@@ -1,0 +1,83 @@
+id: ISS-0425
+title: "Supervision tree is flat: 15 peers of Repo under one :one_for_one with default restart intensity -- layer it before REQ-214 adds the first long-lived domain process"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:57:21Z"
+severity: MAJOR
+tags: [otp, supervision, availability, architecture, s6]
+description: >
+  ARCHITECTURAL, raised during a user-requested review
+  (ORCH-adhoc-20260902) asking specifically about supervision design and
+  BEAM leverage.
+
+  CURRENT SHAPE (lib/letflow/application.ex:110): one
+  Supervisor.start_link with strategy: :one_for_one, no
+  max_restarts/max_seconds override (OTP default: 3 restarts in 5
+  seconds), and ~15 children in a single flat list. Every child is a PEER
+  of Letflow.Repo -- the Repo, Ecto.Migrator, the OIDC provider worker,
+  two Registries, the metrics collector, the empty InstanceSupervisor,
+  SandboxPool, six Task.Supervisors, the Scheduler.Poller and the Bandit
+  listener all sit at the same level.
+
+  (1) NO DEPENDENCY LAYERING. Because everything is a peer, a
+  crash-looping leaf can exhaust the supervisor's restart intensity and
+  take down Letflow.Repo and the HTTP listener with it. Not hypothetical
+  -- scheduler_children/0's own comment documents this exact cascade
+  being hit for real under test (Ecto sandbox ownership errors on every
+  Poller tick until the whole application, Repo included, shut down). The
+  startup order is ALREADY dependency-ordered by hand with load-bearing
+  comments (SandboxPool.TaskSupervisor must precede SandboxPool,
+  ISS-0224) -- that hand-maintained ordering is exactly the signal the
+  tree wants explicit layering. Candidate shape: :rest_for_one at the top
+  level over layered groups (infrastructure: Repo/Migrator/registries ->
+  domain workers -> HTTP listener).
+
+  (2) NO SUPERVISOR OWNS THE DOMAIN. Letflow.InstanceSupervisor is an
+  empty DynamicSupervisor (ISS-0422). There is no process tree
+  representing work in flight, so recovery, backpressure and per-workflow
+  observability have nowhere to attach. NOTE: this is NOT a request to
+  reverse REQ-045's row-based instance decision -- that decision is sound
+  and explicitly NOT in scope. The point is narrower: the tree has no
+  layer owning long-lived domain work.
+
+  (3) TASK.SUPERVISOR SPRAWL. Six separate Task.Supervisors (SandboxPool,
+  Engine.Plugin, Lua, Wasm.ModuleRegistry, Wasm.CapabilityGate,
+  Wasm.ModuleVersionRegistry), each individually well-justified, but
+  collectively a signal that concurrency is solved per-requirement rather
+  than by an owned design. Worth one deliberate review pass; keeping all
+  six with consolidated rationale is a defensible outcome.
+
+  WHY NOW: REQ-214 (pending, queue task 415) explicitly specifies "a
+  supervised polling process advancing parked tokens" for SERVICE_TASK
+  dispatch -- Letflow's first genuinely long-lived, domain-owning
+  process, and the natural place to establish the pattern
+  (registry-keyed, DynamicSupervisor-owned, crash-isolated per dispatch)
+  that InstanceSupervisor was reserved for. Settling tree shape BEFORE
+  REQ-214 lands means that requirement adopts the pattern; settling it
+  after means REQ-214 has likely added a seventh ad-hoc Task.Supervisor
+  needing unpicking. This ordering is the actionable part.
+
+  RELATIONSHIP TO ISS-0421: that issue covers Scheduler.Poller
+  specifically (serial sweeps, SPOF); this one covers the tree SHAPE
+  around it. They overlap on restart intensity -- whichever runs second
+  reads the other's outcome rather than re-deciding it.
+affected_files:
+  - lib/letflow/application.ex
+  - lib/letflow/instance_supervisor.ex
+related:
+  - ISS-0421
+  - ISS-0422
+  - ISS-0224
+  - REQ-045
+  - REQ-214
+source: >
+  User-requested architecture review, 2026-09-02, in response to a direct
+  question about supervision design and BEAM leverage. Verified by
+  reading application.ex's start/2 child list and Supervisor.start_link
+  opts, and by grepping lib/ for strategy:/max_restarts (two strategy
+  sites, neither setting intensity) and for Task.Supervisor children
+  (six).
+queue_task_id: 425
+github_issue: 829
+
+status: open

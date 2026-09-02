@@ -1,0 +1,87 @@
+id: ISS-0424
+title: "Establish Letflow as an independent product: reframe R-Co as historical provenance, retire the 131 parity-justifications, keep the .zig audit trail"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:57:21Z"
+severity: MINOR
+tags: [documentation, independence, migration-completion, user-directed, s6]
+description: >
+  USER-DIRECTED (2026-09-02): Letflow should live its own independent life
+  rather than being framed as R-Co's migration target. This issue
+  implements that decision with a deliberately bounded scope, chosen by
+  the user in preference to a total-removal alternative that was
+  offered and declined.
+
+  MEASURED SCOPE (repo-wide, excluding .git/deps/_build/node_modules):
+  6070 R-Co mentions across 870 files. Of these, ~1235 are .zig
+  source-path citations (provenance), 131 are parity-justifications in
+  production lib/ code across 47 files, 38 are deliberate-divergence
+  notes, and the remainder is prose in design/migration docs.
+
+  ALREADY TRUE -- DO NOT RE-DO: Letflow is ALREADY operationally
+  independent of R-Co. Verified 2026-09-02: mix.exs, config/*.exs,
+  .github/workflows/*.yml and docker-compose.yml contain exactly FIVE
+  R-Co references between them, all comments explaining port-number
+  choices (avoiding R-Co's stack on 5432/8081). Zero build dependency,
+  zero runtime dependency, zero test dependency; the project compiles
+  clean and passes 3060 tests with no R-Co checkout involved. Exactly ONE
+  production module hardcodes an R-Co filesystem path
+  (lib/letflow/engine/pin_rebind.ex:8, in a moduledoc sentence). This
+  issue is about NARRATIVE and DECISION AUTHORITY, not about severing a
+  technical dependency -- do not go looking for one.
+
+  WHAT TO CHANGE, in three parts:
+
+  (1) FRAMING -- CLAUDE.md (7 mentions), README.md (8),
+  docs/migration/README.md (9). Rewrite so Letflow is described as a
+  multi-tenant BPM platform in its own right, not as R-Co's migration
+  target. The migration is effectively complete (179 of 189 requirements
+  done, 9 cancelled, 2 pending: REQ-214/REQ-215), so the present-tense
+  "migration in progress" framing is itself now stale. docs/migration/
+  keeps its content but is reframed as the historical record of how
+  Letflow was built, not as live instructions.
+
+  (2) PARITY-JUSTIFICATIONS -- the 131 occurrences in lib/ production
+  code (47 files) matching "matches R-Co"/"mirrors R-Co"/"same as
+  R-Co"/"R-Co's own"/"parity"/"port of". THESE ARE THE REAL DEBT:
+  decisions defended by lineage rather than merit. For each, either
+  restate the reasoning on its own technical merit or delete the sentence
+  if the code is self-evident. Do NOT mechanically find-and-replace --
+  each needs a judgement call.
+
+  (3) PROVENANCE -- the ~1235 .zig source-path citations. KEEP THESE, but
+  demote them from inline decision-authority to clearly-marked historical
+  provenance. They are the audit trail explaining why 179 completed
+  requirements behave as they do; deleting them makes "is this deliberate
+  or a bug?" unanswerable at scale (the same failure class as ISS-0422's
+  doc drift, x100).
+
+  EXPLICITLY OUT OF SCOPE: the 38 deliberate-divergence notes ("unlike
+  R-Co", "deliberately diverges"). These document independent judgement
+  and are the most valuable references in the tree -- keep them verbatim;
+  they are evidence of exactly the independence this issue establishes.
+
+  SIZING NOTE FOR ORCH: almost certainly too large for one agent turn.
+  Expect to split -- part (1) is small and self-contained; part (2) is 47
+  files of judgement calls and is the natural REQ-ANALYST decomposition
+  candidate; part (3) is mechanical-ish but wide. Splitting is expected,
+  not a failure.
+affected_files:
+  - CLAUDE.md
+  - README.md
+  - docs/migration/README.md
+  - lib/letflow/engine/pin_rebind.ex
+related:
+  - ISS-0422
+  - REQ-214
+  - REQ-215
+source: >
+  User instruction during the architecture review of 2026-09-02: "it is
+  required to cut reference to R-Co ... this project has to live its own
+  independent life". Scope option ("cut framing, keep citations") chosen
+  by the user over total removal when the tradeoff was presented. All
+  counts in this record measured by grep at filing time and re-derivable.
+queue_task_id: 424
+github_issue: 828
+
+status: open

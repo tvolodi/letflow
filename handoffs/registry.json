@@ -3917,6 +3917,20 @@
       "released_lock": true,
       "last_known_step": "Step Final -- PR #801 squash-merged to main (84bc3200), queue task 407 released status: done",
       "note": "ISS-0407 (TaskActivation.append_multi_from_existing_records/7's key_disambiguator spec was looser than its real shape). Handled by ORCH directly per docs/agents/ORCHESTRATOR.md Section10's sizing-rule exception: single file, no runtime behavior change, pure @spec tightening from term() | nil to Ecto.UUID.t() | nil."
+    },
+    {
+      "run_id": "WF03-ISS0406-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0406",
+      "queue_task_id": 406,
+      "github_issue_number": 797,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T09:09:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 investigation for ISS-0406: the ISS-0352 wasm_hang CI flake hit an unusually high rate (4-5 consecutive failures) during a multi-session-concurrent window on 2026-09-02, blocking PR #795 (a doc-only change). This ORCH session independently observed the same pattern repeatedly on PRs #788, #792, #798, #801 (each hitting 2-5 wasm_hang rounds before clearing), corroborating the resource-contention hypothesis. ISSUE-FIXER to investigate whether a CI-config mitigation (e.g. increasing the wasm_hang test's timeout, or reducing concurrent CI job parallelism) is warranted, or whether this should be documented as an accepted characteristic of the existing ISS-0352 flake class."
     }
   ]
 }

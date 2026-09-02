@@ -1,0 +1,120 @@
+run_id: WF02-REQ209-20260902
+date: "2026-09-02"
+agent: TEST-RUNNER
+requirement: REQ-209
+branch: feature/WF02-REQ209-20260902
+commit_tested: 5c2d28b6a52e91c8d20bed0b4e2d6cf9553ca992
+
+req209_diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v8.yaml
+    - handoffs/WF02-REQ209-20260902/step-00-git-setup.json
+    - handoffs/WF02-REQ209-20260902/step-01-code-designer.json
+    - handoffs/WF02-REQ209-20260902/step-01b-code-design-validator.json
+    - handoffs/WF02-REQ209-20260902/step-02a-elixir-dev.json
+    - handoffs/WF02-REQ209-20260902/step-02c-security-reviewer.json
+    - handoffs/WF02-REQ209-20260902/step-02d-reviewer.json
+    - handoffs/WF02-REQ209-20260902/step-03-test-designer.json
+    - handoffs/WF02-REQ209-20260902/step-03b-test-design-validator.json
+    - handoffs/WF02-REQ209-20260902/step-04-test-runner.json
+    - handoffs/orchestrator.log
+    - handoffs/registry.json
+    - lib/letflow/design/req209-expr-differential-corpus-regression.md (new, design doc)
+    - test/fixtures/simulation/differential_corpus.json (new)
+    - test/letflow/engine/expr_differential_corpus_test.exs (new)
+    - test/specs/REQ-209.md (new)
+  note: >
+    No lib/ application code changed. This requirement is test-infrastructure-only
+    (a new differential corpus regression test plus its fixture data), matching the
+    handoff's stated artifacts_in.
+
+toolchain:
+  elixir_erlang: "as configured in this workspace (no toolchain-absence issues encountered)"
+  docker: "letflow-2-postgres-1 and letflow-2-keycloak-1, both Running (docker compose up -d)"
+  db_port_source: "default 5462 (no LETFLOW_DB_PORT override in .env observed)"
+
+compile_check:
+  command: "mix compile --warnings-as-errors"
+  exit_code: 0
+  output: "(no output -- clean compile, zero warnings)"
+  status: PASS
+
+full_suite_run:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  partition_count: 4
+  partition_count_source: env override (TEST_PARALLEL_N=4, per dispatch instruction)
+  test_pool_size: 21
+  exit_code: 0
+  combined_result_line: "combined: 3045 tests, 6 properties, 0 failures (3051/3051 passed)"
+  passed: 3051
+  failed: 0
+  skipped: 0
+  total: 3051
+  per_partition:
+    - partition: 1
+      tests: 787
+      properties: 3
+      failures: 0
+      exit: 0
+    - partition: 2
+      tests: 729
+      properties: 0
+      failures: 0
+      exit: 0
+    - partition: 3
+      tests: 808
+      properties: 0
+      failures: 0
+      exit: 0
+    - partition: 4
+      tests: 721
+      properties: 3
+      failures: 0
+      exit: 0
+
+wasm_hang_isolation_subprocess:
+  command: "mix test --only wasm_hang"
+  exit_code: 0
+  result_line: "Result: 7 passed, 3057 excluded"
+  note: >
+    Ran explicitly because ISS-0352 documents four prior recurrences of a
+    runner-variance-dependent pool-exhaustion timeout in exactly this subprocess.
+    This run was clean -- 7/7 passed, no ExUnit timeout, no cascading failure.
+    The GenServer call-timeout error log lines seen mid-run are expected output
+    from the tests' own genuine, intentional hangs (per ISS-0352/REQ-170's design),
+    not failures -- confirmed by the trailing "Result: 7 passed" line and exit 0.
+
+known_environmental_issues_checked:
+  - id: ISS-0352
+    description: "wasm_hang isolation-subprocess pool exhaustion, four prior recorded recurrences"
+    encountered_this_run: false
+    matched_signature: false
+    evidence: "mix test --only wasm_hang: Result: 7 passed, 3057 excluded, exit 0 -- no timeout, no failure"
+    action_taken: "ran the isolation subprocess explicitly to check; came back clean"
+    blocking: false
+
+  - id: ISS-0403
+    description: "SecretsTest short-plaintext property-test false positive"
+    status_checked: resolved (resolved_at 2026-09-01T23:32:00Z, resolved_in_run WF03-ISS0403-20260901)
+    encountered_this_run: false
+    relevant: false
+    note: "Already fixed on main prior to this branch; not a live risk for this run."
+
+failures_found: []
+
+verdict: PASS
+verdict_note: >
+  mix compile --warnings-as-errors is clean (zero warnings). The full suite passes
+  100% (3051/3051, 0 failures) across all 4 partitions via
+  TEST_PARALLEL_N=4 scripts/test_parallel.sh, which includes REQ-209's own new
+  test/letflow/engine/expr_differential_corpus_test.exs. The isolated
+  :wasm_hang subprocess (ISS-0352's known flake class) was also run explicitly
+  and passed clean (7/7), so no known-flaky-class failure was masked or
+  encountered. ISS-0403 was checked and confirmed already resolved on main
+  before this branch. This branch's diff touches no lib/ code -- only new test
+  files, a new fixture, a design doc, and status/handoff bookkeeping -- so there
+  is no application-code risk surface beyond the new test itself, which passed.
+  Ready to proceed to RELEASE-VALIDATOR.

@@ -21,4 +21,13 @@ source: >
   step-06-issue-fixer-close.json.
 queue_task_id: 407
 github_issue: 799
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0407-20260902
+resolved_at: "2026-09-02T07:30:30Z"
+resolution: >
+  Handled by ORCH directly per the sizing-rule direct-action exception
+  (single file, no runtime behavior change). Tightened
+  key_disambiguator's spec from term() | nil to Ecto.UUID.t() | nil,
+  matching the real shape every caller passes. mix compile
+  --warnings-as-errors and mix format --check-formatted both clean;
+  18/18 tests passed on the two most directly affected test files.

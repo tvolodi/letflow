@@ -260,7 +260,7 @@ defmodule Letflow.Engine.TaskActivation do
           previous_pending_task_nodes :: [Token.t()],
           new_instance_state :: InstanceState.t(),
           prefix :: String.t(),
-          key_disambiguator :: term() | nil
+          key_disambiguator :: Ecto.UUID.t() | nil
         ) :: Ecto.Multi.t()
   def append_multi_from_existing_records(
         %Multi{} = multi,

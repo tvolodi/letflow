@@ -67,3 +67,49 @@ queue_task_id: 423
 github_issue: 827
 
 status: open
+
+# ── Measurement update, 2026-09-02T18:18:49Z (ORCH-adhoc-20260902-arch-review) ──
+# Added after filing: the causes were measured rather than left as hypothesis.
+# This does NOT change the issue's status (still open) -- it narrows the scope.
+measured_causes:
+  parallel_runner_already_exists: >
+    scripts/test_parallel.sh (REQ-113) already implements N-way partitioned
+    parallel running with correct pool sizing against Postgres max_connections
+    (decision 0009). It was NOT being used for the 1805s baseline. Measured on
+    this 16-core host: TEST_PARALLEL_N=6 completed in 616s wall clock vs 1805s
+    serial -- a 2.9x speedup with ZERO code change. This is the cheapest
+    available win and largely pre-empts the "make tests async" work this issue
+    originally proposed.
+  async_is_defeated_globally: >
+    86 test files already declare `async: true`, yet the serial run reported
+    only 14.8s async of 1805.1s. Root cause identified: Letflow.TenantFixture's
+    provisioned_tenant!/1 calls Sandbox.mode(Letflow.Repo, :auto)
+    (test/support/tenant_fixture.ex:191), which is a GLOBAL per-repo setting,
+    not per-test. 46 test files call it. Letflow.DataCase itself is correct
+    (checkout + {:shared, self()} only when not async, data_case.ex:16-20) --
+    it is the fixture that overrides it. This is ALREADY FILED as ISS-0113
+    (queue task 181, GH#367), which describes the same call as a CORRECTNESS
+    hazard (silent unsandboxed writes) but never connected it to the
+    performance cost. ISS-0113 and this issue want to land together or in a
+    deliberate order.
+  schema_provisioning_dominates: >
+    755 distinct tenant schemas are provisioned and dropped in one full suite
+    run (counted from the run log's LETFLOW_TENANT_FIXTURE teardown lines).
+    Each replays the full 52-entry @tenant_scoped_migration_manifest via
+    Ecto.Migrator.run/4 (lib/letflow/tenant_provisioning.ex:334) -- roughly
+    39,000 migration executions per suite run. At the 411 ms/provisioning
+    figure Letflow.SandboxPool's own moduledoc measures, that is ~310s, ~17%
+    of the serial runtime. A template-schema clone (provision once, then
+    CREATE SCHEMA from a template) would attack this directly and is worth
+    evaluating alongside the SandboxPool-backed approach this issue already
+    proposes.
+  not_a_cause_sleeps: >
+    RULED OUT: only 22 Process.sleep call sites exist across the whole test
+    tree, totalling ~825 ms. Sleep-based waiting is not a meaningful
+    contributor and needs no work.
+discovered_side_effect:
+  - >
+      Running 6-way parallel surfaced exactly one failure not seen serially,
+      a wall-clock-sensitive Lua executor test. Filed separately as ISS-0426
+      (queue task 426, GH#830) -- it must be fixed before parallel running is
+      adopted as the default, or CI will look intermittently red.

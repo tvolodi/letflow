@@ -1,0 +1,79 @@
+id: ISS-0426
+title: "Lua executor wall-clock tests flake under CPU contention: a 0.3s test hits its 5000ms timeout when the suite runs 6-way parallel"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T18:18:49Z"
+severity: MAJOR
+tags: [testing, flake, parallelism, lua, wasm, s6]
+description: >
+  MEASURED, reproducible. Found while benchmarking
+  scripts/test_parallel.sh (REQ-113) as a candidate speedup for ISS-0423.
+
+  SYMPTOM: the full suite run as 6 parallel partitions on a 16-core host
+  produced exactly one failure, in a test that passes reliably serially:
+
+    1) test SCRIPT_ERROR capture (REQ-162) AC7: stack trace frames
+       contain no '/' path separator or 'Elixir.' prefix
+       (Letflow.Engine.Lua.ExecutorTest)
+       test/letflow/engine/lua/executor_test.exs:983
+       left:  {:error, {:script_error, script_error}}
+       right: {:error, {:wallclock_timeout, 5000}}
+
+  The test asserts a Lua script fails with SCRIPT_ERROR (integer division
+  by zero). Instead Letflow.Engine.Lua.Executor's wall-clock kill fired
+  first.
+
+  EVIDENCE IT IS CONTENTION, NOT A DEFECT -- same test, same worktree,
+  same commit, run in isolation immediately afterward:
+
+    Finished in 0.3 seconds (0.3s async, 0.00s sync)
+    Result: 1 passed, 47 excluded
+
+  0.3s against a 5000 ms budget (~16,000x margin) collapsing purely
+  because 6 partitions competed for 16 cores. The serial run of the same
+  commit passed 3060/3060, zero failures (Finished in 1805.1 seconds).
+
+  WHY IT MATTERS BEYOND ONE TEST: Letflow.Engine.Lua.Executor and
+  Letflow.Engine.Wasm.CallTimeout are the two subsystems whose
+  CORRECTNESS is defined in wall-clock terms (REQ-155's LUA-10 layer-2
+  host-enforced kill; REQ-169/REQ-170 fuel and epoch interruption). Their
+  tests assert on real elapsed time, making them structurally sensitive
+  to scheduler pressure in a way no other test here is. Any move to run
+  the suite in parallel will surface this class of flake, and it will
+  look like a random unrelated failure to whoever hits it. ISS-0352's
+  wasm_hang cascade is the same family (solved there by excluding those
+  tests into a dedicated subprocess via mix letflow.check.test).
+
+  SCOPE: enumerate and harden the wall-clock-sensitive tests across lua/
+  and wasm/. Options for CODE-DESIGNER, none prescribed: (a) tag them and
+  run them in their own low-concurrency partition, mirroring the
+  wasm_hang precedent already in test_helper.exs; (b) raise the
+  test-side timeout budgets, careful not to weaken what is proven;
+  (c) restructure assertions so they do not depend on which of two
+  racing outcomes wins. Option (b) alone is weakest -- it moves the
+  threshold without removing the sensitivity.
+
+  DO NOT change Letflow.Engine.Lua.Executor's production timeout
+  semantics to fix a test-environment problem -- the wall-clock kill is a
+  security control against untrusted tenant scripts (LUA-10) and its
+  behaviour under load is the thing being asserted.
+affected_files:
+  - test/letflow/engine/lua/executor_test.exs
+  - test/letflow/engine/wasm/call_timeout_test.exs
+  - test/test_helper.exs
+related:
+  - ISS-0423
+  - ISS-0352
+  - REQ-113
+  - REQ-155
+  - REQ-162
+source: >
+  Direct measurement during the architecture review, 2026-09-02:
+  TEST_PARALLEL_N=6 bash scripts/test_parallel.sh (616s wall clock,
+  combined 3056/3057 passed, 1 failure in partition 1), contrasted
+  against the same commit's serial run (1805.1s, 3060 passed, 0
+  failures) and an isolated rerun of the failing test (0.3s, passed).
+queue_task_id: 426
+github_issue: 830
+
+status: open

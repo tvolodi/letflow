@@ -3862,13 +3862,13 @@
       "issue_id": "ISS-0402",
       "queue_task_id": 402,
       "github_issue_number": 789,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-02T02:06:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 issue-resolving run for ISS-0402: REQ-052's design doc cites the now-fixed join_counters persistence gap (ISS-0397) as the reason cancel_instance/3 never wires {:cancel_branch, _} for individual PARALLEL_GATEWAY fork branches. Filed by ORCH itself at ISS-0397's Step Final. ISSUE-FIXER to scope: whether branch-level cancellation should now be designed and implemented, or whether a second independent reason exists to leave it deferred."
+      "lock_released_at": "2026-09-02T02:32:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- ISSUE-FIXER diagnosis complete, no implementation warranted; queue task 402 released back to open (not done), docs/issues/ISS-0402.yaml annotated with scoping_note",
+      "note": "WF-03 issue-resolving run for ISS-0402: REQ-052's design doc cites the now-fixed join_counters persistence gap (ISS-0397) as the reason cancel_instance/3 never wires {:cancel_branch, _} for individual PARALLEL_GATEWAY fork branches. ISSUE-FIXER confirmed ISS-0397 genuinely closes that literal blocker, but found a second, independent, already-on-record reason (ISS-0098: R-Co's own reference cancellation path never operates at branch granularity -- plain unconditional SQL UPDATEs, not per-branch transition events) plus no current caller needing the feature plus two unresolved semantic questions with no reference precedent. Correctly did NOT force a design; released the queue task back to open with a clarified scope note, same disposition pattern as ISS-0399."
     }
   ]
 }

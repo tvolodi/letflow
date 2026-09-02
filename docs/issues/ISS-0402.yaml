@@ -32,3 +32,25 @@ source: >
 queue_task_id: 402
 github_issue: 789
 status: open
+scoping_note: >
+  ISSUE-FIXER investigated (WF03-ISS0402-20260902, 2026-09-02) and
+  recommended NOT implementing branch-level cancellation: ISS-0397's
+  fix does genuinely close OQ-2's literal cited blocker (join_counters
+  is now durably persisted), but a second, independent, already-on-
+  record reason survives untouched -- docs/issues/ISS-0098 (resolved
+  2026-08-22, before ISS-0397 even existed) independently verified
+  against R-Co's real shipped source (src/engine/instance.zig,
+  cancelInstance, EE-08) that R-Co's own reference cancellation path
+  never drives per-branch events through transition/graph machinery at
+  all -- it issues plain unconditional SQL UPDATEs. Letflow's
+  whole-instance-only cancel_instance/3 is architectural parity with
+  the reference system, not a stopgap for a missing table. No current
+  route, UAT scenario, or scheduled requirement needs branch-level
+  cancellation as a caller-facing feature (confirmed by grep across
+  lib/letflow_web/, docs/uat/, docs/requirements.yaml). Two non-trivial
+  semantic questions with no reference-implementation precedent remain
+  open (how completed sibling branches should be handled; whether
+  cancelling a branch that spawned a REQ-062 SUB_PROCESS child should
+  cascade) -- these need a product decision, not an improvised design.
+  Queue task 402 released back to open (not done) -- see
+  handoffs/WF03-ISS0402-20260902/step-01-issue-fixer-diagnosis.json.

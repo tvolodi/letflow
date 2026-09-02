@@ -2844,7 +2844,7 @@ defmodule Letflow.Engine do
               {:cont, {:ok, {Map.put(id_map, token.token_id, record.id), [record | records]}}}
 
             {:error, reason} ->
-              {:halt, {:error, {:hop_chain_token_record_insert_failed, reason}}}
+              {:halt, {:error, reason}}
           end
         end)
     end

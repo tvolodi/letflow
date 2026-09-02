@@ -63,3 +63,24 @@ no_defect_evidence: >
   REQ-192-specified (not a defect to fix). Full evidence (measurement,
   candidate mechanisms tested, method limitation) recorded in ISS-0410.yaml
   under the same verdict_in_run.
+independent_hardening_note: >
+  A separate, concurrent ORCH session (WF03-ISS0409-20260902) independently
+  reached this file's queue task before this no_defect verdict landed on
+  main, and shipped a real code-level hardening rather than a one-off DB
+  cleanup: test/letflow/service_catalog_test.exs's REQ-192 pagination
+  describe block gained (1) a setup-time Repo.delete_all(Entry)
+  establishing an explicit empty-table precondition, and (2) on_exit
+  cleanup on both its own tests via the file's existing cleanup_entry!/1
+  helper, matching every other test in this file's established
+  discipline. This does not contradict the no_defect verdict above --
+  list_all/1 itself is still correctly unfiltered-by-design -- it is a
+  scoped instance of exactly the mitigation ISS-0414 asks for (a safety
+  net against leftover rows from an interrupted run), applied to the one
+  file both ISS-0409 and ISS-0410 already identified as affected. ISS-0414
+  remains open for the broader, suite-wide mechanism. Verified in a clean
+  environment (no concurrent test runs): service_catalog_test.exs alone
+  3x different seeds (33/33 each), paired with admin_services_test.exs 3x
+  (39/39 each). An intermittent, unrelated AC7 failure surfaced during
+  verification and was traced to genuine cross-process DB contention from
+  a second concurrently-running agent's own full-suite test run (not a
+  defect in this fix) -- filed separately as ISS-0416.

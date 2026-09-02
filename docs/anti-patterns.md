@@ -1807,6 +1807,16 @@ GenServer-count test to cover the only part of the original intent ("no second t
 that mapped to an actual acceptance criterion. An identical, still-open instance of this same
 pattern remains at `test/letflow/scheduler_req188_test.exs:432-452` as of this writing --
 out of scope for ISS-0378, flagged for a separate issue.
+ISS-0404 resolved that flagged instance by deletion, the same pattern as ISS-0378's own
+resolution: `scheduler_req188_test.exs`'s "transition.ex is untouched by REQ-188" test
+(a `git diff --stat 746a3ac0..77637268` check, i.e. a historical-commit-range variant of
+this same defect class rather than a moving-symbolic-ref one) was removed outright, with
+no replacement test, because the property it checked was (a) a one-time historical fact
+already permanently discharged the moment REQ-188 merged, not an evergreen property, and
+(b) to the extent any evergreen property was really intended ("transition.ex never gains
+a DB/clock/network dependency"), that broader property is already covered permanently by
+`transition.ex`'s own moduledoc "Purity (AC1)" section and its grep-checkable command --
+see `lib/letflow/design/iss0404-req188-transition-test-fix.md`.
 
 ## A validator's own free-text report file, named `step-*.md`, trips the H6 handoff lint
 

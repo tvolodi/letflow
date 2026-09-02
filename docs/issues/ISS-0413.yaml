@@ -1,0 +1,40 @@
+id: ISS-0413
+title: "host_api_write_test.exs and plugin_handler_test.exs shell out to git diff against a live resolved base ref -- lesser but related fragility to the fixed-SHA class"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0404-20260902
+discovered_at: "2026-09-02T12:13:11Z"
+severity: MINOR
+tags: [test-fragility, ci, s6]
+description: >
+  test/letflow/engine/wasm/host_api_write_test.exs:747 and
+  test/letflow/engine/wasm/plugin_handler_test.exs:54 both resolve a
+  `base_ref` dynamically via `Enum.find(["origin/main", "main"], ...)` +
+  `git rev-parse --verify` at run time, then `git diff` against current
+  HEAD. This is NOT the fixed-historical-SHA fragility class
+  docs/anti-patterns.md documents and ISS-0404/ISS-0378 both fixed (a moving
+  ref does not break on squash-merge/history-rewrite the way a pinned SHA
+  does) -- but it is the sibling fragility class the same anti-patterns.md
+  file separately documents under "A test embeds `git diff main...HEAD`
+  directly...": it still depends on git history/ref resolution being
+  available and correct at test-run time (e.g. a shallow checkout with
+  neither `origin/main` nor `main` reachable), rather than asserting a
+  structural property of the current shipped source. Discovered incidentally
+  by TEST-DESIGNER during WF03-ISS0404-20260902 while confirming no
+  remaining fixed-SHA instances existed project-wide; explicitly out of
+  scope for that run. Whether these two warrant the same
+  structural-check-instead-of-git-diff treatment is a judgment call for
+  whichever ISSUE-FIXER picks this up, same as ISS-0404's own diagnosis
+  pattern.
+affected_files:
+  - test/letflow/engine/wasm/host_api_write_test.exs
+  - test/letflow/engine/wasm/plugin_handler_test.exs
+related:
+  - ISS-0404
+  - ISS-0378
+source: >
+  TEST-DESIGNER's incidental finding during WF03-ISS0404-20260902's
+  project-wide grep for the fixed-SHA defect class (see
+  lib/letflow/design/iss0404-regression-verification.md).
+queue_task_id: 413
+github_issue: 809
+status: open

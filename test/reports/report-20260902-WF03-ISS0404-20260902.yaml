@@ -1,0 +1,216 @@
+# Test run report — WF-03 Step 4 (same shape as WF-02 Step 4)
+# Written by TEST-RUNNER. RELEASE-VALIDATOR independently re-runs the suite
+# rather than trusting this report alone (core-directives.md).
+
+run_id: WF03-ISS0404-20260902
+workflow_id: WF-03
+step: 4
+agent: TEST-RUNNER
+generated_at: "2026-09-02T12:10:00Z"
+branch: feature/WF03-ISS0404-20260902
+commits:
+  - 803e5514 (fix: delete SHA-pinned transition.ex-untouched test)
+  - 75d09428 (TEST-DESIGNER Step 4 regression-verification doc)
+
+change_summary: >
+  Pure test deletion. Removed the SHA-pinned "transition.ex is untouched by
+  REQ-188" describe block from test/letflow/scheduler_req188_test.exs (a
+  git-diff-over-fixed-historical-commit-range check, same fragility class as
+  ISS-0378), plus doc updates to test/specs/REQ-188.md and
+  docs/anti-patterns.md, and two new design docs under lib/letflow/design/.
+  No lib/ application code touched; lib/letflow/engine/transition.ex is
+  untouched by this branch. SECURITY-REVIEWER, REVIEWER, and
+  TEST-DESIGN-VALIDATOR have all already passed this change.
+
+environment_setup:
+  worktree_note: >
+    This worktree (agent-afe31f13dce7d7133, nested under letflow-2) had no
+    .env of its own, which would have defaulted docker compose here to host
+    port 5462 -- already bound by the sibling `letflow` workspace's own
+    postgres container (letflow-postgres-1, unrelated to this repo/branch).
+    Created an untracked .env in this worktree setting LETFLOW_DB_PORT=5493
+    (a port not claimed by any other running container observed via `docker
+    ps -a`) so this run gets its own isolated Postgres instance rather than
+    colliding with or attaching to another checkout's container.
+  docker: "docker compose up -d postgres -- new container
+    agent-afe31f13dce7d7133-postgres-1 created and started, confirmed
+    healthy via docker inspect before running tests."
+
+compile_check:
+  command: "mix compile --warnings-as-errors --force"
+  raw_output: |
+    Compiling 182 files (.ex)
+    Generated letflow app
+  exit_code: 0
+  result: PASS
+  note: >
+    Ran with --force for a genuine full clean recompile (not a cached
+    no-op), confirming nothing project-wide references anything this
+    change removed. 182 files compiled, zero warnings.
+
+command: scripts/test_parallel.sh
+mechanism: >
+  Full suite run as N parallel `mix test --partitions N` processes; each
+  partition's own ExUnit Result:/Failed: summary line parsed and summed into
+  one combined total. Exit 0 iff every partition's parsed count shows 0
+  failures.
+
+partition_count:
+  N: 16
+  source: nproc auto-derivation (TEST_PARALLEL_N unset). All 16 partitions
+    completed cleanly with real per-partition Result:/Failed: lines on both
+    runs below.
+
+runs:
+  - run: 1
+    result: FAIL (transient, see triage below)
+    combined: "3048 tests, 6 properties, 1 failure (3053/3054 passed)"
+    raw_output: |
+      test_parallel: N=16 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      partition 1: 191 tests, 1 property, 0 failures, exit 0
+      partition 2: 128 tests, 0 properties, 0 failures, exit 0
+      partition 3: 218 tests, 0 properties, 0 failures, exit 0
+      partition 4: 182 tests, 0 properties, 0 failures, exit 0
+      partition 5: 249 tests, 2 properties, 0 failures, exit 0
+      partition 6: 209 tests, 0 properties, 0 failures, exit 0
+      partition 7: 155 tests, 0 properties, 0 failures, exit 0
+      partition 8: 232 tests, 0 properties, 0 failures, exit 0
+      partition 9: 132 tests, 0 properties, 0 failures, exit 0
+      partition 10: 179 tests, 0 properties, 0 failures, exit 0
+      partition 11: 178 tests, 0 properties, 0 failures, exit 0
+      partition 12: 203 tests, 0 properties, 0 failures, exit 0
+      partition 13: 161 tests, 1 property, 0 failures, exit 0
+      partition 14: 281 tests, 2 properties, 1 failures, exit 2
+      partition 15: 186 tests, 0 properties, 0 failures, exit 0
+      partition 16: 164 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 3048 tests, 6 properties, 1 failures (3053/3054 passed)
+    failing_test:
+      name: >
+        test existing .json handoff behavior (H1-H5) is unaffected
+        F-JSON-REAL-GRANDFATHERED-UNCHANGED -- a real pre-existing
+        grandfathered .json entry still classifies as grandfathered, not new
+      module: Mix.Tasks.Letflow.LintHandoffsTest
+      file: "test/mix/tasks/letflow.lint_handoffs_test.exs:245"
+      error: |
+        ** (FunctionClauseError) no function clause matching in DateTime.compare/2
+        The following arguments were given to DateTime.compare/2:
+            # 1
+            ~U[2026-08-16 18:42:00Z]
+            # 2
+            :invalid_format
+        code: result = LintHandoffs.lint_file(path, @empty_schema)
+        stacktrace:
+          (elixir 1.20.3) lib/calendar/datetime.ex:1475: DateTime.compare/2
+          (letflow 0.1.0) lib/mix/tasks/letflow.lint_handoffs.ex:623: Mix.Tasks.Letflow.LintHandoffs.created_at_after_rule?/1
+          (letflow 0.1.0) lib/mix/tasks/letflow.lint_handoffs.ex:588: Mix.Tasks.Letflow.LintHandoffs.check_advisory/2
+          (letflow 0.1.0) lib/mix/tasks/letflow.lint_handoffs.ex:376: Mix.Tasks.Letflow.LintHandoffs.lint_file/2
+          test/mix/tasks/letflow.lint_handoffs_test.exs:250: (test)
+  - run: 2
+    result: PASS
+    combined: "3048 tests, 6 properties, 0 failures (3054/3054 passed)"
+    raw_output: |
+      test_parallel: N=16 (source: nproc)
+      test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)
+      partition 1: 191 tests, 1 property, 0 failures, exit 0
+      partition 2: 128 tests, 0 properties, 0 failures, exit 0
+      partition 3: 218 tests, 0 properties, 0 failures, exit 0
+      partition 4: 182 tests, 0 properties, 0 failures, exit 0
+      partition 5: 249 tests, 2 properties, 0 failures, exit 0
+      partition 6: 209 tests, 0 properties, 0 failures, exit 0
+      partition 7: 155 tests, 0 properties, 0 failures, exit 0
+      partition 8: 232 tests, 0 properties, 0 failures, exit 0
+      partition 9: 132 tests, 0 properties, 0 failures, exit 0
+      partition 10: 179 tests, 0 properties, 0 failures, exit 0
+      partition 11: 178 tests, 0 properties, 0 failures, exit 0
+      partition 12: 203 tests, 0 properties, 0 failures, exit 0
+      partition 13: 161 tests, 1 property, 0 failures, exit 0
+      partition 14: 281 tests, 2 properties, 0 failures, exit 0
+      partition 15: 186 tests, 0 properties, 0 failures, exit 0
+      partition 16: 164 tests, 0 properties, 0 failures, exit 0
+      ---
+      combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)
+
+triage:
+  scope_check: >
+    git show --stat on both branch commits (803e5514, 75d09428) confirms
+    neither touches lib/mix/tasks/letflow.lint_handoffs.ex or its test file
+    -- this branch's diff is entirely
+    test/letflow/scheduler_req188_test.exs, test/specs/REQ-188.md,
+    docs/anti-patterns.md, and two new lib/letflow/design/*.md files.
+    LintHandoffsTest failing is unrelated to this branch by file scope
+    alone.
+  isolation_repro: >
+    Ran `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` standalone
+    (same seed as the failing partition, 938614, and again with a fresh
+    seed): both runs 22 passed, 0 failures. The test does not fail on its
+    own.
+  full_rerun_repro: >
+    Re-ran scripts/test_parallel.sh a second time, identical N=16 setup:
+    3054/3054 passed, 0 failures -- LintHandoffsTest passed cleanly in
+    partition 14 this time. Confirms the failure is non-deterministic
+    under this exact branch/environment, not a stable regression.
+  root_cause_hypothesis: >
+    Read lib/mix/tasks/letflow.lint_handoffs.ex:618-651.
+    created_at_after_rule?/1 calls fetch_rule_commit_timestamp/0, which
+    shells out via System.cmd("git", ["show", "-s", "--format=%cI", ...],
+    stderr_to_stdout: true) and does
+    `out |> String.trim() |> DateTime.from_iso8601() |> elem(1)` with NO
+    error handling on the parse result -- if DateTime.from_iso8601/1
+    returns {:error, :invalid_format} (e.g. because stderr noise got
+    merged into stdout via stderr_to_stdout: true, or git returned
+    something unexpected under heavy concurrent-process contention from
+    16 simultaneous partitions each shelling out to git), elem(1) silently
+    extracts the atom :invalid_format instead of a DateTime and passes it
+    on as the comparison "floor", which then blows up in the later
+    DateTime.compare/2 call at line 623. This is a pre-existing latent bug
+    in lint_handoffs.ex (unrelated to ISS-0404's diff, confirmed via git
+    log -- the function predates this branch and last changed under
+    unrelated commits e39d57c7/4b51784e), that only manifests under
+    parallel-partition contention, consistent with both the standalone-pass
+    and full-rerun-pass evidence above.
+  verdict: >
+    Pre-existing, unrelated, non-deterministic flake -- not a regression
+    introduced by ISS-0404's change. Not blocking this PASS. Flagged below
+    for ORCH to file as a new issue rather than silently waved away.
+
+new_issue_to_file:
+  suggested_id: (next available ISS-xxxx, to be assigned by ORCH)
+  title: >
+    Mix.Tasks.Letflow.LintHandoffs.fetch_rule_commit_timestamp/0 silently
+    converts a DateTime.from_iso8601/1 parse failure into the atom
+    :invalid_format via elem(1), causing a FunctionClauseError in
+    DateTime.compare/2 downstream when git show's output is ever
+    unparseable (observed under 16-way parallel test contention)
+  affected_files:
+    - lib/mix/tasks/letflow.lint_handoffs.ex
+  severity: MINOR
+  evidence: this report's runs[0].failing_test and triage sections above.
+
+compile_output_full: |
+  Compiling 182 files (.ex)
+  Generated letflow app
+
+result:
+  status: PASS
+  basis: >
+    Full suite green on the second (clean, unmodified re-run) attempt:
+    3054/3054 passed, 0 failures across all 16 partitions.
+    mix compile --warnings-as-errors --force: clean, 182 files, exit 0.
+    The one failure seen on the first attempt is triaged above as a
+    pre-existing, file-scope-unrelated, non-deterministic flake, not a
+    regression from this branch's change -- reproduced-away on immediate
+    re-run with no code changes, and isolated-run of the same test file
+    passes deterministically on its own.
+
+working_tree:
+  note: >
+    git status clean before and after this run (aside from this new report
+    file and an untracked, gitignored .env this run added to give the
+    worktree its own docker compose port -- see environment_setup above).
+
+verdict: PASS
+next_action: Route to Step 5 (Close Issue). Flag the LintHandoffs flake
+  above to ORCH for a new issue filing (docs/issues/), separate from
+  ISS-0404 and not blocking it.

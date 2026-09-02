@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ209-20260902/step-01-code-designer.json",
   "created_at": "2026-09-02T02:34:45Z",
   "started_at": "2026-09-02T02:34:45Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-02T02:38:12Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S7",
@@ -37,9 +37,9 @@
     ]
   },
   "result": {
-    "status": "PARTIAL",
-    "summary": "Not yet completed by the receiving agent.",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Read c:/Users/tvolo/dev/ai-dala/R-Co/tests/differential/corpus/conditions_v1.json directly and counted condition_id fields by enumeration: 15 entries (gw-001..gw-015), re-confirming the requirement text's figure independently rather than trusting it. Read c:/Users/tvolo/dev/ai-dala/R-Co/tests/differential/differential_test.zig (its own EXP-102-cutover header, confirming R-Co diffed vendor/cel against src/expr as a now-retired one-time gate) and lib/letflow/engine/expr.ex in full (1480 lines -- moduledoc's AC11 section, @unsupported_call_markers L173-191, translate_cel_to_expr/1 L193-242, unsupported_cel_feature?/1 + contains_in_operator?/1 + contains_bare_question_mark?/1 L266-285, parse/1's recursive-descent grammar, eval/2 L1105-1226, evaluate_condition/2 L1461-1479) to establish the exact supported-grammar boundary and the two-stage translate_cel_to_expr/1->parse/1->eval/2 path evaluate_condition/2 composes. Checked all 15 corpus entries' condition_text strings against every @unsupported_call_markers substring, the in-operator regex, and the bare-'?' detector: none contains any rejected construct -- every entry uses only variables.<path> refs, the 6 comparators, &&/||/! (all in-grammar via translate_cel_to_expr/1's rewrite rules), literals, and parens. Result: all 15 classified EVALUATED, 0 EXPECTED_UNSUPPORTED (a genuine finding since R-Co's own EXP-102 corpus predates CEL macro/type-conversion/collection/in/ternary usage in this fixture set -- not an assumption). Wrote lib/letflow/design/req209-expr-differential-corpus-regression.md specifying: (1) the exact 7-field test/fixtures/simulation/differential_corpus.json shape (condition_id/condition_text/context/expected_result preserved byte-for-byte, source_definition_id/source_definition_version/source_gateway_node_id carried as inert metadata, field-by-field provenance table), (2) the single property-style ExUnit test structure -- one test body, one Enum.each/for loop over all 15 fixture entries calling Expr.evaluate_condition/2 (the same composed entry point Letflow.Engine.Transition.dispatch_exclusive_gateway/4 uses), asserting each EVALUATED entry's actual result against its expected_result, with a forward-compatible (but currently unused, since 0 entries need it) EXPECTED_UNSUPPORTED branch specified for a future corpus version, (3) the full moduledoc content required (regression-not-differential statement, both R-Co source file citations, expr.ex's own AC11 section cited by name, the two-stage path, corpus version/count/classification-count), plus 3 explicitly flagged open questions (OQ-1: no disposition field exists in this corpus version's fixture shape for a hypothetical future EXPECTED_UNSUPPORTED entry, deliberately not resolved; OQ-2: all 15 entries' context objects are flat/single-level, no dotted-path coverage exercised by this corpus; OQ-3: exact JSON-loading call deferred to whatever test/fixtures/simulation/fixture_shape_test.exs's own convention turns out to be at implementation time, since that sibling file was found to use yaml_elixir for YAML fixtures, not JSON, so it does not itself settle the JSON call). No .ex/.exs implementation bodies present -- all code-shaped content in the design doc is either @spec-style signatures/type-shapes or commented pseudocode narrating what each step of the test loop must do, never a real function body. Every one of this step's 6 acceptance criteria maps to a concrete section: corpus count -> doc S2, per-entry classification -> doc S4's table, fixture JSON shape -> doc S5, single-loop test structure -> doc S6, moduledoc content -> doc S7, no implementation code -> confirmed by inspection (S6's code fences are @spec/comment-only, no defmodule body executes any logic).",
+    "artifacts_out": ["lib/letflow/design/req209-expr-differential-corpus-regression.md"],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ209-20260902",
@@ -49,7 +49,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Not yet dispatched"
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0413-20260902-step-01b",
+  "run_id": "WF03-ISS0413-20260902",
+  "workflow_id": "WF-03",
+  "step": "01b",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0413-20260902/step-01b-code-designer.json",
+  "created_at": "2026-09-02T15:13:17Z",
+  "started_at": "2026-09-02T15:13:17Z",
+  "completed_at": "2026-09-02T15:13:17Z",
+  "status": "COMPLETED",
+  "priority": "MINOR",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0413"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0413-20260902/step-01-issue-fixer-diagnosis.json",
+      "docs/anti-patterns.md",
+      "lib/letflow/design/iss0378-poller-ac7-test-fix.md",
+      "lib/letflow/design/iss0404-regression-verification.md",
+      "test/specs/REQ-165.md",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "branch_name": "fix/ISS-0413-git-diff-live-ref-fragility-20260902"
+  },
+  "task": {
+    "description": "Decide the design/coverage trade-off ISSUE-FIXER routed here for plugin_handler_test.exs's AC6 live-ref git-diff test (plugin_interface.ex untouched) and implement whichever option the decision leads to."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Chose option (a): delete the AC6 git-diff test outright, no replacement. Design doc: lib/letflow/design/iss0413-plugin-handler-test-fragility.md. Key finding that drove the decision: ISSUE-FIXER's handoff characterized REQ-165's own mutation-testing table (test/specs/REQ-165.md lines 151-171) as showing mutation #3 (a handle_yield_result/4 error-message edit) was NOT caught by AC5's own error-message test (T3) on its own, making the git-diff test (T6) load-bearing. Re-reading that table directly shows the opposite: row 3 says mutation #3 was 'Caught by existing suite? Yes -- AC5's test asserts reason =~ \"did not respond within 100ms\" and failed immediately', action taken 'No test change needed'. Row 6 (AC-coverage table) only adds that T6 'would also have failed' once the mutation reached a diff -- true of any diff-based check and not evidence of independent discriminating power. So the coverage-loss premise behind options (b)/(c) does not hold: nothing of value is preserved by keeping T6, only the future-breakage risk (same class as ISS-0378/ISS-0404 -- a one-time historical fact about REQ-165's own already-merged diff, enforced forever via a live git diff --stat against a moving HEAD, which WILL break the first time a legitimate future PR touches plugin_interface.ex, the shared behaviour contract every plugin handler depends on). Implemented directly (test-only, mechanical): deleted the describe \"AC6: plugin_interface.ex is unmodified\" block (test/letflow/engine/wasm/plugin_handler_test.exs, was lines 34-66), replaced with a comment citing this design doc, ISS-0378/ISS-0404, and the T3-already-catches-mutation-#3 finding. Appended a fourth-recurrence note to docs/anti-patterns.md's existing 'A test scoped to one specific historical commit SHA...' entry, including the citation-verification lesson (a table row saying a check 'would also have failed' is not the same claim as 'was the catch'). mix compile --warnings-as-errors: clean, no output, exit 0. mix test test/letflow/engine/wasm/plugin_handler_test.exs (WASMEX_BUILD=true): 'Finished in 0.2 seconds ... Result: 9 passed, 4 excluded' (excluded tags :keycloak/:wasm_hang, pre-existing, unrelated), 0 failures. mix format on the touched file: no diff produced (already formatted). Working tree: only lib/letflow/design/iss0413-plugin-handler-test-fragility.md (new), docs/anti-patterns.md (append), test/letflow/engine/wasm/plugin_handler_test.exs (deletion), and this handoff changed/added; committed and pushed to fix/ISS-0413-git-diff-live-ref-fragility-20260902. No merge, no PR opened (per task instructions).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0413-plugin-handler-test-fragility.md",
+      "docs/anti-patterns.md",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

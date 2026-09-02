@@ -32,37 +32,19 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   end
 
   # ---------------------------------------------------------------------
-  # AC6: plugin_interface.ex is unmodified by this requirement.
+  # AC6 ("plugin_interface.ex is unmodified by REQ-165") was previously
+  # enforced here via a live-ref `git diff --stat #{base_ref}...HEAD` test.
+  # Removed per ISS-0413 (lib/letflow/design/iss0413-plugin-handler-test-fragility.md):
+  # the property was a one-time historical fact about REQ-165's own merged
+  # diff (already permanently discharged), not an evergreen property a
+  # future PR should have to keep satisfying -- the same defect class
+  # ISS-0378/ISS-0404 already fixed by deletion elsewhere in this suite.
+  # No replacement test was added: the mutation-testing table this test was
+  # kept for (test/specs/REQ-165.md, mutation #3, a handle_yield_result/4
+  # error-message edit) shows that mutation was already independently
+  # caught by the AC5 hang/timeout test below (`reason =~ "did not respond
+  # within 100ms"`), so no discriminating coverage is lost by this deletion.
   # ---------------------------------------------------------------------
-
-  describe "AC6: plugin_interface.ex is unmodified" do
-    test "git diff --stat against plugin_interface.ex is empty" do
-      # `main` only exists as a local branch in a dev checkout; CI's checkout
-      # of a PR branch has no local `main` ref, only `origin/main`. Try both
-      # so this test works in either shape.
-      base_ref =
-        Enum.find(["origin/main", "main"], fn ref ->
-          match?(
-            {_, 0},
-            System.cmd("git", ["rev-parse", "--verify", ref], stderr_to_stdout: true)
-          )
-        end)
-
-      assert base_ref, "expected either 'origin/main' or 'main' to resolve as a git ref"
-
-      {output, 0} =
-        System.cmd("git", [
-          "diff",
-          "--stat",
-          "#{base_ref}...HEAD",
-          "--",
-          "lib/letflow/engine/plugin_interface.ex"
-        ])
-
-      assert String.trim(output) == "",
-             "expected no diff against plugin_interface.ex, got: #{output}"
-    end
-  end
 
   # ---------------------------------------------------------------------
   # AC3 / AC4: dispatched via PluginInterface.invoke/2, {:complete, map()},

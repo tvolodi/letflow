@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-03",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0426-20260902/step-03-elixir-dev.json",
+  "created_at": "2026-09-02T19:20:59Z",
+  "started_at": "2026-09-02T19:20:59Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-02b-code-design-validator-regate2.json",
+      "docs/issues/ISS-0426.yaml",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 -- IMPLEMENT the ISS-0426 fix. The design at lib/letflow/design/iss426-wallclock-test-contention.md is GATE-APPROVED (CODE-DESIGN-VALIDATOR PASS, commit 86b5bf2f, after two rework cycles). Build exactly what it specifies. It is unusually prescriptive because both rework cycles were spent making it so -- treat its sections 2.1.1, 2.1.1a, 2.1.1b, 2.1.2, 2.1.2a, 2.2, 2.3, 2.4 and 3 as the specification, not as suggestions.\n\nWHAT TO BUILD, in the design's own terms:\n  1. Section 2.1.1's seam -- a new @doc false test-only synchronous entry point on Letflow.Engine.Lua.Executor calling the existing private run_script/3 directly, with NO Task.Supervisor.async_nolink and NO Task.yield. Precedented by that module's own build_script_error/3 (executor.ex:438-457) -- match its shape and its comment-justifying style.\n  2. Section 2.1.2's seam -- a second @doc false test-only entry point mirroring run_with_heap_limit/5's :erlang.spawn_opt/2 + monitor + receive shape, with the `after` clause REMOVED ENTIRELY (unbounded wait on the three remaining receive clauses). The max_heap_size: %{kill: true} spawn_opt is retained -- that is what still bounds these workloads.\n  3. Section 2.1.2a's BINDING USAGE CONTRACT, carried into seam 2's OWN @doc false declaration -- not merely referenced from the design doc. Section 7's OQ-1 note states this is 'not latitude'. The gate passed check 1(c) specifically because the design promises this text lands in the source; shipping the seam without it re-opens the exact defect the gate failed twice on. State the rule (callers MUST pass a workload that terminates independently of wall-clock enforcement), why it exists, and what breaks if violated (unbounded hang, backstopped only by ExUnit's 60s default).\n  4. Repoint the Group 1 call sites -- 14 call sites across 11 tests, per section 2.1's table: the 11 nil-heap sites to seam 1, and the 3 heap-limited sites (line 605 x2, line 644 x1) to seam 2.\n  5. Section 2.2/2.4's @tag :lua_wallclock_race on the 11 Group 2 tests (9 pure + 2 mixed), wired into test/test_helper.exs's ExUnit.start(exclude: [...]) list alongside :keycloak and :wasm_hang.\n  6. Section 2.3's minimal, ADDITIVE change to lib/mix/tasks/letflow.check.test.ex: a new sibling function modelled on run_wasm_hang_tests/0 that runs `mix test --only lua_wallclock_race` in its own subprocess, plus one new call site in run/1's success branch. ZERO existing lines touched -- this file is CONTESTED (see below) and ORCH's merge plan depends on that claim staying true.\n\nHARD CONSTRAINTS -- verify and state each in your handoff:\n  - AC4: NO production timeout semantics change. config/config.exs:17's 5_000 stays. execute_with_manifest/2,3, handle_yield_result/3, and run_with_heap_limit/5's own `after` clause must remain BYTE-FOR-BYTE UNCHANGED -- your seams are ADDITIVE functions alongside them. This is REQ-155's LUA-10 security control against untrusted tenant scripts; it is the single most important constraint on this run. Prove it with `git diff main...HEAD -- lib/letflow/engine/lua/executor.ex` showing only additions.\n  - AC3: the suite must still pass SERIALLY under plain `mix test`.\n  - config/test.exs:187 is left as-is (design section 1.4 explains why touching it would not even fix the filed failure).\n\nSCOPE BOUNDARY -- CONCURRENT RUN. WF03-ISS0418-20260902 is live on another host and owns lib/letflow/engine/wasm plus the three wasm test files (call_timeout_test.exs, plugin_handler_test.exs, host_api_write_test.exs). DO NOT EDIT THEM. lib/mix/tasks/letflow.check.test.ex is shared with that run -- keep your change there strictly additive as item 6 states.\n\nVERIFICATION YOU MUST RUN AND QUOTE (No Speculation -- real output, not 'should pass'):\n  - `mix compile` clean.\n  - `mix test test/letflow/engine/lua/executor_test.exs` -- ORCH measured the pre-change baseline on this branch: 'Finished in 4.4 seconds (4.4s async, 0.00s sync) / Result: 48 passed'. Note the 11 newly-tagged Group 2 tests will now be EXCLUDED from a default run, so expect roughly 37 passed plus 11 excluded -- confirm the excluded count matches the number you tagged, and quote the line.\n  - `mix test --only lua_wallclock_race test/letflow/engine/lua/executor_test.exs` -- the isolated partition must pass, proving the tagged tests still run and still assert their timeout behaviour rather than being silently dropped from the suite forever. Quote it. This is the check that catches the worst failure mode of a tagging fix.\n  - The design's own section 4 checklist items that are source reads.\n\nDo NOT write new tests -- TEST-DESIGNER owns Step 4. Your job is the fix plus repointing existing call sites. Complete the handoff with real quoted output for every verification above, then commit and push to feature/WF03-ISS0426-20260902. next_action: 'Route to SECURITY-REVIEWER then REVIEWER'."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

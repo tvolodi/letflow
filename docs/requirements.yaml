@@ -12346,6 +12346,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 415  # letflow-queue task id, GH#812
     description: >
       Closes ISS-0411/GH#807 (queue task 411): Letflow.Engine never
       dispatches :SERVICE_TASK nodes. dispatch_node/4
@@ -12497,6 +12498,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S3
+    impl_order: 417  # letflow-queue task id, GH#814
     description: >
       Second half of ISS-0411/GH#807's fix, atop REQ-214's dispatch-core
       module. Mirrors REQ-187's own role for TIMER nodes exactly (engine

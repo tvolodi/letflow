@@ -493,6 +493,39 @@ defmodule Letflow.Engine.Lua.Executor do
     {:configured_budget, budget}
   end
 
+  # ISS-0426 design §2.1.1/§2.1.1a candidate (i): a test-only synchronous entry point
+  # that calls run_script/3 directly, with no Task.Supervisor.async_nolink and no
+  # Task.yield in its call chain. Precedented by this module's own build_script_error/3
+  # above (public, @doc false, test-only) -- same shape, same justification: a test
+  # needs an inner function without the wrapper that isn't the thing under test.
+  #
+  # Production impact: none. execute_with_manifest/2,3 and every other production
+  # function in this module are untouched byte-for-byte -- this is a new, additive
+  # function alongside them, called only from tests (ISS-0426 HARD CONSTRAINT 1/AC4).
+  #
+  # Categorical bound (design §2.1.1b): run_script/3 always runs under
+  # Sandbox.new(max_instructions: budget) -- a real VM-level instruction counter the
+  # tv-labs/lua interpreter enforces on every opcode it executes, not interceptable
+  # from Lua source (see moduledoc's REQ-154/155 sections). A script can only escape
+  # the *outcome* of that counter (by pcall-catching the raised "instruction budget
+  # exceeded" error and continuing); it cannot escape the counter *incrementing*. So
+  # for any script that does not use Lua's own `goto` to construct a non-standard,
+  # VM-level-uninstrumented control-flow escape, this function terminates within a
+  # bounded number of VM instructions by construction -- a categorical guarantee, not
+  # a fact about which scripts today's callers happen to pass it. This is a STRONGER,
+  # different-in-kind guarantee than run_with_heap_limit_sync/5 below carries -- see
+  # that function's own @doc false for the contrast.
+  @spec run_script_sync(Manifest.t(), binary(), pos_integer()) ::
+          {:ok, %{manifest_hash: String.t()}}
+          | {:error, {:budget_exceeded, pos_integer()}}
+          | {:error, {:script_error, script_error()}}
+          | {:error, String.t()}
+          | {:error, :invalid_script_ref}
+  @doc false
+  def run_script_sync(manifest, script_source, budget) do
+    run_script(manifest, script_source, budget)
+  end
+
   # REQ-156, design §5: the max_heap_words-configured path. Task.Supervisor cannot
   # carry a max_heap_size spawn_opt (moduledoc REQ-156 section), so this bypasses it
   # entirely and spawns directly via :erlang.spawn_opt/2 with :monitor (atomically
@@ -547,6 +580,86 @@ defmodule Letflow.Engine.Lua.Executor do
         end
 
         {:error, {:wallclock_timeout, timeout_ms}}
+    end
+  end
+
+  # ISS-0426 design §2.1.2/§2.1.2a: a test-only unbounded-wait variant of
+  # run_with_heap_limit/5 above, for the heap-limited Group 1 call sites. Mirrors that
+  # function's spawn_opt/monitor/receive shape exactly -- same spawn_opt call, same
+  # reply_ref/monitor_ref pair, same three receive clauses ({^reply_ref, result}, the
+  # :killed :DOWN, and the other-reason :DOWN) -- with the `after timeout_ms -> ...`
+  # clause REMOVED ENTIRELY. The max_heap_size: %{kill: true} spawn_opt is retained
+  # unchanged: that BEAM-enforced limit, not this function's own patience, is what
+  # still bounds these workloads. run_with_heap_limit/5 itself is untouched by this
+  # addition (ISS-0426 HARD CONSTRAINT 1/AC4) -- this is a second, narrower entry
+  # point alongside it, never invoked from any non-test code path.
+  #
+  # BINDING USAGE CONTRACT (ISS-0426 design §2.1.2a -- this is the binding text
+  # itself, not merely a pointer to the design doc; per rework 2's explicit
+  # requirement, callers must be able to read the rule here at the call site):
+  #
+  #   Callers of this function MUST pass a workload that is guaranteed to terminate
+  #   on its own, independently of any wall-clock enforcement -- either because it is
+  #   bounded by :max_instructions alone (a fixed-iteration or otherwise self-limiting
+  #   script with no construct that traps and re-triggers its own budget exhaustion),
+  #   or because it is expected to terminate via the configured max_heap_words
+  #   heap-kill. This function deliberately does not enforce a wall-clock bound --
+  #   that is its entire purpose, to let Group-1 tests assert an outcome without
+  #   racing the production wall-clock kill (run_with_heap_limit/5's own `after`
+  #   clause, untouched above). A script that can catch its own instruction-budget
+  #   exhaustion (e.g. via pcall) and continue executing is NOT a valid input to this
+  #   function: nothing will terminate it, and the calling test process will hang
+  #   until ExUnit's own default 60s test timeout, not this function's -- a
+  #   materially worse failure mode than the flake this function exists to remove. If
+  #   a workload cannot be shown to terminate independently of wall-clock enforcement,
+  #   it belongs in the tagged/isolated :lua_wallclock_race partition instead (racing
+  #   the real `after` clause via run_with_heap_limit/5 or Task.yield as normal) --
+  #   never passed to this function.
+  #
+  # Guarantee kind (design §2.1.1b's contrast table): this is CONTRACTUAL, not
+  # categorical like run_script_sync/3 above -- it holds only if the caller obeys the
+  # contract stated above; this function's own mechanism enforces nothing if the
+  # contract is violated. The memory-limit path itself stays exactly as strong as
+  # run_with_heap_limit/5's: max_heap_size: kill: true is enforced by the BEAM
+  # runtime on the spawned process regardless of whether anything is receive-ing for
+  # it, so removing the wait's own timeout does not relax the heap limit, only this
+  # function's patience for observing the outcome.
+  @spec run_with_heap_limit_sync(Manifest.t(), binary(), pos_integer(), pos_integer()) ::
+          {:ok, %{manifest_hash: String.t()}}
+          | {:error, {:budget_exceeded, pos_integer()}}
+          | {:error, {:script_error, script_error()}}
+          | {:error, String.t()}
+          | {:error, :invalid_script_ref}
+          | {:error, :memory_limit_exceeded}
+  @doc false
+  def run_with_heap_limit_sync(manifest, script_source, budget, max_heap_words) do
+    parent = self()
+    reply_ref = make_ref()
+
+    {pid, monitor_ref} =
+      :erlang.spawn_opt(
+        fn ->
+          send(parent, {reply_ref, run_script(manifest, script_source, budget)})
+        end,
+        [:monitor, max_heap_size: %{size: max_heap_words, kill: true, error_logger: false}]
+      )
+
+    receive do
+      {^reply_ref, result} ->
+        Process.demonitor(monitor_ref, [:flush])
+        result
+
+      # No caller-issued kill exists on this path at all (the `after` clause is
+      # removed entirely), so every :killed DOWN this function can possibly observe
+      # is unconditionally the BEAM's own max_heap_size enforcement -- the ordering
+      # argument run_with_heap_limit/5 relies on degenerates to a simpler, strictly
+      # stronger statement here: there is no caller-issued kill branch to
+      # disambiguate against in the first place (design §2.1.2).
+      {:DOWN, ^monitor_ref, :process, ^pid, :killed} ->
+        {:error, :memory_limit_exceeded}
+
+      {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+        {:error, "#{inspect(__MODULE__)} task crashed: " <> format_exit_reason(reason)}
     end
   end
 

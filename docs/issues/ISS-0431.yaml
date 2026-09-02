@@ -84,3 +84,18 @@ queue_task_id: 431
 github_issue: 835
 
 status: open
+orch_routing_note: >
+  ORCH (2026-09-02): ISSUE-FIXER's sizing pass
+  (handoffs/WF03-ISS0431-20260902/step-01-issue-fixer-diagnosis.json)
+  confirmed this bundles multiple genuinely open architecture decisions
+  (response shape, global-vs-per-tenant caps, library-vs-hand-rolled,
+  pool_size/max_connections coupling) and two disjoint wiring surfaces --
+  not a scoped WF-03 fix. Routed to REQ-ANALYST, which drafted three
+  properly-split requirements resolving every "TO DECIDE" item with
+  stated reasoning: REQ-216 (admission-control core, queue task 434,
+  GH#839), REQ-217 (HTTP entry-path wiring, queue task 435, GH#840),
+  REQ-218 (Poller wiring, queue task 436, GH#841). REQ-VALIDATOR passed
+  all three (handoffs/WF01-REQ216-217-218-20260902/step-validator.json).
+  This record stays open, status unchanged, pending those three
+  requirements' completion -- closing it directly would misrepresent an
+  undiagnosed-but-unfixed gap as resolved.

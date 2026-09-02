@@ -12612,7 +12612,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    impl_order: 434  # letflow-queue task id, GH#839
     description: >
       Closes part 1 of ISS-0431/GH#835 (queue task 431): Letflow has no
       admission control or backpressure anywhere. ISSUE-FIXER's diagnosis
@@ -12781,7 +12781,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    impl_order: 435  # letflow-queue task id, GH#840
     description: >
       Second half of ISS-0431/GH#835's fix for its own stated PRIMARY
       surface, atop REQ-216's core module. Mirrors REQ-186/REQ-187's and
@@ -12869,7 +12869,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
-    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    impl_order: 436  # letflow-queue task id, GH#841
     description: >
       Third and final part of ISS-0431/GH#835's fix, covering its own
       explicitly-named SECONDARY surface: "Poller's per-tenant sweeps and

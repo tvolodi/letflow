@@ -4062,13 +4062,27 @@
       "issue_id": "ISS-0431",
       "queue_task_id": 431,
       "github_issue_number": 835,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-02T20:40:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
+      "lock_released_at": "2026-09-02T20:44:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- diagnosis routed to REQ-ANALYST, 3 requirements drafted and validated (REQ-216/217/218), registered as queue tasks 434/435/436, queue task 431 released open (not done)",
       "note": "WF-03 issue-resolving run for ISS-0431: no admission control/backpressure anywhere in Letflow. Explicitly a design decision (503+Retry-After shape, global vs per-tenant cap, library vs hand-rolled semaphore) per the issue own TO DECIDE section, not a mechanical fix."
+    },
+    {
+      "run_id": "WF01-REQ216-217-218-20260902",
+      "requirement_id": "REQ-216,REQ-217,REQ-218",
+      "issue_id": "ISS-0431",
+      "queue_task_id": null,
+      "github_issue_number": null,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "started_at": "2026-09-02T20:40:00Z",
+      "lock_released_at": "2026-09-02T20:44:00Z",
+      "released_lock": true,
+      "last_known_step": "REQ-VALIDATOR PASS on all 3 -- registered as queue tasks 434 (REQ-216), 435 (REQ-217, depends_on 434), 436 (REQ-218, depends_on 434)",
+      "note": "WF-01 requirement-drafting run for ISS-0431 (admission control/backpressure). REQ-ANALYST resolved all TO-DECIDE items with stated reasoning; REQ-VALIDATOR independently confirmed testability, sizing, depends_on correctness, decision-0014 consistency, and YAML validity."
     }
   ]
 }

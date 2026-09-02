@@ -1,0 +1,50 @@
+{
+  "handoff_id": "b3000e72-0f46-4974-9a5a-b6cc007e11f6",
+  "run_id": "WF02-REQ209-20260902",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ209-20260902/step-06-doc-updater.json",
+  "created_at": "2026-09-02T03:44:22Z",
+  "started_at": "2026-09-02T03:44:22Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-209"],
+    "requirement_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ209-20260902/step-05-release-validator.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RELEASE-VALIDATOR PASSED REQ-209 (independently re-verified full suite 3051/3051, all 6 acceptance criteria confirmed against actual code). Flip REQ-209's status pending/in_progress -> done in docs/requirements.yaml, and append a done event to the current run-history volume (docs/status/requirement_status.v8.yaml, via the index). Check whether this requirement named a docs/migration/stage-N-*.md file in its acceptance criteria (it does not appear to -- confirm this yourself rather than assuming) -- REQ-209 is stage S7; docs/migration/stage-7-simulation-uat-parity.md may be worth a brief status note if S7's own tracking doc lists REQ-209 by id, but do not force an edit if the requirement's own acceptance criteria don't call for one.",
+    "acceptance_criteria": [
+      "docs/requirements.yaml: REQ-209 status flipped to done",
+      "A 'done' event appended to the current run-history volume with a real UTC timestamp",
+      "Checked whether docs/migration/stage-7-simulation-uat-parity.md references REQ-209 and needs an update -- state the finding either way, don't silently skip the check",
+      "artifacts_out lists every file actually touched, named explicitly"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Not yet completed by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ209-20260902",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ209-20260902",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Not yet dispatched"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

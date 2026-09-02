@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF03-ISS0429-20260902-step-03",
+  "run_id": "WF03-ISS0429-20260902",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0429-20260902/step-03-elixir-dev.json",
+  "created_at": "2026-09-02T21:15:00Z",
+  "started_at": "2026-09-02T20:55:00Z",
+  "completed_at": "2026-09-02T21:15:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0429"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0429-async-alert-hook-delivery.md",
+      "handoffs/WF03-ISS0429-20260902/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0429-20260902/step-02-code-designer.json",
+      "handoffs/WF03-ISS0429-20260902/step-02b-code-design-validator.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "branch_name": "fix/ISS-0429-poller-blocking-sleep-20260902"
+  },
+  "task": {
+    "description": "WF-03 Step 3: implement the CODE-DESIGN-VALIDATOR-approved design at lib/letflow/design/iss0429-async-alert-hook-delivery.md -- relocate Letflow.Obs.Alerts.fire_hooks/4's deliver_with_retry/4 dispatch off Letflow.Scheduler.Poller's own process onto a new dedicated Task.Supervisor child in application.ex, without changing deliver_with_retry/4's body/@spec, backoff_delay/2, RetryPolicy, check_and_record_emission/4, or poller.ex's existing try/rescue.",
+    "acceptance_criteria": [
+      "Letflow.Obs.Alerts.TaskSupervisor added to application.ex's children list, after the six existing Task.Supervisors, before scheduler_children()/http_child()",
+      "fire_hooks/4 dispatches deliver_with_retry/4 via Task.Supervisor.start_child/2 (fire-and-forget), not async_nolink, not a direct synchronous call",
+      "check_and_record_emission/4 stays synchronous, unchanged position/semantics, still committed before dispatch",
+      "deliver_with_retry/4 body/@spec, backoff_delay/2, RetryPolicy unchanged",
+      "poller.ex's maybe_run_alert_detection/3 try/rescue unchanged",
+      "webhooks.ex's latent deliver/3 instance untouched",
+      "alerts.ex moduledoc's 'No new periodic process' and 'OQ-4 resolution' sections updated to no longer claim application.ex is unchanged",
+      "a test proves the Poller's own GenServer processes a subsequent :tick promptly while a dispatched hook delivery is still mid-backoff, with a genuine fail-first result against pre-fix code"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented per the approved design, no deviations. (1) lib/letflow/application.ex: added `{Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}` immediately after `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor` and before `] ++ scheduler_children() ++ http_child()`, with an inline comment stating the ISS-0429 motivation, what runs under it, why it is not shared with the other six Task.Supervisors, and the ordering constraint relative to scheduler_children() (mirroring the SandboxPool.TaskSupervisor comment's own convention). (2) lib/letflow/obs/alerts.ex fire_hooks/4: the `:ok -> deliver_with_retry(hook, payload, trigger_key, 1)` branch now reads `:ok -> Task.Supervisor.start_child(Letflow.Obs.Alerts.TaskSupervisor, fn -> deliver_with_retry(hook, payload, trigger_key, 1) end)` with an inline comment explaining the fire-and-forget choice and crash-observability rationale from the design's §3. check_and_record_emission/4's call site, position, and semantics are byte-for-byte unchanged. deliver_with_retry/4's own body, @spec, backoff_delay/2, and the RetryPolicy struct are untouched -- verified via `git diff` showing no lines changed inside those functions. poller.ex was not touched at all (no changes needed, matching the design's §4). lib/letflow/webhooks.ex was not touched (confirmed out of scope). (3) alerts.ex moduledoc: updated the 'No new periodic process' section (now 'No new periodic process, but one new dispatch-only child (ISS-0429)') and the 'OQ-4 resolution' section (now '... -- superseded by ISS-0429') to accurately state that Letflow.Obs.Alerts itself still has no process/start_link/child_spec, but application.ex now has one new Task.Supervisor child dedicated to isolating delivery work, per the design's §7 explicit action item. (4) Test: added a new describe block 'ISS-0429: a dispatched hook delivery mid-backoff does not block a subsequent :tick' to test/letflow/scheduler/poller_test.exs (this file already starts a real Poller GenServer via start_supervised!/1 under Letflow.DataCase's async:false shared-sandbox-mode precedent for an existing REQ-186 test, so no new sandbox-mode/bypass plumbing was needed -- start_supervised!(Poller) already works here). The test configures a single always-500 hook with a 2_000ms base/max backoff, pushes dlq_count over threshold via 6 real Dlq.enqueue/2 rows (so the Poller's own first zero-delay tick fires the hook), sets poll_interval_ms to 40ms, then samples :sys.get_state/1's last_tick_started_at 8 times over ~350ms and asserts at least 2 distinct values were observed -- proving the Poller processed more than one tick while the dispatched hook was still asleep inside its 2_000ms backoff, which is impossible if delivery still ran synchronously on the Poller. FAIL-FIRST PROOF (real, run in this session, not asserted from memory): reverted only the fire_hooks/4 dispatch call site back to the pre-fix synchronous `deliver_with_retry(hook, payload, trigger_key, 1)` (kept the new Task.Supervisor child and moduledoc changes in place), recompiled, and re-ran the new test in isolation -- it genuinely failed: `** (exit) exited in: :sys.get_state(#PID<0.791.0>) ** (EXIT) time out`, because the Poller's own process was still blocked inside deliver_with_retry/4's Process.sleep(2_000) and never reached schedule_next_tick/0 to process a second :tick. Re-applied the fix, recompiled, and re-ran the same test: passed cleanly (`1 passed, 6 excluded`, ~2.4s). REGRESSION FIXES REQUIRED AND MADE (flagging explicitly for REVIEWER, not silently absorbed): running the full targeted regression (`mix test test/letflow/obs/alerts_test.exs test/letflow/scheduler/poller_test.exs`) before these fixes surfaced two genuine, ISS-0429-caused regressions in pre-existing REQ-201 tests, both now fixed: (a) AC-8's test used `capture_log/1` around a *synchronous* `Alerts.run_detection/2` call to capture the 'alert delivery exhausted' log; since delivery is now dispatched off-process and run_detection/2 itself returns almost immediately, the capture_log block was exiting before (and, per ExUnit.CaptureLog's own documented cross-process-capture caveat, potentially even independent of when) the log fired -- fixed by adding a bounded `Process.sleep(200)` inside the capture_log closure, comfortably longer than the test's tiny 1ms/10ms-capped backoff plus two real HTTP round trips, with an inline comment explaining why. (b) AC-11's second test asserted `refute source =~ \"Letflow.Obs.Alerts\"` against application.ex's raw source -- this is now unconditionally false by design, since application.ex must reference `Letflow.Obs.Alerts.TaskSupervisor` for the fix to exist at all. This assertion encoded exactly the pre-ISS-0429 assumption the approved design's §7 already flagged as needing correction (the moduledoc's own 'OQ-4 resolution' section stating the same thing). Narrowed the assertion to `refute source =~ ~r/Letflow\\.Obs\\.Alerts(?!\\.)/` -- any bare, non-dotted reference to Letflow.Obs.Alerts (which is what a child-spec entry for the module itself would require) still fails the test, while the dotted `Letflow.Obs.Alerts.TaskSupervisor` reference this fix adds is explicitly permitted; added an inline comment stating this is a deliberate, CODE-DESIGN-VALIDATOR-approved narrowing of REQ-201's original AC-11, not a weakening of its actual intent (Letflow.Obs.Alerts itself is still never supervised -- both its start_link/1 and child_spec/1 absence assertions in the first AC-11 test are untouched and still pass). VERIFICATION RUN, real output quoted: `mix compile --warnings-as-errors --force` -> 'Compiling 182 files (.ex) / Generated letflow app', zero warnings. `mix format` on all four touched files -> no diff (already formatted). New test in isolation (`mix test test/letflow/scheduler/poller_test.exs:350`) -> '1 passed, 6 excluded'. Combined regression (`mix test test/letflow/obs/alerts_test.exs test/letflow/scheduler/poller_test.exs`) -> '24 passed', zero failures. Additional targeted regression beyond what was asked, since this change touches the global supervision tree: `mix test test/letflow/application_test.exs` -> '4 passed'; `mix test test/letflow/scheduler_test.exs test/letflow/scheduler_req188_test.exs test/letflow/webhooks_delivery_test.exs` -> '31 passed' (confirms webhooks.ex's untouched latent instance and Letflow.Scheduler's own context-module tests are unaffected). Full-suite `mix test` was attempted but exceeded this environment's practical run budget (auto-backgrounded past 120s, killed at a 580s cap with no full result captured) -- not run to completion; flagging this explicitly rather than claiming a full-suite green run. TEST-RUNNER should run the full suite before this lands, per this project's own redundancy principle.",
+    "artifacts_out": [
+      "lib/letflow/application.ex",
+      "lib/letflow/obs/alerts.ex",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/letflow/obs/alerts_test.exs"
+    ],
+    "next_action": "Route to REVIEWER (OTP idiom / supervision-integrity hard gate -- this change adds a new Task.Supervisor to Letflow.Application's supervision tree and changes a dispatch call site's concurrency shape). SECURITY-REVIEWER gate confirmed NOT required: no tenant-data path touched (no new/changed API route, migration, secrets handling, or response shaping -- check_and_record_emission/4's tenant-scoped writes are byte-for-byte unchanged; the only tenant-adjacent code path, deliver_with_retry/4's own body, is unchanged and now simply runs on a different process). REVIEWER should also confirm: (a) the two REQ-201 test fixes (AC-8, AC-11) are judged as legitimate, design-driven test updates rather than scope creep -- both are flagged in detail above with rationale; (b) full mix test suite (not run to completion in this session) is green before merge."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

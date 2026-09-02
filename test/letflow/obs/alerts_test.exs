@@ -399,9 +399,18 @@ defmodule Letflow.Obs.AlertsTest do
       # Use tiny backoff so test doesn't take long
       ctx = base_tick_context(%{dlq_count: 10})
 
+      # ISS-0429: delivery (including its own exhaustion Logger.error call) now runs
+      # in a detached Task dispatched off Letflow.Obs.Alerts.TaskSupervisor, not
+      # synchronously on this test process -- run_detection/2 itself returns as soon
+      # as dispatch happens. capture_log/1 only captures messages logged while its own
+      # `fun` is still running (see ExUnit.CaptureLog's moduledoc: cross-process log
+      # messages are captured only if the capture is still active when they're
+      # logged), so `fun` must stay alive past dispatch. 200ms comfortably covers the
+      # tiny 1ms/10ms-capped backoff configured above plus two real HTTP round trips.
       log =
         capture_log(fn ->
           Alerts.run_detection(schema_name, ctx)
+          Process.sleep(200)
         end)
 
       # 2 attempts should have been made (max_attempts: 2).
@@ -493,21 +502,45 @@ defmodule Letflow.Obs.AlertsTest do
   end
 
   # ---------------------------------------------------------------------------
-  # AC-11: detection runs on the scheduler, not a new child process
+  # AC-11: detection runs on the scheduler, not a new child process running
+  # `Letflow.Obs.Alerts` itself.
+  #
+  # UPDATED under ISS-0429 (design lib/letflow/design/iss0429-async-alert-hook-delivery.md,
+  # superseding this module's own now-updated "OQ-4 resolution" moduledoc section):
+  # `Letflow.Obs.Alerts` itself still has no process, start_link/1, or child_spec/1 of
+  # its own -- that half of AC-11 is unchanged and still asserted below. What DID
+  # change is that `application.ex` now references the module NAME
+  # `Letflow.Obs.Alerts.TaskSupervisor` (a plain `Task.Supervisor`, not `Alerts`
+  # itself) so `fire_hooks/4` has somewhere supervised to dispatch delivery work --
+  # this is a deliberate, CODE-DESIGN-VALIDATOR-approved outcome of ISS-0429, not a
+  # regression of REQ-201's original AC-11. The blanket substring-absence assertion
+  # below is narrowed accordingly: it must still be false that `application.ex`
+  # supervises `Letflow.Obs.Alerts` (the base module) directly, while allowing the
+  # `.TaskSupervisor` reference this fix adds.
   # ---------------------------------------------------------------------------
 
-  describe "AC-11: application.ex not modified; no new child added" do
+  describe "AC-11: application.ex does not supervise Letflow.Obs.Alerts itself" do
     test "Letflow.Obs.Alerts has no start_link/1 and no child_spec/1" do
       refute function_exported?(Alerts, :start_link, 1)
       refute function_exported?(Alerts, :child_spec, 1)
     end
 
-    test "Letflow.Application source does not reference Letflow.Obs.Alerts" do
-      # Source-assertion: git diff of application.ex is the AC-11 evidence.
-      # A module without start_link/child_spec cannot appear as a child spec,
-      # but the source check catches an accidental bare module atom reference too.
+    test "Letflow.Application source references only Letflow.Obs.Alerts.TaskSupervisor, never bare Letflow.Obs.Alerts as a child" do
+      # Source-assertion: git diff of application.ex is the AC-11 evidence. A module
+      # without start_link/child_spec cannot appear as a child spec, but this source
+      # check catches an accidental bare module-atom reference too -- while
+      # deliberately permitting the ISS-0429 `Letflow.Obs.Alerts.TaskSupervisor`
+      # reference this fix adds (asserted to exist by the ISS-0429 test coverage in
+      # test/letflow/scheduler/poller_test.exs and by the application.ex diff itself).
       source = File.read!("lib/letflow/application.ex")
-      refute source =~ "Letflow.Obs.Alerts"
+
+      # Any bare "Letflow.Obs.Alerts" reference NOT immediately followed by a "."
+      # (e.g. a literal ".TaskSupervisor" or ".deliver_with_retry" dotted reference)
+      # would mean the base module itself was used as a child spec entry -- that is
+      # what AC-11 forbids. A dotted reference to a submodule/function name can never
+      # itself be a valid child spec for `Letflow.Obs.Alerts`.
+      refute source =~ ~r/Letflow\.Obs\.Alerts(?!\.)/,
+             "application.ex must not supervise Letflow.Obs.Alerts directly -- only dotted references (e.g. Letflow.Obs.Alerts.TaskSupervisor) are allowed"
     end
   end
 

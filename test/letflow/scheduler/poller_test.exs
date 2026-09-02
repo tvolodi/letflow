@@ -30,6 +30,7 @@ defmodule Letflow.Scheduler.PollerTest do
   import Ecto.Query
 
   alias Letflow.Definitions
+  alias Letflow.Dlq
   alias Letflow.Engine
   alias Letflow.Engine.TokenRecord
   alias Letflow.EventStore.ArchivedEvent
@@ -39,6 +40,7 @@ defmodule Letflow.Scheduler.PollerTest do
   alias Letflow.Scheduler.Poller
   alias Letflow.Scheduler.Timer
   alias Letflow.TenantFixture
+  alias Letflow.WebhookTestServer
 
   defp provisioned_tenant(slug_prefix \\ "req186-poller") do
     TenantFixture.provisioned_tenant!(
@@ -323,6 +325,99 @@ defmodule Letflow.Scheduler.PollerTest do
       assert DateTime.compare(state_after_second.last_retention_run_at, first_run_at) == :eq
       assert table_count(Event, schema_name) == 1
       assert table_count(ArchivedEvent, schema_name) == 1
+    end
+  end
+
+  # ===================================================================================
+  # ISS-0429 -- a dispatched alert-hook delivery mid-backoff must not block the
+  # Poller's own subsequent :tick. See
+  # lib/letflow/design/iss0429-async-alert-hook-delivery.md §6 for the full test
+  # rationale this describe block implements.
+  # ===================================================================================
+
+  defp put_alert_config(overrides) do
+    original = Application.get_env(:letflow, :alert_hooks)
+    Application.put_env(:letflow, :alert_hooks, overrides)
+
+    on_exit(fn ->
+      case original do
+        nil -> Application.delete_env(:letflow, :alert_hooks)
+        val -> Application.put_env(:letflow, :alert_hooks, val)
+      end
+    end)
+  end
+
+  describe "ISS-0429: a dispatched hook delivery mid-backoff does not block a subsequent :tick" do
+    test "the Poller's own last_tick_started_at advances more than once while the only " <>
+           "configured hook is still retrying its (slow) backoff schedule" do
+      # Always-500 server -- deliver_with_retry/4 enters its Process.sleep(backoff_delay/2)
+      # branch on every attempt. base_backoff_ms/max_backoff_ms are both 2_000ms (test-local
+      # RetryPolicy override, not the production default) so the mid-backoff window is
+      # comfortably wide -- long enough to straddle several real ticks at the overridden
+      # poll_interval_ms below, but short enough this test still finishes in well under a
+      # second either way (pass or fail-first).
+      server = WebhookTestServer.start(500, "internal error")
+
+      put_alert_config(
+        enabled: true,
+        thresholds: [dlq_depth_threshold: 5],
+        hooks: [
+          [
+            hook_id: "iss0429-poller-block-hook",
+            enabled: true,
+            destination_url: server.url,
+            timeout_ms: 1_000,
+            auth_secret_ref: nil,
+            retry_policy: [
+              max_attempts: 5,
+              base_backoff_ms: 2_000,
+              max_backoff_ms: 2_000,
+              multiplier: 2.0
+            ]
+          ]
+        ]
+      )
+
+      # Short poll interval so several real ticks fall well inside the hook's
+      # still-in-progress 2_000ms backoff window from the first tick's dispatch.
+      put_scheduler_config(poll_interval_ms: 40, jitter_ms: 0, max_timers_per_cycle: 64)
+
+      %{schema_name: schema_name} = provisioned_tenant("iss0429-poller-block")
+
+      # Push dlq_count over the threshold=5 BEFORE the Poller starts, so its very
+      # first (zero-delay) tick's alert detection pass fires the hook immediately.
+      for _ <- 1..6 do
+        assert {:ok, _entry} =
+                 Dlq.enqueue(%{entry_type: "iss0429_poller_block_test"}, prefix: schema_name)
+      end
+
+      pid = start_supervised!(Poller)
+
+      # Let the first tick (and its synchronous check_and_record_emission/4 commit +
+      # fire-and-forget dispatch) run and settle.
+      Process.sleep(30)
+
+      timestamps =
+        for _ <- 1..8 do
+          Process.sleep(40)
+          state = :sys.get_state(pid)
+          state.last_tick_started_at
+        end
+
+      distinct_timestamps = Enum.uniq(timestamps)
+
+      # Regression proof: at least two DIFFERENT last_tick_started_at values must have
+      # been observed within this ~350ms sampling window, which is well inside the
+      # hook's still-mid-backoff 2_000ms window from the first dispatch. Pre-fix, the
+      # Poller's own handle_info(:tick, _) call ran deliver_with_retry/4 synchronously
+      # and would still be blocked inside Process.sleep(2_000) at this point --
+      # schedule_next_tick/0 is only ever reached AFTER that call returns, so
+      # last_tick_started_at would never have advanced past its first value.
+      assert length(distinct_timestamps) >= 2,
+             "expected the Poller to process more than one :tick within #{8 * 40}ms while " <>
+               "the dispatched hook was still mid-backoff (2_000ms); observed only " <>
+               "#{length(distinct_timestamps)} distinct last_tick_started_at value(s) -- " <>
+               "the Poller's own tick appears to be blocked on hook delivery"
     end
   end
 

@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-03c",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-03c-reviewer.json",
+  "created_at": "2026-09-02T20:53:35Z",
+  "started_at": "2026-09-02T20:53:35Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0426-20260902/step-03b-security-reviewer.json",
+      "docs/issues/ISS-0426.yaml",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3 IDIOM/DESIGN-INTEGRITY GATE for ISS-0426. SECURITY-REVIEWER has already PASSED (handoff step-03b): no INV violation, production semantics confirmed untouched (113 insertions / 0 deletions in executor.ex), the two public @doc false seams judged an acceptable availability-only risk with no production call path, and the test tagging confirmed to still execute (37 passed + 11 excluded default; 11 passed + 37 excluded isolated). Do not re-run the security scope test -- review for YOUR scope: idiomatic OTP usage, supervision integrity, scope creep, and decision-record consistency.\n\nWHAT TO REVIEW, run-specifically:\n\n1. OTP IDIOM OF THE SECOND SEAM. run_with_heap_limit_sync/4 uses :erlang.spawn_opt/2 with a monitor and a bare `receive` that has NO `after` clause -- an unbounded receive. Judge this as OTP code. It deliberately mirrors the existing run_with_heap_limit/5's shape (which does have an `after`), so the question is not 'is spawn_opt idiomatic here' -- that pattern is already established in this module for a reason (max_heap_size is a spawn_opt). The question is whether an unbounded receive is acceptable in this codebase's idiom for a test-only helper, whether the three receive clauses are exhaustive over the monitored process's termination modes, and whether Process.demonitor/2 hygiene is correct on every path (a leaked monitor or a stray :DOWN left in the caller's mailbox is a real defect in a function tests call repeatedly).\n\n2. DUPLICATION VS. THE ORIGINAL. The new seam is close to a copy of run_with_heap_limit/5 minus the `after` clause, and run_lua_wallclock_race_tests/0 in letflow.check.test.ex is described by ELIXIR-DEV as a 3-substitution copy of run_wasm_hang_tests/0. Both duplications were deliberate design decisions (letflow.check.test.ex is shared with the live concurrent run WF03-ISS0418-20260902, so additive-only was REQUIRED -- zero existing lines touched, which ORCH verified: 37 insertions / 0 deletions). Judge whether the duplication is justified or whether an extraction is warranted -- but weigh the concurrent-run constraint, which is real and which ORCH will rely on when sequencing the merge against ISS-0418. If you would normally demand a refactor here, say whether it should be deferred to a follow-up issue rather than done now.\n\n3. SCOPE CREEP. The change should be: two additive seams, repointed Group 1 call sites, a new @tag on 11 tests, test_helper.exs exclusion wiring, and an additive check.test.ex subprocess. Confirm nothing else rode along. `git diff main...HEAD --stat` is your starting point.\n\n4. DECISION-RECORD CONSISTENCY. Check the change against docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md and REQ-155/156/162's own design docs -- particularly that nothing here silently re-decides the scripting runtime's timeout/security posture. The design doc lib/letflow/design/iss426-wallclock-test-contention.md is gate-approved; verify the IMPLEMENTATION matches what that design specifies rather than diverging from it (especially design sections 2.1.1, 2.1.2, 2.1.2a, 2.2, 2.3, 2.4).\n\n5. THE CONTRACT COMMENT. Design section 2.1.2a's usage contract had to land in the seam's own @doc false/comment block -- the design gate FAILED TWICE on this exact point before passing. It is present at executor.ex:601-612 (ORCH verified). Judge whether it is written well enough to actually bind a future caller who reads only the source: does it state the rule, the reason, and the failure mode?\n\n6. AN INCIDENTAL FINDING ELIXIR-DEV FLAGGED FOR YOU. The type checker now emits a non-fatal 'clause will never match' note at executor_test.exs:464 for a `refute match?({:error, {:wallclock_timeout, _}}, result)` line, because run_script_sync/3's narrower @spec correctly excludes wallclock_timeout as categorically unreachable. ELIXIR-DEV left it as-is (touching test assertions is TEST-DESIGNER's scope, not its own) and notes it fails nothing. Rule on it: is leaving a permanent 'will never match' warning in the tree acceptable, should the assertion be removed/rewritten by TEST-DESIGNER at Step 4, or is the warning itself valuable as a standing proof that the unreachability claim holds? State your preference clearly enough that ORCH can put it in TEST-DESIGNER's handoff.\n\nYou may READ anything. Do not edit lib/ or test/. Complete the handoff with a clear PASS/FAIL, per-item verdicts, and an explicit ruling on item 6; commit it to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

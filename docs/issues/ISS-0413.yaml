@@ -37,4 +37,23 @@ source: >
   lib/letflow/design/iss0404-regression-verification.md).
 queue_task_id: 413
 github_issue: 809
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0413-20260902
+resolved_at: "2026-09-02T16:05:00Z"
+resolution: >
+  Two-part, asymmetric fix. host_api_write_test.exs's AC7 git-diff test
+  (lua/ untouched) was deleted directly by ISSUE-FIXER -- a structural
+  sibling test in the same describe block already covered the same intent.
+  plugin_handler_test.exs's AC6 git-diff test (plugin_interface.ex
+  untouched) required a real CODE-DESIGNER pass
+  (lib/letflow/design/iss0413-plugin-handler-test-fragility.md): the
+  design doc corrected a misread of REQ-165's own mutation-testing table
+  cited in ISSUE-FIXER's initial diagnosis -- mutation #3 was actually
+  caught independently by AC5's own content-level assertion, not by the
+  git-diff test, so no coverage was lost by deleting it. REVIEWER
+  independently re-verified the citation correction against
+  test/specs/REQ-165.md before passing. Both deletions follow the
+  ISS-0378/ISS-0404 "evergreen property via live git diff" precedent.
+  docs/anti-patterns.md updated with a fourth-recurrence note. Full suite:
+  3055/3057 (2 pre-existing unrelated rustc-ENOENT failures). Merged via
+  PR #819 (all 4 checks green, no CI flake this run).

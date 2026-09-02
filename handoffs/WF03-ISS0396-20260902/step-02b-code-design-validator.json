@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF03-ISS0396-20260902-step-02b",
+  "run_id": "WF03-ISS0396-20260902",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0396-20260902/step-02b-code-design-validator.json",
+  "created_at": "2026-09-02T02:35:00Z",
+  "started_at": "2026-09-02T02:29:03Z",
+  "completed_at": "2026-09-02T02:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-062"],
+    "issue_ids": ["ISS-0396"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0396-task-records-multi-sibling-fix.md",
+      "handoffs/WF03-ISS0396-20260902/step-02-code-designer.json",
+      "handoffs/WF03-ISS0396-20260902/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine.ex",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "artifacts_out": [],
+    "branch_name": "fix/ISS-0396-multi-task-records-2plus-20260902"
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's fix design for ISS-0396 (lib/letflow/design/iss0396-task-records-multi-sibling-fix.md) against the real source, independently re-verifying the design's correction of the Step-1 diagnosis's reachable-trigger claim, key-disambiguator uniqueness/correctness, no-other-reader-of-old-key-shape, test adequacy, and the two open questions (OQ-1/OQ-2) under the project's no-silent-deferral standard."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All 7 checks pass. Design approved -- routing to Step 3 ELIXIR-DEV.\n\n1) Key disambiguator: verified directly against task_activation.ex:242-276 (current 6-arg append_multi_from_existing_records/6, key `Multi.run(multi, {:task_records, instance_id}, ...)` at line 258) and sub_process.ex:944-972 (build_completion_write_steps/12's current 5-arg call site, no disambiguator). Design's proposed change (optional 7th param `key_disambiguator \\\\ nil`, defaulting to byte-identical old key; non-nil only at the one changed call site, producing `{:task_records, instance_id, parent_token.id}`) is a correct, minimal, additive change. Confirmed engine.ex's two other call sites are cited at their real line numbers: `maybe_append_task_activation_multi/7`'s 6-arg call at engine.ex:2674, and `persist_timer_fired_advance/7`'s inline 6-arg call at engine.ex:2009 -- both grep-confirmed to be the exact call sites, both untouched by the design.\n\n2) parent_token.id uniqueness: independently re-derived the ACTUAL reachable trigger, not the design's narrative alone. Read engine.ex:572-605 (`prepare_sub_process_children/5`, the create/2 root-activation path) -- confirmed it has NO membership/persisted-token check, accepting every `{:sub_process_start, token_id, node_id}` unconditionally. Contrasted with engine.ex:2314-2380 (`prepare_sub_process_children_for_completion/8` + `resolve_parent_token_record_id/2`), which DOES reject any token_id not in `persisted_token_ids` (pre-existing before the hop chain began) with `{:sub_process_after_split_join_not_supported, token_id}`. Read the ISS-0067 test directly (test/letflow/engine_sub_process_test.exs:922-970): it proves a same-hop-chain PARALLEL_GATEWAY split feeding SUB_PROCESS nodes via `complete_task/3` is rejected with zero children created and a full rollback -- independently confirming the design's correction that `complete_task/3` cannot produce 2+ prepared_children today, and that `Engine.create/2`'s root path (engine.ex:1085-1109, `build_sub_process_children_multi/6`) is the only currently-reachable trigger. Each sibling's parent_token resolves to a distinct TokenRecord UUID PK (dispatch_parallel_split/4 mints one branch token per split edge) -- uniqueness holds.\n\n3) Read-your-own-writes: read `load_parent_context/2` in full (sub_process.ex:1070-1111) -- confirmed it issues fresh `Repo.get`/`Repo.all` reads at call time on the open transaction's connection, with no caching or staleness risk; sibling N's reads genuinely observe sibling N-1's already-applied writes. Key disambiguation is purely a Multi step-name change and does not touch this function's signature, body, or call order.\n\n4) No other reader of old key shape: re-ran `grep -rn \\\":task_records\\\" lib/ test/` myself (not reusing the design's own grep output) -- confirmed exactly two production call sites (task_activation.ex:176, the fixed-atom `append_multi/6`, untouched; task_activation.ex:258, the tuple-keyed function this fix touches) and no other file pattern-matches either key shape. All other hits are design-doc/test-comment prose.\n\n5) Test design: `graph_root_split_into_two_subprocesses/1` fixture and the Engine.create/2-based test body (§5) are precisely specified -- concrete graph shape, concrete assertions (no raise, parent :completed, 2 child_projections, 2 SUB_PROCESS_COMPLETED events, 0 orphan tasks, incidental ISS-0397 join_counters cross-check) -- genuinely exercises the corrected root-activation trigger path, not the foreclosed hop-chain path. Adequate for TEST-DESIGNER to implement without further disambiguation.\n\n6) OQ-1/OQ-2 (no-silent-deferral check): OQ-1 (future ISS-0067 relaxation) is correctly resolved in-doc already -- the fix lives at build_completion_write_steps/12, the convergence point for all three call sites, so no design change is needed regardless; this is not a deferral, it's a closed forward-compatibility note. OQ-2 (nested/no-join cascade variant) was left as a genuinely open question for CDV to confirm -- I independently investigated and RESOLVED it using material already in the design's own citation trail: read `find_matching_join/2` and `dispatch_parallel_split/4` in lib/letflow/engine/transition.ex:772-843. Confirmed a PARALLEL_GATEWAY split whose branches do not converge on a single matching join gateway is rejected at split-dispatch time with `{:error, {:no_matching_join_found, node.id}}`, aborting the transition before any such instance can ever execute. This forecloses OQ-2's premise (an 'unbalanced/non-block-structured split' variant reaching two independent completions with no join) categorically -- such a graph shape can never produce a running instance in the first place. OQ-2 is therefore moot, same conclusion class as OQ-1: no design change needed. This does not constitute a design defect requiring rework (the design named the exact resolving mechanism and correctly declined to assume it without verification); I record the resolution here rather than sending back for a prose-only update, since it does not change any code ELIXIR-DEV needs to write.\n\n7) No implementation code: scanned every code fence in the design doc (grep for defmodule/defstruct/```) -- only an @spec block (lines 108-118) and a literal `grep` shell command shown as a fenced example (lines 213-215). No `.ex` function bodies present.\n\nConclusion: design is unambiguous, fully specified (including error shapes via the existing @spec + case clauses referenced), and requires no rework. Approved.",
+    "routing": "Route to Step 3 ELIXIR-DEV to implement per lib/letflow/design/iss0396-task-records-multi-sibling-fix.md: (a) add optional `key_disambiguator \\\\ nil` 7th param to `TaskActivation.append_multi_from_existing_records/6` in lib/letflow/engine/task_activation.ex, changing its Multi.run key computation per §2; (b) update its @doc/@spec; (c) change the single call site in `build_completion_write_steps/12` (lib/letflow/engine/sub_process.ex:966-972) to pass `parent_token.id` as the new argument; (d) leave engine.ex's two call sites (maybe_append_task_activation_multi/7 at 2674, persist_timer_fired_advance/7 at 2009) untouched. TEST-DESIGNER to follow with the §5 test spec (new describe block + graph_root_split_into_two_subprocesses/1 fixture in test/letflow/engine_sub_process_test.exs)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-02T02:35:00Z",
+      "notes": "All 7 checks pass; independently resolved OQ-2 as moot via transition.ex's find_matching_join/dispatch_parallel_split guard. No rework required."
+    }
+  ]
+}

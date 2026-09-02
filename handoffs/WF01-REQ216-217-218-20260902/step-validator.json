@@ -1,0 +1,69 @@
+{
+  "handoff_id": "d3f6a9c2-4b1e-4a8f-9c7d-req216217218validator",
+  "run_id": "WF01-REQ216-217-218-20260902",
+  "workflow_id": "WF-01",
+  "step": "02",
+  "from_agent": "REQ-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF01-REQ216-217-218-20260902/step-validator.json",
+  "created_at": "2026-09-02T20:41:31Z",
+  "started_at": "2026-09-02T20:41:31Z",
+  "completed_at": "2026-09-02T20:41:31Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216", "REQ-217", "REQ-218"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/issues/ISS-0431.yaml",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-01 Step 2 HARD GATE: independently validate REQ-216 (admission-control core), REQ-217 (HTTP-path wiring) and REQ-218 (Poller wiring), drafted by REQ-ANALYST to close ISS-0431 (no admission control/backpressure anywhere in Letflow). Run the five WF-01 Step 2 checks against each: testability, consistency, depends_on correctness, sizing, and confirmation that ISS-0431's own 'TO DECIDE' items were actually resolved in the requirement text (not left implicit), plus decision-0014 consistency for REQ-216's hand-rolled-vs-library reasoning and confirmation that REQ-217's AuthPipeline gap is disclosed as an accepted limitation, not glossed over.",
+    "acceptance_criteria": [
+      "Every check is actually run against each of the three requirements, not assumed.",
+      "depends_on verified against this file's own REQ-id convention (not queue_task_id/impl_order), cross-checked against REQ-186/187 and REQ-214/215 precedent.",
+      "Each of ISS-0431's four TO-DECIDE items (response shape, global-vs-per-tenant, library-vs-hand-rolled, pool_size/max_connections coupling) confirmed resolved with stated reasoning by reading the requirement text directly, plus confirmation the tier-weighted-caps exclusion is stated with a real reason.",
+      "REQ-216's decision-0014 attribution checked against 0014's actual text, not trusted from REQ-ANALYST's report.",
+      "REQ-217's AuthPipeline disclosed-limitation claim checked against the requirement's own text.",
+      "YAML re-parsed to confirm no broken depends_on, duplicate ids, or displaced fields from REQ-ANALYST's reported mid-edit slip on REQ-215."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All three requirements PASS every check. REQ-216 (lines ~12610-12676), REQ-217 (~12779-12866) and REQ-218 (~12867-12930) in docs/requirements.yaml were each read in full, alongside docs/issues/ISS-0431.yaml and docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md. No rework needed; requirements are ready for WF-02.",
+    "checks_run": {
+      "a_testability": "PASS (3/3). REQ-216's ACs are concrete and falsifiable: exact cap arithmetic (pool_size - reserved_headroom), a 3-tenant/global-cap-10 and 5-tenant/global-cap-2 fair-share numeric example, an explicit global-cap-exhausted-then-fresh-tenant-rejected scenario, and a release-then-one-subsequent-success check. REQ-217's ACs specify exact HTTP status/header assertions, a body-too-large-still-503-not-413 discriminator proving plug ordering, an exhaust-then-round-trip-then-succeed release check, and a raise-still-releases check. REQ-218's ACs specify exact mock call counts (0 then 3), a global-cap-of-1 sequential-processing check, a partial-not-total-skip check, and a grep-verified 'try_acquire({:tenant,_}) never called in poller.ex' criterion. None of these restate the description; each names a concrete test scenario and expected value.",
+      "b_consistency": "PASS (3/3). No requirement contradicts another or an existing decision record. REQ-216 explicitly declines to absorb ISS-0224's SandboxPool admission-shaped defect with a stated reason (different resource, already independently scoped out of ISS-0220's own parent fix) rather than silently conflating the two. REQ-217 and REQ-218 each state precisely what they do NOT touch (each other, REQ-216's core, RateLimit, tier-weighted caps) so there is no overlap or double-build risk.",
+      "c_depends_on": "PASS (3/3), verified against this file's actual convention. depends_on uses REQ-ids exclusively, never queue_task_id/impl_order (confirmed: REQ-214 carries impl_order: 415 as a separate commented field while its depends_on: [REQ-056, REQ-204] and REQ-215's depends_on: [REQ-214, REQ-177, REQ-049, REQ-061] both cite REQ-ids only; REQ-187 depends_on: [REQ-186, REQ-047, REQ-052, REQ-050] is the direct core-then-wiring precedent). REQ-216: depends_on: [] -- correct, it is the core module with no prerequisite (mirrors REQ-186's own no-dependency core entry). REQ-217: depends_on: [REQ-216] -- correct and sufficient; REQ-217 needs only the core API, nothing else it references (Response.service_unavailable/2 is already-shipped REQ-066, AuthPipeline/TenantStatus are already-shipped, so no additional edge is missing. REQ-218: depends_on: [REQ-216] -- correct; REQ-218 correctly does NOT depend on REQ-217, matching the requirement text's own explicit statement that they are disjoint, independent wiring targets (HTTP path vs. Poller) touching different files, mirroring the REQ-187/REQ-191 (etc.) pattern of multiple independent wiring requirements sharing one core dependency with no edge between the wiring siblings themselves.",
+      "d_stage_fit": "PASS (3/3). All three are stage S6, matching REQ-216's own description situating this as closing a cross-cutting operational gap (admission control / backpressure) alongside the S6 scheduler/observability work already in this stage, not S7 (simulation/UAT, which is scenario-based acceptance, not a mechanism build) or S8 (web/ -- no route/UI surface touched by any of the three).",
+      "e_size": "PASS (3/3), checked directly against the REQ-186/187 and REQ-214/215 split precedent named by REQ-ANALYST. The two-way core/wiring split those precedents use is here correctly extended to a three-way core/wiring-A/wiring-B split BECAUSE there are genuinely two independent wiring surfaces (HTTP entry path and Poller), which the timer and SERVICE_TASK precedents did not have -- this is a structural difference in the underlying problem, not scope inflation. Each requirement stays within one file's worth of change: REQ-216 touches only a new lib/letflow/admission.ex-equivalent module plus one supervision-tree line in application.ex; REQ-217 touches only lib/letflow/plugs/api_pipeline.ex (its 'two gates' are inherent to one plug-chain change, not two separable deliverables -- the AuthPipeline-ordering constraint means both gates must land together for the requirement to be coherent at all); REQ-218 touches only lib/letflow/scheduler/poller.ex. None bundles a second, separable feature."
+    },
+    "to_decide_items_verified": {
+      "response_shape": "RESOLVED, reused not invented: REQ-216 explicitly defers to the already-existing Letflow.Api.Response.service_unavailable/2 (REQ-066) and designs its own return-type contract ({:ok, ref} | {:error, :capacity}) specifically so REQ-217's mapping onto that helper is 'a one-line call, not require the caller to reconstruct rejection semantics.' REQ-217 then actually calls it and requires the 503 body to match REQ-066's own existing error_test.exs shape exactly rather than asserting a new ad hoc body.",
+      "global_vs_per_tenant": "RESOLVED as BOTH, composing -- REQ-216 states the reasoning for each half being individually insufficient (per-tenant-only cannot bound total pool_size demand per ISS-0194's own math; global-only cannot stop one tenant starving others per ISS-0431's and decision 0006's own isolation posture) and REQ-216 AC3 explicitly tests the composition (a per-tenant success that still fails the global gate).",
+      "library_vs_hand_rolled": "RESOLVED as hand-rolled pure-BEAM, with reasoning traced to decision 0014 (verified against 0014's real text below, not just REQ-ANALYST's claim).",
+      "pool_size_coupling": "RESOLVED as a live function (pool_size - reserved_headroom) read from the same Application config key config/runtime.exs already writes, with an AC requiring a test that changes pool_size and observes the computed cap change with no second setting -- directly closing the drift class ISS-0194/0219/0222/0224 already demonstrated.",
+      "tier_weighted_caps_exclusion": "Confirmed explicitly out of scope with a real, checked reason, not hand-waved: REQ-216 states Letflow.Identity.Tenant's schema (lib/letflow/identity/tenant.ex) has no plan/tier field to weight by, naming the exact fields that DO exist (slug, display_name, status, idp_realm_id) as evidence it was actually read, and frames tiering as a genuine unresolved product decision rather than an implementation detail."
+    },
+    "decision_0014_consistency_check": {
+      "verdict": "ACCURATE, not misattributed or stretched",
+      "evidence": "Read 0014's actual text directly. 0014's real argument (not merely REQ-ANALYST's paraphrase) is: 'For Lua, tv-labs/lua removes the hazard class entirely rather than mitigating it. There is no native code...' versus 'For WASM, no pure-BEAM option exists at all -- the only credible path is a NIF, so the hazard cannot be designed away and must be contained instead.' REQ-216's own text states this exact method ('0014's method is to ask whether a pure-BEAM option removes the hazard class outright vs. merely mitigating it, and to treat any new native/NIF dependency as a real, disclosed cost') and then applies it faithfully to a genuinely analogous case: bounding Ecto connection concurrency is a problem a GenServer counter already solves with zero native/NIF surface, citing Letflow.SandboxPool (REQ-039/ISS-0224) as existing in-house precedent for the same primitive shape. This is a correct transfer of 0014's general method to a new but structurally similar decision, not a claim that 0014 itself already covered admission control."
+    },
+    "req_217_disclosed_limitation_check": {
+      "verdict": "CONFIRMED, actually written into the requirement text",
+      "evidence": "REQ-217's description contains an explicit 'DISCLOSED LIMITATION' block: 'AuthPipeline's own DB work (steps 1-4 of its moduledoc) is covered by the global gate only, not a per-tenant one, because tenant identity does not exist yet at that point in the chain. This is accepted, not silently omitted -- state it in this plug's own moduledoc.' It is framed explicitly as matching 'this project's own honesty convention for a limitation that cannot be fully closed within one requirement's scope, e.g. decision 0014's own disclosed WASM native-crash gap' -- an accepted, stated tradeoff, not glossed over."
+    },
+    "yaml_validity_check": {
+      "verdict": "PASS",
+      "evidence": "python3 yaml.safe_load on docs/requirements.yaml parses cleanly: 192 total requirements, no exception. grep for '^  - id: REQ-21[5-8]' returns exactly one occurrence each of REQ-215/216/217/218 at lines 12496/12610/12779/12867 -- no duplicates. REQ-215's depends_on: [REQ-214, REQ-177, REQ-049, REQ-061] appears exactly once inside its own block (line 12609), confirming the reported mid-edit slip was fixed correctly and no depends_on line is displaced into the wrong requirement's block."
+    },
+    "issues": [],
+    "next_action": "requirements ready for WF-02"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

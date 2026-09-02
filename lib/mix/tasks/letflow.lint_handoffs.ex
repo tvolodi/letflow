@@ -643,7 +643,10 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
            stderr_to_stdout: true
          ) do
       {out, 0} ->
-        out |> String.trim() |> DateTime.from_iso8601() |> elem(1)
+        case out |> String.trim() |> DateTime.from_iso8601() do
+          {:ok, ts, _offset} -> ts
+          {:error, _reason} -> nil
+        end
 
       _ ->
         nil

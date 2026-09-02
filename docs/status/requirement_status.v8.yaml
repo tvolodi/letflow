@@ -604,3 +604,52 @@ history:
       per GIT_MERGE.md's worktree variant. Final verification: HEAD ==
       origin/main (a09f15d0), git log shows the squash commit, clean working
       tree.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-02T15:44:18Z"
+    note: >
+      WF03-ISS0419-20260902 done (queue task 419, GH#817). Investigated
+      whether `mix deps.get` silently defeats CI's actions/cache for
+      wasmex's Rust NIF Cargo build output (deps/wasmex/native/wasmex/target/)
+      on every backend-gate CI run, even on a cache hit -- closed as
+      status: no_defect, not resolved: no code file was changed, only
+      docs/issues/ISS-0419.yaml. ISSUE-FIXER (Step 1) inspected 4 real CI
+      runs today (ids 33634490464, 33635645070, 33622754837, 33586549969)
+      via `gh run view --job=<id> --log` against genuine `Cache hit for:
+      Linux-mix-<hash>` restores: `mix deps.get` completed in ~1s every
+      time and the subsequent backend-gate step's compile output contained
+      zero Cargo/rustc invocation lines in any of them -- only the Elixir
+      compile. Traced this to Rustler.Compiler.compile_crate/3's own
+      structural no-op path (do_compile/2 only runs when expected NIF
+      output files are missing from priv_dir, which a cache restore already
+      satisfies) -- confirmed by direct source read of
+      deps/rustler/lib/rustler/compiler.ex. What actually dominates the
+      ~12-15 min runtime: the ExUnit suite itself (~694s of ~720s total in
+      the cited run), not any wasmex rebuild. Also reconciled an apparent
+      premise conflict: `CARGO_INCREMENTAL: 0` is genuinely absent from
+      .github/workflows/ci.yml's literal text (ORCH's own grep was correct)
+      but genuinely active on the live job's env (dtolnay/rust-toolchain@stable
+      injects it into $GITHUB_ENV unconditionally) -- both true, about two
+      different artifacts, and structurally irrelevant on a cache-hit run
+      since Cargo is never invoked. Stated method limitation: a local
+      cold-build repro was attempted but blocked by this host's Rust
+      toolchain (rustup stable=1.93.1) not meeting wasmex 0.15.1's
+      Cargo.lock requirement (rustc 1.94.0+, CI pins 1.97.1 via
+      .tool-versions) -- real CI log evidence was used instead and judged
+      more directly probative anyway. docs/issues/ISS-0419.yaml ->
+      status: no_defect, verdict_in_run/verdict_at set (not
+      resolved_in_run/resolved_at), full evidence block per
+      ISSUE_QUEUE.md's no_defect bar. GitHub issue #817 closed with the
+      no_defect comment template, independently confirmed
+      (state: CLOSED, closedAt 2026-09-02T13:56:44Z). PR #820 (title
+      prefixed fix:, docs-only diff: docs/issues/ISS-0419.yaml plus this
+      run's own handoffs/WF03-ISS0419-20260902/*.json) -- CI green (4
+      checks: Backend gate x2, Frontend gate x2, both push and
+      pull_request triggers), squash-merged (commit 503fc5bd), verified
+      via `gh pr view --json state,mergedAt` per GIT_MERGE.md's worktree
+      variant since the local checkout side-effect errored as documented
+      for a secondary worktree. Remote+local branch refs deleted
+      explicitly. Final HEAD verified == origin/main. Queue task 419
+      released status: done.

@@ -11849,7 +11849,7 @@ requirements:
   - id: REQ-209
     title: Port R-Co's condition-evaluation corpus (tests/differential/corpus/conditions_v1.json, 15 entries) as an ExUnit regression suite for Letflow.Engine.Expr
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S7
     impl_order: 386  # letflow-queue task id, GH#758
     description: >

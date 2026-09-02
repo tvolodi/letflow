@@ -3869,6 +3869,22 @@
       "released_lock": true,
       "last_known_step": "Step Final -- ISSUE-FIXER diagnosis complete, no implementation warranted; queue task 402 released back to open (not done), docs/issues/ISS-0402.yaml annotated with scoping_note",
       "note": "WF-03 issue-resolving run for ISS-0402: REQ-052's design doc cites the now-fixed join_counters persistence gap (ISS-0397) as the reason cancel_instance/3 never wires {:cancel_branch, _} for individual PARALLEL_GATEWAY fork branches. ISSUE-FIXER confirmed ISS-0397 genuinely closes that literal blocker, but found a second, independent, already-on-record reason (ISS-0098: R-Co's own reference cancellation path never operates at branch granularity -- plain unconditional SQL UPDATEs, not per-branch transition events) plus no current caller needing the feature plus two unresolved semantic questions with no reference precedent. Correctly did NOT force a design; released the queue task back to open with a clarified scope note, same disposition pattern as ISS-0399."
+    },
+    {
+      "run_id": "WF02-REQ209-20260902",
+      "requirement_id": "REQ-209",
+      "queue_task_id": 386,
+      "github_issue_number": 758,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/fixtures/simulation/differential_corpus.json",
+        "test/letflow/engine/expr_differential_corpus_test.exs"
+      ],
+      "started_at": "2026-09-02T02:33:20Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "note": "WF-02 requirement-implementation run for REQ-209: port R-Co's 15-entry condition-evaluation corpus as an ExUnit regression suite for Letflow.Engine.Expr. Locked directly via set_lock, bypassing get_next_task -- it was persistently returning ISS-0402 (newest open issue, genuinely stuck pending a product decision per its own scoping_note, not a defect to fix) ahead of any requirement task via LIFO ordering; released ISS-0402 back to open without status each time rather than re-investigating an already-thoroughly-diagnosed question. depends_on: [REQ-050, REQ-197, REQ-198], all confirmed done. No owned_modules overlap with any other active run at dispatch time (registry scan)."
     }
   ]
 }

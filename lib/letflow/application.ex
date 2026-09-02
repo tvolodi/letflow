@@ -55,6 +55,14 @@ defmodule Letflow.Application do
         # mirroring the Wasm.ModuleVersionRegistry placement precedent below ("order
         # between these two is not load-bearing").
         Letflow.Metrics.Registry,
+        # REQ-216 (design req216-admission-control-core.md §4): the global +
+        # per-tenant admission-control counting semaphore. NO ordering
+        # dependency in either direction -- see Letflow.Admission's own
+        # moduledoc ("Supervision-tree placement") for the full reasoning.
+        # Placed here as a readability choice, grouped with the other
+        # leaf/independently-startable infrastructure children (Registry,
+        # Letflow.Metrics.Registry) above, not a correctness requirement.
+        {Letflow.Admission, []},
         Letflow.InstanceSupervisor,
         # ISS-0224: every SandboxPool DB operation runs under this supervisor via
         # Task.Supervisor.async_nolink/3. It MUST precede {Letflow.SandboxPool, []} --

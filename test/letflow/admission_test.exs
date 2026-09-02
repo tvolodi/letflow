@@ -1,0 +1,268 @@
+defmodule Letflow.AdmissionTest do
+  use ExUnit.Case, async: true
+
+  # No Letflow.DataCase here deliberately: Letflow.Admission makes no Repo
+  # call at all (see its moduledoc's "Supervision-tree placement" section),
+  # so pulling in the sandboxed-connection test case would suggest a DB
+  # dependency that does not exist. Every test starts its own isolated
+  # instance under a unique `:name` (mirroring
+  # Letflow.SandboxPool's own test-isolation convention) so tests run
+  # `async: true` with no shared state.
+
+  alias Letflow.Admission
+
+  defp start_admission(opts) do
+    n = System.unique_integer([:positive])
+    name = Module.concat(__MODULE__, "Server#{n}")
+
+    {:ok, pid} =
+      start_supervised(%{
+        id: {Admission, n},
+        start: {Admission, :start_link, [Keyword.put(opts, :name, name)]}
+      })
+
+    {pid, name}
+  end
+
+  # AC1: try_acquire(:global) admits up to exactly (pool_size -
+  # reserved_headroom), rejects beyond, both read from config, and the cap
+  # changes with a pool_size override with no other code edit.
+  describe "AC1: global cap = pool_size - reserved_headroom" do
+    test "admits exactly pool_size - reserved_headroom concurrent :global admissions, then rejects" do
+      {_pid, name} = start_admission(pool_size: 5, reserved_headroom: 2)
+
+      # cap == 3
+      assert {:ok, _ref1} = Admission.try_acquire(:global, name)
+      assert {:ok, _ref2} = Admission.try_acquire(:global, name)
+      assert {:ok, _ref3} = Admission.try_acquire(:global, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+    end
+
+    test "the computed cap changes when pool_size override changes, no other code edit" do
+      {_pid, name_small} = start_admission(pool_size: 3, reserved_headroom: 2)
+      # cap == 1
+      assert {:ok, _ref} = Admission.try_acquire(:global, name_small)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name_small)
+
+      {_pid2, name_big} = start_admission(pool_size: 10, reserved_headroom: 2)
+      # cap == 8
+      refs = for _ <- 1..8, do: Admission.try_acquire(:global, name_big) |> elem(1)
+      assert length(refs) == 8
+      assert {:error, :capacity} = Admission.try_acquire(:global, name_big)
+    end
+
+    test "reserved_headroom is also read from config, not hardcoded" do
+      {_pid, name} = start_admission(pool_size: 10, reserved_headroom: 8)
+      # cap == 2
+      assert {:ok, _ref1} = Admission.try_acquire(:global, name)
+      assert {:ok, _ref2} = Admission.try_acquire(:global, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+    end
+  end
+
+  # AC2: per-tenant cap enforced independently -- A's exhaustion doesn't
+  # block B.
+  describe "AC2: per-tenant caps are independent across tenants" do
+    test "tenant A exhausting its own share still leaves tenant B able to acquire up to B's own share" do
+      # global cap 10. Track tenant B FIRST (one attempt) so both tenants
+      # are tracked before A's share is computed -- otherwise, with only A
+      # tracked, A's own cap would be floor(10/1) = 10, not the floor(10/2)
+      # = 5 this test means to exercise.
+      {_pid, name} = start_admission(pool_size: 12, reserved_headroom: 2)
+
+      {:ok, _b_ref0} = Admission.try_acquire({:tenant, "tenant_b"}, name)
+
+      # now 2 tenants tracked -> each gets floor(10/2) = 5
+      a_refs = for _ <- 1..5, do: Admission.try_acquire({:tenant, "tenant_a"}, name) |> elem(1)
+      assert length(a_refs) == 5
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "tenant_a"}, name)
+
+      # tenant B, simultaneously, can still acquire up to its own share
+      # (already used 1 of 5)
+      assert {:ok, _ref} = Admission.try_acquire({:tenant, "tenant_b"}, name)
+    end
+  end
+
+  # AC3: a {:tenant, schema} acquisition that would pass the per-tenant gate
+  # is still rejected once the GLOBAL cap is exhausted, even for a fresh
+  # tenant with zero per-tenant usage of its own.
+  describe "AC3: tenant acquisition also gated by the global cap" do
+    test "a fresh tenant with zero usage is rejected once :global acquisitions alone exhaust the global cap" do
+      {_pid, name} = start_admission(pool_size: 5, reserved_headroom: 2)
+      # cap == 3
+
+      assert {:ok, _} = Admission.try_acquire(:global, name)
+      assert {:ok, _} = Admission.try_acquire(:global, name)
+      assert {:ok, _} = Admission.try_acquire(:global, name)
+
+      # fresh tenant, zero per-tenant usage of its own -- still rejected
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "fresh_tenant"}, name)
+    end
+  end
+
+  # AC4: release/1 frees exactly one unit of both the global AND (for a
+  # {:tenant, _}) the per-tenant budget it was acquired against.
+  describe "AC4: release frees exactly the budget(s) it was acquired against" do
+    test "acquiring to capacity, releasing one, observes exactly one subsequent try_acquire succeeds (:global)" do
+      {_pid, name} = start_admission(pool_size: 4, reserved_headroom: 2)
+      # cap == 2
+      {:ok, ref1} = Admission.try_acquire(:global, name)
+      {:ok, _ref2} = Admission.try_acquire(:global, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+
+      assert :ok = Admission.release(ref1, name)
+
+      assert {:ok, _ref3} = Admission.try_acquire(:global, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+    end
+
+    test "releasing a {:tenant, _} ref frees both the global unit AND that tenant's own unit" do
+      {_pid, name} = start_admission(pool_size: 4, reserved_headroom: 2)
+      # cap == 2, 1 tenant tracked -> per-tenant cap == 2
+      {:ok, tref} = Admission.try_acquire({:tenant, "t1"}, name)
+      {:ok, _tref2} = Admission.try_acquire({:tenant, "t1"}, name)
+
+      # global exhausted (2/2) and tenant exhausted (2/2)
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "t1"}, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+
+      assert :ok = Admission.release(tref, name)
+
+      # exactly one further acquisition succeeds against EITHER budget
+      assert {:ok, _} = Admission.try_acquire({:tenant, "t1"}, name)
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "t1"}, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+    end
+
+    test "release/1 is idempotent on an unknown/already-released ref" do
+      {_pid, name} = start_admission(pool_size: 4, reserved_headroom: 2)
+      {:ok, ref} = Admission.try_acquire(:global, name)
+
+      assert :ok = Admission.release(ref, name)
+      # second release of the same ref is a documented no-op, not a raise
+      assert :ok = Admission.release(ref, name)
+
+      # a hand-constructed, never-issued ref is also a no-op
+      forged = %Admission.Ref{id: make_ref(), pool: :global}
+      assert :ok = Admission.release(forged, name)
+    end
+  end
+
+  # AC5: per-tenant cap = floor(global_cap / tracked_tenant_count), floor 1.
+  describe "AC5: per-tenant cap is an equal fair-share split with a floor of 1" do
+    test "3 tracked tenants against a global cap of 10 -> each gets floor(10/3) = 3, not 1" do
+      {_pid, name} = start_admission(pool_size: 12, reserved_headroom: 2)
+      # cap == 10
+
+      # touch all three tenants once each so all three are tracked before
+      # asserting the per-tenant cap
+      {:ok, _} = Admission.try_acquire({:tenant, "t1"}, name)
+      {:ok, _} = Admission.try_acquire({:tenant, "t2"}, name)
+      {:ok, _} = Admission.try_acquire({:tenant, "t3"}, name)
+
+      # t1 already holds 1; floor(10/3) == 3, so 2 more should succeed, then reject
+      assert {:ok, _} = Admission.try_acquire({:tenant, "t1"}, name)
+      assert {:ok, _} = Admission.try_acquire({:tenant, "t1"}, name)
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "t1"}, name)
+    end
+
+    test "5 tenants against a global cap of 9 -> each gets the floor of 1, not 0, isolated from global exhaustion" do
+      # global cap deliberately large enough (9) that it is NOT the
+      # bottleneck for this assertion -- floor(9/5) == 1 is what's under
+      # test, isolated from AC3's separate global-exhaustion behavior.
+      {_pid, name} = start_admission(pool_size: 11, reserved_headroom: 2)
+      # cap == 9
+
+      # each of the 5 tenants' FIRST attempt succeeds (proves the floor is
+      # 1, not 0 -- a floor of 0 would reject every one of these)
+      for schema <- ["t1", "t2", "t3", "t4", "t5"] do
+        assert {:ok, _} = Admission.try_acquire({:tenant, schema}, name)
+      end
+
+      # a SECOND attempt by any one of them is rejected by its own
+      # per-tenant cap (floor(9/5) == 1), even though the global budget
+      # still has 4 units free (9 - 5 == 4) -- proves the rejection is the
+      # per-tenant gate, not global exhaustion
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "t1"}, name)
+      # confirmed still not globally exhausted
+      assert {:ok, _} = Admission.try_acquire(:global, name)
+    end
+
+    test "the per-tenant cap recomputes as the tracked-tenant set grows (never retroactively revokes)" do
+      {_pid, name} = start_admission(pool_size: 12, reserved_headroom: 2)
+      # cap == 10
+
+      # tenant A alone: floor(10/1) == 10, acquire 3
+      refs_a = for _ <- 1..3, do: Admission.try_acquire({:tenant, "a"}, name) |> elem(1)
+      assert length(refs_a) == 3
+
+      # a 4th... actually 2nd and 3rd tenant now attempt, shrinking A's
+      # NEXT computed cap without touching A's already-held refs
+      {:ok, _} = Admission.try_acquire({:tenant, "b"}, name)
+      {:ok, _} = Admission.try_acquire({:tenant, "c"}, name)
+      # now 3 tenants tracked -> floor(10/3) == 3, A already holds 3 -> A's
+      # next attempt is rejected
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "a"}, name)
+
+      # but every ref A already holds remains valid and freely releasable
+      for ref <- refs_a do
+        assert :ok = Admission.release(ref, name)
+      end
+    end
+  end
+
+  # AC6: Letflow.Admission is present in Letflow.Application's supervision
+  # tree, with its moduledoc stating explicitly whether it has an ordering
+  # dependency.
+  describe "AC6: present in the live supervision tree, no ordering dependency documented" do
+    test "Letflow.Admission is supervised as its own child of Letflow.Supervisor" do
+      children = Supervisor.which_children(Letflow.Supervisor)
+
+      admission_child =
+        Enum.find(children, fn
+          {_id, _pid, _type, [Letflow.Admission]} -> true
+          _ -> false
+        end)
+
+      assert {_id, pid, :worker, [Letflow.Admission]} = admission_child
+      assert is_pid(pid)
+      assert Process.alive?(pid)
+    end
+
+    test "the running instance is usable end-to-end (proves it started from real config)" do
+      assert {:ok, ref} = Admission.try_acquire(:global)
+      assert :ok = Admission.release(ref)
+    end
+
+    test "the moduledoc states an explicit ordering-dependency stance" do
+      {:docs_v1, _anno, :elixir, _format, %{"en" => moduledoc}, _meta, _docs} =
+        Code.fetch_docs(Letflow.Admission)
+
+      assert moduledoc =~ "ordering dependency"
+    end
+  end
+
+  # AC7 (mix test / mix compile --warnings-as-errors) is verified by running
+  # the suite itself, not by an in-suite assertion -- see the ELIXIR-DEV
+  # handoff for quoted command output.
+
+  describe "atomicity (AC3 mutation-testing target)" do
+    test "a rejected {:tenant, _} acquisition mutates neither counter" do
+      {_pid, name} = start_admission(pool_size: 5, reserved_headroom: 2)
+      # cap == 3, exhaust globally first
+      {:ok, _} = Admission.try_acquire(:global, name)
+      {:ok, _} = Admission.try_acquire(:global, name)
+      {:ok, _} = Admission.try_acquire(:global, name)
+
+      state_before = :sys.get_state(name)
+      assert {:error, :capacity} = Admission.try_acquire({:tenant, "x"}, name)
+      state_after = :sys.get_state(name)
+
+      assert state_after.global_in_use == state_before.global_in_use
+      # the tenant entry is still created (lazy tracking happens regardless
+      # of outcome), but its in_use must remain 0 -- not incremented on a
+      # rejected attempt
+      assert state_after.tenants["x"].in_use == 0
+    end
+  end
+end

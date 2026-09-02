@@ -1,0 +1,305 @@
+# S7 (simulation-and-uat-parity) — WF-04 stage-gate release validation
+#
+# Produced by RELEASE-VALIDATOR at WF-04 Step 2, per
+# docs/agents/workflows/WF-04_full_test_run.md and docs/agents/ORCHESTRATOR.md §8.
+# Independently re-derived — re-ran the full test suite directly (own
+# scripts/test_parallel.sh invocation, N=4) rather than trusting TEST-RUNNER's
+# test/reports/report-2026-09-02-WF04.yaml, additionally ran the stricter
+# `mix letflow.check.test` gate (which TEST-RUNNER's own Step 1 does not run),
+# and re-checked every REQ-205..210 acceptance criterion against the actual
+# current lib/, test/, docs/ files rather than against REQ-210's own aggregate
+# table's paraphrase of them or docs/status/requirement_status.yaml's narration.
+
+stage: S7
+stage_name: simulation-and-uat-parity
+validated_at: 2026-09-02T12:01:48Z
+validator: RELEASE-VALIDATOR
+head_commit: 7ce2a77f954e02cd429a26467b20f4b87c41c3
+verdict: FAIL
+
+# ---------------------------------------------------------------------------
+# Independent test re-runs (this validator's own, not copied from TEST-RUNNER)
+# ---------------------------------------------------------------------------
+test_suite_reruns:
+  - run: 1
+    command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+    result: "combined: 3046 tests, 6 properties, 0 failures (3052/3052 passed)"
+    exit_code: 0
+    note: >
+      Matches TEST-RUNNER's own report-2026-09-02-WF04.yaml exactly (same
+      3052/3052, same partition test counts). Independently confirmed, not
+      merely re-read.
+  - run: 2
+    command: "mix letflow.check.test"
+    result: "FAILED -- underlying `mix test` run exited 2 (real test failure/error). Result: 3054/3055 passed (6/6 properties, 3048/3049 tests), 10 excluded. Failed: 1 test."
+    exit_code: 1
+    note: >
+      This is the stricter, mandatory-per-role-instructions check that
+      scripts/test_parallel.sh's partitioned run does NOT exercise the same
+      way -- a plain single-process `mix test` against the WHOLE suite
+      sequentially, which surfaces a real cross-test-file interaction that
+      partitioning happens to keep apart. Re-ran plain `mix test` a second
+      time independently (nohup'd, polled to completion, ~1438s) to capture
+      the actual failing test's detail, since letflow.check.test's own
+      streamed output exceeded what this environment's background-task
+      capture buffer retained. Reproduced deterministically a THIRD time by
+      running just the two interacting files together
+      (`mix test test/letflow/service_catalog_test.exs
+      test/letflow/routers/admin_services_test.exs` -> 38/39, same failure).
+  - run: 3
+    command: "mix compile --warnings-as-errors"
+    exit_code: 0
+    result: "clean, zero warnings"
+
+# ---------------------------------------------------------------------------
+# NEW FINDING (this validation run) -- MAJOR, pre-existing, unrelated to S7
+# ---------------------------------------------------------------------------
+new_findings:
+  - title: >
+      Letflow.ServiceCatalog.list_all/1 has no scope/tenant filter, so
+      REQ-192's own pagination-correctness test (an exact-count assertion)
+      is not isolated from any other test file that leaves a scope: :global
+      service_catalog row behind -- test/letflow/routers/admin_services_test.exs
+      creates such rows and is a second, independent async: false file
+      relying on its own on_exit/1 cleanup. Under scripts/test_parallel.sh's
+      4-way partitioning the two files happen to land in partitions that
+      mask the interaction; under a full single-process `mix test` (this
+      project's own stricter mix letflow.check.test gate) it fails
+      deterministically.
+    failing_test: "test/letflow/service_catalog_test.exs:750 -- \"REQ-192 list_all/1 pagination correctness next_cursor is non-nil while more rows remain, and nil on the final page\" (Letflow.ServiceCatalogTest)"
+    assertion: "assert length(page2) == 1 -- left: 2, right: 1 (one extra scope: :global row present that this test did not create)"
+    severity: MAJOR
+    attribution: >
+      Route 1 (structural): `git diff origin/main...HEAD -- '*service_catalog*'`
+      returns zero changed files -- S7's entire REQ-205..210 diff never
+      touches lib/letflow/service_catalog.ex, its test, or
+      admin_services_test.exs. Both interacting files predate S7 by a wide
+      margin (git log: c5e57fc1 "feat(REQ-192)" and 7d150f91 "feat(REQ-191)",
+      both merged well before REQ-205's own first commit). PRE-EXISTING and
+      UNRELATED to S7's own scope -- not this run's responsibility to fix per
+      WF-04's own decision tree, but genuinely NOT previously filed (checked
+      docs/issues/*.yaml and docs/anti-patterns.md for any existing
+      service_catalog/list_all record -- none found) and NOT flaky
+      (reproduced 100% of 3 independent attempts, same assertion, same
+      direction).
+    disposition: "REPORT TO ORCH FOR FILING per ISSUE_QUEUE.md / core-directives.md's No Issue Left Local-Only -- this validator does not self-assign an issue id."
+    affected_files:
+      - lib/letflow/service_catalog.ex
+      - test/letflow/service_catalog_test.exs
+      - test/letflow/routers/admin_services_test.exs
+
+# ---------------------------------------------------------------------------
+# Per-requirement independent re-verification (AC text pulled fresh from
+# docs/requirements.yaml this session, not from REQ-210's paraphrase)
+# ---------------------------------------------------------------------------
+requirements_checked:
+  - id: REQ-205
+    title: S7 scenario-harness foundation
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "test/fixtures/simulation/{swiftroute,vortex,meridian}/ -- 6 company/org_structure files + 6 process_*.yaml = 12 files present (confirmed by find, matches AC1's count)"
+      - "test/letflow/simulation/seed_idempotency_test.exs and test/letflow/simulation/runner_test.exs exist and pass (part of this run's own test/letflow/simulation/ re-run: 27/27 passed, isolated)"
+      - "grep for advance-timer/advance_timer in lib/letflow/router.ex and lib/letflow/routers/: zero matches, consistent with REQ-205 not building that endpoint"
+      - "mix compile --warnings-as-errors: exit 0 (this validator's own run)"
+    findings: []
+
+  - id: REQ-206
+    title: Run SwiftRoute's 4 simulation scenarios
+    status_in_requirements_yaml: done
+    independent_verdict: PASS_WITH_CAVEAT
+    evidence:
+      - "test/letflow/simulation/req206_swiftroute_test.exs re-run in isolation (part of the 27/27 test/letflow/simulation/ pass): all 4 scenarios' dispositions confirmed as REQ-210's table states -- swiftroute-tenant-onboarding-happy EXECUTED (gui DEFERRED_TO_S8), swiftroute-shipment-high-value-happy EXECUTED, swiftroute-shipment-ops-timeout-escalation step2 SKIP/MINOR (advance-timer genuinely absent, re-confirmed by fresh grep this session), swiftroute-shipment-attach-delivery-note still asserts :unbuilt_feature"
+      - "test file's own 'UNIMPLEMENTED findings' describe block (lines 492-527) contains an honest, dated, in-code note: REQ-211+REQ-212 have since shipped the attachment route surface, so the file's OWN source-evidence sub-test for that finding was correctly removed as testing a stale premise, but the scenario's own :unbuilt_feature disposition assertion was deliberately left unchanged, because it was never re-run end-to-end against the new subsystem"
+    findings:
+      - >
+        Not a new finding, re-affirming REQ-210's own §5 point 4: the
+        shipment-attach-delivery-note scenario has NOT been re-run against
+        the now-shipped attachment subsystem. Independently confirmed this
+        is still true (the scenario test still asserts :unbuilt_feature,
+        unchanged), not merely repeated from REQ-210's prose.
+
+  - id: REQ-207
+    title: Run Vortex's 4 simulation scenarios
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "test/letflow/simulation/req207_vortex_test.exs re-run (part of the 27/27 pass): vortex-production-order-above-threshold EXECUTED, vortex-supplier-quality-deviation-critical EXECUTED (EO-001 ordering), vortex-supplier-quality-deviation-false-positive EXECUTED (end-false-positive), vortex-entity-list-filter-and-page BLOCKED_ON_DEPENDENCY"
+      - "lib/letflow/router.ex lines 79-80 re-confirmed this session: Letflow.Routers.Entities / Letflow.Routers.EntityQuery still listed in the Deferred routes table, tagged S5/S6 -- entity subsystem genuinely still unmounted, disposition remains correct"
+    findings: []
+
+  - id: REQ-208
+    title: Run Meridian's 3 simulation scenarios
+    status_in_requirements_yaml: done
+    independent_verdict: PASS_WITH_MATERIAL_UPDATE
+    evidence:
+      - "test/letflow/simulation/req208_meridian_test.exs -- THIS FILE HAS ALREADY BEEN UPDATED since REQ-208's own original run, by ISS-0397's own fix PR (git log: b5051c15 'ISS-0397: Persist join_counters, fixing cross-call PARALLEL_GATEWAY joins (#788)', merged, on main, part of this commit). Its moduledoc now states explicitly: 'FIXED by ISS-0397 ... The two tests below were updated accordingly ... to assert the now-real, now-successful second-call behavior instead of the pre-fix HTTP 500 -- they no longer reproduce a defect, they lock in its fix.'"
+      - "Re-ran this file directly (part of the 27/27 test/letflow/simulation/ pass): both loan-origination scenarios' step2b (the separate-HTTP-call branch completion that used to 500 pre-fix) now asserts and gets outcome :ok; real queried state confirmed post-completion (join_counters cohort shows 2/3 branches received, current_nodes narrows correctly) -- this IS the re-run this task asked me to perform, and it already happened, inside ISS-0397's own PR, with real assertions, not merely a claim"
+      - "HOWEVER: full committee-vote / quorum-2-of-3 / disbursement (the deepest part of AC1/AC2) is STILL not reachable -- for a DIFFERENT, newly-precise reason than REQ-210's report states. The test module's own moduledoc (lines 29-38) states plainly: disburse-loan/credit-committee-vote/l1-approval sit behind SERVICE_TASK nodes Letflow.Engine does not dispatch -- a pre-existing, disclosed-since-REQ-206 platform gap, NOT the join_counters defect. REQ-210's report attributed the still-unreached quorum path to the (now fully fixed) join_counters defect; the ACTUAL current blocker is the SERVICE_TASK dispatch gap, confirmed by reading the test file's own test-local simplified graphs (@simple_loan_origination_graph) which had to elide every SERVICE_TASK node to make ANY of this runnable at all"
+      - "meridian-regulatory-compliance-review-bafin: step 3 still :blocked, blocked_by ISS-0389 (advance-timer), re-confirmed still open"
+    findings:
+      - title: >
+          SERVICE_TASK dispatch gap (Letflow.Engine does not dispatch
+          SERVICE_TASK nodes) is disclosed in THREE requirements' own test
+          moduledocs (req206_swiftroute_test.exs, req207_vortex_test.exs,
+          req208_meridian_test.exs) but was NEVER reported as a `result.issues`
+          finding in any of REQ-206/207/208's own handoffs (checked
+          handoffs/WF02-REQ206-20260901/, WF02-REQ207-20260901/,
+          WF02-REQ208-20260901/ step-02a-elixir-dev.json result.issues
+          arrays directly -- REQ-208's own 3 issues are join_counters
+          [BLOCKER], REQ-199-concurrency-not-exercised [MINOR], and 3
+          pre-existing test flakes [MINOR]; none of the three is the
+          SERVICE_TASK gap) and consequently has NO docs/issues/*.yaml
+          record (checked: no file mentions runtime SERVICE_TASK dispatch;
+          ISS-0079/ISS-0104 are a different, narrower CHK-10
+          validation-time gap, not this one).
+        severity: MAJOR
+        disposition: >
+          This is exactly the shape of gap REQ-210's own AC2 exists to
+          catch ("any finding that was reported but never actually
+          registered is itself reported as a new finding") -- REQ-210's
+          own aggregate table did not catch it because it only tracked 3
+          named findings (advance-timer, attachment subsystem,
+          entity-list dependency), and this one was disclosed only in test
+          prose across three files, never surfaced to ORCH. Report to ORCH
+          for filing per ISSUE_QUEUE.md.
+        affected_files:
+          - lib/letflow/engine.ex
+          - test/letflow/simulation/req206_swiftroute_test.exs
+          - test/letflow/simulation/req207_vortex_test.exs
+          - test/letflow/simulation/req208_meridian_test.exs
+      - title: >
+          REQ-210's own stage-doc REVIEWER sign-off entry states the
+          quorum/disbursement paths remain unreached "truncated by the
+          now-resolved join_counters defect" -- this is no longer the
+          precise, current causal explanation. The join_counters defect
+          IS resolved and IS re-verified (see evidence above, step2b now
+          :ok). The paths remain unreached for the SEPARATE SERVICE_TASK
+          dispatch reason above. Not a fabrication (both statements happen
+          to leave the same scenarios unreached), but the stage doc's
+          own causal attribution is stale as of this validation and should
+          be corrected by whichever future session files/resolves the
+          SERVICE_TASK finding above, so a future reader does not
+          re-attempt a join_counters-shaped fix for an already-fixed
+          defect while missing the real current blocker.
+        severity: MINOR
+        disposition: "Documentation accuracy note, not a code defect -- report to ORCH; does not block the stage gate on its own."
+
+  - id: REQ-209
+    title: Port R-Co's condition-evaluation corpus as ExUnit regression suite
+    status_in_requirements_yaml: done
+    independent_verdict: PASS
+    evidence:
+      - "test/fixtures/simulation/differential_corpus.json: 15 condition_id entries confirmed by direct grep count this session"
+      - "test/letflow/engine/expr_differential_corpus_test.exs re-run directly: Result: 1 passed (single property-style loop over all 15 entries, per AC2's 'one test loop, not 15 duplicated test bodies' requirement)"
+    findings: []
+
+  - id: REQ-210
+    title: S7 stage-level parity report
+    status_in_requirements_yaml: done
+    independent_verdict: PASS_WITH_CAVEAT
+    evidence:
+      - "docs/migration/stage-7-simulation-uat-parity.md's REVIEWER sign-off section: dated entry present ('2026-09-02 (REQ-210, WF02-REQ210-20260902)'), REPLACES the prior placeholder (confirmed no residual 'Pending --' text remains in the file), matches AC3"
+      - "18-file tests/simulation/scenarios/platform/ corpus named out of scope in the stage doc's own Scope section, matches AC4"
+      - "26-item aggregate table in lib/letflow/design/req210-s7-parity-report.md §1: all 26 rows independently spot-checked against this validator's own fresh test re-runs above -- no discrepancy found in disposition values"
+      - "§5's factual (not declarative) framing re-confirmed: explicitly reserves the stage-gate determination to ORCH/RELEASE-VALIDATOR, does not itself declare S7 done, matches AC5"
+    findings:
+      - >
+        AC2 gap (see REQ-208 finding above): the SERVICE_TASK dispatch gap
+        was never registered, and REQ-210's own confirmation pass did not
+        catch it because it was never surfaced as a `result.issues` entry
+        for REQ-210 to check against the issue registry in the first
+        place -- REQ-210 can only confirm what reached it. Not a defect in
+        REQ-210's own executed work; the report is accurate about
+        everything it was actually pointed at.
+
+# ---------------------------------------------------------------------------
+# Stage-doc / decision-record cross-checks
+# ---------------------------------------------------------------------------
+reviewer_signoff:
+  appended: true
+  location: docs/migration/stage-7-simulation-uat-parity.md
+  dated_section: "2026-09-02 (REQ-210, WF02-REQ210-20260902)"
+  note: "Present, replaces the prior placeholder cleanly. See MINOR finding above re: its join_counters causal attribution being stale for the still-unreached quorum path (SERVICE_TASK gap is now the real cause)."
+
+decision_record_cross_check:
+  - decision: "docs/migration/decisions/ (all reviewed for S7 relevance)"
+    status: consistent
+    note: >
+      No docs/migration/decisions/ record found that S7's shipped
+      code/tests contradict. S7 is explicitly a correctness-gate stage,
+      not a decision-making one (stage doc's own "Decisions: None
+      expected" section, re-confirmed accurate).
+
+issues_reviewed:
+  - id: ISS-0389
+    disposition: "confirmed still genuinely open -- advance-timer endpoint re-confirmed absent by fresh grep this session"
+  - id: ISS-0390
+    disposition: "confirmed resolved -- REQ-211+REQ-212 merged, attachment routes exist; re-confirmed the scenario itself has NOT been re-run against them (still :unbuilt_feature in req206_swiftroute_test.exs)"
+  - id: ISS-0391
+    disposition: "remains open, not a blocker -- disclosed-synthetic scenario corpus, structurally faithful; carry-forward item, requires R-Co filesystem access this environment does not have"
+  - id: ISS-0393
+    disposition: "remains open, same as ISS-0391, duplicate-superset relationship already self-documented"
+  - id: ISS-0392, ISS-0396, ISS-0397, ISS-0398
+    disposition: "all confirmed resolved and merged (git log), and ISS-0397's fix independently re-verified as actually re-exercising the previously-blocked Meridian scenario paths (see REQ-208 evidence above) -- not merely marked resolved in a record"
+
+# ---------------------------------------------------------------------------
+# Verdict
+# ---------------------------------------------------------------------------
+findings:
+  blockers: []
+  majors:
+    - "service_catalog list_all/1 test-isolation failure (new_findings above) -- pre-existing, unrelated to S7, but real, live, reproducible, and previously unfiled"
+    - "SERVICE_TASK dispatch gap never registered as an issue despite being disclosed across 3 S7 requirements' test files (REQ-208 finding above) -- an S7-adjacent gap in REQ-210's own AC2 confirmation, though the gap itself is a pre-existing platform limitation, not new"
+  minors:
+    - "REQ-210's stage-doc sign-off entry's causal attribution for the still-unreached Meridian quorum path is stale (blames the now-fixed join_counters defect; real current cause is the undisclosed-as-issue SERVICE_TASK gap)"
+
+overall_verdict: FAIL
+verdict_rationale: >
+  WF-04's own decision tree: "Any BLOCKER/MAJOR found? YES -> route to owning
+  agent (if this run's responsibility) or file per ISSUE_QUEUE.md (if
+  pre-existing/unrelated)." Two MAJOR findings were independently discovered
+  by this validation pass, both genuinely new (neither previously filed).
+  Per WF-04, this is a FAIL requiring findings to be filed before the gate
+  can be considered clean, even though neither finding is this run's own
+  responsibility to FIX (both are pre-existing/unrelated to S7's own diff --
+  service_catalog predates S7 entirely; the SERVICE_TASK gap is a disclosed,
+  pre-existing platform limitation S7 surfaced but did not cause).
+
+correctness_gate_assessment: >
+  Separately from the mechanical FAIL verdict above (see
+  docs/agents/ORCHESTRATOR.md §8 item 2's "zero BLOCKER issues" -- no
+  BLOCKER was found, only MAJOR, but WF-04's own tree routes ANY
+  BLOCKER/MAJOR to filing before clearing) -- this validator's own
+  assessment of S7's stated correctness-gate PURPOSE ("a correctness gate
+  on S4/S5/S6's combined output," stage doc line 17-18), independent of the
+  mechanical gate check: the gate has functioned well on its own terms.
+  6 of 11 tenant-business scenarios ran clean. All 15 differential-corpus
+  entries matched. 4 real Engine defects (ISS-0392/0396/0397/0398) were
+  found AND fixed, and -- new since REQ-210's own report -- ISS-0397's fix
+  was independently confirmed here to have actually restored the
+  previously-blocked Meridian join-completion path in a real re-run, not
+  merely a claim. The remaining open items (ISS-0389 advance-timer,
+  ISS-0391/0393 synthetic-scenario-corpus, the entity-list stage-sequencing
+  gap, the now-precisely-identified SERVICE_TASK dispatch gap, and the
+  not-yet-re-run attachment/committee-vote scenarios) are all legitimately
+  carry-forward or already-tracked, EXCEPT the two new findings above,
+  which were real gaps this validation pass surfaced and which must be
+  filed (not silently carried) before the mechanical gate can read clean.
+  Once both are filed (they do not block S8 architecturally -- neither
+  touches S8's own frontend-integration scope -- but WF-04's own tree
+  requires filing before PASS), a re-run of this same WF-04 Step 2 check
+  should clear.
+
+next_action: >
+  Report both new findings to ORCH for filing per ISSUE_QUEUE.md (this
+  validator does not self-file). Once filed, S7's stage gate can be
+  re-evaluated -- ORCHESTRATOR.md §8 item 2 requires zero BLOCKER issues
+  from the most recent WF-04 run (satisfied: zero BLOCKERs) but this
+  validator's own FAIL verdict under WF-04's decision tree (any
+  BLOCKER/MAJOR routes to filing, not straight to PASS) means item 3
+  ("RELEASE-VALIDATOR produced a PASS for Stage N") is NOT currently
+  satisfied. ORCH should not clear S7 for S8 launch until this run's two
+  MAJOR findings are filed and this check is re-confirmed, even though
+  neither finding requires new code before S8 can safely start (S8 is
+  frontend-integration scope; neither finding is on that path).

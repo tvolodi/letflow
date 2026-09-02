@@ -34,6 +34,17 @@ source: >
   handoffs from WF03-ISS0408-20260902's Step Final (git-merge) run, ELIXIR-DEV's
   own mix test attribution analysis (two full-suite runs, consistent single
   failure, isolated run passes).
+duplicate_note: >
+  ISS-0410 (queue task 410, GH#806, filed 2026-09-02T12:04:10Z by
+  RELEASE-VALIDATOR during WF04-S7-20260902) independently found the same
+  underlying bug with a more precise root cause: Letflow.ServiceCatalog.list_all/1
+  has no scope/tenant filter, and test/letflow/routers/admin_services_test.exs
+  is the specific other file leaving scope: :global rows behind (confirmed via
+  a deterministic 3-way reproduction, including an isolated two-file run).
+  Treat ISS-0410 as the primary record for this bug; this record (ISS-0409)
+  is kept as the original discovery but should be closed as
+  resolved-via-duplicate once ISS-0410 is picked up and fixed, per the same
+  cross-reference convention already established for ISS-0391/ISS-0393.
 queue_task_id: 409
 github_issue: 805
 status: open

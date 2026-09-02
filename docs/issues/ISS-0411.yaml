@@ -1,0 +1,55 @@
+id: ISS-0411
+title: "Letflow.Engine does not dispatch SERVICE_TASK nodes -- disclosed in 3 S7 test files' moduledocs but never registered as an issue"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF04-S7-20260902
+discovered_at: "2026-09-02T12:04:29Z"
+severity: MAJOR
+tags: [engine, service-task, s3, s7]
+description: >
+  Discovered during WF-04's S7 stage-gate release validation (2026-09-02),
+  while independently confirming REQ-208's still-unreached Meridian
+  committee-vote/quorum-2-of-3/disbursement paths (deepest part of REQ-208's
+  own AC1/AC2). The blocking gap for those paths is Letflow.Engine's lack of
+  SERVICE_TASK dispatch -- disburse-loan/credit-committee-vote/l1-approval
+  sit behind SERVICE_TASK nodes the Engine does not dispatch, a
+  pre-existing platform gap explicitly disclosed in THREE requirements' own
+  test moduledocs (test/letflow/simulation/req206_swiftroute_test.exs,
+  req207_vortex_test.exs, req208_meridian_test.exs -- req208's own test
+  file's simplified test-local graph had to elide every SERVICE_TASK node
+  just to make anything runnable at all) but was NEVER reported as a
+  result.issues finding in any of REQ-206/207/208's own handoffs and
+  consequently has no docs/issues/*.yaml record.
+  This is exactly the shape of gap REQ-210's own AC2 exists to catch ("any
+  finding that was reported but never actually registered is itself
+  reported as a new finding") -- REQ-210's own aggregate table did not
+  catch it because it only tracked findings surfaced via result.issues, and
+  this one was disclosed only in test prose across three files, never
+  surfaced to ORCH as a finding in the first place.
+  IMPORTANT correction to the record: docs/migration/stage-7-simulation-uat-parity.md's
+  REVIEWER sign-off entry (from REQ-210) currently states the Meridian
+  quorum/disbursement paths remain unreached because they were "truncated
+  by the now-resolved join_counters defect" -- this causal attribution is
+  now stale. join_counters (ISS-0397) IS resolved and IS independently
+  re-verified as actually fixed (req208_meridian_test.exs's own step2b now
+  asserts and gets :ok). The quorum/disbursement paths remain unreached for
+  this SEPARATE reason (SERVICE_TASK dispatch), not join_counters. Whoever
+  picks this up should also correct that stale causal attribution in the
+  stage-7 doc's sign-off entry (a documentation accuracy fix, not a code
+  change).
+affected_files:
+  - lib/letflow/engine.ex
+  - test/letflow/simulation/req206_swiftroute_test.exs
+  - test/letflow/simulation/req207_vortex_test.exs
+  - test/letflow/simulation/req208_meridian_test.exs
+  - docs/migration/stage-7-simulation-uat-parity.md
+related:
+  - REQ-206
+  - REQ-207
+  - REQ-208
+  - REQ-210
+source: >
+  docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
+  independent per-requirement re-verification of REQ-208).
+queue_task_id: 411
+github_issue: 807
+status: open

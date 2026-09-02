@@ -1,0 +1,53 @@
+id: ISS-0410
+title: "Letflow.ServiceCatalog.list_all/1 has no scope/tenant filter, causing a test-isolation failure between service_catalog_test.exs and admin_services_test.exs"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF04-S7-20260902
+discovered_at: "2026-09-02T12:04:10Z"
+severity: MAJOR
+tags: [test-isolation, service-catalog, s6]
+description: >
+  Discovered during WF-04's S7 stage-gate release validation (2026-09-02).
+  Letflow.ServiceCatalog.list_all/1 has no scope/tenant filter, so REQ-192's
+  own pagination-correctness test (an exact-count assertion in
+  test/letflow/service_catalog_test.exs:750) is not isolated from any other
+  test file that leaves a scope: :global service_catalog row behind.
+  test/letflow/routers/admin_services_test.exs creates such rows and is a
+  second, independent async: false file relying on its own on_exit/1
+  cleanup. Under scripts/test_parallel.sh's 4-way partitioning the two files
+  happen to land in partitions that mask the interaction; under a full
+  single-process mix test (this project's own stricter
+  mix letflow.check.test gate) it fails deterministically: "assert
+  length(page2) == 1 -- left: 2, right: 1" (one extra scope: :global row
+  present that this test did not create).
+  Confirmed pre-existing and structurally unrelated to S7 (git diff
+  origin/main...HEAD -- '*service_catalog*' returns zero changed files
+  across S7's entire REQ-205..210 diff; both interacting files predate S7
+  by a wide margin). Reproduced deterministically 3 independent times --
+  not flaky, a real test-isolation gap. Fix likely needs either a
+  tenant/scope filter added to list_all/1's own query, or the test itself
+  scoped/isolated from other global-scope fixture rows -- ISSUE-FIXER
+  should diagnose the right approach.
+affected_files:
+  - lib/letflow/service_catalog.ex
+  - test/letflow/service_catalog_test.exs
+  - test/letflow/routers/admin_services_test.exs
+related:
+  - REQ-191
+  - REQ-192
+duplicate_note: >
+  ISS-0409 (queue task 409, GH#805, filed 2026-09-02T10:50:00Z by
+  ELIXIR-DEV during WF03-ISS0408-20260902) is the same underlying bug,
+  filed ~1h14m earlier -- same failing test, same suspected mechanism
+  (leftover global-scope service_catalog rows), but without this record's
+  more precise root-cause identification (the specific interacting file,
+  admin_services_test.exs, and the exact query-level fix needed: a
+  tenant/scope filter on list_all/1). This record (ISS-0410) is the more
+  complete one and should be treated as primary; ISS-0409 should be closed
+  as resolved-via-duplicate once this is picked up, per the same
+  cross-reference convention already established for ISS-0391/ISS-0393.
+source: >
+  docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
+  independent mix letflow.check.test re-run).
+queue_task_id: 410
+github_issue: 806
+status: open

@@ -1,0 +1,155 @@
+# Test run report — WF-04 Step 1 (Full Test Run)
+# Pre-stage-gate validation pass for Stage S7 (see docs/agents/ORCHESTRATOR.md §8),
+# ahead of ORCH considering Stage S8 eligible to launch. Not tied to any single
+# requirement.
+
+workflow: WF-04
+step: 1
+agent: TEST-RUNNER
+run_id: WF04-20260902
+date_utc_start: 2026-09-02T10:46:57Z
+date_utc_end: 2026-09-02T10:57:04Z
+wall_clock_duration: "10m07s (per test_parallel.sh's own timestamped stdout, first line to last line)"
+
+git:
+  branch: main
+  branch_confirmed: true
+  commit: 7ce2a77f954e02cd429a26467b20f4b87c41c343
+  working_tree: clean (no code changes made in this run -- read-only validation pass,
+    so per WF-04 Step 00's git-setup exception no feature branch was created)
+
+environment:
+  toolchain: local (not Docker fallback) -- mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [source] [64-bit] [smp:16:16] [ds:16:16:10] [async-threads:1] [jit:ns] / Elixir 1.20.3 (compiled with Erlang/OTP 29)"
+  mix_version: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  containers: >
+    letflow-postgres-1 (already running before this run started, port 5462, healthy)
+    and letflow-keycloak-1 (already running, port 8093, healthy) -- confirmed via
+    `docker compose ps` before running; no `docker compose up -d` issued by this run
+    since both were already up (per test-runner.md step 1, only run compose up when
+    needed). No untracked .env LETFLOW_DB_PORT override present in this workspace,
+    so the default port 5462 applied to both compose and Ecto.
+  command_run: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+  TEST_PARALLEL_N: 4
+  TEST_PARALLEL_N_rationale: >
+    Set explicitly per this run's own dispatch instructions -- documented workaround
+    for ISS-0219 (nproc-derived N on this host exceeds Postgres/CPU capacity and
+    crashes every partition with duplicate_table/connection errors during
+    ecto.create/migrate before any Result: line). N=4 is the host's known-good value
+    per README.md's Notes section and scripts/test_parallel.sh's own ISS-0219 comment.
+  computed_pool_size: 21 (test_parallel.sh's own ISS-0287 clamp: N=4, max_connections=100,
+    superuser_reserved=3, headroom=10, nonpool_reserve=2 -> budget 85 / N=4 -> 21)
+
+verdict: PASS
+
+checks:
+  test_suite_full:
+    result: PASS
+    combined_summary_line_verbatim: "combined: 3046 tests, 6 properties, 0 failures (3052/3052 passed)"
+    total: 3052
+    passed: 3052
+    failed: 0
+    properties: 6
+    example_tests: 3046
+    excluded_total: 13
+    excluded_note: >
+      Sum of each partition's own "excluded" count in its Result: line (0 + 3 + 1 + 9
+      = 13). These are the standing @moduletag :keycloak and @tag :wasm_hang exclusions
+      that test/test_helper.exs applies to every default ExUnit.start invocation
+      (ExUnit.start(exclude: [:keycloak, :wasm_hang])) -- every scripts/test_parallel.sh
+      partition loads this same test_helper.exs, so this is expected, not a gap.
+      Deliberate inclusion runs exist for both (`mix test --include keycloak ...`,
+      `mix test --include wasm_hang ...`) but were not run in this pass -- WF-04 Step 1
+      is scripts/test_parallel.sh's own invocation, not mix letflow.check.test's second
+      subprocess.
+    any_partition_warnings: none (no "test_parallel: WARNING" lines emitted by the
+      aggregator across any of the 4 partitions -- every partition had a Result: line,
+      every partition's exit code / parsed-failure-count pair was internally consistent)
+
+  per_partition:
+    - partition: 1
+      tests: 787
+      properties: 3
+      failures: 0
+      excluded: 0
+      exit_code: 0
+      result_line_verbatim: "Result: 790 passed (3 properties, 787 tests)"
+      exunit_seed: 711689
+    - partition: 2
+      tests: 729
+      properties: 0
+      failures: 0
+      excluded: 3
+      exit_code: 0
+      result_line_verbatim: "Result: 729 passed, 3 excluded"
+      exunit_seed: 662995
+    - partition: 3
+      tests: 808
+      properties: 0
+      failures: 0
+      excluded: 1
+      exit_code: 0
+      result_line_verbatim: "Result: 808 passed, 1 excluded"
+      exunit_seed: 611494
+    - partition: 4
+      tests: 722
+      properties: 3
+      failures: 0
+      excluded: 9
+      exit_code: 0
+      result_line_verbatim: "Result: 725 passed (3 properties, 722 tests), 9 excluded"
+      exunit_seed: 558006
+
+  streamdata_property_seeds: >
+    All 6 properties passed in all partitions. StreamData only prints its own
+    generation seed in a failure report (for shrink reproduction) -- since none of the
+    6 properties failed in this run, no StreamData-specific seed was emitted to
+    capture. Each partition's own ExUnit seed (listed per-partition above, "Running
+    ExUnit with seed: <n>") governs that partition's property-case generation and is
+    what a `--seed <n>` re-run against the same partition would reproduce.
+
+  wasm_hang_flake_check:
+    status: NOT_ENCOUNTERED -- structurally could not have been
+    explanation: >
+      This run's dispatch flagged an unusually high rate of the documented
+      ISS-0352/ISS-0406 :wasm_hang isolated-subprocess flake under today's heavy
+      multi-session concurrent load, with instructions to note it plainly if hit
+      rather than silently exclude or panic about it. Checked directly:
+      scripts/test_parallel.sh launches plain `mix test --partitions N` per partition,
+      and test/test_helper.exs's `ExUnit.start(exclude: [:keycloak, :wasm_hang])`
+      applies to every one of those invocations -- confirmed by this run's own output
+      (13 total excluded across partitions, consistent with the keycloak+wasm_hang
+      tagged tests being skipped, not run). The :wasm_hang flake class only manifests
+      inside `mix letflow.check.test`'s SECOND, isolated `mix test --only wasm_hang`
+      subprocess (per ISS-0352's resolution note) -- a different invocation than what
+      WF-04 Step 1 runs. So this pass had zero exposure to that flake by construction,
+      not by luck; nothing to report as either "hit" or "avoided."
+
+pre_existing_failures_found: none
+issues_filed: none
+code_changes_made: none (read-only validation pass, no application or test code touched)
+
+diagnosis: "N/A -- zero failures observed. Nothing to route to ELIXIR-DEV,
+  FRONTEND-DEV, or TEST-DESIGNER."
+
+stage_context:
+  # For RELEASE-VALIDATOR's benefit at WF-04 Step 2 -- not independently re-verified
+  # in this Step 1 pass, just docs/requirements.yaml's status as read.
+  stage_under_gate: S7 (per this run's dispatch -- pre-stage-gate check ahead of S8
+    eligibility)
+  requirements_tagged_S7_status_done: [REQ-205, REQ-206, REQ-207, REQ-208, REQ-209,
+    REQ-210, REQ-213]
+  note: >
+    This Step 1 run is a full-suite pass/fail check, not a per-requirement
+    acceptance-criteria audit -- that independent re-check is RELEASE-VALIDATOR's job
+    at WF-04 Step 2, per WF-04's own overview (a fresh check against the code, not a
+    re-run of this report).
+
+handoff:
+  verdict: PASS
+  artifacts_out:
+    - test/reports/report-2026-09-02-WF04.yaml
+  next_action: "Route to RELEASE-VALIDATOR (WF-04 Step 2 -- independent re-verification
+    of every done S7 requirement's acceptance criteria against current code, plus
+    confirmation of docs/migration/stage-7-*.md's REVIEWER sign-off section, per
+    WF-04_full_test_run.md Step 2)."

@@ -3991,6 +3991,23 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #819 merged to main, queue task 413 released done",
       "note": "WF-03 issue-resolving run for ISS-0413: host_api_write_test.exs and plugin_handler_test.exs shell out to git diff against a live resolved base ref. Sibling fragility class to ISS-0404/ISS-0378 (fixed-SHA class already fixed). ISSUE-FIXER to judge whether structural-check-instead-of-git-diff treatment is warranted."
+    },
+    {
+      "run_id": "WF03-ISS0419-20260902",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "issue_id": "ISS-0419",
+      "queue_task_id": 419,
+      "github_issue_number": 817,
+      "status": "COMPLETED",
+      "owned_modules": [
+        ".github/workflows/ci.yml"
+      ],
+      "started_at": "2026-09-02T13:44:15Z",
+      "lock_released_at": "2026-09-02T15:44:04Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #820 merged to main (503fc5bd), queue task 419 released done",
+      "note": "WF-03 issue-resolving run for ISS-0419: does mix deps.get silently defeat CI's actions/cache for wasmex's Rust NIF Cargo build output? ISSUE-FIXER (Step 1) empirically verified via 4 real CI run logs (gh run view --job) that the cache is NOT defeated -- deps.get completes in ~1s on a cache hit and Cargo/rustc is never re-invoked, consistent with Rustler.Compiler.compile_crate/3's structural no-op path when the NIF output already exists in priv_dir. The ~12-15 min runtime is dominated by the ExUnit suite itself (~694s), not wasmex. Closed status: no_defect (not resolved) with a full evidence citation per ISSUE_QUEUE.md's bar; no code file changed, only docs/issues/ISS-0419.yaml. PR #820 was docs-only, CI green (4 checks), squash-merged. GH#817 closed with the no_defect comment template."
     }
   ]
 }

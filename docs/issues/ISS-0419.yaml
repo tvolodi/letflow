@@ -47,4 +47,91 @@ source: >
   `cd: config.path` call site).
 queue_task_id: 419
 github_issue: 817
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0419-20260902
+verdict_at: "2026-09-02T13:55:48Z"
+evidence: >
+  Diagnosed in handoffs/WF03-ISS0419-20260902/step-01-issue-fixer-diagnose.json
+  (result.summary, full detail there). Root-cause verdict: the CI cache is NOT
+  being defeated -- mix deps.get does not silently invalidate the cached
+  deps/wasmex/native/wasmex/target/ Cargo build output on a cache hit.
+
+  FIRST-HAND MEASUREMENT: 3 real, distinct CI runs from today's run history
+  (ids 33634490464, 33635645070, 33622754837), each independently inspected
+  via `gh run view --job=<id> --log` against a genuine `Cache hit for:
+  Linux-mix-<hash>` actions/cache restore (i.e. mix.lock unchanged from a
+  prior successful run). In all 3 runs the 'Install dependencies' step
+  (mix deps.get) completed in ~1 second, and the subsequent 'Run backend
+  gate' step's full compile output contained zero occurrences of
+  wasmex|Compiling|Fresh|cargo|rustc|error[E anywhere related to a Cargo/rustc
+  invocation (grepped across each ~300k-line log) -- only
+  `Compiling 199 files (.ex)` / `Generated letflow app` (Elixir compile).
+  A 4th run (33586549969, the day's earliest) was also inspected and was
+  likewise a cache hit with no Cargo-compile signal, so no genuine cold/first
+  -populate run existed in today's history for a direct hit-vs-miss contrast;
+  the verdict rests on the consistent absence of any Cargo-compile line
+  across every real run available, not a same-day paired comparison.
+  Runtime breakdown from run 33634490464's own log timestamps: Elixir
+  compile took ~7s (13:14:33-13:14:40), then the ExUnit suite ran
+  `Finished in 694.2 seconds (23.5s async, 670.7s sync)`, plus a second
+  ~24.2s ExUnit run inside the `mix letflow.check` alias chain -- i.e. the
+  test suite itself, not any wasmex rebuild, accounts for ~694 of the
+  ~720s total.
+
+  MECHANISMS TESTED (each named individually, including what was ruled out):
+  1. deps/rustler/lib/rustler/compiler.ex's compile_crate/3 (lines 7-36) and
+     do_compile/2 (lines 54-62): confirmed by direct source read (rustler
+     0.38.0, fetched via `mix deps.get` in this worktree) that Cargo runs via
+     `System.cmd(cmd, args, cd: config.path, env: config.env, ...)` with no
+     CARGO_TARGET_DIR override anywhere in deps/rustler or deps/wasmex
+     (grepped both trees, zero matches) -- so Cargo's target/ does land at
+     deps/wasmex/native/wasmex/target/ as the issue alleged. TRUE premise,
+     but not itself evidence of defeat.
+  2. compile_crate/3's own early-exit / structural no-op path (lines 10,
+     19-26): do_compile is only invoked when config.skip_compilation? is
+     false AND expected_files(config) are missing from priv_dir() -- both
+     conditions are satisfied by a successful cache restore, so on a genuine
+     cache hit the compiler is never re-invoked at all, independent of
+     whether mix deps.get itself touches the directory. This is CONSISTENT
+     WITH and EXPLAINS the observed zero-Cargo-output runs above.
+  3. Mix.Tasks.Deps.Get's already-fetched/lockfile-matching behavior: a
+     LOCAL repro was attempted (ran `mix deps.get` in this worktree, then
+     tried `WASMEX_BUILD=true mix compile` to force a cold build and inspect
+     target/ mtimes before/after) but could NOT be completed -- see method
+     limitation below. RULED OUT as a locally-verifiable mechanism; CI-log
+     evidence (item above) was used instead and is more directly probative
+     since it is the actual environment the issue concerns.
+  4. CARGO_INCREMENTAL: 0's presence: independently re-grepped
+     .github/workflows/ci.yml (`grep -n CARGO_INCREMENTAL`) and confirmed
+     ZERO matches in the workflow source text -- ORCH's own prior grep was
+     correct on its own terms. However the broader claim ("set on the
+     backend gate step") is ALSO true, checked against the LIVE job env
+     rather than the source text: run 33634490464's 'Set up Rust (pinned via
+     .tool-versions)' step log shows dtolnay/rust-toolchain@stable
+     unconditionally injecting `CARGO_INCREMENTAL=0` into $GITHUB_ENV
+     (`if [ -z "${CARGO_INCREMENTAL+set}" ]; then echo CARGO_INCREMENTAL=0
+     >> $GITHUB_ENV; fi`), which then appears verbatim in every later step's
+     env block including 'Run backend gate' itself. Both statements
+     reconciled as true (source-text absence vs. live-env presence, two
+     different artifacts) -- RULED OUT as a false premise or a source of
+     the reported 12-15 min runtime, since it is structurally inert whenever
+     Cargo is never invoked (i.e. on every cache-hit run inspected).
+
+  STATED METHOD LIMITATION: local reproduction of a cold-vs-warm wasmex
+  build (to directly mtime-inspect deps/wasmex/native/wasmex/target/) was
+  attempted in this worktree and blocked by a Rust toolchain/pin mismatch --
+  this host's rustup default is stable=1.93.1, while wasmex 0.15.1's
+  Cargo.lock requires rustc 1.94.0+ (dozens of build errors, e.g.
+  wasmtime@47.0.3, cranelift-isle@0.134.3), and CI pins rust 1.97.1 via
+  .tool-versions. `WASMEX_BUILD=true mix compile` therefore failed before
+  ever creating a target/ dir locally, so no local mtime-based repro could
+  be completed. Real CI run logs were used instead of a local repro -- this
+  is judged a stronger evidentiary source anyway (the actual environment in
+  question) but it means the verdict rests entirely on log inspection of
+  cache-hit runs, not on a controlled local before/after diff, and no
+  genuine cold-cache run existed in today's history to pair against a
+  cache-hit run for direct contrast.
+
+  No fix was made and none is needed -- .github/workflows/ci.yml's caching
+  setup is working as designed on every run inspected. No code file was
+  touched in this run or its diagnosis step.

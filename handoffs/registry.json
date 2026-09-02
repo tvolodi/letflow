@@ -4083,6 +4083,20 @@
       "released_lock": true,
       "last_known_step": "REQ-VALIDATOR PASS on all 3 -- registered as queue tasks 434 (REQ-216), 435 (REQ-217, depends_on 434), 436 (REQ-218, depends_on 434)",
       "note": "WF-01 requirement-drafting run for ISS-0431 (admission control/backpressure). REQ-ANALYST resolved all TO-DECIDE items with stated reasoning; REQ-VALIDATOR independently confirmed testability, sizing, depends_on correctness, decision-0014 consistency, and YAML validity."
+    },
+    {
+      "run_id": "WF03-ISS0429-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0429",
+      "queue_task_id": 429,
+      "github_issue_number": 833,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T20:50:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
+      "note": "WF-03 issue-resolving run for ISS-0429: Process.sleep inside alert-hook delivery blocks the platform-wide Scheduler.Poller GenServer for up to tens of seconds per hook per tenant, stalling every tenant timer. Issue asks to reconcile placement with ISS-0425 (concurrent supervision-tree redesign proposal) rather than inventing one -- ISSUE-FIXER sizing pass first."
     }
   ]
 }

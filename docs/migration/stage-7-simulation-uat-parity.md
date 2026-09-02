@@ -285,9 +285,13 @@ cross-cutting gap rather than one scenario's edge case. (c)
 — already documented in `lib/letflow/router.ex`'s own "Deferred routes" table, not a
 newly discovered gap). (d) Both Meridian loan-origination scenarios' committee-vote,
 quorum-2-of-3, and disbursement paths were never reached during their own original S7
-execution run (truncated by the now-resolved `join_counters` defect) — re-running them
-to actually exercise those paths against the fixed Engine is not part of REQ-210's own
-scope and is named as follow-up work below. (e) `test/fixtures/simulation/
+execution run (originally attributed to the now-resolved `join_counters` defect, but that
+attribution is stale as of `ISS-0411`, filed 2026-09-02: `join_counters` is confirmed fixed
+and those paths are now independently confirmed still unreached, for a separate reason —
+`Letflow.Engine`'s `Transition.dispatch_node/4` has no `SERVICE_TASK` dispatch, and the
+committee-vote/disbursement paths sit behind `SERVICE_TASK` nodes; see `ISS-0411` for the
+full diagnosis) — re-running them to actually exercise those paths against the fixed Engine
+is not part of REQ-210's own scope and is named as follow-up work below. (e) `test/fixtures/simulation/
 {swiftroute,vortex,meridian}/scenarios/*.yaml` remain disclosed-synthetic, not
 byte-for-byte ports of R-Co's real scenario corpus (`ISS-0391`/`ISS-0393`, both open,
 confirmed to be the same underlying gap with ISS-0393 carrying the superset scope —

@@ -98,3 +98,15 @@ source: >
 queue_task_id: 411
 github_issue: 807
 status: open
+orch_routing_note: >
+  ORCH (2026-09-02, picked up for WF-03 processing): confirmed the diagnosis
+  above is already complete and its sizing verdict stands -- this is not a
+  scoped WF-03 bug fix. Not implementing a fix in this run. Corrected the
+  stale stage-7 causal attribution (join_counters -> SERVICE_TASK dispatch)
+  in docs/migration/stage-7-simulation-uat-parity.md directly, per
+  ORCHESTRATOR.md Sec 10's direct-action sizing rule (single file, no new
+  function/module/spec, no migration, no supervision-tree file, no
+  tenant-data path, no test-asserted behavior change -- all six checks
+  pass). Routing the real gap (SERVICE_TASK dispatch) to REQ-ANALYST as a
+  new requirement per the diagnosis note's own recommendation. This record
+  stays open, status unchanged, pending that requirement's completion.

@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-02",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-02-code-designer.json",
+  "created_at": "2026-09-02T18:47:07Z",
+  "started_at": "2026-09-02T18:47:07Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0426-20260902/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0426.yaml",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/test_helper.exs",
+      "config/test.exs",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "docs/issues/ISS-0352.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "config/test.exs",
+      "docs/issues/ISS-0426.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 -- design the fix for ISS-0426. Follow WF-02 Step 1's design procedure as WF-03 Step 2 directs. Produce a design artefact under lib/letflow/design/ (suggested name iss426-wallclock-test-contention.md); design only, NO implementation code.\n\nREAD ISSUE-FIXER's Step 1 diagnosis FIRST (artifacts_in[0], result.summary) -- it is the evidence base for this design and it contains the enumeration, the root-cause mechanism, and an options assessment. Per HANDOFF_PROTOCOL.md section 1.1 its factual claims are checkable and may be wrong: verify the ones your design depends on (in particular the two-group split of the lua tests and the claim that all wasm-side wall-clock-sensitive tests are ALREADY tagged :wasm_hang) rather than inheriting them.\n\nTHE ESTABLISHED ROOT CAUSE, in mechanism terms: Executor.execute_with_manifest/3 races Task.yield(timeout_ms) against wall-clock time. handle_yield_result(nil, ...) fires when no reply arrived in time, which measures SCHEDULER AVAILABILITY for the child task and the calling process -- not Lua execution time. Under 6-way partitioning on 16 cores, six BEAM nodes oversubscribe the cores ~6x, so a microsecond-scale task can sit unscheduled past a 5000ms budget. The diagnosis splits the lua tests into two groups that need DIFFERENT treatment:\n  GROUP 1 (~10 tests incl. the filed failure at executor_test.exs:983): a generous timeout_ms: 5_000 wrapped around trivial real work, where the timeout is incidental scaffolding and ANY timeout outcome is a wrong-branch failure. ORCH has independently confirmed this reading for AC7 at line 983: that test asserts a SCRIPT_ERROR from integer division by zero; the 5000ms budget is not the property under test at all.\n  GROUP 2 (~9 tests): a tight budget where the race IS the property under test -- these legitimately assert timeout behaviour and must keep doing so.\n\nISSUE-FIXER's recommendation, which you may adopt, refine, or reject with stated reasoning: option (c) restructure for GROUP 1, option (a) tag-and-isolate (mirroring the :wasm_hang precedent in test/test_helper.exs and lib/mix/tasks/letflow.check.test.ex) for GROUP 2. Option (b) raise-the-budget alone is NOT recommended and the diagnosis gives the reason: config/test.exs:187's own history shows this budget already raised twice (200 -> 1500 -> 5000ms) and exceeded again both times. Note also the diagnosis's finding that config/test.exs:187 is DEAD CODE for the filed failure, because AC7 pins its own timeout_ms: 5_000 literal and never falls through to config -- so any design leaning on the config value must say how the pinned literals are reached.\n\nHARD CONSTRAINTS your design must satisfy and state that it satisfies:\n  1. (ISS-0426 AC4) Letflow.Engine.Lua.Executor's PRODUCTION wall-clock kill semantics unchanged -- no production timeout constant raised or removed, config/config.exs:17's 5_000 untouched. It is REQ-155's LUA-10 layer-2 security control against untrusted tenant scripts. A design that relaxes it to fix a test environment problem is rejected outright.\n  2. (ISS-0426 AC5) If your design tags/partitions rather than rewrites, the tagging MUST be wired into test/test_helper.exs AND mix letflow.check.test the same way wasm_hang already is, so a plain `mix test` and CI both stay correct. Read how :wasm_hang does it (test_helper.exs:19-33's ExUnit.start(exclude: ...) and letflow.check.test.ex's run_wasm_hang_tests/0 subprocess) and mirror the shape.\n  3. (ISS-0426 AC3) The suite must still pass SERIALLY under plain `mix test`. Do not trade serial correctness for parallel safety.\n  4. GROUP 2's tests must still genuinely prove the timeout behaviour they exist to prove. A restructure that makes a timeout test unable to fail is a worse defect than the flake.\n\nSCOPE BOUNDARY -- CONCURRENT RUN. WF03-ISS0418-20260902 is live on another host implementing the OQ-5 WASM concurrency cap and owns lib/letflow/engine/wasm, test/letflow/engine/wasm/{call_timeout,plugin_handler,host_api_write}_test.exs, and lib/mix/tasks/letflow.check.test.ex. Your design may READ all of these. It must NOT require editing the three wasm test files. lib/mix/tasks/letflow.check.test.ex is a CONTESTED file: if AC5 forces a change there, design the change as a MINIMAL, ADDITIVE one (a new isolated-subprocess invocation alongside the existing wasm_hang one, not a restructure of it) and flag the contention explicitly in your design's own risks section so ORCH can sequence the merge against ISS-0418.\n\nALSO NOTE, and design around: ISSUE-FIXER could NOT reproduce the failure with a cheaper single-file contention probe (it ran up to 24 OS-level CPU burners plus 8x6 concentrated AC7-only runs, all clean) and reported that honestly as a negative rather than disproof -- the real filed observation came from a full 6-way partitioned suite run. ISS-0426's AC6 requires the fix be shown to work across at least two repeated end-to-end runs. So your design should, where it can, prefer a fix whose correctness is STRUCTURALLY evident (the failure branch is removed or made unreachable) over one that can only be validated statistically by not-flaking -- because a probabilistic fix is very expensive to demonstrate here. State in the design how a validator can tell your fix works WITHOUT needing to first reproduce a flake that resists reproduction.\n\nDeliverable: the design document, plus a complete handoff (PASS/FAIL, artifacts_out naming the design path, next_action routing to CODE-DESIGN-VALIDATOR). Commit the design and your handoff to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

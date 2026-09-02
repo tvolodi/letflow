@@ -1,0 +1,38 @@
+id: ISS-0433
+title: "Scheduler.Poller re-reads Application.get_env config every tick instead of caching in :persistent_term"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T19:17:07Z"
+severity: MINOR
+tags: [performance, scheduler, config, s6]
+description: >
+  Profiling in ISS-0432 identified this as one of two concrete,
+  measured-shape action items (the other, per-tick Repo.all over
+  Registration, is ISS-0421). Application.get_env is called repeatedly
+  per Poller tick for config values that effectively never change at
+  runtime (no code path reconfigures them without a full BEAM restart).
+  :persistent_term is the idiomatic zero-copy home for such values,
+  avoiding the per-read ETS lookup + copy Application.get_env performs
+  internally.
+  Scope: identify every Application.get_env call in the
+  Scheduler.Poller tick path (lib/letflow/scheduler/poller.ex) and any
+  hot per-tick path it calls into, confirm each read value is genuinely
+  tick-invariant (does not change without a restart), and replace with
+  a :persistent_term read populated once at application boot
+  (lib/letflow/application.ex or the Poller GenServer's own init/1). Do
+  not extend scope beyond the Poller tick path measured by ISS-0432 --
+  this is a small, measurement-justified change, not a general
+  Application.get_env sweep.
+affected_files:
+  - lib/letflow/scheduler/poller.ex
+  - lib/letflow/application.ex
+related:
+  - ISS-0432
+  - ISS-0421
+source: >
+  docs/issues/ISS-0432.yaml's own "WHAT THE PROFILING DOES SUPPORT"
+  section, item 2 -- filed as its own tracked issue per that record's
+  closing note (ISS-0432 itself carries no queue-task-shaped work).
+queue_task_id: 433
+github_issue: 838
+status: open

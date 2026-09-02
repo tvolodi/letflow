@@ -80,4 +80,20 @@ source: >
 queue_task_id: 432
 github_issue: 836
 
-status: open
+status: no_defect
+verdict_in_run: ORCH-adhoc-20260902-arch-review
+verdict_at: "2026-09-02T19:17:07Z"
+orch_closing_note: >
+  ORCH (2026-09-02, picked up for queue processing): this record's own
+  deliverable is a durable, first-hand-measured refutation (:timer.tc
+  figures quoted above, real modules, both BEAM-side and in-container
+  comparisons) -- that deliverable is already complete as filed. Per the
+  record's own explicit instruction ("DO NOT let this become a general
+  performance-tuning run"), no code change belongs to THIS issue: the two
+  concrete action items it identifies (Poller's per-tick Repo.all,
+  config re-reads) are correctly scoped to ISS-0421 and a still-unfiled
+  persistent_term follow-up, not to be actioned here. Closing no_defect:
+  the proposed optimisation (ETS graph cache) was investigated and
+  measured, and confirmed not worth building at current graph sizes --
+  a positive, falsifiable, measured negative result, not an
+  unresolved question. No queue-task-shaped work remains under this id.

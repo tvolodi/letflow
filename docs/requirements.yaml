@@ -12218,3 +12218,125 @@ requirements:
       - "the moduledoc states plainly that no existing web/ SPA consumer or R-Co route contract exists for this surface, that this requirement defines the response shapes rather than matching one, and states the content-vs-metadata distinction between the two GET routes"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-211, REQ-069, REQ-072, REQ-070]
+
+  - id: REQ-213
+    title: Make mix letflow.check.test a mandatory named step in TEST-DESIGNER's and RELEASE-VALIDATOR's own instructions (ISS-0069 recurrence, 7 occurrences)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S7
+    impl_order: 405  # letflow-queue task id, GH#794
+    description: >
+      docs/anti-patterns.md's "A test helper's default argument goes dead
+      the moment every call site starts passing it explicitly" entry
+      (docs/anti-patterns.md:1830-1885) documents the same defect class
+      recurring SEVEN times: REQ-178, REQ-187, REQ-191 (1st-3rd, the entry's
+      original write-up), REQ-195 (4th), and REQ-203 (7th, the entry's most
+      recent recurrence note). The pattern: a test helper declares
+      `defp fn_name(a, b, c \\ default)`, but every call site in the file
+      ends up passing `c` explicitly, so the zero-arg clause is genuinely
+      dead code -- caught only by the compiler's "default values ... are
+      never used" warning under --warnings-as-errors, and ONLY when the
+      test file is actually recompiled fresh.
+      The REQ-203 recurrence note (docs/anti-patterns.md:1862-1885) is
+      explicit that this is not a "try harder to remember" problem: the
+      dead default in test/letflow/repository/activation_test.exs's
+      version_attrs/1 slipped past TEST-DESIGNER's own local
+      `mix compile --warnings-as-errors` AND a real `mix test` run of that
+      exact file, AND past five separate hard gates that each ran a real
+      mix compile/mix test pass on the same file (TEST-DESIGN-VALIDATOR
+      twice, REVIEWER twice, RELEASE-VALIDATOR once) -- none of whom ran
+      `mix letflow.check.test`, only `mix test <specific files>` or
+      scripts/test_parallel.sh. It was caught only by CI's mix letflow.check
+      gate, after every WF-02 gate had already passed.
+      WHY `mix test <file>` ALONE IS INSUFFICIENT (confirmed by reading
+      lib/mix/tasks/letflow.check.test.ex in full, 2026-09-01): Elixir's
+      incremental compiler does not always force a fresh
+      warnings-as-errors recompile of an already-compiled test module
+      across separate `mix test` invocations within the same _build cache
+      -- a file that compiles standalone in isolation can still hide a
+      dead-default warning that only surfaces on a genuinely fresh
+      compile. `mix letflow.check.test` (lib/mix/tasks/letflow.check.test.ex)
+      shells out to a full `mix test` subprocess and additionally greps its
+      captured stdout+stderr for the fixed, stable substring "default
+      values for the optional arguments" (ISS-0069's own warning class),
+      failing the task if that substring appears anywhere -- even if the
+      underlying `mix test` run itself exited 0. This is a materially
+      different, stricter check than a bare `mix test <file>` call, which
+      never inspects its own output for this warning class at all.
+      THE FIX (stated verbatim in the anti-patterns.md entry's own last
+      paragraph, quoted here so it is not silently reinterpreted): "the fix
+      here is not 'try harder to remember,' it is to add
+      `mix letflow.check.test` (not merely `mix test <file>`) as a
+      mandatory, named step in TEST-DESIGNER's and RELEASE-VALIDATOR's own
+      instructions, since both are the natural last local checkpoints
+      before a PR's own CI run."
+      SCOPE: edit exactly two files --
+      .claude/agents/test-designer.md and .claude/agents/release-validator.md.
+      For TEST-DESIGNER (currently ~68 lines): add a step requiring
+      `mix letflow.check.test` to be run and its real output quoted before
+      the handoff to TEST-DESIGN-VALIDATOR is reported as complete --
+      TEST-DESIGNER already writes test code with default-argument helpers
+      as a matter of course (the entry's own recurring pattern is TEST-
+      DESIGNER's own helper style), so this is the step that should catch
+      the defect at its origin. For RELEASE-VALIDATOR (currently ~57
+      lines): add `mix letflow.check.test` as an explicit, named
+      re-verification step alongside its existing mandatory
+      scripts/test_parallel.sh re-run (see its "What you do" section,
+      which already establishes the "re-run yourself, do not trust a
+      report" pattern this new step extends) -- run it before the
+      requirement is reported/marked done, matching this role's existing
+      "independent re-verification, not report-copying" framing. Both
+      additions must explicitly say WHY `mix test <file>` alone is
+      insufficient (the incremental-compiler cache gap above), not just
+      assert the new command as unexplained ritual -- an instruction that
+      states a rule without its reason is the same failure mode that let
+      this recur seven times with a documented mitigation nobody actually
+      wired in.
+      OWNERSHIP: DOC-UPDATER, not ELIXIR-DEV and not ORCH-direct, per
+      docs/migration/decisions/0008-cross-cutting-tooling-stage-and-doc-
+      ownership.md Question 2 (confirmed Option A, REVIEWER sign-off
+      2026-08-21): DOC-UPDATER's remit explicitly widens to
+      `.claude/agents/*.md` "whenever a requirement's acceptance_criteria
+      explicitly names them" -- exactly this case, two named files, pure
+      mechanical prose insertion citing an existing mix task and an
+      existing anti-patterns.md entry, no lib/ code and no architectural
+      design judgment involved. ORCH-direct is disqualified by
+      ORCHESTRATOR.md Section 10 check 1 (this touches two files, not
+      exactly one).
+      STAGE: tagged S7 (not tied to any R-Co migration subsystem) per
+      decision 0008 Question 1's provisional pick, Option A -- "tag with
+      whichever stage is currently active/in-progress at draft time".
+      This pick is a REQ-ANALYST/REQ-VALIDATOR-level provisional choice
+      only, NOT REVIEWER-confirmed: decision 0008's own "REVIEWER
+      sign-off -- 2026-08-21" section states verbatim that Question 1 was
+      "not evaluated by this gate; REVIEWER's Step 2d scope is
+      idiom/supervision/scope-creep/decision-record consistency, not
+      requirement-schema stage-fit, which is REQ-VALIDATOR's remit and
+      was already passed at WF-01", leaving it "as REQ-VALIDATOR/schema
+      territory, unaddressed here rather than silently assumed
+      resolved" -- the same unconfirmed status REQ-114's own S4 tag
+      already carries. Applying Option A's rule here nonetheless
+      correctly produces S7: S7 is the stage the most recently drafted
+      requirements in this file carry (REQ-205 through REQ-210) as of
+      this requirement's own drafting.
+      NOT IN THIS REQUIREMENT: no change to lib/ or priv/repo/migrations/
+      -- this requirement touches only .claude/agents/ instruction text.
+      No change to lib/mix/tasks/letflow.check.test.ex itself (it already
+      does exactly what's needed, confirmed above) or to
+      docs/agents/workflows/WF-02_requirement_implementation.md (the
+      anti-patterns.md fix text names TEST-DESIGNER's and RELEASE-
+      VALIDATOR's own instructions specifically, not the workflow doc; if
+      a future gate finds the workflow doc also needs the same step named
+      explicitly, that is separate follow-on scope, not silently folded in
+      here). No retroactive fix to any of the seven prior occurrences'
+      already-merged code. No new anti-patterns.md entry (this
+      requirement closes the existing entry's outstanding fix, it does not
+      document a new one).
+    acceptance_criteria:
+      - ".claude/agents/test-designer.md contains a mandatory step naming `mix letflow.check.test` verbatim (not merely `mix test` or `mix test <file>`), stated as required before the handoff to TEST-DESIGN-VALIDATOR is reported complete"
+      - ".claude/agents/release-validator.md contains a mandatory step naming `mix letflow.check.test` verbatim, stated as required as part of its independent re-verification before a requirement/stage is reported done -- placed alongside or immediately after its existing scripts/test_parallel.sh re-run instruction, not as a disconnected addition"
+      - "both additions state explicitly, in their own words, why a bare `mix test <file>` run is insufficient -- specifically that Elixir's incremental compiler does not always force a fresh warnings-as-errors recompile of an already-compiled test module across separate mix test invocations within the same _build cache, citing ISS-0069/the anti-patterns.md entry rather than asserting the rule unexplained"
+      - "git diff on both files shows only the new step(s) added -- no unrelated restructuring of either file's existing content"
+      - "the added text in both files is concrete about WHEN the step runs in that agent's own workflow (e.g. before reporting the step/handoff complete), matching the style of surrounding instructions in the same file, not generic advice like 'remember to check for warnings'"
+      - "mix help letflow.check.test (or an equivalent direct read of lib/mix/tasks/letflow.check.test.ex) is quoted or cited to confirm the command name and behavior actually matches what the two instruction files now say it does"
+    depends_on: []

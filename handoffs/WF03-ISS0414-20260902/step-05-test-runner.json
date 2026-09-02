@@ -1,0 +1,73 @@
+{
+  "handoff_id": "WF03-ISS0414-20260902-step-05",
+  "run_id": "WF03-ISS0414-20260902",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0414-20260902/step-05-test-runner.json",
+  "created_at": "2026-09-02T14:24:30Z",
+  "started_at": "2026-09-02T13:56:40Z",
+  "completed_at": "2026-09-02T14:24:30Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-191", "REQ-192"],
+    "issue_ids": ["ISS-0414", "ISS-0409", "ISS-0410"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0414-20260902/step-04-reviewer.json",
+      "test/support/tenant_schema_reaper.ex",
+      "test/support/service_catalog_reaper_test.exs",
+      "test/test_helper.exs"
+    ],
+    "artifacts_out": [
+      "handoffs/WF03-ISS0414-20260902/step-05-test-runner.json"
+    ],
+    "branch_name": "fix/ISS-0414-service-catalog-safety-net-20260902"
+  },
+  "task": {
+    "description": "Execute the full mix test suite plus mix compile --warnings-as-errors on the fix branch and confirm no new regressions vs. the documented pre-existing baseline before this fix is routed to close.",
+    "acceptance_criteria": [
+      "mix compile --warnings-as-errors exits 0",
+      "mix test test/support/service_catalog_reaper_test.exs -- 5/5 pass",
+      "Full suite run via mix letflow.check.test, waited on synchronously to completion",
+      "No NEW failures vs. the documented pre-existing baseline (2 rustc-ENOENT toolchain tests)",
+      "No suite-wide slowdown or flakiness vs. typical (~3050+ tests, ~2 pre-existing failures)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Checked out and pulled fix/ISS-0414-service-catalog-safety-net-20260902 (already up to date). Docker Postgres/Keycloak containers were already running (docker socket required sudo in this shell; verified via `sudo -n docker compose up -d` which reported both containers already Running -- no action needed).\n\n1. `mix compile --warnings-as-errors` -- exit 0, no output (clean compile, no warnings).\n\n2. `mix test test/support/service_catalog_reaper_test.exs` -- Result: 5 passed, 0 failures. Real output tail:\n```\n13:57:32.737 [warning] TenantSchemaReaper.sweep_service_catalog_orphans/1: found 2 service_catalog row(s) at a suite boundary, where the correct content is always empty (ISS-0414) -- deleting unconditionally: iss0414-svc-3 (scope=global), iss0414-svc-4 (scope=tenant)\n...\nFinished in 0.2 seconds (0.00s async, 0.2s sync)\n\nResult: 5 passed\n```\n\n3. Full suite via `mix letflow.check.test`, run foreground/blocking (the tool's own per-call timeout forced two background slots during the ~26 min run; each time I polled the background PID/log via repeated foreground `kill -0`/`wc -l`/until-loop checks rather than ending my turn to wait on a cross-turn notification, per this role's standing instruction). Real final output:\n```\nFinished in 1550.2 seconds (14.9s async, 1535.3s sync)\n\nResult: 3060/3062 passed (6/6 properties, 3054/3056 tests), 10 excluded\nFailed: 2 tests\n** (Mix) mix letflow.check.test: FAILED -- underlying `mix test` run exited 2 (real test failure/error).\n```\n(`mix letflow.check.test` exits non-zero on any failure, including documented pre-existing ones -- expected here, not itself evidence of a regression; see point 4.)\n\n4. Read both failure blocks from the real log -- both are exactly the documented pre-existing rustc-ENOENT toolchain tests, nothing else:\n```\n  1) test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)\n     test/mix/tasks/letflow_check_toolchain_test.exs:289\n     ** (ErlangError) Erlang error: :enoent\n     ...\n       (elixir 1.20.3) lib/system.ex:1141: System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])\n\n  2) test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)\n     test/mix/tasks/letflow_check_toolchain_test.exs:274\n     ** (ErlangError) Erlang error: :enoent\n     ...\n       (elixir 1.20.3) lib/system.ex:1141: System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])\n```\nBoth fail because `rustc` is not installed in this toolchain image, matching the README's documented pre-existing limitation exactly (test names, line numbers, and enoent-on-System.cmd(\"rustc\",...) shape all match the known baseline). No failure anywhere in the log touches service_catalog, TenantSchemaReaper, or any of the five files this fix's diff touched. Zero new failures.\n\n5. Timing/flakiness comparison: 3062 total tests (3056 example tests + 6 properties), 10 excluded, 1550.2s wall (1535.3s sync + 14.9s async) -- within the stated typical envelope (~3050+ tests, ~2 pre-existing failures). No new intermittent failures, no hangs, no unusual per-test latency spikes observed in the log around the ISS-0414 reaper's two test_helper.exs boundary call sites (pre-suite sweep and after_suite sweep both completed in milliseconds per the debug log timestamps, e.g. the service_catalog SELECT/DELETE pair at suite start/end each ran in under 5ms). The new unconditional sweep adds negligible overhead to the suite boundary.\n\nAll five verification points pass. No genuine new failure found.",
+    "routing": "Route to Step Final (ORCH). This is a WF-03 issue run for ISS-0414/ISS-0409/ISS-0410 routed as a design-driven fix (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> SECURITY-REVIEWER -> REVIEWER -> TEST-RUNNER), not a diagnosis-only issue, so no separate ISSUE-FIXER close step is needed. All gates (00/01/01b/02/03/04/05) are green: compile clean, the 5 new tests pass, and the full regression suite shows 3060/3062 passing with the only 2 failures being the pre-existing, documented rustc-ENOENT toolchain tests unrelated to this change. ORCH may proceed to merge fix/ISS-0414-service-catalog-safety-net-20260902 and close ISS-0414/ISS-0409/ISS-0410."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "step": "01b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-02T13:27:31Z"
+    },
+    {
+      "step": "03",
+      "agent": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-02T13:51:36Z"
+    },
+    {
+      "step": "04",
+      "agent": "REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-02T13:55:07Z"
+    },
+    {
+      "step": "05",
+      "agent": "TEST-RUNNER",
+      "result": "COMPLETED",
+      "at": "2026-09-02T14:24:30Z"
+    }
+  ]
+}

@@ -3846,14 +3846,14 @@
       "issue_id": "ISS-0403",
       "queue_task_id": 403,
       "github_issue_number": 791,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/secrets_test.exs"
       ],
       "started_at": "2026-09-01T23:27:41Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step Final (ORCH direct action per sizing rule) -- fix implemented and verified, pending PR/merge",
+      "lock_released_at": "2026-09-02T02:05:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final -- PR #792 squash-merged to main (651d6060), queue task 403 released status: done (CI hit the wasm_hang flake 5 times before clearing)",
       "note": "ISS-0403 (Letflow.SecretsTest property test's containment refute was a false-positive at short plaintext lengths -- coincidental substring containment, not a real ciphertext leak). Handled by ORCH directly per docs/agents/ORCHESTRATOR.md Section10's sizing-rule exception: single test file, no production code, no new public API, no migration, no supervision-tree touch, no tenant-data path. Raised the check's minimum plaintext length threshold from > 0 to >= 8 bytes with inline probability-math justification; added a dedicated regression test reproducing the exact originally-observed byte value (186) 20 times in a loop. Verified with 6 separate test runs across different --seed values, all green."
     }
   ]

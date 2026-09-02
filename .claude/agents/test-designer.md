@@ -45,6 +45,20 @@ For each acceptance criterion of the requirement(s) in scope, write:
    exists (not just a restatement of the criterion).
 2. Test code under `test/letflow/` (unit/integration) or `test/letflow_web/` (API-layer,
    once one exists), following existing project conventions.
+3. Before reporting the handoff to TEST-DESIGN-VALIDATOR as complete, run
+   `mix letflow.check.test` and quote its real output. A bare `mix test <file>` run on
+   just the file(s) you wrote is **not sufficient** on its own: Elixir's incremental
+   compiler does not always force a fresh warnings-as-errors recompile of an
+   already-compiled test module across separate `mix test` invocations within the same
+   `_build` cache, so a dead default argument in a test helper you just wrote (e.g.
+   `defp fn_name(a, b, c \\ default)` where every call site in the file ends up passing
+   `c` explicitly, per `docs/anti-patterns.md`'s "A test helper's default argument goes
+   dead..." entry, ISS-0069 — recurred 7 times, REQ-178/187/191/195/203) can compile
+   clean in isolation and still be dead code. `mix letflow.check.test`
+   (`lib/mix/tasks/letflow.check.test.ex`) forces the fresh recompile and additionally
+   greps the captured output for the fixed substring `"default values for the optional
+   arguments"`, failing even if the underlying test run itself exited 0 — this is the
+   check that actually catches it, not merely running the file's own tests.
 
 For a WF-03 regression test: the test must be shown to **fail against the pre-fix
 code** and pass against the fix — state this explicitly in the spec, and actually

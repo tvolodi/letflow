@@ -12222,7 +12222,7 @@ requirements:
   - id: REQ-213
     title: Make mix letflow.check.test a mandatory named step in TEST-DESIGNER's and RELEASE-VALIDATOR's own instructions (ISS-0069 recurrence, 7 occurrences)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S7
     impl_order: 405  # letflow-queue task id, GH#794
     description: >

@@ -302,6 +302,46 @@ defmodule Letflow.EngineSubProcessTest do
     }
   end
 
+  # ISS-0396: START -> PARALLEL_GATEWAY("split") -> {SUB_PROCESS("sp1"),
+  # SUB_PROCESS("sp2")} -> PARALLEL_GATEWAY("join") -> END. Same edge/node JSON
+  # shape as graph_parent_split_then_subprocess/1 above, but with "start"
+  # feeding directly into "split" -- no intervening HUMAN_TASK("gate") --
+  # because this scenario is exercised via Engine.create/2's own root
+  # activation (design doc iss0396-task-records-multi-sibling-fix.md §1), not
+  # via a completing task: unlike graph_parent_split_then_subprocess/1's
+  # sp1/sp2 (whose parent token_ids are derived split-branch ids, rejected by
+  # resolve_parent_token_record_id/2 per ISS-0067), sp1/sp2 here are reached
+  # directly by Engine.create/2's own activate/3 path, which has no such
+  # "already persisted" membership check at all (§1).
+  defp graph_root_split_into_two_subprocesses(child_definition_name) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{"id" => "split", "node_type" => "PARALLEL_GATEWAY"},
+        %{
+          "id" => "sp1",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{
+          "id" => "sp2",
+          "node_type" => "SUB_PROCESS",
+          "attributes" => %{"definition_name" => child_definition_name}
+        },
+        %{"id" => "join", "node_type" => "PARALLEL_GATEWAY"},
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "split"},
+        %{"id" => "e2", "source" => "split", "target" => "sp1"},
+        %{"id" => "e3", "source" => "split", "target" => "sp2"},
+        %{"id" => "e4", "source" => "sp1", "target" => "join"},
+        %{"id" => "e5", "source" => "sp2", "target" => "join"},
+        %{"id" => "e6", "source" => "join", "target" => "end"}
+      ]
+    }
+  end
+
   defp start_attrs(definition, overrides \\ %{}) do
     Map.merge(
       %{
@@ -1206,6 +1246,86 @@ defmodule Letflow.EngineSubProcessTest do
 
       assert [_middle_sp_event] =
                sub_process_completed_events(schema_name, middle_instance.instance_id)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0396 -- Ecto.Multi :task_records key collision when 2+ SIBLING SUB_PROCESS
+  # children of the SAME parent instance each complete synchronously within the SAME
+  # transaction. ISS-0392 above fixed only the call(1)-vs-call(2) collision (one
+  # instance's own :task_records step vs. its synchronously-completing child's); this
+  # is the call(2)-vs-call(2) case ISS-0392 left open. See
+  # lib/letflow/design/iss0396-task-records-multi-sibling-fix.md for the full
+  # re-derivation of the defect mechanism and why the trigger below (Engine.create/2's
+  # own root activation, not a complete_task/3 hop chain -- ISS-0067's guard forecloses
+  # that path today, design doc §1) is the one that is actually reachable.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0396 -- 2+ sibling SUB_PROCESS children no longer collide on {:task_records, instance_id}" do
+    test "two sync-completing sibling SUB_PROCESS children: no Multi crash, task_records independently persisted" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      # Shared child definition for both branches -- START -> END, synchronous, same
+      # graph_child_immediate/0 ISS-0392 already uses. Deliberately shared: ISS-0396 is
+      # about the Multi key, keyed on the PARENT's instance_id/parent_token.id, not on
+      # which child definition is used.
+      child_def = active_definition!(schema_name, graph_child_immediate())
+
+      parent_def =
+        active_definition!(
+          schema_name,
+          graph_root_split_into_two_subprocesses(child_def.name)
+        )
+
+      # Pre-fix, this raised RuntimeError "cannot merge Multi; ... [task_records:
+      # \"<parent_instance_id>\"]" at build_sub_process_children_multi/6, since sp1's
+      # and sp2's own synchronous-completion cascades both appended the identical
+      # {:task_records, parent_instance_id} key onto the same Multi. Post-fix: {:ok,
+      # _}, no raise -- each sibling's step is keyed {:task_records, instance_id,
+      # parent_token.id}, and distinct siblings have distinct parent_token.id values
+      # (design doc §2, uniqueness proof).
+      assert {:ok, created} = Engine.create(start_attrs(parent_def), prefix: schema_name)
+
+      # Both branches complete synchronously and the join immediately admits both,
+      # advancing the root instance straight through "join" to "end" within this same
+      # create/2 transaction -- no external complete_task/3 call needed, unlike the
+      # ISS-0392 single-level test, since nothing here is gated behind a HUMAN_TASK.
+      parent_projection = Repo.get!(InstanceProjection, created.instance_id, prefix: schema_name)
+      assert parent_projection.status == :completed
+
+      # Both sp1's and sp2's own children-creation multi step ran -- proves neither
+      # sibling's step was silently dropped/skipped by the fix (the assertion that
+      # would fail under a "just skip the second sibling" style fix the Step-1
+      # diagnosis explicitly rejected in favor of key disambiguation).
+      children = child_projections(schema_name, created.instance_id)
+      assert length(children) == 2
+
+      for child <- children do
+        assert child.parent_instance_id == created.instance_id
+        assert child.definition_id == child_def.id
+      end
+
+      # One SUB_PROCESS_COMPLETED event per sibling -- proves both siblings' own
+      # event_key step (sub_process.ex:961) ran to completion, not just one.
+      assert sub_process_completed_events(schema_name, created.instance_id) |> length() == 2
+
+      # This graph has no HUMAN_TASK node anywhere, so the root instance itself should
+      # have inserted zero `tasks` rows across the whole hop chain -- the direct "both
+      # sibling {:task_records, instance_id, parent_token.id} steps ran, inserted
+      # nothing extra, and did not orphan/duplicate any row" assertion (the
+      # :task_records step's own newly_pending == [] short-circuit case,
+      # task_activation.ex).
+      assert all_tasks_for_instance(schema_name, created.instance_id) == []
+
+      # Secondary assertion (ISS-0397 cross-reference, design doc §5 point 10): the
+      # root instance's own join_counters column is written sequentially by each
+      # sibling's own projection_key step (reconcile_parent_projection/5) before the
+      # join admits the second sibling. Once both branches have joined, the fired
+      # join's own counter entry is deleted (mirroring
+      # test/letflow/iss0397_join_counters_test.exs's own "fired join -> no entry"
+      # precedent) -- asserted here since it's exercised "for free" by this same
+      # scenario, not because this fix changes that column's behavior.
+      assert parent_projection.join_counters == %{}
     end
   end
 end

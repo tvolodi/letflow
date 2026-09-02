@@ -2418,3 +2418,57 @@ field being fixed. Then verify with a real, running regression test that exercis
 specific scenario the fix's own test fixtures use (here: a split immediately after `START`,
 inside `create/2`'s own hop-chain) before considering a design's write-site enumeration
 complete, even one that has already passed CODE-DESIGN-VALIDATOR.
+
+## ISS-0397's own join_counters fix still missed a THIRD sibling read/write path, in a different module — plus a Multi-step-ordering bug only that path exposed
+
+**What happened.** The entry directly above this one documents ISS-0397's fix missing
+`Letflow.Engine.create/2`'s own `insert_instance_projection/8` (a sibling *write* path to the
+`reconcile_projection/5` the design fixed). Implementing ISS-0396
+(`lib/letflow/design/iss0396-task-records-multi-sibling-fix.md`) surfaced a FOURTH function
+that builds/mutates the same `join_counters` state independently, in a different module
+entirely: `Letflow.Engine.SubProcess.load_parent_context/2` (sub_process.ex) — the seed-state
+builder used specifically for a sub-process completion cascade — still hardcoded
+`join_counters: %{}` rather than `SnapshotWriter.deserialize_join_counters(projection.join_counters)`,
+and its write-side sibling, `reconcile_parent_projection/5` in the same module, never
+persisted `join_counters` back to the row at all (not even a defaulted/wrong value — the
+field was simply absent from its `attrs` map). Neither defect was reachable by any test in
+the suite before ISS-0396's own regression test, because no prior test drove 2+ sibling
+`SUB_PROCESS` children through a real `PARALLEL_GATEWAY` join via this specific module's own
+seed/reconcile pair — every earlier sub-process test either had no join at all, or reached one
+via `Letflow.Engine`'s own (already-fixed) `build_instance_state/3`/`reconcile_projection/5`
+pair, never `SubProcess`'s own copy. A THIRD, architecturally distinct bug came with them: the
+root instance's own `INSTANCE_STARTED` event append (`persist/8`'s `:event` Multi step) was
+positioned *after* the `build_sub_process_children_multi/6` merge, on the implicit assumption
+that nothing before it could change the row's status away from the `:active` the
+`:instance_projection` step (M1) had just inserted — false once a synchronously-completing
+`SUB_PROCESS` cascade writes that same row's status to `:completed` (via
+`reconcile_parent_projection/5`, a direct write, not gated by `EventStore.append/2`'s own
+`active_instance_guard`) *before* M3 ever runs. All three were caught only because ELIXIR-DEV
+ran the new regression test for real, iterated on the actual failures (`cannot merge Multi`,
+then a wrong final `:active` status, then `{:event_append_failed, {:instance_terminated,
+:completed}}`), and root-caused each one rather than declaring the design's own two-file
+change ✅ once it compiled.
+
+**Why this is easy to miss.** Each of these three functions/steps is written, commented, and
+positioned as if it were the ONLY place its concern lives — `load_parent_context/2`'s own
+moduledoc-adjacent comment doesn't mention `join_counters` at all (it predates ISS-0397),
+`reconcile_parent_projection/5` mirrors `reconcile_projection/5`'s attrs shape closely enough
+to look complete at a glance, and `persist/8`'s own M1 comment ("M4 below flips the row to its
+true final status immediately after the event append succeeds") is correct for every scenario
+tested until ISS-0396's — it just never accounted for a WRITE to the same row happening
+*between* M1 and M3 via an entirely different code path (`SubProcess`'s own cascade, not
+`persist/8`'s own M4/`:finalize`). None of these are visible from reading any ONE of the three
+functions in isolation; each only shows up as a live, reproducing test failure.
+
+**Correct alternative.** Same core lesson as the entry above, generalized: a struct-shaped
+piece of state (`join_counters`, an `instance_projections` row's `status`) that is
+read/written from more than one module is not "handled" until every module's own copy of the
+read/write logic is checked — not just the ones the current design's own file-touch list
+names. When a design's own regression test exercises a genuinely novel code path (here: a
+ROOT instance's own SUB_PROCESS children completing synchronously through a real join, inside
+`Engine.create/2`'s own transaction, confirmed nothing in the existing suite exercised this
+before), do not assume the surrounding, already-shipped machinery is safe by virtue of being
+already-shipped — run the test, read the real error, and re-derive from the actual failing
+code path rather than from what the design document assumed. Both fixes are captured under
+`fix(ISS-0396)` for the sibling-key-collision issue that prompted their discovery; they are
+each also independently a bugfix in their own right, unrelated to the collision itself.

@@ -78,6 +78,7 @@ defmodule Letflow.Engine.SubProcess do
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
+  alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.Token
   alias Letflow.Engine.TokenRecord
   alias Letflow.Engine.Transition
@@ -968,7 +969,8 @@ defmodule Letflow.Engine.SubProcess do
       graph,
       seed_state.pending_task_nodes,
       final_instance_state,
-      prefix
+      prefix,
+      parent_token.id
     )
     |> Multi.run(reconciliation_key, fn repo, _changes ->
       reconcile_parent_tokens(
@@ -1094,13 +1096,41 @@ defmodule Letflow.Engine.SubProcess do
               &%Token{token_id: to_string(&1.token_id), node_id: &1.node_id, branch_id: nil}
             )
 
+          # Bugfix discovered while implementing ISS-0396 (see
+          # lib/letflow/design/iss0396-task-records-multi-sibling-fix.md's
+          # own test scenario, §5, which is the first test in the codebase to
+          # exercise a real PARALLEL_GATEWAY join reached via THIS function's
+          # own seed_state, rather than via Letflow.Engine's
+          # build_instance_state/3): join_counters was hardcoded to `%{}`
+          # here, unlike build_instance_state/3's own
+          # `SnapshotWriter.deserialize_join_counters(projection.join_counters)`
+          # (the ISS-0397 fix, lib/letflow/design/iss0397-join-counters-fix.md
+          # §2.5) -- ISS-0397's fix only touched Letflow.Engine's own
+          # build_instance_state/3, not this function's separate,
+          # sub-process-completion-cascade-specific copy of the same
+          # seed-state-building logic. With join_counters always empty here,
+          # any SUB_PROCESS child whose parent token completes directly onto
+          # a PARALLEL_GATEWAY join (Transition.dispatch_parallel_join/4)
+          # always fails with {:unknown_branch_id, ...} (Map.get returns nil),
+          # surfaced to callers as a misleading
+          # SUB_PROCESS_DEFINITION_NOT_FOUND execution error via this
+          # module's own to_error_args/6 {:definition_not_found, reason}
+          # catch-all mapping. Restoring the real persisted counters here,
+          # exactly as build_instance_state/3 already does, is required for
+          # ISS-0396's own regression test (a root split into two sibling
+          # SUB_PROCESS children rejoined by a PARALLEL_GATEWAY) to run at
+          # all, and is flagged here for REVIEWER: out of
+          # iss0396-task-records-multi-sibling-fix.md's own stated
+          # file-touch list (§6), but a minimal, targeted correctness fix
+          # with no scope beyond restoring the exact behavior
+          # build_instance_state/3 already has.
           seed_state = %InstanceState{
             instance_id: projection.instance_id,
             status: :active,
             tokens: active_tokens,
             variables: projection.variables,
             pending_task_nodes: pending_task_tokens,
-            join_counters: %{}
+            join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)
           }
 
           node = Enum.find(graph.nodes, &(&1.id == parent_token.node_id))
@@ -1243,10 +1273,25 @@ defmodule Letflow.Engine.SubProcess do
         {:error, {:instance_not_found, parent_instance_id}}
 
       %InstanceProjection{} = projection ->
+        # Bugfix companion to load_parent_context/2's own join_counters fix
+        # above (discovered the same way, while implementing ISS-0396):
+        # join_counters was never written back here at all, unlike
+        # Letflow.Engine's own reconcile_projection/5 (the ISS-0397 fix,
+        # lib/letflow/design/iss0397-join-counters-fix.md §2.4, "persisted
+        # unconditionally on every call"). Without this, a sibling
+        # SUB_PROCESS completion's own updated join cohort (e.g. sibling 1
+        # recording its own branch as received, still :wait) is computed in
+        # memory by Transition.dispatch_parallel_join/4 but never survives
+        # past this Multi step -- sibling 2's own later load_parent_context/2
+        # call re-reads the stale, pre-sibling-1 cohort from the DB and the
+        # join never fires. Same fix shape as reconcile_projection/5:
+        # persisted unconditionally, not just when a gateway was touched.
         attrs = %{
           status: final_instance_state.status,
           current_nodes: Enum.map(final_instance_state.tokens, & &1.node_id),
-          variables: final_instance_state.variables
+          variables: final_instance_state.variables,
+          join_counters:
+            SnapshotWriter.serialize_join_counters(final_instance_state.join_counters)
         }
 
         attrs =

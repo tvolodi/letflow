@@ -960,8 +960,39 @@ defmodule Letflow.Engine do
       # M1, run as part of M3 below) requires the instance_projections row
       # to be non-terminal at INSTANCE_STARTED append time -- the same
       # ordering EventStore.append/2 already enforces for every other
-      # event. M4 below flips the row to its true final status immediately
-      # after the event append succeeds, still inside this same Multi.
+      # event. M4 (:finalize) below flips the row to its true final status
+      # immediately after the event append succeeds, still inside this same
+      # Multi.
+      #
+      # Bugfix discovered while implementing ISS-0396 (see
+      # lib/letflow/design/iss0396-task-records-multi-sibling-fix.md's own
+      # test scenario, §5 -- the first test in the codebase where a ROOT
+      # instance's own SUB_PROCESS children complete synchronously enough,
+      # within THIS SAME create/2 transaction, to advance the ROOT itself
+      # all the way to :completed via a PARALLEL_GATEWAY join): M3 (:event,
+      # this root instance's own INSTANCE_STARTED append) used to sit AFTER
+      # the `build_sub_process_children_multi/6` merge below, on the
+      # (previously untested) assumption that nothing before M3 could ever
+      # change this row's status away from the :active this step just wrote.
+      # That assumption is false once a synchronously-completing SUB_PROCESS
+      # cascade is in the mix: `Letflow.Engine.SubProcess.
+      # reconcile_parent_projection/5` (sub_process.ex) writes this SAME
+      # row's status directly (not through `EventStore.append/2`, so not
+      # gated by its own active_instance_guard) from *inside* that merge,
+      # ahead of M3 -- flipping the row to :completed before M3 ever runs.
+      # M3 then hits `active_instance_guard`'s own terminal check and fails
+      # with `{:instance_terminated, :completed}`, rejecting the ROOT
+      # instance's own founding INSTANCE_STARTED event. M3 is moved here,
+      # immediately after M1 and before :token_record/the children merge, so
+      # it always runs while the row is still the :active this step just
+      # inserted -- nothing between M1 and M3 reads `changes[:token_record]`
+      # or `changes[:event]`, so this reordering is safe. Flagged for
+      # REVIEWER: this is a `persist/8`-wide Multi-step-ordering change,
+      # outside iss0396-task-records-multi-sibling-fix.md's own stated
+      # file-touch list (§6), and the largest of the three bugs surfaced by
+      # that design's own regression test -- worth its own extra scrutiny,
+      # and a candidate for being split into its own follow-up issue if
+      # REVIEWER judges it too large for this branch.
       insert_instance_projection(
         repo,
         instance_id,
@@ -971,6 +1002,18 @@ defmodule Letflow.Engine do
         current_node_ids,
         initial_variables,
         new_instance_state.join_counters,
+        prefix
+      )
+    end)
+    |> Multi.run(:event, fn _repo, _changes ->
+      append_instance_started_event(
+        instance_id,
+        definition,
+        correlation_key,
+        initial_variables,
+        pins,
+        conflicts,
+        attrs,
         prefix
       )
     end)
@@ -994,7 +1037,7 @@ defmodule Letflow.Engine do
     end)
     |> Multi.merge(fn changes ->
       # REQ-187 design doc §3.2 -- positioned immediately after :token_record
-      # (the step that resolves real TokenRecord ids) and before :event,
+      # (the step that resolves real TokenRecord ids) and before :finalize,
       # matching exactly where build_sub_process_children_multi/5 sits.
       id_map =
         TaskActivation.token_id_to_record_id(
@@ -1017,18 +1060,6 @@ defmodule Letflow.Engine do
       new_instance_state,
       prefix
     )
-    |> Multi.run(:event, fn _repo, _changes ->
-      append_instance_started_event(
-        instance_id,
-        definition,
-        correlation_key,
-        initial_variables,
-        pins,
-        conflicts,
-        attrs,
-        prefix
-      )
-    end)
     |> Multi.run(:finalize, fn repo, %{instance_projection: projection} ->
       finalize_instance_projection(
         repo,

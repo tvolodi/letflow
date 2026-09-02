@@ -12606,3 +12606,342 @@ requirements:
       - "docs/migration/stage-7-simulation-uat-parity.md's REQ-210 REVIEWER sign-off entry no longer attributes the Meridian quorum/disbursement gap to join_counters, and instead correctly names this requirement's own fix -- confirmed by reading the corrected entry text"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-214, REQ-177, REQ-049, REQ-061]
+
+  - id: REQ-216
+    title: Admission-control core -- a pure-BEAM global + per-tenant counting semaphore tied to POOL_SIZE, closing ISS-0431 part 1
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    description: >
+      Closes part 1 of ISS-0431/GH#835 (queue task 431): Letflow has no
+      admission control or backpressure anywhere. ISSUE-FIXER's diagnosis
+      (handoffs/WF03-ISS0431-20260902/step-01-issue-fixer-diagnosis.json)
+      confirmed by direct read that no bounded-concurrency mechanism exists
+      on any surface -- lib/letflow/plugs/api_pipeline.ex's plug chain has
+      none (Letflow.Plugs.RateLimit is a different, still-unmounted S4
+      mechanism -- request-RATE throttling, not concurrency admission --
+      porting it would not close this gap); lib/letflow/application.ex's
+      five Task.Supervisors all bound unrelated subsystems (sandbox
+      provisioning, plugin/Lua/Wasm dispatch), none of them HTTP-request or
+      Poller concurrency against the Ecto pool; config/runtime.exs:113 sets
+      `pool_size` from `POOL_SIZE` with nothing anywhere referencing it.
+      Four prior issues (ISS-0194, ISS-0219, ISS-0222, ISS-0224) each solved
+      a DIFFERENT local instance of the same root cause (unbounded demand vs.
+      a bounded connection resource) with no shared mechanism; this
+      requirement is the shared mechanism, so a fifth ad hoc shape does not
+      get invented. THIS REQUIREMENT IS THE CORE ONLY -- no HTTP-path or
+      Poller wiring (REQ-217, REQ-218), mirroring REQ-186/REQ-214's own
+      "core module first, wiring requirements second" split precedent in
+      this file.
+
+      DECISIONS RESOLVED HERE (ISS-0431's own "TO DECIDE, not prescribed"
+      list), with reasoning, not left to ELIXIR-DEV to improvise:
+
+      1. LIBRARY VS. HAND-ROLLED: hand-rolled, pure-BEAM GenServer-based
+      counting semaphore(s). No new dependency. Reasoning transferred
+      directly from decision 0014 (new-dependency policy), which the
+      diagnosis already checked: 0014's method is to ask whether a pure-BEAM
+      option removes the hazard class outright vs. merely mitigating it, and
+      to treat any new native/NIF dependency as a real, disclosed cost
+      requiring its own comparison. Bounding concurrent access to Ecto
+      connections is a problem the BEAM's own primitives already solve
+      natively (a GenServer counter, `:queue` + monitors -- the same shape
+      `Letflow.SandboxPool`, REQ-039/ISS-0224, already uses for an adjacent
+      but distinct problem) with no NIF surface at all, so 0014's own
+      argument for preferring pure-BEAM mechanisms applies here with no
+      countervailing benefit to a hex dependency (this is a small, fully
+      in-house state machine, not a mature external sandboxing runtime the
+      way wasmex's Wasmtime binding is).
+
+      2. GLOBAL VS. PER-TENANT VS. BOTH: BOTH, composing, not either alone.
+      A per-tenant-only cap cannot bound total demand on `pool_size` (N
+      tenants each admitted up to a per-tenant cap can jointly exceed
+      `pool_size` the same way ISS-0194's N-partitions-times-pool_size math
+      already demonstrated for a structurally identical multiplication). A
+      global-only cap cannot stop one tenant's burst starving every other
+      tenant, which ISS-0431 itself names as "arguably the more important
+      property in a multi-tenant BPM platform" and which is exactly decision
+      0006's multi-tenancy isolation posture (schema-per-tenant data
+      isolation composed with NO existing resource-fairness isolation) --
+      leaving it unaddressed would be a real regression against that
+      posture, not a neutral omission. So: a GLOBAL semaphore bounds total
+      admitted concurrent DB-connection-holding work platform-wide, and a
+      PER-TENANT semaphore (one counter per active tenant schema, entries
+      created lazily on first admission attempt, never pre-allocated for
+      every possible tenant) bounds any single tenant's share of that same
+      budget. Default per-tenant share: an equal fair-share split of the
+      global cap across the CURRENTLY-DISTINCT tenants that have made an
+      admission attempt in a rolling window (avoids the global cap collapsing
+      to 1 the instant tenant count exceeds it -- floor of 1 slot per tenant,
+      matching decision 0009/ISS-0194's own "clamp with a floor" precedent),
+      overridable per environment. Tier-weighted per-tenant caps (e.g. a
+      paying tenant getting a larger share) are explicitly OUT OF SCOPE and
+      recorded as a genuinely open product question, not resolved here:
+      `Letflow.Identity.Tenant`'s schema (lib/letflow/identity/tenant.ex) has
+      no plan/tier field to weight by (verified by reading the schema block
+      in full -- only `slug`, `display_name`, `status`, `idp_realm_id`
+      exist), so introducing tenant tiering is a genuine product decision
+      with no existing data model to hang it on, not an implementation
+      detail this requirement can quietly decide. Equal fair-share is the
+      only defensible default absent that decision.
+
+      3. TIE TO POOL_SIZE/MAX_CONNECTIONS (closing the drift ISS-0194/0219/
+      0222/0224 already show happens between independently-tuned numbers):
+      the global cap MUST be expressed as a function of the configured Ecto
+      `pool_size` (config/runtime.exs's `POOL_SIZE`/`config :letflow,
+      Letflow.Repo, pool_size:` -- read the SAME value this module reads,
+      never a second independently-set number), specifically
+      `pool_size - reserved_headroom`, where `reserved_headroom` (config,
+      default 2) reserves connection budget for non-admission-controlled
+      DB consumers this requirement does not touch (REQ-186's
+      `Letflow.Scheduler.Poller` before REQ-218 wires it in;
+      `Letflow.SandboxPool`'s own already-serialized DB worker; migrations).
+      This function relationship, not a hardcoded number, is the
+      acceptance-tested contract -- changing `POOL_SIZE` at boot changes the
+      computed global cap on the very next boot with no second setting to
+      update, closing exactly the drift class this issue exists to end.
+
+      4. RESPONSE SHAPE: settled by existing precedent, not invented here.
+      `Letflow.Api.Response.service_unavailable/2` (REQ-066,
+      lib/letflow/api/response.ex) already exists, is already used for an
+      analogous resource-exhaustion rejection
+      (`lib/letflow/routers/promotions.ex`'s "no sandbox free within
+      timeout"), and REQ-066's own moduledoc documents the caller-sets-
+      Retry-After convention identically to `rate_limited/2`. This
+      requirement's core module returns a typed outcome the wiring
+      requirements (REQ-217/218) map onto that EXISTING response helper --
+      this requirement does not touch any router or plug itself (no HTTP
+      surface in scope), so it does not call `Response.service_unavailable/2`
+      directly, but its return-type design must make that mapping a
+      one-line call, not require the caller to reconstruct rejection
+      semantics.
+
+      NOT ABSORBED, WITH REASON: ISS-0224's own deferred
+      `Letflow.SandboxPool` admission-shaped defect (its `handle_call/3`
+      blocking the pool mailbox during synchronous provisioning) is a
+      DIFFERENT resource -- ephemeral promotion-pipeline sandbox slots, not
+      the tenant-request-serving Ecto pool -- already has its own
+      independently-reasoned wait-queue/slot-bookkeeping shape (REQ-039,
+      ISS-0048's crash-reclaim invariants), and was deliberately scoped out
+      of its own parent fix (ISS-0220 §12) specifically to avoid conflating
+      two independently-revertable subsystems. Folding it into this
+      cross-cutting core module now would repeat exactly that mistake in
+      reverse. It stays a separate, still-open concern; REQ-039/ISS-0224's
+      module is prior art for the wait-queue SHAPE (a FIFO of waiters with
+      per-waiter timeout, ISS-0224's own fix for exactly that shape) that
+      this requirement's per-tenant/global semaphores may reuse internally,
+      but is not the same mechanism and is not touched by this requirement.
+
+      SCOPE:
+      1. New module `Letflow.Admission` (or equivalently named per its own
+      moduledoc) plus a supervised GenServer (or a small set of them --
+      state the shape chosen and why in the moduledoc) implementing:
+      `try_acquire(pool :: :global | {:tenant, tenant_schema :: String.t()}) ::
+      {:ok, admission_ref()} | {:error, :capacity}` and
+      `release(admission_ref()) :: :ok`. No HTTP or Poller-specific
+      vocabulary anywhere in this module -- REQ-217/218 are the only
+      callers, and both are equally valid callers of the exact same API.
+      2. Global cap computed once at supervised-child start from
+      `Application.fetch_env!(:letflow, Letflow.Repo)[:pool_size]` (the
+      SAME config key `config/runtime.exs` already writes) minus
+      `reserved_headroom` (config, default 2), never re-read from a second
+      independently-configured value.
+      3. Per-tenant cap computed as the equal fair-share split described in
+      decision 2 above, with a floor of 1 and recomputed as the set of
+      currently-tracked tenants changes (a tenant with zero admission
+      attempts in the tracking window is not counted against the split).
+      4. `try_acquire/1` for `{:tenant, _}` MUST also consume one unit of
+      the SAME global budget (both gates are checked, not just the
+      per-tenant one) -- decision 2's own "both, composing" requirement made
+      concrete and testable.
+      5. Added to `Letflow.Application`'s supervision tree
+      (lib/letflow/application.ex), following this file's own established
+      Task.Supervisor-ordering discipline (state explicitly in the moduledoc
+      whether any other child must start before or after it, or that no
+      ordering dependency exists, mirroring REQ-173/REQ-166's own "no
+      ordering dependency" precedent comments in application.ex).
+      NOT IN THIS REQUIREMENT: no plug, no route, no change to
+      api_pipeline.ex or poller.ex (REQ-217, REQ-218); no tier-weighted caps
+      (recorded above as a genuinely open product question); no change to
+      `Letflow.SandboxPool` (a different resource, explicitly not absorbed,
+      see above).
+    acceptance_criteria:
+      - "Letflow.Admission.try_acquire(:global) returns {:ok, ref} up to exactly (pool_size - reserved_headroom) concurrently-held admissions, and {:error, :capacity} on the next attempt while all of them are held -- reserved_headroom and pool_size both read from Application config, verified by a test that overrides pool_size and observes the computed cap change with no other code edit"
+      - "Letflow.Admission.try_acquire({:tenant, schema}) enforces its own per-tenant cap independently of other tenants: tenant A exhausting its own per-tenant share still leaves tenant B able to acquire up to B's own share, demonstrated with a test asserting A's rejection and B's simultaneous success"
+      - "a {:tenant, schema} acquisition that succeeds at the per-tenant gate but would exceed the GLOBAL cap is still rejected with {:error, :capacity} -- a test that exhausts the global cap via :global acquisitions alone, then shows a fresh tenant's first-ever {:tenant, _} attempt is rejected despite having zero per-tenant usage of its own"
+      - "release/1 on a previously-acquired admission_ref() frees exactly one unit of both the global AND (for a {:tenant, _} ref) the per-tenant budget it was acquired against, verified by acquiring to capacity, releasing one, and observing exactly one subsequent try_acquire/1 succeeds"
+      - "the per-tenant cap for a newly-observed tenant schema recomputes as an equal fair-share split of the global cap with a floor of 1, demonstrated by a test with 3 tracked tenants against a global cap of 10 (each gets floor(10/3)=3, not 1) and a global cap of 2 against 5 tenants (each gets the floor of 1, not 0)"
+      - "Letflow.Admission is present as its own entry in Letflow.Application's supervision tree, confirmed by reading application.ex, with its moduledoc stating explicitly whether it has any start-order dependency on another child or none"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+
+  - id: REQ-217
+    title: Wire admission control into the HTTP entry path -- 503 + Retry-After on rejection, closing ISS-0431 part 2 (primary surface)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    description: >
+      Second half of ISS-0431/GH#835's fix for its own stated PRIMARY
+      surface, atop REQ-216's core module. Mirrors REQ-186/REQ-187's and
+      REQ-214/REQ-215's own "core module first, wiring requirement(s)
+      second, disjoint files" split precedent in this file.
+
+      TWO ADMISSION GATES, NOT ONE, because tenant identity is not known
+      until partway through `Letflow.Plugs.ApiPipeline`'s existing chain --
+      read in full (lib/letflow/plugs/api_pipeline.ex): `Plug.Parsers` runs
+      first, then `assign_trace_id`, then `Letflow.Plugs.AuthPipeline`
+      (which itself resolves tenant identity via a DB read -- token
+      verification, tenant-by-realm/slug resolution, JIT provisioning --
+      i.e. AuthPipeline's OWN work already consumes a DB connection BEFORE
+      any tenant identity exists to gate on), then
+      `Letflow.Plugs.TenantStatus`, then `match`/`dispatch`. Given that
+      ordering, a single per-tenant-only gate cannot run early enough to
+      cover AuthPipeline's own connection use. Resolved as follows, stated
+      as an accepted, disclosed limitation rather than silently glossed
+      over (matching this project's own honesty convention for a limitation
+      that cannot be fully closed within one requirement's scope, e.g.
+      decision 0014's own disclosed WASM native-crash gap):
+
+      1. GLOBAL gate, mounted FIRST in the chain -- before `Plug.Parsers`,
+      so a request rejected for lack of capacity is rejected before any
+      body-parsing work is spent on it. Calls
+      `Letflow.Admission.try_acquire(:global)`. Covers AuthPipeline's own
+      connection use (the gap named above) because it runs before
+      AuthPipeline and gates ALL downstream DB-connection-holding work,
+      auth included.
+      2. PER-TENANT gate, mounted immediately AFTER `Letflow.Plugs.AuthPipeline`
+      (tenant identity now resolved into `conn.assigns.auth_context.tenant_id`)
+      and BEFORE `Letflow.Plugs.TenantStatus`/`match`/`dispatch`. Calls
+      `Letflow.Admission.try_acquire({:tenant, schema_name})`, resolving
+      `schema_name` the same way `Letflow.Plugs.TenantStatus` and
+      `Letflow.Scheduler.Poller` already do (tenant-id -> schema-name
+      resolution already exists in this codebase; reuse it, do not
+      re-derive). Covers TenantStatus's own DB lookup and every sub-router's
+      dispatch work -- the dominant share of connection-holding time per
+      REQ-056/ISS-0431's own round-trip profiling.
+      DISCLOSED LIMITATION: AuthPipeline's own DB work (steps 1-4 of its
+      moduledoc) is covered by the global gate only, not a per-tenant one,
+      because tenant identity does not exist yet at that point in the
+      chain. This is accepted, not silently omitted -- state it in this
+      plug's own moduledoc.
+      3. Both gates: on `{:error, :capacity}`, respond immediately (halt the
+      plug chain, no further plugs run) via
+      `Letflow.Api.Response.service_unavailable/2` (REQ-066, ALREADY
+      EXISTING -- do not add a new response helper), with the
+      `Retry-After` header set explicitly on the conn first (matching
+      `Response.rate_limited/2`'s own documented "caller sets Retry-After"
+      convention) to a fixed, configured seconds value (config, default 1)
+      -- NOT a computed estimate, since this admission mechanism has no
+      queueing/backoff-timing model to estimate from (a fixed short value
+      matching `Letflow.Plugs.TenantStatus`'s own existing `@retry_after_seconds
+      "30"` precedent's SHAPE, though the specific number here is
+      independently justified: admission rejection is a near-instant
+      decision with no wait queue behind it, unlike TenantStatus's
+      migration-in-progress case, so a MUCH shorter retry-after is
+      appropriate -- state this reasoning in the plug's moduledoc rather
+      than copying TenantStatus's 30-second value uncritically).
+      4. On success at BOTH gates: the plug stores both `admission_ref()`s
+      in `conn.assigns` and registers a `Plug.Conn.register_before_send/2`
+      (or equivalent, matching how this codebase already threads
+      request-scoped cleanup -- state which mechanism is chosen and why) or
+      calls `Letflow.Admission.release/1` for both refs when the response is
+      sent, so an admitted request's slot is freed exactly once, on every
+      response path including a request that raises inside a downstream
+      plug or router (verified in the acceptance criteria below).
+      NOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore logic;
+      no change to `Letflow.Plugs.RateLimit` (still deferred, unmounted,
+      unrelated mechanism); no Poller wiring (REQ-218); no tier-weighted
+      per-tenant caps (REQ-216's own recorded open question).
+    acceptance_criteria:
+      - "with REQ-216's global cap artificially forced to 0 (test config override), every request to any /api/v1/* route -- including one that would otherwise pass auth -- receives HTTP 503 with a Retry-After header and Plug.Parsers never runs (no body-parsing side effect observable), confirmed by a request carrying a body too large for the parser's own limit still returning 503 rather than 413"
+      - "with the global cap open but a specific tenant's per-tenant cap artificially forced to 0, a request authenticated as that tenant receives HTTP 503 with Retry-After, while a request authenticated as a DIFFERENT tenant (same global cap) succeeds -- both requests observed in the same test"
+      - "a successfully admitted request that completes normally releases both its global and per-tenant admission_ref()s exactly once, verified by exhausting the cap, making one full round-trip request, and observing a subsequent request now succeeds"
+      - "a successfully admitted request whose downstream handler RAISES still releases both admission_ref()s (no permanent slot leak on an error path) -- a test that forces a raise in a route handler and then verifies a subsequent request still succeeds"
+      - "the 503 response body matches Letflow.Api.Response.service_unavailable/2's existing Error.service_unavailable/1 document shape exactly (same fields REQ-066's own test/letflow/api/error_test.exs already asserts), confirmed by comparing against that existing test's expected shape rather than asserting a new ad hoc body shape"
+      - "the plug chain order change is confirmed by reading lib/letflow/plugs/api_pipeline.ex: the global admission plug is the very first plug (before Plug.Parsers), and the per-tenant admission plug is positioned after Letflow.Plugs.AuthPipeline and before Letflow.Plugs.TenantStatus"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-216]
+
+  - id: REQ-218
+    title: Wire admission control into Poller's per-tick tenant sweep, closing ISS-0431 part 3 (secondary surface)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    # impl_order: not yet registered -- ORCH runs WF-01 Step 3 (register_task) after REQ-VALIDATOR PASS; field omitted until then, per this file's own established convention (see the S8 block's impl_order note)
+    description: >
+      Third and final part of ISS-0431/GH#835's fix, covering its own
+      explicitly-named SECONDARY surface: "Poller's per-tenant sweeps and
+      future LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover
+      by the same decision rather than each inventing its own cap." Atop
+      REQ-216's core module; does not touch REQ-217's HTTP-path wiring.
+
+      WHAT `lib/letflow/scheduler/poller.ex` ACTUALLY DOES TODAY (read in
+      full, not assumed): `handle_info(:tick, ...)` calls
+      `Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name)
+      end)` -- SEQUENTIAL, one tenant schema at a time, not concurrent. The
+      same sequential pattern repeats for
+      `maybe_run_retention_sweep/2`, `maybe_run_alert_detection/3`,
+      `maybe_run_ordering_cycle/1`, `maybe_run_ordering_sweeper/1`,
+      `maybe_run_ordering_metrics/1`. So THIS module does not exhibit
+      unbounded CONCURRENT demand the way the HTTP path does (each call
+      blocks the single Poller GenServer process, so at most one DB
+      connection is held by Poller work at any instant) -- the real gap
+      here is ACCOUNTING, not concurrency: Poller's one held connection is
+      invisible to REQ-216's admission budget, so REQ-216's global cap
+      (`pool_size - reserved_headroom`) can only be a safe ceiling on
+      HTTP-path concurrency if `reserved_headroom` already reserves enough
+      slack for Poller's own use -- an implicit, untested assumption today.
+      This requirement makes that assumption explicit and enforced rather
+      than merely documented.
+
+      SCOPE:
+      1. Before each of the six sequential per-tenant operations named
+      above (the timer poll-and-fire loop plus the five `maybe_run_*`
+      sweeps), acquire ONE global admission slot via
+      `Letflow.Admission.try_acquire(:global)` for that operation's single
+      Repo-touching call, and release it immediately after that call
+      returns (success or the operation's own already-established rescue
+      path -- do not weaken any existing per-operation try/rescue
+      isolation boundary documented in poller.ex's moduledoc, e.g.
+      `maybe_run_alert_detection/3`'s own `rescue _ -> :ok`; the
+      acquire/release wraps around the existing isolation, it does not
+      replace it).
+      2. On `{:error, :capacity}` from `try_acquire(:global)` for a given
+      schema's operation within a tick: skip that one schema's operation
+      for that tick only (do not crash the GenServer, do not skip every
+      other schema's turn, do not skip that schema's OTHER operations this
+      tick if a later `try_acquire` call for a different operation
+      succeeds) -- mirroring `fetch_tenant_schemas/0`'s own existing
+      per-tick-degrades-gracefully philosophy already documented in this
+      module's moduledoc, applied per-schema-per-operation rather than
+      per-tick.
+      3. Poller does NOT use REQ-216's per-tenant semaphore -- only
+      `:global`. Reasoning: Poller's sweep already iterates every tenant
+      schema once per tick by design (REQ-186's own decision), so a
+      per-tenant CAP on Poller would not bound fairness between tenants the
+      way it does for bursty HTTP traffic, it would only cause a tenant to
+      be silently skipped some ticks for no client-visible reason -- a
+      strictly worse outcome for a background sweep whose whole contract is
+      "every tenant gets a turn." Stated explicitly rather than left
+      implicit.
+      4. No change to `Letflow.Application`'s supervision tree (no new
+      process; Poller remains the sole caller, same GenServer, same child
+      entry) and no change to `Letflow.Scheduler`'s own `poll_and_fire/1`
+      contract (unchanged input/output; the acquire/release wraps its call
+      site in `poller.ex`, per §1 above).
+      NOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore or
+      REQ-217's HTTP-path wiring; no change to ISS-0430's future LISTEN/
+      NOTIFY work (named by ISS-0431 as a future secondary surface to cover
+      "by the same decision," not this requirement's own job to build); no
+      change to any `maybe_run_*` function's own internal per-schema
+      rescue logic beyond wrapping it in acquire/release.
+    acceptance_criteria:
+      - "with REQ-216's global cap artificially forced to 0 (test config override), a tick over 3 tenant schemas calls Scheduler.poll_and_fire/1 ZERO times for any of them (each skipped for capacity), the GenServer does not crash, and the next tick (cap restored) resumes normally -- verified by a test asserting the mock/spy call count is exactly 0 during the forced-zero tick and exactly 3 on the following tick"
+      - "with the global cap forced to admit exactly 1 concurrent unit, a tick still processes all 3 tenant schemas' timer poll-and-fire loop to completion (sequential acquire/release, not a permanent block), confirmed by observing all 3 schemas' poll_and_fire/1 calls occur within that single tick"
+      - "an admission {:error, :capacity} for one schema's operation within a tick does not prevent a DIFFERENT schema's SAME operation, or that SAME schema's OTHER operations, from being attempted later in the same tick -- explicit test forcing capacity exhaustion mid-tick and observing partial, not total, skip"
+      - "Letflow.Admission.try_acquire({:tenant, _}) is never called anywhere in lib/letflow/scheduler/poller.ex -- grep-verified, confirming decision 3's per-tenant-exclusion is actually implemented, not just described"
+      - "an existing per-operation rescue path (e.g. maybe_run_alert_detection/3's rescue _ -> :ok) still catches its own operation's raise with the new acquire/release wrapped around it -- a test forcing that operation to raise still leaves the admission slot released (no leak) and the tick completes"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-216]

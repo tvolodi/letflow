@@ -1,0 +1,99 @@
+id: ISS-0427
+title: "Tenant test-schema provisioning replays 52 migrations (2259 ms) per schema, 755 times per suite run -- clone from a prepared template instead"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T18:34:00Z"
+severity: MAJOR
+tags: [testing, performance, ci, tenant-provisioning, s6]
+description: >
+  MEASURED, and the single largest remaining cost in the test suite. Split
+  out of ISS-0423, whose acceptance criteria cover parallelisation and
+  `async: true` ONLY -- an agent could satisfy every one of them and never
+  touch this. That gap is why this is its own issue.
+
+  THE COST. Every test needing a tenant calls
+  Letflow.TenantFixture.provisioned_tenant!/1, which runs
+  TenantProvisioning.replay_migrations/2 -> Ecto.Migrator.run/4 over the
+  52-entry @tenant_scoped_migration_manifest
+  (lib/letflow/tenant_provisioning.ex:334). Measured directly on this host
+  against the real schema (38 tables), letflow_test9:
+
+    Ecto.Migrator.run replay:                                 2259 ms  (52 migrations, ~31 ms each)
+    CREATE SCHEMA alone:                                        36 ms
+    clone via CREATE TABLE (LIKE <tpl>.<t> INCLUDING ALL) x38:  460 ms  (avg over 5 clones)
+
+  4.9x per provisioning, ~1.8 s saved per test that provisions a tenant.
+  The full suite performs 755 provisionings (counted from
+  LETFLOW_TENANT_FIXTURE teardown lines in a real run log) -- roughly
+  39,000 migration executions per suite run.
+
+  CORRECTION TO AN EARLIER FIGURE ON RECORD: Letflow.SandboxPool's
+  moduledoc measures provisioning at "411 ms at its very fastest" for 31
+  migrations, and ISS-0423 originally quoted it. Against today's
+  52-migration manifest the real cost is 2259 ms -- the 411 ms figure
+  understates this lever by ~5x and should not be used for sizing.
+
+  WHY THIS LEVER AND NOT JUST PARALLELISM: it helps the SERIAL suite, the
+  parallel suite, AND CI. That last point matters because
+  .github/workflows/ci.yml runs on ubuntu-latest (2 vCPU), where
+  scripts/test_parallel.sh derives N=2 and the 2.9x measured on a 16-core
+  workstation does not transfer (see ISS-0423's ci_gives_almost_nothing
+  note). Template cloning is the only measured lever that speeds up CI.
+
+  HARD DESIGN CONSTRAINT, found by testing rather than assuming:
+  CREATE TABLE (LIKE ... INCLUDING ALL) does NOT copy foreign-key
+  constraints -- Postgres omits FKs from LIKE. A naive implementation
+  yields schemas that look complete (right table count, indexes,
+  defaults, identity/sequences) but silently lack referential integrity,
+  quietly weakening every test depending on real constraint behaviour.
+  The implementation MUST either re-add FKs from the template's catalog
+  (pg_constraint contype='f'), use a pg_dump/restore-style DDL clone, or
+  use a Postgres template database. Whichever is chosen, constraint
+  parity against a migration-built schema must be asserted, not assumed.
+
+  METHOD LIMITATION ON THE MEASUREMENTS, stated so nobody repeats the
+  dead end: an earlier attempt to benchmark a pg_dump-based clone
+  reported 44 ms/clone on a toy 2-table schema and 0 bytes of DDL on the
+  real one. That result is INVALID -- `mix run` holds everything in an
+  uncommitted transaction even under Sandbox.mode(Letflow.Repo, :auto),
+  so the schema is invisible to any external process (verified: 38 tables
+  visible in-connection, 0 to a separate psql session). The 460 ms figure
+  is the trustworthy one, measured entirely in-connection via
+  Repo.query!. A pg_dump/template-database approach may beat 460 ms but
+  CANNOT be benchmarked from inside a sandboxed connection and was NOT
+  measured -- if the design picks that route, benchmark it outside the
+  sandbox first.
+
+  SCOPE: change how a tenant schema is materialised for TESTS. Production
+  tenant provisioning (provision_tenant_schema/1 + replay_migrations/2 as
+  called by real tenant onboarding) is a separate risk surface -- if the
+  design proposes changing it too, that must be called out explicitly and
+  gated by SECURITY-REVIEWER, not folded in silently. A test-only change
+  is the expected, lower-risk outcome.
+
+  INTERACTS WITH: Letflow.SandboxPool already owns a quota-bounded pool of
+  pre-provisioned, migration-scaffolded schemas built for exactly this
+  shape. Template-clone and pool are complementary, not alternatives --
+  the pool decides WHEN a schema is available, the template decides HOW
+  CHEAPLY one is made. ISS-0423 proposes the pool angle; this is the
+  template angle; design them together or in a deliberate order.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - test/support/tenant_fixture.ex
+  - lib/letflow/sandbox_pool.ex
+related:
+  - ISS-0423
+  - ISS-0426
+  - ISS-0113
+  - ISS-0224
+source: >
+  Direct measurement during the architecture review, 2026-09-02, in
+  response to the user asking how template-schema provisioning would be
+  adopted. All three timings above measured in-connection via Repo.query!
+  against a real 52-migration, 38-table tenant schema in letflow_test9;
+  the probe database was dropped afterward. The 755-provisioning count
+  comes from the serial full-suite run log of the same commit.
+queue_task_id: 427
+github_issue: 831
+
+status: open

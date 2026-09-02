@@ -172,3 +172,23 @@ adoption_notes:
     schema is not FK-identical -- the last is NOT acceptable, since
     assert_schema_complete!/2 and several tests depend on real constraint
     behaviour. Verify constraint parity against the template explicitly.
+
+# ── Scope split, 2026-09-02T18:34:00Z (ORCH-adhoc-20260902) ──
+# This issue's own acceptance criteria cover parallelisation and
+# `async: true` ONLY. The template-schema lever described in
+# `measured_causes.schema_provisioning_dominates` and
+# `adoption_notes.template_schema_measured` above is NOT covered by any
+# criterion here -- an agent could satisfy every AC on this issue and never
+# touch it. Split out rather than left implicit:
+#
+#   ISS-0427 (queue task 427, GH#831) -- tenant test-schema provisioning
+#   replays 52 migrations (2259 ms) per schema, 755x per run; clone from a
+#   prepared template instead. Carries its own acceptance criteria,
+#   including the foreign-key parity constraint that LIKE ... INCLUDING ALL
+#   does not satisfy.
+#
+# The two are complementary and should be designed together or in a
+# deliberate order: the SandboxPool angle proposed here decides WHEN a
+# schema is available, ISS-0427's template decides HOW CHEAPLY one is made.
+split_out_to:
+  - ISS-0427

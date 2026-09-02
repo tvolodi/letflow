@@ -1,0 +1,39 @@
+id: ISS-0409
+title: "ServiceCatalogTest REQ-192 list_all/1 pagination correctness fails in full suite, passes in isolation"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0408-20260902
+discovered_at: "2026-09-02T10:50:00Z"
+severity: MINOR
+tags: [test-isolation, service-catalog, req-192, flaky]
+description: >
+  Discovered by ELIXIR-DEV during WF03-ISS0408-20260902 Step Final
+  (git-merge, post-rebase mix test verification).
+
+  test/letflow/service_catalog_test.exs "REQ-192 list_all/1 pagination
+  correctness" fails when run as part of the full mix test suite (observed
+  twice, consistently, across two separate full-suite runs post-rebase) but
+  passes when run in isolation.
+
+  Confirmed unrelated to ISS-0408's own changes: test/letflow/service_catalog_test.exs
+  and lib/letflow/service_catalog.ex are byte-identical to origin/main on that
+  branch -- the ISS-0408 diff never touches either file.
+
+  Suspected cross-test isolation fragility -- possibly leftover global-scope
+  service_catalog rows from another test not cleaning up, or a shared
+  :global-scope fixture race. ELIXIR-DEV also noted two stray leftover
+  :global-scope service_catalog rows left behind by an earlier interrupted
+  mix test run in that same session, which may be a related or contributing
+  factor rather than the sole cause -- needs its own diagnosis rather than
+  assuming that was the only source.
+affected_files:
+  - test/letflow/service_catalog_test.exs
+  - lib/letflow/service_catalog.ex
+related:
+  - REQ-192
+source: >
+  handoffs from WF03-ISS0408-20260902's Step Final (git-merge) run, ELIXIR-DEV's
+  own mix test attribution analysis (two full-suite runs, consistent single
+  failure, isolated run passes).
+queue_task_id: 409
+github_issue: 805
+status: open

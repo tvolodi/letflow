@@ -1,12 +1,18 @@
 # ISS-0426 — Lua wall-clock test contention flake — fix design
 
-**Status:** design, awaiting CODE-DESIGN-VALIDATOR.
-**Scope:** test-infrastructure only —
-`test/letflow/engine/lua/executor_test.exs`, `test/test_helper.exs`, and (minimal,
-additive) `lib/mix/tasks/letflow.check.test.ex`.
-**Explicitly out of scope:** `lib/letflow/engine/lua/executor.ex` (no production code
-change), `config/config.exs:17` (production `lua_wallclock_timeout_ms` untouched),
-`config/test.exs:187` (left as-is — see §2.3 for why touching it would not even fix
+**Status:** design, rework 1 (CODE-DESIGN-VALIDATOR FAIL on OQ-2 — resolved in §2.1.2 of
+this revision; see §2.1/§2.1.1a/§2.1.2/§3/§4/§7 for what changed).
+**Scope:** test-infrastructure, plus two small additive `@doc false` test-only seams on
+`lib/letflow/engine/lua/executor.ex` (§2.1.1a candidate (i), §2.1.2) — no existing
+production function's behavior changes, only two new functions are added alongside them.
+Primary files: `test/letflow/engine/lua/executor_test.exs`, `test/test_helper.exs`,
+`lib/letflow/engine/lua/executor.ex` (additive only), and (minimal, additive)
+`lib/mix/tasks/letflow.check.test.ex`.
+**Explicitly out of scope:** every EXISTING function/behavior in
+`lib/letflow/engine/lua/executor.ex` (`execute_with_manifest/2,3`, `handle_yield_result/3`,
+`run_with_heap_limit/5`'s own `after` clause — all byte-for-byte unchanged, see §3 point
+1 and §6), `config/config.exs:17` (production `lua_wallclock_timeout_ms` untouched),
+`config/test.exs:187` (left as-is — see §1.4 for why touching it would not even fix
 the filed failure), and every file `lib/letflow/engine/wasm` / the three WF03-ISS0418
 wasm test files own (read-only per this run's scope boundary).
 
@@ -128,55 +134,67 @@ description's own framing of what's available to adopt/refine/reject).
 
 ### 2.1 GROUP 1 — restructure so no assertion depends on which of two racing outcomes wins
 
-**Full list (15 call sites across 10 tests, corrected/completed per §1.2(a)):**
+**Full list — 14 call sites across 11 tests, corrected against CODE-DESIGN-VALIDATOR's
+independently-derived count** (this design's prior revision's own summary sentence said
+"15 call sites across 10 tests," which was arithmetic drift against its own table, not a
+different table — the table's row *data* was already correct; only the header sentence is
+fixed here). Independently re-verified for this revision by reading every
+`max_heap_words:` value paired with each `timeout_ms:` site (not just the outcome column),
+which surfaces the mechanism split §2.1.2 below exists to resolve: **3 of these 14 call
+sites (in 2 of the 11 tests) are heap-limited** (non-nil `max_heap_words`) and route
+through `run_with_heap_limit/5`, not `run_script/3` — flagged in a new "Mechanism" column
+so the table itself carries this distinction rather than leaving it implicit:
 
-| Test (line, current) | Workload | Current `timeout_ms` | Asserted outcome |
-|---|---|---|---|
-| REQ-154 AC-1 "smaller budget halts sooner" (253) | `for i=1,5000 do end` x2 | 5_000 x2 | `budget_exceeded` / `:ok` |
-| REQ-154 AC-2 "while true...budget_exceeded" (273) | `while true do end` | 5_000 | `budget_exceeded` |
-| REQ-154 AC-3 "budget_exceeded is structured" (283) | `while true do end` | 5_000 | `budget_exceeded` |
-| REQ-154 AC-4 "pcall-caught budget exhaustion" (299) | pcall-wrapped loop | 5_000 | `:ok` |
-| REQ-155 "AC-4 regression guard: budget_exceeded unaffected by generous timeout" (448) | `@infinite_loop`, budget 500 | 5_000 | `budget_exceeded` |
-| REQ-156 AC-1 "smaller max_heap_words halts sooner" (605) | allocating script x2 | 5_000 x2 | `memory_limit_exceeded` / `:ok` |
-| REQ-156 AC-2 "1GB alloc under 16MB limit" (644) | gigabyte-allocating script | 5_000 | `memory_limit_exceeded` |
-| REQ-162 AC1 "uncaught runtime error produces SCRIPT_ERROR" (812) | `1 // 0` | 5_000 | `script_error` |
-| REQ-162 AC4 "1 // 0 raises..." (861) | `1 // 0` x2 | 5_000 x2 | `script_error` / `:ok` |
-| REQ-162 **AC7 "stack trace frames contain no '/' or 'Elixir.'" (983) — THE FILED FAILURE** | `local function f()...1//0...end` | 5_000 | `script_error` |
-| REQ-162 "regression guard §7: real uncaught VM opcode error..." (1052) | `1 // 0` | 5_000 | `script_error` |
+| Test (line, current) | Workload | Current `timeout_ms` | Asserted outcome | Mechanism |
+|---|---|---|---|---|
+| REQ-154 AC-1 "smaller budget halts sooner" (253) | `for i=1,5000 do end` x2 | 5_000 x2 | `budget_exceeded` / `:ok` | nil-heap |
+| REQ-154 AC-2 "while true...budget_exceeded" (273) | `while true do end` | 5_000 | `budget_exceeded` | nil-heap |
+| REQ-154 AC-3 "budget_exceeded is structured" (283) | `while true do end` | 5_000 | `budget_exceeded` | nil-heap |
+| REQ-154 AC-4 "pcall-caught budget exhaustion" (299) | pcall-wrapped loop | 5_000 | `:ok` | nil-heap |
+| REQ-155 "AC-4 regression guard: budget_exceeded unaffected by generous timeout" (448) | `@infinite_loop`, budget 500 | 5_000 | `budget_exceeded` | nil-heap |
+| REQ-156 AC-1 "smaller max_heap_words halts sooner" (605) | allocating script x2 | 5_000 x2 | `memory_limit_exceeded` / `:ok` | **heap-limited** |
+| REQ-156 AC-2 "1GB alloc under 16MB limit" (644) | gigabyte-allocating script | 5_000 | `memory_limit_exceeded` | **heap-limited** |
+| REQ-162 AC1 "uncaught runtime error produces SCRIPT_ERROR" (812) | `1 // 0` | 5_000 | `script_error` | nil-heap |
+| REQ-162 AC4 "1 // 0 raises..." (861) | `1 // 0` x2 | 5_000 x2 | `script_error` / `:ok` | nil-heap |
+| REQ-162 **AC7 "stack trace frames contain no '/' or 'Elixir.'" (983) — THE FILED FAILURE** | `local function f()...1//0...end` | 5_000 | `script_error` | nil-heap |
+| REQ-162 "regression guard §7: real uncaught VM opcode error..." (1052) | `1 // 0` | 5_000 | `script_error` | nil-heap |
 
-(The two mixed tests at 656/887 are handled separately in §2.4, not in this table — only
-their non-racing `budget_result`/`memory_result` calls belong to this group's treatment.)
+(11 rows, 14 call sites: rows 253, 605, and 861 each contribute 2 calls. The two mixed
+tests at 656/887 are handled separately in §2.4, not in this table — their
+`memory_result` calls are ALSO heap-limited, the same mechanism §2.1.2 resolves for
+605/644, but §2.4 makes a deliberate, stated choice to leave them as literal 3-arity
+calls rather than apply §2.1.2's seam, relying on tag-isolation instead — see §2.4 for
+why.)
 
 **The restructure:** for every call site in this table, the outcome under test
 (`budget_exceeded`, `memory_limit_exceeded`, `script_error`, or `:ok`) is fully determined
 by the workload alone — none of them is asserting anything about wall-clock time. The
 `timeout_ms: 5_000` argument exists only as "clearly enough time for this workload," which
 is exactly the condition ISS-0426's own filing calls out as removable rather than
-re-tuned. Two changes, applied together:
+re-tuned. Two mechanisms are needed, split by the Mechanism column above, because
+`nil`-heap-words and heap-limited execution are two genuinely different code paths in
+`executor.ex` (§2.1.1 for the former, §2.1.2 for the latter — the validator's OQ-2 finding
+is that the prior revision only specified the former):
 
-1. **Replace the wall-clock race with a budget-only or logic-only path wherever the
-   `Task.yield`/wall-clock mechanism is not needed to observe the asserted outcome.**
-   Concretely: introduce one new, `nil`-heap-words-equivalent call path (or reuse an
-   existing seam if one already exists — see Open Question OQ-1) that runs `run_script/3`
-   **synchronously in the calling test process**, with no `Task.Supervisor.async_nolink` +
-   `Task.yield(timeout_ms)` race at all — no wall clock is read, so there is no timeout
-   value to blow through regardless of host contention. This is structurally, not
-   statistically, immune: the failing branch (`handle_yield_result(nil, ...)`) is
-   unreachable from this path by construction, because the path never calls
-   `Task.yield/2`.
+1. **nil-heap sites (11 call sites, 9 tests — every row above except 605/644):** replace
+   the wall-clock race with a synchronous, no-`Task.yield` call — §2.1.1.
+2. **heap-limited sites (3 call sites, 2 tests — 605, 644 — plus the 2 heap-limited arms
+   inside the mixed tests, §2.4):** replace `run_with_heap_limit/5`'s own hand-rolled
+   race with an unbounded-wait variant of the same mechanism — §2.1.2.
 
-   This requires a design-level decision about *where* the synchronous seam lives — see
-   §2.1.1 (two design options weighed) and Open Question OQ-1 (left for
-   CODE-DESIGN-VALIDATOR / ELIXIR-DEV since it is the one place this design does not fully
-   pin down a single answer).
+Both mechanisms produce the same structural guarantee: the call chain the test exercises
+never reads a wall-clock timeout value, so `{:error, {:wallclock_timeout, _}}` is
+unreachable from these tests by construction, not merely unlikely under load.
 
-2. **For call sites where introducing a synchronous seam is undesirable or not needed**
-   (i.e., any Group-1 site not worth the seam's cost — see §2.1.1), fall back to keeping
-   the 3-arity call exactly as today but tag the *test* into Group 2's isolated,
-   low-concurrency partition (§2.2) instead of restructuring it. This is the safety valve:
-   every Group-1 test gets EITHER "no race at all" (preferred, structurally verifiable) OR
-   "isolated from contention" (fallback, same treatment as Group 2) — never left racing in
-   the default `async: true` file under contention with no mitigation.
+**Safety valve, unchanged from the prior revision:** for any call site where a
+synchronous mechanism turns out to be undesirable during implementation (neither §2.1.1
+nor §2.1.2's own scope currently identifies one, but this remains available), fall back
+to keeping the 3-arity/heap-limited call exactly as today and tag the *test* into Group
+2's isolated, low-concurrency partition (§2.2) instead of restructuring it. Every
+Group-1 test gets EITHER "no race at all" (preferred, structurally verifiable, and now
+specified for all 14 call sites, not just the 11 nil-heap ones) OR "isolated from
+contention" (fallback, same treatment as Group 2) — never left racing in the default
+`async: true` file under contention with no mitigation.
 
 #### 2.1.1 Where the synchronous seam lives — two options weighed
 
@@ -207,26 +225,142 @@ thing under test." No new pattern introduced.
 **Option 2.1.1-B (rejected as the primary mechanism): keep the 3-arity call, just raise
 each site's own `timeout_ms:` literal.** This is option (b) applied per-call-site instead
 of via config — rejected for the same reason §1.4 rejects it globally: it moves the
-threshold without removing the sensitivity, and per §1.2(a)'s corrected count, is now 11
-literals to re-tune (was already going to be ~10 per the diagnosis), each requiring its
-own "how high is high enough" judgement call with no evidence-based ceiling (unlike
-iss0260-ac1-timing-flake.md's §3.1, which had two real measured data points to derive a
-number from — this design has zero data points for a Group-1-safe ceiling, because
+threshold without removing the sensitivity, and per §2.1's corrected count, is now 14
+literals across 11 tests to re-tune (was already going to be ~10 tests per the
+diagnosis), each requiring its own "how high is high enough" judgement call with no
+evidence-based ceiling (unlike iss0260-ac1-timing-flake.md's §3.1, which had two real
+measured data points to derive a number from — this design has zero data points for a
+Group-1-safe ceiling, because
 ISSUE-FIXER's own reproduction attempts never caught the failure to measure how much
 headroom would have sufficed). Not adopted.
 
-**Decision: 2.1.1-A**, applied to every table row in §2.1 where a same-process
-synchronous call is straightforward (all of them — none of these workloads needs the
-`Task`-based isolation for its own outcome; heap-limited or instruction-limited runaways
-still terminate on their own via `:max_instructions`/`max_heap_words`, which do not
-require the wall-clock wrapper to enforce).
+#### 2.1.1a Where the seam lives structurally — three alternatives compared
 
-**What does NOT change in this table's tests:** the workload scripts, the
-`max_instructions`/`max_heap_words` values, and every non-timing assertion — untouched.
-Only the call site swaps from "async task + wall-clock race" to "synchronous call," and
-the (now-meaningless) `timeout_ms: 5_000` argument is dropped from call sites that no
-longer take it (the new seam has no timeout parameter to pass — see Open Question OQ-1 on
-its exact arity/signature).
+Per CODE-DESIGN-VALIDATOR's rework instruction (point (ii), non-blocking but required in
+this pass): 2.1.1-A's own "a new function on `Executor`" shape was compared against two
+structural alternatives before being chosen, not only against "don't remove the race at
+all" (2.1.1-B, a different axis). All three candidates below achieve the same *behavior*
+(no `Task.yield` in the call chain); they differ only in *where the seam is declared*.
+
+| Candidate | Shape | Assessment |
+|---|---|---|
+| **(i) New function on `Executor`, `@doc false`** — this is 2.1.1-A | A small additive wrapper (or, per OQ-1, possibly `run_script/3` itself exposed directly — see below) alongside `execute_with_manifest/2,3` | **Chosen.** Directly precedented in this exact file (`build_script_error/3`, executor.ex:438-457) for exactly this justification: a test needs an inner function without its outer wrapper. Keeps the seam next to the code it seams into, so a future reader of `executor.ex` sees both the wrapped and unwrapped entry points in one place. Smallest diff of the three. |
+| **(ii) A test-support module** (e.g. a `test/support/` helper that reimplements or wraps the call) | Move the "call without the wrapper" logic out of `lib/` entirely, into test-only code | **Rejected.** `run_script/3` is `defp` — a `test/support/` module cannot call it without either (a) `executor.ex` exposing *something* public first (which collapses back to option (i) or (iii) anyway, just with an extra indirection layer), or (b) duplicating `run_script/3`'s body outside `lib/`, which is worse than (i): a second copy of REQ-154/155's own budget-exhaustion/rescue logic that can drift from the real implementation and silently stop testing what production actually does. Only viable if paired with (i) or (iii) underneath it, at which point it adds a layer without removing one. |
+| **(iii) Make `run_script/3` itself public-with-`@doc false`** (drop the `defp`, no new wrapper function) | Same function, just widen its visibility instead of adding a sibling | **Considered, not chosen, but noted as a legitimate close second.** Smaller diff than (i) in one sense (zero new functions) — but `run_script/3`'s current 3-arg shape (`manifest, script_source, budget`) is `execute_with_manifest/3`'s *already-normalized* internal form (post `normalize_script_ref/1`), not the public `(script_ref, registered_hash, opts)` shape every other caller of this module uses. Making it public as-is would mean Group 1 tests call a differently-shaped function than `execute_with_manifest/3`'s own public contract, which is a bigger behavioral-surface change than a same-shaped wrapper that just drops `:timeout_ms`/the `Task` wrapper. (i)'s wrapper can preserve the familiar `(script_ref, registered_hash, opts)` call shape Group 1's existing test code already uses (minus `:timeout_ms`), meaning the table's 14 call sites need a smaller textual edit (drop one key from `opts`, change the function name) than (iii) would require (restructure each call site to pass the already-normalized manifest/script_source pair). ELIXIR-DEV may still land on (iii) if it turns out simpler in practice — not prescribed away, since both satisfy every hard constraint identically — but (i) is this design's stated preference for the reason above. |
+
+**Decision: 2.1.1-A / candidate (i)**, applied to every **nil-heap** row in §2.1's table
+(11 of the 14 call sites, in 9 of the 11 tests — everything except 605/644, whose
+heap-limited mechanism is §2.1.2's separate concern). None of these nil-heap workloads
+needs `Task`-based isolation for its own outcome; instruction-limited runaways still
+terminate on their own via `:max_instructions`, which does not require the wall-clock
+wrapper to enforce.
+
+**What does NOT change in this table's nil-heap tests:** the workload scripts, the
+`max_instructions` values, and every non-timing assertion — untouched. Only the call site
+swaps from "async task + wall-clock race" to "synchronous call," and the
+(now-meaningless) `timeout_ms: 5_000` argument is dropped from call sites that no longer
+take it (the new seam has no timeout parameter to pass — see Open Question OQ-1 on its
+exact arity/signature).
+
+#### 2.1.2 The heap-limited Group 1 sites (605, 644, and the mixed tests' `memory_result` arms) — OQ-2, RESOLVED
+
+**This is the design gap CODE-DESIGN-VALIDATOR's rework instruction requires resolved as
+a concrete element, not left to ELIXIR-DEV.** Restated precisely, from an independent
+re-read of `executor.ex:508-551` for this revision: `run_with_heap_limit/5` does not call
+`Task.yield` at all, but its own `receive ... after timeout_ms -> ... end` block is
+mechanistically the same race — a bounded wait for one of several messages, where the
+`after` clause fires purely on elapsed wall-clock time regardless of whether the spawned
+process's own work has finished. Three call sites in two pure-Group-1 tests (605's two
+calls, 644's one call) and two more inside the mixed tests' `memory_result` arms (§2.4)
+all route through this function, so §2.1.1's seam — which only removes `Task.yield` from
+the nil-heap path — does nothing for them; left unaddressed, these 5 call sites across 4
+tests would still be exposed to ISS-0426's exact failure mode after the nil-heap fix
+ships.
+
+**The constraint that makes this non-trivial (stated in the rework instruction, confirmed
+by this revision's own read of executor.ex:508-551):** `max_heap_words` enforcement is a
+BEAM `max_heap_size` spawn option — it can only apply to a process, and the caller must
+still learn the outcome via a message (a `:DOWN` for the heap-kill case, or the
+`{reply_ref, result}` message for normal completion) rather than a return value, because
+the work happens in a different process than the caller. So the "run it synchronously,
+no separate process" move §2.1.1 makes for the nil-heap case does not transfer here —
+some process boundary and some `receive` remain necessary no matter what.
+
+**What DOES transfer, and is this section's resolution:** the race is not the process
+boundary itself, or the `receive` itself — it is specifically the `after timeout_ms ->`
+clause racing the other two `receive` clauses. Removing only that clause, while keeping
+everything else about `run_with_heap_limit/5`'s shape (spawn with `max_heap_size`,
+monitor, `receive` on `{reply_ref, result}` / `{:DOWN, ..., :killed}` /
+`{:DOWN, ..., reason}`), yields an **unbounded-wait variant**: a second `@doc false`
+test-only seam, alongside 2.1.1's nil-heap one — call it, structurally,
+`run_with_heap_limit_sync/4`-shaped (naming left to ELIXIR-DEV, same as OQ-1; the design
+commitment is the *behavior*, not the identifier) — whose `receive` block has exactly
+2.1.1's own three non-`after` clauses from `run_with_heap_limit/5` and *no* `after`
+clause at all. Concretely, the new seam's `receive` differs from the existing function's
+only by the absence of the `after timeout_ms -> Process.exit(pid, :kill); ...` branch —
+every other line (the `spawn_opt` call itself, the `reply_ref`/`monitor_ref` pair, the
+`{^reply_ref, result}` clause, both `:DOWN` clauses, the `demonitor` call) is reused or
+mirrored unchanged, not reinvented.
+
+**Why this is structurally sound, not merely "remove the timeout and hope":**
+
+- **The memory-limit path stays exactly as strong as it is today.** `max_heap_size: kill:
+  true` is enforced by the BEAM runtime on the spawned process regardless of whether
+  anything is `receive`-ing for it — removing the caller's own `after` clause does not
+  relax the heap limit itself, only the caller's *patience* for observing the outcome.
+  Every Group-1 heap-limited test (605, 644, and the mixed tests' `memory_result` arms)
+  asserts `memory_limit_exceeded` or `:ok`/success — never `wallclock_timeout` — so an
+  unbounded wait costs these tests nothing they were relying on. A workload that
+  genuinely never terminates and never trips the heap limit would hang this seam
+  forever — but no Group-1 heap-limited test uses such a workload (605/644's workloads are
+  the same bounded, real allocating scripts that terminate — successfully or via a heap
+  kill — every time today; they do not depend on a caller-issued kill to end), so this is
+  not a live risk for the sites this section actually covers.
+- **Design §5.3's ordering argument is preserved, and is now unconditionally true rather
+  than conditionally true.** The prior revision's concern (validator-cited) was whether
+  removing the `after` clause could break the invariant that a `:killed` DOWN is
+  attributable to the BEAM's own heap enforcement, never the caller. With no `after`
+  clause at all, the caller issues no kill, ever, on this path — so every `:killed` DOWN
+  this seam can possibly observe is unconditionally the BEAM's own doing. The ordering
+  argument (":killed observed before `after` could fire, so it wasn't the caller")
+  degenerates to a simpler, strictly stronger statement: there is no caller-issued kill
+  branch to disambiguate against in the first place. `:memory_limit_exceeded` stays
+  exactly as distinguishable from a caller-issued kill as it is today — more so, since
+  the disambiguation is now structural rather than timing-order-dependent.
+- **This mirrors 2.1.1's own reasoning exactly, applied to the one part of the mechanism
+  that differs (a required process boundary) rather than the part that's the same (no
+  wall-clock read).** Both seams share the property this run's task asked for: the
+  `wallclock_timeout` branch is unreachable by construction (§2.1.1: no `Task.yield`
+  call exists on the path at all; §2.1.2: the `receive` block has no `after` clause to
+  read a wall clock through), not merely unlikely under the load levels tested so far.
+
+**Coverage consequence, stated per REQ-156 property per test (the rework instruction's
+own required framing) — nothing is lost, because these tests never asserted the
+timeout/caller-kill branch in the first place:**
+
+| Test | REQ-156 property it proves | Still proven after this section's fix? |
+|---|---|---|
+| REQ-156 AC-1 "smaller max_heap_words halts sooner than a larger one" (605) | The configured heap limit is load-bearing — different limits produce different outcomes (`memory_limit_exceeded` vs `:ok`) on the same script | Yes, unchanged — both outcomes are BEAM-heap-kill or natural-completion, neither depends on the caller's own timeout |
+| REQ-156 AC-2 "1GB alloc under 16MB limit fails cleanly" (644) | A script wildly exceeding its heap limit fails via `memory_limit_exceeded`, not a hang or crash | Yes, unchanged — this is exactly the BEAM-heap-kill branch, which an unbounded wait still observes (it terminates via the kill, not via patience) |
+
+The two mixed tests' `memory_result` arms (656, 887) are mechanistically identical to
+644 (same heap-limited BEAM-kill branch, same `memory_limit_exceeded` outcome) and are
+therefore ALSO eligible for this section's seam in principle — but §2.4 makes the
+deliberate, separately-stated choice not to apply it to them, tag-isolating the whole
+test instead (both arms inherit Group 2's contention mitigation "for free" once the test
+carrying the genuinely-racing `timeout_result` arm is tagged). That choice, not this
+table, is authoritative for those two tests — listed here only to confirm the *option*
+this section provides would have covered them too, had §2.4 chosen to use it.
+
+**What this section does NOT claim to fix:** `run_with_heap_limit/5` itself (the
+production function) is untouched — its own `after timeout_ms` clause remains exactly as
+today, still exercised by Group 2's own heap-limited test (executor_test.exs:788,
+"memory-limited call whose script hangs...terminated by the caller's own timeout kill,"
+already correctly placed in Group 2's table in §2.2, since that test's entire point is
+exercising exactly the `after`-clause branch this section's new seam omits). This
+section adds a second, narrower entry point alongside the production function for the
+tests that don't need the `after` clause; it does not change or remove the production
+function's own behavior, satisfying HARD CONSTRAINT 1 (AC4) the same way §2.1.1 does.
 
 ### 2.2 GROUP 2 — tag + isolate, mirroring the `:wasm_hang` precedent exactly
 
@@ -360,11 +494,13 @@ Neither pure Group 1 nor pure Group 2 (see §1.2(b)). Treatment:
 
 1. **(AC4) Production wall-clock kill semantics unchanged.** `config/config.exs:17` is
    not referenced anywhere in this design. `execute_with_manifest/2,3`'s existing bodies,
-   `handle_yield_result/3`, and every other function in `lib/letflow/engine/lua/executor.ex`
-   that is not the one new `@doc false` test-only seam (§2.1.1-A) are byte-for-byte
-   unchanged. The new seam is additive, calls the same already-existing private
-   `run_script/3` the production path already calls, and is never invoked from any
-   non-test code path.
+   `handle_yield_result/3`, `run_with_heap_limit/5` (including its own `after timeout_ms`
+   clause), and every other function in `lib/letflow/engine/lua/executor.ex` that is not
+   one of the two new `@doc false` test-only seams (§2.1.1/2.1.1a for nil-heap, §2.1.2 for
+   heap-limited) are byte-for-byte unchanged. Both new seams are additive, each reuses the
+   already-existing production logic it wraps (`run_script/3`, and `run_with_heap_limit/5`'s
+   own spawn/monitor/receive shape minus its `after` clause, respectively), and neither is
+   ever invoked from any non-test code path.
 2. **(AC5) Tagging wired the same way `:wasm_hang` already is.** §2.3 adds
    `:lua_wallclock_race` to `test/test_helper.exs`'s existing `exclude:` list (same list,
    same mechanism) and adds one new isolated `--only lua_wallclock_race` subprocess to
@@ -400,15 +536,20 @@ under 24-way OS-level contention plus 48 concentrated AC7-only runs, making "run
 times and see if it still flakes" an expensive, weak validation strategy. This design is
 structural for the group that matters most (Group 1, including the filed AC7 failure):
 
-- **Group 1 (§2.1): structurally verifiable, not statistically.** After the restructure,
-  the eleven Group-1 call sites (§2.1's table) never call `Task.yield/2` and never read a
-  `timeout_ms` value at all — the `handle_yield_result(nil, ...)` branch that produced the
-  filed failure is unreachable from these call sites **by construction**, not merely
-  unlikely to fire. A validator can confirm this by reading the diff: (a) each listed call
-  site now calls the new synchronous seam instead of `execute_with_manifest/3`, (b) the
-  new seam's own implementation (once ELIXIR-DEV writes it) contains no `Task`/`Task.yield`
-  call — a static, one-time source read, not a repeated run. This is the "failure branch
-  removed / made unreachable" shape this run's task description asks for explicitly.
+- **Group 1 (§2.1/§2.1.2): structurally verifiable, not statistically, for all 14 call
+  sites in all 11 tests — both mechanisms.** After the restructure, the 11 nil-heap call
+  sites never call `Task.yield/2` at all (§2.1.1), and the 3 heap-limited call sites
+  (605 x2, 644 x1) never evaluate an `after timeout_ms ->` clause at all (§2.1.2) — in
+  both cases the `{:error, {:wallclock_timeout, _}}` outcome that produced the filed
+  failure is unreachable from these call sites **by construction**, not merely unlikely
+  to fire. A validator can confirm this by reading the diff: (a) each nil-heap row now
+  calls §2.1.1's seam instead of `execute_with_manifest/3` and that seam's own body
+  (once ELIXIR-DEV writes it) contains no `Task`/`Task.yield` call; (b) each heap-limited
+  row (605, 644) now calls §2.1.2's seam and that seam's own `receive` block (once
+  written) has no `after` clause — both are static, one-time source reads, not repeated
+  runs. This is the "failure branch removed / made unreachable" shape this run's task
+  description asks for explicitly, and per the rework instruction, now covers the
+  heap-limited sites that the prior revision left as an open question.
 - **Group 2 (§2.2/§2.3): still statistical in principle** (these tests still race a real
   wall-clock timeout — that's the point), **but the contention source is removed, not
   just reduced.** Isolating them into their own single-test-file `mix test --only
@@ -435,11 +576,13 @@ structural for the group that matters most (Group 1, including the filed AC7 fai
 
 **How TEST-RUNNER/RELEASE-VALIDATOR can confirm this design's fix works, concretely:**
 
-1. **Structural check (no flake reproduction needed):** `git diff` shows every §2.1 call
-   site now uses the synchronous seam, and the seam's own body (grep for `Task.yield`
-   or `Task.Supervisor.async_nolink` inside it) contains neither. This alone confirms
-   Group 1 (including the exact filed line, AC7) cannot reproduce ISS-0426's specific
-   failure mode again, independent of host load.
+1. **Structural check (no flake reproduction needed):** `git diff` shows every nil-heap
+   §2.1 row now uses §2.1.1's seam (grep its body for `Task.yield`/
+   `Task.Supervisor.async_nolink` — must find neither), and every heap-limited §2.1 row
+   (605, 644) now uses §2.1.2's seam (grep its body for `after` inside the `receive`
+   block — must find none). This alone confirms Group 1 (including the exact filed line,
+   AC7, and the two previously-uncovered heap-limited tests) cannot reproduce
+   ISS-0426's specific failure mode again, independent of host load.
 2. **`mix test` (plain, serial):** must still pass 100% (HARD CONSTRAINT 3) — this was
    already true before the fix and remains a simple regression check, not new evidence
    about contention.
@@ -469,7 +612,12 @@ structural for the group that matters most (Group 1, including the filed AC7 fai
 ## 6. What does NOT change
 
 - `lib/letflow/engine/lua/executor.ex`'s public API (`execute_with_manifest/2,3`,
-  `@behaviour Letflow.Engine.LuaScriptAudit.Executor`) — unchanged.
+  `@behaviour Letflow.Engine.LuaScriptAudit.Executor`) — unchanged. `run_with_heap_limit/5`
+  itself, including its own `after timeout_ms` clause, is also unchanged — §2.1.2 adds a
+  second, narrower entry point alongside it for tests that don't need that clause; it
+  does not modify or remove the original function's behavior, and Group 2's own
+  heap-limited test (line 788) keeps exercising the original function's `after` clause
+  exactly as today.
 - `config/config.exs:17`, `config/test.exs:187` — both untouched (§1.4 explains why
   touching the latter would not even fix the filed failure).
 - Every WASM-side file (`lib/letflow/engine/wasm/**`, the three wasm test files) —
@@ -501,20 +649,36 @@ structural for the group that matters most (Group 1, including the filed AC7 fai
   it must satisfy: (a) no `Task`/`Task.yield` in its call chain, (b) reuses
   `run_script/3` rather than duplicating its body, (c) `@doc false`, matching
   `build_script_error/3`'s existing precedent for a test-only seam in this exact module.
-- **OQ-2 — whether `max_heap_words`-limited Group 1 sites (REQ-156 AC-1/AC-2, lines
-  605/644) can use the same synchronous seam, or need a heap-limited variant.** Those two
-  tests currently pass `max_heap_words:` a real integer, which today routes through
-  `run_with_heap_limit/5` (the `:erlang.spawn_opt/2` + `max_heap_size` path), not
-  `run_script/3` directly — a materially different function than the `nil`-heap-words
-  seam OQ-1 describes. This design's intent for those two sites is the same structural
-  goal (no wall-clock race), but the concrete mechanism may need to be "call
-  `run_with_heap_limit/5` synchronously without its own `after timeout_ms ->` clause
-  racing" rather than reusing OQ-1's exact seam verbatim — left for ELIXIR-DEV to resolve
-  during implementation, flagged explicitly rather than silently assumed identical to the
-  `nil`-heap-words case.
-- **OQ-3 — tag name conflicts.** `:lua_wallclock_race` was checked against
-  `test/test_helper.exs` and `test/letflow/engine/wasm/*_test.exs`'s existing tags
-  (`:keycloak`, `:wasm_hang`) and does not collide. Not checked against every `@tag` in
-  the full test suite (out of this design's read scope) — CODE-DESIGN-VALIDATOR or
+- **OQ-2 — RESOLVED in this revision, no longer open.** The prior revision left open
+  whether the `max_heap_words`-limited Group 1 sites (REQ-156 AC-1/AC-2, lines 605/644)
+  could use the nil-heap seam or needed a different mechanism, since they route through
+  `run_with_heap_limit/5` rather than `run_script/3`. Per CODE-DESIGN-VALIDATOR's rework
+  finding that this was a design gap rather than legitimate latitude, §2.1.2 now
+  specifies a concrete second seam: the same spawn/monitor/receive shape
+  `run_with_heap_limit/5` already uses, with its `after timeout_ms ->` clause removed
+  (unbounded wait on the two `:DOWN` clauses and the reply clause only) — see §2.1.2 for
+  the full mechanism, the ordering-argument preservation, and the per-test REQ-156
+  coverage table. Only the exact function name/arity of this second seam remains
+  ELIXIR-DEV's choice (same category of latitude as OQ-1 below, not a design gap).
+- **OQ-3 (renumbered OQ-2) — exact signature/name of the new synchronous test seams
+  (§2.1.1a candidate (i) for nil-heap, §2.1.2 for heap-limited).** This design specifies
+  each seam's *behavior* (§2.1.1a: calls `run_script/3` directly, no `Task`/`Task.yield`;
+  §2.1.2: reuses `run_with_heap_limit/5`'s spawn/monitor/receive shape minus its `after`
+  clause) and *precedent* (§2.1.1a's own three-way comparison; both mirror
+  `build_script_error/3`'s existing `@doc false` seam pattern) but leaves the exact
+  function names, arities, and argument shapes to ELIXIR-DEV — e.g. whether the nil-heap
+  seam takes `(script_ref, registered_hash, opts)` matching `execute_with_manifest/3`'s
+  own shape minus `:timeout_ms`, or a narrower `(manifest, script_source, budget)`
+  matching `run_script/3`'s own current private signature directly. Reason for leaving
+  this open: both shapes satisfy every constraint in this design equally, and pinning one
+  down would be guessing at an ergonomics question that isn't answerable from the
+  diagnosis alone — unlike the heap-limited mechanism question (former OQ-2), this is
+  genuine implementation latitude, not an unresolved design question, because this
+  design's own hard constraints (no `Task.yield`/no `after` clause, `@doc false`, reuse
+  not duplication) fully determine correctness regardless of which name/arity is chosen.
+- **OQ-4 (renumbered OQ-3) — tag name conflicts.** `:lua_wallclock_race` was checked
+  against `test/test_helper.exs` and `test/letflow/engine/wasm/*_test.exs`'s existing
+  tags (`:keycloak`, `:wasm_hang`) and does not collide. Not checked against every `@tag`
+  in the full test suite (out of this design's read scope) — CODE-DESIGN-VALIDATOR or
   ELIXIR-DEV should `grep -rn "lua_wallclock_race" test/` once before landing to confirm
   no pre-existing use.

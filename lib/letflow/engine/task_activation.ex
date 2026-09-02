@@ -238,6 +238,20 @@ defmodule Letflow.Engine.TaskActivation do
   `Ecto.Multi.merge/2`'s own static duplicate-key check. `append_multi/6` is
   deliberately left on the fixed atom key: it has exactly one call site per
   `Multi`, so no collision is possible there.
+
+  Takes one further optional `key_disambiguator` argument (ISS-0396,
+  `lib/letflow/design/iss0396-task-records-multi-sibling-fix.md` §2),
+  defaulting to `nil`. When `nil` (the default, and the only value the two
+  pre-existing call sites — `Letflow.Engine.maybe_append_task_activation_multi/7`
+  and `Letflow.Engine.persist_timer_fired_advance/7` — ever pass), the
+  appended step's key is `{:task_records, instance_id}`, byte-identical to
+  the key shape before this argument existed. When non-`nil`, the key is
+  `{:task_records, instance_id, key_disambiguator}` instead — needed because
+  `instance_id` alone is not unique enough when this function is called once
+  per *sibling* SUB_PROCESS child of the same parent instance within one
+  `Multi` (`Letflow.Engine.SubProcess.build_completion_write_steps/12`,
+  which passes the completing sibling's own `parent_token.id` here for
+  exactly this reason).
   """
   @spec append_multi_from_existing_records(
           multi :: Ecto.Multi.t(),
@@ -245,7 +259,8 @@ defmodule Letflow.Engine.TaskActivation do
           graph :: Graph.t(),
           previous_pending_task_nodes :: [Token.t()],
           new_instance_state :: InstanceState.t(),
-          prefix :: String.t()
+          prefix :: String.t(),
+          key_disambiguator :: term() | nil
         ) :: Ecto.Multi.t()
   def append_multi_from_existing_records(
         %Multi{} = multi,
@@ -253,9 +268,16 @@ defmodule Letflow.Engine.TaskActivation do
         %Graph{} = graph,
         previous_pending_task_nodes,
         %InstanceState{} = new_instance_state,
-        prefix
+        prefix,
+        key_disambiguator \\ nil
       ) do
-    Multi.run(multi, {:task_records, instance_id}, fn repo, _changes ->
+    task_records_key =
+      case key_disambiguator do
+        nil -> {:task_records, instance_id}
+        disambiguator -> {:task_records, instance_id, disambiguator}
+      end
+
+    Multi.run(multi, task_records_key, fn repo, _changes ->
       newly_pending =
         newly_pending_tokens(previous_pending_task_nodes, new_instance_state.pending_task_nodes)
 

@@ -1,0 +1,65 @@
+{
+  "handoff_id": "WF03-ISS0396-20260902-step-04",
+  "run_id": "WF03-ISS0396-20260902",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0396-20260902/step-04-test-designer.json",
+  "created_at": "2026-09-02T05:35:00Z",
+  "started_at": "2026-09-02T05:15:00Z",
+  "completed_at": "2026-09-02T05:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-062"],
+    "issue_ids": ["ISS-0396"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0396-task-records-multi-sibling-fix.md",
+      "handoffs/WF03-ISS0396-20260902/step-03d-reviewer.json",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "artifacts_out": [
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "branch_name": "fix/ISS-0396-multi-task-records-2plus-20260902"
+  },
+  "task": {
+    "description": "Coverage-verification pass on ELIXIR-DEV's ISS-0396 regression test at test/letflow/engine_sub_process_test.exs:1264-1330 (graph_root_split_into_two_subprocesses/1 fixture): confirm the test is non-vacuous, confirm via mutation that it fails against the pre-fix code, confirm the two join_counters gap fixes have real distinguishing assertions, confirm test isolation, and fix any genuine gap found."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "1) READ the existing regression test in full (test/letflow/engine_sub_process_test.exs:1264-1330). It exercises 2 sibling SUB_PROCESS children (graph_root_split_into_two_subprocesses/1: START -> split(PARALLEL_GATEWAY) -> {sp1, sp2} -> join(PARALLEL_GATEWAY) -> end) both reached via Engine.create/2's own root activation path (design doc iss0396-task-records-multi-sibling-fix.md's own stated actually-reachable trigger, since ISS-0067's guard forecloses reaching this collision via a complete_task/3 hop chain instead). Both children use graph_child_immediate/0 (START->END, no HUMAN_TASK), so both complete synchronously inside Engine.create/2's own transaction.\n\n2) MUTATION TESTING -- 3 targeted mutations against the real shipped fix, each applied, run, observed to fail with real evidence, then reverted and confirmed clean via `git diff` (no residual diff):\n   a) Reverted the key_disambiguator argument at sub_process.ex:967-974's TaskActivation.append_multi_from_existing_records/7 call (dropped the trailing `parent_token.id` arg, falling back to the pre-fix nil default / fixed {:task_records, instance_id} key). Result: `mix test test/letflow/engine_sub_process_test.exs` -> 15/16 passed, 1 failure -- the ISS-0396 test itself raised `** (RuntimeError) cannot merge Multi; the following operations were found in both Ecto.Multi: [task_records: \"<parent_instance_id>\"]` at `Engine.create/2` (test line 1287), byte-for-byte the same collision the design doc and ELIXIR-DEV's iteration log describe pre-fix. This is direct, non-speculative proof the test fails against the pre-fix key shape and passes only with the fix.\n   b) Reverted load_parent_context/2's join_counters read (sub_process.ex:1133, hardcoded back to `%{}` instead of `SnapshotWriter.deserialize_join_counters(projection.join_counters)`). Result: 15/16 passed, 1 failure -- a DIFFERENT real error, `** (RuntimeError) cannot merge Multi; the following operations were found in both Ecto.Multi: [:execution_error_projection_lock]`, i.e. the join fails with an unknown-branch-id (empty join_counters map) and gets routed into the execution-error path, which itself then collides across siblings -- confirming this fix is load-bearing and distinctly diagnosable from mutation (a).\n   c) Reverted reconcile_parent_projection/5's join_counters write-back (sub_process.ex:1289-1295, dropped the `join_counters:` key from `attrs`). Result: 15/16 passed, 1 failure -- `assert parent_projection.status == :completed` failed with `left: :active, right: :completed`: sibling 2's own load_parent_context/2 re-read a stale, pre-sibling-1 join cohort (since sibling 1's cohort update never survived past its own Multi step), so the join never fired and the root instance is left waiting forever. This is a third, distinct failure signature confirming the write-back fix independently from (a) and (b).\n   All three mutations were reverted immediately after observation; `git diff lib/letflow/engine/sub_process.ex` is empty and `mix test test/letflow/engine_sub_process_test.exs` returns to a clean `Result: 16 passed` after each revert and after the final revert.\n\n3) COVERAGE GAP INVESTIGATION -- the existing test's own `all_tasks_for_instance(schema_name, created.instance_id) == []` assertion (line 1318) cannot, on its own, distinguish 'the fixed {:task_records, instance_id, parent_token.id} step ran for both siblings and inserted nothing' from 'the step silently ran for only one sibling and inserted nothing either way', because graph_child_immediate/0's root graph (join -> end directly) never produces a non-empty `final_instance_state.pending_task_nodes` for the ROOT instance at either sibling's own dispatch -- there is nothing for the step to insert regardless of whether it ran once or twice. I attempted to close this by writing a stronger variant (root graph: join -> HUMAN_TASK('after_join') -> end, so the SECOND sibling's own join-firing dispatch would produce a real pending-task entry, letting me assert on an actually-inserted row's existence/count/linkage). This surfaced a genuine, PRE-EXISTING, ISS-0396-UNRELATED defect: TaskActivation.append_multi_from_existing_records/7 (by its own docstring/naming) requires every newly-pending token to already be a persisted TokenRecord row, but Transition.dispatch_parallel_join/4 mints a synthetic, non-UUID token id (`\"<origin>/join/joined\"`, transition.ex:1211) for the freshly-joined branch that has NOT yet been persisted as a TokenRecord at the point this step runs -- `cast_token_record_id/1` (task_activation.ex:326-329) correctly rejects it with `{:error, {:invalid_token_record_id, \"<id>/join/joined\"}}`. This means 'a SUB_PROCESS-triggered parallel join that continues into further pending work' is not currently a supported code path at all, independent of ISS-0396's fix. This is out of ISS-0396's own stated scope (its design doc and the existing test both only require join -> END with no further work) and fixing it means changing application code (sub_process.ex/task_activation.ex/transition.ex), which is outside TEST-DESIGNER's mandate (test-only). I reverted this exploratory test and its helper graph cleanly -- `git diff --stat test/letflow/engine_sub_process_test.exs` is empty, confirmed via `git status --porcelain` showing a fully clean tree. Given the mutation evidence in (2) already independently and distinctly proves each of the three fixes (key disambiguation, join_counters read, join_counters write-back) is load-bearing and causes a real, differently-shaped failure when reverted, I judge the existing test's coverage of ISS-0396's own acceptance criteria to be adequate as shipped; the join-then-further-work gap is a separate, deeper finding for ORCH to route (new issue), not a defect in this test's coverage of ISS-0396.\n\n4) TEST ISOLATION: confirmed test uses `provisioned_tenant()` (fresh schema per test, per test_developer_guide.md's own DataCase pattern), `active_definition!/2` scoped to that schema_name, `start_attrs/2`'s own `unique_idempotency_key(\"start\")` helper for idempotency-key uniqueness, and `Ecto.UUID.generate()` for actor_id -- no shared mutable state, no wall-clock/unseeded-randomness dependency (DateTime.utc_now() only used for completed_at bookkeeping, never asserted against a fixed value).\n\n5) FINAL VERIFICATION: `mix test test/letflow/engine_sub_process_test.exs` -> `Result: 16 passed`, 0 failures, on the branch exactly as ELIXIR-DEV/REVIEWER left it. No test-code changes were committed (net diff is empty after the revert) since the existing coverage, once verified by mutation, was found adequate for ISS-0396's own scope; a genuine but out-of-scope defect was discovered and is reported below for ORCH rather than silently absorbed into this test.",
+    "routing": "Route to Step 4b TEST-DESIGN-VALIDATOR for the coverage hard-gate re-check. No test-code changes to review beyond what REVIEWER already passed at Step 3d -- this step's contribution is the mutation-testing evidence in this handoff's summary (3 distinct, independently-reverted mutations, each producing a different real failure signature) as additional proof the existing test genuinely exercises all three fixes (key disambiguation, load_parent_context/2 join_counters read, reconcile_parent_projection/5 join_counters write-back), not just 'no crash'. FOR ORCH (non-blocking, flagged not filed, new finding from this step): a genuine, ISS-0396-unrelated gap exists in TaskActivation.append_multi_from_existing_records/7 (task_activation.ex) -- it assumes every newly-pending token is already a persisted TokenRecord, but Transition.dispatch_parallel_join/4 (transition.ex:1211) mints a synthetic non-UUID token id for a freshly-joined branch that is not yet persisted when this step runs, so 'a SUB_PROCESS-completion-triggered parallel join that continues into further pending work (e.g. another HUMAN_TASK)' currently fails with {:error, {:invalid_token_record_id, ...}} rather than succeeding. Reproduced directly: root graph START->split->{sp1,sp2}->join->HUMAN_TASK->end, both children graph_child_immediate/0, via Engine.create/2 -- fails deterministically. This predates ISS-0396 (the collision fix's own design doc and test both only exercise join->END) and needs its own root-cause trace/design before being filed; I deliberately did not self-assign a docs/issues/ id per the 2026-08-21 ISSUE_QUEUE.md protocol change requiring id allocation via ORCH calling letflow-queue's register_task."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-02T02:35:00Z",
+      "notes": "All 7 checks pass; independently resolved OQ-2 as moot via transition.ex's find_matching_join/dispatch_parallel_split guard. No rework required."
+    },
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T04:35:00Z",
+      "notes": "INV-1/4/6/7/8 applicable and satisfied; INV-2/3/5/9 not applicable. Independently re-ran 131 tests (0 failures) and re-derived the core fix, both join_counters extensions, and the persist/8 reordering against the actual shipped ISS-0397 diff and the real engine.ex code, not just ELIXIR-DEV's narrative. No BLOCKER found."
+    },
+    {
+      "gate": "REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:20:00Z",
+      "notes": "Idiom, supervision (N/A), scope, and decision-record checks all clear. Independent sign-off on persist/8's :event reordering given after reading the real old/new Multi-step order and every downstream reader of `changes` myself. Targeted re-run of the 3 specified test files: 62 passed, 0 failed. One non-blocking type-safety observation and one unrelated pre-existing audit-staleness question flagged for ORCH, not self-filed as an issue per the ISSUE_QUEUE.md id-allocation protocol."
+    },
+    {
+      "gate": "TEST-DESIGNER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:35:00Z",
+      "notes": "Confirmed existing regression test non-vacuous via 3 independent, reverted mutations, each producing a distinct real failure signature. Confirmed isolation and no wall-clock/unseeded-randomness dependency. Discovered and reported (non-blocking, not self-filed) a genuine but ISS-0396-unrelated defect in the join-then-further-work path while probing for a stronger persistence assertion; reverted the exploratory test cleanly rather than merging a test that fails for reasons outside this issue's scope. mix test test/letflow/engine_sub_process_test.exs: 16 passed, 0 failures, tree clean."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0396-20260902-step-02",
+  "run_id": "WF03-ISS0396-20260902",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0396-20260902/step-02-code-designer.json",
+  "created_at": "2026-09-02T02:25:08Z",
+  "started_at": "2026-09-02T02:15:00Z",
+  "completed_at": "2026-09-02T02:25:08Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-062"],
+    "issue_ids": ["ISS-0396"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0396-20260902/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/design/iss0392-multi-task-records-collision-fix.md",
+      "test/letflow/engine_sub_process_test.exs"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0396-task-records-multi-sibling-fix.md"
+    ],
+    "branch_name": "fix/ISS-0396-multi-task-records-2plus-20260902"
+  },
+  "task": {
+    "description": "Design a fix for ISS-0396 (Ecto.Multi {:task_records, instance_id} collision when 2+ sibling SUB_PROCESS children complete synchronously in the same transaction) per the Step-1 diagnosis, re-verifying every claim (key disambiguator uniqueness, read-your-own-writes correctness across siblings, no other reader of the old key shape, exact reachable repro path) directly against the current source rather than trusting the diagnosis's line numbers or framing."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Wrote lib/letflow/design/iss0396-task-records-multi-sibling-fix.md. Confirmed the collision mechanism exactly as diagnosed (TaskActivation.append_multi_from_existing_records/6's Multi.run key at task_activation.ex:258, keyed only {:task_records, instance_id}, called once per synchronously-completing SUB_PROCESS child from build_completion_write_steps/12, sub_process.ex:966-972). CORRECTED the diagnosis's call-site framing: re-derived from resolve_parent_token_record_id/2 (engine.ex:2368-2380) and the already-merged ISS-0067 guard/test that the complete_task/3 hop-chain path (append_sub_process_children_creation_multi/6, engine.ex:2525-2545) cannot currently produce 2+ prepared_children entries at all (a same-hop-chain PARALLEL_GATEWAY split's derived branch token_ids are rejected by ISS-0067's own membership check, proven by engine_sub_process_test.exs's existing ISS-0067 test). The genuinely reachable trigger, confirmed by reading Engine.create/2's root-activation path (prepare_sub_process_children/5, engine.ex:572-605, and persist/8 -> build_sub_process_children_multi/6, engine.ex:1085-1109, which has NO such membership guard), is a definition whose graph splits into 2+ SUB_PROCESS nodes directly off a PARALLEL_GATEWAY at/near the graph root. Both call sites funnel into the same build_completion_write_steps/12, so the fix covers both regardless.\n\nFix design: TaskActivation.append_multi_from_existing_records/6 gains an optional last parameter key_disambiguator (default nil, so the two existing call sites -- engine.ex:2674 maybe_append_task_activation_multi/7, and engine.ex:2009 persist_timer_fired_advance/7 -- keep compiling unchanged and keep the exact 2-tuple {:task_records, instance_id} key). Only build_completion_write_steps/12's one call site (sub_process.ex:966-972) is changed, passing parent_token.id (already in scope, already used for this same function's other 4 sibling-safe keys at sub_process.ex:960-963) as the disambiguator, producing {:task_records, instance_id, parent_token.id} for that call only.\n\nUniqueness re-derived: parent_token.id resolves 1:1 to parent_token_record_id (via update_parent_token_waiting/5's repo.get/repo.update round-trip, sub_process.ex:662-682), which in turn is a distinct token_id per {:sub_process_start, token_id, node_id} pending event -- distinct split branches mint distinct token ids by construction (Transition.dispatch_parallel_split/4) -- so siblings in one reduce always get pairwise-distinct parent_token.id values (TokenRecord ids are UUID PKs). Tuple-arity safety confirmed: a 2-tuple key can never == a 3-tuple key under Erlang term equality, so no collision is possible between the two unmodified call sites and the new disambiguated one, nor between a deeper cascade level's own key (maybe_cascade_to_grandparent/6 uses a distinct grandparent_token and distinct instance_id).\n\nCorrectness re-derived: load_parent_context/2 (sub_process.ex:1070-1111) issues fresh Repo reads at call time, inside the same open transaction/connection as every prior sibling's already-applied writes (Multi.merge callbacks execute in insertion order) -- Postgres read-your-own-writes visibility means sibling N's seed_state already reflects sibling N-1's inserts, so each sibling's own newly_pending diff is genuinely disjoint. Disambiguating the KEY changes only the internal Multi changes-map label for a step's result, not execution order or what a step's callback reads/writes -- purely additive, no regression risk to this property.\n\nOther readers: grepped ':task_records' across lib/ and test/ -- confirmed exactly two production call sites of the key (the fixed-atom append_multi/6 at task_activation.ex:176, untouched, different namespace entirely; and append_multi_from_existing_records/6 at task_activation.ex:258, the one this fix touches). No downstream Multi step (reconciliation_key/event_key/projection_key/cascade_lookup_key in build_completion_write_steps/12) reads the :task_records step's own result from changes. Nothing else needs updating.\n\nTest design specified (not implemented): a new describe block in test/letflow/engine_sub_process_test.exs exercising Engine.create/2 directly (not complete_task/3, since that path is confirmed unreachable today per the correction above) with a new graph_root_split_into_two_subprocesses/1 fixture: START -> PARALLEL_GATEWAY(split) -> {SUB_PROCESS(sp1), SUB_PROCESS(sp2)} -> PARALLEL_GATEWAY(join) -> END, both sp1/sp2 pointing at the existing graph_child_immediate/0 (START->END, synchronous) child definition. Asserts: no raise (pre-fix would raise 'cannot merge Multi'), parent InstanceProjection reaches :completed within Engine.create/2 alone, 2 child_projections created (proves neither sibling was silently skipped -- rules out a 'first sibling wins' style non-fix), 2 SUB_PROCESS_COMPLETED events, zero orphan/duplicate task rows on the root instance (this graph has no HUMAN_TASK node), and secondarily cross-checks ISS-0397's join_counters column reflects both branches joining (same shared instance_projections row, different write path, exercised incidentally not by design coupling).\n\nOpen questions flagged, not silently resolved: OQ-1, a future relaxation of ISS-0067's guard could make complete_task/3 reach this same collision -- already covered by this fix's design (same build_completion_write_steps/12 chain), no action needed now, flagged only for future traceability. OQ-2, an unbalanced/join-less split where 2 siblings might BOTH independently reach :completed and BOTH call maybe_cascade_to_grandparent/6 for the same grandparent token (a deeper, nested variant of this same collision class, one level up) -- not reachable in this design's own root-level test (no grandparent to cascade to), and possibly already foreclosed by REQ-051's own block-structured split/join validation (referenced in the existing ISS-0067 test's own comment) -- left for CODE-DESIGN-VALIDATOR or a follow-up issue to confirm, not assumed safe here.\n\nNo implementation code in the design doc -- verified via grep for defmodule/def/defp/'do$' patterns, none found; only prose and one @spec block.",
+    "routing": "Route to Step 2b CODE-DESIGN-VALIDATOR to gate lib/letflow/design/iss0396-task-records-multi-sibling-fix.md before ELIXIR-DEV/TEST-DESIGNER proceed. Pay particular attention to: (1) the §1 correction of the Step-1 diagnosis's reachable-call-site framing -- confirm independently rather than taking this design's word for it; (2) OQ-2's unresolved nested-cascade question; (3) whether the optional-parameter backward-compatibility approach (default nil, only one call site changed) is an acceptable 'in scope' backward-compatible shape per the original task brief's item 3, versus requiring an explicit follow-up issue for the two untouched call sites."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": []
+}

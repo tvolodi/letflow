@@ -4055,6 +4055,20 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- diagnosis found nothing to convert, no_defect, queue task 433 released done",
       "note": "WF-03 issue-resolving run for ISS-0433: replace per-tick Application.get_env reads in Scheduler.Poller with :persistent_term, populated once at boot. Small, measurement-justified change per ISS-0432 profiling."
+    },
+    {
+      "run_id": "WF03-ISS0431-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0431",
+      "queue_task_id": 431,
+      "github_issue_number": 835,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T20:40:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
+      "note": "WF-03 issue-resolving run for ISS-0431: no admission control/backpressure anywhere in Letflow. Explicitly a design decision (503+Retry-After shape, global vs per-tenant cap, library vs hand-rolled semaphore) per the issue own TO DECIDE section, not a mechanical fix."
     }
   ]
 }

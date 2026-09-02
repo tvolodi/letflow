@@ -747,8 +747,37 @@ defmodule Letflow.ServiceCatalogTest do
   # ---------------------------------------------------------------------------------
 
   describe "REQ-192 list_all/1 pagination correctness" do
+    # ISS-0409: `service_catalog` is a real, globally-committed table (see
+    # moduledoc) -- unlike every other DataCase fixture in this suite, its rows
+    # are never rolled back by a sandboxed transaction and are never dropped by
+    # a tenant-schema `DROP SCHEMA ... CASCADE`. This describe block's
+    # assertions are exact counts/splits (`length(page1) == 2`, `cursor2 ==
+    # nil`), which silently assumed the table held *only* the rows this test
+    # itself was about to create. That assumption broke intermittently in the
+    # full suite: a stray global-scope row left behind by an interrupted prior
+    # `mix test` run (real commits survive a `Ctrl-C` since `on_exit/1` never
+    # fires) is enough to shift `list_all/1`'s page split and fail
+    # `length(page2) == 1` / `cursor2 == nil` -- while the same test always
+    # passed in isolation, where no such stray row happened to be sitting in
+    # the database at that moment. This file and `admin_services_test.exs` are
+    # the only two places that ever write real rows to this table, and both
+    # already discipline themselves to delete every row they create -- so the
+    # fix is this describe block asserting its own precondition (an empty
+    # table) rather than assuming it, per `test_developer_guide.md` §1's "No
+    # test pollution" / "doesn't depend on execution order" directive. Each
+    # test below also cleans up its own created entries via `on_exit/1`
+    # (this file's own established discipline, see `cleanup_entry!/1`) so this
+    # describe block cannot become the NEXT run's source of stray rows --
+    # the `setup`-time wipe alone only guards against rows already left by a
+    # crashed prior run; it does not stop these tests from leaving new ones.
+    setup do
+      Repo.delete_all(Entry)
+      :ok
+    end
+
     test "next_cursor is non-nil while more rows remain, and nil on the final page" do
       entries = for _ <- 1..3, do: register!(%{scope: :global})
+      on_exit(fn -> Enum.each(entries, &cleanup_entry!(&1.service_id)) end)
       expected_ids = entries |> Enum.map(& &1.service_id) |> Enum.sort()
 
       assert {:ok, %{items: page1, next_cursor: cursor1}} =
@@ -769,6 +798,7 @@ defmodule Letflow.ServiceCatalogTest do
 
     test "next_cursor is nil on the first page when the full result set fits within page_size" do
       entry = register!(%{scope: :global})
+      on_exit(fn -> cleanup_entry!(entry.service_id) end)
 
       assert {:ok, %{items: items, next_cursor: nil}} = ServiceCatalog.list_all(%{page_size: 200})
       assert entry.service_id in Enum.map(items, & &1.service_id)

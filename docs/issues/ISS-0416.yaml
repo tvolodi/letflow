@@ -1,0 +1,42 @@
+id: ISS-0416
+title: "ServiceCatalogTest AC7 narrow-scope test intermittently fails with undefined_table on another tenant's process_definitions when run repeatedly"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0409-20260902
+discovered_at: "2026-09-02T12:15:00Z"
+severity: MINOR
+tags: [test-hygiene, postgres, tenant-provisioning, service-catalog]
+description: >
+  Discovered by ORCH while verifying ISS-0409's fix, running
+  test/letflow/service_catalog_test.exs alone multiple times in quick
+  succession. AC7 describe block's test at line 460 ("narrowing global
+  -> tenant is refused, naming the conflicting tenant, when another
+  tenant's ACTIVE definition references it") intermittently failed
+  with Postgrex.Error 42P01 undefined_table on a dynamically-provisioned
+  tenant schema's process_definitions table.
+
+  Root-caused as LIKELY (not confirmed) cross-process DB contention: the
+  same run also logged TenantSchemaReaper.sweep_orphans/2 deferring its
+  sweep because another mix test invocation was concurrently connected
+  to the same database (a second ORCH-dispatched agent was independently
+  running its own full-suite mix test against the shared Postgres
+  instance at the same time). Once that concurrent process was killed,
+  repeated runs of the same file passed cleanly every time.
+
+  This is a real but different concern from a genuine per-test isolation
+  bug: needs someone to reproduce this test's failure WITHOUT any
+  concurrent mix test invocation before concluding whether AC7 itself
+  has a genuine isolation bug (in the ISS-0048/0050/0060 recurrence
+  class) or whether this occurrence was purely cross-process contention.
+affected_files:
+  - test/letflow/service_catalog_test.exs
+related:
+  - ISS-0409
+  - ISS-0060
+  - ISS-0048
+  - ISS-0050
+source: >
+  ORCH's own verification runs during WF03-ISS0409-20260902 (seed-varied
+  repeated mix test invocations of service_catalog_test.exs).
+queue_task_id: 416
+github_issue: 813
+status: open

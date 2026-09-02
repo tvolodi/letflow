@@ -45,4 +45,118 @@ source: >
   (independent confirmation of out-of-scope characterization).
 queue_task_id: 396
 github_issue: 776
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0396-20260902
+resolved_at: "2026-09-02T06:05:00Z"
+resolution: >
+  Fixed by disambiguating the Ecto.Multi key TaskActivation.append_multi_from_existing_records/6
+  (now /7) uses when appending its {:task_records, instance_id} step.
+  lib/letflow/design/iss0396-task-records-multi-sibling-fix.md re-derived the
+  actually-reachable trigger: not a complete_task/3 hop chain (ISS-0067's own
+  membership guard already forecloses that path), but Engine.create/2's own
+  root-activation path, when a definition's graph splits into 2+ SUB_PROCESS
+  nodes directly off a PARALLEL_GATEWAY at/near the graph root and 2+ of
+  those siblings have synchronously-completing (START->END) child graphs.
+  Each sibling's own completion cascade (SubProcess.build_completion_write_steps/12)
+  independently appended {:task_records, parent_instance_id} onto the same
+  accumulating Multi, since all siblings share one parent instance_id --
+  Ecto.Multi.merge/2 raised "cannot merge Multi" on the second sibling.
+
+  append_multi_from_existing_records/6 gained an optional, defaulted
+  key_disambiguator parameter (nil for its two pre-existing call sites,
+  Engine.maybe_append_task_activation_multi/7 and
+  Engine.persist_timer_fired_advance/7 -- both keep the byte-identical
+  {:task_records, instance_id} key). SubProcess.build_completion_write_steps/12's
+  one call site now passes parent_token.id as the disambiguator, producing
+  {:task_records, instance_id, parent_token.id} -- distinct per sibling by
+  construction (each fork branch mints a distinct TokenRecord UUID), and
+  never colliding with the unmodified 2-tuple key shape (different tuple
+  arity) or with a deeper cascade level's own distinct-instance_id key.
+
+  Three additional in-family, pre-existing defects were found and fixed
+  while making the design's own regression test
+  (test/letflow/engine_sub_process_test.exs:1264-1330,
+  "ISS-0396 -- 2+ sibling SUB_PROCESS children no longer collide on
+  {:task_records, instance_id}") pass for real, all outside the design
+  doc's own stated file-touch list but confirmed genuinely necessary by
+  3 independent reviewers (SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER via
+  mutation) tracing what fails without each:
+    1. SubProcess.load_parent_context/2 hardcoded join_counters: %{} in its
+       seed InstanceState instead of
+       SnapshotWriter.deserialize_join_counters(projection.join_counters)
+       -- ISS-0397 fixed this exact defect in Engine.build_instance_state/3
+       but missed this sibling copy in SubProcess's own
+       sub-process-completion-cascade seed-state builder. Without it, the
+       first sibling to reach a PARALLEL_GATEWAY join fails
+       {:unknown_branch_id, ...} before any collision is even reached.
+    2. SubProcess.reconcile_parent_projection/5 never wrote join_counters
+       back to the instance_projections row at all -- ISS-0397 fixed the
+       sibling write path, Engine.reconcile_projection/5, but again missed
+       this copy. Without it, sibling 1's updated join cohort never
+       survives past its own Multi step, so sibling 2's later
+       load_parent_context/2 read is stale and the join never fires (root
+       instance stuck :active forever).
+    3. Engine.persist/8's :event Multi step (the root instance's own
+       INSTANCE_STARTED append) was positioned AFTER the
+       build_sub_process_children_multi/6 merge. When 2+ synchronous
+       siblings advance the root instance to :completed within the same
+       create/2 transaction (via reconcile_parent_projection/5's direct,
+       ungated status write), that flip happened before INSTANCE_STARTED
+       was appended, so EventStore.append/2's active_instance_guard
+       rejected it as {:instance_terminated, :completed}. Fixed by moving
+       the :event step to run immediately after :instance_projection (M1)
+       and before :token_record/the children merge -- confirmed by all
+       three reviewers that no other Multi step reads changes.event, so
+       the reorder has zero blast radius on every pre-existing
+       Engine.create/2 call shape.
+
+  Verified genuinely fixed, not just claimed, re-confirmed independently
+  during this close step: test/letflow/engine_sub_process_test.exs:1264-1330
+  asserts {:ok, created} (no raise -- the pre-fix repro), parent_projection
+  reaches :completed, exactly 2 child_projections (proves neither sibling
+  was silently skipped -- rules out a "first sibling wins" non-fix), 2
+  SUB_PROCESS_COMPLETED events, zero orphaned task rows, and
+  parent_projection.join_counters == %{} (join fired and cleared). All four
+  fixes (key disambiguation + 2 join_counters gaps + persist/8 reordering)
+  read directly in the shipped diff and confirmed present:
+  lib/letflow/engine/task_activation.ex (key_disambiguator param, spec, doc),
+  lib/letflow/engine/sub_process.ex (parent_token.id passed at the one call
+  site; SnapshotWriter.deserialize_join_counters/serialize_join_counters
+  calls in load_parent_context/2 and reconcile_parent_projection/5), and
+  lib/letflow/engine.ex's persist/8 (:event step moved ahead of
+  :token_record/the children merge). TEST-DESIGNER's 3 independent,
+  reverted mutations (dropping the disambiguator arg; reverting the
+  join_counters read; reverting the join_counters write-back) each produced
+  a distinct real failure signature, confirming all three fixes are
+  load-bearing. Full suite: 3052/3054 passed (10 excluded); the 2 failures
+  are the pre-existing rustc-ENOENT toolchain tests
+  (test/mix/tasks/letflow_check_toolchain_test.exs, REQ-165), confirmed
+  absent from this branch's diff and unrelated.
+
+  Two non-blocking findings surfaced along the way, not yet filed as their
+  own issues -- left for ORCH to register at this run's Step Final rather
+  than self-filed here, per the ISSUE_QUEUE.md id-allocation protocol:
+    - REVIEWER flagged task_activation.ex's new
+      key_disambiguator :: term() | nil @spec as looser than it needs to be
+      -- every real caller passes either nil or a TokenRecord.id
+      (Ecto.UUID.t()/binary); a tighter
+      key_disambiguator :: Ecto.UUID.t() | nil spec would catch a
+      wrong-shaped disambiguator at typecheck time instead of silently
+      producing a working-but-meaningless key.
+    - TEST-DESIGNER found, while probing for a stronger persistence
+      assertion, a genuine pre-existing defect distinct from ISS-0396:
+      TaskActivation.append_multi_from_existing_records/7 requires every
+      newly-pending token to already be a persisted TokenRecord row, but
+      Transition.dispatch_parallel_join/4's fire_join/5 (transition.ex:1211)
+      mints a synthetic, non-UUID token id for a freshly-joined branch that
+      is not yet persisted at the point this step runs --
+      cast_token_record_id/1 correctly rejects it with
+      {:error, {:invalid_token_record_id, ...}}. This means a
+      SUB_PROCESS-completion-triggered PARALLEL_GATEWAY join that continues
+      into further pending work (e.g. another HUMAN_TASK) is not currently
+      a supported code path at all -- only join->END works today. Both
+      findings independently re-confirmed accurate during this close step
+      (spec read at task_activation.ex; reproduction logic re-traced against
+      transition.ex:1196-1218 and task_activation.ex:300-331) and confirmed,
+      via grep across docs/issues/, not already covered by any existing
+      filed issue.

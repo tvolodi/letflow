@@ -1,0 +1,95 @@
+{
+  "handoff_id": "WF03-ISS0396-20260902-step-06",
+  "run_id": "WF03-ISS0396-20260902",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0396-20260902/step-06-issue-fixer-close.json",
+  "created_at": "2026-09-02T06:12:00Z",
+  "started_at": "2026-09-02T06:00:00Z",
+  "completed_at": "2026-09-02T06:12:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-062"],
+    "issue_ids": ["ISS-0396", "ISS-0392", "ISS-0397"],
+    "artifacts_in": [
+      "docs/issues/ISS-0396.yaml",
+      "handoffs/WF03-ISS0396-20260902/step-00-git-setup.json",
+      "handoffs/WF03-ISS0396-20260902/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0396-20260902/step-02-code-designer.json",
+      "handoffs/WF03-ISS0396-20260902/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0396-20260902/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0396-20260902/step-03c-security-reviewer.json",
+      "handoffs/WF03-ISS0396-20260902/step-03d-reviewer.json",
+      "handoffs/WF03-ISS0396-20260902/step-04-test-designer.json",
+      "handoffs/WF03-ISS0396-20260902/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0396-20260902/step-05-test-runner.json",
+      "test/letflow/engine_sub_process_test.exs",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/engine/sub_process.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "artifacts_out": [
+      "docs/issues/ISS-0396.yaml"
+    ],
+    "branch_name": "fix/ISS-0396-multi-task-records-2plus-20260902"
+  },
+  "task": {
+    "description": "WF-03 Step 6 close step for ISS-0396: read the full step-00..step-05 handoff chain, independently confirm the shipped fix genuinely resolves the original symptom and that all in-family extensions are genuinely shipped, confirm two non-blocking findings raised mid-run are accurately described and not already covered by an existing filed issue, and flip docs/issues/ISS-0396.yaml to status: resolved with a resolution record."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Read the full step-00 through step-05 handoff chain plus docs/issues/ISS-0396.yaml, then independently re-verified against the real code and tests rather than trusting the write-ups.\n\n1) ORIGINAL SYMPTOM vs. SHIPPED FIX: confirmed by direct read of test/letflow/engine_sub_process_test.exs:1264-1330 ('ISS-0396 -- 2+ sibling SUB_PROCESS children no longer collide on {:task_records, instance_id}'). It exercises exactly the issue's own stated repro target (a hop chain with a PARALLEL_GATEWAY spawning 2+ SUB_PROCESS children, 2+ with synchronous START->END child graphs, completing in the same transaction) via Engine.create/2's root-activation path (the design doc's own correction: complete_task/3's hop-chain path is foreclosed by ISS-0067's existing guard). Assertions confirmed present and non-trivial: {:ok, created} (no 'cannot merge Multi' raise), parent_projection.status == :completed, length(children) == 2 (rules out a 'first sibling wins/skip' non-fix), 2 SUB_PROCESS_COMPLETED events, all_tasks_for_instance == [] (no orphan/duplicate rows), parent_projection.join_counters == %{} (join fired and cleared, ISS-0397 cross-check). This genuinely exercises and resolves the symptom described in ISS-0396.yaml's description field.\n\n2) ALL FOUR IN-FAMILY EXTENSIONS CONFIRMED GENUINELY SHIPPED, read directly in the current working tree (not from narrative alone):\n   - lib/letflow/engine/task_activation.ex: append_multi_from_existing_records/6 (now 7-arity) has `key_disambiguator \\\\ nil` param, @spec `key_disambiguator :: term() | nil`, and doc explaining the {:task_records, instance_id, key_disambiguator} 3-tuple shape when non-nil vs. the byte-identical 2-tuple for the two pre-existing call sites.\n   - lib/letflow/engine/sub_process.ex build_completion_write_steps/12: passes `parent_token.id` as the disambiguator at its one call site (confirmed at the call-site grep, sub_process.ex line ~973).\n   - lib/letflow/engine/sub_process.ex load_parent_context/2: `join_counters: SnapshotWriter.deserialize_join_counters(projection.join_counters)` present in the seed_state map (was hardcoded %{} pre-fix), with an inline comment documenting the ISS-0397 sibling-miss.\n   - lib/letflow/engine/sub_process.ex reconcile_parent_projection/5: `attrs` map includes `join_counters: SnapshotWriter.serialize_join_counters(final_instance_state.join_counters)` (was absent pre-fix).\n   - lib/letflow/engine.ex persist/8: `:instance_projection` (M1) Multi.run step's inline comment confirms the `:event` step now runs immediately after M1, ahead of `:token_record`/the children merge -- matches all three reviewers' (SECURITY-REVIEWER, REVIEWER independently, TEST-RUNNER's diff-scope check) description of the reorder.\n   Total: 4 extensions (key_disambiguator, load_parent_context join_counters read, reconcile_parent_projection join_counters write, persist/8 reordering), all confirmed present in the real diff, matching the task brief's count.\n\n3) TWO NON-BLOCKING FINDINGS -- confirmed accurately described and NOT already covered by any existing filed issue (grepped docs/issues/*.yaml for key_disambiguator, Ecto.UUID.t(), invalid_token_record_id, dispatch_parallel_join, join-then-further-work-shaped terms -- zero matches; also scanned titles of all docs/issues/*.yaml, including the most recent ISS-0399 through ISS-0403, none overlap):\n   (a) REVIEWER's type-safety finding (step-03d): task_activation.ex's `key_disambiguator :: term() | nil` @spec is looser than the one real shape every caller passes (nil, or a TokenRecord.id / Ecto.UUID.t()). Re-read the actual @spec in the current file -- confirmed still `term() | nil`, finding is accurate and still live.\n   (b) TEST-DESIGNER's pre-existing-defect finding (step-04): TaskActivation.append_multi_from_existing_records/7 requires every newly-pending token to already be a persisted TokenRecord row, but Transition.dispatch_parallel_join/4's fire_join/5 (transition.ex:1211) mints a synthetic non-UUID token id for a freshly-joined branch not yet persisted at the point this step runs, so cast_token_record_id/1 rejects it -- meaning a SUB_PROCESS-completion-triggered PARALLEL_GATEWAY join that continues into further pending work (e.g. another HUMAN_TASK) is not currently supported; only join->END works today. Confirmed this is out of ISS-0396's own stated scope (the design doc and shipped test both only cover join->END) and is a genuinely distinct, deeper defect, not a coverage gap in this run's own test.\n   Both findings are ready for ORCH to register as new queued issues at Step Final (queue_task_id allocation via letflow-queue's register_task, per the 2026-08-21 ISSUE_QUEUE.md protocol) -- deliberately not self-filed by any prior agent in this chain, and not self-filed here either, consistent with that protocol.\n\n4) docs/issues/ISS-0396.yaml updated: status flipped to resolved, with resolved_in_run: WF03-ISS0396-20260902, resolved_at: 2026-09-02T06:05:00Z, and a resolution: field summarizing the core fix, all three in-family bugfixes, verification evidence, and both non-blocking findings -- same convention as ISS-0397's and ISS-0398's own resolution records (multi-paragraph narrative citing real file/line evidence, explicit note on what remains open for a future session).\n\nAll gates 00 through 05 in the chain show PASS with no rework at any step (rework_count: 0 throughout, max_rework: 3). No blocking issues found during this close-step re-verification.",
+    "routing": "Route to Step Final ORCH. Recommend: (1) merge fix/ISS-0396-multi-task-records-2plus-20260902 to main -- all gates green, full suite 3052/3054 (10 excluded, 2 pre-existing unrelated rustc-ENOENT failures), docs/issues/ISS-0396.yaml now resolved; (2) release queue_task_id 396 as done; (3) register two NEW queued issues at Step Final per the ISSUE_QUEUE.md id-allocation protocol (neither is filed yet, both independently re-confirmed accurate and non-duplicate by this close step): (a) MINOR/type-safety -- task_activation.ex's `key_disambiguator :: term() | nil` @spec should be tightened to `Ecto.UUID.t() | nil` since every real caller passes only nil or a TokenRecord.id; (b) a genuine pre-existing defect (severity ORCH's call, likely MINOR-to-MODERATE) -- TaskActivation.append_multi_from_existing_records/7 rejects the synthetic non-UUID token ids Transition.dispatch_parallel_join/4's fire_join/5 mints for a freshly-joined branch not yet persisted as a TokenRecord, so any SUB_PROCESS-completion-triggered PARALLEL_GATEWAY join that continues into further pending work (e.g. another HUMAN_TASK) currently fails with {:error, {:invalid_token_record_id, ...}} -- only join->END is supported today. Both findings and their affected_files/related fields are laid out in this handoff's result.summary point 3 for ORCH to transcribe into new docs/issues/ISS-XXXX.yaml entries."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-02T02:35:00Z",
+      "notes": "All 7 checks pass; independently resolved OQ-2 as moot via transition.ex's find_matching_join/dispatch_parallel_split guard. No rework required."
+    },
+    {
+      "gate": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T04:35:00Z",
+      "notes": "INV-1/4/6/7/8 applicable and satisfied; INV-2/3/5/9 not applicable. Independently re-ran 131 tests (0 failures) and re-derived the core fix, both join_counters extensions, and the persist/8 reordering against the actual shipped ISS-0397 diff and the real engine.ex code, not just ELIXIR-DEV's narrative. No BLOCKER found."
+    },
+    {
+      "gate": "REVIEWER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:20:00Z",
+      "notes": "Independent sign-off on persist/8's :event reordering (agree it is the right fix, own trace of every changes-reader confirms zero blast radius elsewhere). Idiom/scope checks pass; all 3 extensions confirmed genuinely necessary by tracing failure-without-fix. Full suite re-run: 3052/3054 passed, 2 pre-existing environmental failures. One type-safety observation filed as an issue, non-blocking."
+    },
+    {
+      "gate": "TEST-DESIGNER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:35:00Z",
+      "notes": "Confirmed existing regression test non-vacuous via 3 independent, reverted mutations, each producing a distinct real failure signature. Discovered and reported (non-blocking, not self-filed) a genuine but ISS-0396-unrelated defect in the join-then-further-work path. mix test test/letflow/engine_sub_process_test.exs: 16 passed, 0 failures, tree clean."
+    },
+    {
+      "gate": "TEST-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:30:04Z",
+      "notes": "Independently reproduced mutation (a) myself, real RuntimeError, 15/16 passed; reverted, confirmed clean. Independently verified the flagged join-continuation defect by reading transition.ex and task_activation.ex directly. No coverage gap found. Final run: 16 passed, 0 failures, tree clean."
+    },
+    {
+      "gate": "TEST-RUNNER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T05:59:14Z",
+      "notes": "mix compile --warnings-as-errors: exit 0. mix test test/letflow/engine_sub_process_test.exs: 16 passed. mix letflow.check.test full suite: 3052/3054 passed, 10 excluded, 2 pre-existing rustc-ENOENT toolchain failures confirmed absent from this branch's diff. No new failures."
+    },
+    {
+      "gate": "ISSUE-FIXER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T06:12:00Z",
+      "notes": "Independent close-step re-verification: spot-checked the real regression test and assertions, confirmed all 4 in-family extensions present in the current working tree by direct code read, confirmed both non-blocking findings accurate and non-duplicate via grep across docs/issues/*.yaml. docs/issues/ISS-0396.yaml flipped to resolved with full resolution record. No blocking issues found."
+    }
+  ]
+}

@@ -1478,8 +1478,16 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 13
+    entries: 14
     note: >
+      Incremented to 14 by ORCH's WF03-ISS0411-20260902 done-event append
+      (SCOPE-CHANGE) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 14 on-disk entries, no roll
+      triggered (697 lines / well under the 1200-line/120000-byte ceiling).
+      This increment was itself missed in the entry's own commit (PR #823)
+      and caught by CI's A9 invariant test, corrected here in a follow-up
+      commit on the same branch before merge.
+
       Incremented to 13 by ORCH's WF03-ISS0419-20260902 done-event append
       (SCOPE-CHANGE) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 13 on-disk entries, no roll

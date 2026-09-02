@@ -106,3 +106,18 @@ resolution: >
   follow-on requirement if REQ-051's {:cancel_branch, _} coverage is ever
   prioritized -- flagging here for a future session rather than resolving it
   unilaterally.
+false_alarm_note: >
+  2026-09-02 (ORCH): briefly, incorrectly reopened this issue (queue task
+  397 set back to open, GH#778 reopened with a comment) while diagnosing
+  ISS-0402, after finding lib/letflow/engine.ex:1824 still hardcoding
+  join_counters: %{} on a LOCAL CHECKOUT THAT WAS STALE -- a sibling
+  session's real fix (WF03-ISS0397-20260901, this file's own `resolution`
+  field above) had already merged to origin/main but not yet been pulled
+  into this working tree. Caught immediately on `git pull`: the fix is
+  genuinely present (build_instance_state/3 and reconcile_projection/5
+  both read/write join_counters via SnapshotWriter, confirmed by direct
+  re-read post-pull). Re-corrected: queue task 397 set back to done, GH#778
+  re-closed with an explanatory comment. Lesson for future sessions: fetch
+  and reconcile against origin/main before trusting a local, possibly-stale
+  checkout as evidence a fix does not exist -- especially in a
+  multi-session repo where merges land mid-investigation.

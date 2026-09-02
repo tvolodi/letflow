@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-04",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-04-test-designer.json",
+  "created_at": "2026-09-02T20:59:55Z",
+  "started_at": "2026-09-02T20:59:55Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "handoffs/WF03-ISS0426-20260902/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0426-20260902/step-03c-reviewer.json",
+      "docs/issues/ISS-0426.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "test/letflow/engine/lua/executor_test.exs"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 -- REGRESSION TEST for ISS-0426. Both hard gates have PASSED (SECURITY-REVIEWER step-03b, REVIEWER step-03c). Read WF-03's Step 4 section for the fail-first rule, then read THIS description carefully, because ISS-0426 is an awkward fit for that rule and you must not apply it mechanically.\n\nWHY THE STANDARD FAIL-FIRST SHAPE DOES NOT TRANSFER. WF-03 Step 4 normally requires a test that FAILS against pre-fix code and PASSES post-fix. ISS-0426's defect is a FLAKE: a wall-clock timeout that fires only under 6-way CPU contention on a 16-core host. ISSUE-FIXER could not reproduce it even with 24 OS-level CPU burners plus 48 concentrated runs of the affected test -- recorded in its Step 1 handoff as an honest negative. So a 'test that fails pre-fix' would be one that fails only probabilistically, on some hosts, sometimes. Writing one and claiming it demonstrates the fix would be exactly the speculation core-directives.md forbids. DO NOT fabricate a contention harness and assert it reproduces the flake unless you actually observe it reproducing.\n\nWHAT TO PROVE INSTEAD -- the fix is STRUCTURAL, so prove it structurally. Design section 4 (read it) states the correctness is verifiable by construction rather than statistically: after the change, {:error, {:wallclock_timeout, _}} is UNREACHABLE from the 14 Group 1 call sites, because 11 no longer call Task.yield at all and 3 no longer evaluate any `after timeout_ms ->` clause. Your coverage should lock in THAT property so a future change reintroducing the race is caught. Properties worth locking (you decide the final shape):\n  (a) The two new seams behave correctly: run_script_sync/3 and run_with_heap_limit_sync/4 return the same outcomes as their racing counterparts for the workloads Group 1 uses -- script_error, budget_exceeded, memory_limit_exceeded, :ok -- so the restructure did not change what the repointed tests assert. This is the highest-value coverage: 14 call sites were repointed to new code paths, and a subtly different return shape would let those tests pass for the wrong reason.\n  (b) run_with_heap_limit_sync/4 still enforces the MEMORY limit -- max_heap_size kill:true is retained, so an over-allocating script still yields :memory_limit_exceeded. REQ-156/LUA-09's bound must be SHOWN intact through the new path, not assumed from the old.\n  (c) The tag partition is wired correctly and the 11 :lua_wallclock_race tests still genuinely assert timeout behaviour -- i.e. they can still FAIL if the wall-clock kill regressed. A tagging fix's worst failure mode is tests excluded everywhere that therefore never fail again. Both reviewers confirmed they currently run (11 passed / 37 excluded isolated); consider whether anything should guard that wiring going forward.\n\nWHERE FAIL-FIRST DOES APPLY, and how to satisfy it honestly. WF-03's own section 'When the pre-fix failure is the code under test does not exist' covers your case: the seams are NEW, so any test of them fails pre-fix with UndefinedFunctionError, which proves nothing about whether your tests discriminate a CORRECT seam from a WRONG one. That section therefore requires MUTATION: mutate the shipped logic and record which tests fail per mutant, targeting the specific traps the fix exists to handle. Suggested mutants (pick ones that actually probe your assertions): restore an `after timeout_ms ->` clause to run_with_heap_limit_sync/4 with a tiny timeout and confirm a test catches the reintroduced wallclock_timeout; drop the max_heap_size spawn_opt and confirm (b)'s memory test fails; make run_script_sync/3 delegate back to execute_with_manifest/3 and confirm something notices. Record pass/fail counts per mutant in your test spec.\n  MUTANTS ARE TEMPORARY PROBES. WF-03 is explicit: leaving one in the tree is a step failure. Use a throwaway `git worktree` (preferred) or revert in place with `git checkout -- <path>` and VERIFY the revert -- quote BOTH `git status --porcelain lib/ test/` empty AND the test file re-running green -- in result.summary.\n\nSTANDING RULING FROM REVIEWER, follow rather than re-decide: the type checker emits a non-fatal 'clause will never match' note at executor_test.exs:466's `refute match?({:error, {:wallclock_timeout, _}}, result)`. REVIEWER ruled LEAVE IT AS-IS -- it is a standing, machine-checked proof that run_script_sync/3's categorical unreachability guarantee (design section 2.1.1b) holds; if a future change broke the guarantee the warning would silently DISAPPEAR, which is the signal worth preserving. It is CI-invisible (mix compile --warnings-as-errors only checks lib/). Do not remove or rewrite that assertion, and do NOT add more assertions of that shape elsewhere.\n\nCONSTRAINTS: you own test/letflow/engine/lua/executor_test.exs only. Do NOT edit lib/letflow/engine/lua/executor.ex except transiently for a mutant you then revert and verify. Do NOT touch the three wasm test files or lib/letflow/engine/wasm (owned by the live concurrent run WF03-ISS0418-20260902). Do NOT change production timeout semantics (AC4). You WRITE tests; TEST-RUNNER owns the full-suite gate -- but run your own new tests to confirm they pass, and you must run the mutants.\n\nComplete the handoff with your test spec (including the per-mutant results table), real quoted output, and the revert verification. Commit and push to branch feature/WF03-ISS0426-20260902. next_action: 'Route to TEST-DESIGN-VALIDATOR'."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

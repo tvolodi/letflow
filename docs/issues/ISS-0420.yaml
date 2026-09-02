@@ -1,0 +1,51 @@
+id: ISS-0420
+title: "Upgrade oidcc (HIGH CVE-2026-75759, auth path) and bandit (HIGH CVE-2026-74836 + MEDIUM CVE-2026-75484) -- 3 live advisories reported by mix hex.audit"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:39:00Z"
+severity: MAJOR
+tags: [security, dependencies, oidc, http, s6]
+description: >
+  `mix hex.audit` on main (2026-09-02, letflow-3 checkout, deps freshly
+  fetched via `mix deps.get`) reports three live security advisories
+  against pinned production dependencies. Two are HIGH.
+
+  (1) oidcc 3.8.0 -- EEF-CVE-2026-75759 / GHSA-533g-4vf3-xwrj (HIGH):
+  "Encrypted ID token or JARM response accepted without a nested
+  signature". This sits directly in Letflow's authentication path:
+  mix.exs depends on ueberauth_oidcc ~> 0.4, which pins oidcc ~> 3.2
+  (mix.lock line 12 resolves 3.8.0), and lib/letflow/oidc/token_verifier/
+  calls Oidcc.Token.validate_jwt/3 to verify every bearer token reaching
+  Letflow.Plugs.AuthPipeline. Highest priority of the three.
+
+  (2) bandit 1.12.4 -- EEF-CVE-2026-74836 / GHSA-xj8g-532w-jv94 (HIGH):
+  "HTTP/2 connection-window starvation pins Plug processes indefinitely".
+  Bandit is Letflow's HTTP server (mix.exs {:bandit, "~> 1.5"}, started in
+  Letflow.Application.http_child/0). Pinned-process exhaustion is a
+  denial-of-service against the whole web tier.
+
+  (3) bandit 1.12.4 -- EEF-CVE-2026-75484 / GHSA-x3gh-xhj4-3vq8 (MEDIUM):
+  "HTTP/2 header field values containing CR, LF or NUL are passed to the
+  application unvalidated".
+
+  No defect in Letflow's own modules is implied -- this is dependency
+  hygiene on pinned versions. Both are transitive-pin-sensitive (oidcc
+  arrives via ueberauth_oidcc), so closing the oidcc advisory may require
+  moving ueberauth_oidcc too.
+affected_files:
+  - mix.exs
+  - mix.lock
+  - lib/letflow/oidc/token_verifier/oidcc.ex
+  - lib/letflow/plugs/auth_pipeline.ex
+related:
+  - ISS-0275
+source: >
+  User-requested architecture review of the backend, 2026-09-02
+  (ORCH-adhoc). Verified by running `mix hex.audit` directly in the
+  letflow-3 checkout after `mix deps.get`; advisory text quoted verbatim
+  from that output. Dependency wiring confirmed by reading mix.exs and
+  mix.lock.
+queue_task_id: 420
+github_issue: 824
+
+status: open

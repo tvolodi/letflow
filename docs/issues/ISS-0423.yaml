@@ -1,0 +1,69 @@
+id: ISS-0423
+title: "ExUnit suite runs 99.2% serially (1790s of 1805s) -- a ~30 min gate on every requirement is a pipeline throughput ceiling"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:39:00Z"
+severity: MINOR
+tags: [testing, performance, ci, pipeline-throughput, s6]
+description: >
+  MEASURED, not estimated. Full `mix test` on main (letflow-3,
+  MIX_TEST_PARTITION=3, 2026-09-02), exit 0:
+
+    Finished in 1805.1 seconds (14.8s async, 1790.2s sync)
+    Result: 3060 passed (6 properties, 3054 tests), 10 excluded
+
+  99.2% of wall-clock is the synchronous portion. On a 16-core machine the
+  suite effectively uses about one core.
+
+  ROOT CAUSE (structural, not incidental): Letflow's state lives in
+  per-tenant Postgres schemas, not in processes, so tests cannot set
+  `async: true` without contending on shared schemas and the engine's own
+  FOR UPDATE locks. The test-support tenant fixture provisions and drops a
+  REAL schema per test -- visible throughout the run log as
+  LETFLOW_TENANT_FIXTURE phase=teardown lines -- and each provisioning
+  replays the full tenant-scoped migration set (Letflow.SandboxPool's
+  moduledoc measures this at 411 ms at its very fastest for 31 migrations;
+  priv/repo/migrations/ now holds 69 files).
+
+  WHY IT MATTERS: `mix letflow.check` runs the full suite and is the gate
+  on EVERY requirement and issue run in a humanless pipeline. A ~30 min
+  serial gate bounds how many runs per day the pipeline can complete, and
+  it grows linearly with the suite. It also caused a real defect during
+  this review: a 900s timeout on the suite killed it at exit 143 with zero
+  output, producing an initially wrong "still running" report to the user.
+  ISS-0419's own evidence independently measured the same thing in CI
+  ("Finished in 694.2 seconds (23.5s async, 670.7s sync)") and concluded
+  the suite -- not the wasmex NIF build -- accounts for ~694s of a ~720s
+  CI job. Confirmed twice, from different directions.
+
+  Suggested direction, NOT prescribed (CODE-DESIGNER decides scope and
+  whether it is worth it): Letflow already owns Letflow.SandboxPool, a
+  quota-bounded pool of pre-provisioned, migration-scaffolded schemas
+  built for exactly this shape (claim/release, owner-monitored,
+  at-most-one-DB-op-in-flight). Backing the test tenant fixture with
+  pooled pre-provisioned schemas could allow `async: true` for the large
+  share of tests needing only an isolated schema and touching no global
+  table. HARD CONSTRAINT: must not raise peak concurrent DBConnection
+  checkouts past what the test Repo pool can serve -- the exact hazard
+  ISS-0224 fixed in the pool itself. decision
+  0009-test-parallel-pool-sizing.md governs this area and must be read
+  first. A partial result (a subset of modules made async) is a legitimate
+  outcome; so is a reasoned "not worth it" with the measurement recorded.
+affected_files:
+  - test/support/
+  - config/test.exs
+  - mix.exs
+related:
+  - ISS-0224
+  - ISS-0419
+  - REQ-039
+source: >
+  User-requested architecture review of the backend, 2026-09-02
+  (ORCH-adhoc). Timing quoted verbatim from a real full `mix test` run
+  completed in this session (exit 0). Migration count from
+  `ls priv/repo/migrations | wc -l` (69); per-provisioning cost quoted
+  from Letflow.SandboxPool's own moduledoc measurement.
+queue_task_id: 423
+github_issue: 827
+
+status: open

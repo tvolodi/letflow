@@ -1,0 +1,63 @@
+id: ISS-0422
+title: "CLAUDE.md and requirements.yaml still describe a process-per-instance design the codebase decided against -- InstanceSupervisor supervises nothing"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:39:00Z"
+severity: MINOR
+tags: [documentation, agent-instructions, otp, s6]
+description: >
+  Doc-vs-code drift in two files every agent reads at session start.
+
+  CLAUDE.md line 24 states that findings from early development
+  "(idiomatic OTP usage, process-per-instance design)" are "folded
+  directly into the stage-2 and stage-3 migration docs where they're
+  still relevant". docs/requirements.yaml line 11 carries the same
+  phrasing. A reader reasonably takes this to mean Letflow runs a process
+  per workflow instance.
+
+  It does not, and that was a deliberate, recorded decision. REQ-045
+  resolved the S3 running-instance shape to a plain transactional context
+  module (Letflow.Engine.create/2), NOT a supervised process.
+  lib/letflow/instance_supervisor.ex says so in its own moduledoc:
+  "Currently supervises no children ... there is nothing for this
+  supervisor to own yet." It is a DynamicSupervisor with zero children,
+  deliberately retained for a future requirement. Letflow.Engine's own
+  moduledoc section "Process-vs-row decision (AC5, AC6)" records the full
+  reasoning.
+
+  Measured on main 2026-09-02: the entire 62.5k-LOC lib/ tree contains six
+  `use GenServer`/`use DynamicSupervisor` modules total (plugin_registry,
+  wasm/module_version_registry, metrics/registry, sandbox_pool,
+  scheduler/poller, instance_supervisor -- the last empty). Engine
+  concurrency is arbitrated by Postgres row locks, with ~147
+  Repo.transaction / FOR UPDATE / lock(...) sites across lib/.
+
+  Why this matters beyond tidiness: CLAUDE.md is mandatory session-start
+  reading for every agent in a humanless pipeline. An agent that believes
+  instances are supervised processes may propose or accept a design
+  premised on per-instance crash isolation, restart-based recovery, or
+  process state that does not exist. Same failure class as the
+  stale-status-report incident already in docs/anti-patterns.md
+  ("Inheriting a claim from a record instead of re-deriving it from the
+  source").
+
+  Scope is DOCUMENTATION ONLY. Do not change the architecture, and do not
+  delete instance_supervisor.ex -- REQ-045 AC5 explicitly retains it and
+  that decision is not in scope to reverse here.
+affected_files:
+  - CLAUDE.md
+  - docs/requirements.yaml
+  - lib/letflow/instance_supervisor.ex
+related:
+  - REQ-045
+  - REQ-046
+source: >
+  User-requested architecture review of the backend, 2026-09-02
+  (ORCH-adhoc). Verified by reading instance_supervisor.ex and
+  Letflow.Engine's moduledoc directly, and by grepping lib/ for
+  `use GenServer|use DynamicSupervisor|use Supervisor` (6 matches, one of
+  them the empty InstanceSupervisor) and for lock/transaction sites.
+queue_task_id: 422
+github_issue: 826
+
+status: open

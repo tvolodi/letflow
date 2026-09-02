@@ -1,0 +1,73 @@
+id: ISS-0421
+title: "Scheduler.Poller is a platform-wide SPOF running seven serial per-tenant sweeps per tick under default restart intensity"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:39:00Z"
+severity: MAJOR
+tags: [scheduler, supervision, availability, performance, s6]
+description: >
+  Letflow.Scheduler.Poller (lib/letflow/scheduler/poller.ex,
+  handle_info(:tick, ...) lines ~100-124) is a single supervised GenServer
+  that, on every tick, iterates EVERY tenant schema SERIALLY -- and does so
+  seven separate times per tick: the timer poll_and_fire loop, plus
+  maybe_refresh_active_instances, maybe_run_retention_sweep,
+  maybe_run_alert_detection, maybe_run_ordering_cycle,
+  maybe_run_ordering_sweeper and maybe_run_ordering_metrics. Each is its
+  own Enum.each over the full schema list doing per-tenant DB work on the
+  one Poller process.
+
+  Three consequences, structural rather than hypothetical:
+
+  (1) TIMER LATENCY SCALES WITH TENANT COUNT. Wall-clock per tick is
+  O(tenants x per-tenant query time x 7 sweeps), unbounded and
+  uninstrumented as a total. schedule_next_tick/0 fires only AFTER all
+  seven complete, so the effective poll interval silently stretches as
+  tenants are added -- a tenant timer configured to fire at T can drift
+  arbitrarily late with no error and no alert. For a BPM product that is
+  correctness-visible, not merely slow.
+
+  (2) PLATFORM-WIDE SPOF. The module's own moduledoc already states the
+  stake: "a crashed Poller stops every tenant's timers firing
+  platform-wide, a vastly worse regression than a stale gauge". It
+  correctly guards the metrics refresh with two rescue layers -- but that
+  reasoning was applied to the metrics path only, not the other six sweeps.
+
+  (3) DEFAULT RESTART INTENSITY. Letflow.Application (application.ex:110)
+  uses strategy: :one_for_one with no max_restarts/max_seconds override,
+  i.e. the OTP default of 3 restarts in 5 seconds, on a flat ~15-child
+  tree. A persistent fault crashing the Poller three times in five seconds
+  takes down the ENTIRE application including Letflow.Repo and the HTTP
+  listener. scheduler_children/0's own comment documents this exact cascade
+  being hit for real under test.
+
+  Not a regression -- this shape accreted one sweep at a time
+  (REQ-186 core, REQ-188 retention, REQ-194 metrics, plus three ordering
+  sweeps).
+
+  Suggested direction, NOT prescribed (CODE-DESIGNER decides): bound
+  per-tenant work with Task.async_stream(max_concurrency:) so one
+  slow/locked tenant cannot stall the rest, and/or set explicit
+  max_restarts/max_seconds so a scheduler fault degrades the scheduler
+  rather than the node. Any change must preserve the deliberate
+  one-tenant_schemas/0-query-per-tick property and must not raise peak
+  DBConnection checkouts past what Repo pool_size (10) can serve -- the
+  same hazard class ISS-0224 fixed inside Letflow.SandboxPool.
+affected_files:
+  - lib/letflow/scheduler/poller.ex
+  - lib/letflow/application.ex
+related:
+  - REQ-186
+  - REQ-188
+  - REQ-194
+  - ISS-0224
+source: >
+  User-requested architecture review of the backend, 2026-09-02
+  (ORCH-adhoc). Verified by reading poller.ex's handle_info(:tick, ...)
+  clause and application.ex's Supervisor.start_link opts directly; the
+  seven sweep call sites and the absence of any max_restarts/max_seconds
+  override were confirmed by grep across lib/ (only two strategy: sites
+  exist, neither sets intensity).
+queue_task_id: 421
+github_issue: 825
+
+status: open

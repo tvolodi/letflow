@@ -1,0 +1,63 @@
+{
+  "handoff_id": "WF03-ISS0402-20260902-step-01",
+  "run_id": "WF03-ISS0402-20260902",
+  "workflow_id": "WF-03",
+  "step": "1",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0402-20260902/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-02T02:07:35Z",
+  "started_at": "2026-09-02T01:45:00Z",
+  "completed_at": "2026-09-02T02:07:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-051", "REQ-052", "REQ-053", "REQ-054", "REQ-062"],
+    "issue_ids": ["ISS-0402", "ISS-0397", "ISS-0098"],
+    "artifacts_in": [
+      "docs/issues/ISS-0402.yaml",
+      "docs/issues/ISS-0098.yaml",
+      "docs/issues/ISS-0397.yaml",
+      "lib/letflow/design/req052-instance-cancellation.md",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "lib/letflow/design/req062-sub-process-runtime.md",
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/transition.ex",
+      "docs/requirements.yaml"
+    ],
+    "branch_name": "fix/ISS-0402-cancel-branch-scoping-20260902"
+  },
+  "task": {
+    "description": "Scope ISS-0402: revisit REQ-052's OQ-2 (why cancel_instance/3 never drives {:cancel_branch, branch_id} through Transition) now that ISS-0397 closed the join_counters persistence gap OQ-2 cited as its blocker. Determine whether branch-level cancellation should now be designed/implemented, or whether a second independent reason still makes it out of scope.",
+    "acceptance_criteria": [
+      "Confirm ISS-0397 genuinely closed the persistence gap OQ-2 cited (join_counters durably persisted)",
+      "Search for a second, independent reason branch-level cancellation might still be out of scope: other docs referencing {:cancel_branch,_}, unresolved product/semantic questions, requirements.yaml scheduling status",
+      "Assess real-world urgency: any current caller (route/UAT) needing this today",
+      "Make a genuine scoping recommendation and route accordingly (CODE-DESIGNER if warranted now, ORCH with a release-and-clarify recommendation if not)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Diagnosis: ISS-0402's premise (the ORIGINAL blocker is gone) is correct, but a second, independent, and stronger reason to leave cancel_instance/3 as whole-instance-only already exists on record, predating ISS-0397 -- this is a genuine scoping call, not a bug, and implementation is NOT warranted now.\n\n(1) Confirmed ISS-0397's fix genuinely closed OQ-2's cited blocker. Read the real lib/letflow/engine.ex: join_counters is now persisted unconditionally on both create (insert_instance_projection/8, ~line 1174/1184, threading new_instance_state.join_counters through SnapshotWriter.serialize_join_counters/1) and every subsequent write (~line 2845-2869, 'persisted unconditionally on every call (ISS-0397 fix...)'), and read back correctly in build_instance_state/3 (~line 1847, SnapshotWriter.deserialize_join_counters/1). The literal gap req048's OQ-3 disclosed and req052 OQ-2 cited ('No table persists JoinCounter state across calls today') is genuinely closed -- a scoped InstanceState reconstruction for cancel_instance/3 could now retrieve real, non-empty join_counters.\n\n(2) Found a SECOND, independent reason, already on record and NOT superseded by ISS-0397: ISS-0098 (resolved 2026-08-22T15:14:15Z, run WF03-ISS0278-20260822 -- this predates ISS-0397 by over a week) independently re-verified req052's OQ-2 against R-Co's own real, literal shipped source (R-Co/src/engine/instance.zig, cancelInstance, EE-08, lines 2513-2634) rather than against Letflow's own persistence-gap reasoning alone. That verification is baked directly into the design doc itself (lib/letflow/design/req052-instance-cancellation.md lines 111-134, '§0 update 2026-08-22'): R-Co's own cancelInstance algorithm (its own doc-commented 8-step sequence, steps d/e) issues plain, unconditional SQL `UPDATE tasks SET status='CANCELLED' ... WHERE instance_id=$1 AND status='PENDING'` and the equivalent for timers, directly inside its single transaction -- there is NO per-branch event driven through R-Co's own transition/graph machinery ANYWHERE in R-Co's real cancellation path, for any reason, gap or no gap. This means Letflow's whole-instance-only cancel_instance/3 is not a workaround for a missing table -- it is architectural PARITY with the reference system's actual, confirmed design. R-Co's cancelInstance was never join-counter-aware and never needed to be: whole-instance cancellation legitimately cancels every still-open task/token unconditionally, branch-by-branch distinction being irrelevant to that operation's actual semantics. Driving {:cancel_branch, branch_id} through Transition per-branch from cancel_instance/3 today would not restore parity with anything -- it would newly DIVERGE from R-Co's confirmed behavior to add a caller-facing capability R-Co itself never exposes.\n\n(3) Searched the full codebase (grep -rn cancel_branch across lib/, test/, docs/) for any other requirement/design doc treating branch-level cancellation as a caller-facing feature, and found none. Every other reference to {:cancel_branch, branch_id} is REQ-051's own internal Transition event -- used only for the join-cohort bookkeeping needed when OTHER machinery (a future gateway-driven cancellation path, never named as any concrete requirement) marks one branch's token as no longer live so a PARALLEL_GATEWAY join can fire/wait correctly around it. dispatch_cancel_branch/3 (lib/letflow/engine/transition.ex:1243) is exercised today only by direct unit tests calling Transition.transition/3 (test/letflow/engine/parallel_gateway_test.exs, test/letflow/engine_cancel_instance_test.exs:459) -- never by any real caller path, route, or UAT scenario. grep across lib/letflow_web/ and docs/uat found zero references to any branch-scoped cancel operation or route. requirements.yaml has no REQ scheduling caller-facing branch-level cancellation as a feature; REQ-051/052/053/054 are all status: done and none names it as a deferred follow-up (only req052's own doc's OQ-2 flags it as an open question, not a scheduled requirement).\n\n(4) Real-world urgency: none found. No route, controller, or UAT scenario calls for a caller to cancel a single branch of a running instance while leaving the rest of the instance active -- cancel_instance/3's entire caller-facing contract (per its own design doc, moduledoc, and REQ-052's acceptance criteria) is whole-instance cancellation. This is purely theoretical completeness against an internal Transition event's own type signature, not a product gap anyone has hit.\n\n(5) Non-trivial unresolved semantics (per task item 2c), never addressed by OQ-2's text or any other doc: what does 'cancel one branch of a running parallel split, leaving the instance ACTIVE' even mean for (a) sibling branches that already completed before the cancel call -- does the join now fire short with the completed branches' results plus a synthesized cancel for the target branch, or does the whole join get suppressed? (b) a branch that has already spawned a SUB_PROCESS child instance (REQ-062) -- does branch-cancel need to cascade-cancel that child, or leave it orphaned? req062-sub-process-runtime.md line 46 states 'EE-08 (parent cancel doesn't cascade to child) needs no new code' for WHOLE-INSTANCE cancel (matching R-Co's own EE-08, which never cascades cancellation to a child instance either) -- but that answer was reasoned for whole-instance cancellation specifically; a hypothetical branch-scoped cancel is a different, unprecedented operation with no R-Co equivalent to consult at all (R-Co's own cancelInstance, per (2) above, is whole-instance-only -- it has no branch-scoped mode whose cascade behavior could be read off directly). Designing branch-level cancellation now would mean inventing new product semantics with zero reference-implementation anchor, which is exactly the kind of scope a bugfix/follow-up issue should not silently absorb.\n\nCONCLUSION: this is not warranted to implement now. The originally-cited blocker (join_counters persistence) is genuinely gone, but a second, independent, already-on-record verification against R-Co's real source (ISS-0098) shows the current whole-instance-only design is intentional parity with the reference system, not a stopgap. No real caller needs branch-level cancellation today, and the semantic questions a real design would have to answer (completed-sibling handling, SUB_PROCESS-child cascade) have no precedent to draw from and are non-trivial enough to need their own product decision, not a same-issue scope expansion. Recommend releasing queue task 402 back to the queue as CLOSED-AS-NOT-NEEDED (same disposition pattern as ISS-0399), with docs/issues/ISS-0402.yaml updated to record: (a) the persistence-gap premise confirmed closed, (b) the independent R-Co-parity reason (ISS-0098) that still applies, (c) that this is a deliberate scoping decision requiring a NEW requirement (with REQ-ANALYST/REQ-VALIDATOR/stakeholder product-semantics input on completed-sibling and SUB_PROCESS-cascade behavior) if branch-level cancellation is ever actually wanted as a caller-facing feature, not a follow-up bugfix.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0402-20260902/step-01-issue-fixer-diagnosis.json"
+    ],
+    "issues": [
+      "req052-instance-cancellation.md's OQ-2 text and ISS-0402's own filing both undersell ISS-0098's already-on-record R-Co-parity verification as the stronger, independent reason -- future issue filings referencing OQ-2 should cite ISS-0098's resolution alongside the persistence-gap reasoning to avoid this same re-litigation recurring a third time.",
+      "If a future requirement is filed for real branch-level cancellation, it must resolve two semantic questions this diagnosis surfaced and found no precedent for: (a) already-completed sibling-branch handling when one branch of the same split is cancelled, (b) whether cancelling a branch that spawned a SUB_PROCESS child (REQ-062) cascades to that child -- R-Co's EE-08 no-cascade answer is for whole-instance cancel only and does not transfer to a branch-scoped operation R-Co itself never implements."
+    ],
+    "next_action": "Route to ORCH (not CODE-DESIGNER): recommend releasing queue task 402 back to open/closed-as-not-needed per the ISS-0399 disposition pattern. ORCH should update docs/issues/ISS-0402.yaml status to reflect this scoping conclusion (not 'resolved' via a code fix, but a deliberate not-now decision with the reasoning above recorded), and, if desired, file a new forward-looking requirement candidate (not sized for WF-03) for REQ-ANALYST to pick up only if/when a real caller need for branch-level cancellation emerges -- that future requirement would need to name the two open semantic questions above as acceptance-criteria-shaping open questions from the start."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "gate": "ISSUE-FIXER",
+      "result": "PASS",
+      "timestamp": "2026-09-02T02:07:35Z",
+      "notes": "Diagnosis complete: re-verified ISS-0397 closed the join_counters persistence gap by reading the real engine.ex write/read sites; found ISS-0098's prior R-Co-source verification (predating ISS-0397) already establishes an independent, still-valid reason (parity with R-Co's own whole-instance-only, non-branch-aware cancelInstance) to leave cancel_instance/3 as-is; found no scheduled requirement, route, or UAT caller needing branch-level cancellation; surfaced two unresolved semantic questions (completed-sibling handling, SUB_PROCESS-cascade) with no reference-implementation precedent. Recommending release-back-to-queue, not implementation."
+    }
+  ]
+}

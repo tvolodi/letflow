@@ -135,11 +135,13 @@ requirement, not something this migration changed:
 - **Bundle size.** The production build emits a single 1.66 MB chunk
   (442 kB gzipped) and Vite warns about it. No code-splitting is configured
   beyond one lazy `autoLayout` chunk.
-- **Orphaned `UserDetailPage.tsx`.** `pages/admin/UserDetailPage.tsx` is
-  unreferenced by `src/router.tsx` (both `/admin/users` and `/admin/users/:id`
-  route to the live `pages/admin/UsersPage.tsx`). It in turn is the only
-  importer of `components/admin/users/DeactivateUserDialog.tsx`, which is
-  otherwise unused. Flagged by `REQ-121`'s investigation as a third dead file
-  outside that requirement's scope (only `pages/admin/users/UsersPage.tsx` and
+- **`UserDetailPage.tsx` — fixed by `ISS-0289`.** Originally flagged by
+  `REQ-121`'s investigation as a third dead file outside that requirement's
+  scope (only `pages/admin/users/UsersPage.tsx` and
   `components/admin/users/CreateUserDialog.tsx` were named there, and both
-  have since been deleted) — not yet resolved.
+  have since been deleted). `pages/admin/UserDetailPage.tsx` is live:
+  `src/router.tsx` routes `/admin/users/:userId` to it, and it in turn
+  imports and renders `components/admin/users/DeactivateUserDialog.tsx`
+  (also live, not dead). Regression-locked by
+  `src/__tests__/router.iss-0289.test.tsx`. This entry is kept as a record
+  of the drift that existed at migration, not as a live discrepancy.

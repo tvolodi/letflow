@@ -653,3 +653,45 @@ history:
       for a secondary worktree. Remote+local branch refs deleted
       explicitly. Final HEAD verified == origin/main. Queue task 419
       released status: done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-02T17:01:13Z"
+    note: >
+      ISS-0411 (queue task 411, GH#807) picked up for WF-03 processing.
+      ISSUE-FIXER's diagnosis (already recorded in docs/issues/ISS-0411.yaml
+      by a prior session) concluded this is NOT a scoped WF-03 bug fix:
+      Letflow.Engine.Transition.dispatch_node/4 has no SERVICE_TASK dispatch
+      handler, a real gap needing a new supervised dispatch-orchestration
+      process, an HTTP transport, a service_catalog lookup, and
+      SECURITY-REVIEWER sign-off on SSRF/tenant-scoping -- multi-file,
+      new-architecture, tenant-data-path work, not a bounded fix. No
+      implementation attempted in this run. Two actions taken instead: (1)
+      corrected a stale causal attribution in
+      docs/migration/stage-7-simulation-uat-parity.md's REQ-210 sign-off
+      entry (it blamed the Meridian quorum/disbursement paths' unreached
+      status on the now-resolved join_counters defect; ISS-0411 established
+      the real, separate cause is this SERVICE_TASK gap) -- taken as a
+      direct ORCH action per ORCHESTRATOR.md Sec 10 (single-purpose doc
+      fix, all six sizing checks pass) rather than a full workflow; (2)
+      dispatched REQ-ANALYST to draft the real gap as new requirement(s) --
+      found it was already fully covered by REQ-214 (dispatch orchestration
+      core, HTTP transport, SSRF gate, service_catalog stub) and REQ-215
+      (wire SERVICE_TASK into dispatch_node/4, async-park pattern), both
+      status: pending with real impl_order (415/417) already registered in
+      letflow-queue, so no duplicate requirements were written. Also
+      confirmed ISS-0104 (flagged as a likely co-requisite in ISS-0411's
+      diagnosis) is status: resolved and no longer a live blocker. PR #821
+      (docs-only diff: docs/issues/ISS-0411.yaml routing note plus the
+      stage-7 doc correction) -- backend-gate CI hit the known wasm_hang
+      isolated-test-group timing flake twice (different individual tests
+      each time, both unrelated to this PR's diff; main 3060-test suite
+      passed clean on every run) before a third run passed clean; squash-
+      merged (commit 7250b72a). docs/issues/ISS-0411.yaml left at
+      status: open deliberately -- the underlying gap is not resolved, only
+      routed; closing status: done on the queue task would have
+      best-effort closed GH#807 and misrepresented an unresolved gap as
+      fixed (the exact ISS-0277 failure mode). Queue task 411 released
+      WITHOUT a status (stays open, immediately reclaimable) so it can be
+      picked up again once REQ-214/REQ-215 land.

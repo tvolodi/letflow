@@ -3977,6 +3977,20 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #818 merged to main, queue task 414 released done",
       "note": "WF-03 issue-resolving run for ISS-0414: service_catalog is this codebase's only table with no per-tenant-schema DROP SCHEMA CASCADE safety net, uniquely exposed to accumulating leftover rows from any interrupted/crashed mix test run. Root cause of ISS-0409/ISS-0410's own recurrence. Issue itself frames this as a design-worth-scoping question, not a pre-decided fix -- routing through a real CODE-DESIGNER pass rather than a direct action."
+    },
+    {
+      "run_id": "WF03-ISS0413-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0413",
+      "queue_task_id": 413,
+      "github_issue_number": 809,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T15:35:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 issue-resolving run for ISS-0413: host_api_write_test.exs and plugin_handler_test.exs shell out to git diff against a live resolved base ref. Sibling fragility class to ISS-0404/ISS-0378 (fixed-SHA class already fixed). ISSUE-FIXER to judge whether structural-check-instead-of-git-diff treatment is warranted."
     }
   ]
 }

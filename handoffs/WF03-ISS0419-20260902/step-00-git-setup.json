@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b2e1a1a4-6f2a-4e1e-9a2f-1c3d5e6f7a01",
+  "run_id": "WF03-ISS0419-20260902",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0419-20260902/step-00-git-setup.json",
+  "created_at": "2026-09-02T13:44:15Z",
+  "started_at": "2026-09-02T13:44:15Z",
+  "completed_at": "2026-09-02T13:45:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0419.yaml",
+      "docs/agents/protocols/GIT_SETUP.md"
+    ],
+    "owned_modules": [
+      ".github/workflows/ci.yml"
+    ]
+  },
+  "task": {
+    "description": "Run fn:git-setup per docs/agents/protocols/GIT_SETUP.md for WF-03 issue ISS-0419 (CI backend gate wasmex build-caching investigation). This checkout is a secondary git worktree sharing one .git with a primary checkout that holds local main -- CONFIRMED via `git worktree list` (4 entries). Use the Worktree variant (GIT_SETUP.md 'Worktree variant' section): replace steps 1-2 with `git fetch origin main` then `git checkout -b feature/WF03-ISS0419-20260902 origin/main` -- never check out local main in this worktree. Then steps 3-8 as normal: branch name feature/WF03-ISS0419-20260902, verify `git branch --show-current`, push with `git push -u origin feature/WF03-ISS0419-20260902`.",
+    "acceptance_criteria": [
+      "git fetch origin main exited 0",
+      "git checkout -b feature/WF03-ISS0419-20260902 origin/main exited 0 (branched from freshly-fetched remote ref, never from local main)",
+      "git branch --show-current outputs feature/WF03-ISS0419-20260902",
+      "git push -u origin feature/WF03-ISS0419-20260902 exited 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Ran fn:git-setup Worktree variant for WF03-ISS0419-20260902. Confirmed via `git worktree list` (4 entries) that this checkout is a secondary worktree sharing one .git with a primary checkout holding local main. Executed: `git fetch origin main` (exit 0, updated FETCH_HEAD), `git checkout -b feature/WF03-ISS0419-20260902 origin/main` (exit 0, branched from freshly-fetched origin/main; local main was never checked out), `git branch --show-current` (output: feature/WF03-ISS0419-20260902, exact match), `git push -u origin feature/WF03-ISS0419-20260902` (exit 0, new branch created on remote, upstream tracking set). No prior aborted-run branch existed, so no delete-and-recreate was needed. This handoff file itself (claimed IN_PROGRESS before the checkout) was carried across the branch switch via git stash push/pop to avoid the checkout-blocked-by-local-changes error, then staged to resolve the resulting modify/delete conflict against origin/main (the file does not exist upstream yet).",
+    "artifacts_out": ["branch: feature/WF03-ISS0419-20260902"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0419-20260902",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0419-20260902",
+      "push_status": "success",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to Step 0.5 (ISSUE-FIXER registry lookup)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

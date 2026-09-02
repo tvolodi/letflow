@@ -1,0 +1,53 @@
+id: ISS-0418
+title: "wasm_hang isolated-subprocess flake: implement OQ-5 operator-configurable cap on concurrent WASM invocations (root fix for ISS-0352 recurrence class)"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902
+discovered_at: "2026-09-02T12:53:07Z"
+severity: MAJOR
+tags: [ci, flake, wasm, s6]
+description: >
+  ISS-0352 (test/letflow/engine/wasm/*_test.exs,
+  lib/mix/tasks/letflow.check.test.ex) documents SIX independent recurrences
+  (PR #691, #780/ISS-0392, #786/ISS-0400, #790/ISS-0401, #795/ISS-0406,
+  #810/ISS-0404) of the same wasmex native-thread-pool exhaustion mechanism
+  inside the isolated `mix test --only wasm_hang` CI subprocess -- always
+  contained to that subprocess (main suite always green), but chronically
+  blocking merges via ExUnit 60-180s timeouts under runner contention.
+  ISS-0352's own `resolution:` field already states: the deeper OQ-5 fix
+  (an operator-configurable cap on concurrently in-flight WASM invocations,
+  per lib/letflow/design/req170-wasm-wallclock-timeout.md section 8 and
+  decision 0014) is the only structural fix for this recurrence class and
+  is increasingly load-bearing, not an optional follow-up, after
+  four-plus recurrences documented at filing time (now six).
+  This issue is exactly that follow-up: design and implement the
+  concurrency cap so the isolated wasm_hang subprocess (and/or the
+  underlying wasmex invocation path generally) cannot exhaust the shared
+  Tokio native worker pool regardless of CI runner size or concurrent-
+  session contention.
+  Raised to MAJOR (from ISS-0406's MINOR) because this is no longer a
+  single-incident flake report -- it is the sixth recurrence of a known,
+  already-diagnosed, already-load-bearing-per-its-own-issue-record defect
+  whose fix has been deferred six times running.
+affected_files:
+  - test/letflow/engine/wasm/call_timeout_test.exs
+  - test/letflow/engine/wasm/plugin_handler_test.exs
+  - test/letflow/engine/wasm/host_api_write_test.exs
+  - lib/mix/tasks/letflow.check.test.ex
+  - lib/letflow/design/req170-wasm-wallclock-timeout.md
+related:
+  - ISS-0352
+  - ISS-0392
+  - ISS-0400
+  - ISS-0401
+  - ISS-0406
+  - ISS-0404
+  - REQ-170
+  - decision-0014
+source: >
+  docs/issues/ISS-0352.yaml (full recurrence history and its own
+  `candidate_scope_for_whoever_picks_this_up` (c) / resolution notes),
+  docs/issues/ISS-0406.yaml, PR #810/ISS-0404's CI run 33628938373 (sixth
+  recurrence, observed live during this filing).
+queue_task_id: 418
+github_issue: 816
+status: open

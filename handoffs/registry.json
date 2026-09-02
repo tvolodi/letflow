@@ -4118,7 +4118,9 @@
     {
       "run_id": "WF02-REQ214-20260902",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-214"],
+      "requirement_ids": [
+        "REQ-214"
+      ],
       "stage": "S3",
       "queue_task_id": 415,
       "github_issue_number": 812,
@@ -4145,6 +4147,25 @@
         "git log/status on feature/WF02-REQ214-20260902 (0 commits ahead of main, uncommitted working-tree changes matching the implementation)"
       ],
       "note": "REQ-214 (queue task 415, GH#812, 'SERVICE_TASK dispatch orchestration core') ran its full WF-02 pipeline for real -- CODE-DESIGNER/CODE-DESIGN-VALIDATOR (1 real rework: OQ-3 URL-freeze-on-retry + an invented FOR UPDATE OF lock syntax, both fixed citing real precedents from Letflow.Webhooks.attempt_loop/7 and Letflow.Scheduler.claim_due_timer_ids/2), ELIXIR-DEV/SECURITY-REVIEWER (1 real rework: config_from_snapshot/1 could raise and crash the shared Poller GenServer, fixed with typed catch-alls and a try/rescue mirroring Letflow.Scheduler.attempt_fire/2), REVIEWER (PASS both passes), TEST-DESIGNER/TEST-DESIGN-VALIDATOR (TEST-DESIGNER found 2 real implementation defects -- :catalog_service never actually routed to catalog_lookup_stub/2, and no SSRF-bypass test seam existed -- both fixed by ELIXIR-DEV rework2; TEST-DESIGN-VALIDATOR then found 1 more gap, missing DNS-rebinding coverage, fixed by TEST-DESIGNER rework1, test count reaching 42), TEST-RUNNER (found and ORCH directly fixed a real boot-gating test crash under MIX_TEST_PARTITION, test-only change per ORCHESTRATOR.md Section 10's sizing rule; rerun clean at 3099/3099), RELEASE-VALIDATOR (8/9 ACs PASS, AC8 flagged as a genuine process gap since no handoffs/ directory existed) -- but NO handoffs/WF02-REQ214-*/ directory or registry entry was ever written contemporaneously. THIS ENTRY AND handoffs/WF02-REQ214-20260902/'s 21 JSON files ARE A RECONSTRUCTION, written 2026-09-03 after the fact from the run's real, on-disk artifacts (the design doc, the shipped code and its own inline comments naming specific reviewers' findings, the real test file and its real test count, and a real test report file with genuine, independently-dated timestamps) -- not fabricated from nothing. Exact original wall-clock timestamps for most steps could not be recovered and are stated as reconstructed approximations in each handoff file's own summary; two real anchors (a genuine TEST-RUNNER dispatch-start and a genuine TEST-RUNNER completion timestamp, both from test/reports/report-2026-09-03-REQ214.yaml) were used to bound the reconstructed sequence where available. Superseding update (rebase onto origin/main during Step Final): the implementation is now committed on feature/WF02-REQ214-20260902 (commit 3d1698b5), resolving a real conflict in lib/letflow/application.ex against REQ-216's own concurrent Letflow.Obs.Alerts.TaskSupervisor/Letflow.Admission supervision-tree additions (ordering constraints from both preserved) and against mix.lock's ISS-0420 dependency bumps (oidcc/bandit, resolved via mix deps.get, recompiled clean)."
+    },
+    {
+      "run_id": "WF03-ISS0426-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0426",
+      "queue_task_id": 426,
+      "github_issue_number": 830,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/engine/lua/executor_test.exs",
+        "test/test_helper.exs",
+        "config/test.exs",
+        "docs/issues/ISS-0426.yaml"
+      ],
+      "started_at": "2026-09-02T18:32:04Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED -- branch feature/WF03-ISS0426-20260902 created and pushed; dispatching Step 0.5/1 to ISSUE-FIXER",
+      "note": "WF-03 issue-resolving run for ISS-0426: Lua executor wall-clock tests flake under CPU contention (a 0.3s test hits its 5000ms budget when the suite runs 6-way parallel on 16 cores). CONCURRENT-RUN COORDINATION: live sibling run WF03-ISS0418-20260902 owns lib/letflow/engine/wasm, the wasm test files, and lib/mix/tasks/letflow.check.test.ex while implementing the OQ-5 concurrency cap. This run therefore narrows to the LUA side plus test_helper.exs/config/test.exs and enumerates-without-editing the wall-clock-sensitive wasm tests, rather than racing ISS-0418."
     }
   ]
 }

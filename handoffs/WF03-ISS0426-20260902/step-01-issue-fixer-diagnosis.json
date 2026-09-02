@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-01",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-02T18:32:50Z",
+  "started_at": "2026-09-02T18:32:50Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0426.yaml",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "test/letflow/engine/lua/executor_test.exs",
+      "lib/letflow/engine/lua/executor.ex",
+      "test/test_helper.exs",
+      "config/test.exs",
+      "scripts/test_parallel.sh",
+      "docs/issues/ISS-0352.yaml",
+      "docs/issues/ISS-0418.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      "config/test.exs",
+      "docs/issues/ISS-0426.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 0.5 (registry lookup) and Step 1 (diagnose) for ISS-0426. Read docs/agents/workflows/WF-03_issue_resolving.md for both steps' own procedures and follow them; this description states the run-specific scope, not the method.\n\nSTEP 0.5 -- REGISTRY LOOKUP. Search docs/issues/*.yaml for prior entries with matching symptoms: wall-clock/timing-sensitive test failures under parallel or contended execution. ISS-0352 (wasm_hang native-thread-pool exhaustion, SIX recurrences) and ISS-0418 (its OQ-5 root fix, currently IN FLIGHT on another host) are known related entries and are named in ISS-0426's own record -- cite them, and state explicitly whether the LUA-side flake is the SAME root cause as the wasm-side one or merely the same FAMILY. That distinction decides whether this is a recurrence (flag at least MAJOR per Step 0.5's rule) or an independent first occurrence. Also check ISS-0219 and ISS-0222 (documented scripts/test_parallel.sh host-capacity failure modes) so you do not misattribute an infrastructure limit to this defect.\n\nSTEP 1 -- DIAGNOSE. Reproduce first, do not diagnose from the report's prose (No Speculation). The filed repro is: run the full suite as 6 partitions on this 16-core host via scripts/test_parallel.sh (TEST_PARALLEL_N=6) and observe test/letflow/engine/lua/executor_test.exs:983 fail with right: {:error, {:wallclock_timeout, 5000}} where {:error, {:script_error, _}} was asserted. NOTE ISS-0222: a run launched immediately after a prior full-suite run can produce a transient too_many_connections in one partition -- that is not this defect; wait and re-run. If a full 6-way suite run is too expensive to use as your primary probe, you may instead induce equivalent CPU contention against the lua test file alone and say exactly what you did -- but a real observation of the failure is required either way. If you genuinely cannot reproduce it, say so plainly and report what you measured instead; do not assert the mechanism you could not observe.\n\nTHE DIAGNOSIS MUST DELIVER, as ISS-0426's acceptance criterion 1 requires:\n  (a) An EXPLICIT ENUMERATION of the wall-clock-sensitive tests across test/letflow/engine/lua/ AND test/letflow/engine/wasm/, each with the timing assumption it makes stated (what budget, asserted how, against what real elapsed work). This enumeration is the deliverable even for the wasm files -- see the SCOPE BOUNDARY below.\n  (b) The ROOT CAUSE in mechanism terms: why a 0.3s workload can exceed a 5000ms wall-clock budget under 6-way partitioning on 16 cores. Identify precisely where the budget is read (Letflow.Engine.Lua.Executor reads :letflow, :lua_wallclock_timeout_ms -- note config/test.exs:187 ALREADY sets a test-specific value of 5000, so a test-only budget lever exists without touching config/config.exs) and what actually consumes the wall clock under contention (BEAM scheduler starvation, Task.shutdown brutal_kill timing, dirty schedulers, partition count vs core count, or something else you can evidence).\n  (c) An assessment of the three options ISS-0426 names -- (a) tag + low-concurrency partition mirroring the :wasm_hang precedent in test/test_helper.exs, (b) raise test-only budgets, (c) restructure assertions so they do not depend on which of two racing outcomes wins -- with a recommendation and your reasoning. You are NOT prescribing the design (that is CODE-DESIGNER's step); you are supplying the evidence CODE-DESIGNER needs to choose. Note ISS-0426 itself judges option (b) alone the weakest because it moves the threshold without removing the sensitivity.\n\nHARD CONSTRAINT (ISS-0426 acceptance criterion 4): Letflow.Engine.Lua.Executor's PRODUCTION wall-clock kill semantics must not change. No production timeout constant raised or removed. The kill is REQ-155's LUA-10 layer-2 security control against untrusted tenant scripts; its behaviour under load is the thing under test, not an implementation detail to relax. config/config.exs:17's 5_000 is production -- do not touch it.\n\nSCOPE BOUNDARY -- CONCURRENT RUN. WF03-ISS0418-20260902 is live on another host (branch feature/WF03-ISS0418-20260902) implementing the OQ-5 WASM concurrency cap, and owns lib/letflow/engine/wasm, test/letflow/engine/wasm/call_timeout_test.exs, plugin_handler_test.exs, host_api_write_test.exs, and lib/mix/tasks/letflow.check.test.ex. READ those files freely for the enumeration in (a) -- do NOT edit them, and do not propose a fix that requires editing them. If your diagnosis concludes the wasm half genuinely cannot be separated from the lua half, say so explicitly as a BLOCKER-severity issue in result.issues and let ORCH decide whether to wait on ISS-0418 rather than working around it yourself.\n\nYOU DO NOT IMPLEMENT THE FIX (WF-03 Step 1's own rule). Write the diagnosis into result.summary and complete the handoff with next_action: 'Route to CODE-DESIGNER for fix design'. Do not modify any file under lib/ or test/ in this step; the only file this step writes is its own handoff."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

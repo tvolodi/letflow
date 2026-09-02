@@ -39,4 +39,19 @@ source: >
   repeated mix test invocations of service_catalog_test.exs).
 queue_task_id: 416
 github_issue: 813
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0416-20260902
+verdict_at: "2026-09-02T13:16:00Z"
+no_defect_evidence: >
+  ORCH re-ran test/letflow/service_catalog_test.exs alone 8 consecutive
+  times with different seeds (1-8), confirmed via `ps aux | grep "mix
+  test"` that no other mix test process was running against the shared
+  Postgres instance at any point: 33/33 passed every single run, zero
+  intermittent AC7 failures. This confirms the original occurrence was
+  purely cross-process DB contention from a second concurrently-running
+  agent's own full-suite mix test (as hypothesized in this record's own
+  description), not a genuine per-test isolation bug in AC7's own
+  fixtures. No code change made. This is a distinct verdict from
+  ISS-0409/ISS-0410's own no_defect closure (a genuinely stale, day-old
+  leftover row) -- both are real but different classes of "test failed
+  under full-suite load, not because of a bug in the test itself."

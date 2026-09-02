@@ -102,7 +102,27 @@ defmodule Letflow.Application do
         # pair above) -- see the design doc §7's own note.
         {Letflow.Engine.Wasm.ModuleVersionRegistry,
          name: Letflow.Engine.Wasm.ModuleVersionRegistry},
-        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor}
+        {Task.Supervisor, name: Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor},
+        # ISS-0429 (design lib/letflow/design/iss0429-async-alert-hook-delivery.md §1):
+        # dedicated Task.Supervisor isolating alert-hook delivery's HTTP POST +
+        # retry/backoff loop (Letflow.Obs.Alerts.deliver_with_retry/4, dispatched from
+        # fire_hooks/4) off Letflow.Scheduler.Poller's own process. Deliberately its own
+        # supervisor, not a reuse of any of the six above: alert-hook delivery is
+        # I/O-bound HTTP dispatch to tenant-operator-configured external endpoints, an
+        # independent concern from sandbox provisioning, plugin/Lua/Wasm execution --
+        # mirroring Wasm.ModuleRegistryTaskSupervisor's own "independent concern"
+        # reasoning above. MUST precede `scheduler_children()` below: the Poller's
+        # own first :tick runs with ZERO delay (`Process.send_after(self(), :tick, 0)`
+        # in poller.ex's init/1) and, from that very first tick, can dispatch to this
+        # supervisor via fire_hooks/4 -- if this supervisor were registered after
+        # scheduler_children(), that first tick could reach
+        # Task.Supervisor.start_child/2 before this name is registered, the same
+        # ordering hazard SandboxPool.TaskSupervisor's own comment above documents for
+        # its analogous case. No ordering dependency relative to the six
+        # Task.Supervisors above (unlike the SandboxPool/SandboxPool.TaskSupervisor
+        # pair), matching ModuleVersionRegistry/ModuleVersionRegistryTaskSupervisor's
+        # own "order between these two is not load-bearing" note.
+        {Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}
       ] ++ scheduler_children() ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

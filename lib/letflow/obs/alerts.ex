@@ -35,11 +35,21 @@ defmodule Letflow.Obs.Alerts do
   file, no controller, and no Plug module is added or modified by this
   module.
 
-  ## No new periodic process
+  ## No new periodic process, but one new dispatch-only child (ISS-0429)
 
-  Detection runs on REQ-186's existing `Letflow.Scheduler.Poller` tick
-  cadence via `run_detection/2`. No new child is added to
-  `Letflow.Application`'s supervision tree.
+  Detection still runs on REQ-186's existing `Letflow.Scheduler.Poller` tick
+  cadence via `run_detection/2` — this module still owns no ticker of its
+  own. As of ISS-0429 (design
+  `lib/letflow/design/iss0429-async-alert-hook-delivery.md`), `fire_hooks/4`
+  dispatches each hook's `deliver_with_retry/4` call (HTTP POST + its own
+  internal retry/backoff loop) as a fire-and-forget task under a new,
+  dedicated `Letflow.Obs.Alerts.TaskSupervisor` child of
+  `Letflow.Application`, instead of running it synchronously on the
+  Poller's own process. This keeps the Poller's `handle_info(:tick, _)`
+  from blocking on a slow or unreachable hook endpoint's retry/backoff
+  schedule — see ISS-0429 for the full incident. `check_and_record_emission/4`
+  is unaffected: it still runs synchronously, on the calling process,
+  committed before any dispatch decision.
 
   ## OQ-1 resolution (auth_secret_ref namespace)
 
@@ -62,11 +72,19 @@ defmodule Letflow.Obs.Alerts do
   `last_tick_started_at` is nil (first tick), the paused-subscription check
   is skipped entirely.
 
-  ## OQ-4 resolution (no application.ex change)
+  ## OQ-4 resolution (no application.ex change) — superseded by ISS-0429
 
-  `Letflow.Obs.Alerts` has no process of its own. `run_detection/2` is a
-  pure function called from the Poller's tick. `application.ex` is
-  unchanged.
+  `Letflow.Obs.Alerts` still has no process of its own: `run_detection/2`
+  remains a pure function called from the Poller's tick, and this module
+  still defines no `start_link/1` or `child_spec/1`. This no longer means
+  `application.ex` is unchanged, though: ISS-0429 added one child,
+  `{Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}`, purely to
+  isolate `deliver_with_retry/4`'s HTTP delivery work from the Poller's own
+  process (see "No new periodic process, but one new dispatch-only child"
+  above). That supervisor owns no state and makes no decisions of its own —
+  it exists only so `fire_hooks/4` has somewhere supervised to dispatch a
+  detached delivery task, the same pattern this codebase's other six
+  domain-scoped `Task.Supervisor` children already follow.
   """
 
   require Logger
@@ -419,7 +437,18 @@ defmodule Letflow.Obs.Alerts do
             :ok
 
           :ok ->
-            deliver_with_retry(hook, payload, trigger_key, 1)
+            # ISS-0429: fire-and-forget dispatch, not `async_nolink` + `handle_info`
+            # correlation -- see this module's moduledoc and the design doc's §3 for
+            # why. Nothing reads deliver_with_retry/4's return value (never did, even
+            # when called synchronously); Task.Supervisor.start_child/2's own return
+            # value is discarded too -- a start_child/2 failure is a Task.Supervisor
+            # machinery failure, not an alert-delivery failure. Crash observability for
+            # an unanticipated raise inside deliver_with_retry/4 comes from
+            # Task.Supervisor's own supervised-task crash-report/logging path, not from
+            # anything this call site needs to add.
+            Task.Supervisor.start_child(Letflow.Obs.Alerts.TaskSupervisor, fn ->
+              deliver_with_retry(hook, payload, trigger_key, 1)
+            end)
         end
       end
     end)

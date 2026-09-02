@@ -35,16 +35,31 @@ source: >
   own mix test attribution analysis (two full-suite runs, consistent single
   failure, isolated run passes).
 duplicate_note: >
-  ISS-0410 (queue task 410, GH#806, filed 2026-09-02T12:04:10Z by
-  RELEASE-VALIDATOR during WF04-S7-20260902) independently found the same
-  underlying bug with a more precise root cause: Letflow.ServiceCatalog.list_all/1
-  has no scope/tenant filter, and test/letflow/routers/admin_services_test.exs
-  is the specific other file leaving scope: :global rows behind (confirmed via
-  a deterministic 3-way reproduction, including an isolated two-file run).
-  Treat ISS-0410 as the primary record for this bug; this record (ISS-0409)
-  is kept as the original discovery but should be closed as
-  resolved-via-duplicate once ISS-0410 is picked up and fixed, per the same
-  cross-reference convention already established for ISS-0391/ISS-0393.
+  ISS-0410 (queue task 410, GH#806) is the same underlying bug report,
+  filed independently ~1h14m later. ISSUE-FIXER's diagnosis (below) found
+  THIS record's own hedge -- "leftover global-scope service_catalog rows
+  from an earlier interrupted mix test run... may be a related or
+  contributing factor" -- was the correct read, not ISS-0410's more
+  specific but wrong causal claim (a missing tenant/scope filter on
+  list_all/1). Both records close together as no_defect.
 queue_task_id: 409
 github_issue: 805
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0410-20260902
+verdict_at: "2026-09-02T12:22:40Z"
+no_defect_evidence: >
+  ISSUE-FIXER (2026-09-02), diagnosing ISS-0410 (the cross-referenced
+  duplicate of this record): confirmed this record's own suspected
+  mechanism was correct. Two genuinely stale service_catalog rows
+  (req191-svc-388, req191-svc-1686, scope: global, dated 2026-09-01 --
+  one full day before either issue was filed) were found directly in the
+  live letflow_test database, orphaned from an unrelated interrupted
+  mix test run that never reached its on_exit teardown. Deleted both
+  rows; re-ran test/letflow/service_catalog_test.exs alone (33/33 passed)
+  and together with test/letflow/routers/admin_services_test.exs (39/39
+  passed, twice, deterministically) -- both files' own cleanup logic is
+  correct once no external stale state interferes. list_all/1's
+  unfiltered-by-design behavior is deliberate, REVIEWER-signed-off,
+  REQ-192-specified (not a defect to fix). Full evidence (measurement,
+  candidate mechanisms tested, method limitation) recorded in ISS-0410.yaml
+  under the same verdict_in_run.

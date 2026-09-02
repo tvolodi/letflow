@@ -1,0 +1,40 @@
+id: ISS-0414
+title: "service_catalog has no safety net against leftover rows from an interrupted mix test run (root cause of ISS-0409/ISS-0410)"
+discovered_by: ISSUE-FIXER
+discovered_in_run: WF03-ISS0410-20260902
+discovered_at: "2026-09-02T12:23:33Z"
+severity: MINOR
+tags: [test-isolation, service-catalog, tooling, s6]
+description: >
+  ISSUE-FIXER's diagnosis of ISS-0410/ISS-0409 (both closed no_defect
+  2026-09-02) found the real cause of two independently-filed
+  test-isolation reports: two genuinely stale service_catalog rows,
+  orphaned from an unrelated interrupted mix test invocation that never
+  reached its on_exit teardown, sat in the live letflow_test database for
+  at least a day before either issue was filed.
+  service_catalog (lib/letflow/service_catalog.ex) is this codebase's only
+  table with no per-tenant-schema DROP SCHEMA CASCADE safety net (per its
+  own moduledoc's GLOBAL table design note, deliberate per REQ-191/192),
+  so it is uniquely exposed to accumulating leftover rows from any
+  interrupted/crashed mix test run, with nothing currently detecting or
+  auto-cleaning that state. This could recur with different row ids and
+  produce a similarly confusing, hard-to-attribute test failure again.
+  Worth a lightweight mitigation -- e.g. a test/test_helper.exs or CI
+  pre-check asserting service_catalog is empty before the suite starts, or
+  a mix letflow.check.test-gate cleanup step -- rather than relying on
+  every future interrupted run's on_exit firing correctly. This is a
+  design-worth-scoping question for CODE-DESIGNER, not a pre-decided fix.
+affected_files:
+  - lib/letflow/service_catalog.ex
+  - test/test_helper.exs
+related:
+  - REQ-191
+  - REQ-192
+  - ISS-0409
+  - ISS-0410
+source: >
+  ISSUE-FIXER's diagnosis handoff during WF03-ISS0410-20260902, closing
+  ISS-0410/ISS-0409 as no_defect.
+queue_task_id: 414
+github_issue: 811
+status: open

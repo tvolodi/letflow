@@ -47,6 +47,51 @@ related:
   - REQ-207
   - REQ-208
   - REQ-210
+  - REQ-056
+  - REQ-177
+  - ISS-0104
+diagnosis_note: >
+  ISSUE-FIXER (2026-09-02): root cause confirmed by direct source read, not
+  a hidden defect -- Letflow.Engine.Transition.dispatch_node/4
+  (lib/letflow/engine/transition.ex:270-339) is a 7-way dispatch table
+  (START/END/HUMAN_TASK/EXCLUSIVE_GATEWAY/PARALLEL_GATEWAY/SUB_PROCESS/
+  TIMER) with an explicit, self-documented catch-all returning
+  {:error, {:node_type_not_yet_implemented, node_type, node_id}} for the
+  one remaining Graph.node_type() variant, :SERVICE_TASK. This is a
+  deliberately, repeatedly self-documented scope boundary REQ-056 (pure
+  ServiceTask logic: config parsing, failure classification, backoff,
+  idempotency -- shipped, done) and REQ-177 (DLQ landing on give-up --
+  shipped, done) both explicitly scoped OUT three times each in their own
+  design docs, never closed by any later requirement.
+  What a real fix needs (NOT a small wire-up): (1) a dispatch-shape
+  decision matching the existing async-park pattern HUMAN_TASK already
+  uses (Transition's own purity contract forbids I/O in the synchronous
+  dispatch hop); (2) a concrete HTTP transport implementation of
+  ServiceTask.transport_fun() (none exists yet -- deliberately deferred,
+  per lib/letflow/design/service_task.md §3.4); (3) a concrete
+  service_catalog lookup for route_kind: :catalog_service (S6, still
+  unbuilt, same design doc §3.5); (4) the actual dispatch-orchestration
+  process (a supervised gen_statem/Task that sleeps for backoff, calls the
+  transport, classifies outcomes via ServiceTask.classify_failure_kind/1,
+  retries per decide_failure/3, advances the token on success or routes to
+  set_instance_error/2 -> REQ-177's DLQ on give-up); (5) ISS-0104 (CHK-10,
+  a known upstream validator defect forcing a non-blank "endpoint"
+  attribute even for catalog-only dispatch) is a likely co-requisite.
+  R-Co has real source to port from (src/engine/service_task.zig,
+  executeHttpRequest() and its dispatch-loop caller) but REQ-056
+  deliberately ported only the pure/injectable-boundary logic, not the
+  transport or orchestration loop -- so this is a real gap R-Co has
+  closed and Letflow hasn't, not new-invented functionality, but no
+  existing Letflow code exists to fall back on for the remaining piece.
+  SIZING VERDICT: this is NOT a scoped WF-03 bug fix. New architectural
+  decision (supervised process shape), touches a security-sensitive
+  tenant-data path (outbound HTTP driven by tenant-authored URL
+  templates -- SECURITY-REVIEWER will need to gate on SSRF/tenant-scoping
+  grounds), multi-file/multi-module scope. Recommend routing through
+  REQ-ANALYST as one or more new, properly sized requirements rather than
+  fixed as a WF-03 issue. This record stays open pending that new
+  requirement's completion -- closing it directly would misrepresent an
+  undiagnosed-but-unfixed gap as resolved.
 source: >
   docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
   independent per-requirement re-verification of REQ-208).

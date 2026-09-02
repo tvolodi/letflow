@@ -12340,3 +12340,267 @@ requirements:
       - "the added text in both files is concrete about WHEN the step runs in that agent's own workflow (e.g. before reporting the step/handoff complete), matching the style of surrounding instructions in the same file, not generic advice like 'remember to check for warnings'"
       - "mix help letflow.check.test (or an equivalent direct read of lib/mix/tasks/letflow.check.test.ex) is quoted or cited to confirm the command name and behavior actually matches what the two instruction files now say it does"
     depends_on: []
+
+  - id: REQ-214
+    title: SERVICE_TASK dispatch orchestration core -- HTTP transport, SSRF-gated inline_url dispatch, and a supervised polling process advancing parked tokens (EXT-01 dispatch loop, closes ISS-0411 part 1)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Closes ISS-0411/GH#807 (queue task 411): Letflow.Engine never
+      dispatches :SERVICE_TASK nodes. dispatch_node/4
+      (lib/letflow/engine/transition.ex:334-339) hits its generic
+      {:error, {:node_type_not_yet_implemented, :SERVICE_TASK, node_id}}
+      catch-all for every SERVICE_TASK node -- the one Graph.node_type()
+      variant that reaches it. REQ-056 (done, S3) already shipped the pure
+      logic this requirement wires up: Letflow.Engine.ServiceTask's
+      parse_config_from_node_attributes/1, classify_failure_kind/1,
+      is_retriable_failure/1, decide_failure/3,
+      compute_service_task_backoff_ms/3, build_idempotency_key/4,
+      build_service_task_give_up_error_attrs/1, build_empty_url_error_attrs/1
+      -- see lib/letflow/design/service_task.md, which deliberately left the
+      transport, the service_catalog lookup, and the dispatch-orchestration
+      loop itself out of scope (its own §1 table). REQ-177 (done, S6)
+      separately wired the give-up outcome into Letflow.Dlq.enqueue/2. Both
+      requirements' own design docs name this exact remaining gap; ISS-0411
+      is that gap surfacing as a real platform defect (discovered via
+      REQ-208's Meridian committee-vote/disbursement paths sitting behind
+      undispatchable SERVICE_TASK nodes) rather than new-invented scope.
+      THIS REQUIREMENT IS THE CORE: the HTTP transport, the dispatch
+      decision loop, and its supervised process -- mirroring REQ-186's own
+      split (Letflow.Scheduler's core/poller, no route/engine wiring in that
+      requirement) rather than REQ-187's engine-wiring half, which is
+      REQ-215.
+      SCOPE:
+      1. A concrete transport_fun() implementation (REQ-056 design §3.4)
+      using :httpc.request/4 -- already this codebase's own established
+      outbound-HTTP mechanism (REQ-183's Letflow.Webhooks.dispatch_http/3,
+      :inets/:ssl already started per mix.exs's own comment at that call
+      site) -- rather than adding a new HTTP client library dependency. No
+      new decision record is needed: :httpc is already the platform's one
+      outbound-HTTP mechanism, used identically for the same
+      tenant-authored-URL threat model REQ-183/REQ-204 already solved.
+      2. SECURITY (BLOCKER, INV-9): every dispatch call, for BOTH
+      route_kind values, MUST call Letflow.Webhooks.UrlValidator.validate/2
+      (lib/letflow/webhooks/url_validator.ex, REQ-204) against the fully
+      rendered URL immediately before the :httpc.request/4 call --
+      identical defence-in-depth placement to
+      Letflow.Webhooks.dispatch_http/3,4 (lib/letflow/webhooks.ex:373-392).
+      A blocked URL returns the same {:error, :target_url_not_allowed}
+      shape UrlValidator already defines; the caller (REQ-215) routes it
+      through ServiceTask.build_service_task_give_up_error_attrs/1's
+      :request_build_error-shaped give-up path (no retry -- an SSRF-blocked
+      URL is deterministic, retrying cannot succeed, exactly like
+      :request_build_error's own existing rationale in service_task.md
+      §5.3). SERVICE_TASK's own url_template is tenant-authored graph-node
+      attribute data (definition-author-controlled, same trust boundary
+      webhook target_url has) -- this is a real SSRF surface, not a
+      speculative one, and SECURITY-REVIEWER is a hard gate on this
+      requirement for exactly that reason.
+      3. route_kind: :catalog_service dispatch: since S6's service_catalog
+      (src/repository/service_catalog.zig) is NOT built (no table, no
+      lookup module exists anywhere in lib/), this requirement's
+      catalog_lookup_fun() implementation (REQ-056 design §3.5) returns
+      {:error, :not_registered} unconditionally for every service_id --
+      stated explicitly in the moduledoc as a real, current limitation
+      (route_kind: :catalog_service dispatch attempts). :not_registered
+      routes through the same give-up path as an SSRF block (deterministic,
+      no retry). Building the real catalog is explicitly NOT this
+      requirement -- named as a future requirement, not silently deferred
+      unremarked.
+      4. The dispatch-orchestration process: a new context module,
+      Letflow.Engine.ServiceTaskDispatcher, plus a new supervised poller
+      process, Letflow.Engine.ServiceTaskDispatcher.Poller, added to
+      Letflow.Application's supervision tree (lib/letflow/application.ex)
+      alongside the existing Letflow.Scheduler.Poller entry -- same
+      architecture, NOT the same process (SERVICE_TASK dispatch and TIMER
+      firing are independent concerns with independent poll cadences and
+      independent per-tenant claim queries; do not overload
+      Letflow.Scheduler.Poller with a second responsibility). Mirrors
+      Letflow.Scheduler's own design exactly (lib/letflow/scheduler.ex,
+      lib/letflow/design/req185-scheduler-firing-architecture.md,
+      lib/letflow/design/req186-scheduler-core.md): supervised GenServer
+      ticker (no Oban, matching this codebase's own already-decided
+      no-background-job-library posture), FOR UPDATE SKIP LOCKED claim
+      per tenant schema, one Repo.transaction/1 per claimed dispatch
+      attempt, no startup-sweep lock. A parked SERVICE_TASK token needs its
+      own durable "pending dispatch" record to poll against -- reuse the
+      shape decision REQ-186 already made for exactly this problem
+      (a `service_task_dispatches` table analogous to `timers`, holding
+      instance_id, token_id, node_id, config snapshot, attempt_index,
+      next_attempt_at, status) rather than inventing a different
+      persistence shape; this requirement owns that table's migration and
+      schema module.
+      5. On each poll claim: call the config's transport_fun() (step 1),
+      classify the raw outcome via REQ-056's classify_failure_kind/1,
+      decide via decide_failure/3 using the row's own attempt_index and the
+      config's retry_limit. :retry re-schedules next_attempt_at using
+      compute_service_task_backoff_ms/3 and increments attempt_index in the
+      same transaction (no sleep -- the poller's own poll interval is the
+      wait mechanism, exactly like Letflow.Scheduler never sleeping inside
+      fire_timer/2). :give_up (either exhausted retries or an immediately
+      non-retriable kind) computes
+      build_service_task_give_up_error_attrs/1's attrs and returns them to
+      REQ-215's caller -- THIS module does not call
+      Letflow.Engine.set_instance_error/2 itself (that call site belongs to
+      REQ-215's engine-wiring layer, per REQ-056 design §6's own routing
+      statement: "a future dispatch-orchestration caller... is required to
+      invoke" set_instance_error/2, not this module doing it directly,
+      keeping Letflow.Engine.* as the sole caller of its own
+      standalone_error_attrs()-consuming functions).
+      6. A successful (2xx, JSON-object body) dispatch: this module returns
+      the decoded body to REQ-215's caller for REQ-049's VariableMerge and
+      token advancement -- again, this module does not call
+      Letflow.Engine functions itself; it returns a typed outcome
+      (:advance, decoded_body) | (:give_up, standalone_error_attrs()) |
+      :retry_scheduled, and REQ-215 supplies the actual Engine call sites,
+      matching the same layering Letflow.Scheduler/Letflow.Engine.
+      advance_after_timer_fired/3 already established (poller module calls
+      into Letflow.Engine, not the reverse).
+      NOT IN THIS REQUIREMENT, AND WHY:
+      (a) dispatch_node/4's own :SERVICE_TASK dispatch clause and the
+      activation-time async-park write (the transition.ex/engine.ex
+      wiring analogous to REQ-187's role for TIMER) -- REQ-215, so this
+      requirement's own module can be built and unit-tested (transport_fun,
+      classification, claim/poll loop) against synthetic parked-dispatch
+      rows before the Engine can ever produce a real one.
+      (b) The real service_catalog (S6, still unbuilt) -- step 3 above
+      states the stub explicitly rather than building it.
+      (c) HTTP request cancellation/abort on instance cancellation
+      (REQ-187's own description already named this as REQ-056's deferred
+      "HTTP-abort half" and explicitly excluded it from REQ-187's own
+      scope) -- still deferred; this requirement's poller simply lets an
+      already-dispatched :httpc.request/4 call complete or time out
+      per-request (the config's own timeout_ms), it does not add a new
+      cross-request cancellation mechanism. A row belonging to a since-
+      cancelled/completed instance is skipped at claim time (same
+      SCH-03-style check REQ-187 already established for timers) rather
+      than aborted mid-flight.
+      (d) No change to lib/letflow/engine/service_task.ex itself (REQ-056's
+      pure functions) beyond what step 1-3 above requires wiring against --
+      no re-litigating its already-shipped classification/backoff/decision
+      algorithms.
+    acceptance_criteria:
+      - "a synthetic service_task_dispatches row with route_kind :inline_url and a URL resolving to a real HTTPS test endpoint, when claimed by ServiceTaskDispatcher.poll_and_dispatch/1 (or equivalently named per the module's own moduledoc), results in exactly one :httpc.request/4 call and correctly classifies a 2xx JSON-object response as an :advance outcome carrying the decoded body -- via REQ-056's own classify_failure_kind/1, not a re-implementation"
+      - "a dispatch row whose rendered URL resolves to a blocked SSRF range (127.0.0.1, 169.254.169.254, and a DNS-rebinding case via an injected resolver, mirroring test/letflow/webhooks/url_validator_test.exs's own three cases) is rejected by UrlValidator.validate/2 BEFORE any :httpc.request/4 call is made, and produces a :give_up outcome -- asserted by mocking/injecting the transport such that a real :httpc call occurring at all fails the test"
+      - "a dispatch row with route_kind :catalog_service is rejected with a :not_registered-shaped :give_up outcome regardless of service_id, and the moduledoc states explicitly that this is because S6's service_catalog does not exist yet, naming it as a future requirement's job"
+      - "a failure classified as retriable (e.g. :timeout, :network, :rate_limited_429) with attempt_index below the config's retry_limit results in the row's next_attempt_at advancing per REQ-056's compute_service_task_backoff_ms/3 and attempt_index incrementing, in the SAME transaction as the claim -- verified by reading the row back, not by trusting the function's return value alone"
+      - "a failure classified as non-retriable, OR a retriable failure whose attempt_index has reached retry_limit, produces a :give_up outcome carrying the exact standalone_error_attrs() shape ServiceTask.build_service_task_give_up_error_attrs/1 returns -- this module itself never calls Letflow.Engine.set_instance_error/2, confirmed by grep showing no such call exists in the new module"
+      - "Letflow.Engine.ServiceTaskDispatcher.Poller is added to Letflow.Application's supervision tree as its own entry, distinct from and running alongside Letflow.Scheduler.Poller (both present in the supervisor's child list, confirmed by reading application.ex), with its own configurable poll interval (mirroring Letflow.Scheduler.poll_interval_ms/0's Application.get_env pattern)"
+      - "a dispatch row belonging to an instance that is no longer ACTIVE (cancelled or completed) is skipped at claim time and never produces an :httpc.request/4 call, mirroring REQ-187's SCH-03 timer-cancellation precedent -- explicit test"
+      - "SECURITY-REVIEWER's sign-off is recorded confirming every dispatch code path -- both route_kind values -- calls UrlValidator.validate/2 immediately before its :httpc.request/4 call, per INV-9's own verification checklist item 3"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-056, REQ-204]
+
+  - id: REQ-215
+    title: Wire SERVICE_TASK nodes into the engine -- async-park dispatch on token arrival, re-entry on dispatcher outcome (closes ISS-0411 part 2, REQ-061's own deferred AC8 caller)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S3
+    description: >
+      Second half of ISS-0411/GH#807's fix, atop REQ-214's dispatch-core
+      module. Mirrors REQ-187's own role for TIMER nodes exactly (engine
+      transition + lifecycle wiring, disjoint files from REQ-214's core,
+      same reason REQ-187 was split from REQ-186: "REQ-186 builds a
+      subsystem, this changes the engine's transition and lifecycle
+      paths").
+      THE STUB THIS CLOSES: lib/letflow/engine/transition.ex's
+      dispatch_node/4 catch-all clause (currently lines 334-339,
+      pending REQ-214's own edits elsewhere in the file, which do not touch
+      this clause) returns {:error, {:node_type_not_yet_implemented,
+      :SERVICE_TASK, node_id}} for every SERVICE_TASK node. This is the
+      last of the 8 Graph.node_type() variants without a real dispatch_node/4
+      clause.
+      SCOPE:
+      1. Transition (PURITY, matching REQ-187's own §4 requirement
+      verbatim for TIMER): a token arriving at a :SERVICE_TASK node must
+      NOT dispatch HTTP synchronously inside transition/3
+      (Transition's own moduledoc purity contract: "no
+      File.*/HTTPoison/Req.*/:httpc/process-mailbox call ... anywhere in
+      transition/3's call graph"). Add dispatch_service_task/4, following
+      dispatch_human_task/3's async-park shape exactly
+      (lib/letflow/engine/transition.ex:387-390): the token is appended to
+      an InstanceState list field (name it in the moduledoc; either reuse
+      pending_task_nodes's own shape with a discriminating field, or add a
+      new field -- state which and why) and transition/3 returns a new
+      pending_event() variant, {:service_task_dispatch_requested, token_id,
+      node_id}, carrying no config and no HTTP detail -- the impure caller
+      (step 2) resolves the node's attributes and calls REQ-056's
+      parse_config_from_node_attributes/1 itself, exactly as REQ-187's
+      {:timer_armed, token_id, node_id} carries no duration and no
+      timestamp for the identical reason.
+      2. Impure activation-time caller (the Letflow.Engine function that
+      already turns {:sub_process_start, ...} and {:timer_armed, ...} into
+      real writes, per transition.ex's own moduledoc cross-references):
+      on {:service_task_dispatch_requested, token_id, node_id}, parse the
+      node's config via REQ-056's parse_config_from_node_attributes/1,
+      render its URL template against instance variables (REQ-056 design
+      §4 notes template rendering is deliberately not that module's job --
+      state which existing Letflow rendering mechanism this requirement
+      reuses, e.g. whatever REQ-183's body_template rendering or an
+      equivalent existing templating call already uses; do not invent a
+      new template-rendering algorithm here), and validate the rendered
+      URL via REQ-056's validate_rendered_url/1. An empty-rendered-URL
+      failure routes through build_empty_url_error_attrs/1 into
+      set_instance_error/2 (AC6's already-designed path, never wired to a
+      real caller until now). Otherwise, INSERT one row into REQ-214's
+      service_task_dispatches table (attempt_index 0, next_attempt_at =
+      now) in the SAME transaction as the state-transition event append --
+      matching REQ-187's own "timer row and the state-transition event are
+      written in ONE transaction" acceptance criterion exactly, for the
+      identical reason (a crash between the two must not leave a dangling
+      token with no dispatch record).
+      3. Re-entry: a new Letflow.Engine.advance_after_service_task_outcome/N
+      function, directly mirroring
+      Letflow.Engine.advance_after_timer_fired/3's own shape (engine.ex
+      L1898-1916: fetch-and-lock the instance projection, rebuild the
+      snapshot/state, dispatch a hop, persist) -- called BY REQ-214's
+      dispatcher poller (never the reverse) when a dispatch row resolves to
+      :advance or :give_up (REQ-214's own typed outcomes, not re-derived
+      here). :advance carries the decoded 2xx body -- merge it via REQ-049's
+      VariableMerge.merge/3 (REQ-056 design §5's own documented, not-yet-
+      wired caller relationship) and advance the token off the
+      :SERVICE_TASK node along its outgoing edge, reusing
+      advance_off_completed_node/4's existing declared-order/default-last
+      algorithm (transition.ex:463+) exactly as
+      dispatch_task_completion/4 and dispatch_sub_process_completion/4
+      already do -- do not write a fourth copy of that algorithm. :give_up
+      calls Letflow.Engine.set_instance_error/2 directly with REQ-214's
+      returned standalone_error_attrs() (REQ-056 design §6's routing
+      statement, finally given a real caller) -- in the SAME transaction as
+      the dispatch row's own terminal-status update, so a crash between the
+      two cannot leave one without the other.
+      4. Cancellation: a token parked mid-SERVICE_TASK-dispatch whose
+      instance is cancelled must not be advanced by a late-arriving
+      dispatcher outcome. REQ-214's own claim-time ACTIVE-instance check
+      (its own acceptance criteria) handles the not-yet-claimed case; this
+      requirement additionally ensures Letflow.Engine.cancel_instance/3
+      marks any still-pending service_task_dispatches row for that
+      instance as cancelled in the SAME transaction as the instance's own
+      status flip (mirroring REQ-187's cancel_pending_timers/2 call site
+      exactly -- add the equivalent call alongside it, not a new
+      unrelated mechanism).
+      5. Documentation accuracy fix (ISS-0411's own explicit instruction,
+      a doc change not a code change): correct
+      docs/migration/stage-7-simulation-uat-parity.md's REVIEWER sign-off
+      entry (from REQ-210), which currently attributes the Meridian
+      quorum/disbursement paths' unreached status to "the now-resolved
+      join_counters defect" -- ISS-0397/join_counters IS resolved and
+      test/letflow/simulation/req208_meridian_test.exs's own step2b now
+      passes; the real cause was always this SERVICE_TASK dispatch gap.
+      Update that entry to name this correctly rather than leaving the
+      stale attribution standing.
+      NOT IN THIS REQUIREMENT: no change to REQ-214's dispatcher/poller
+      internals; no change to REQ-056's already-shipped pure functions; no
+      route or controller file; no change to the real service_catalog
+      (still S6, unbuilt).
+    acceptance_criteria:
+      - "a definition containing a SERVICE_TASK node whose route_kind is inline_url, dispatched against a real (test-server) HTTPS endpoint returning a 2xx JSON object, starts an instance whose token reaches that node, parks (no {:error, {:node_type_not_yet_implemented, :SERVICE_TASK, _}}), and is later advanced past the node once REQ-214's dispatcher resolves it -- an end-to-end test replacing what all three of test/letflow/simulation/req206_swiftroute_test.exs, req207_vortex_test.exs, and req208_meridian_test.exs currently elide, per ISS-0411's own description"
+      - "req208_meridian_test.exs's committee-vote/quorum-2-of-3/disbursement paths (previously unreached, per ISS-0411) are reached and pass end to end -- this is the concrete regression test the issue itself names as blocked on this fix"
+      - "the SERVICE_TASK dispatch row and its state-transition event are written in ONE transaction: a test that forces the event append to fail leaves no service_task_dispatches row behind"
+      - "a URL template that renders to an empty string is rejected at activation via build_empty_url_error_attrs/1 and routes to Letflow.Engine.set_instance_error/2's ERROR path rather than ever creating a dispatch row -- exercising REQ-056's AC6 path with a real caller for the first time"
+      - "cancelling an instance with a still-pending service_task_dispatches row marks that row cancelled in the same transaction as the instance's own status flip, and REQ-214's dispatcher never dispatches a cancelled row -- explicit test forcing the race (row claimed-but-not-yet-dispatched at cancellation time)"
+      - "lib/letflow/engine/transition.ex contains no :httpc/HTTPoison/Req/File call after this change (grep-verified per the module's own documented purity check), and its moduledoc names the new pending_event() variant and which InstanceState field carries the parked token"
+      - "docs/migration/stage-7-simulation-uat-parity.md's REQ-210 REVIEWER sign-off entry no longer attributes the Meridian quorum/disbursement gap to join_counters, and instead correctly names this requirement's own fix -- confirmed by reading the corrected entry text"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-214, REQ-177, REQ-049, REQ-061]

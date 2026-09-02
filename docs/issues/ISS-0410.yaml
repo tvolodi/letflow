@@ -36,18 +36,60 @@ related:
   - REQ-192
 duplicate_note: >
   ISS-0409 (queue task 409, GH#805, filed 2026-09-02T10:50:00Z by
-  ELIXIR-DEV during WF03-ISS0408-20260902) is the same underlying bug,
-  filed ~1h14m earlier -- same failing test, same suspected mechanism
-  (leftover global-scope service_catalog rows), but without this record's
-  more precise root-cause identification (the specific interacting file,
-  admin_services_test.exs, and the exact query-level fix needed: a
-  tenant/scope filter on list_all/1). This record (ISS-0410) is the more
-  complete one and should be treated as primary; ISS-0409 should be closed
-  as resolved-via-duplicate once this is picked up, per the same
-  cross-reference convention already established for ISS-0391/ISS-0393.
+  ELIXIR-DEV during WF03-ISS0408-20260902) is the same underlying bug
+  report, filed ~1h14m earlier. ISSUE-FIXER's diagnosis (below) found
+  ISS-0409's own hedge ("may be a related or contributing factor rather
+  than the sole cause") was the more accurate read -- this record's
+  (ISS-0410's) specific causal claim (a missing tenant/scope filter on
+  list_all/1, with admin_services_test.exs as the live leak source) was
+  investigated and found WRONG. Both records close together as no_defect.
 source: >
   docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
   independent mix letflow.check.test re-run).
 queue_task_id: 410
 github_issue: 806
-status: open
+status: no_defect
+verdict_in_run: WF03-ISS0410-20260902
+verdict_at: "2026-09-02T12:22:40Z"
+no_defect_evidence: >
+  ISSUE-FIXER (2026-09-02): (1) MEASUREMENT -- `mix test
+  test/letflow/service_catalog_test.exs` alone, 3 deterministic runs
+  (--seed 0): 32/33, same failure every time (line 750, "assert
+  length(page2) == 1" -- left: 2, right: 1). --trace output showed page
+  1's unfiltered LIMIT 3 query correctly returned only the test's own 3
+  fresh rows; page 2's cursor query returned an extra, untracked 4th row.
+  Direct query against the live letflow_test database (docker exec
+  letflow-postgres-1 psql -U letflow -d letflow_test) found two genuinely
+  leftover service_catalog rows (req191-svc-388, req191-svc-1686), scope:
+  global, both dated 2026-09-01 -- one full day before this issue was even
+  filed, orphaned from an unrelated, earlier interrupted mix test
+  invocation that never reached its on_exit teardown. Deleted both rows
+  directly; re-ran service_catalog_test.exs alone -> 33/33 passed;
+  re-ran together with admin_services_test.exs (the exact combination
+  this issue named) -> 39/39 passed, twice, deterministically; confirmed
+  table back to 0 rows after both runs.
+  (2) CANDIDATE MECHANISMS TESTED: (a) list_all/1 missing a tenant/scope
+  filter as an accidental gap -- RULED OUT: read lib/letflow/service_catalog.ex's
+  own moduledoc, which states the unfiltered behavior is deliberate ("no
+  tenant or scope filtering whatsoever... the caller is entirely
+  responsible"), and REQ-192's own acceptance criteria in
+  docs/requirements.yaml explicitly require unfiltered listing ("returns
+  entries the caller's own tenant does not own, demonstrating it is not
+  tenant-filtered") -- adding a filter would be a regression against a
+  shipped, REVIEWER-signed-off requirement, not a fix. (b)
+  admin_services_test.exs as the live interacting leak source -- RULED
+  OUT: both stale rows predate this issue's discovery run by a full day;
+  the file's own on_exit cleanup was independently confirmed correct via
+  the clean 39/39 combined re-run. (c) genuinely stale pre-existing DB
+  rows from an unrelated interrupted run -- CONFIRMED, per the direct
+  query and before/after row counts above.
+  (3) METHOD LIMITATION: this measurement rules out THIS specific
+  instance of leftover rows: it does not prove no future interrupted
+  mix test run can leave new orphaned service_catalog rows behind, since
+  ExUnit's on_exit cleanup is skipped entirely when a run is
+  killed/crashed rather than completing normally, and this table (unlike
+  every tenant-scoped table) has no per-tenant-schema DROP SCHEMA CASCADE
+  safety net to fall back on. A follow-up issue is filed separately for
+  this residual risk (see below) rather than folded into this no_defect
+  verdict.
+  (4) RUN-ID/TIMESTAMP: see verdict_in_run:/verdict_at: above.

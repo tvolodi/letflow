@@ -3963,6 +3963,20 @@
       "released_lock": true,
       "last_known_step": "Step Final -- verified no_defect, queue task 416 released status: done",
       "note": "ISS-0416's own suspected mechanism (cross-process DB contention causing an intermittent AC7 failure) was verified directly: confirmed no other mix test process was running, then ran test/letflow/service_catalog_test.exs alone 8 consecutive times with different seeds -- 33/33 passed every time, zero recurrence. Closed as no_defect, no code change needed."
+    },
+    {
+      "run_id": "WF03-ISS0414-20260902",
+      "requirement_id": null,
+      "issue_id": "ISS-0414",
+      "queue_task_id": 414,
+      "github_issue_number": 811,
+      "status": "IN_PROGRESS",
+      "owned_modules": [],
+      "started_at": "2026-09-02T13:20:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "note": "WF-03 issue-resolving run for ISS-0414: service_catalog is this codebase's only table with no per-tenant-schema DROP SCHEMA CASCADE safety net, uniquely exposed to accumulating leftover rows from any interrupted/crashed mix test run. Root cause of ISS-0409/ISS-0410's own recurrence. Issue itself frames this as a design-worth-scoping question, not a pre-decided fix -- routing through a real CODE-DESIGNER pass rather than a direct action."
     }
   ]
 }

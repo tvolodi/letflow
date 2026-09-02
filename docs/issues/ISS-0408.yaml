@@ -24,8 +24,29 @@ description: >
   join->END and are unaffected, but this is a real, distinct
   pre-existing gap in the join-then-continue path.
 affected_files:
-  - lib/letflow/engine/transition.ex
-  - lib/letflow/engine/task_activation.ex
+  - lib/letflow/engine.ex
+  - lib/letflow/engine/token_record.ex
+  - lib/letflow/tenant_provisioning.ex
+  - priv/repo/migrations/20260902000001_make_tokens_branch_id_nullable.exs
+  - test/letflow/engine/schemas_test.exs
+affected_files_note: >
+  The original filing (written by ORCH from the bug report, before diagnosis)
+  listed lib/letflow/engine/transition.ex and lib/letflow/engine/task_activation.ex
+  as affected -- that was a guess based on where the symptom surfaced
+  (fire_join/5 mints the synthetic id; cast_token_record_id/1 rejects it).
+  Diagnosis (Step 1) traced the actual root cause one layer up: the hop-chain
+  Multi construction in lib/letflow/engine.ex (build_task_activation_and_
+  reconciliation_multi/4 and persist_timer_fired_advance/6) had no insert step
+  to persist a real TokenRecord for a hop-chain-new join token before
+  task-activation/reconciliation ran against it. Both engine.ex commits
+  (542f2974, 74aba472) explicitly confirm transition.ex and task_activation.ex
+  were NOT modified -- the fix left cast_token_record_id/1 and
+  do_reconcile_token_records/5 byte-for-byte unchanged and instead ensured the
+  token they receive is always a real, persisted record. A schema/changeset
+  gap surfaced during implementation (TokenRecord.branch_id was null: false at
+  the DB level though a join-merged token's branch_id is legitimately nil per
+  REQ-051/REQ-044) required the additive migration and token_record.ex/
+  tenant_provisioning.ex changes.
 related:
   - ISS-0396
   - REQ-051
@@ -34,4 +55,8 @@ source: >
   step-04b-test-design-validator.json, step-06-issue-fixer-close.json.
 queue_task_id: 408
 github_issue: 800
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0408-20260902
+resolved_at: "2026-09-02T09:22:17Z"
+design_doc: lib/letflow/design/iss0408-join-token-record-insert-fix.md
+regression_test: test/letflow/iss0408_join_token_record_test.exs

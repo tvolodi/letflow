@@ -1,0 +1,24 @@
+id: ISS-0407
+title: "TaskActivation.append_multi_from_existing_records/7 key_disambiguator spec is looser than its real shape"
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0396-20260902
+discovered_at: "2026-09-02T04:00:00Z"
+severity: MINOR
+tags: [type-safety, engine, follow-up]
+description: >
+  ISS-0396 (WF03-ISS0396-20260902) added an optional
+  key_disambiguator :: term() | nil parameter to
+  Letflow.Engine.TaskActivation.append_multi_from_existing_records/7.
+  Every real caller passes an Ecto.UUID.t() (parent_token.id) or nil --
+  the term() | nil spec is looser than necessary and could hide a real
+  type error at a future call site. Tighten to Ecto.UUID.t() | nil.
+affected_files:
+  - lib/letflow/engine/task_activation.ex
+related:
+  - ISS-0396
+source: >
+  handoffs/WF03-ISS0396-20260902/step-03d-reviewer.json,
+  step-06-issue-fixer-close.json.
+queue_task_id: 407
+github_issue: 799
+status: open

@@ -1,0 +1,37 @@
+id: ISS-0408
+title: "TaskActivation rejects the synthetic non-UUID token ids dispatch_parallel_join/4 mints for freshly-joined branches, blocking join-to-further-work scenarios"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0396-20260902
+discovered_at: "2026-09-02T04:30:00Z"
+severity: MAJOR
+tags: [engine, parallel-gateway, task-activation, follow-up]
+description: >
+  Discovered by TEST-DESIGNER while extending ISS-0396's regression
+  test (WF03-ISS0396-20260902, Step 4), independently confirmed by
+  TEST-DESIGN-VALIDATOR. Letflow.Engine.Transition.
+  dispatch_parallel_join/4's fire_join/5 mints a synthetic non-UUID
+  token id (origin_token_id <> "/" <> node.id <> "/joined") for a
+  freshly-joined PARALLEL_GATEWAY branch that is not yet persisted as
+  a TokenRecord. Letflow.Engine.TaskActivation.
+  append_multi_from_existing_records/7's cast_token_record_id/1
+  rejects any non-UUID via Ecto.UUID.cast/1, raising
+  {:invalid_token_record_id, ...}.
+
+  This means any scenario where a PARALLEL_GATEWAY join is immediately
+  followed by further work requiring a new task activation (e.g.
+  join -> HUMAN_TASK) currently fails -- only join -> END works today.
+  ISS-0396's own shipped fix and regression test only require
+  join->END and are unaffected, but this is a real, distinct
+  pre-existing gap in the join-then-continue path.
+affected_files:
+  - lib/letflow/engine/transition.ex
+  - lib/letflow/engine/task_activation.ex
+related:
+  - ISS-0396
+  - REQ-051
+source: >
+  handoffs/WF03-ISS0396-20260902/step-04-test-designer.json,
+  step-04b-test-design-validator.json, step-06-issue-fixer-close.json.
+queue_task_id: 408
+github_issue: 800
+status: open

@@ -1,0 +1,50 @@
+id: ISS-0419
+title: "CI backend gate: verify/fix wasmex Rust NIF build caching so mix deps.get does not silently defeat the deps/_build cache on every run"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902
+discovered_at: "2026-09-02T13:42:07Z"
+severity: MINOR
+tags: [ci, performance, wasm, s6]
+description: >
+  The backend CI job (`.github/workflows/ci.yml` `jobs.backend`) currently
+  takes 12-15 min on a clean run and 15-45+ min under contention, most of
+  it plausibly the wasmex NIF Rust compile (`WASMEX_BUILD: true` is set
+  deliberately, per REQ-165/`lib/letflow/design/req165-wasmex-process-boundary.md`
+  section 0, to force building against the pinned Rust toolchain in
+  `.tool-versions` rather than silently pulling a `rustler_precompiled`
+  prebuilt binary -- that decision is NOT in scope to reverse here, it
+  exists specifically to prevent toolchain drift).
+  Cargo build output for the wasmex crate lands at
+  `deps/wasmex/native/wasmex/target/` (`Rustler.Compiler.compile_crate/3`
+  runs cargo with `cd: config.path`, no `CARGO_TARGET_DIR` override, so
+  it's Cargo-default relative to the crate dir) which IS nested inside
+  the already-cached `deps` path (ci.yml's `actions/cache` step, keyed on
+  `hashFiles(mix.lock)`) -- but `mix deps.get` runs unconditionally every
+  single run, even on a cache hit, and it is UNVERIFIED whether that step
+  preserves the nested `native/wasmex/target/` Cargo build dir intact or
+  silently wipes/invalidates it on every invocation regardless of the
+  `actions/cache` restore.
+  Also present: `CARGO_INCREMENTAL: 0` is set on the backend gate step,
+  which deliberately disables incremental compilation (usually done for
+  CI cache-corruption safety) -- worth confirming this is still the right
+  tradeoff once/if the `target/` dir caching is actually verified working.
+  Raised by the user directly after observing a 15-minute CI run and
+  asking whether the wasmex NIF could be precompiled/cached; investigation
+  confirmed `WASMEX_BUILD: true`'s rationale is deliberate and load-bearing
+  (must not be reversed) but surfaced this separate, real caching-scope gap.
+affected_files:
+  - .github/workflows/ci.yml
+related:
+  - REQ-165
+  - REQ-136
+  - REQ-138
+  - ISS-0352
+  - ISS-0418
+source: >
+  User-initiated investigation during ISS-0404/ISS-0418 work, 2026-09-02.
+  Confirmed via reading .github/workflows/ci.yml and
+  deps/rustler/lib/rustler/compiler.ex directly (compile_crate/3's
+  `cd: config.path` call site).
+queue_task_id: 419
+github_issue: 817
+status: open

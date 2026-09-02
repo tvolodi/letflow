@@ -40,4 +40,6 @@ source: >
   Recurrence paragraph.
 queue_task_id: 404
 github_issue: 793
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0404-20260902
+resolved_at: "2026-09-02T12:14:07Z"

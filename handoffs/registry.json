@@ -4090,12 +4090,12 @@
       "issue_id": "ISS-0429",
       "queue_task_id": 429,
       "github_issue_number": 833,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [],
       "started_at": "2026-09-02T20:50:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
+      "lock_released_at": "2026-09-02T22:40:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #842 merged to main, queue task 429 released done",
       "note": "WF-03 issue-resolving run for ISS-0429: Process.sleep inside alert-hook delivery blocks the platform-wide Scheduler.Poller GenServer for up to tens of seconds per hook per tenant, stalling every tenant timer. Issue asks to reconcile placement with ISS-0425 (concurrent supervision-tree redesign proposal) rather than inventing one -- ISSUE-FIXER sizing pass first."
     }
   ]

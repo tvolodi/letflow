@@ -82,4 +82,31 @@ source: >
 queue_task_id: 429
 github_issue: 833
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0429-20260902
+resolved_at: "2026-09-02T22:40:00Z"
+resolution: >
+  Alert-hook delivery moved off the platform-wide Scheduler.Poller
+  GenServer onto a new Letflow.Obs.Alerts.TaskSupervisor (fire-and-forget
+  Task.Supervisor.start_child/2 dispatch), placed after the six existing
+  domain-scoped Task.Supervisors and before scheduler_children()/
+  http_child() in lib/letflow/application.ex -- load-bearing ordering,
+  independently re-derived by both CODE-DESIGN-VALIDATOR and REVIEWER
+  (the Poller's zero-delay first tick would otherwise dispatch to a
+  not-yet-started supervisor). check_and_record_emission/4's at-most-once/
+  dedupe semantics, deliver_with_retry/4's body/@spec, backoff_delay/2,
+  RetryPolicy, and poller.ex's existing try/rescue are all byte-for-byte
+  unchanged. CODE-DESIGN-VALIDATOR independently verified the
+  crash-observability claim: Task.Supervisor.start_child/2 tasks run
+  under proc_lib, so an unhandled crash is logged via standard
+  :logger/SASL regardless of caller monitoring, matching Elixir's own
+  documented behavior. ELIXIR-DEV produced a real fail-first proof
+  (reverted dispatch -> genuine test timeout; reapplied -> passes) and
+  fixed two pre-existing REQ-201 tests broken by the semantics change,
+  independently verified by REVIEWER as legitimate adaptations against
+  REQ-201's own original spec, not weakenings. Full suite: 3055/3058 (2
+  pre-existing rustc-ENOENT failures, 1 documented ISS-0426-class Lua
+  wall-clock flake). lib/letflow/webhooks.ex's identical-shape latent
+  instance (no live caller) explicitly left as a still-open follow-up.
+  Merged via PR #842 (one wasm_hang-class CI flake on the initial run,
+  re-ran clean, confirmed unrelated).

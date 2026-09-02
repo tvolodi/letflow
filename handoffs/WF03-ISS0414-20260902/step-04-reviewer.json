@@ -1,0 +1,67 @@
+{
+  "handoff_id": "WF03-ISS0414-20260902-step-04",
+  "run_id": "WF03-ISS0414-20260902",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0414-20260902/step-04-reviewer.json",
+  "created_at": "2026-09-02T13:55:07Z",
+  "started_at": "2026-09-02T13:52:00Z",
+  "completed_at": "2026-09-02T13:55:07Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-191", "REQ-192"],
+    "issue_ids": ["ISS-0414", "ISS-0409", "ISS-0410"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0414-service-catalog-safety-net.md",
+      "handoffs/WF03-ISS0414-20260902/step-03-security-reviewer.json",
+      "test/support/tenant_schema_reaper.ex",
+      "test/test_helper.exs",
+      "test/support/service_catalog_reaper_test.exs"
+    ],
+    "artifacts_out": [
+      "handoffs/WF03-ISS0414-20260902/step-04-reviewer.json"
+    ],
+    "branch_name": "fix/ISS-0414-service-catalog-safety-net-20260902"
+  },
+  "task": {
+    "description": "Idiom/scope/decision-record hard gate on the ISS-0414 service_catalog safety-net implementation: (1) idiom check of sweep_service_catalog_orphans/1 against the module's existing style; (2) design fidelity (reuses existing guard, no age threshold, unconditional delete with warn-log, wired at the same two test_helper.exs boundary points); (3) adequacy of the 5 tests in service_catalog_reaper_test.exs; (4) decision-record consistency; (5) legitimacy of the design's 2 deferred open questions; (6) regression run.",
+    "acceptance_criteria": [
+      "Idiom, supervision, scope-creep, and decision-record checks performed against the real diff, not the design doc alone",
+      "5 tests read and confirmed non-vacuous, covering the design's specified scenarios",
+      "mix test test/support/service_catalog_reaper_test.exs test/support/tenant_schema_reaper_test.exs test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs test/letflow/definitions/service_scope_validator_test.exs green",
+      "PASS only if no genuine defect found; otherwise FAILED routed back to ELIXIR-DEV"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "1. Idiom check: read the new sweep_service_catalog_orphans/1 (test/support/tenant_schema_reaper.ex lines 206-274) against sweep_orphans/2's existing style (lines 131-204) side by side. Naming (sweep_*_orphans, own_tag, rows), the try/rescue/after skeleton, Sandbox.mode(repo, :auto) then :manual restore in `after`, `Logger.info` for deferral / `Logger.warning` for an anomalous nonzero find / `Logger.error` with Exception.format(:error, exception, __STACKTRACE__) for the rescue branch, and read-before-delete (SELECT then DELETE, never a bare bulk DELETE) all match sweep_orphans/2's own idiom exactly. No case-do hand-rolled state machine, no new process, no GenServer -- this is a plain function extending an existing test-support module, which is the right shape for a suite-boundary hook (not a candidate for gen_statem at all -- there is no state to manage across calls). Idiomatic, consistent with the file it extends.\n\n2. Design fidelity: confirmed line-for-line against design doc SS2.4/SS2.5/SS3. own_tag + concurrent_invocation_present?/2 reused verbatim, zero duplication (git diff confirms these private helpers have zero hunks touching them). No min_age_seconds-equivalent parameter -- correctly omitted per SS2.1's argument (service_catalog rows are never held open across a test's duration, so no age buffer is needed; verified this claim against service_catalog_test.exs/admin_services_test.exs/service_scope_validator_test.exs, none of which hold a row open past their own on_exit/1). Delete is unconditional (`DELETE FROM service_catalog` with no WHERE clause), matching SS2.4 step 6 exactly, with the required :warning log naming every found service_id/scope pair first. test/test_helper.exs wiring: two new lines, one before ExUnit.start() immediately after the existing sweep_orphans() call, one inside the same ExUnit.after_suite/1 callback immediately after the existing sweep_orphans() call inside it -- exactly the 'two plain adjacent calls, no new wrapper function' placement SS3 specifies, not folded into a shared wrapper.\n\n3. Test coverage (test/support/service_catalog_reaper_test.exs, 5 describe blocks): (a) empty-table test actually pre-sweeps then asserts {:ok, %{deleted: 0}} and Repo.aggregate(Entry, :count) == 0 -- non-vacuous, checks real DB state, not just the return tuple. (b) mixed scope test inserts one :global and one :tenant-scoped row (with a real tenant FK via insert_tenant!), asserts both existed before and both are gone after, deleted >= 2 -- exercises the 'no scope-based filtering' claim for real. (c) concurrent-invocation-deferral test opens a genuine second Postgrex connection tagged with a fake application_name with no matching TEST_PARALLEL_GROUP suffix, confirms via a direct pg_stat_activity query that the tag is visible before asserting {:deferred, :concurrent_invocation} and that the pre-inserted row survives untouched, then closes that connection and re-sweeps to confirm the row is deleted once the hazard clears -- this is a real concurrency scenario, not a mock. (d) sibling test_parallel.sh test computes the invocation's own group suffix from a real `SHOW application_name` and branches its own assertion (expect_proceed?) on whether this invocation is itself running under a group tag today -- correctly falls back to exercising the plain ISS-0110 'no group tag, still excluded correctly' path when run standalone, rather than silently no-op'ing; this is a deliberate, honest adaptation for the two different real-invocation shapes, not weakened coverage. (e) failure-mode test uses a BrokenRepo whose query!/1-2 always raises but whose get_dynamic_repo/0 delegates to the real Letflow.Repo (so Sandbox.mode/2 still resolves) -- isolates the forced failure to exactly the SELECT/DELETE path per the design's own rationale, and the security reviewer's independently-run test output already confirms the real rescue-branch log line fires. All 5 are non-vacuous and match the design's SS4 required coverage list one-for-one.\n\n4. Decision-record consistency: grepped docs/anti-patterns.md and docs/migration/decisions/ for service_catalog/TenantSchemaReaper -- zero hits in either. No existing decision record is touched or contradicted. service_catalog's deliberate global-table design (lib/letflow/service_catalog.ex) is unchanged -- this diff adds zero lib/letflow/ files (git diff --stat confirms only test/support/, test/test_helper.exs, docs/guides/test_developer_guide.md, and the design doc itself changed).\n\n5. Open questions: OQ-1 (mid-run leak healing) is a structural limitation of any suite-boundary sweep, correctly left open with a stated future trigger (a third incident), consistent with iss064's own precedent for the same gap on tenant_schemas -- not silently resolved. OQ-2 (renaming TenantSchemaReaper) was explicitly left for REVIEWER to weigh in on: having read the actual moduledoc, the two-responsibility shape is not a code smell yet -- both sweeps share the exact same concurrency-guard mechanism and boundary-call-site convention, the moduledoc clearly separates the two responsibilities into their own labeled sections (ISS-0110/ISS-0217 vs ISS-0414), and each has its own independently-attributable test file. A rename now would touch every historical doc reference (ISS-0064/0110/0217 records) for zero behavioral gain -- agreeing with the design's own rejection. Recommend leaving OQ-2 open rather than acting on it now; revisit only if a third table's reaper need arrives and the module accretes a third unrelated responsibility. OQ-3 (no min_age_seconds for service_catalog) is legitimately narrower-by-design per point 2 above, not an oversight.\n\nNo scope creep found: no new abstraction, behaviour, or macro introduced; the change is exactly sized to the stated problem (one new function on an existing module, two call-site lines, one new test file), matching the design's own stated change class.\n\nNo type-safety gap worth filing: the new function's return type ({:ok, %{deleted: n}} | {:deferred, :concurrent_invocation}) is a plain, already-fully-enumerable tagged tuple with a @spec: there is no invalid-state class here that a struct/Ecto.Enum change would make unrepresentable -- it mirrors sweep_orphans/2's own already-reviewed shape.\n\n6. Regression: ran `mix test test/support/service_catalog_reaper_test.exs test/support/tenant_schema_reaper_test.exs test/letflow/service_catalog_test.exs test/letflow/routers/admin_services_test.exs test/letflow/definitions/service_scope_validator_test.exs` myself -- Result: 74 passed, 0 failures. Also ran `mix compile --warnings-as-errors` (clean, no output) and `mix format --check-formatted` (clean, no output).\n\nNo defect found. PASS.",
+    "routing": "PASS -- no genuine defect found. Route to Step 5 TEST-RUNNER: this change already ships its own full, adequate test coverage authored alongside the implementation (test/support/service_catalog_reaper_test.exs, 5 tests, confirmed non-vacuous in item 3 above, all passing), so no further TEST-DESIGNER/TEST-DESIGN-VALIDATOR cycle is needed for this run. TEST-RUNNER should independently re-run the full regression suite (not just the 5 targeted files reviewed here) to confirm no unrelated breakage before this fix is merged."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "step": "01b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-02T13:27:31Z"
+    },
+    {
+      "step": "03",
+      "agent": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-02T13:51:36Z"
+    },
+    {
+      "step": "04",
+      "agent": "REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-02T13:55:07Z"
+    }
+  ]
+}

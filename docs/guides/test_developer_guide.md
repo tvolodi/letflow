@@ -33,6 +33,20 @@ function in isolation without a server.
    `StreamData` properties use the framework's own seeding, not a hand-rolled RNG.
 4. **No test pollution.** Each test creates its own data (see `Ecto.UUID.generate()` in
    the existing tests) and doesn't depend on execution order.
+5. **`service_catalog` has no tenant-schema cleanup fallback (ISS-0414).** Every other
+   tenant-scoped table gets its rows reclaimed for free when a test's `on_exit/1` drops
+   that test's whole tenant schema (`DROP SCHEMA ... CASCADE`). `service_catalog` is a
+   GLOBAL table (`Letflow.ServiceCatalog`'s own moduledoc) with no such fallback — a row
+   left behind is left behind for good until something explicitly deletes it. Every test
+   file that writes to `service_catalog` must still clean up its own rows in its own
+   `on_exit/1` (see `test/letflow/service_catalog_test.exs`'s `cleanup_entry!/1`). The
+   suite-boundary safety net `Letflow.TenantSchemaReaper.sweep_service_catalog_orphans/1`
+   adds (`test/test_helper.exs`, before `ExUnit.start()` and in `ExUnit.after_suite/1`)
+   is exactly that — a safety net for a *crashed* run whose `on_exit/1` never got to run
+   — not a substitute for correct per-test cleanup in a normally-completing one: finding
+   any row at all at a suite boundary is itself logged as an anomaly, so a test relying
+   on the reaper instead of its own `on_exit/1` would trigger that warning on every
+   normal run.
 
 ---
 

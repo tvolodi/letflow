@@ -1,0 +1,61 @@
+{
+  "handoff_id": "WF03-ISS0414-20260902-step-03",
+  "run_id": "WF03-ISS0414-20260902",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0414-20260902/step-03-security-reviewer.json",
+  "created_at": "2026-09-02T13:51:36Z",
+  "started_at": "2026-09-02T13:48:00Z",
+  "completed_at": "2026-09-02T13:51:36Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-191", "REQ-192"],
+    "issue_ids": ["ISS-0414", "ISS-0409", "ISS-0410"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0414-service-catalog-safety-net.md",
+      "handoffs/WF03-ISS0414-20260902/step-02-elixir-dev.json",
+      "test/support/tenant_schema_reaper.ex",
+      "test/test_helper.exs",
+      "test/support/service_catalog_reaper_test.exs",
+      "docs/guides/test_developer_guide.md"
+    ],
+    "artifacts_out": [
+      "handoffs/WF03-ISS0414-20260902/step-03-security-reviewer.json"
+    ],
+    "branch_name": "fix/ISS-0414-service-catalog-safety-net-20260902"
+  },
+  "task": {
+    "description": "Run INV-1..INV-8 (docs/agents/instructions/security-invariants.md) against git diff origin/main...HEAD for ISS-0414's service_catalog suite-boundary reaper. Verify per the run's own instructions: (1) the unconditional DELETE only ever executes under MIX_ENV=test; (2) the reused concurrent_invocation_present?/2 guard is correct against both a genuinely separate invocation and a scripts/test_parallel.sh sibling partition; (3) no secrets/credentials in the new code or its log messages; (4) the never-raises/outer-rescue-returns-{:ok, %{deleted: 0}} contract is real; (5) only test-support files changed, no lib/letflow/ production code touched.",
+    "acceptance_criteria": [
+      "Every INV-1..INV-8 invariant determined APPLIES or NOT-APPLICABLE against the real diff, with APPLIES ones actually verified, not assumed",
+      "Scope test recorded explicitly",
+      "PASS only if every applicable invariant passes; otherwise FAILED with specifics routed back to ELIXIR-DEV"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: this diff adds test-support code (test/support/tenant_schema_reaper.ex, test/test_helper.exs, test/support/service_catalog_reaper_test.exs) that resolves no secret, and touches a lookup/DELETE against a table (service_catalog) -- treated as in-scope per this run's own instructions even though the table is a deliberately global, non-tenant-scoped table (per lib/letflow/service_catalog.ex's own moduledoc and prior REVIEWER sign-off, 2026-08-30) and no lib/letflow/ file or migration changed in this diff.\n\nINV-1 (tenant data isolation) -- NOT-APPLICABLE. No new/changed Ecto schema module or migration in this diff (git diff --name-only confirms zero priv/repo/migrations/*.exs and zero lib/letflow/*.ex files -- the only lib/ hit is the markdown design doc). service_catalog itself is confirmed (lib/letflow/service_catalog.ex lines 28-53, REVIEWER-signed 2026-08-30) to be deliberately global -- no :prefix, no tenant_id column, not in Letflow.TenantProvisioning.tenant_scoped_migrations/0 -- so INV-1's :prefix-scoping requirement does not apply to this table at all, and this diff doesn't touch that established design.\n\nINV-2, INV-3, INV-5 -- NOT-APPLICABLE (S4/S5 not started).\n\nINV-4 (secrets by reference only) -- APPLIES, PASS. Read lib/letflow/service_catalog/entry.ex's full schema (lines 53-70): endpoint_url, request_schema, response_schema, required_auth (Ecto.Enum descriptor, not key material), timeout_ms, retry_policy, scope, owner_tenant_id, created_at/updated_at -- no column holds actual secret/credential material. The new :warning log (tenant_schema_reaper.ex line ~253) names only service_id and scope per found row; confirmed by reading the schema these can never carry a secret value by construction.\n\nINV-6 -- read as advisory for new data-access paths; this is a test-support sweep of an already-reviewed global table, not a new access path into tenant data; no separate scoping demonstration required beyond INV-1's NOT-APPLICABLE finding above.\n\nINV-7 (no SQL string interpolation) -- APPLIES, PASS. `grep -n \"query!(\" test/support/tenant_schema_reaper.ex` shows the two new call sites (`repo.query!(\"SELECT service_id, scope FROM service_catalog\")` and `repo.query!(\"DELETE FROM service_catalog\")`) are both static string literals with zero interpolation of any tenant- or user-controlled value into the SQL text -- confirmed by reading the actual diff hunk, not just the design doc's description. (The log-message string interpolation a few lines away is Logger output, not SQL, and carries only service_id/scope per INV-4 above.)\n\nINV-8 (no unhandled crashes) -- APPLIES, PASS. Read the full try/rescue/after block (tenant_schema_reaper.ex lines 224-268): the rescue clause wraps the entire body (Sandbox.mode(:auto), current_application_name/1, concurrent_invocation_present?/2, both query!/1 calls) and returns {:ok, %{deleted: 0}} on any exception, logged at :error -- identical shape/parity to the pre-existing sweep_orphans/2 contract. Verified for real, not just read: ran `mix test test/support/service_catalog_reaper_test.exs test/support/tenant_schema_reaper_test.exs --seed 0` -- Result: 11 passed, including the deliberate BrokenRepo failure-mode test, whose forced exception is visible in the real log output ('[error] TenantSchemaReaper.sweep_service_catalog_orphans/1 aborted: ** (RuntimeError) boom (BrokenRepo.query!/1, forced for ISS-0414 test)') immediately followed by the test's own passing assertion of {:ok, %{deleted: 0}} -- the never-raises claim is real, not asserted-only. Also ran `MIX_ENV=test mix compile --warnings-as-errors` (clean) and `mix format --check-formatted` (clean).\n\nMIX_ENV=test confinement (task item 1): traced mix.exs -- elixirc_paths(:test) is the only env compiling test/support (elixirc_paths(_) => [\"lib\"] otherwise), so tenant_schema_reaper.ex cannot even be loaded outside MIX_ENV=test. test/test_helper.exs is loaded exclusively by ExUnit.start(), which only ever runs from the `mix test` task -- Mix's own `test` task hardcodes MIX_ENV to test before any config or code loads, regardless of an ambient MIX_ENV value, and config/test.exs (the only config sourced under that env) points Letflow.Repo at `letflow_test#{MIX_TEST_PARTITION}` (config/test.exs line 54), never a dev/prod database name. No invocation shape in this repo (plain `mix test`, `mix test <path>`, scripts/test_parallel.sh, `mix letflow.check.test`) bypasses this. Confirmed structurally, not by convention alone.\n\nConcurrent-invocation guard re-verification (task item 2): read concurrent_invocation_present?/2, current_application_name/1, group_tag_of/1 in full (tenant_schema_reaper.ex lines 280-320) -- byte-for-byte unchanged by this diff (confirmed: git diff shows zero hunks touching these lines), reused verbatim as the design claims, not duplicated. Traced config/test.exs lines 71-95 (ISS-0110/ISS-0217 tagging) and scripts/test_parallel.sh: each test_parallel.sh partition connects to its OWN database (`letflow_test#{MIX_TEST_PARTITION}`, a distinct partition index per launched process) even though all partitions are visible to each other in the single server-wide pg_stat_activity view -- so the TEST_PARALLEL_GROUP-tag exclusion correctly lets sibling partitions proceed with their sweep without deferring, and because each sibling's service_catalog rows live in a physically different database, a sibling's DELETE FROM service_catalog can only ever affect that sibling's own partition database, never cross-contaminate another partition's data, even in the hypothetical worst case. A genuinely separate, non-sibling invocation (no matching group tag, e.g. two ungrouped `mix test` runs sharing the default `letflow_test` database) is correctly NOT excluded and still defers, exactly as ISS-0110 requires. This guard was already load-bearing for sweep_orphans/2 and is unmodified here; new coverage in service_catalog_reaper_test.exs's own criterion-3/4 tests exercises both branches directly against sweep_service_catalog_orphans/1 specifically, and both passed in the real test run above.\n\nScope (task item 5): `git diff origin/main...HEAD --name-only` confirms only test/support/tenant_schema_reaper.ex, test/test_helper.exs, test/support/service_catalog_reaper_test.exs (new), docs/guides/test_developer_guide.md, lib/letflow/design/iss0414-service-catalog-safety-net.md (design doc, not code), and handoff/registry bookkeeping files changed. Zero files under lib/letflow/*.ex or priv/repo/migrations/*.exs. No production code touched.\n\nNo defect found. All applicable invariants PASS.",
+    "routing": "Route to Step 4 REVIEWER for OTP-idiom/scope-creep/decision-record-consistency review. No security defect found; INV-1 is NOT-APPLICABLE (no schema/migration change, and service_catalog is an already-reviewed, deliberately global table); INV-4, INV-7, INV-8 APPLY and PASS, independently verified by reading the actual diff hunks and running the real test suite (mix test test/support/service_catalog_reaper_test.exs test/support/tenant_schema_reaper_test.exs --seed 0 => Result: 11 passed; mix compile --warnings-as-errors clean; mix format --check-formatted clean)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": true,
+  "gate_history": [
+    {
+      "step": "01b",
+      "agent": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "at": "2026-09-02T13:27:31Z"
+    },
+    {
+      "step": "03",
+      "agent": "SECURITY-REVIEWER",
+      "result": "PASS",
+      "at": "2026-09-02T13:51:36Z"
+    }
+  ]
+}

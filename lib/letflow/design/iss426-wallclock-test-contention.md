@@ -1,7 +1,9 @@
 # ISS-0426 — Lua wall-clock test contention flake — fix design
 
-**Status:** design, rework 1 (CODE-DESIGN-VALIDATOR FAIL on OQ-2 — resolved in §2.1.2 of
-this revision; see §2.1/§2.1.1a/§2.1.2/§3/§4/§7 for what changed).
+**Status:** design, rework 2 (CODE-DESIGN-VALIDATOR re-gate FAIL on the §2.1.2 seam's
+unbounded wait having no stated usage contract — resolved in §2.1.2a of this revision,
+plus the sibling §2.1.1b stating §2.1.1's categorical bound; rework 1 resolved OQ-2's
+mechanism itself in §2.1.2, which the rework 2 gate confirmed and did not revisit).
 **Scope:** test-infrastructure, plus two small additive `@doc false` test-only seams on
 `lib/letflow/engine/lua/executor.ex` (§2.1.1a candidate (i), §2.1.2) — no existing
 production function's behavior changes, only two new functions are added alongside them.
@@ -262,6 +264,46 @@ swaps from "async task + wall-clock race" to "synchronous call," and the
 take it (the new seam has no timeout parameter to pass — see Open Question OQ-1 on its
 exact arity/signature).
 
+#### 2.1.1b This seam's bound is categorical, not usage-dependent — and how it differs from §2.1.2's (rework 2's required fix)
+
+Stated explicitly because CODE-DESIGN-VALIDATOR's rework 2 gate found the design never
+said it, and a reader could otherwise wrongly assume this seam and §2.1.2's heap-limited
+seam are equally safe for the same reason. **They are not — they carry categorically
+different guarantees, and both must be stated so nobody carries §2.1.1's stronger
+guarantee's assumptions over to §2.1.2's weaker one, or vice versa.**
+
+`run_script/3` — the function this seam calls directly, with no wrapper — always runs
+under `Sandbox.new(max_instructions: budget)` (executor.ex, `run_script/3`'s own body).
+`:max_instructions` is a real VM-level instruction counter enforced by the `tv-labs/lua`
+interpreter itself on every opcode it executes; the moduledoc (executor.ex:54-80, quoted
+in §2.1.2a below) is explicit that a script can only ESCAPE the *outcome* this counter
+produces (by `pcall`-catching the raised "instruction budget exceeded" error and
+continuing) — it cannot escape the counter *incrementing* on every instruction the VM
+executes, because that increment is not something Lua source code can observe or
+intercept. So for any script that does not use Lua's own `goto` to construct a
+non-standard, VM-level-uninstrumented control-flow escape (a case this design has no
+evidence any Group-1 nil-heap workload attempts, and which would be a pre-existing gap in
+`:max_instructions` itself, not something this seam introduces), `run_script/3`
+terminates within a bounded number of VM instructions **by construction** — the same
+categorical, mechanism-level guarantee this whole design has been asking for throughout
+(§4's "structurally verifiable, not statistically" framing), not a fact about which
+scripts today's tests happen to pass it.
+
+**This is a stronger, different-in-kind guarantee than §2.1.2's seam has.** §2.1.2's seam
+(the heap-limited one) has no instruction counter backing it at the VM level for the
+*wall-clock* dimension — a script that `pcall`s its own `:max_instructions` exhaustion and
+loops again is NOT stopped by that counter (per the moduledoc's own hostile-case text),
+and if it also never trips the configured heap limit, nothing in that seam's mechanism
+stops it either; it hangs. That is why §2.1.2a exists as a binding usage contract
+(caller discipline) rather than a mechanism-level guarantee like this section's — the two
+seams are not interchangeable, and a future ELIXIR-DEV/TEST-DESIGNER choosing which seam
+a new Group-1 test should call must know which guarantee they are relying on:
+
+| Seam | What bounds its execution | Guarantee kind |
+|---|---|---|
+| §2.1.1 (nil-heap, `run_script/3` direct) | `:max_instructions`, enforced by the Lua VM interpreter on every opcode, not interceptable by Lua source | **Categorical** — holds for any input except a `goto`-based VM-instrumentation escape, independent of caller discipline |
+| §2.1.2 (heap-limited, `run_with_heap_limit/5`'s shape minus `after`) | Only the workload's own termination (fixed iteration, or reliably tripping `max_heap_words`) | **Contractual** — holds only if the caller obeys §2.1.2a's usage contract; the seam's own mechanism enforces nothing if the contract is violated |
+
 #### 2.1.2 The heap-limited Group 1 sites (605, 644, and the mixed tests' `memory_result` arms) — OQ-2, RESOLVED
 
 **This is the design gap CODE-DESIGN-VALIDATOR's rework instruction requires resolved as
@@ -310,12 +352,13 @@ mirrored unchanged, not reinvented.
   relax the heap limit itself, only the caller's *patience* for observing the outcome.
   Every Group-1 heap-limited test (605, 644, and the mixed tests' `memory_result` arms)
   asserts `memory_limit_exceeded` or `:ok`/success — never `wallclock_timeout` — so an
-  unbounded wait costs these tests nothing they were relying on. A workload that
-  genuinely never terminates and never trips the heap limit would hang this seam
-  forever — but no Group-1 heap-limited test uses such a workload (605/644's workloads are
-  the same bounded, real allocating scripts that terminate — successfully or via a heap
-  kill — every time today; they do not depend on a caller-issued kill to end), so this is
-  not a live risk for the sites this section actually covers.
+  unbounded wait costs these tests nothing they were relying on today. **This is true of
+  the current call sites, but it is a fact about what happens to be passed to the seam,
+  not a property the seam's own mechanism enforces** — a workload that genuinely never
+  terminates and never trips the heap limit would hang this seam forever, and nothing in
+  the seam itself prevents a future caller from passing one. §2.1.2a below turns this
+  observation into a binding usage contract on the seam, rather than leaving it as an
+  implicit fact true only because of what today's two call sites happen to be.
 - **Design §5.3's ordering argument is preserved, and is now unconditionally true rather
   than conditionally true.** The prior revision's concern (validator-cited) was whether
   removing the `after` clause could break the invariant that a `:killed` DOWN is
@@ -361,6 +404,81 @@ exercising exactly the `after`-clause branch this section's new seam omits). Thi
 section adds a second, narrower entry point alongside the production function for the
 tests that don't need the `after` clause; it does not change or remove the production
 function's own behavior, satisfying HARD CONSTRAINT 1 (AC4) the same way §2.1.1 does.
+
+#### 2.1.2a Binding usage contract on this seam (rework 2's required fix)
+
+**This is not a new mechanism change — the seam's behavior from §2.1.2 above is
+unchanged.** This subsection makes explicit, as a binding contract rather than an
+observation about current usage, the one thing §2.1.2's "why this is structurally sound"
+reasoning depended on without stating it as a rule: this seam has **no bound on how long
+it waits**. Removing the `after` clause removes the wall-clock kill entirely from this
+code path — deliberately, since that kill is exactly the mechanism these Group-1 tests
+don't want racing their assertions — but that means **nothing else in this seam bounds
+its own execution time**. The seam is safe today only because both of its current callers
+(605, 644, and the mixed tests' `memory_result` arms via §2.4) happen to pass a workload
+that terminates on its own. That is a fact about the callers, not a guarantee the
+mechanism enforces — exactly the gap CODE-DESIGN-VALIDATOR's rework 2 gate found.
+
+**Why this is a real, not academic, risk — from this module's own moduledoc
+(executor.ex:54-80, quoted directly, not paraphrased):**
+
+> `:max_instructions` is an in-band VM counter: when it is exhausted, control returns to
+> the Lua script itself (via a raised, `pcall`-catchable error), and the script decides
+> what happens next — that is the definition of "relying on Lua to cooperate."
+
+and, naming the exact hostile case this contract exists to rule out of this seam's inputs:
+
+> This kill fires purely on elapsed wall-clock time observed from outside the task. It
+> has no dependency on whether the script trapped, ignored, or never triggered its own
+> `:max_instructions` error: a script that `pcall`s its own budget exhaustion and loops
+> again is still killed, because the outer timeout has no counter of its own for the
+> script to reset or dodge — it only measures how long the task's OS-level process has
+> been running.
+
+For a script shaped like that — one that catches its own `:max_instructions` exhaustion
+in a `pcall` and loops again — the wall-clock kill is not one of two redundant bounds, it
+is the **only** bound that terminates it at all. `run_with_heap_limit/5`'s own `after`
+clause is precisely what stops such a script when a heap limit is also configured but
+the script never allocates enough to trip it (this is exactly what
+executor_test.exs:788's Group-2 test, "a memory-limited call whose script hangs without
+tripping the heap limit," exists to prove — a generous heap limit plus a
+`pcall`-guarded-and-repeated infinite loop, terminated only by the caller's own timeout
+kill). §2.1.2's seam removes that exact `after` clause. Pass that test's own workload
+shape to §2.1.2's seam instead of to `run_with_heap_limit/5`, and the seam waits forever
+for a `{reply_ref, result}` or `:DOWN` message that never arrives — the test hangs until
+ExUnit's own default 60s test timeout fires, which is a materially worse failure mode
+than the ISS-0426 flake this entire design exists to remove (a silent multi-second stall
+with a generic ExUnit timeout error, instead of a fast, clearly-attributed
+`wallclock_timeout` mismatch).
+
+**The contract, stated as a rule (this is the binding text — ELIXIR-DEV must carry this
+into the seam's own `@doc false` declaration, not merely into a design doc nobody reads
+at the call site):**
+
+> Callers of this seam MUST pass a workload that is guaranteed to terminate on its own,
+> independently of any wall-clock enforcement — either because it is bounded by
+> `:max_instructions` alone (a fixed-iteration or otherwise self-limiting script with no
+> construct that traps and re-triggers its own budget exhaustion), or because it is
+> expected to terminate via the configured `max_heap_words` heap-kill. This seam
+> deliberately does not enforce a wall-clock bound — that is its entire purpose, to let
+> Group-1 tests assert an outcome without racing the production wall-clock kill. A script
+> that can catch its own instruction-budget exhaustion (e.g. via `pcall`) and continue
+> executing is NOT a valid input to this seam: nothing will terminate it, and the calling
+> test process will hang until ExUnit's own test timeout, not the seam's. If a workload
+> cannot be shown to terminate independently of wall-clock enforcement, it belongs in
+> Group 2 (§2.2/§2.3, tag-isolated, still racing the real `after` clause via
+> `run_with_heap_limit/5` or `Task.yield` as normal) — never in this seam.
+
+**Applied to this design's own two call sites, so the contract is checked here rather
+than only asserted:** `@moderate_allocating_script` and `@gigabyte_allocating_script`
+(executor_test.exs:568-597, re-read for this rework) are both fixed-iteration Lua
+`for i = 1, N do ... end` loops building a table — no `pcall`, no loop construct that
+could re-enter after an instruction-budget trap. Both terminate purely by exhausting
+their fixed iteration count (natural completion) or by tripping the configured
+`max_heap_words` limit first (BEAM heap-kill) — never by relying on a wall-clock kill to
+end. Both call sites satisfy the contract as stated, so §2.1.2's earlier "not a live risk
+for the sites this section actually covers" conclusion holds — now because the contract
+is met and checked, not merely because it happens to be met.
 
 ### 2.2 GROUP 2 — tag + isolate, mirroring the `:wasm_hang` precedent exactly
 
@@ -583,6 +701,15 @@ structural for the group that matters most (Group 1, including the filed AC7 fai
    block — must find none). This alone confirms Group 1 (including the exact filed line,
    AC7, and the two previously-uncovered heap-limited tests) cannot reproduce
    ISS-0426's specific failure mode again, independent of host load.
+1a. **Contract check (§2.1.2a, no flake reproduction needed):** the heap-limited seam's
+   own `@doc false` declaration states, in substance, the binding usage contract §2.1.2a
+   specifies — that callers must pass a workload bounded independently of wall-clock
+   enforcement, and that a `pcall`-trap-and-continue workload will hang the caller. A
+   validator confirms this by reading the seam's own doc text, not by triggering a hang.
+   Separately, confirm the two current callers (605, 644, and the mixed tests' via §2.4)
+   still pass `@moderate_allocating_script`/`@gigabyte_allocating_script` unchanged
+   (§2.1.2a's own "applied to this design's own two call sites" analysis) — a one-time
+   source read, not a repeated run.
 2. **`mix test` (plain, serial):** must still pass 100% (HARD CONSTRAINT 3) — this was
    already true before the fix and remains a simple regression check, not new evidence
    about contention.
@@ -649,6 +776,10 @@ structural for the group that matters most (Group 1, including the filed AC7 fai
   it must satisfy: (a) no `Task`/`Task.yield` in its call chain, (b) reuses
   `run_script/3` rather than duplicating its body, (c) `@doc false`, matching
   `build_script_error/3`'s existing precedent for a test-only seam in this exact module.
+  **Latitude here is naming/arity only** — it does not extend to §2.1.2a's binding usage
+  contract text for the heap-limited seam, which is not latitude and must appear in that
+  seam's own `@doc false` content verbatim in substance, per rework 2's explicit
+  requirement.
 - **OQ-2 — RESOLVED in this revision, no longer open.** The prior revision left open
   whether the `max_heap_words`-limited Group 1 sites (REQ-156 AC-1/AC-2, lines 605/644)
   could use the nil-heap seam or needed a different mechanism, since they route through

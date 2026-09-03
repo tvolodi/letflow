@@ -601,6 +601,136 @@ defmodule Letflow.Scheduler.PollerTest do
     end
   end
 
+  # A retention-eligible event NOT archived on a rejected attempt stays
+  # pending in the "events" table -- left alone, it would still be there (and
+  # still eligible) on the NEXT attempt, so a later attempt's successful
+  # retention sweep could archive TWO (or more, across several skipped
+  # attempts) events at once, breaking a simple "archived count went up by
+  # exactly 1" delta check. Deleting any leftover pending event before each
+  # fresh attempt keeps every attempt's own delta isolated.
+  defp clear_pending_events!(schema_name) do
+    Repo.delete_all(Event, prefix: schema_name)
+  end
+
+  # AC3's requirement text has TWO independent sub-clauses: (a) a rejection
+  # for one schema's operation does not block a DIFFERENT schema's SAME
+  # operation later in the tick (covered above by the 10-schema antagonist
+  # test, all racing for the same poll_and_fire operation), and (b) a
+  # rejection for one schema's operation does not block that SAME schema's
+  # OTHER operations later in the tick. (a) alone does not exercise (b) --
+  # a coarser, forbidden design (one acquire/release per SCHEMA covering all
+  # six of its operations, ruled out by design doc §1/§3) would still pass
+  # every assertion in the test above, since that test only ever looks at
+  # one operation (poll_and_fire) across many schemas.
+  #
+  # This test exercises (b) with a LARGELY DETERMINISTIC harness rather than
+  # a two-sided race: an earlier draft used a continuous antagonist Task
+  # (mirroring ac3_antagonist_loop/0 above) contending against BOTH the
+  # target schema's poll_and_fire AND its retention-sweep admission calls at
+  # once. Diagnostic runs (temporary IO.puts instrumentation, since removed)
+  # showed that shape is not merely occasionally flaky but structurally
+  # biased: with a single sole global unit and a tight-looping antagonist,
+  # BOTH of the target's admission attempts overwhelmingly land on the SAME
+  # side of the race together (both admitted, or both rejected) far more
+  # often than they split -- a two-sided race does not reliably produce the
+  # one outcome this test needs. The fix removes one whole side of the race:
+  # the probe is acquired by the TEST process itself BEFORE `handle_info/2`
+  # is even invoked, so the tick's very FIRST admission attempt (this
+  # schema's poll_and_fire, with no other schema ahead of it in the
+  # `Enum.each`) is DETERMINISTICALLY rejected -- no race at all, since the
+  # test process's own `try_acquire/1` call has already completed, and
+  # nothing else could have taken or released that unit before
+  # `handle_info/2`'s own first line runs (same-process, strict
+  # happens-before ordering; `Task.async/1` below does not block this
+  # process from proceeding straight into the tick call). Only ONE race
+  # remains: whether the probe is released (by a short-lived helper Task)
+  # before the SAME schema's LATER retention-sweep admission attempt, which
+  # runs only after the entire poll_and_fire loop plus the unwrapped
+  # `maybe_refresh_active_instances/1` pass have completed -- a comfortably
+  # wide, one-sided margin rather than a symmetric coin flip.
+  defp ac3b_attempt(schema_name, instance_id, attempt) do
+    clear_pending_events!(schema_name)
+    timer_id = due_timer_for!(schema_name, "req218-ac3b-#{attempt}")
+
+    old_created_at =
+      DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
+
+    seed_event!(schema_name, instance_id, old_created_at, attempt)
+    archived_before = table_count(ArchivedEvent, schema_name)
+
+    assert {:ok, probe_ref} = Admission.try_acquire(:global)
+
+    releaser =
+      Task.async(fn ->
+        Process.sleep(5)
+        Admission.release(probe_ref)
+      end)
+
+    state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+    assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+    Task.await(releaser)
+
+    # Deterministic per the comment above: the probe was held before the
+    # tick began, so this schema's poll_and_fire admission call -- the very
+    # first admission attempt of the whole tick -- must have been rejected.
+    assert timer_status!(schema_name, timer_id) == "pending",
+           "expected this schema's poll_and_fire to be deterministically rejected (probe held " <>
+             "before the tick began), but its timer fired anyway"
+
+    table_count(ArchivedEvent, schema_name) == archived_before + 1
+  end
+
+  describe "REQ-218 AC3 (per-schema clause): a rejected schema's other ops still proceed" do
+    test "the same schema's retention sweep still runs after its own poll_and_fire was rejected, in the same tick" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+      put_scheduler_config(retention_enabled: true, retention_interval_ms: 0, retention_days: 30)
+
+      %{schema_name: schema_name} = provisioned_tenant("req218-ac3b")
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, instance_id)
+
+      # Filler schemas (no due timers/events of their own), provisioned ONCE
+      # and reused across every attempt -- Poller's own tenant_schemas/0
+      # lists every currently-provisioned schema, so these add real,
+      # unavoidable DB round-trip time between the target schema's own
+      # poll_and_fire admission attempt (near the very start of the tick's
+      # timer loop, essentially instantaneous regardless of filler count)
+      # and its own, much LATER retention-sweep admission attempt (only
+      # after the ENTIRE poll_and_fire loop across every schema, plus the
+      # unwrapped maybe_refresh_active_instances pass over every schema
+      # again, have both completed). Without fillers this gap was measured
+      # (temporary IO.puts instrumentation, since removed) to be so narrow
+      # that no fixed release delay reliably landed inside it -- too short a
+      # delay let the release race ahead of even the target's own
+      # poll_and_fire attempt (breaking the "poll deterministically
+      # rejected" assumption this test's first assertion depends on), while
+      # a delay long enough to avoid that then usually landed AFTER
+      # retention's own attempt too (both admission calls on the same,
+      # wrong side). Fillers widen the real elapsed time between the two
+      # target-schema attempts, not the release delay itself, so a single
+      # fixed delay can reliably land after the first and before the second.
+      for i <- 1..12, do: provisioned_tenant("req218-ac3b-filler-#{i}")
+
+      # Only one side of ac3b_attempt/3 above is still a race (whether the
+      # 5ms-delayed release beats the retention-sweep admission call) --
+      # retried a handful of times purely as margin against scheduler jitter
+      # on a loaded host, not because the outcome is symmetric.
+      result = Enum.reduce_while(1..10, nil, &ac3b_reduce(schema_name, instance_id, &1, &2))
+
+      assert result == :ok,
+             "expected at least one of 10 attempts where this schema's retention sweep still " <>
+               "ran (old event archived) after its own poll_and_fire admission call was " <>
+               "deterministically rejected in the same tick -- proving a rejected operation " <>
+               "for a schema does not block that SAME schema's OTHER operations from being " <>
+               "attempted later in the same tick"
+    end
+  end
+
+  defp ac3b_reduce(schema_name, instance_id, attempt, _acc) do
+    if ac3b_attempt(schema_name, instance_id, attempt), do: {:halt, :ok}, else: {:cont, nil}
+  end
+
   describe "REQ-218 AC4: Letflow.Admission.try_acquire({:tenant, _}) is never called from poller.ex" do
     test "the source text of lib/letflow/scheduler/poller.ex contains no {:tenant, admission call" do
       source = File.read!(Path.join(File.cwd!(), "lib/letflow/scheduler/poller.ex"))

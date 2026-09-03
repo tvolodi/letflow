@@ -144,8 +144,8 @@ tick, in order:
    `rescue` at all, so `after` is the ONLY mechanism guaranteeing release
    there).
 3. On `{:error, :capacity}`: do not call the operation at all for this
-   schema this tick. Log one line at `Logger.info/1` level (§2) naming the
-   schema and the operation, then continue the `Enum.each` to the next
+   schema this tick. Log one line at `Logger.warning/1` level (§2) naming
+   the schema and the operation, then continue the `Enum.each` to the next
    schema — this schema's turn for THIS operation is skipped for this
    tick only; nothing else is affected (§3).
 
@@ -171,22 +171,42 @@ raises, halts the `Enum.each`, or returns early from the enclosing
 `maybe_run_*`/`handle_info` function — this is a per-element skip inside
 an otherwise-unchanged iteration, not a loop-level short-circuit.
 
-**Logging: `Logger.info/1`, one line per skipped schema/operation pair,**
+**Logging: `Logger.warning/1`, one line per skipped schema/operation pair,**
 distinct in both level and content from the existing `rescue _ -> :ok`
 branches (rows 3–6), which log nothing today and are not changed to log
 anything by this requirement (NOT IN THIS REQUIREMENT's own text scopes
 changes to "any `maybe_run_*` function's own internal per-schema rescue
 logic" to "wrapping it in acquire/release" only — adding logging to the
-untouched `rescue` branches would exceed that scope). `Logger.info/1` (not
-`:warning`/`:error`) because an admission-driven skip is an EXPECTED,
-graceful-degradation outcome under load — the same severity class
-`fetch_tenant_schemas/0`'s own moduledoc-documented degrade-gracefully
-philosophy implies for its own DB-unreachable skip, not a fault requiring
-operator paging. The message must name both the schema and which of the
-six operations was skipped (e.g. distinguishable free text per row,
-`"schema=<schema_name> op=<operation-label>"`-shaped or equivalent) so an
-operator reading logs can tell which of the six admission sites is
-under contention, per the requirement's own "so an operator can see
+untouched `rescue` branches would exceed that scope). `Logger.warning/1`
+(not `:info`/`:error`) per this codebase's own two real, on-point
+precedents for the same event class — an expected condition where one
+item is skipped and the loop continues, worth an operator's attention but
+not a fault:
+`lib/letflow/tenant_provisioning/backfill.ex:37` and `:44`
+(`{:error, :tenant_not_provisioned}` / `{:error, :tenant_schema_missing}`
+inside a `Enum.reduce_while`-style backfill loop — each logs at
+`Logger.warning/1` and then continues via `{:cont, ...}`, i.e. skip-this-
+one-continue-the-loop, exactly REQ-218's own shape) and
+`lib/letflow/obs/alerts.ex:588` (`resolve_auth_header/1`'s `with`-`else`
+fallback on auth-secret-resolution failure logs at `Logger.warning/1`,
+`"alert hook auth_secret_ref resolution failed, sending without
+Authorization"`, then degrades gracefully by returning `nil` rather than
+halting delivery). Both precedents match REQ-218's skip event far more
+closely than the earlier draft's `fetch_tenant_schemas/0` analogy, which
+does not hold: `fetch_tenant_schemas/0`'s own `:error` path does not log
+at all (it only calls `MetricsRegistry.mark_active_instances_refresh_failed/0`),
+so it establishes no precedent for any specific `Logger` level.
+`Logger.info/1` also has zero live call sites anywhere else in
+`lib/letflow/`, confirming it is not this codebase's convention for any
+comparable event. `Logger.error` remains reserved in this codebase for
+actual failures/exhaustion (e.g. `alerts.ex:201` "alert detection
+crashed", `alerts.ex:534` "alert delivery exhausted"), which a capacity
+skip is not. The message must name both the schema and which of the six
+operations was skipped (e.g. distinguishable free text per row,
+`"schema=<schema_name> op=<operation-label>"`-shaped or equivalent,
+optionally with keyword metadata in the `alerts.ex:588` style) so an
+operator reading logs can tell which of the six admission sites is under
+contention, per the requirement's own "so an operator can see
 admission-driven skips happening" framing — the exact label vocabulary
 (atom, string constant, etc.) is ELIXIR-DEV's to choose, not specified
 further here since it carries no behavioral consequence.
@@ -432,8 +452,9 @@ an `async: false` test" requirement):
 * **Q2 — exact `Logger` message wording/label vocabulary for skip
   events (§2)** is left to ELIXIR-DEV's discretion (no behavioral
   consequence, no acceptance criterion constrains the exact string) —
-  only the level (`info`) and the requirement that both schema and
-  operation be identifiable in the message are fixed by this design.
+  only the level (`warning`, per §2's two cited precedents) and the
+  requirement that both schema and operation be identifiable in the
+  message are fixed by this design.
 * **Q3 — AC1's literal "mock/spy call count" framing (§6)** conflicts
   with this codebase's no-mocking-library precedent already established
   in `poller_test.exs`'s own moduledoc/tests (asserting real row-count/

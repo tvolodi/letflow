@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-02b-regate2",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate2.json",
+  "created_at": "2026-09-03T10:47:00Z",
+  "started_at": "2026-09-03T10:47:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440",
+      "ISS-0441"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-02-code-designer-rework2.json",
+      "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate.json",
+      "docs/issues/ISS-0441.yaml",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "mix.exs",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "FINAL RE-GATE of the ISS-0440 design (rework 2, commit b4ed0a41). You have failed this design twice, both times correctly, and the second failure exposed a repo-wide gap now filed as ISS-0441. Item 2 (the --dir override and AC1 demonstration mechanics) PASSED at the last gate and is SETTLED. This re-gate has exactly two questions plus a scope check.\n\n1. IS THE THREE-TIER RESTATEMENT COMPLETE AND TRUE? CODE-DESIGNER rewrote sections 1 and 3.5 around: Tier 1 CI runs unconditionally (structural); Tier 2 a violation is therefore always detected and recorded (structural, follows from Tier 1); Tier 3 whether detection blocks the merge is PROCEDURAL, since no branch protection exists and PR #848 is a live counterexample. It reports independently re-verifying both facts, correcting AC1's framing, and finding one additional leftover Tier-3-strength sentence in 1.2 that had survived rework 1. ORCH grepped: surviving 'impossible to merge' strings are the design quoting the withdrawn claim (48, 488), affirming the true half (495), supplying the corrected sentence (539), and referencing the framing (847).\n   VERIFY: (i) no section still argues from the withdrawn premise -- check 1.2's closing paragraph specifically, since that is where a leftover already hid once; (ii) Tier 2's claim is itself true -- does a violation REALLY get detected every time CI runs? Consider whether any path skips the linter within a CI run that does execute (e.g. an earlier alias step failing first and short-circuiting `mix letflow.check` before lint_handoffs is reached -- read mix.exs's alias ordering: lint_handoffs sits AFTER check_toolchain, check_requirements_registration and check_deferral_staleness, so if one of THOSE fails, does lint_handoffs still run?). If an earlier step can short-circuit it, Tier 2 is 'detected whenever CI reaches the linter', not 'always detected', and the design should say so. This is the same class of second-order overclaim you have now caught twice -- it is the last place it could hide.\n\n2. ARE THE --dir GUARDS ADEQUATE? New section 2.1a specifies both a hard refusal when an explicitly-supplied --dir discovers zero files, AND an unconditional banner naming the scanned directory on every run including the default path. Judge whether the pair is sufficient and whether the banner is genuinely unmissable as specified. Separately, the design DECLINES to restrict --autofix against the real corpus, arguing that restricting it would reintroduce the 'agent must remember the safe flags' failure mode this design exists to eliminate, and would block a legitimate local-fix use case; it names the closed mapping, status-field-only scope, and per-file reporting as what makes it acceptable. Judge that reasoning. An unrestricted mass-rewrite path on a hard CI gate is a real risk, but so is a safety mechanism that depends on remembering a flag -- decide which argument wins here and say why. Either verdict is defensible if reasoned.\n\n3. SCOPE CHECK. Confirm via git diff (b4ed0a41 against its parent) that rework 2 is confined to the three-tier restatement, the new 2.1a, the new 6.4, AC1's framing correction and the 1.2 leftover -- and that nothing settled moved: 2.1's --dir threading, resolve_dir/1's default, the byte-identical no-flag path, section 5's demonstration steps, the inside-handoffs/ rejection, both mechanisms' shapes, the four-option verdicts, the hook rejection, AC3/AC4/AC5, and the corrected 1900-file corpus figure. A rework that silently altered a settled element is itself a FAIL.\n\nBIAS TOWARD CLOSING -- and read this carefully, because it is the last rework available. rework_count is 2 of max 3. A FAIL here leaves ONE attempt before ORCH must escalate per ORCHESTRATOR.md. The design's remaining defect class is descriptive accuracy, not mechanism. If the tiers are honest and the guards reasoned, PASS -- do not hold the gate for wording you would have phrased differently, and do not manufacture a third-order objection to be thorough. If you genuinely must FAIL, give the EXACT sentences required so rework 3 is a mechanical edit.\n\nDo not edit lib/ or test/. Complete the handoff with per-item verdicts and a clear PASS/FAIL; on PASS route to ELIXIR-DEV. Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

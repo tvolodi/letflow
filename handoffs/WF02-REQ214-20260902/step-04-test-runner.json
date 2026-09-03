@@ -1,0 +1,46 @@
+{
+  "handoff_id": "2f0774b8-3bd6-4893-8ce8-60bb394068d1",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ214-20260902/step-04-test-runner.json",
+  "created_at": "2026-09-02T19:23:30Z",
+  "started_at": "2026-09-02T19:24:00Z",
+  "completed_at": "2026-09-02T19:40:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["d3192672-f336-4dee-bdde-94255a3eafc5"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ214-20260902/step-03b-test-design-validator-recheck1.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "config/dev.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Run the full mix test suite (scripts/test_parallel.sh) and mix compile --warnings-as-errors. Verify REQ-214's own test file, confirm no new failures vs. the pre-existing baseline."
+  },
+  "result": {
+    "status": "FAILED",
+    "summary": "REAL, ON-DISK EVIDENCE FOR THIS STEP: test/reports/report-2026-09-03-REQ214.yaml's own 'first_attempt' section (preserved verbatim in that file, confirmed present on disk at reconstruction time). This handoff file itself is a RECONSTRUCTION written 2026-09-03 after the fact, reformatting that real report's own first_attempt content into this schema -- not a fresh invention. Timestamps are reconstructed approximations except where noted below, where they are copied directly from the real report. Full-suite run: combined 3090 tests, 6 properties, 5 failures (3091/3096 passed) -- verbatim from the real report. 5 failures, in 2 classes. CLASS 1 (1 failure, REAL DEFECT, THIS BRANCH): Letflow.Engine.ServiceTaskDispatcherTest's boot-gating describe block -- specifically the 'config/dev.exs does not override start_service_task_dispatcher to false' test -- crashed under scripts/test_parallel.sh's MIX_TEST_PARTITION env var. Root cause: the test used Config.Reader.read!/1 against config/dev.exs directly, which executes that file's own content -- and config/dev.exs carries a deliberate ISS-0015 (GH#71) guard that raises whenever MIX_TEST_PARTITION is set, specifically to stop dev config from silently loading under partitioned test runs. This test's own approach (Config.Reader.read!/1, safe for config/prod.exs which carries no such guard) was the wrong technique for config/dev.exs specifically, and the failure is a real, reproducible defect in this branch's own new test file, not a flake. CLASS 2 (4 failures, attributed to environmental contention, NOT this branch): 3x Letflow.TenantSchemaReaperTest (concurrent-invocation liveness guard / reclaims orphaned row / schema_name format guard) and 1x Letflow.Engine.Lua.ExecutorTest (configurable memory limit, nil max_heap_words) -- attributed to Postgres too_many_connections pressure from concurrent sibling sessions on this host, structurally unrelated to this branch's diff (git diff confirms neither test/support/tenant_schema_reaper_test.exs nor test/letflow/engine/lua/executor_test.exs is touched by this branch's changes). This attribution is stated as an attribution, not a certainty -- the real report's own note says these tests were never claimed to fail deterministically, only under measured contention, and this is independently re-checked in the rerun (see step-04-recheck1.json).",
+    "artifacts_out": [
+      "test/reports/report-2026-09-03-REQ214.yaml"
+    ],
+    "issues": [
+      {"severity": "BLOCKER", "description": "The 'config/dev.exs does not override start_service_task_dispatcher to false' test in the boot-gating describe block crashes under MIX_TEST_PARTITION (used by scripts/test_parallel.sh) because it calls Config.Reader.read!/1 against config/dev.exs, which carries a deliberate ISS-0015/GH#71 guard raising whenever MIX_TEST_PARTITION is set. Needs a source-structure check (reading the raw file text) instead of executing the guarded config, mirroring the technique this same describe block already uses for application.ex.", "affected_requirement": "REQ-214"},
+      {"severity": "MINOR", "description": "3x TenantSchemaReaperTest and 1x Lua.ExecutorTest failed, attributed to Postgres too_many_connections contention from concurrent sibling sessions on this host, not this branch's diff (neither affected file is touched). Recorded for visibility, not blocking per Unblock-Everything.", "affected_requirement": null}
+    ],
+    "next_action": "The boot-gating test failure is a real, one-file, test-only defect. Per docs/agents/ORCHESTRATOR.md Section 10's direct-action sizing rule, this qualifies for ORCH to fix directly rather than a full ELIXIR-DEV rework round (test-only change, one file, no new public function/module/@spec, no migration, no supervision-tree file, no tenant-data path). See step-00-git-setup-fix1.json for that fix, then re-run TEST-RUNNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

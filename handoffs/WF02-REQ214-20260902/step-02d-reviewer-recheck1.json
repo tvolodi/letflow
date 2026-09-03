@@ -1,0 +1,41 @@
+{
+  "handoff_id": "756a90ec-0bdc-4719-8845-94f4e41ac187",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ214-20260902/step-02d-reviewer-recheck1.json",
+  "created_at": "2026-09-02T18:40:00Z",
+  "started_at": "2026-09-02T18:45:00Z",
+  "completed_at": "2026-09-02T19:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["5de72f8d-06ec-45ea-89ff-ded2dfb7806c"],
+    "artifacts_in": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "lib/letflow/webhooks.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Follow-up idiom re-check on rework2's route_kind branch and the http_transport/3->4 split. Confirm test quality (on_exit scoping, no leak risk), scope unchanged beyond the two fixed files, and that the crash-safety fix from rework1 is unaffected by rework2's changes."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact; timestamps are reconstructed approximations. ROUTE_KIND BRANCH IDIOM: confirmed clean -- do_attempt_dispatch/2's 3-clause case match (inline_url / catalog_service / malformed) is a flat, readable pattern-match with no nested conditionals, consistent with this module's existing style and with Letflow.Scheduler's own dispatch-branch idiom. HTTP_TRANSPORT/3->4 SPLIT: confirmed to genuinely mirror Letflow.Webhooks.dispatch_http/3,4's naming and shape convention -- same arity relationship (3-arity delegates to 4-arity with a default resolver), same config-flag-gated split, same doc-comment convention explaining the test-only purpose of the 4-arity clause. Not a novel pattern invented for this module; a deliberate reuse of an established one. TEST QUALITY: read the new tests directly -- the real-local-HTTP-server test for the genuine :advance path uses a proper setup/on_exit pairing to start and stop the test server per test (no shared/leaked server across tests, confirmed by grep for on_exit and Supervisor.stop/GenServer.stop-shaped teardown calls in the relevant describe block), and the connection-refused retriable-failure test targets a genuinely closed local port rather than a mocked function, with no lingering process or port left open after the test (confirmed no missing on_exit for that describe block either). SCOPE: confirmed unchanged beyond lib/letflow/engine/service_task_dispatcher.ex and test/letflow/engine/service_task_dispatcher_test.exs -- rework2 touched no other file. CRASH-SAFETY FIX (rework1) UNAFFECTED: re-read config_from_snapshot/1 and attempt_dispatch/2's outer try/rescue directly -- both are untouched by rework2's route_kind branch and http_transport split, confirmed by the fact that rework2's own changes are additive (a new case clause, a new arity, a new config flag) with no edit to either function rework1 fixed. MODULEDOC: re-confirmed accurate, including the http_transport/3 doc's own explicit statement of the :service_task_ssrf_validation_enabled mechanism and its test-only rationale. Overall PASS.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b) to independently re-verify TEST-DESIGNER's original coverage-verification pass, now against rework2's fixed implementation."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -131,7 +131,7 @@ defmodule Letflow.Application do
         # pair), matching ModuleVersionRegistry/ModuleVersionRegistryTaskSupervisor's
         # own "order between these two is not load-bearing" note.
         {Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}
-      ] ++ scheduler_children() ++ http_child()
+      ] ++ scheduler_children() ++ service_task_dispatcher_children() ++ http_child()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -173,6 +173,31 @@ defmodule Letflow.Application do
   defp scheduler_children do
     if Application.get_env(:letflow, :start_scheduler, true) do
       [{Letflow.Scheduler.Poller, []}]
+    else
+      []
+    end
+  end
+
+  # REQ-214 (design service_task_dispatcher.md §8): the SERVICE_TASK
+  # dispatch-orchestration poller's supervised GenServer ticker. Gated the
+  # same way scheduler_children/0 gates Letflow.Scheduler.Poller above, for
+  # the IDENTICAL documented hazard (this Poller's own first tick also runs
+  # with ZERO delay and queries Letflow.Repo from a process no test process
+  # is an ancestor of -- under Ecto.Adapters.SQL.Sandbox's default :manual
+  # mode that raises DBConnection.OwnershipError repeatedly until this
+  # supervisor's restart intensity is exceeded and the whole application,
+  # Letflow.Repo included, shuts down). A NEW, distinct config key,
+  # :start_service_task_dispatcher, NOT a reuse of :start_scheduler --
+  # REQ-214's own text is explicit the two pollers are independent concerns
+  # with independent poll cadences, so their boot gates stay independent
+  # too, letting a future host disable one without the other.
+  # config/test.exs sets start_service_task_dispatcher: false. No
+  # acceptance criterion requires this Poller to run automatically inside
+  # the test suite; Letflow.Engine.ServiceTaskDispatcher's own tests call
+  # poll_and_dispatch/1 directly.
+  defp service_task_dispatcher_children do
+    if Application.get_env(:letflow, :start_service_task_dispatcher, true) do
+      [{Letflow.Engine.ServiceTaskDispatcher.Poller, []}]
     else
       []
     end

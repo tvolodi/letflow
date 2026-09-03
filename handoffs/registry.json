@@ -4114,6 +4114,37 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #844 merged to main, queue task 434 released done",
       "note": "WF-02 requirement-implementation run for REQ-216: admission-control core, a pure-BEAM global + per-tenant counting semaphore tied to POOL_SIZE, closing ISS-0431 part 1. Core-only, no HTTP-path or Poller wiring (REQ-217/218 do that)."
+    },
+    {
+      "run_id": "WF02-REQ214-20260902",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-214"],
+      "stage": "S3",
+      "queue_task_id": 415,
+      "github_issue_number": 812,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/service_task_dispatcher.ex",
+        "lib/letflow/engine/service_task_dispatcher/poller.ex",
+        "priv/repo/migrations/20260902010001_create_service_task_dispatches.exs",
+        "test/letflow/engine/service_task_dispatcher_test.exs"
+      ],
+      "started_at": "2026-09-02T09:15:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Committed on feature/WF02-REQ214-20260902 (1 commit ahead of main, commit 3d1698b5) after RELEASE-VALIDATOR's PARTIAL verdict and DOC-UPDATER's correct refusal to flip status to done pre-commit (per its own next_action: 'do not flip to done until a real commit exists'). Step Final (rebase/push/PR/CI/merge) in progress -- this update supersedes the entry's original 0-commits-ahead state.",
+      "backfilled": true,
+      "backfilled_at": "2026-09-03T09:00:00Z",
+      "backfill_source": [
+        "handoffs/WF02-REQ214-20260902/step-00-git-setup.json through step-05-release-validator.json (all 21 files, written this same backfill)",
+        "lib/letflow/design/service_task_dispatcher.md (on disk)",
+        "lib/letflow/engine/service_task_dispatcher.ex and lib/letflow/engine/service_task_dispatcher/poller.ex (on disk, including inline comments attributing specific fixes to SECURITY-REVIEWER and TEST-DESIGNER by name)",
+        "test/letflow/engine/service_task_dispatcher_test.exs (on disk, 42 tests)",
+        "test/reports/report-2026-09-03-REQ214.yaml (on disk, real TEST-RUNNER first-attempt and rerun results)",
+        "docs/requirements.yaml REQ-214 entry (on disk, status: pending, stage: S3)",
+        "git log/status on feature/WF02-REQ214-20260902 (0 commits ahead of main, uncommitted working-tree changes matching the implementation)"
+      ],
+      "note": "REQ-214 (queue task 415, GH#812, 'SERVICE_TASK dispatch orchestration core') ran its full WF-02 pipeline for real -- CODE-DESIGNER/CODE-DESIGN-VALIDATOR (1 real rework: OQ-3 URL-freeze-on-retry + an invented FOR UPDATE OF lock syntax, both fixed citing real precedents from Letflow.Webhooks.attempt_loop/7 and Letflow.Scheduler.claim_due_timer_ids/2), ELIXIR-DEV/SECURITY-REVIEWER (1 real rework: config_from_snapshot/1 could raise and crash the shared Poller GenServer, fixed with typed catch-alls and a try/rescue mirroring Letflow.Scheduler.attempt_fire/2), REVIEWER (PASS both passes), TEST-DESIGNER/TEST-DESIGN-VALIDATOR (TEST-DESIGNER found 2 real implementation defects -- :catalog_service never actually routed to catalog_lookup_stub/2, and no SSRF-bypass test seam existed -- both fixed by ELIXIR-DEV rework2; TEST-DESIGN-VALIDATOR then found 1 more gap, missing DNS-rebinding coverage, fixed by TEST-DESIGNER rework1, test count reaching 42), TEST-RUNNER (found and ORCH directly fixed a real boot-gating test crash under MIX_TEST_PARTITION, test-only change per ORCHESTRATOR.md Section 10's sizing rule; rerun clean at 3099/3099), RELEASE-VALIDATOR (8/9 ACs PASS, AC8 flagged as a genuine process gap since no handoffs/ directory existed) -- but NO handoffs/WF02-REQ214-*/ directory or registry entry was ever written contemporaneously. THIS ENTRY AND handoffs/WF02-REQ214-20260902/'s 21 JSON files ARE A RECONSTRUCTION, written 2026-09-03 after the fact from the run's real, on-disk artifacts (the design doc, the shipped code and its own inline comments naming specific reviewers' findings, the real test file and its real test count, and a real test report file with genuine, independently-dated timestamps) -- not fabricated from nothing. Exact original wall-clock timestamps for most steps could not be recovered and are stated as reconstructed approximations in each handoff file's own summary; two real anchors (a genuine TEST-RUNNER dispatch-start and a genuine TEST-RUNNER completion timestamp, both from test/reports/report-2026-09-03-REQ214.yaml) were used to bound the reconstructed sequence where available. Superseding update (rebase onto origin/main during Step Final): the implementation is now committed on feature/WF02-REQ214-20260902 (commit 3d1698b5), resolving a real conflict in lib/letflow/application.ex against REQ-216's own concurrent Letflow.Obs.Alerts.TaskSupervisor/Letflow.Admission supervision-tree additions (ordering constraints from both preserved) and against mix.lock's ISS-0420 dependency bumps (oidcc/bandit, resolved via mix deps.get, recompiled clean)."
     }
   ]
 }

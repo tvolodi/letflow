@@ -9,7 +9,7 @@
   "created_at": "2026-09-03T16:48:33Z",
   "started_at": "2026-09-03T16:30:00Z",
   "completed_at": "2026-09-03T16:48:33Z",
-  "status": "PASSED",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",

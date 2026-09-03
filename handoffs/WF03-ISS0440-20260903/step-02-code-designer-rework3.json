@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-02-rework3",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-02-code-designer-rework3.json",
+  "created_at": "2026-09-03T10:52:52Z",
+  "started_at": "2026-09-03T10:52:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440",
+      "ISS-0441"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate2.json",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "docs/issues/ISS-0441.yaml",
+      "mix.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK 3 of the ISS-0440 fix design -- THE LAST ONE. rework_count is 3 of max 3. A FAIL after this forces ORCH to escalate per ORCHESTRATOR.md, so land it in one pass. The good news: the validator explicitly ruled this MECHANICAL -- one sentence plus two cross-reference updates plus a note. It is NOT a redesign, and nothing about either mechanism changes.\n\nEVERYTHING ELSE PASSED AND IS SETTLED -- do not touch, do not revisit: item 1(i) (1.2's closing paragraph is a pointer, not an independent restatement -- no defect), item 2 (BOTH --dir guards adequate and jointly justified; the --autofix-unrestricted reasoning judged SOUND and to win on its own terms, with its three safety properties accepted as genuinely bounding the risk), and item 3 (scope check -- the validator byte-diffed the settled sections and confirmed zero drift).\n\nTHE ONE BLOCKER -- TIER 2 IS OVERSTATED, the third and last hiding place of the same defect class. Your section 1 Tier 2 bullet says a violation is always DETECTED and RECORDED, and that this follows mechanically from Tier 1 adding no further assumption. That is false, and the validator verified it AT THE MIX SOURCE LEVEL rather than only empirically: lib/mix/lib/mix/task.ex's run_alias/6 recurses through an alias's string list with NO check of the previous step's result, and the only rescue in the entire run/run_task/run_alias chain is scoped narrowly to OptionParser.ParseError. A Mix.Error from an earlier alias entry is caught nowhere and unwinds the whole `mix letflow.check` invocation before letflow.lint_handoffs is reached. All three entries ahead of it in mix.exs's alias -- letflow.check_toolchain, letflow.check_requirements_registration, letflow.check_deferral_staleness, positions 1-3 with lint_handoffs at position 4 -- call Mix.raise on failure. ORCH reproduced the behaviour independently: `mix do letflow.check_toolchain + letflow.lint_handoffs` reaches the linter and prints its OK line, while `mix do cmd exit 1 + letflow.lint_handoffs` aborts with a stacktrace and produces ZERO lint output.\n  So Tier 1 (CI runs unconditionally) remains TRUE and unchanged. Tier 2 as worded silently assumes CI REACHES the fourth alias entry, which Tier 1 does not license.\n\nTHE EXACT REWORK, as the validator specified it -- follow this rather than improvising:\n  1. In section 1's Tier 2 bullet, AFTER the 'no further assumption' sentence, add a qualifying sentence that: states this assumes CI reaches the linter; NAMES the three earlier alias entries and their Mix.raise-on-failure behaviour; and states the corrected guarantee as 'always detected and recorded WHENEVER CI REACHES THE LINTER, which happens unless an earlier alias entry fails first -- in which case Tier 1 still holds (the job goes red) but H1's own check is not what is reported that run.'\n  2. Update section 3.5's and AC1's own restatements of the same claim to match -- either the same qualified wording, or a short pointer back to section 1's corrected text. Do NOT leave the unqualified claim repeated verbatim a second and third time.\n  3. In section 6.4, note that the branch-protection follow-up (now filed as ISS-0441, GH#851 -- reference it by id) would close this ordering gap too, via the same repo-administration action, since it is the same underlying question: does a problem detected anywhere in the job actually block the merge, or merely get reported that run.\n\nWHY THIS IS WORTH THE LAST REWORK, so you can judge the edit's tone correctly: the validator ruled it material not because the gap is large -- if an earlier gate fails the PR is not merging on that basis anyway -- but because this is the THIRD CONSECUTIVE LAYER at which an unconditional claim needed a scope qualifier (1.3/Mechanism B, then Tier 3 merge-blocking, now Tier 2 detection), in a design whose entire subject is not overclaiming. The pattern is the finding. Your corrected text should read as a design that has learned that lesson, not as one grudgingly conceding a technicality.\n\nDesign only, no implementation code. Update the design in place, complete this handoff, commit both to feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

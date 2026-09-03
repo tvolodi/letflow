@@ -4202,7 +4202,9 @@
     {
       "run_id": "WF02-REQ215-20260903",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-215"],
+      "requirement_ids": [
+        "REQ-215"
+      ],
       "stage": "S3",
       "queue_task_id": 417,
       "github_issue_number": 814,
@@ -4228,15 +4230,15 @@
       "issue_id": "ISS-0444",
       "queue_task_id": 444,
       "github_issue_number": 855,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/scheduler.ex",
         "lib/letflow/scheduler/poller.ex"
       ],
       "started_at": "2026-09-03T14:25:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "lock_released_at": "2026-09-03T16:35:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #857 merged to main, queue task 444 released done",
       "note": "WF-03 issue-resolving run for ISS-0444: a tenant schema missing its Postgres schema entirely crashes Letflow.Scheduler.poll_and_fire/1, contradicting poller.ex own never-raises moduledoc claim. Found during REQ-218 own work, filed as a tracked follow-up."
     }
   ]

@@ -32,4 +32,28 @@ source: >
   follow-up, per the ISS-0437 pattern from REQ-216's own run).
 queue_task_id: 444
 github_issue: 855
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0444-20260903
+resolved_at: "2026-09-03T16:35:00Z"
+resolution: >
+  Letflow.Scheduler.claim_due_timer_ids/2 and run_retention_sweep/1 (a
+  second instance of the identical defect class, found during diagnosis)
+  now rescue narrowly -- rescue error in Postgrex.Error, gated on
+  error.postgres.code in [:undefined_table, :undefined_schema],
+  re-raising anything else -- matching lib/letflow/engine/pin_rebind.ex's
+  existing precedent. claim_due_timer_ids/2 returns [] on the caught
+  error (the existing "zero due timers" shape, no new type);
+  run_retention_sweep/1's existing {:error, term()} spec already
+  accommodated the new error path. Logger.warning/1 with keyword
+  metadata (matching lib/letflow/obs/alerts.ex's shape) makes the skip
+  operator-visible. Design went through one rework cycle:
+  CODE-DESIGN-VALIDATOR caught a fabricated justification (a claimed
+  "several other callers" of EventStore.archive/1 that a real grep
+  showed was false -- only one production caller), corrected with the
+  actual reasoning. ISSUE-FIXER correctly declined to implement the fix
+  itself despite an offer to do so, since the fix boundary was a real
+  design decision -- routed to CODE-DESIGNER per its own role boundary.
+  Real mutation testing on both rescue clauses: removing each
+  independently produced a genuine uncaught Postgrex.Error, confirming
+  non-vacuous coverage. Full suite 3145/3147 (2 pre-existing unrelated
+  failures). Merged via PR #857, all 4 CI checks green, no flake.

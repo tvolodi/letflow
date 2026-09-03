@@ -62,3 +62,25 @@ source: >
 queue_task_id: 442
 github_issue: 852
 status: open
+orch_routing_note: >
+  ORCH (2026-09-03): ISSUE-FIXER's diagnosis
+  (handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json)
+  found a real sequencing blocker: the code this issue is about
+  (--autofix/write_json!/2 in lib/mix/tasks/letflow.lint_handoffs.ex)
+  does not exist on main -- it was only ever added on the still-open
+  ISS-0440 feature branch (feature/WF03-ISS0440-20260903), which has not
+  merged (docs/issues/ISS-0440.yaml still status: open, no PR exists,
+  and letflow-queue task 440 is currently locked by a different, live
+  agent session). ISSUE-FIXER diagnosed against ISS-0440's own branch via
+  a disposable git worktree, confirmed the root cause (Jason.encode!
+  re-sorts keys AND reflows formatting at every nesting level, not just
+  top-level) and reproduced it (88 diff lines on a real 48-line fixture,
+  consistent with the issue's own 84-line figure), and made the sizing
+  call: routes to CODE-DESIGNER, since option (b)'s "status value
+  appearing elsewhere in the file" collision risk is real and
+  demonstrated on the same fixture (a nested result.status: "PASS").
+  Queue task 442 released back to open (not done) -- this record stays
+  open, not resolved, until ISS-0440 merges and CODE-DESIGNER can design
+  the fix against real, on-main code. Whoever next picks this up should
+  first re-check ISS-0440's status/branch before dispatching
+  CODE-DESIGNER.

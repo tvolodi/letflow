@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-02b",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator.json",
+  "created_at": "2026-09-03T10:16:34Z",
+  "started_at": "2026-09-03T10:16:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-02-code-designer.json",
+      "handoffs/WF03-ISS0440-20260903/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0440.yaml",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/anti-patterns.md",
+      "mix.exs",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2 GATE -- validate CODE-DESIGNER's design for ISS-0440 (lib/letflow/design/iss440-handoff-status-enforcement.md, commit dc7431b9). HARD GATE: PASS or FAIL. Apply your role's checklist plus the run-specific items below.\n\nCONTEXT: this issue exists because SIX prior written-down mitigations for the same defect class all failed. The bar for this design is therefore unusually specific -- not 'is it reasonable' but 'does it eliminate the dependency on someone remembering'. Judge it against that.\n\n1. THE CENTRAL CLAIM -- does the enforcement actually ride an UNAVOIDABLE action? The design names two, deliberately independent:\n   A. Restricted --autofix riding mix letflow.check's unconditional CI invocation.\n   B. A top-level status field READ inserted as a numbered clause INSIDE HANDOFF_PROTOCOL.md 1.3's existing dispatch-time commit procedure, positioned before the commit step -- explicitly NOT a new skippable step.\n   ORCH has independently verified the factual base for both: .github/workflows/ci.yml:126 is a single unconditional `run: mix letflow.check` with no `if:` and no `continue-on-error`, and mix.exs:91-108's alias does include letflow.lint_handoffs as a hard gate. So the FACTS hold. YOUR job is the harder question: does Mechanism B genuinely become unavoidable by being written as a clause inside an existing procedure, or is that still prose asking ORCH to remember -- just better-placed prose? This is the crux. ISS-0196/1.3 is cited as precedent on the grounds that it has held since adoption; TEST that precedent rather than accepting it -- is 1.3 actually complied with in practice across the corpus, and if so, is it because it is structurally enforced or because it happens to have been followed? If 1.3's own compliance rests on ORCH remembering, then Mechanism B inherits that weakness and the design must say so.\n\n2. THE AUTOFIX REFUSAL. Verify the design restricts autofix to {PASS, COMPLETE, DONE} -> COMPLETED and REFUSES on FAIL and anything else, with the refusal being loud (non-zero exit, file untouched, named reason) rather than silent. Confirm the design cannot, under any path it specifies, convert a genuinely FAILED handoff into COMPLETED. This is the one place where a design defect would be WORSE than the bug being fixed, because it would corrupt the pipeline's record of what actually happened. Also consider a case the diagnosis may not have: what does autofix do with a handoff whose status is null/missing entirely, or a non-string? ORCH's own corpus scan found exactly one such file today (a PENDING handoff with null result.status -- legitimate), so null handling is a real path, not hypothetical.\n\n3. AC2 -- THE HOOK REJECTION. The design REJECTS the .githooks/pre-push option, arguing an unconfigured host has zero protection and that the only possible detector would itself run inside mix letflow.check, making it circular. Judge whether that reasoning is sound or whether it disposes of a viable option too quickly -- a pre-push hook that catches the error 10 minutes before CI does has real value even if CI is the backstop. The design records it as an optional future latency-only addition. Is that the right call, and does the design satisfy AC2 as written (the mechanism works on a fresh clone by another host)?\n\n4. AC1 -- THE DEMONSTRATION PATH. The design specifies ELIXIR-DEV plants a bad status into a SCRATCH FIXTURE (never a real handoffs/ file). Verify this actually demonstrates AC1 ('catches a deliberately-introduced bad status BEFORE CI, demonstrated by a real run with actual output quoted'). Specifically: does testing against a scratch fixture rather than a real handoff file weaken the demonstration? The linter discovers files via handoff_files/0 -- if a scratch fixture lives outside handoffs/, does the linter even see it, and if not, how is the demonstration valid? This is a real mechanical question, not a nitpick; get a definite answer from the source.\n\n5. SCOPE AND SAFETY. The design changes lib/mix/tasks/letflow.lint_handoffs.ex, which is a HARD CI GATE for EVERY in-flight run on every host. A defect here breaks every other session's ability to merge. Confirm the design's changes are additive (a new --autofix flag path) and cannot alter the DEFAULT no-flag behaviour that CI depends on. Confirm it does not change @legal_statuses, the grandfathering lists, or any existing check's verdict.\n\n6. AC3/AC4/AC5. Confirm the design preserves '0 new violations, 25 pre-existing grandfathered' (AC3); that it updates docs/anti-patterns.md to record occurrence 8 AND the structural fix, so the entry stops being an open recurrence log (AC4 -- note the diagnosis found EIGHT occurrences, not the seven the issue text says); and that the cost claim holds (AC5) -- the design asserts neither mechanism adds a new full-corpus lint call site, with Mechanism B being an in-memory field read rather than a linter invocation. Verify that is actually what the design specifies.\n\nRead anything. Do not edit lib/ or test/. Complete the handoff with a clear PASS/FAIL and per-item verdicts; on PASS route to ELIXIR-DEV. Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -512,3 +512,232 @@ comparably "should not occur" case. No further design change is needed here;
 §2 and §8 already commit to stating this in the plug's own moduledoc.
 
 No further open questions remain for this design.
+
+## 10. REWORK (step-01e, SECURITY-REVIEWER step-03 FAIL) — the double-global-consumption fix
+
+**Defect this section fixes, restated precisely:** the design in §1–§9 above (as
+shipped and FAILED by SECURITY-REVIEWER at
+`handoffs/WF02-REQ217-20260903/step-03-security-reviewer.json`) has the global
+gate (mount 1) acquire a `:global` unit and hold it, via Mechanism A/B, for the
+ENTIRE remaining request lifetime — including the whole span the tenant gate
+(mount 2) runs in. Per REQ-216's own "composing" rule (§0 of
+`req216-admission-control-core.md`, item 2: "a `{:tenant, _}` acquisition
+consumes the SAME global budget as `:global` acquisitions" — NOT reopened
+here, see below), mount 2's `try_acquire({:tenant, schema})` ALSO consumes one
+global unit. From the instant `AuthPipeline` completes to the instant the
+response is sent, a single admitted request therefore holds TWO global units
+simultaneously, for a budget REQ-216 calibrated to mean "one unit per
+concurrently-DB-connection-holding request." This halves the effective
+concurrent-request ceiling relative to `pool_size - reserved_headroom`,
+confirmed by the shipped tests' own comments (`global_cap == 2` is the
+minimum that admits even one request end to end — should be `1`).
+
+### 10.1 Chosen fix: release the global gate's ref immediately after `AuthPipeline` completes, before the tenant gate acquires
+
+This is SECURITY-REVIEWER's suggested direction, adopted as-is over the
+alternative considered and rejected in §10.2. **No change to
+`Letflow.Admission`'s public API, state shape, or atomicity algorithm.**
+REQ-216 is already merged and released; its own design doc's acceptance
+criteria (AC3: atomic check-both-mutate-both for a `{:tenant, _}`
+acquisition) impose no obligation to accommodate "a caller wants to hold one
+ref across two dependent, sequential gates" — that is REQ-217's own
+plug-composition problem, solved entirely at the plug level below.
+
+**What changes, precisely:**
+
+1. **New release point, no new `Letflow.Admission` call shape.** A new plug
+   function is added to `Letflow.Plugs.ApiPipeline`'s chain, positioned
+   immediately after `Letflow.Plugs.AuthPipeline` and immediately BEFORE the
+   `Letflow.Plugs.Admission, pool: :tenant` mount (i.e. between them, not
+   replacing either). It calls a new public function on
+   `Letflow.Plugs.Admission`:
+
+   ```
+   @spec release_global_ref(Plug.Conn.t()) :: Plug.Conn.t()
+   ```
+
+   Body, precisely: if `conn.assigns[:global_admission_ref]` is `nil`, return
+   `conn` unchanged (defensive — should not occur on this path, since the
+   global gate is mounted first and always assigns this key or halts before
+   this plug is ever reached, but matching this design's existing
+   "idempotent, never raise on a no-op release" posture rather than assuming
+   the invariant). Otherwise: (a) call `Letflow.Admission.release/1` on that
+   ref — the SAME `release/1` REQ-216 already exposes, unchanged, called one
+   step earlier than before, nothing new; (b) remove that SPECIFIC ref (not
+   the whole list — the tenant ref has not been pushed yet at this point in
+   the chain, but removing by value rather than by "clear the list" keeps
+   this function correct regardless of future reordering) from the
+   `@admission_refs_pdict_key` list via `List.delete/2`; (c) `assign(conn,
+   :global_admission_ref, nil)`, so mount 1's ALREADY-REGISTERED
+   `before_send` callback (Mechanism A, §5, still registered and still
+   fires later at response time) sees `nil` under that assign key and takes
+   its existing no-op branch (`release_ref(nil) -> :ok`) — no code change
+   needed in `admit/3`'s callback for this to be safe, because that callback
+   was already written to treat "ref no longer present" as a safe no-op, for
+   exactly this kind of early-release scenario.
+   `Letflow.Plugs.ApiPipeline` mounts this the same way it already mounts
+   `:assign_trace_id` (§0/§7): a thin private, local, 2-arity wrapper
+   function (name: `release_global_admission/2`) that ignores its `opts`
+   argument and delegates its `conn` argument straight to
+   `Letflow.Plugs.Admission.release_global_ref/1`, returning that call's
+   result. It is mounted in the plug chain by atom name (`Plug.Router`'s
+   `plug/2` macro only accepts a module or a local-function atom — never a
+   remote function capture — the identical constraint `assign_trace_id/2`'s
+   own existing wrapper already exists to satisfy).
+
+2. **The tenant gate's acquisition shape is UNCHANGED.** Mount 2
+   (`Letflow.Plugs.Admission, pool: :tenant`) still calls
+   `Admission.try_acquire({:tenant, schema_name})` exactly as before — still
+   the full composing pair (global + tenant) in one atomic REQ-216 call, per
+   REQ-216's own unmodified design. It is simply the FIRST global unit this
+   request holds by the time it runs (the original one having just been
+   released in step 1), not a second one stacked on an already-held first.
+
+3. **Exact new chain order (supersedes §7):** (1) `Letflow.Plugs.Admission,
+   pool: :global` — unchanged position; (2) `Plug.Parsers` — unchanged; (3)
+   `:assign_trace_id` — unchanged; (4) `Letflow.Plugs.AuthPipeline` —
+   unchanged; **(5) NEW — `:release_global_admission`**, releasing mount 1's
+   ref; (6) `Letflow.Plugs.Admission, pool: :tenant` — unchanged call shape,
+   now the sole global-unit holder from here on; (7) `Letflow.Plugs.TenantStatus`
+   — unchanged; (8) `:match`; (9) `:dispatch`.
+
+4. **Every OTHER path's release mechanism is unchanged and still needed.**
+   The new step 5 plug only ever runs on the path where the global gate
+   admitted AND `AuthPipeline` itself did not halt/raise. Two other paths
+   still exist and still rely on the ORIGINAL Mechanism A/B exactly as §5
+   already specifies, unmodified:
+   * Global gate admits, but `AuthPipeline` itself halts the request (auth
+     failure) before reaching step 5 — the plug chain skips every remaining
+     plug including the new one (`Plug.Builder`'s `conn.halted` check, §3),
+     so the global ref is still released the ORIGINAL way, via mount 1's own
+     `before_send` callback firing when `AuthPipeline`'s own halt+response is
+     sent. No double consumption is possible here because the tenant gate is
+     never reached at all on this path.
+   * Global gate admits, then something raises before reaching step 5 (inside
+     `AuthPipeline` itself, or in the global gate's own believed-unreachable
+     branches) — Mechanism B (`handle_errors/2` draining the pdict list)
+     still releases it, unchanged, exactly as §5 already specifies. Again,
+     the tenant gate is never reached, so no double consumption exists to fix
+     on this path — the ONLY path this rework changes is the one where BOTH
+     gates run to completion, because that is the only path where double
+     consumption is possible.
+   * Global gate is rejected outright (`{:error, :capacity}`) — request halts
+     at mount 1 itself, unchanged, step 5 never reached, nothing to release
+     beyond what `reject/2` already does (nothing was ever acquired).
+
+5. **`release_pending_refs/0` (Mechanism B, unchanged in shape) now typically
+   drains a list containing at most the TENANT ref by the time it is reached
+   for a raise occurring at or after step 6** (since the global ref was
+   already surgically removed from that list by `release_global_ref/1` at
+   step 5) — this is exactly the intended effect, not a special case
+   `handle_errors/2` needs to know about: it already iterates whatever is in
+   the list and calls `release/1` on each idempotently, regardless of how
+   many entries remain.
+
+### 10.2 Alternative considered and rejected: skip the tenant gate's own global-consuming acquisition, reusing the already-held global ref
+
+Rejected. This would require `Letflow.Admission` to expose either (a) a new
+acquisition shape that acquires ONLY the per-tenant counter without
+co-checking/co-incrementing the global one (contradicts REQ-216's §0 item 2
+"composing" decision as a per-call OPT-OUT, meaning `Letflow.Admission` would
+now need to know "the caller already holds a global unit, do not check or
+increment it again for this call" — a new concept its atomicity algorithm,
+§1 of `req216-admission-control-core.md`, does not have and was not designed
+to reason about safely: the whole point of evaluating both conditions in one
+`handle_call/3` before mutating either is that BOTH conditions are always
+freshly checked together; a caller-asserted "skip the global check, trust my
+already-held ref" bypasses that atomicity guarantee for the DURATION the
+skip is in effect, which is exactly the kind of thing REQ-216's design
+explicitly reasoned should never be split across two checks), or (b) passing
+the already-held global `admission_ref()` into the tenant acquisition call
+so `Letflow.Admission` recognizes and "transfers" it — again a new public
+API surface and a new internal ref-identity concept neither `try_acquire/2`
+nor `admission_ref()`'s current opaque, uninspectable design (§0: "opaque,
+callers must not construct/pattern-match it directly") supports. Either
+variant means changing `Letflow.Admission`'s already-merged, already-released
+public contract and/or its core atomicity algorithm to accommodate REQ-217's
+own composition bug — exactly what the task brief instructs this design to
+avoid unless no plug-level fix exists. §10.1's fix requires zero changes to
+`Letflow.Admission` (same `try_acquire/2`, same `release/1`, same atomicity
+algorithm, same opaque ref type) and is strictly simpler. Rejected.
+
+### 10.3 Race-condition analysis (the task brief's question (a)) — addressed explicitly, not glossed over
+
+**Yes, a gap exists**, and it is deliberately accepted as ordinary,
+correct admission-control behavior, not a defect requiring further design
+work. Precisely: between `release_global_ref/1` releasing mount 1's global
+unit (step 5) and the tenant gate's `try_acquire({:tenant, schema})`
+re-acquiring a (global + tenant) pair (step 6), some OTHER request's
+`try_acquire/2` call — global or tenant-composing — could win the
+now-freed global slot first, because `Letflow.Admission`'s single-`GenServer`
+mailbox serializes ALL callers' requests in arrival order (§1 of
+`req216-admission-control-core.md`), and this request's own step-6 call is
+just another message in that same queue, with no priority or reservation
+carried over from step 1's grant. **Consequence:** a request that was
+admitted at the global gate is NOT guaranteed to also be admitted at the
+tenant gate — it can receive `{:error, :capacity}` at step 6 immediately
+after having been told "yes" at step 1, having already spent the cost of
+`Plug.Parsers`, trace-id assignment, and the full `AuthPipeline` DB round
+trip.
+
+**Why this is accepted, not a defect:**
+
+1. **It is what "admission control" already means everywhere else in this
+   design.** `Letflow.Admission`'s own moduledoc (§0, quoted above) states
+   there is "no wait queue... never parked" — every `try_acquire/2` call, at
+   either gate, is already documented as an independent, freshly-evaluated,
+   first-come-first-served decision with no reservation semantics. Two
+   `try_acquire/2` calls FROM THE SAME REQUEST were never specially linked
+   by REQ-216's design in the first place; REQ-217's original (buggy) wiring
+   only ACCIDENTALLY behaved as if they were linked, by holding the first
+   ref open as a kind of de facto reservation through the second call — and
+   that accidental behavior is precisely the mechanism causing the
+   double-consumption defect this rework fixes. Removing it removes the
+   defect AND the (unintended, undocumented, never-an-acceptance-criterion)
+   reservation side effect together; there is no way to keep one without the
+   other short of the rejected §10.2 alternative.
+   
+2. **It reflects real resource usage more accurately than the buggy
+   version did, not less.** The global cap exists to bound concurrent
+   DB-connection-holding work (REQ-216 §0 item 3's whole rationale). By the
+   time `AuthPipeline` completes, this request is no longer holding any DB
+   connection — released it back to the pool internally already. Holding a
+   global unit open past that point (the original bug) OVER-counts this
+   request's actual resource use; releasing it at step 5 makes the count
+   track reality. A request that then loses the race for a fresh unit at
+   step 6 is exactly as legitimate a rejection as one that loses the race
+   for the FIRST unit at step 1 would be — both reflect "the pool is at
+   capacity right now," which is the entire, correct purpose of this
+   mechanism.
+
+3. **No starvation risk beyond ordinary admission control's own.** The
+   released slot is not specially reserved for anyone; it becomes available
+   to whichever caller's message is next in the single GenServer's mailbox,
+   the same arbitration every other pair of competing `try_acquire/2` calls
+   in this system already gets. There is no scenario where THIS request is
+   less likely to win that slot than any other waiting request — it is not
+   deprioritized, only no longer artificially prioritized by an implicit
+   reservation the original design never intended to grant.
+
+**Moduledoc obligation added (supersedes/extends §8 item 1):**
+`Letflow.Plugs.Admission`'s moduledoc must additionally state: admission at
+the global gate is a re-checked, not reserved, precondition for admission at
+the tenant gate — a request admitted at the global gate can still receive
+`{:error, :capacity}` at the tenant gate, after `AuthPipeline`'s own work has
+already run, because the global gate's unit is released immediately after
+`AuthPipeline` completes and the tenant gate performs a fresh, independent
+`try_acquire/2` call rather than reusing or extending the first grant. This
+is intentional (§10.3) and must not be "fixed" by re-introducing overlap
+between the two gates' held refs.
+
+### 10.4 Acceptance-criteria arithmetic that must be re-derived (flagged for TEST-DESIGNER, not resolved here)
+
+`test/letflow/plugs/admission_pipeline_test.exs`'s existing AC3/AC4 comments
+assert `global_cap == 2` is the minimum needed to admit one full request end
+to end. Under §10.1's fix, this must become `global_cap == 1`: at no instant
+does an admitted request hold more than one global unit, because the second
+gate's acquisition never begins until the first gate's unit has already been
+released. This is a TEST-DESIGNER-owned rework (re-deriving the exact
+minimum-cap values these tests assert), not something this design doc
+resolves further — flagged here so it is not silently missed when tests are
+updated to match this rework.

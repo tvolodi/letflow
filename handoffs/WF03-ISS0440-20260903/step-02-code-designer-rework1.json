@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-02-rework1",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-03T10:31:29Z",
+  "started_at": "2026-09-03T10:31:29Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/issues/ISS-0440.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK 1 of the ISS-0440 fix design. CODE-DESIGN-VALIDATOR returned FAIL with two BLOCKERs and one MINOR. Read its handoff (artifacts_in[0]) in full. Items 5 and 6 (additive/default-preserving; AC3/AC4/AC5) PASSED and are settled -- do not revisit them. The autofix refusal contract was also verified correct on item 2; only its stated PREMISE was wrong.\n\nBLOCKER 1 -- OVERCLAIMED UNAVOIDABILITY (item 1). Your design says of Mechanism B that 'there is no path through this procedure that reaches step 4 without having passed step 2.' The validator established that is not literally true: HANDOFF_PROTOCOL.md 1.3 is itself PROSE -- ORCH manually remembering to git add && git commit, pointed at from ORCHESTRATOR.md:23's MUST list -- not anything code-enforced. Its good track record (docs/anti-patterns.md:1123 records the single incident that CAUSED 1.3 to be written, with no logged recurrence since) is evidence of RELIABILITY, not of structural guarantee. The validator also found that main's squash-merge history makes 1.3 compliance unverifiable from main directly -- an 88.5% single-commit figure it first measured turned out to be a squash artifact -- though this run's own unsquashed branch does show the real two-commit dispatch-then-complete pattern live (45ac032a dispatch -> dc7431b9 completion).\n   REQUIRED FIX: state plainly that Mechanism B inherits 1.3's RELIABILITY CLASS (strong track record, procedurally enforced, NOT code-guaranteed) rather than implying CI-gate-strength unavoidability. Keep Mechanism B -- it is not being rejected; the validator faulted the CLAIM, not the mechanism. Then, because the whole issue is that six prose mitigations failed, ADDRESS THE CONSEQUENCE HONESTLY: given B is procedural, what carries the actual structural guarantee? If the answer is 'Mechanism A alone, at CI', say so explicitly and explain why the pair is still worth having (B is a latency improvement over A, not an independent guarantee). ORCH's own view, which you may adopt or reject with reasoning: a design that is honest about being 'CI-guaranteed plus a procedural early-catch' is ACCEPTABLE and materially better than the six prose-only predecessors, because A genuinely cannot be skipped -- but it must not be SOLD as more than that, since overclaiming is precisely how a seventh mitigation becomes an eighth tally line.\n\nBLOCKER 2 -- THE AC1 DEMONSTRATION CANNOT EXECUTE AS WRITTEN (item 4). Your section 5 has ELIXIR-DEV plant a bad status in a scratch fixture OUTSIDE handoffs/, then run `mix letflow.lint_handoffs` against it. That cannot work: run/1 (line 234) calls handoff_files() with NO argument, and the default is the hardcoded @handoffs_dir 'handoffs' (line 97), so a fixture outside handoffs/ is INVISIBLE to any real CLI invocation. AC1 requires a demonstration by a REAL RUN with actual output quoted, so a plan the CLI cannot execute fails AC1 outright.\n   GOOD NEWS, and ORCH verified this from source so you can build on it: handoff_files/1 at line 279 ALREADY takes a dir parameter with a default -- `def handoff_files(dir \\ @handoffs_dir)`. The capability exists; it is simply not reachable from the CLI because run/1 does not pass anything through. So the fix is small: specify how run/1 exposes a directory override (e.g. a --dir flag parsed from args, defaulting to @handoffs_dir so CI's no-flag invocation is byte-identical in behaviour). Design that override explicitly, state its default, and confirm it cannot change the no-flag path CI depends on. Alternatively, if you prefer the fixture to live INSIDE handoffs/ under a scratch run-id, address the obvious hazard: a deliberately-bad handoff committed under handoffs/ would be linted by every OTHER host's CI too and would break their builds -- so if you go that way, the fixture must never be committed, and you must say how that is guaranteed.\n\nMINOR -- CORRECT A FALSE PREMISE ORCH SUPPLIED (item 2). ORCH's dispatch told you a null-status handoff exists today; that was WRONG and the validator caught it. ORCH's original scan used a broad glob (handoffs/**/*.json) rather than the linter's own discovery pattern. Re-scanned with the linter's actual pattern (handoffs/**/step*.*): 1900 files, ZERO bad, missing, null, or non-string top-level status values. The file ORCH cited is not even discovered by handoff_files/0 (wrong basename) and its null field was the unrelated result.status. Correct any design text resting on that premise. Your autofix refusal contract was verified CORRECT and is unchanged -- but since null/missing is now known NOT to occur in the corpus, state what autofix does on it anyway (defensively refusing is fine); do not silently leave the path unspecified just because it is currently unpopulated.\n\nSCOPE DISCIPLINE: change nothing else. Both mechanisms keep their shape, the four-option verdicts stand, the hook rejection stands, AC3/AC4/AC5 stand. Design only, no implementation code. Update lib/letflow/design/iss440-handoff-status-enforcement.md in place, complete this handoff, commit both to branch feature/WF03-ISS0440-20260903. rework_count 1 of max 3."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

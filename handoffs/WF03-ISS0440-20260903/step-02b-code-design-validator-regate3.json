@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-02b-regate3",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate3.json",
+  "created_at": "2026-09-03T10:57:28Z",
+  "started_at": "2026-09-03T10:57:28Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440",
+      "ISS-0441"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-02-code-designer-rework3.json",
+      "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate2.json",
+      "docs/issues/ISS-0440.yaml",
+      "docs/issues/ISS-0441.yaml",
+      "mix.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "FINAL GATE on the ISS-0440 design (rework 3, commit 06bfa746). You have failed this design three times, each time correctly, and each finding was real -- the third one you verified at Mix's own run_alias/6 source level. Rework 3 was YOUR specified fix, applied. This gate has ONE question.\n\nTHE ONE QUESTION: is the Tier 2 qualifier now present, correct, and propagated everywhere the unqualified claim previously stood? CODE-DESIGNER reports applying your wording verbatim to section 1's Tier 2 bullet -- naming the three earlier alias entries and their Mix.raise behaviour, citing the run_alias/6 evidence, and stating the corrected guarantee as 'always detected and recorded whenever CI reaches the linter, which happens unless an earlier alias entry fails first -- in which case Tier 1 still holds (the job goes red) but H1's own check is not what is reported that run.' It then reports propagating it FURTHER than you asked: an umbrella sentence atop 3.5, the qualifier spelled out in full at 3.5's opening AND its closing self-description, at AC1's Mechanism A bullet, and at section 7's guidance for the anti-patterns.md note DOC-UPDATER will write -- that last one because the guidance was itself repeating the unqualified phrasing as instructions for future content. Section 6.4 now cites ISS-0441/GH#851 by id and explains that a required status check on the whole letflow.check job closes the Tier 2 ordering gap too, since it blocks the merge regardless of which alias entry produced the red.\n  ORCH verified mechanically: the corrected phrase 'whenever CI reaches the linter' appears 5 times; ISS-0441 is referenced 3 times; the diff is 123 insertions / 65 deletions confined to the design file plus its own handoff.\n  YOUR JOB: (i) confirm the qualifier is correct as written and not subtly weaker than what you specified; (ii) confirm NO unqualified restatement survives anywhere -- this is the fourth time this class has been checked, and it hid in a different section each previous time, so sweep rather than spot-check, section 7's DOC-UPDATER guidance and any summary/abstract text included; (iii) confirm the settled items did not move (item 2's --dir/--autofix text, 1.2's closing pointer, section 4's verdicts, section 5's demonstration steps, AC3/AC4/AC5, the 1900-file figure).\n\nCLOSE IT IF IT IS RIGHT. rework_count is at max (3 of 3). If this PASSES, route to ELIXIR-DEV and the run proceeds. If it FAILS, ORCH must escalate rather than dispatch a fourth rework -- so a FAIL here should be reserved for a genuine surviving defect of the same class, not a wording preference, not a newly-invented fourth-order objection, and not thoroughness for its own sake. You have already extracted the real value from this design; three correct FAILs is a good outcome, and a fourth would need to be as well-evidenced as the first three. Equally: if an unqualified claim genuinely still stands somewhere, say so plainly -- passing a design you believe is still overclaiming would be the worst outcome available, given that is the exact failure mode this issue exists to end.\n\nDo not edit lib/ or test/. Complete the handoff with a clear PASS/FAIL and per-item verdicts; on PASS set next_action to route to ELIXIR-DEV. Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

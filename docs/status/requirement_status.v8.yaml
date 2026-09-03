@@ -1084,3 +1084,55 @@ history:
       parts 1+partial-2). Queue task 445 (GH#858) locked. Branch
       feature/WF02-REQ219-20260903 created from main. Dispatching Step 1
       (CODE-DESIGNER).
+
+  - req: REQ-219
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-03T22:51:35Z"
+    note: >
+      WF02-REQ219-20260903 done (queue task 445, GH#858, stage S6).
+      RELEASE-VALIDATOR independently re-verified all 10 acceptance
+      criteria PASS (handoffs/WF02-REQ219-20260903/step-05-release-
+      validator.json): re-ran scripts/test_parallel.sh (3176/3178, 2
+      pre-existing rustc-toolchain-gap failures) and mix
+      letflow.check.test twice (one run showed 9 unrelated failures
+      structurally attributed to external ISS-0110-class DB contention
+      from a concurrent mix test process, not reproduced on immediate
+      re-run; clean re-run 3179/3181, same 2 pre-existing rustc failures).
+      Ships lib/letflow/supervisor/{infrastructure,pollers,http}.ex,
+      replacing Letflow.Application's flat 20-child list with exactly 3
+      top-level children (Infrastructure, Pollers, Http) under
+      strategy: :one_for_one. Infrastructure owns all 17 non-poller/
+      non-Bandit children in unchanged relative order (ISS-0224's
+      SandboxPool.TaskSupervisor-before-SandboxPool ordering preserved).
+      Pollers owns both existing Pollers (still individually gated),
+      with an explicit max_restarts: 5/max_seconds: 60 override
+      (documented rationale in its own moduledoc) so a sustained
+      per-tick crash-loop exits and restarts ONLY Pollers -- Repo and
+      Http are structurally untouched, closing the documented incident
+      ISS-0425 itself cites (scheduler_children/0's own comment). Http
+      owns Bandit, unchanged gating. No config file changes (AC7).
+      REVIEWER's sign-off (step-02d) confirmed :one_for_one over
+      :rest_for_one is justified against the real 20-child dependency
+      graph (every infra child looked up by name, never stored pid) and
+      that InstanceSupervisor's placement is not a claim about real
+      children. Closes ISS-0425 parts 1 and (partially) 2; part 3
+      (Task.Supervisor sprawl review) is REQ-220, now unblocked
+      (depends_on: [REQ-219], REQ-219 now done). ISS-0421's own
+      Poller-internal fix (serial-sweep bounding) is unblocked to build
+      on this requirement's settled restart-intensity decision (max_restarts
+      5/max_seconds 60) rather than re-deciding it. ISS-0451 (a new,
+      real finding surfaced by REVIEWER during this run -- a narrower
+      crash-loop-count edge case) filed separately, confirmed by
+      RELEASE-VALIDATOR to be explicitly out of scope of this
+      requirement's own AC4/decision-3 text; does not block this release.
+      docs/migration/stage-6-operational-cross-cutting.md grepped for
+      ISS-0425/REQ-219/supervision: zero references, matching the same
+      "no staleness update warranted" pattern DOC-UPDATER applied for
+      REQ-216/REQ-217 (the doc's existing sign-off/scope sections don't
+      track per-requirement supervision-tree internals). No
+      docs/anti-patterns.md entry added: this is an architectural
+      finding already fully documented in ISS-0425.yaml, not a repeated
+      agent-execution mistake of the kind that file exists to catalog.
+      docs/requirements.yaml's REQ-219 status flipped in_progress -> done
+      in this same step.

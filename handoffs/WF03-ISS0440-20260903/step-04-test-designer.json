@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-04",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-04-test-designer.json",
+  "created_at": "2026-09-03T11:31:00Z",
+  "started_at": "2026-09-03T11:31:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0440"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "test/fixtures/lint_handoffs",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0440-20260903/step-03b-security-reviewer.json",
+      "handoffs/WF03-ISS0440-20260903/step-03c-reviewer.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/issues/ISS-0440.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": ["test/mix/tasks/letflow.lint_handoffs_test.exs", "test/fixtures/lint_handoffs"]
+  },
+  "task": {
+    "description": "WF-03 STEP 4 -- REGRESSION TEST for ISS-0440. Both hard gates have PASSED: SECURITY-REVIEWER (step-03b) and REVIEWER (step-03c, with two non-blocking MINORs already filed as ISS-0442 and ISS-0443 -- do NOT fix those here, they are separate claimable work; your tests must not assert the behaviour those issues want changed as though it were desired, but they also must not fail because of it).\n\nWHAT SHIPPED (read lib/mix/tasks/letflow.lint_handoffs.ex and the design doc before writing anything): the task gained (a) a --dir <path> flag with resolve_dir/1 + find_dir_flag/1, an unconditional scan banner naming the scanned directory, a :missing_value Mix.raise, and guard_empty_scope/2 which Mix.raise-s when a scope resolves to zero handoff files; (b) a restricted --autofix mode driven by a CLOSED 3-value @autofix_map (PASS/COMPLETE/DONE -> COMPLETED) which rewrites the top-level status field only, REFUSES ambiguous values (notably FAIL, which is ambiguous between lifecycle FAILED and a COMPLETED step whose result.status is FAIL), and reports every fix and every refusal on stdout unconditionally.\n\nREAD WF-03's section 'When the pre-fix failure is the code under test does not exist' IN FULL AND COMPLY WITH IT. This fix ADDS new flags, so the pre-fix failure for most of your tests will be 'flag not recognised / function undefined' -- which is trivially satisfiable and proves nothing about whether your tests discriminate a CORRECT implementation from a WRONG one. Therefore the fail-first requirement is satisfied here ONLY by ALSO MUTATING the shipped logic and recording which of your tests fail for each mutant. Mutants must target the specific traps this fix exists to handle -- not arbitrary breakage. Design at least three, and consider these as candidates (choose what actually discriminates; you own the choice):\n  M1 -- widen @autofix_map to also map FAIL -> FAILED (or -> COMPLETED). This is THE central safety property: the refusal of FAIL is the thing SECURITY-REVIEWER's PASS rests on. A test suite that does not go red under M1 has not covered this fix at all.\n  M2 -- delete/neuter guard_empty_scope/2 so an empty or nonexistent --dir scope silently reports OK across 0 files instead of raising. This is the 'confident green for a scan that never happened' trap.\n  M3 -- make --autofix rewrite the file even in the refusal branch (i.e. let a refused file reach write_json!/2), or make autofix silently fix without printing to stdout. The unconditional stdout report is the second half of the visibility property.\n  Optionally M4 -- make resolve_dir/1 ignore --dir and always use @handoffs_dir, to prove your --dir tests actually bind to the flag rather than passing incidentally.\n\nCOVERAGE REQUIRED (map each to a named test):\n  1. --dir <fixture> scans ONLY the fixture and the banner names it.\n  2. --dir with no value Mix.raise-s.\n  3. --dir pointing at a directory with zero handoff files Mix.raise-s (guard_empty_scope) rather than reporting a clean OK.\n  4. --autofix rewrites top-level status PASS -> COMPLETED, and likewise COMPLETE and DONE.\n  5. --autofix REFUSES FAIL: the file is left BYTE-IDENTICAL and the refusal is printed. Assert byte-identity explicitly (read the file before and after), not merely 'status is still FAIL'.\n  6. --autofix leaves a value outside the closed map (e.g. an arbitrary string, or a legal-but-wrong enum member) untouched and refuses it.\n  7. --autofix does NOT touch nested result.status -- a file whose top-level status is COMPLETED and whose result.status is PASS must come back byte-identical.\n  8. Every fix and every refusal appears on stdout (capture_io).\n  9. Default no-flag invocation still scans @handoffs_dir and behaves as before (H1-H6 verdicts, grandfathering, exit behaviour unchanged). Keep this one cheap -- do not re-verify the whole corpus in a unit test if the existing suite already covers the default path; state what you relied on.\n\nHARD CONSTRAINTS.\n  - Tests MUST use isolated tmp fixtures, never the real handoffs/ corpus, and MUST NEVER run --autofix against handoffs/. Use System.tmp_dir!/0 + a unique subdir, or extend test/fixtures/lint_handoffs, and clean up via on_exit. A test that mutates the repo's real handoff files is an automatic step failure.\n  - A MUTANT IS A TEMPORARY PROBE. WF-03 is explicit: leaving one in the tree is a step failure. PREFERRED -- apply mutants in a throwaway `git worktree` of this branch so the working checkout is never mutated; remove the worktree when done. If you instead mutate in place, you MUST revert with `git checkout -- <path>`, then VERIFY the revert and QUOTE BOTH of these in result.summary: (i) `git status --porcelain lib/ test/` is empty, and (ii) the test file re-runs green against restored, unmutated code.\n  - You WRITE the tests; you do not own the final pass/fail verdict -- TEST-RUNNER (step 4c) does. But you DO run them here, because the mutant measurements are the deliverable and cannot be produced without running.\n  - Match the existing test file's conventions (test/mix/tasks/letflow.lint_handoffs_test.exs) -- naming, async setting, fixture style. Read it first; do not invent a parallel style.\n\nDELIVERABLE. Extend test/mix/tasks/letflow.lint_handoffs_test.exs (and fixtures as needed). In result.summary give: the full test list with names, the actual `mix test` output (real numbers, quoted -- No Speculation), and a MUTANT TABLE recording, per mutant, exactly which named tests failed and the pass/fail counts. Complete the handoff with a clear PASS/FAIL and route to TEST-DESIGN-VALIDATOR (step 04b). Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

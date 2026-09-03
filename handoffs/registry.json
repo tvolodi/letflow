@@ -4180,7 +4180,7 @@
       "started_at": "2026-09-03T02:45:00Z",
       "lock_released_at": null,
       "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "last_known_step": "Step 06 REVIEWER COMPLETED -- PASS, dispatching to TEST-DESIGNER",
       "note": "WF-02 requirement-implementation run for REQ-217: wire admission control into the HTTP entry path (two gates -- global before Plug.Parsers, per-tenant after AuthPipeline), 503+Retry-After on rejection. Closes ISS-0431 part 2 of 3. Depends on REQ-216 (done, merged)."
     }
   ]

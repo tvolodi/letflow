@@ -4104,15 +4104,15 @@
       "issue_id": null,
       "queue_task_id": 434,
       "github_issue_number": 839,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/admission.ex (new)",
         "lib/letflow/application.ex"
       ],
       "started_at": "2026-09-02T22:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "lock_released_at": "2026-09-03T02:40:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #844 merged to main, queue task 434 released done",
       "note": "WF-02 requirement-implementation run for REQ-216: admission-control core, a pure-BEAM global + per-tenant counting semaphore tied to POOL_SIZE, closing ISS-0431 part 1. Core-only, no HTTP-path or Poller wiring (REQ-217/218 do that)."
     }
   ]

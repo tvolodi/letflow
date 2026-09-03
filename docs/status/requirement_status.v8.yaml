@@ -820,3 +820,30 @@ history:
       --warnings-as-errors` clean post-rebase. Still on
       feature/WF02-REQ214-20260902, not yet merged -- Step Final's
       push/PR/CI/merge steps are next.
+
+  - req: REQ-214
+    event: done
+    agent: ORCH
+    at: "2026-09-03T04:57:32Z"
+    note: >
+      Supersedes the `blocked` and `revised` entries above for the same
+      requirement. PR #847 squash-merged to main (81e2dea8) after rebase
+      resolved a real 4-file conflict (this file, the index,
+      handoffs/registry.json, and a genuine supervision-tree conflict in
+      lib/letflow/application.ex against REQ-216's Letflow.Admission and
+      ISS-0429's Letflow.Obs.Alerts.TaskSupervisor entries, both landed
+      on main while this branch was in flight -- resolved preserving both
+      entries' own ordering constraints). CI's pull_request-triggered run
+      passed clean (main suite + isolated wasm_hang subset both green);
+      the separate push-triggered run on the identical commit hit the
+      documented wasm_hang isolated-subprocess flake twice in a row (main
+      suite genuinely clean both times, 3118/3118; only the isolated
+      `--only wasm_hang` subset failed, 5/7 then 4/7) -- confirmed
+      structurally unrelated (git diff shows zero overlap with any
+      wasm/plugin_handler file) and merged via admin override after that
+      double confirmation, per the same precedent already established
+      earlier today for PRs #795/#802. docs/requirements.yaml's REQ-214
+      status flipped pending -> done in this same step. Queue task 415
+      released status: done (GH#812 best-effort closed). REQ-215 (the
+      engine-wiring half, ISS-0411/GH#807's other part) remains
+      separately pending.

@@ -12344,7 +12344,7 @@ requirements:
   - id: REQ-214
     title: SERVICE_TASK dispatch orchestration core -- HTTP transport, SSRF-gated inline_url dispatch, and a supervised polling process advancing parked tokens (EXT-01 dispatch loop, closes ISS-0411 part 1)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S3
     impl_order: 415  # letflow-queue task id, GH#812
     description: >

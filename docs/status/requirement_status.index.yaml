@@ -1478,8 +1478,16 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 20
+    entries: 21
     note: >
+      Incremented to 21 by ORCH's Step-Final rebase of
+      WF02-REQ217-20260903: this branch's own entries (REQ-217 started at
+      02:45, plus REQ-217 done appended by DOC-UPDATER later in this same
+      branch) interleaved with REQ-214/ISS-0426's own concurrently-landed
+      entries during the rebase -- reconstructed via git show + set-diff,
+      no content lost, confirmed 21 on-disk entries via
+      `grep -c "^  - req:" docs/status/requirement_status.v8.yaml`.
+
       Incremented to 20 by WF03-ISS0426-20260902 (ORCH)'s own ISS-0426
       done-event append at Step Final -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 20 on-disk entries. `wc`:

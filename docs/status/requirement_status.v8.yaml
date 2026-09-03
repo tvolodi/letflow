@@ -735,6 +735,16 @@ history:
       "admission"): neither references the admission-control gap, so
       neither needed a staleness update from this step.
 
+  - req: REQ-217
+    event: started
+    agent: ORCH
+    at: "2026-09-03T02:45:00Z"
+    note: >
+      Wire admission control into the HTTP entry path (closes ISS-0431
+      part 2, primary surface). Queue task 435 (GH#840) locked, unblocked
+      by REQ-216's merge. Branch feature/WF02-REQ217-20260903 created
+      from main. Dispatching Step 1 (CODE-DESIGNER).
+
   - req: REQ-214
     event: blocked
     agent: DOC-UPDATER

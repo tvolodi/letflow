@@ -4273,6 +4273,25 @@
       "released_lock": false,
       "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
       "note": "WF-03 issue-resolving run for ISS-0425: flat supervision tree, 15 peers of Repo under one :one_for_one with default restart intensity, no dependency layering, no domain-owning supervisor, Task.Supervisor sprawl (6 separate ones). Issue predicted a 7th ad-hoc supervisor if not settled before REQ-214 -- now 4+ new supervision entries have landed since filing (REQ-214, REQ-216 Admission, ISS-0429 Alerts.TaskSupervisor, REQ-215 dispatcher poller)."
+    },
+    {
+      "run_id": "WF03-ISS0440-20260903",
+      "requirement_id": null,
+      "issue_id": "ISS-0440",
+      "queue_task_id": 440,
+      "github_issue_number": 849,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.lint_handoffs.ex",
+        "docs/anti-patterns.md",
+        "docs/guides/backend_developer_guide.md",
+        ".githooks/"
+      ],
+      "started_at": "2026-09-03T09:58:49Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED -- branch feature/WF03-ISS0440-20260903 created and pushed; dispatching Step 0.5/1 to ISSUE-FIXER",
+      "note": "WF-03 run for ISS-0440: make the handoff top-level-status enum violation structurally impossible. 7th occurrence of a class docs/anti-patterns.md explicitly declares re-documenting EXHAUSTED. Filed by ORCH at the end of WF03-ISS0426-20260902, whose own first CI run surfaced occurrence 7. SELF-REFERENTIAL: the fix targets the linting machinery this run's own handoffs are checked against, so this run's handoffs double as live test data. Key facts measured at Step 00: linter takes 8.4s over 1915 files; run(_args) ignores args and always lints the whole corpus (no subset capability exists); H1 check itself is already correct -- the gap is WHEN it runs, not WHAT it checks; no hook infrastructure exists at all (git 2.50.1 supports core.hooksPath)."
     }
   ]
 }

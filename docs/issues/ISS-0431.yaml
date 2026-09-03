@@ -83,7 +83,26 @@ source: >
 queue_task_id: 431
 github_issue: 835
 
-status: open
+status: resolved
+resolved_in_run: WF02-REQ218-20260903
+resolved_at: "2026-09-03T14:20:00Z"
+resolution: >
+  All three split-out requirements landed: REQ-216 (admission-control
+  core, PR #844), REQ-217 (HTTP entry-path wiring, PR #850), REQ-218
+  (Poller wiring, PR #854). The admission-control/backpressure gap this
+  issue describes is closed on both named surfaces (HTTP entry path,
+  Poller's per-tick sweep) atop a shared pure-BEAM global+per-tenant
+  counting semaphore tied to POOL_SIZE. Each requirement's design went
+  through at least one real rework cycle catching a genuine defect
+  (REQ-216: an underspecified atomicity algorithm and a vacuous test,
+  both caught by live mutation testing; REQ-217: a crash-safety trace
+  error and a real double-global-consumption bug found by
+  SECURITY-REVIEWER; REQ-218: a coverage gap in AC3's second sub-clause
+  and a log-level correction) -- all independently re-verified before
+  merge. One disclosed residual: ISS-0430's future LISTEN/NOTIFY work,
+  named by this issue's own description as a future secondary surface to
+  cover "by the same decision," remains unaddressed -- out of scope for
+  REQ-216/217/218 as scoped, not a reason to withhold this closure.
 orch_routing_note: >
   ORCH (2026-09-02): ISSUE-FIXER's sizing pass
   (handoffs/WF03-ISS0431-20260902/step-01-issue-fixer-diagnosis.json)

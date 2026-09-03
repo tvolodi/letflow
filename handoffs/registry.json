@@ -4189,14 +4189,14 @@
       "issue_id": null,
       "queue_task_id": 436,
       "github_issue_number": 841,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/scheduler/poller.ex"
       ],
       "started_at": "2026-09-03T08:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "lock_released_at": "2026-09-03T14:20:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #854 merged to main, queue task 436 released done, ISS-0431 resolved (all 3 parts done), ISS-0444 filed for the flagged pre-existing gap",
       "note": "WF-02 requirement-implementation run for REQ-218: wire admission control into Pollers per-tick tenant sweep (global-only acquire/release around each of 6 sequential per-tenant operations). Closes ISS-0431 part 3 of 3 (secondary surface). Depends on REQ-216 (done, merged)."
     }
   ]

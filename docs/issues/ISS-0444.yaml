@@ -1,0 +1,35 @@
+id: ISS-0444
+title: "Letflow.Scheduler.poll_and_fire/1's documented never-raises contract does not hold for a tenant schema missing its Postgres schema entirely"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ218-20260903
+discovered_at: "2026-09-03T09:30:00Z"
+severity: MINOR
+tags: [scheduler, raise-safety, s6]
+description: >
+  Found by ELIXIR-DEV and independently confirmed by REVIEWER during
+  REQ-218 (WF02-REQ218-20260903), while wiring admission control into
+  Scheduler.Poller. Letflow.Scheduler.claim_due_timer_ids/2 (called from
+  poll_and_fire/1) has no try/rescue; a tenant whose Postgres schema was
+  fully dropped/never created triggers an unrescued Postgrex
+  undefined_table/undefined_schema error, contradicting
+  lib/letflow/scheduler/poller.ex's own moduledoc claim that
+  poll_and_fire/1 "never raises." Since poller.ex's own Enum.each over
+  schemas has no per-schema rescue either, this would crash the entire
+  tick's timer-poll pass, not just the affected tenant.
+  Confirmed genuinely pre-existing and out of REQ-218's own scope by both
+  ELIXIR-DEV and REVIEWER -- not fixed in that run, filed here per
+  core-directives.md's "No Issue Left Local-Only" rule.
+affected_files:
+  - lib/letflow/scheduler.ex
+  - lib/letflow/scheduler/poller.ex
+related:
+  - REQ-218
+  - ISS-0437
+source: >
+  handoffs/WF02-REQ218-20260903/step-02-elixir-dev.json and
+  handoffs/WF02-REQ218-20260903/step-03-reviewer.json (REVIEWER's own
+  independent confirmation and recommendation to file this as a tracked
+  follow-up, per the ISS-0437 pattern from REQ-216's own run).
+queue_task_id: 444
+github_issue: 855
+status: open

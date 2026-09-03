@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ219-20260903/step-03b-test-design-validator.json",
   "status": "COMPLETED",
   "priority": "HIGH",
-  "timestamp_utc": "2026-09-03T20:47:06Z",
+  "completed_at": "2026-09-03T20:47:06Z",
   "context": {
     "stage": "S6",
     "requirement_ids": ["REQ-219"],

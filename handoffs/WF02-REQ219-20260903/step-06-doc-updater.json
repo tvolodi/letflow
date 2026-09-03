@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ219-20260903/step-06-doc-updater.json",
   "status": "COMPLETED",
   "priority": "HIGH",
-  "timestamp_utc": "2026-09-03T22:51:35Z",
+  "completed_at": "2026-09-03T22:51:35Z",
   "context": {
     "stage": "S6",
     "requirement_ids": ["REQ-219"],
@@ -26,6 +26,11 @@
       "docs/anti-patterns.md (grepped for flat-supervision-tree precedent)",
       "docs/issues/ISS-0425.yaml (full read)"
     ],
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v8.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
     "branch_name": "feature/WF02-REQ219-20260903",
     "head_commit_verified": "f7635dbe"
   },
@@ -40,15 +45,9 @@
     "stage_doc_check": "docs/migration/stage-6-operational-cross-cutting.md grepped for ISS-0425/REQ-219/supervision: zero references. No edit made -- consistent with the same 'no staleness update warranted' judgment DOC-UPDATER applied for REQ-216/REQ-217 (this doc's Scope/Decisions/sign-off sections don't track per-requirement supervision-tree internals, and REQ-219's own acceptance criteria don't name this file).",
     "anti_patterns_check": "docs/anti-patterns.md not edited. The flat-supervision-tree issue is already fully documented in docs/issues/ISS-0425.yaml as an architectural finding (not a recurring agent-execution mistake), which is what anti-patterns.md exists to catalog -- judged not warranted rather than forced.",
     "doc_invariants_test": "mix test test/docs/requirement_status_invariants_test.exs run in the foreground to completion: Result: 20 passed, 0 failures.",
-    "req_220_dependency_check": "docs/requirements.yaml REQ-220 (Task.Supervisor sprawl review, queue task 446, owner ELIXIR-DEV, status: pending) has depends_on: [REQ-219] only. REQ-219 is now status: done, so REQ-220's dependency is satisfied for whoever picks it up next. No action taken on REQ-220 itself, per scope."
+    "req_220_dependency_check": "docs/requirements.yaml REQ-220 (Task.Supervisor sprawl review, queue task 446, owner ELIXIR-DEV, status: pending) has depends_on: [REQ-219] only. REQ-219 is now status: done, so REQ-220's dependency is satisfied for whoever picks it up next. No action taken on REQ-220 itself, per scope.",
+    "next_action": "ORCH: push and merge feature/WF02-REQ219-20260903 (DOC-UPDATER does not merge). REQ-220 is now eligible for pickup once dispatched."
   },
-  "artifacts_out": [
-    "docs/requirements.yaml",
-    "docs/status/requirement_status.v8.yaml",
-    "docs/status/requirement_status.index.yaml",
-    "handoffs/WF02-REQ219-20260903/step-06-doc-updater.json"
-  ],
-  "next_action": "ORCH: push and merge feature/WF02-REQ219-20260903 (DOC-UPDATER does not merge). REQ-220 is now eligible for pickup once dispatched.",
   "rework_count": 0,
   "max_rework": 3
 }

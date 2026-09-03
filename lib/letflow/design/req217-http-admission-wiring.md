@@ -85,39 +85,91 @@ and prose only.
   independently confirms "no global rescue/`Plug.ErrorHandler` in this
   codebase currently catches" — still true; this design adds one, narrowly,
   see §5).
-* `deps/plug/lib/plug/error_handler.ex` — `use Plug.ErrorHandler` overrides
-  `call/2` with `try do super(conn, opts) rescue/catch ... end`, invokes the
-  using module's `handle_errors/2` callback, then **unconditionally
-  re-raises** (`Plug.ErrorHandler.__catch__/6`'s last line: `:erlang.raise(
-  kind, reason, stack)`) — so after `handle_errors/2` runs, the exception
-  still propagates to Bandit's own `handle_error/7` exactly as it does
-  today, and Bandit still produces the same generic crash response it
-  already produces with no `Plug.ErrorHandler` in the picture. **Critical
-  and easy-to-miss detail, verified by reading the macro-generated `call/2`
-  literally**: the `conn` visible inside `handle_errors/2`'s calling
-  `catch`/`rescue` clause is the **parameter bound at the top of the
-  overriding `call/2`** — i.e. the conn `Letflow.Plugs.ApiPipeline.call/2`
-  was originally invoked with, from `Letflow.Router`'s `forward/2` — **not**
-  whatever `conn` a downstream plug had mutated it into by the time it
-  raised. `super(conn, opts)`'s own internal sequential reassignment of a
-  local `conn` variable (`Plug.Builder.compile/3`'s generated single-function
-  body) is invisible to the caller's separate `conn` parameter binding, and
-  nothing here wraps the exception in a `Plug.Conn.WrapperError` (that only
-  happens if something upstream already did so, which nothing in this
-  codebase does). **Consequence: `conn.assigns` is NOT a reliable channel to
-  read the admission refs back out of at crash-cleanup time** — see §5 for
-  the mechanism this design uses instead.
+* `deps/plug/lib/plug/router.ex:254-271` — `Plug.Router`'s generated
+  `dispatch/2` wraps the call to the MATCHED ROUTE HANDLER (`fun.(conn,
+  opts)`, inside a `:telemetry.span/3`) in its own `try/catch`. On any
+  `kind, reason` caught there, it calls `Plug.Conn.WrapperError.reraise(conn,
+  kind, reason, __STACKTRACE__)` — and the `conn` closed over here is
+  `dispatch/2`'s own function parameter, i.e. the conn as it stood
+  immediately before the route handler ran: already threaded through
+  `Plug.Parsers`, both admission plug mounts, `AuthPipeline`, and
+  `TenantStatus`. A raise INSIDE the matched route handler is therefore
+  captured together with a conn that DOES carry both admission-ref assigns.
+* `deps/plug/lib/plug/conn/wrapper_error.ex` — `WrapperError.reraise/4`'s
+  `:error`-kind clause builds `%Plug.Conn.WrapperError{conn: conn, kind:
+  :error, reason: reason, stack: stack}` and raises that struct as the new
+  exception; its `:throw`/`:exit` clauses re-raise the original kind/reason
+  unchanged, without wrapping. `Plug.Router`'s `dispatch/2` is the only
+  place in this codebase's dependency chain that ever constructs a
+  `Plug.Conn.WrapperError`, and it only does so around the route-handler
+  call, never around any plug that runs before `:match`/`:dispatch`.
+* `deps/plug/lib/plug/error_handler.ex:78-96` — the module's
+  `@before_compile`-generated `call/2` has TWO separate clauses, not one, and
+  the earlier version of this design only examined the second: a `rescue e
+  in Plug.Conn.WrapperError ->` clause, which matches the struct
+  `dispatch/2` built above and calls `Plug.ErrorHandler.__catch__/6` with
+  `conn = e.conn` — the DOWNSTREAM, fully-threaded conn captured inside
+  `dispatch/2`, carrying both admission-ref assigns — and a SEPARATE `catch
+  kind, reason ->` clause, for anything that reaches `call/2` WITHOUT already
+  being a `Plug.Conn.WrapperError` (i.e. anything that never passed through
+  `dispatch/2`'s own try/catch), which calls `__catch__/6` with `conn` bound
+  to `call/2`'s OWN outer parameter — the conn
+  `Letflow.Plugs.ApiPipeline.call/2` was originally invoked with, before
+  either admission plug ran. Either way, `__catch__/6` unconditionally
+  re-raises after invoking `handle_errors/2` (`:erlang.raise(kind, reason,
+  stack)`), so Bandit's own `handle_error/7` still runs exactly as it does
+  today and still produces the same generic crash response this codebase
+  already produces with no `Plug.ErrorHandler` in the picture (§0's Bandit
+  trace above is unaffected either way — no new response body/status is
+  introduced by any of this).
+
+  **Consequence, precisely scoped** (an earlier version of this design
+  claimed, incorrectly, that nothing in this codebase's stack ever wraps a
+  raise in `Plug.Conn.WrapperError` — that claim is false, per the two
+  bullets above, and is corrected here):
+  * A raise inside the MATCHED ROUTE HANDLER (during `:dispatch`, after
+    `:match`) is captured via the `rescue e in Plug.Conn.WrapperError`
+    clause with `e.conn` = the fully-downstream conn. `conn.assigns` IS
+    reliable here — both admission-ref assigns are present, and a
+    `register_before_send/2`-only cleanup would in fact be READABLE at this
+    call site (though it would still never RUN, since `register_before_send`
+    callbacks are skipped on every crash path regardless of which conn they
+    close over — see the Bandit bullet above; that part of the earlier
+    analysis was correct).
+  * A raise inside a PLUG that runs BEFORE `dispatch/2` —
+    `Letflow.Plugs.AuthPipeline`, `Letflow.Plugs.TenantStatus`, or
+    `Letflow.Plugs.Admission`'s own believed-unreachable tenant-derivation
+    crash branches (§2) — is NOT wrapped in `Plug.Conn.WrapperError` at all:
+    `Plug.Builder.compile/3`'s generated pipeline body (the sequence of
+    `plug` calls before `:match`/`:dispatch`) has no per-plug `try/catch` of
+    its own; only `Plug.Router`'s `dispatch/2` adds one, and only around the
+    final route-handler call. Such a raise propagates straight to
+    `Plug.ErrorHandler`'s plain `catch` clause, whose `conn` is `call/2`'s
+    own outer parameter — the PRE-PIPELINE conn. Neither admission-ref
+    assign is visible on that conn: each `assign/3` call happened on a
+    locally-rebound `conn` variable inside `Plug.Builder`'s generated
+    function body, a binding invisible to `call/2`'s separately-bound outer
+    parameter. `conn.assigns` is NOT reliable for this case.
+
+  This design's raise-safety mechanism (§5, Mechanism B) is justified ONLY
+  against this second, narrower case — an exception raised by a PLUG before
+  `dispatch/2` ever runs — not against a blanket "nothing wraps in
+  WrapperError" claim. That narrower case is real and still needs Mechanism
+  B: it covers exactly the raise sites this requirement's own admission
+  plug mounts sit adjacent to (`AuthPipeline` runs between the two admission
+  mounts; `TenantStatus` runs after the second; `Admission`'s own
+  "unreachable" branches, §2, are themselves plug code running before
+  `dispatch/2`).
 
 ## 1. Plug shape: one parameterized module, mounted twice
 
-`Letflow.Plugs.Admission`, a single `@behaviour Plug` module, mounted twice
-in `lib/letflow/plugs/api_pipeline.ex` with different `init/1` opts:
-
-```
-plug(Letflow.Plugs.Admission, pool: :global)   # before Plug.Parsers
-...
-plug(Letflow.Plugs.Admission, pool: :tenant)   # after AuthPipeline, before TenantStatus
-```
+`Letflow.Plugs.Admission`, a single `@behaviour Plug` module, mounted TWICE
+in `lib/letflow/plugs/api_pipeline.ex`'s plug chain with different mount
+options: once with an option selecting the global pool, positioned as the
+very first plug (before `Plug.Parsers`), and once with an option selecting
+the tenant pool, positioned after `Letflow.Plugs.AuthPipeline` and before
+`Letflow.Plugs.TenantStatus`. The exact resulting chain order is given in
+full in §7.
 
 **Not two separate modules.** The two gates differ only in (a) how the
 `Letflow.Admission.pool_selector()` value is derived (`:global` is a literal;
@@ -185,12 +237,13 @@ no per-request cost to the parameterization.
 
 ## 3. `{:error, :capacity}` — halt and respond
 
-```
-conn
-|> Plug.Conn.put_resp_header("retry-after", to_string(retry_after_seconds()))
-|> Letflow.Api.Response.service_unavailable(rejection_detail(pool))
-|> Plug.Conn.halt()
-```
+On `{:error, :capacity}` from `try_acquire/2`, `call/2` performs, in order:
+(1) set the `retry-after` response header on the conn to the string form of
+`retry_after_seconds/0`'s value (§4); (2) call
+`Letflow.Api.Response.service_unavailable/2` with that conn and this mount's
+rejection-detail string (below), which produces the RFC 9457 problem
+document and sets the response status; (3) halt the conn (`Plug.Conn.halt/1`)
+so no further plug in the chain runs. No other work happens on this path.
 
 * `retry_after_seconds/0` — see §4.
 * `rejection_detail(:global)` → `"server at capacity, retry shortly"`;
@@ -230,16 +283,11 @@ conn
 
 ## 4. `Retry-After` config
 
-New key inside the SAME `:letflow, :admission` keyword list REQ-216's
-`Letflow.Admission.start_link/1` already reads `:reserved_headroom` from
-(`admission.ex:160-164`) — not a new top-level config namespace, since both
-keys govern the same feature area:
-
-```elixir
-config :letflow, :admission,
-  reserved_headroom: 2,        # already exists (REQ-216)
-  retry_after_seconds: 1       # new (REQ-217), default 1 if key absent
-```
+New key, `:retry_after_seconds`, added inside the SAME `:letflow, :admission`
+application-config keyword list REQ-216's `Letflow.Admission.start_link/1`
+already reads `:reserved_headroom` from (`admission.ex:160-164`) — not a new
+top-level config namespace, since both keys govern the same feature area.
+Default, when the key is absent, is `1` (second).
 
 `retry_after_seconds/0` (private to `Letflow.Plugs.Admission`):
 
@@ -247,12 +295,14 @@ config :letflow, :admission,
 @spec retry_after_seconds() :: pos_integer()
 ```
 
-reads `Application.get_env(:letflow, :admission, [])[:retry_after_seconds] ||
-1` — same `Keyword.get`-with-default shape `Letflow.Admission.start_link/1`
-already uses for `reserved_headroom`, read fresh on every rejection (not
-cached), so a test overriding this key via `Application.put_env/3` observes
-the new value with no other code change, mirroring AC1/AC2's own
-config-override testing convention for REQ-216's caps. This is a **fixed
+Reads the `:retry_after_seconds` key out of the `:letflow, :admission`
+application-config keyword list, defaulting to `1` when the key is absent —
+same "read application config, default if missing" shape
+`Letflow.Admission.start_link/1` already uses for `reserved_headroom`. Read
+fresh on every rejection (not cached at startup or compile time), so a test
+overriding this key via `Application.put_env/3` observes the new value with
+no other code change, mirroring AC1/AC2's own config-override testing
+convention for REQ-216's caps. This is a **fixed
 configured value**, never computed from queue depth or observed contention —
 per the requirement text, this admission mechanism has no queueing/backoff
 model to derive an estimate from (§0's `Letflow.Admission` moduledoc: "no
@@ -267,118 +317,111 @@ release/2` is documented idempotent (§0) — a ref already removed from the
 server's `refs` map is a safe no-op on a second `release/2` call. This
 overlap is the design's OWN safety margin, not a bug to eliminate.
 
-**Storage on success (both mounts):**
-
-```
-conn = Plug.Conn.assign(conn, assigns_key(pool), ref)   # :global_admission_ref / :tenant_admission_ref
-```
-
-satisfying the requirement text's explicit "stores both `admission_ref()`s in
-`conn.assigns`" instruction, and giving `TEST-DESIGNER` a conn-visible hook to
-assert against directly in the normal-completion tests (AC3).
+**Storage on success (both mounts):** on a successful `try_acquire/2`, `call/2`
+assigns the resulting `admission_ref()` onto the conn, under one of two
+distinct assign keys depending on which mount produced it (one key for the
+global-pool ref, one for the tenant-pool ref) — satisfying the requirement
+text's explicit "stores both `admission_ref()`s in `conn.assigns`"
+instruction, and giving `TEST-DESIGNER` a conn-visible hook to assert
+against directly in the normal-completion tests (AC3).
 
 **Mechanism A — `Plug.Conn.register_before_send/2`, for every NON-crashing
 response path (2xx/3xx/4xx/5xx-via-`Response.*`/`halt`, matching
-`Letflow.Plugs.HttpMetrics`'s own precedent, §0):**
-
-```
-Plug.Conn.register_before_send(conn, fn conn ->
-  release_if_present(conn, assigns_key(pool))
-  conn
-end)
-```
-
-registered immediately after the successful `assign/3` above. This covers
-AC3 (normal completion) and also covers a LATER plug's own explicit
-`halt/1`+response (e.g. `TenantStatus`'s 403/503, or a route handler's
-ordinary error response) — any of `Plug.Conn`'s own `send_resp/send_chunked/
-send_file`, which is what actually triggers registered `before_send`
-callbacks (`commit_response!/1` in Bandit's pipeline, §0), always runs on
-these paths since nothing crashed.
+`Letflow.Plugs.HttpMetrics`'s own precedent, §0):** immediately after
+assigning the ref, `call/2` registers a `before_send` callback (via
+`Plug.Conn.register_before_send/2`) that, when it runs, releases this
+mount's ref if the corresponding assign is still present on the conn passed
+to it (idempotent — a no-op if already released) and returns the conn
+unchanged otherwise. This covers AC3 (normal completion) and also covers a
+LATER plug's own explicit `halt/1` + response (e.g. `TenantStatus`'s 403/503,
+or a route handler's ordinary error response) — any of `Plug.Conn`'s own
+`send_resp`/`send_chunked`/`send_file`, which is what actually triggers
+registered `before_send` callbacks (`commit_response!/1` in Bandit's
+pipeline, §0), always runs on these paths since nothing crashed.
 
 **Mechanism B — a narrowly-scoped `use Plug.ErrorHandler` on
-`Letflow.Plugs.ApiPipeline` itself, for the RAISE path (AC4):**
-
-Mechanism A alone does **not** cover AC4 — §0's Bandit trace proves
+`Letflow.Plugs.ApiPipeline` itself, for the raise sites Mechanism A cannot
+reach:** Mechanism A does not cover every raise — §0's Bandit trace proves
 `register_before_send/2` callbacks are skipped entirely on any
-`catch`/`rescue` in `Bandit.Pipeline.run/5`. This design closes that gap with
-the smallest addition that does not touch REQ-066's error-response contract:
+`catch`/`rescue` in `Bandit.Pipeline.run/5`, for ANY raise regardless of
+where it originates. Whether `conn.assigns` would even be a reliable READ
+channel if something did run `handle_errors/2`-style cleanup depends on
+WHERE the raise happened, per §0's corrected trace:
+* A raise inside the matched ROUTE HANDLER reaches `Plug.ErrorHandler`'s
+  `rescue e in Plug.Conn.WrapperError` clause with a fully-downstream conn —
+  `conn.assigns` would be reliable there, but Mechanism A still never runs
+  its callback on this path (Bandit trace above), so a conn-based read
+  inside `handle_errors/2` is still needed for this case, not `conn.assigns`
+  cleanup via `before_send`.
+* A raise inside a PLUG that runs before `dispatch/2` — `AuthPipeline`,
+  `TenantStatus`, or `Letflow.Plugs.Admission`'s own believed-unreachable
+  branches (§2) — reaches `Plug.ErrorHandler`'s plain `catch` clause with the
+  PRE-PIPELINE conn, on which `conn.assigns` carries neither admission-ref
+  assign at all, regardless of whether either admission mount had already
+  run and assigned its ref on a (now-invisible) downstream conn binding.
+
+Since `conn.assigns` is unreliable for the second case and, even where
+reliable, is only reachable at all via a `Plug.ErrorHandler` `handle_errors/2`
+callback (never via `register_before_send`, which never fires on a raise),
+this design uses a single mechanism that works uniformly for both cases
+instead of two different read strategies: `Letflow.Plugs.Admission` defines
+a process-dictionary key, as a named, documented module attribute — following
+the SAME convention `lib/letflow/engine/wasm/host_api.ex`
+(`@staged_writes_pdict_key`, `@fail_signal_pdict_key`) and
+`lib/letflow/engine/lua/platform.ex` (`@staged_writes_pdict_key`) already
+establish in this codebase for exactly this class of problem (request/
+execution-scoped state that must survive a callback/exception boundary
+independent of which local variable binding is in scope): a
+`{ModuleName, :purpose_atom}` tuple bound to a module attribute, not a bare
+inline atom. This design's attribute is named `@admission_refs_pdict_key`,
+value `{Letflow.Plugs.Admission, :admission_refs}`. On every successful
+`try_acquire/2`, in addition to the `conn.assigns` write above, `call/2`
+prepends the new ref onto a list held under this key in the process
+dictionary of the process handling the request. Process dictionary state is
+process-local and lives for the lifetime of the Erlang process handling this
+request regardless of which `conn` value is locally bound in which stack
+frame at crash time — it is unaffected by `Plug.Builder`'s per-plug conn
+rebinding and by the exception unwinding that loses everything on the conn's
+own call stack, so it is readable from `handle_errors/2` regardless of which
+of the two raise sites above triggered it.
+
 `Letflow.Plugs.ApiPipeline` adds `use Plug.ErrorHandler` (after `use
 Plug.Router`, matching `Plug.ErrorHandler`'s own documented ordering
 requirement relative to `Plug.Debugger`, not applicable here since this
-codebase has no `Plug.Debugger`) and defines:
-
-```
-@impl Plug.ErrorHandler
-@spec handle_errors(Plug.Conn.t(), %{kind: :error | :throw | :exit, reason: term(), stack: Exception.stacktrace()}) :: Plug.Conn.t()
-```
-
-Per §0's read of `Plug.ErrorHandler`'s macro expansion, the `conn` this
-callback receives is bound from the OUTER `call/2` parameter — i.e. the conn
-`Letflow.Router`'s `forward/2` handed to `ApiPipeline.call/2` at the very
-start of the request, **before either admission plug ran** — so
-`conn.assigns` in `handle_errors/2` never carries the refs this design just
-stored on a *different*, downstream-rebound `conn` value (§0's detailed
-trace of why). **This is exactly why Mechanism B does NOT read
-`conn.assigns`** — it reads a **process-dictionary-held list** instead,
-populated by the SAME `Letflow.Plugs.Admission.call/2` success branch that
-does the `assign/3` above:
-
-```
-Process.put(:letflow_admission_refs, [ref | Process.get(:letflow_admission_refs, [])])
-```
-
-Process dictionary state is process-local and lives for the lifetime of the
-Erlang process handling this request regardless of which `conn` value is
-locally bound in which stack frame at crash time — it is unaffected by
-`Plug.Router`'s per-plug conn rebinding and by the exception unwinding that
-loses everything on the conn's own call stack. This is the same class of
-mechanism Elixir's own ecosystem already reaches for whenever request-scoped
-state must survive a raise and be readable independent of which `conn`
-binding is in scope (e.g. `Logger.metadata/0-1`, `Ecto.Adapters.SQL.
-Sandbox`'s ownership tracking) — not a novel invention for this requirement,
-though it has no prior in-repo example (`docs/anti-patterns.md` has no entry
-against it; flagged for REVIEWER as a new-to-this-codebase idiom, justified
-above, in case a different existing convention is preferred instead).
-
-`handle_errors/2`'s body:
-
-```
-Process.get(:letflow_admission_refs, [])
-|> Enum.each(&Letflow.Admission.release/1)
-
-Process.delete(:letflow_admission_refs)
-
-conn
-```
-
-then `Plug.ErrorHandler`'s own generated `call/2` **unconditionally
-re-raises** the original exception after `handle_errors/2` returns (§0) — so
-Bandit's existing `handle_error/7` still runs exactly as it does today and
-still produces the same generic crash response this codebase already
-produces with `Plug.ErrorHandler` absent. **No new response body, status
-code, or contract is introduced by this requirement for the crash path** —
-`use Plug.ErrorHandler` here is pure cleanup plumbing, never a caller of
+codebase has no `Plug.Debugger`) and defines a `handle_errors/2` callback
+(`@impl Plug.ErrorHandler`, `@spec handle_errors(Plug.Conn.t(), %{kind:
+:error | :throw | :exit, reason: term(), stack: Exception.stacktrace()}) ::
+Plug.Conn.t()`) whose body: reads the ref list held under
+`@admission_refs_pdict_key` (defaulting to an empty list if absent), calls
+`Letflow.Admission.release/1` on each entry in that list, clears the key from
+the process dictionary, and returns the conn it was given unchanged. Then
+`Plug.ErrorHandler`'s own generated `call/2` unconditionally re-raises the
+original exception after `handle_errors/2` returns (§0) — so Bandit's
+existing `handle_error/7` still runs exactly as it does today and still
+produces the same generic crash response this codebase already produces
+with `Plug.ErrorHandler` absent. No new response body, status code, or
+contract is introduced by this requirement for the crash path — `use
+Plug.ErrorHandler` here is pure cleanup plumbing, never a caller of
 `Response.internal_error/1` or any other response helper, which keeps this
 requirement's scope disjoint from REQ-066's own explicitly-deferred "global
 Postgrex-error-to-JSON rescue" question (`req066-api-error-response.md`
 §0.3) — this design does not answer that question and does not need to.
 
 **Process-dictionary hygiene on the NON-crash path:** since `handle_errors/2`
-only runs on a raise, `Process.put/2`'s entry is left in the dictionary after
-a normal (non-raising) request completes unless something clears it. Because
-Bandit request-handling processes are not guaranteed to be a fresh process
-per request (keep-alive connections may reuse the same process for
-sequential — never concurrent — requests, per `ThousandIsland`'s per-
-connection process model this codebase already relies on transitively via
-Bandit), Mechanism A's `before_send` callback ALSO calls `Process.delete(
-:letflow_admission_refs)` (in addition to `release_if_present/2` on the
-`conn.assigns` value) so a normal request leaves no stale process-dictionary
-entry behind for a later request on the same reused process to
-double-release against. `release_if_present/2`'s own idempotency (§0) makes
-the ordering between "release the `conn.assigns` ref" and "clear the
-process-dictionary list" unimportant — whichever mechanism's release call
-runs first wins, and the second is always a safe no-op.
+only runs on a raise, an entry written under `@admission_refs_pdict_key`
+would be left in the process dictionary after a normal (non-raising) request
+completes unless something clears it. Because Bandit request-handling
+processes are not guaranteed to be a fresh process per request (keep-alive
+connections may reuse the same process for sequential — never concurrent —
+requests, per `ThousandIsland`'s per-connection process model this codebase
+already relies on transitively via Bandit), Mechanism A's `before_send`
+callback ALSO clears this process-dictionary key (in addition to releasing
+the `conn.assigns` ref) so a normal request leaves no stale process-
+dictionary entry behind for a later request on the same reused process to
+double-release against. `release/2`'s own idempotency (§0) makes the
+ordering between "release the `conn.assigns` ref" and "clear the process-
+dictionary list" unimportant — whichever release call runs first wins, and
+the second is always a safe no-op.
 
 **Ordering summary per gate:** the global gate's `before_send` (Mechanism A)
 release/clear runs strictly before the tenant gate's, since it was
@@ -405,16 +448,15 @@ distinction is worth stating rather than leaving implicit.
 
 ## 7. Exact `api_pipeline.ex` chain after this change
 
-```
-plug(Letflow.Plugs.Admission, pool: :global)     # NEW — first plug, before Plug.Parsers
-plug(Plug.Parsers, parsers: [...], ...)          # unchanged
-plug(:assign_trace_id)                           # unchanged
-plug(Letflow.Plugs.AuthPipeline)                 # unchanged
-plug(Letflow.Plugs.Admission, pool: :tenant)     # NEW — after AuthPipeline, before TenantStatus
-plug(Letflow.Plugs.TenantStatus)                 # unchanged
-plug(:match)                                     # unchanged
-plug(:dispatch)                                  # unchanged
-```
+In order, top to bottom: (1) `Letflow.Plugs.Admission` mounted with the
+global-pool option — NEW, first plug in the chain, before `Plug.Parsers`;
+(2) `Plug.Parsers`, unchanged; (3) the existing `:assign_trace_id` plug,
+unchanged; (4) `Letflow.Plugs.AuthPipeline`, unchanged; (5)
+`Letflow.Plugs.Admission` mounted again with the tenant-pool option — NEW,
+positioned after `AuthPipeline` and before `TenantStatus`; (6)
+`Letflow.Plugs.TenantStatus`, unchanged; (7) `:match`, unchanged; (8)
+`:dispatch`, unchanged. Only the two new mounts at positions (1) and (5) are
+added; every other plug's position and options are unchanged from today.
 
 `use Plug.ErrorHandler` is added to the module's own `use`/`import` header
 (alongside the existing `use Plug.Router`), plus the new `handle_errors/2`
@@ -433,29 +475,40 @@ must state, in its own words (not merely by reference to this design doc):
 2. The independently-justified `retry_after_seconds` reasoning (§0/§4): why 1s
    here is right where `TenantStatus`'s 30s is right for ITS OWN, structurally
    different case, not a copy-uncritically situation.
-3. Which cleanup mechanism is used and why (§5's two-mechanism design,
-   including the "why not `conn.assigns` inside `handle_errors/2`" point) —
-   this is this requirement's most safety-critical property and must not be
+3. Which cleanup mechanism is used and why (§5's two-mechanism design), with
+   the precise, narrow scope of the raise-safety gap Mechanism B closes: a
+   raise inside a PLUG running before `Plug.Router`'s `dispatch/2` (e.g.
+   `AuthPipeline`, `TenantStatus`, or this plug's own believed-unreachable
+   branches) is not wrapped in `Plug.Conn.WrapperError` and surfaces with a
+   pre-pipeline conn that carries neither admission-ref assign — this, not a
+   blanket claim that nothing in this codebase's stack ever wraps a raise in
+   `Plug.Conn.WrapperError`, is why the process-dictionary mechanism exists.
+   This is this requirement's most safety-critical property and must not be
    left for a future reader to re-derive from Bandit/Plug source the way this
    design doc had to.
 
-## 9. Open questions (explicitly unresolved, not guessed)
+## 9. Resolved decisions and open questions
 
-* **OQ-1:** Should `Letflow.Plugs.Admission`'s process-dictionary key
-  (`:letflow_admission_refs`) collide-guard against some OTHER, future
-  plug/library also using `Process.put/2` under an unrelated key? No
-  collision exists today (grep confirms no other `Process.put/2` call site
-  in `lib/letflow/` as of this design). Not a blocking question for this
-  requirement, but worth a repo-wide convention (a shared "reserved process-
-  dictionary key prefix" note in `docs/anti-patterns.md`) if a second
-  requirement ever wants the same raise-survival trick — left to REVIEWER to
-  decide whether to require that now or defer it.
-* **OQ-2:** This design does not attempt to special-case the (believed
-  unreachable, §2) `{:error, :invalid_tenant_id}`/missing-`:auth_context`
-  branches with a clean 500 via `Response.internal_error/1` — it lets them
-  crash and relies on Mechanism B's cleanup plus Bandit's existing generic
-  crash response. If REVIEWER prefers an explicit `Response.internal_error/1`
-  call for these two "should not occur" branches instead (still releasing
-  refs first), that is a small, compatible change to §2's design, not a
-  reason to rework anything else here — flagged rather than silently decided
-  either way.
+**Resolved — process-dictionary key convention (was OQ-1 in an earlier
+version of this design):** this design does not invent a novel idiom.
+`lib/letflow/engine/wasm/host_api.ex` and `lib/letflow/engine/lua/
+platform.ex` already establish, in this codebase, a documented
+`@xxx_pdict_key` module-attribute convention (a `{ModuleName, :purpose_atom}`
+tuple bound to a named attribute, e.g. `@staged_writes_pdict_key`,
+`@fail_signal_pdict_key`) for exactly this survives-a-callback-boundary
+problem. §5 follows that convention directly
+(`@admission_refs_pdict_key`, `{Letflow.Plugs.Admission, :admission_refs}`)
+rather than a bare inline atom, so no collision-guarding open question or
+REVIEWER-blessed new idiom is needed — this is simply the existing
+convention applied to a third call site.
+
+**Resolved — tenant-derivation-failure branches (was OQ-2 in an earlier
+version of this design):** CODE-DESIGN-VALIDATOR's review of this design's
+prior iteration confirmed §2's choice — letting the (believed unreachable)
+`{:error, :invalid_tenant_id}` and missing-`:auth_context` branches crash
+rather than defensively responding via `Response.internal_error/1` — is
+acceptable as-is, matching `TenantStatus`'s own fail-closed precedent for a
+comparably "should not occur" case. No further design change is needed here;
+§2 and §8 already commit to stating this in the plug's own moduledoc.
+
+No further open questions remain for this design.

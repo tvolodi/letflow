@@ -67,12 +67,31 @@ and this design uses exactly these three, by name, everywhere below:
   every `push`/`pull_request` event by workflow trigger, not by an agent choosing to invoke
   it, and Mix does not skip an alias entry because an agent forgot to ask for it. **Nothing
   about whether this tier fires depends on any agent's memory or judgement.**
-- **Tier 2 — a violation is therefore always DETECTED and RECORDED. Structural, verified.**
-  Tier 1 firing unconditionally means `mix letflow.lint_handoffs`'s H1 check always runs
-  against every push, and its non-zero exit and violation report are always produced and
-  always visible in the CI run's own log — this follows mechanically from Tier 1 and adds
-  no further assumption. **This is the load-bearing guarantee this design actually
-  delivers: detection cannot be skipped.**
+- **Tier 2 — a violation is therefore always DETECTED and RECORDED, WHENEVER CI REACHES
+  THE LINTER. Structural, verified, and stated with the qualifier it needs (rework-3
+  correction — this is the third and last place this design's central discipline, not
+  overclaiming, had to be applied, and it is applied here explicitly rather than left
+  implicit).** Tier 1 firing unconditionally means `mix letflow.lint_handoffs` is always
+  *invoked* as part of `letflow.check`'s alias — but "invoked" is not "reached," and Tier 1
+  alone does not license "reached." `mix.exs`'s `letflow.check` alias runs its entries in a
+  straight-line sequence, and `letflow.lint_handoffs` sits at position 4, behind
+  `letflow.check_toolchain`, `letflow.check_requirements_registration`, and
+  `letflow.check_deferral_staleness` (positions 1-3). Verified at the Mix source level, not
+  only empirically: `lib/mix/lib/mix/task.ex`'s `run_alias/6` recurses through an alias's
+  string list with no check of the previous entry's result, and the only rescue in the
+  entire `run`/`run_task`/`run_alias` chain is scoped narrowly to
+  `OptionParser.ParseError` — a `Mix.Error` raised by an earlier entry is caught nowhere
+  and unwinds the whole `mix letflow.check` invocation before `letflow.lint_handoffs` is
+  ever reached. All three entries ahead of it call `Mix.raise` on failure. Reproduced
+  directly: `mix do letflow.check_toolchain + letflow.lint_handoffs` reaches the linter and
+  prints its OK line; `mix do cmd exit 1 + letflow.lint_handoffs` aborts with a stacktrace
+  and produces **zero** lint output. **The corrected guarantee: a violation is always
+  detected and recorded whenever CI reaches the linter, which happens unless an earlier
+  alias entry fails first — in which case Tier 1 still holds (the job goes red) but H1's own
+  check is not what is reported that run.** This is the load-bearing guarantee this design
+  actually delivers: detection cannot be skipped **once the linter is reached**, and an
+  earlier-entry failure never produces a false "clean" reading — it produces a red job for a
+  different, already-detected reason instead.
 - **Tier 3 — whether that detection BLOCKS THE MERGE. Procedural, NOT structural, and
   demonstrably violated in this repo's own history (PR #848, above).** Detection stopping a
   merge requires either GitHub-enforced branch protection (absent — the 404 above) or the
@@ -94,13 +113,15 @@ letflow.check.test
 **What ISS-0440's own title asks for ("make the violation structurally impossible") is
 therefore NOT fully achievable in this repo's current configuration, and this design says
 so plainly rather than leaving the title silently unmet.** What this design achieves is
-Tier 1 + Tier 2 at full strength (unconditional detection, no agent decision involved) plus
+Tier 1 + Tier 2 at the strength stated in the Tier 2 bullet above (detection that cannot be
+skipped once CI reaches the linter, no agent decision involved in whether Tier 1 fires) plus
 two procedural enforcement points (Mechanism B's early catch, §3; Tier 3's existing
-CI-green-gate MUST). What would close the gap to true Tier-3 structural enforcement is
-**branch protection on `main` with `mix letflow.check`'s job set as a required status
-check** — a one-time GitHub repository administration action, not a code change this design
-can specify, and explicitly out of scope for this fix (see §6.4, new). ORCH is filing that
-as its own follow-up issue; this design references it as a known, named gap rather than
+CI-green-gate MUST). What would close the gap to true Tier-3 structural enforcement — and,
+per §6.4, the ordering gap the Tier 2 qualifier above names as well — is **branch protection
+on `main` with `mix letflow.check`'s job set as a required status check** — a one-time
+GitHub repository administration action, not a code change this design can specify, and
+explicitly out of scope for this fix (see §6.4). ORCH is filing that as its own follow-up
+issue (ISS-0441, GH#851); this design references it as a known, named gap rather than
 implying Tier 1+2 alone already closes it.
 
 This is why §2's autofix change rides Tier 1/2 and nowhere else: it does not need a new call
@@ -481,27 +502,36 @@ option (b)/(c) as literally "call `mix letflow.lint_handoffs` at every dispatch"
 to pay 74.7s × (dispatches per run) under contention, which is exactly why §5.2 rejects that
 literal reading of (b)/(c) in favor of the field-read shown above.
 
-### 3.5 Where the actual guarantee lives, at the correct tier — stated honestly, rework-2 correction
+### 3.5 Where the actual guarantee lives, at the correct tier — stated honestly, rework-2 AND rework-3 corrections
 
-**Corrected again per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1.** Rework-1's version of
-this section said Mechanism A guarantees the violation "would still be caught, every time,
-... before merge" and that "structurally impossible to merge" was literally true. That
+**Corrected per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1, then qualified further per
+rework-3's BLOCKER (§1's Tier 2 bullet is the source of truth for the exact wording — this
+section points to it rather than re-deriving it a third time).** Rework-1's version of this
+section said Mechanism A guarantees the violation "would still be caught, every time, ...
+before merge" and that "structurally impossible to merge" was literally true. That
 conflated Tier 2 (detection) with Tier 3 (merge-blocking) — §1's rewrite is the source of
-truth for the distinction; this section restates only what follows from it for Mechanism A
-vs. Mechanism B specifically.
+truth for the Tier 1/2/3 distinction; this section restates only what follows from it for
+Mechanism A vs. Mechanism B specifically. **Every "always detected and recorded" phrase
+below carries §1's Tier 2 qualifier — whenever CI reaches the linter, which fails to hold
+only if one of the three earlier `letflow.check` alias entries (`check_toolchain`,
+`check_requirements_registration`, `check_deferral_staleness`) raises first — even where
+not spelled out in full a second and third time; §1 is where that qualifier is stated
+completely.**
 
-**Mechanism A (§1.1/§2) delivers Tier 1 + Tier 2 at full, unconditional strength: the
-violation is always DETECTED and RECORDED in CI output.** That part of the original claim —
-"nothing bypasses CI" — is true and re-verified (`ci.yml`'s step has no `if:`/
-`continue-on-error:`). What is **not** true, and is withdrawn here, is that detection
-implies the violation "cannot reach `main`": `main` has no branch protection (verified,
-§1), and PR #848 — this run's own — merged today with a FAILURE conclusion present in its
-rollup. **Mechanism A's honest guarantee is "always detected and recorded," not "cannot
-reach main."** Whether a detected violation actually blocks a given merge is Tier 3,
-procedural: it depends on the merging agent honoring `GIT_MERGE.md`'s CI-green-gate MUST,
-which is the same character of guarantee as the §1.3 claim rework-1 already corrected for
-Mechanism B — a written procedure, not a GitHub-enforced server-side rule, given this
-repo's current configuration.
+**Mechanism A (§1.1/§2) delivers Tier 1 + Tier 2 at the strength §1's Tier 2 bullet
+states: the violation is always DETECTED and RECORDED in CI output whenever CI reaches the
+linter.** That part of the original claim — "nothing bypasses CI" — is true of Tier 1 and
+re-verified (`ci.yml`'s step has no `if:`/`continue-on-error:`); it is Tier 2's own
+unqualified "always detected" that needed the ordering qualifier, which §1 now states in
+full. Separately and independently, what is **not** true, and was withdrawn at rework-2, is
+that detection implies the violation "cannot reach `main`": `main` has no branch
+protection (verified, §1), and PR #848 — this run's own — merged today with a FAILURE
+conclusion present in its rollup. **Mechanism A's honest guarantee is "always detected and
+recorded whenever CI reaches the linter," not "cannot reach main."** Whether a detected
+violation actually blocks a given merge is Tier 3, procedural: it depends on the merging
+agent honoring `GIT_MERGE.md`'s CI-green-gate MUST, which is the same character of
+guarantee as the §1.3 claim rework-1 already corrected for Mechanism B — a written
+procedure, not a GitHub-enforced server-side rule, given this repo's current configuration.
 
 **Mechanism B (§1.2/§3.1-3.4) does not add a second, independent Tier-1/2-strength
 guarantee either** — it is procedural throughout, inheriting §1.3's track record (strong,
@@ -536,9 +566,14 @@ second independent guarantee, and it does nothing for Tier 3 either.
 two procedural enforcement points" is adopted as this design's honest self-description —
 materially better than six prose-only predecessors that produced no detection at all, but
 explicitly **not** "structurally impossible to violate" and **not** "structurally
-impossible to merge." The correct sentence is: *a violation is always detected and recorded
-by CI; whether it is then blocked from merging depends on a procedure (`GIT_MERGE.md`'s
-CI-green gate) that this repository does not currently enforce server-side.*
+impossible to merge." **The fully-qualified sentence, spelled out once more here because it
+is this design's own closing self-description and should not be the one place the qualifier
+is left implicit:** *a violation is always detected and recorded by CI whenever CI reaches
+the linter — which holds unless one of the three `letflow.check` alias entries ahead of it
+raises first, in which case the job still goes red but for a different, already-detected
+reason; and whether a detected violation is then blocked from merging depends on a
+procedure (`GIT_MERGE.md`'s CI-green gate) that this repository does not currently enforce
+server-side.*
 
 ---
 
@@ -625,14 +660,21 @@ role's own mandate that every acceptance criterion maps to something concrete.)
 asserted at face value.** True structural (Tier 3, merge-blocking) enforcement is NOT
 achieved by this design in this repo's current configuration — `main` has no branch
 protection (verified, §1) and a red CI run has demonstrably merged before (PR #848). What
-*is* achieved, at full unconditional strength, is Tier 1+2: detection. Two catches, both
-real, neither claiming more than its tier supports:
+*is* achieved is Tier 1 at full unconditional strength plus Tier 2 **at the qualified
+strength §1's Tier 2 bullet states** (rework-3 correction: detection is guaranteed whenever
+CI reaches the linter, which fails only if one of the three earlier alias entries raises
+first — §1 has the full statement and the Mix-source-level evidence; not re-derived here).
+Two catches, both real, neither claiming more than its tier supports:
 
-- **Mechanism A** catches (and for the safe subset, self-heals) it **at CI** — Tier 1+2,
-  unconditional: the check always runs and a violation is always detected and recorded in
-  CI's output. This does **not** mean the violation is blocked from `main` — that is Tier 3,
-  which depends on the merging agent honoring `GIT_MERGE.md`'s CI-green gate, a written
-  procedure this repository does not enforce server-side (§1).
+- **Mechanism A** catches (and for the safe subset, self-heals) it **at CI** — Tier 1
+  unconditional, Tier 2 whenever CI reaches the linter (§1): the check always *runs as part
+  of the alias*, and a violation is always detected and recorded **once the linter executes**
+  — not if an earlier alias entry (`check_toolchain`, `check_requirements_registration`,
+  `check_deferral_staleness`) raises first, in which case the job still goes red (Tier 1
+  holds) but H1's own result is not what's reported that run. This also does **not** mean
+  the violation is blocked from `main` when it is detected — that is Tier 3, which depends
+  on the merging agent honoring `GIT_MERGE.md`'s CI-green gate, a written procedure this
+  repository does not enforce server-side (§1).
 - **Mechanism B** catches it **before CI even runs** — at the moment ORCH would otherwise
   commit the very handoff carrying the bad value, per §3.2 step 2 — *when the documented
   §1.3 procedure is followed*, which it reliably has been since ISS-0196 but is not
@@ -789,22 +831,36 @@ future change wants CI to self-heal and push a fix commit, that is a separate, l
 decision (write access from a CI job, atomicity with the rest of the check run) and is
 explicitly not decided here.
 
-### 6.4 The Tier 3 gap — branch protection — is a NAMED, out-of-scope repo-administration follow-up, not silently left unaddressed
+### 6.4 The Tier 3 gap — branch protection — is a NAMED, out-of-scope repo-administration follow-up, not silently left unaddressed, and it closes the Tier 2 ordering gap too
 
-**New, per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1.** §1/§3.5/AC1 establish that this
-design achieves Tier 1+2 (unconditional detection) but not Tier 3 (a detected violation
-provably cannot merge), because `main` carries no branch protection today (`404` on
-`repos/tvolodi/letflow/branches/main/protection`) and PR #848 shows a red run merging in
-practice. Closing that gap requires **GitHub branch protection on `main` with
-`mix letflow.check`'s "Backend gate" job (and, if desired, "Frontend gate") configured as a
-required status check** — a repository-settings action taken through GitHub's API or web
-UI, not a code or documentation change any of this design's two mechanisms can specify or
-implement. This is explicitly **out of scope for this design and for ELIXIR-DEV's
-implementation of it** — no `.ex`, `.md`, or `.yml` change proposed here performs it. ORCH
-is filing this as its own follow-up issue (per `docs/agents/protocols/ISSUE_QUEUE.md`); this
-design records the gap by name, with the exact verification command that demonstrates it
-today (`gh api repos/tvolodi/letflow/branches/main/protection`), so a future reader finds a
-named, tracked gap rather than an implication that Tier 1+2 alone already closed it.
+**Per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1, extended per rework-3.** §1/§3.5/AC1
+establish that this design achieves Tier 1 at full strength and Tier 2 at the qualified
+strength §1's Tier 2 bullet states (detection whenever CI reaches the linter) but not
+Tier 3 (a detected violation provably cannot merge), because `main` carries no branch
+protection today (`404` on `repos/tvolodi/letflow/branches/main/protection`) and PR #848
+shows a red run merging in practice. Closing that gap requires **GitHub branch protection
+on `main` with `mix letflow.check`'s "Backend gate" job (and, if desired, "Frontend gate")
+configured as a required status check** — a repository-settings action taken through
+GitHub's API or web UI, not a code or documentation change any of this design's two
+mechanisms can specify or implement. This is explicitly **out of scope for this design and
+for ELIXIR-DEV's implementation of it** — no `.ex`, `.md`, or `.yml` change proposed here
+performs it. **ORCH has filed this as ISS-0441 (GH#851)**, referenced here by id per
+`docs/agents/protocols/ISSUE_QUEUE.md`; this design records the gap by name, with the exact
+verification command that demonstrates it today
+(`gh api repos/tvolodi/letflow/branches/main/protection`), so a future reader finds a named,
+tracked gap rather than an implication that Tier 1+2 alone already closed it.
+
+**The same follow-up (ISS-0441/GH#851) also closes rework-3's Tier 2 ordering gap, because
+it is the same underlying question asked at two different points in the job.** Whether a
+problem detected anywhere in `mix letflow.check` actually blocks the merge, or merely gets
+reported for that one run, is Tier 3's question regardless of which alias entry raised it —
+`letflow.lint_handoffs` failing at position 4, or `check_toolchain`/
+`check_requirements_registration`/`check_deferral_staleness` failing first at positions 1-3
+and preventing position 4 from ever running. A required status check on the whole
+`letflow.check` job blocks the merge in **either** case: it does not distinguish which
+alias entry produced the red result, so it closes both the Tier 3 gap named above and the
+ordering-dependent variant of Tier 2 in one repository-administration action. No separate
+follow-up is needed for the ordering gap specifically.
 
 ---
 
@@ -839,13 +895,15 @@ named, tracked gap rather than an implication that Tier 1+2 alone already closed
    not as a claim that the insertion is itself code-enforced (§1.2/§3.5).
 3. `docs/anti-patterns.md`: per the issue's explicit instruction, do **not** add an eighth
    tally line as the fix. If anything is appended here, it should be a closing note stating
-   this occurrence's mitigation delivers unconditional detection (Tier 1+2, Mechanism A at
-   CI — the check itself always runs and always records a violation) plus two procedural
-   enforcement points (Mechanism B's early catch, and the pre-existing CI-green-gate MUST
-   that Tier 3/merge-blocking still depends on, since `main` carries no branch protection
-   today) — described at that three-tier precision, never as uniformly "structural" or as
-   "cannot reach main" — rather than a ninth recurrence entry. DOC-UPDATER's call at
-   Step 6, not this step's.
+   this occurrence's mitigation delivers Tier 1 detection-is-invoked at full strength plus
+   Tier 2 detection-is-recorded whenever CI actually reaches the linter (Mechanism A, at
+   CI — qualified per §1: an earlier `letflow.check` alias entry raising first still turns
+   the job red but is not H1's own result) plus two procedural enforcement points
+   (Mechanism B's early catch, and the pre-existing CI-green-gate MUST that Tier 3's
+   merge-blocking still depends on, since `main` carries no branch protection today) —
+   described at that three-tier precision, never as uniformly "structural," never as
+   "cannot reach main," and never as an unqualified "always detected" — rather than a
+   ninth recurrence entry. DOC-UPDATER's call at Step 6, not this step's.
 4. Test fixtures for AC1's demonstration live under `scratch/` or `test/fixtures/` (per File
    Placement Rules), always **outside** `handoffs/`, invoked via the new `--dir` flag
    (§2.1, §5 AC1) — never inside `handoffs/` (hazard: any other host's CI would lint it

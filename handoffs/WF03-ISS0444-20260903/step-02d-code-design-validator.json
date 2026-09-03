@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF03-ISS0444-20260903-step-02d",
+  "run_id": "WF03-ISS0444-20260903",
+  "workflow_id": "WF-03",
+  "step": "02d",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0444-20260903/step-02d-code-design-validator.json",
+  "created_at": "2026-09-03T15:45:00Z",
+  "started_at": "2026-09-03T15:35:00Z",
+  "completed_at": "2026-09-03T15:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-218", "REQ-188", "REQ-186"],
+    "issue_ids": ["ISS-0444"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0444-20260903/step-02c-code-designer-rework.json",
+      "handoffs/WF03-ISS0444-20260903/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0444-poller-schema-availability.md"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0444-poller-schema-availability.md"
+    ],
+    "branch_name": "fix/ISS-0444-poller-missing-schema-20260903"
+  },
+  "task": {
+    "description": "Re-check CODE-DESIGNER's rework of §4's fabricated 'archive/1 has several OTHER callers/contexts' justification, per step-02b's own FAIL verdict, before releasing the design to ELIXIR-DEV."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "verdict": "PASS",
+    "summary": "Re-checked §4's corrected rescue-placement justification against source directly (not against the rework's own summary).\n\n1. FABRICATED CLAIM REMOVED: confirmed. `git diff 414bcc3f c3880b03 -- lib/letflow/design/iss0444-poller-schema-availability.md` shows the ENTIRE diff is confined to §4's rescue-placement paragraph; the old sentence 'archive/1 is a general-purpose context function with several OTHER callers/contexts implied by its own moduledoc' is gone in full, along with the 'widening ITS rescue behavior is a larger, less-scoped change than run_retention_sweep/1 ... catching the same narrow error at its own call site' framing that depended on it.\n\n2. INDEPENDENT RE-VERIFICATION OF CALLER COUNT: ran `grep -rn \"EventStore.archive(\" lib/ test/` myself. Result: exactly one production call site, lib/letflow/scheduler.ex:565 (inside run_retention_sweep/1 itself); 8 call sites in test/letflow/event_store_test.exs (lines 693, 777, 783, 817, 849, 869, 1053, 1087); 1 call site in test/letflow/engine/reconstruction_test.exs:353. Total 9 test call sites, 1 production call site -- matches CODE-DESIGNER's re-verified count in step-02c exactly (1 production, ~9 test). The design doc's own prose still rounds this to '~10 direct unit-test invocations' / '~10 test call sites' (twice) rather than ~9 -- a one-off rounding of an approximate figure, not a fabricated or load-bearing count: the reasoning built on it ('checked against every one of those existing call sites') does not depend on the exact number being 9 vs 10, and the doc is explicit that archive/1 has exactly ONE production caller, which is the fact the prior FAIL turned on. Not a gate failure.\n\n3. REPLACEMENT JUSTIFICATION MATCHES ALL THREE REQUIRED ELEMENTS: (a) states the re-verified grep fact plainly -- 'archive/1's only PRODUCTION caller anywhere in lib/ is run_retention_sweep/1 itself ... there is only one'; (b) reframes around contract ownership, citing archive/1's own moduledoc-documented reusability intent ('EventStore's general-purpose primitive by design intent ... reusable properties for whatever calls it, today or in the future') and the existing unit tests' interest in a raise propagating rather than being folded into {:error, {:schema_unavailable, _}} ('callers (including tests probing its own error contract) may legitimately want a raise on a genuinely-missing schema to propagate'); (c) ties the placement decision back to §1's own rescue-boundary idiom verbatim ('mirroring poll_and_fire/1's own boundary in §1 -- rescue at the outermost function whose contract promises graceful degradation, not inside the shared lower-level primitive it delegates to'). The underlying placement decision (rescue in run_retention_sweep/1, not archive/1) is unchanged, exactly as claimed.\n\n4. NO OTHER SECTION TOUCHED: confirmed via the same git diff -- the changed hunk starts mid-sentence at 'hold\" reasoning) — NOT inside EventStore.archive/1.' and ends before 'existing body (the single delegating call to EventStore.archive/1) gains the identical shape...', which is unchanged text both before and after. Sections 0, 1, 2, 3, 5, 6, 7, and the rest of §4 (rescue shape, placement inside run_retention_sweep/1, {:error, {:schema_unavailable, tenant_schema}} reason-term choice, no second issue filed, retention-specific test-coverage note) are byte-identical to the step-02b-reviewed version. All prior PASS findings (rescue boundary in claim_due_timer_ids/2, poller.ex moduledoc quote, pin_rebind.ex precedent, scheduler_test.exs:578-579 non-impact, Logger precedent citations, poll_result()/[]-return safety trace, no-implementation-code, retention-sweep scope-inclusion judgment) stand unchanged and require no re-verification.\n\nAll checks pass. Design is released to ELIXIR-DEV for implementation.",
+    "routing": "Route to ELIXIR-DEV to implement per lib/letflow/design/iss0444-poller-schema-availability.md in full (§1-§5); TEST-DESIGNER's own gate follows per §6's test-approach notes once implementation lands.",
+    "checks": {
+      "fabricated_several_other_callers_claim_removed": "PASS",
+      "caller_count_independently_reverified": "PASS (1 production call site scheduler.ex:565, 9 test call sites -- matches rework's own count; doc's '~10' rounding is non-material)",
+      "replacement_justification_states_grep_fact": "PASS",
+      "replacement_justification_cites_moduledoc_reusability_intent": "PASS",
+      "replacement_justification_cites_tests_wanting_raise_to_propagate": "PASS",
+      "replacement_justification_ties_to_section1_idiom": "PASS",
+      "no_other_section_touched": "PASS (git diff confined to single §4 paragraph)",
+      "prior_pass_findings_unchanged": "PASS"
+    }
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

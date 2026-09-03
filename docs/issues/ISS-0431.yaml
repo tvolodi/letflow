@@ -99,3 +99,22 @@ orch_routing_note: >
   This record stays open, status unchanged, pending those three
   requirements' completion -- closing it directly would misrepresent an
   undiagnosed-but-unfixed gap as resolved.
+
+  UPDATE (DOC-UPDATER, 2026-09-03, WF02-REQ218-20260903 Step 6): all
+  three requirements are now status: done -- REQ-216 merged
+  2026-09-03T01:28:40Z, REQ-217 merged 2026-09-03T06:50:13Z, REQ-218
+  merged (this step). The underlying admission-control/backpressure gap
+  this issue describes is now closed on both named surfaces (HTTP entry
+  path via REQ-217, Poller's per-tick sweep via REQ-218) atop REQ-216's
+  shared core semaphore. This record's own `status:` field is
+  deliberately left at `open` by this step -- per this project's
+  established convention (see REQ-211/REQ-212's own DOC-UPDATER run notes
+  on ISS-0390), the final `status: resolved` flip for a parent issue once
+  every one of its split-out requirements has landed is ORCH's own
+  Step-Final action, not DOC-UPDATER's, so ORCH should release
+  letflow-queue task 431 as done and flip this file's `status:` to
+  `resolved` at Step Final. One disclosed residual: ISS-0430's future
+  LISTEN/NOTIFY work, named by this issue's own description as a future
+  secondary surface to cover "by the same decision," remains
+  unaddressed -- that is out of scope for REQ-216/217/218 as scoped and
+  is not a reason to withhold closing this issue.

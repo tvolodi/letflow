@@ -29,6 +29,8 @@ defmodule Letflow.Scheduler.PollerTest do
 
   import Ecto.Query
 
+  alias Letflow.Admission
+  alias Letflow.AdmissionTestHelpers
   alias Letflow.Definitions
   alias Letflow.Dlq
   alias Letflow.Engine
@@ -418,6 +420,354 @@ defmodule Letflow.Scheduler.PollerTest do
                "the dispatched hook was still mid-backoff (2_000ms); observed only " <>
                "#{length(distinct_timestamps)} distinct last_tick_started_at value(s) -- " <>
                "the Poller's own tick appears to be blocked on hook delivery"
+    end
+  end
+
+  # ===================================================================================
+  # REQ-218 -- admission-control wiring on Poller's six sequential per-tenant
+  # operations. See lib/letflow/design/req218-poller-admission-wiring.md for the
+  # full design; test shapes below follow its §6 (with the AC3 "precise
+  # interleaving harness" and AC5 "fault-injection point" both explicitly left to
+  # TEST-DESIGNER/ELIXIR-DEV's discretion there).
+  # ===================================================================================
+
+  defp due_timer_for!(schema_name, node_id) do
+    instance_id = start_instance!(schema_name)
+
+    fire_at = DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.truncate(:microsecond)
+
+    assert {:ok, timer} =
+             Scheduler.create(
+               Repo,
+               %{
+                 instance_id: instance_id,
+                 timer_type: "deadline",
+                 node_id: node_id,
+                 fire_at: fire_at,
+                 token_id: live_token_id!(schema_name, instance_id)
+               },
+               prefix: schema_name
+             )
+
+    timer.id
+  end
+
+  defp timer_status!(schema_name, timer_id) do
+    Repo.get!(Timer, timer_id, prefix: schema_name).status
+  end
+
+  # A fully-provisioned (normal) tenant schema, minus its ordering table --
+  # this is a surgical fault injection targeting ONLY the ordering rows
+  # (maybe_run_ordering_cycle/1, maybe_run_ordering_sweeper/1,
+  # maybe_run_ordering_metrics/1), which all query "effect_completions"
+  # (lib/letflow/ordering/consumer.ex, sweeper.ex, metrics.ex) and have no
+  # internal self-rescue, unlike Letflow.Obs.Alerts's own safe_* helpers
+  # (design doc's §7 Q4). A schema whose Postgres schema was never created at
+  # all was tried first and rejected: Letflow.Scheduler.poll_and_fire/1 (row
+  # 1, contract-documented to never raise, with NO poller-side rescue at all)
+  # turned out to ALSO raise for a schema missing its "timers" table entirely
+  # -- crashing the whole tick before ever reaching the ordering rows this AC
+  # is actually about. Dropping only "effect_completions" from an otherwise
+  # intact, fully-migrated schema leaves "timers" (and everything else)
+  # intact, so poll_and_fire/1, retention, and REQ-194's per-schema-rescued
+  # active-instance refresh are all unaffected -- only the three ordering
+  # rows' own queries fail.
+  defp drop_ordering_table!(schema_name) do
+    Repo.query!(~s(DROP TABLE IF EXISTS "#{schema_name}"."effect_completions" CASCADE))
+  end
+
+  describe "REQ-218 AC1: forced-zero admission cap skips every schema; capacity restored resumes normally" do
+    test "holding the sole global unit before a tick leaves all 3 schemas' timers pending; releasing it lets the next tick fire all 3" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      schemas =
+        for i <- 1..3 do
+          %{schema_name: schema_name} = provisioned_tenant("req218-ac1-#{i}")
+          timer_id = due_timer_for!(schema_name, "req218-ac1")
+          {schema_name, timer_id}
+        end
+
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, state_after_zero} = Poller.handle_info(:tick, state)
+
+      for {schema_name, timer_id} <- schemas do
+        assert timer_status!(schema_name, timer_id) == "pending"
+      end
+
+      :ok = Admission.release(probe_ref)
+
+      assert {:noreply, _state_after_restore} = Poller.handle_info(:tick, state_after_zero)
+
+      for {schema_name, timer_id} <- schemas do
+        assert timer_status!(schema_name, timer_id) == "fired"
+      end
+    end
+  end
+
+  describe "REQ-218 AC2: a cap of exactly 1 still drains all schemas sequentially within a single tick" do
+    test "3 schemas' due timers all fire within one tick, with no probe held and global_cap == 1" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      schemas =
+        for i <- 1..3 do
+          %{schema_name: schema_name} = provisioned_tenant("req218-ac2-#{i}")
+          timer_id = due_timer_for!(schema_name, "req218-ac2")
+          {schema_name, timer_id}
+        end
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      for {schema_name, timer_id} <- schemas do
+        assert timer_status!(schema_name, timer_id) == "fired"
+      end
+    end
+  end
+
+  # A single, sequential caller (Poller) never holds more than one admission
+  # unit at a time (§1/§3 of the design doc), so with global_cap == 1 and NO
+  # concurrent contender, Poller's own acquire/release round trips never
+  # collide with each other -- every attempt succeeds (AC2's own proof).
+  # Genuinely forcing SOME (not all) of a tick's independent
+  # try_acquire(:global) calls to observe {:error, :capacity} therefore
+  # requires a real concurrent contender racing for the same sole unit
+  # throughout the tick -- this antagonist task continuously
+  # acquires-then-immediately-releases the sole global unit for as long as
+  # the tick is running, so some of Poller's own attempts land while the
+  # antagonist holds it (rejected) and others land while it doesn't (admitted)
+  # -- a real, not simulated, race against the exact admission decision AC3 is
+  # about. Extracted to its own top-level private function (not an inline
+  # closure inside the test) so the compiler doesn't need to derive an
+  # anonymous-function name from this describe/test's own long text.
+  defp ac3_attempt(schema_names) do
+    timers =
+      for schema_name <- schema_names,
+          do: {schema_name, due_timer_for!(schema_name, "req218-ac3")}
+
+    antagonist = Task.async(&ac3_antagonist_loop/0)
+
+    state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+    {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+    Task.shutdown(antagonist, :brutal_kill)
+
+    Enum.count(timers, fn {schema_name, timer_id} ->
+      timer_status!(schema_name, timer_id) == "fired"
+    end)
+  end
+
+  defp ac3_antagonist_loop do
+    case Admission.try_acquire(:global) do
+      {:ok, ref} -> Admission.release(ref)
+      {:error, :capacity} -> :ok
+    end
+
+    ac3_antagonist_loop()
+  end
+
+  describe "REQ-218 AC3: a capacity rejection for one schema/operation does not block the rest of the same tick" do
+    test "an antagonist contending for the sole global unit produces a genuine partial skip" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      schema_names =
+        for i <- 1..10 do
+          %{schema_name: schema_name} = provisioned_tenant("req218-ac3-#{i}")
+          schema_name
+        end
+
+      # Retried up to 5 times (fresh due timers each attempt, same 10
+      # already-provisioned schemas) because which specific attempts collide
+      # with the antagonist is inherently nondeterministic; the assertion only
+      # requires that a genuine partial skip is OBSERVED at least once, not
+      # that it reproduces on a fixed attempt.
+      result =
+        Enum.reduce_while(1..5, nil, fn _attempt, _acc ->
+          fired_count = ac3_attempt(schema_names)
+
+          if fired_count > 0 and fired_count < length(schema_names) do
+            {:halt, fired_count}
+          else
+            {:cont, nil}
+          end
+        end)
+
+      assert is_integer(result),
+             "expected at least one of 5 attempts to show a genuine partial skip (some of " <>
+               "the 10 schemas' poll_and_fire admitted, some rejected) within a single tick " <>
+               "while an antagonist contended for the sole global unit -- got either total " <>
+               "success or total skip on every attempt"
+    end
+  end
+
+  # A retention-eligible event NOT archived on a rejected attempt stays
+  # pending in the "events" table -- left alone, it would still be there (and
+  # still eligible) on the NEXT attempt, so a later attempt's successful
+  # retention sweep could archive TWO (or more, across several skipped
+  # attempts) events at once, breaking a simple "archived count went up by
+  # exactly 1" delta check. Deleting any leftover pending event before each
+  # fresh attempt keeps every attempt's own delta isolated.
+  defp clear_pending_events!(schema_name) do
+    Repo.delete_all(Event, prefix: schema_name)
+  end
+
+  # AC3's requirement text has TWO independent sub-clauses: (a) a rejection
+  # for one schema's operation does not block a DIFFERENT schema's SAME
+  # operation later in the tick (covered above by the 10-schema antagonist
+  # test, all racing for the same poll_and_fire operation), and (b) a
+  # rejection for one schema's operation does not block that SAME schema's
+  # OTHER operations later in the tick. (a) alone does not exercise (b) --
+  # a coarser, forbidden design (one acquire/release per SCHEMA covering all
+  # six of its operations, ruled out by design doc §1/§3) would still pass
+  # every assertion in the test above, since that test only ever looks at
+  # one operation (poll_and_fire) across many schemas.
+  #
+  # This test exercises (b) with a LARGELY DETERMINISTIC harness rather than
+  # a two-sided race: an earlier draft used a continuous antagonist Task
+  # (mirroring ac3_antagonist_loop/0 above) contending against BOTH the
+  # target schema's poll_and_fire AND its retention-sweep admission calls at
+  # once. Diagnostic runs (temporary IO.puts instrumentation, since removed)
+  # showed that shape is not merely occasionally flaky but structurally
+  # biased: with a single sole global unit and a tight-looping antagonist,
+  # BOTH of the target's admission attempts overwhelmingly land on the SAME
+  # side of the race together (both admitted, or both rejected) far more
+  # often than they split -- a two-sided race does not reliably produce the
+  # one outcome this test needs. The fix removes one whole side of the race:
+  # the probe is acquired by the TEST process itself BEFORE `handle_info/2`
+  # is even invoked, so the tick's very FIRST admission attempt (this
+  # schema's poll_and_fire, with no other schema ahead of it in the
+  # `Enum.each`) is DETERMINISTICALLY rejected -- no race at all, since the
+  # test process's own `try_acquire/1` call has already completed, and
+  # nothing else could have taken or released that unit before
+  # `handle_info/2`'s own first line runs (same-process, strict
+  # happens-before ordering; `Task.async/1` below does not block this
+  # process from proceeding straight into the tick call). Only ONE race
+  # remains: whether the probe is released (by a short-lived helper Task)
+  # before the SAME schema's LATER retention-sweep admission attempt, which
+  # runs only after the entire poll_and_fire loop plus the unwrapped
+  # `maybe_refresh_active_instances/1` pass have completed -- a comfortably
+  # wide, one-sided margin rather than a symmetric coin flip.
+  defp ac3b_attempt(schema_name, instance_id, attempt) do
+    clear_pending_events!(schema_name)
+    timer_id = due_timer_for!(schema_name, "req218-ac3b-#{attempt}")
+
+    old_created_at =
+      DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
+
+    seed_event!(schema_name, instance_id, old_created_at, attempt)
+    archived_before = table_count(ArchivedEvent, schema_name)
+
+    assert {:ok, probe_ref} = Admission.try_acquire(:global)
+
+    releaser =
+      Task.async(fn ->
+        Process.sleep(5)
+        Admission.release(probe_ref)
+      end)
+
+    state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+    assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+    Task.await(releaser)
+
+    # Deterministic per the comment above: the probe was held before the
+    # tick began, so this schema's poll_and_fire admission call -- the very
+    # first admission attempt of the whole tick -- must have been rejected.
+    assert timer_status!(schema_name, timer_id) == "pending",
+           "expected this schema's poll_and_fire to be deterministically rejected (probe held " <>
+             "before the tick began), but its timer fired anyway"
+
+    table_count(ArchivedEvent, schema_name) == archived_before + 1
+  end
+
+  describe "REQ-218 AC3 (per-schema clause): a rejected schema's other ops still proceed" do
+    test "the same schema's retention sweep still runs after its own poll_and_fire was rejected, in the same tick" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+      put_scheduler_config(retention_enabled: true, retention_interval_ms: 0, retention_days: 30)
+
+      %{schema_name: schema_name} = provisioned_tenant("req218-ac3b")
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(schema_name, instance_id)
+
+      # Filler schemas (no due timers/events of their own), provisioned ONCE
+      # and reused across every attempt -- Poller's own tenant_schemas/0
+      # lists every currently-provisioned schema, so these add real,
+      # unavoidable DB round-trip time between the target schema's own
+      # poll_and_fire admission attempt (near the very start of the tick's
+      # timer loop, essentially instantaneous regardless of filler count)
+      # and its own, much LATER retention-sweep admission attempt (only
+      # after the ENTIRE poll_and_fire loop across every schema, plus the
+      # unwrapped maybe_refresh_active_instances pass over every schema
+      # again, have both completed). Without fillers this gap was measured
+      # (temporary IO.puts instrumentation, since removed) to be so narrow
+      # that no fixed release delay reliably landed inside it -- too short a
+      # delay let the release race ahead of even the target's own
+      # poll_and_fire attempt (breaking the "poll deterministically
+      # rejected" assumption this test's first assertion depends on), while
+      # a delay long enough to avoid that then usually landed AFTER
+      # retention's own attempt too (both admission calls on the same,
+      # wrong side). Fillers widen the real elapsed time between the two
+      # target-schema attempts, not the release delay itself, so a single
+      # fixed delay can reliably land after the first and before the second.
+      for i <- 1..12, do: provisioned_tenant("req218-ac3b-filler-#{i}")
+
+      # Only one side of ac3b_attempt/3 above is still a race (whether the
+      # 5ms-delayed release beats the retention-sweep admission call) --
+      # retried a handful of times purely as margin against scheduler jitter
+      # on a loaded host, not because the outcome is symmetric.
+      result = Enum.reduce_while(1..10, nil, &ac3b_reduce(schema_name, instance_id, &1, &2))
+
+      assert result == :ok,
+             "expected at least one of 10 attempts where this schema's retention sweep still " <>
+               "ran (old event archived) after its own poll_and_fire admission call was " <>
+               "deterministically rejected in the same tick -- proving a rejected operation " <>
+               "for a schema does not block that SAME schema's OTHER operations from being " <>
+               "attempted later in the same tick"
+    end
+  end
+
+  defp ac3b_reduce(schema_name, instance_id, attempt, _acc) do
+    if ac3b_attempt(schema_name, instance_id, attempt), do: {:halt, :ok}, else: {:cont, nil}
+  end
+
+  describe "REQ-218 AC4: Letflow.Admission.try_acquire({:tenant, _}) is never called from poller.ex" do
+    test "the source text of lib/letflow/scheduler/poller.ex contains no {:tenant, admission call" do
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/scheduler/poller.ex"))
+
+      refute source =~ "{:tenant,",
+             "poller.ex must only ever call Letflow.Admission.try_acquire(:global) -- " <>
+               "REQ-218 decision 3 explicitly excludes the per-tenant pool for Poller"
+    end
+  end
+
+  describe "REQ-218 AC5: an existing per-operation rescue still catches its own raise, with the admission slot released (no leak)" do
+    test "a schema missing its ordering table raises inside maybe_run_ordering_cycle/1's own rescue, without leaking its admission slot or crashing the tick" do
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      %{schema_name: broken_schema_name} = provisioned_tenant("req218-ac5-broken")
+      drop_ordering_table!(broken_schema_name)
+
+      %{schema_name: real_schema_name} = provisioned_tenant("req218-ac5-real")
+      timer_id = due_timer_for!(real_schema_name, "req218-ac5")
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+
+      # Must not crash the calling (test) process -- maybe_run_ordering_cycle/1's
+      # (and _sweeper/1's and _metrics/1's) existing `rescue _ -> :ok` must still
+      # catch the raise this broken schema forces, with the new acquire/release
+      # wrapped around it per the design's §1 point 2 (the acquire/release wraps
+      # AROUND the existing rescue, never replacing it).
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      # The real schema's own operations were unaffected by the broken schema's raise.
+      assert timer_status!(real_schema_name, timer_id) == "fired"
+
+      # No leak: with global_cap == 1 (pool_size: 3, reserved_headroom: 2), if any
+      # of the broken schema's raised ordering admission round trips had failed to
+      # release, this probe would observe {:error, :capacity} instead.
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+      :ok = Admission.release(probe_ref)
     end
   end
 

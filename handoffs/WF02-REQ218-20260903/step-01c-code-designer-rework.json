@@ -1,0 +1,53 @@
+{
+  "handoff_id": "WF02-REQ218-20260903-step-01c",
+  "run_id": "WF02-REQ218-20260903",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ218-20260903/step-01c-code-designer-rework.json",
+  "created_at": "2026-09-03T10:05:00Z",
+  "started_at": "2026-09-03T10:05:00Z",
+  "completed_at": "2026-09-03T10:20:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-218"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req218-poller-admission-wiring.md",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/admission.ex",
+      "lib/letflow/plugs/admission.ex",
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/tenant_provisioning/backfill.ex",
+      "docs/requirements.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ218-20260903",
+    "requirement_text": "Third and final part of ISS-0431/GH#835's fix, covering its own\nexplicitly-named SECONDARY surface: \"Poller's per-tenant sweeps and\nfuture LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover\nby the same decision rather than each inventing its own cap.\" Atop\nREQ-216's core module; does not touch REQ-217's HTTP-path wiring.\n\nWHAT `lib/letflow/scheduler/poller.ex` ACTUALLY DOES TODAY (read in\nfull, not assumed): `handle_info(:tick, ...)` calls\n`Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name)\nend)` -- SEQUENTIAL, one tenant schema at a time, not concurrent. The\nsame sequential pattern repeats for\n`maybe_run_retention_sweep/2`, `maybe_run_alert_detection/3`,\n`maybe_run_ordering_cycle/1`, `maybe_run_ordering_sweeper/1`,\n`maybe_run_ordering_metrics/1`. So THIS module does not exhibit\nunbounded CONCURRENT demand the way the HTTP path does (each call\nblocks the single Poller GenServer process, so at most one DB\nconnection is held by Poller work at any instant) -- the real gap\nhere is ACCOUNTING, not concurrency: Poller's one held connection is\ninvisible to REQ-216's admission budget, so REQ-216's global cap\n(`pool_size - reserved_headroom`) can only be a safe ceiling on\nHTTP-path concurrency if `reserved_headroom` already reserves enough\nslack for Poller's own use -- an implicit, untested assumption today.\nThis requirement makes that assumption explicit and enforced rather\nthan merely documented.\n\nSCOPE:\n1. Before each of the six sequential per-tenant operations named\nabove (the timer poll-and-fire loop plus the five `maybe_run_*`\nsweeps), acquire ONE global admission slot via\n`Letflow.Admission.try_acquire(:global)` for that operation's single\nRepo-touching call, and release it immediately after that call\nreturns (success or the operation's own already-established rescue\npath -- do not weaken any existing per-operation try/rescue\nisolation boundary documented in poller.ex's moduledoc, e.g.\n`maybe_run_alert_detection/3`'s own `rescue _ -> :ok`; the\nacquire/release wraps around the existing isolation, it does not\nreplace it).\n2. On `{:error, :capacity}` from `try_acquire(:global)` for a given\nschema's operation within a tick: skip that one schema's operation\nfor that tick only (do not crash the GenServer, do not skip every\nother schema's turn, do not skip that schema's OTHER operations this\ntick if a later `try_acquire` call for a different operation\nsucceeds) -- mirroring `fetch_tenant_schemas/0`'s own existing\nper-tick-degrades-gracefully philosophy already documented in this\nmodule's moduledoc, applied per-schema-per-operation rather than\nper-tick.\n3. Poller does NOT use REQ-216's per-tenant semaphore -- only\n`:global`. Reasoning: Poller's sweep already iterates every tenant\nschema once per tick by design (REQ-186's own decision), so a\nper-tenant CAP on Poller would not bound fairness between tenants the\nway it does for bursty HTTP traffic, it would only cause a tenant to\nbe silently skipped some ticks for no client-visible reason -- a\nstrictly worse outcome for a background sweep whose whole contract is\n\"every tenant gets a turn.\" Stated explicitly rather than left\nimplicit.\n4. No change to `Letflow.Application`'s supervision tree (no new\nprocess; Poller remains the sole caller, same GenServer, same child\nentry) and no change to `Letflow.Scheduler`'s own `poll_and_fire/1`\ncontract (unchanged input/output; the acquire/release wraps its call\nsite in `poller.ex`, per §1 above).\nNOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore or\nREQ-217's HTTP-path wiring; no change to ISS-0430's future LISTEN/\nNOTIFY work (named by ISS-0431 as a future secondary surface to cover\n\"by the same decision,\" not this requirement's own job to build); no\nchange to any `maybe_run_*` function's own internal per-schema\nrescue logic beyond wrapping it in acquire/release.\n"
+  },
+  "task": {
+    "description": "Rework CODE-DESIGNER pass (WF-02 Step 1c, iteration 1) on REQ-218's design, addressing CODE-DESIGN-VALIDATOR's single BLOCKER from step-01b: §2's capacity-skip log line used Logger.info/1 justified by an unsupported analogy to fetch_tenant_schemas/0 (which does not log at all). Fix: change the decided log level to Logger.warning/1, citing this codebase's two real on-point precedents for an expected skip-and-continue event instead of the unsupported analogy.",
+    "acceptance_criteria": [
+      "with REQ-216's global cap artificially forced to 0 (test config override), a tick over 3 tenant schemas calls Scheduler.poll_and_fire/1 ZERO times for any of them (each skipped for capacity), the GenServer does not crash, and the next tick (cap restored) resumes normally -- verified by a test asserting the mock/spy call count is exactly 0 during the forced-zero tick and exactly 3 on the following tick",
+      "with the global cap forced to admit exactly 1 concurrent unit, a tick still processes all 3 tenant schemas' timer poll-and-fire loop to completion (sequential acquire/release, not a permanent block), confirmed by observing all 3 schemas' poll_and_fire/1 calls occur within that single tick",
+      "an admission {:error, :capacity} for one schema's operation within a tick does not prevent a DIFFERENT schema's SAME operation, or that SAME schema's OTHER operations, from being attempted later in the same tick -- explicit test forcing capacity exhaustion mid-tick and observing partial, not total, skip",
+      "Letflow.Admission.try_acquire({:tenant, _}) is never called anywhere in lib/letflow/scheduler/poller.ex -- grep-verified, confirming decision 3's per-tenant-exclusion is actually implemented, not just described",
+      "an existing per-operation rescue path (e.g. maybe_run_alert_detection/3's rescue _ -> :ok) still catches its own operation's raise with the new acquire/release wrapped around it -- a test forcing that operation to raise still leaves the admission slot released (no leak) and the tick completes",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed the single BLOCKER from step-01b. Read lib/letflow/tenant_provisioning/backfill.ex:25-54 and lib/letflow/obs/alerts.ex:580-594 directly to confirm the exact precedent shape before editing. §1 point 3, §2, and §7 Q2 of lib/letflow/design/req218-poller-admission-wiring.md all changed from Logger.info/1 to Logger.warning/1. §2 now cites the two real precedents CODE-DESIGN-VALIDATOR identified: backfill.ex:37 and :44 (Logger.warning/1 on {:error, :tenant_not_provisioned} / {:error, :tenant_schema_missing}, each followed by {:cont, ...} -- skip-this-one-continue-the-loop, the same shape as REQ-218's own per-schema skip) and alerts.ex:588 (resolve_auth_header/1's with-else fallback logs Logger.warning/1 'alert hook auth_secret_ref resolution failed, sending without Authorization' then degrades gracefully by returning nil) -- and explicitly states why the prior fetch_tenant_schemas/0 analogy does not hold (that function's :error path only calls MetricsRegistry.mark_active_instances_refresh_failed/0, it does not log at all) and that Logger.info/1 has zero other live call sites in lib/letflow/. Logger.error's reservation for actual failures (alerts.ex:201, :534) is also noted to explain why that level is still wrong for a capacity skip. No other section touched: §7 Q1 (maybe_refresh_active_instances/1 out of scope) and Q3 (mock/spy AC1 wording resolved via real-effect assertion) left exactly as CODE-DESIGN-VALIDATOR confirmed correct in step-01b, per its own next_action instruction not to touch them. Still zero implementation code -- only the log-level prose and its cited precedents changed.",
+    "artifacts_out": [
+      "lib/letflow/design/req218-poller-admission-wiring.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

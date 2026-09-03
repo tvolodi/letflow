@@ -1,0 +1,64 @@
+{
+  "handoff_id": "step08-WF02-REQ218-20260903",
+  "run_id": "WF02-REQ218-20260903",
+  "workflow_id": "WF-02",
+  "step": "08",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ218-20260903/step-08-doc-updater.json",
+  "created_at": "2026-09-03T13:18:43Z",
+  "started_at": "2026-09-03T13:17:00Z",
+  "completed_at": "2026-09-03T13:18:43Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-218"
+    ],
+    "issue_ids": [
+      "ISS-0431"
+    ],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ218-20260903/step-07-release-validator.json",
+      "handoffs/WF02-REQ218-20260903/step-03-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v8.yaml",
+      "docs/issues/ISS-0431.yaml",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "branch_name": "feature/WF02-REQ218-20260903",
+    "requirement_text": "Third and final part of ISS-0431/GH#835's fix, covering its own\nexplicitly-named SECONDARY surface: \"Poller's per-tenant sweeps and\nfuture LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover\nby the same decision rather than each inventing its own cap.\" Atop\nREQ-216's core module; does not touch REQ-217's HTTP-path wiring.\n\nWHAT `lib/letflow/scheduler/poller.ex` ACTUALLY DOES TODAY (read in\nfull, not assumed): `handle_info(:tick, ...)` calls\n`Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name)\nend)` -- SEQUENTIAL, one tenant schema at a time, not concurrent. The\nsame sequential pattern repeats for\n`maybe_run_retention_sweep/2`, `maybe_run_alert_detection/3`,\n`maybe_run_ordering_cycle/1`, `maybe_run_ordering_sweeper/1`,\n`maybe_run_ordering_metrics/1`. So THIS module does not exhibit\nunbounded CONCURRENT demand the way the HTTP path does (each call\nblocks the single Poller GenServer process, so at most one DB\nconnection is held by Poller work at any instant) -- the real gap\nhere is ACCOUNTING, not concurrency: Poller's one held connection is\ninvisible to REQ-216's admission budget, so REQ-216's global cap\n(`pool_size - reserved_headroom`) can only be a safe ceiling on\nHTTP-path concurrency if `reserved_headroom` already reserves enough\nslack for Poller's own use -- an implicit, untested assumption today.\nThis requirement makes that assumption explicit and enforced rather\nthan merely documented.\n\nSCOPE:\n1. Before each of the six sequential per-tenant operations named\nabove (the timer poll-and-fire loop plus the five `maybe_run_*`\nsweeps), acquire ONE global admission slot via\n`Letflow.Admission.try_acquire(:global)` for that operation's single\nRepo-touching call, and release it immediately after that call\nreturns (success or the operation's own already-established rescue\npath -- do not weaken any existing per-operation try/rescue\nisolation boundary documented in poller.ex's moduledoc, e.g.\n`maybe_run_alert_detection/3`'s own `rescue _ -> :ok`; the\nacquire/release wraps around the existing isolation, it does not\nreplace it).\n2. On `{:error, :capacity}` from `try_acquire(:global)` for a given\nschema's operation within a tick: skip that one schema's operation\nfor that tick only (do not crash the GenServer, do not skip every\nother schema's turn, do not skip that schema's OTHER operations this\ntick if a later `try_acquire` call for a different operation\nsucceeds) -- mirroring `fetch_tenant_schemas/0`'s own existing\nper-tick-degrades-gracefully philosophy already documented in this\nmodule's moduledoc, applied per-schema-per-operation rather than\nper-tick.\n3. Poller does NOT use REQ-216's per-tenant semaphore -- only\n`:global`. Reasoning: Poller's sweep already iterates every tenant\nschema once per tick by design (REQ-186's own decision), so a\nper-tenant CAP on Poller would not bound fairness between tenants the\nway it does for bursty HTTP traffic, it would only cause a tenant to\nbe silently skipped some ticks for no client-visible reason -- a\nstrictly worse outcome for a background sweep whose whole contract is\n\"every tenant gets a turn.\" Stated explicitly rather than left\nimplicit.\n4. No change to `Letflow.Application`'s supervision tree (no new\nprocess; Poller remains the sole caller, same GenServer, same child\nentry) and no change to `Letflow.Scheduler`'s own `poll_and_fire/1`\ncontract (unchanged input/output; the acquire/release wraps its call\nsite in `poller.ex`, per §1 above).\nNOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore or\nREQ-217's HTTP-path wiring; no change to ISS-0430's future LISTEN/\nNOTIFY work (named by ISS-0431 as a future secondary surface to cover\n\"by the same decision,\" not this requirement's own job to build); no\nchange to any `maybe_run_*` function's own internal per-schema\nrescue logic beyond wrapping it in acquire/release.\n"
+  },
+  "task": {
+    "description": "WF-02 Step 6 (DOC-UPDATER) for REQ-218: flip status to done, append the done event to the current run-history volume, update docs/issues/ISS-0431.yaml now that all three ISS-0431 sub-requirements are done, spot-check poller.ex's moduledoc, and surface REVIEWER's recommended follow-up issue (poll_and_fire/1's broken never-raises contract) since DOC-UPDATER has no register_task authority."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Flipped REQ-218 to status: done in docs/requirements.yaml. Appended a 'done' event for REQ-218 to docs/status/requirement_status.v8.yaml (now 24 on-disk `- req:` entries, confirmed via `grep -c \"^  - req:\"`), summarizing the with_admission/3 helper wrapping all 6 sequential per-tenant operations with global-only Letflow.Admission.try_acquire(:global)/release/1 via try/after, the deliberate exclusion of the per-tenant semaphore (Poller already iterates every schema once per tick by design), the 1 CODE-DESIGN-VALIDATOR rework round (BLOCKER: the design's originally-chosen Logger.info/1 had zero real on-point precedent in this codebase -- corrected to Logger.warning/1 to match lib/letflow/tenant_provisioning/backfill.ex:37,44 and lib/letflow/obs/alerts.ex:588), and REVIEWER's independently-confirmed pre-existing out-of-scope finding. Explicitly noted THIS CLOSES ISS-0431/GH#835 ENTIRELY -- all three parts (REQ-216 core, REQ-217 HTTP wiring, REQ-218 Poller wiring) are now status: done. Bumped docs/status/requirement_status.index.yaml's volume-8 `entries:` count from 23 to 24 in the same commit. `git diff --numstat` on requirement_status.v8.yaml showed 55 insertions / 0 deletions, confirming append-only. Ran `mix test test/docs/requirement_status_invariants_test.exs` in the foreground: 20 tests, 0 failures -- quoted below.\n\nUpdated docs/issues/ISS-0431.yaml's orch_routing_note with an appended UPDATE paragraph (read the existing note first -- it correctly stated the record 'stays open ... pending those three requirements' completion', which is now stale since all three are done) recording all three requirements' done status/merge timestamps, that the gap is closed on both named surfaces, and that DOC-UPDATER is deliberately leaving ISS-0431.yaml's own `status:` field at `open` -- per the established convention this project already set with REQ-211/REQ-212's own DOC-UPDATER runs on ISS-0390 (that precedent left the parent issue's final `status: resolved` flip to ORCH's own Step-Final action once every split-out requirement had landed). Also flagged in that same note that ISS-0430's future LISTEN/NOTIFY work remains a disclosed, out-of-scope residual, not a reason to withhold closing ISS-0431.\n\nSpot-checked lib/letflow/scheduler/poller.ex's moduledoc against the actual shipped code: it already contains a full, accurate 'REQ-218 addition' section documenting the with_admission/3 wrapper, the 6 wrapped operations, the Logger.warning/1 precedent citations, the global-only choice and its reasoning, and maybe_refresh_active_instances/1's deliberate exclusion. No edit needed -- already current.\n\nMIX TEST OUTPUT (test/docs/requirement_status_invariants_test.exs, foreground, waited out synchronously):\n'Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]\\nFinished in 1.5 seconds (1.5s async, 0.00s sync)\\nResult: 20 passed'\n\nFOLLOW-UP ISSUE NOT YET REGISTERED -- DOC-UPDATER has no register_task authority, so this is surfaced here prominently for ORCH to register at Step Final, per REVIEWER's own recommendation in handoffs/WF02-REQ218-20260903/step-03-reviewer.json (following the ISS-0437 pattern):\n  Proposed title: \"Letflow.Scheduler.poll_and_fire/1's documented never-raises contract does not hold for a tenant schema missing its Postgres schema entirely\"\n  Description: claim_due_timer_ids/2 (called from poll_and_fire/1, lib/letflow/scheduler.ex:192-213 and callee) runs a raw Ecto query against the tenant-schema-prefixed `timers` table with no try/rescue anywhere in its body or in poll_and_fire/1's own body. lib/letflow/scheduler/poller.ex's own moduledoc (line ~32) explicitly asserts poll_and_fire/1 'already guarantees it never raises' -- a contract this function does not actually meet for a tenant whose Postgres schema was never created, or was dropped entirely (e.g. mid-deprovisioning): a Postgrex undefined_table/undefined_schema error propagates unrescued, and since Poller's own Enum.each over schemas has no per-schema rescue at that call site either (only REQ-218's new admission wrapper, which adds no rescue), such a raise would crash the whole Poller tick's timer-poll pass for every schema in that tick, not just the affected one. Confirmed genuinely pre-existing and out of REQ-218's own scope (REQ-218's diff never touches lib/letflow/scheduler.ex).\n  Severity: MINOR (per REVIEWER's own recommendation) -- an unusual but not impossible tenant state, not an everyday occurrence, but a real crash path contradicting a documented contract.\n  Affected files: lib/letflow/scheduler.ex (the actual raise site), lib/letflow/scheduler/poller.ex (the moduledoc's contract claim and the un-rescued Enum.each call site).\n  Tags: [scheduler, raise-safety, s6]. Related: REQ-218, REQ-186, ISS-0437 (pattern precedent). discovered_by: REVIEWER (carrying forward ELIXIR-DEV's own finding), discovered_in_run: WF02-REQ218-20260903.",
+    "artifacts_out": [
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.index.yaml",
+      "docs/status/requirement_status.v8.yaml",
+      "docs/issues/ISS-0431.yaml",
+      "handoffs/WF02-REQ218-20260903/step-08-doc-updater.json"
+    ],
+    "issues": [
+      "PROPOSED (not yet registered, ORCH must register at Step Final): poll_and_fire/1's never-raises contract is broken for a tenant with a fully-missing Postgres schema -- see summary above for full title/description/severity/affected_files."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ218-20260903",
+      "commit_sha_list": [],
+      "remote_branch": "feature/WF02-REQ218-20260903",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ORCH (Step Final): commit/push already done by DOC-UPDATER on this branch; ORCH to (1) register the follow-up issue proposed above via register_task, (2) open/merge the PR now that all WF-02 gates (through RELEASE-VALIDATOR PASS) and documentation update are complete, and (3) release letflow-queue task 431 as done and flip docs/issues/ISS-0431.yaml's status to resolved, since all three of its split-out requirements are now done."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

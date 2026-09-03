@@ -1,0 +1,107 @@
+{
+  "handoff_id": "step07-WF02-REQ218-20260903",
+  "run_id": "WF02-REQ218-20260903",
+  "workflow_id": "WF-02",
+  "step": "07",
+  "from_agent": "RELEASE-VALIDATOR",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ218-20260903/step-07-release-validator.json",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-218"
+    ],
+    "issue_ids": [],
+    "requirement_text": "Third and final part of ISS-0431/GH#835's fix, covering its own\nexplicitly-named SECONDARY surface: \"Poller's per-tenant sweeps and\nfuture LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover\nby the same decision rather than each inventing its own cap.\" Atop\nREQ-216's core module; does not touch REQ-217's HTTP-path wiring.\n\nWHAT `lib/letflow/scheduler/poller.ex` ACTUALLY DOES TODAY (read in\nfull, not assumed): `handle_info(:tick, ...)` calls\n`Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name)\nend)` -- SEQUENTIAL, one tenant schema at a time, not concurrent. The\nsame sequential pattern repeats for\n`maybe_run_retention_sweep/2`, `maybe_run_alert_detection/3`,\n`maybe_run_ordering_cycle/1`, `maybe_run_ordering_sweeper/1`,\n`maybe_run_ordering_metrics/1`. So THIS module does not exhibit\nunbounded CONCURRENT demand the way the HTTP path does (each call\nblocks the single Poller GenServer process, so at most one DB\nconnection is held by Poller work at any instant) -- the real gap\nhere is ACCOUNTING, not concurrency: Poller's one held connection is\ninvisible to REQ-216's admission budget, so REQ-216's global cap\n(`pool_size - reserved_headroom`) can only be a safe ceiling on\nHTTP-path concurrency if `reserved_headroom` already reserves enough\nslack for Poller's own use -- an implicit, untested assumption today.\nThis requirement makes that assumption explicit and enforced rather\nthan merely documented.\n\nSCOPE:\n1. Before each of the six sequential per-tenant operations named\nabove (the timer poll-and-fire loop plus the five `maybe_run_*`\nsweeps), acquire ONE global admission slot via\n`Letflow.Admission.try_acquire(:global)` for that operation's single\nRepo-touching call, and release it immediately after that call\nreturns (success or the operation's own already-established rescue\npath -- do not weaken any existing per-operation try/rescue\nisolation boundary documented in poller.ex's moduledoc, e.g.\n`maybe_run_alert_detection/3`'s own `rescue _ -> :ok`; the\nacquire/release wraps around the existing isolation, it does not\nreplace it).\n2. On `{:error, :capacity}` from `try_acquire(:global)` for a given\nschema's operation within a tick: skip that one schema's operation\nfor that tick only (do not crash the GenServer, do not skip every\nother schema's turn, do not skip that schema's OTHER operations this\ntick if a later `try_acquire` call for a different operation\nsucceeds) -- mirroring `fetch_tenant_schemas/0`'s own existing\nper-tick-degrades-gracefully philosophy already documented in this\nmodule's moduledoc, applied per-schema-per-operation rather than\nper-tick.\n3. Poller does NOT use REQ-216's per-tenant semaphore -- only\n`:global`. Reasoning: Poller's sweep already iterates every tenant\nschema once per tick by design (REQ-186's own decision), so a\nper-tenant CAP on Poller would not bound fairness between tenants the\nway it does for bursty HTTP traffic, it would only cause a tenant to\nbe silently skipped some ticks for no client-visible reason -- a\nstrictly worse outcome for a background sweep whose whole contract is\n\"every tenant gets a turn.\" Stated explicitly rather than left\nimplicit.\n4. No change to `Letflow.Application`'s supervision tree (no new\nprocess; Poller remains the sole caller, same GenServer, same child\nentry) and no change to `Letflow.Scheduler`'s own `poll_and_fire/1`\ncontract (unchanged input/output; the acquire/release wraps its call\nsite in `poller.ex`, per §1 above).\nNOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore or\nREQ-217's HTTP-path wiring; no change to ISS-0430's future LISTEN/\nNOTIFY work (named by ISS-0431 as a future secondary surface to cover\n\"by the same decision,\" not this requirement's own job to build); no\nchange to any `maybe_run_*` function's own internal per-schema\nrescue logic beyond wrapping it in acquire/release.\n",
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "test/specs/REQ-218.md",
+      "test/letflow/scheduler/poller_test.exs",
+      "test/support/admission_test_helpers.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/admission.ex",
+      "handoffs/WF02-REQ218-20260903/step-06-test-runner.json"
+    ],
+    "branch_name": "feature/WF02-REQ218-20260903"
+  },
+  "task": {
+    "description": "WF-02 Step 5: independent release-validation re-verification of REQ-218 (admission-control wiring into Poller's per-tick tenant sweep). Re-run the full suite two independent ways (scripts/test_parallel.sh and mix letflow.check.test), resolve TEST-RUNNER's flagged unconfirmed Letflow.Engine.Lua.ExecutorTest failure, and re-derive all 6 acceptance criteria directly against current code/tests.",
+    "acceptance_criteria": [
+      "AC1-AC6 from docs/requirements.yaml's REQ-218 entry each independently re-confirmed against actual code/tests",
+      "Own independent scripts/test_parallel.sh run, failures structurally attributed via git diff --stat, not count-matched against TEST-RUNNER's report",
+      "Own independent mix letflow.check.test run",
+      "TEST-RUNNER's flagged Letflow.Engine.Lua.ExecutorTest (REQ-156) finding resolved (flake vs regression) with isolated repeated runs",
+      "requirement_status staleness check (status: in_progress accurate, no premature done event)"
+    ]
+  },
+  "result": {
+    "verdict": "PASS",
+    "lua_executor_finding_resolution": {
+      "conclusion": "Confirmed genuine host-load timing flake, unrelated to this branch. `git diff --stat main...HEAD -- lib/ test/` shows this branch touches only lib/letflow/design/req218-poller-admission-wiring.md, lib/letflow/scheduler/poller.ex, test/letflow/scheduler/poller_test.exs, test/specs/REQ-218.md -- zero overlap with lib/letflow/engine/lua/ or its test, independently re-confirmed here (not merely re-read from TEST-RUNNER's report). Ran `mix test test/letflow/engine/lua/executor_test.exs` in isolation 5 consecutive times in the foreground (own shell, own PIDs): all 5 runs printed `Result: 45 passed, 11 excluded`, 5/5 passed, 0 failures. This test also appeared (and passed with no failure entry) in this session's own independent scripts/test_parallel.sh run (partition 4) and in this session's own independent mix letflow.check.test run. The AC-1 assertion (small_elapsed_ms < large_elapsed_ms, a hard wall-clock ordering between two elapsed-time measurements) is inherently susceptible to scheduler jitter under the heavy host load a ~27-minute full-suite single-process run produces; under isolated/lighter load it is stable. Classified as (a) known timing-sensitive flake, not a regression connected to REQ-218 or any of this session's changes."
+    },
+    "own_independent_test_parallel_run": {
+      "command": "TEST_PARALLEL_N=8 scripts/test_parallel.sh, single foreground run, waited synchronously to completion",
+      "real_output": "combined: 3132 tests, 6 properties, 3 failures (3135/3138 passed). Per-partition: partition 7 exit 2 (2 failures), partition 8 exit 2 (1 failure), all others exit 0.",
+      "failure_attribution_structural_not_count_matched": [
+        {
+          "test": "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)",
+          "partition": 7,
+          "classification": "known pre-existing rustc-ENOENT toolchain flake -- confirmed no rustc binary on this host's PATH (same root cause independently confirmed by TEST-DESIGN-VALIDATOR and TEST-RUNNER in this same run's prior steps). Not connected to REQ-218; git diff shows zero touch of anything toolchain-related."
+        },
+        {
+          "test": "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)",
+          "partition": 7,
+          "classification": "same known rustc-ENOENT flake, second of the pair. Not connected to REQ-218."
+        },
+        {
+          "test": "test scoped_repo_opts/1 API shape scoped_repo_opts/1 is 1-arity — no tenant/schema/prefix parameter exists to pass (Letflow.Api.ContextTest)",
+          "partition": 8,
+          "classification": "NEW failure not seen in any prior step's run (a different failure set than TEST-RUNNER's own run turned up, exactly as this project's 'failure attribution is structural, never by count-matching' rule predicts). Independently confirmed NOT a regression: `git diff --stat main...HEAD -- lib/letflow/api/context.ex` shows zero changes on this branch; read lib/letflow/api/context.ex directly and confirmed `scoped_repo_opts/1` is defined at line 213 with `@spec` at line 211 -- function_exported?/3 should be true. Ran `mix test test/letflow/api/context_test.exs` in isolation 3 consecutive times in the foreground: all 3 runs printed `Result: 11 passed`, 0 failures. This test also passed cleanly (no failure entry) in this session's own independent mix letflow.check.test run. Classified as a transient function_exported?/3 module-loading-order flake under 8-way concurrent partition load, not a regression -- same flake CLASS as the Lua timing finding (host-load-sensitive, not code-connected), just a different specific test than what TEST-RUNNER's run happened to surface."
+        }
+      ],
+      "req218_specific_evidence": "Letflow.Scheduler.PollerTest ran entirely in partition 3 (37 log-line references), zero failure/error entries grepped anywhere in that partition's log. Zero {:tenant, occurrences in lib/letflow/scheduler/poller.ex confirmed directly by grep (exit 1/no match). Zero ISS-0069 'default values for the optional arguments' regression-signature occurrences across all 8 partition logs."
+    },
+    "own_independent_check_test_run": {
+      "command": "mix letflow.check.test, single foreground run, waited synchronously to completion (~27 minutes, Finished in 1626.7 seconds)",
+      "real_output": "Result: 3139/3141 passed (6/6 properties, 3133/3135 tests), 21 excluded. Failed: 2 tests.",
+      "failures": [
+        "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest) -- known pre-existing rustc-ENOENT flake",
+        "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest) -- known pre-existing rustc-ENOENT flake"
+      ],
+      "notably": "Neither the Lua executor timing test nor the context_test.exs function_exported? test failed in this run -- both passed cleanly, further corroborating that both are transient, load-dependent flakes rather than persistent regressions. Zero ISS-0069 regression-signature occurrences (`grep -c \"default values for the optional arguments\"` = 0). Zero PollerTest failure/error entries (37 log references, all clean)."
+    },
+    "ac_by_ac_reconfirmation": {
+      "source_of_truth": "docs/requirements.yaml REQ-218 entry, read directly (lines ~12867 onward), not paraphrased from any prior handoff.",
+      "AC1": "Confirmed via direct read of poller_test.exs:479-507 (describe \"REQ-218 AC1...\"). Test holds a probe try_acquire(:global) before a tick with pool_size:3/reserved_headroom:2 (global_cap effectively exhausted), asserts all 3 schemas' due timers stay 'pending' after that tick, then releases the probe and asserts all 3 flip to 'fired' on the next tick, and the GenServer's handle_info/2 returns {:noreply, ...} (no crash) in both cases. Satisfied.",
+      "AC2": "Confirmed via direct read of poller_test.exs:509-527 (describe \"REQ-218 AC2...\"). global_cap effectively 1 (pool_size:3/reserved_headroom:2), no probe held, all 3 schemas' due timers assert 'fired' after one single handle_info(:tick, ...) call -- proves sequential acquire/release drains all 3 within one tick, not a permanent block. Satisfied.",
+      "AC3": "Two independently-verified sub-clauses, both present in poller_test.exs: (a) lines 570-602, a capacity rejection for one schema's poll_and_fire does not block a DIFFERENT schema's SAME operation later in the tick; (b) lines 684-728 (the newly-added per-schema clause test), a rejection for a schema's poll_and_fire does not block that SAME schema's OTHER operations (retention sweep) later in the same tick. Both read directly and confirmed non-vacuous. Satisfied.",
+      "AC4": "Confirmed via direct read of poller_test.exs:734-742 and lib/letflow/scheduler/poller.ex directly: `refute source =~ \"{:tenant,\"` against File.read!/1 of poller.ex's real source is a live, automated ExUnit assertion (not an informal grep). Independently grepped lib/letflow/scheduler/poller.ex myself for `{:tenant` -- zero occurrences (grep exit 1). All 6 with_admission/3 call sites (poller.ex handle_info/2 plus the five maybe_run_* functions) pass only `:global`. Satisfied.",
+      "AC5": "Confirmed via direct read of poller.ex's with_admission/3 (lines ~150-172): the acquire/release is `case Admission.try_acquire(:global) do {:ok, ref} -> try do fun.() after Admission.release(ref) end; {:error, :capacity} -> Logger.warning(...) end`, so the `after` clause is the sole release path regardless of any inner rescue. poller_test.exs:744-772 (describe \"REQ-218 AC5...\") forces a genuine raise through an existing per-operation rescue path and asserts the tick does not crash, a different intact schema's own timer still fires, and a post-tick probe try_acquire(:global) still succeeds under a constrained cap (proving no ref leak). Satisfied.",
+      "AC6": "mix compile --warnings-as-errors and mix test both independently re-run and passed in this session (see own_independent_test_parallel_run and own_independent_check_test_run above; both are supersets of a plain `mix test`/`mix compile --warnings-as-errors` pass with zero warnings and zero REQ-218-related failures). Satisfied with real output quoted above."
+    },
+    "requirement_status_staleness_check": {
+      "docs_requirements_yaml": "REQ-218 entry's `status:` field read directly -- still `in_progress`, matching Step 00's flip, not stale (no premature `done` anywhere).",
+      "docs_status_requirement_status_v8_yaml": "Only one REQ-218 event present: `event: started`, `agent: ORCH` (from Step 00). No `done`/`verified` event yet -- accurate, ready for DOC-UPDATER to append the closing event and flip status."
+    },
+    "decision_record_consistency": "grepped docs/migration/decisions/ for REQ-218 or admission -- zero matches. No decision record makes any claim this requirement's shipped code contradicts.",
+    "commands_run": [
+      "git pull (already up to date)",
+      "git diff --stat main...HEAD -- lib/ test/",
+      "direct reads of lib/letflow/scheduler/poller.ex (full) and test/letflow/scheduler/poller_test.exs (all REQ-218 describe blocks)",
+      "grep -n '{:tenant' lib/letflow/scheduler/poller.ex (0 matches)",
+      "mix test test/letflow/engine/lua/executor_test.exs (x5, foreground, sequential) -- 5/5 passed",
+      "TEST_PARALLEL_N=8 scripts/test_parallel.sh (x1, foreground, waited to completion)",
+      "mix test test/letflow/api/context_test.exs (x3, foreground, sequential) -- 3/3 passed",
+      "mix letflow.check.test (x1, foreground, waited synchronously to completion, ~27 minutes)",
+      "grep -c 'default values for the optional arguments' on both full-suite logs (0 both times)",
+      "grep -c 'Letflow.Scheduler.PollerTest' plus fail/error filtering on both full-suite logs (0 failures both times)"
+    ],
+    "gaps_found": [],
+    "summary": "PASS. Independently resolved TEST-RUNNER's flagged Letflow.Engine.Lua.ExecutorTest finding as a genuine host-load timing flake (5/5 isolated passes, zero diff overlap with lib/letflow/engine/lua/, passed cleanly in both of this session's own full-suite runs). Ran two independent full-suite verifications of my own: scripts/test_parallel.sh (N=8, 3135/3138 passed, 3 failures -- 2 known rustc-ENOENT plus one NEW-to-this-run context_test.exs function_exported?/3 flake, independently isolated and confirmed as a transient parallel-load flake via 3/3 clean isolated re-runs and zero diff overlap with lib/letflow/api/context.ex) and mix letflow.check.test (3139/3141 passed, only the 2 known rustc-ENOENT failures, zero occurrence of either the Lua or context flake this time, which is itself further evidence both are load-dependent and not code-connected). Per this project's structural (not count-matching) failure-attribution rule, my own run surfaced a DIFFERENT third failure than TEST-RUNNER's run did, and both were independently traced to zero code overlap with this branch. Re-derived and confirmed all 6 of REQ-218's acceptance criteria directly against the current lib/letflow/scheduler/poller.ex and test/letflow/scheduler/poller_test.exs source -- all satisfied, non-vacuously. Zero {:tenant, occurrences in poller.ex (AC4), zero ISS-0069 regression signature in either full-suite run, zero PollerTest failures anywhere. requirement_status confirmed accurate (in_progress, only a started event, no stale done/verified). No decision-record contradiction found (docs/migration/decisions/ has no REQ-218/admission entries to contradict). Not a stage-gate run, so no stage-doc REVIEWER sign-off check applies.",
+    "next_action": "Route to DOC-UPDATER to flip REQ-218's status to done in docs/requirements.yaml and append the closing status-history event in docs/status/requirement_status.v8.yaml."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

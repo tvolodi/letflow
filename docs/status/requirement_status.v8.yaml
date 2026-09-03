@@ -961,3 +961,68 @@ history:
       a false problem. Closes ISS-0431 part 2 of 3 (primary HTTP surface);
       REQ-218 (Poller wiring, queue task 436, GH#841) remains pending as
       part 3.
+  - req: REQ-218
+    event: started
+    agent: ORCH
+    at: "2026-09-03T08:45:00Z"
+    note: >
+      Wire admission control into Poller's per-tick tenant sweep (closes
+      ISS-0431 part 3, secondary surface). Queue task 436 (GH#841)
+      locked, unblocked by REQ-216's merge. Branch
+      feature/WF02-REQ218-20260903 created from main. Dispatching Step 1
+      (CODE-DESIGNER).
+
+  - req: REQ-218
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-03T13:17:18Z"
+    note: >
+      WF02-REQ218-20260903 done (queue task 436, GH#841, stage S6).
+      RELEASE-VALIDATOR independently re-verified all 6 acceptance criteria
+      PASS (own scripts/test_parallel.sh TEST_PARALLEL_N=8 run 3135/3138,
+      own mix letflow.check.test run 3139/3141, both failure sets
+      structurally attributed to pre-existing environmental flakes --
+      rustc-ENOENT toolchain gap and two independently-confirmed
+      host-load timing flakes (Lua executor wall-clock test, context_test.exs
+      function_exported?/3) -- with zero PollerTest failures in either run).
+      Ships new with_admission/3 private helper in
+      lib/letflow/scheduler/poller.ex wrapping each of Poller's 6 sequential
+      per-tenant operations (the timer poll-and-fire loop plus the five
+      maybe_run_* sweeps) with a global-only
+      Letflow.Admission.try_acquire(:global)/release/1 pair via try/after
+      for leak-safety; on {:error, :capacity} that one schema's operation
+      is skipped for the tick only, logged at Logger.warning/1. Per-tenant
+      semaphore deliberately never used here (Poller already iterates
+      every tenant schema once per tick by design, REQ-186; a per-tenant
+      cap would only cause silent unfair skips). No supervision-tree
+      change, no change to Letflow.Scheduler.poll_and_fire/1's contract.
+      Path: 1 CODE-DESIGN-VALIDATOR rework round (step-01b/01c/01d) -- a
+      BLOCKER log-level correction, the design's originally-chosen
+      Logger.info/1 had zero real on-point precedent anywhere in this
+      codebase (grep found exactly one Logger.info hit, inside an
+      unrelated design-doc code comment), while two real precedents
+      (lib/letflow/tenant_provisioning/backfill.ex:37,44 and
+      lib/letflow/obs/alerts.ex:588, both skip-and-continue) both use
+      Logger.warning/1 -- corrected to match. REVIEWER passed clean on
+      first attempt and independently confirmed a REAL, pre-existing,
+      out-of-scope gap flagged by ELIXIR-DEV: Letflow.Scheduler.poll_and_fire/1
+      raises for a tenant whose Postgres schema is entirely missing,
+      contradicting poller.ex's own moduledoc claim that it "never
+      raises" -- confirmed genuinely pre-existing (REQ-218's diff never
+      touches lib/letflow/scheduler.ex) and recommended a follow-up issue
+      be filed at Step Final following the ISS-0437 pattern; DOC-UPDATER
+      does not have register_task authority so this is restated in this
+      run's own step-08 handoff for ORCH to register. poller.ex's own
+      moduledoc spot-checked against the shipped code and found already
+      accurate (correctly documents the REQ-218 addition and the
+      Logger.warning precedent) -- no edit needed.
+      THIS CLOSES ISS-0431/GH#835 ENTIRELY: all three parts -- REQ-216
+      (admission-control core, GH#839), REQ-217 (HTTP entry-path wiring,
+      GH#840), and REQ-218 (this requirement, Poller wiring, GH#841) --
+      are now status: done. docs/issues/ISS-0431.yaml's orch_routing_note
+      updated by this step to reflect all three requirements complete;
+      its own status: field left at open deliberately, per this project's
+      established convention (REQ-211/REQ-212's own DOC-UPDATER runs) that
+      the FINAL status: resolved flip for a parent issue once all its
+      split-out requirements land is ORCH's own Step-Final action, not
+      DOC-UPDATER's.

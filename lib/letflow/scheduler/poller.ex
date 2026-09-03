@@ -34,6 +34,27 @@ defmodule Letflow.Scheduler.Poller do
   already-established isolation boundary for no additional safety
   property.
 
+  ## REQ-218 addition -- admission-control wiring on the six sequential
+  per-tenant operations (design `req218-poller-admission-wiring.md`)
+
+  Each of the six named operations below (the timer poll-and-fire loop
+  plus the five `maybe_run_*` sweeps) acquires ONE `:global` admission
+  unit via `Letflow.Admission.try_acquire/1` for that operation's own
+  single per-schema call, and releases it via an `after` clause on the
+  wrapping `try` -- guaranteeing release even if some future edit to the
+  wrapped operation let an exception past its own existing rescue. On
+  `{:error, :capacity}`, that one schema's turn for that one operation is
+  skipped for this tick only (logged at `Logger.warning/1`, matching
+  `lib/letflow/tenant_provisioning/backfill.ex:37,44` and
+  `lib/letflow/obs/alerts.ex:588`'s skip-and-continue precedent) -- every
+  other schema, and every other operation, proceeds independently. Only
+  `:global` is ever acquired here, never the per-tenant pool -- Poller already
+  iterates every tenant schema once per tick by design (REQ-186), so a
+  per-tenant cap would only cause silent, unfair skips rather than bound
+  anything meaningful for a background sweep. `maybe_refresh_active_instances/1`
+  (REQ-194) is deliberately left UNWRAPPED -- not one of REQ-218's six
+  named operations.
+
   ## REQ-194 addition -- `letflow_active_instances` refresh (design
   `req194-prometheus-metrics.md` §6)
 
@@ -66,6 +87,9 @@ defmodule Letflow.Scheduler.Poller do
 
   use GenServer
 
+  require Logger
+
+  alias Letflow.Admission
   alias Letflow.Engine
   alias Letflow.Metrics.Registry, as: MetricsRegistry
   alias Letflow.Obs.Alerts
@@ -104,7 +128,12 @@ defmodule Letflow.Scheduler.Poller do
     new_state =
       case fetch_tenant_schemas() do
         {:ok, schemas} ->
-          Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name) end)
+          Enum.each(schemas, fn schema_name ->
+            with_admission(schema_name, :poll_and_fire, fn ->
+              Scheduler.poll_and_fire(schema_name)
+            end)
+          end)
+
           maybe_refresh_active_instances(schemas)
           retention_state = maybe_run_retention_sweep(schemas, state)
           maybe_run_alert_detection(schemas, observed_lag_ms, get_last_tick_started_at(state))
@@ -123,6 +152,34 @@ defmodule Letflow.Scheduler.Poller do
     {:noreply, new_state}
   end
 
+  # REQ-218: acquires ONE :global admission unit for `fun`'s single
+  # Repo-touching call, releasing it via an `after` clause (guaranteed even
+  # if `fun` itself raises past whatever rescue it already establishes --
+  # `fun` is responsible for its OWN existing rescue boundary, if any; this
+  # wrapper adds admission accounting only, never a rescue of its own). On
+  # `{:error, :capacity}`, logs and skips `fun` entirely for this
+  # schema/operation this tick -- never raises, never halts the caller's
+  # `Enum.each`.
+  @spec with_admission(String.t(), atom(), (-> any())) :: :ok
+  defp with_admission(schema_name, op, fun) when is_function(fun, 0) do
+    case Admission.try_acquire(:global) do
+      {:ok, ref} ->
+        try do
+          fun.()
+        after
+          Admission.release(ref)
+        end
+
+      {:error, :capacity} ->
+        Logger.warning("poller admission capacity exhausted, skipping schema/operation",
+          schema: schema_name,
+          op: op
+        )
+    end
+
+    :ok
+  end
+
   defp compute_lag(nil, _now), do: nil
   defp compute_lag(last, now), do: DateTime.diff(now, last, :millisecond)
 
@@ -135,7 +192,12 @@ defmodule Letflow.Scheduler.Poller do
   # this tick's timer-poll loop above -- not queried a second time.
   defp maybe_run_retention_sweep(schemas, state) do
     if Scheduler.retention_enabled?() and Scheduler.retention_due?(state.last_retention_run_at) do
-      Enum.each(schemas, fn schema_name -> Scheduler.run_retention_sweep(schema_name) end)
+      Enum.each(schemas, fn schema_name ->
+        with_admission(schema_name, :retention_sweep, fn ->
+          Scheduler.run_retention_sweep(schema_name)
+        end)
+      end)
+
       %{state | last_retention_run_at: DateTime.utc_now()}
     else
       state
@@ -150,11 +212,13 @@ defmodule Letflow.Scheduler.Poller do
 
     if Keyword.get(cfg, :enabled, false) do
       Enum.each(schemas, fn schema_name ->
-        try do
-          Alerts.build_context_and_detect(schema_name, observed_lag_ms, last_tick_started_at)
-        rescue
-          _ -> :ok
-        end
+        with_admission(schema_name, :alert_detection, fn ->
+          try do
+            Alerts.build_context_and_detect(schema_name, observed_lag_ms, last_tick_started_at)
+          rescue
+            _ -> :ok
+          end
+        end)
       end)
     end
   end
@@ -220,11 +284,13 @@ defmodule Letflow.Scheduler.Poller do
 
     if Keyword.get(cfg, :enabled, true) do
       Enum.each(schemas, fn schema_name ->
-        try do
-          Letflow.Ordering.run_cycle(schema_name, prefix: schema_name)
-        rescue
-          _ -> :ok
-        end
+        with_admission(schema_name, :ordering_cycle, fn ->
+          try do
+            Letflow.Ordering.run_cycle(schema_name, prefix: schema_name)
+          rescue
+            _ -> :ok
+          end
+        end)
       end)
     end
   end
@@ -235,11 +301,13 @@ defmodule Letflow.Scheduler.Poller do
 
     if Keyword.get(cfg, :enabled, true) do
       Enum.each(schemas, fn schema_name ->
-        try do
-          Letflow.Ordering.sweep_gaps(schema_name, prefix: schema_name)
-        rescue
-          _ -> :ok
-        end
+        with_admission(schema_name, :ordering_sweeper, fn ->
+          try do
+            Letflow.Ordering.sweep_gaps(schema_name, prefix: schema_name)
+          rescue
+            _ -> :ok
+          end
+        end)
       end)
     end
   end
@@ -250,11 +318,13 @@ defmodule Letflow.Scheduler.Poller do
 
     if Keyword.get(cfg, :enabled, true) do
       Enum.each(schemas, fn schema_name ->
-        try do
-          Letflow.Ordering.emit_lag_metrics(schema_name, prefix: schema_name)
-        rescue
-          _ -> :ok
-        end
+        with_admission(schema_name, :ordering_metrics, fn ->
+          try do
+            Letflow.Ordering.emit_lag_metrics(schema_name, prefix: schema_name)
+          rescue
+            _ -> :ok
+          end
+        end)
       end)
     end
   end

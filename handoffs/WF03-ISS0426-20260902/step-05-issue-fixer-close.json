@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-05",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-03T06:21:26Z",
+  "started_at": "2026-09-03T06:21:26Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0426.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "handoffs/WF03-ISS0426-20260902/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0426-20260902/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0426-20260902/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "test/reports/report-20260903-WF03-ISS0426-20260902.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "docs/issues/ISS-0426.yaml"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 5 -- CLOSE THE ISSUE RECORD for ISS-0426. Every prior gate has PASSED: CODE-DESIGN-VALIDATOR (after 2 reworks), SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (which independently reproduced a mutant and matched its count exactly), and TEST-RUNNER. Follow WF-03 Step 5's own procedure; this description supplies the run-specific facts you need and the one judgement call you must make.\n\nTHE JUDGEMENT CALL -- WHICH TERMINAL STATUS. Read ISSUE_QUEUE.md's 'Issue status vocabulary' and decide between `resolved`, `instrumented`, and `no_defect` BEFORE writing the line. Do not default to `resolved`. The relevant facts:\n  - A root cause WAS identified and removed for the class that produced the filed failure: {:error, {:wallclock_timeout, _}} is now unreachable BY CONSTRUCTION from the 14 Group 1 call sites (11 no longer call Task.yield at all; 3 no longer evaluate any `after timeout_ms ->` clause). That is a structural removal, not a mitigation.\n  - BUT the 11 Group 2 tests still race a real wall-clock timeout by design -- hard constraint 4 REQUIRED keeping that race, because those tests exist to assert the LUA-10 kill actually fires. Their contention exposure is reduced (isolated subprocess, no async siblings, no parallel partitions) rather than eliminated.\n  So: the filed defect's root cause is removed; a related residual sensitivity is deliberately retained as required by the issue's own constraints. Judge whether that is `resolved` (root cause removed) or `instrumented` (verified work shipped, root cause NOT removed, requires a superseded_by: pointer). ORCH's reading is that `resolved` is correct because the retained Group 2 race is not the filed defect and was explicitly out of scope by AC4/hard-constraint-4 -- but YOU make the call against ISSUE_QUEUE.md's actual definitions, and if you choose `instrumented` you must file the successor issue pointer. Whichever you choose, use THAT status's own key pair (resolved -> resolved_in_run:/resolved_at:; instrumented -> resolved_in_run:/resolved_at: plus a required superseded_by:; no_defect -> verdict_in_run:/verdict_at:, never resolved_*).\n\nEVIDENCE TO CITE IN THE RECORD (all real, all verified this run):\n  - Fix: two additive @doc false test-only seams on Letflow.Engine.Lua.Executor (run_script_sync/3, run_with_heap_limit_sync/4). executor.ex diff vs main: 113 insertions, 0 deletions -- AC4 holds, production wall-clock kill semantics byte-for-byte unchanged, config/config.exs:17 untouched. REQ-155's LUA-10 security control intact.\n  - 11 genuinely-racing tests tagged @tag :lua_wallclock_race, excluded in test_helper.exs, isolated in a new additive subprocess in letflow.check.test.ex (37 insertions, 0 deletions -- zero existing lines touched, which mattered because that file is shared with the live concurrent run WF03-ISS0418-20260902).\n  - Coverage: 8 new tests (seam equivalence across all 4 outcome shapes; memory limit still binds through the unbounded-wait seam; AST-based tag-partition integrity). Fail-first satisfied by MUTATION per WF-03's rule for new code -- 4 mutants each producing a discriminating failure set (4/45, 4/45, 12/45, 1/56), and TEST-DESIGN-VALIDATOR independently reproduced mutant 1 in a throwaway worktree, matching both the count and the exact failing-test set.\n  - TEST-RUNNER's results: full serial `mix test` -> 'Result: 3057 passed (6 properties, 3051 tests), 21 excluded', 0 failures (AC3). Isolated partition -> 11 passed, 45 excluded. `mix letflow.check.test` -> PASS all 3 phases. AC6 -> TWO TEST_PARALLEL_N=6 scripts/test_parallel.sh runs, both 'combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)', all 6 partitions clean, no ISS-0219/ISS-0222 infrastructure symptoms.\n\nHONESTY REQUIREMENT ON THE RESOLUTION TEXT -- this record will be read by future runs and must not overclaim. State plainly that the ORIGINAL FLAKE WAS NEVER REPRODUCED ON DEMAND: ISSUE-FIXER could not trigger it even under 24 OS-level CPU burners plus 48 concentrated runs of the affected test, and recorded that as an honest negative. The fix therefore rests on STRUCTURAL verification (the failure branch is unreachable by construction, confirmable by reading the diff) with the two clean parallel runs as CONFIRMATORY evidence -- not on having reproduced the flake and then shown it gone. The gate-approved design's section 4 is the authority for that framing. Do not write anything implying the flake was reproduced and eliminated.\n\nALSO RECORD: the scope_note already in docs/issues/ISS-0426.yaml explains that the wasm half of the filed scope was deliberately left to the live concurrent run WF03-ISS0418-20260902 (which owns lib/letflow/engine/wasm and the three wasm test files). Confirm that note is still accurate, and make clear in the resolution that this run enumerated-but-did-not-edit the wasm-side wall-clock-sensitive tests. TEST-DESIGN-VALIDATOR also filed a MINOR noting AC6's literal criterion; TEST-RUNNER has now satisfied it with two real runs, so that concern is closed -- say so.\n\nGITHUB CLOSE. github_issue is 830. Step 5's evidence-on-close rule is a HARD requirement: close it with `gh issue close 830 --comment \"<...>\"` using the comment template for the status you actually chose (WF-03 Step 5 item 2 gives the exact wording per status). A close with no comment and no linked PR is this step NOT DONE. Note the PR is not merged yet at the time you run this -- ORCH handles Step Final -- so the --comment form is the one that applies.\n\nComplete the handoff: PASS, next_action 'Route to Step Final'. Commit and push to branch feature/WF03-ISS0426-20260902."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

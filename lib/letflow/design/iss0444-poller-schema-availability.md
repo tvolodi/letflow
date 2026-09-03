@@ -298,12 +298,30 @@ pattern genuinely applies to both call sites with no additional complexity"):
   (querying a `prefix:` schema that does not physically exist).
 * **Rescue placement:** inside `Letflow.Scheduler.run_retention_sweep/1` itself
   (this module, matching §1's "fix at the function whose own contract needs to
-  hold" reasoning) — NOT inside `EventStore.archive/1`. `archive/1` is a
-  general-purpose context function with several OTHER callers/contexts implied by
-  its own moduledoc (per-event-type retention policies, idempotent re-invocation);
-  widening ITS rescue behavior is a larger, less-scoped change than
-  `run_retention_sweep/1` (the one function REQ-188's Poller integration actually
-  calls) catching the same narrow error at its own call site: `run_retention_sweep/1`'s
+  hold" reasoning) — NOT inside `EventStore.archive/1`. Re-verified directly
+  (`grep -rn "EventStore.archive(" lib/ test/`): `archive/1`'s only PRODUCTION
+  caller anywhere in `lib/` is `run_retention_sweep/1` itself
+  (`scheduler.ex:565`); its only other call sites are ~10 direct unit-test
+  invocations in `test/letflow/event_store_test.exs` and
+  `test/letflow/engine/reconstruction_test.exs` that assert specific
+  `{:ok, ...}`/`{:error, ...}` shapes for scenarios assuming a physically-present
+  schema. So the placement choice is not about spreading a rescue's benefit
+  across multiple distinct production callers — there is only one. It is about
+  which function's CONTRACT should absorb "schema silently unavailable" as a
+  recoverable outcome. `archive/1` is `EventStore`'s general-purpose primitive
+  by design intent — its own moduledoc documents per-event-type retention-policy
+  precedence and idempotent re-invocation as reusable properties for whatever
+  calls it, today or in the future — and it is exercised directly by those ~10
+  test call sites specifically because callers (including tests probing its own
+  error contract) may legitimately want a raise on a genuinely-missing schema to
+  propagate rather than be silently folded into `{:error, {:schema_unavailable,
+  _}}`. Widening `archive/1`'s own rescue behavior would need to be checked
+  against every one of those existing call sites for a behavioral change that
+  isn't scoped to this fix, whereas `run_retention_sweep/1` is the one function
+  whose contract this design is actually repairing (mirroring `poll_and_fire/1`'s
+  own boundary in §1 — rescue at the outermost function whose contract promises
+  graceful degradation, not inside the shared lower-level primitive it delegates
+  to). `run_retention_sweep/1`'s
   existing body (the single delegating call to `EventStore.archive/1`) gains the
   identical shape of `rescue` clause specified in §1 for `claim_due_timer_ids/2` —
   matching `error in Postgrex.Error`, testing `postgres.code` against

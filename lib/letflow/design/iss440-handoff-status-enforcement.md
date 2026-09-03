@@ -39,36 +39,76 @@ not a second independent guarantee.
 
 ---
 
-## 1. The two unavoidable actions this design rides on
+## 1. The two unavoidable actions this design rides on, and the THREE tiers of guarantee they actually produce
 
-### 1.1 Unavoidable action #1 — `mix letflow.check` runs on every push, unconditionally, host-agnostic
+**Corrected per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1 — read this subsection before any
+other, since it sets the vocabulary every later section is now held to.** Rework-1 withdrew
+an overclaim about Mechanism B ("no path through the procedure without the check") and
+replaced it with a claim about Mechanism A that turned out to be the *same class of error
+one level down*: "structurally impossible to merge... because nothing bypasses CI." That is
+false, verified independently by both ORCH and CODE-DESIGN-VALIDATOR against this repo's
+actual state, not a hypothetical:
 
-`.github/workflows/ci.yml`'s `backend` job's only content step is `run: mix letflow.check`
-(no flags, no conditional). `mix.exs`'s `letflow.check` alias (lines 91-108, verified read
-this session) is a **fixed, non-optional list**:
+- `gh api repos/tvolodi/letflow/branches/main/protection` → `404 "Branch not protected"`.
+  `main` has **no branch protection at all** — no required status checks, nothing.
+- PR #848, merged by this very run's own session earlier today, has a `statusCheckRollup`
+  showing its two "Backend gate (mix letflow.check)" runs as **FAILURE** and **SUCCESS** —
+  it was merged with a failing gate present. ORCH re-confirmed this directly; it is a live
+  counterexample in this repo's own history, not a hypothetical risk.
+
+**So the correct statement is not two tiers ("structural" vs. "procedural"), it is THREE,**
+and this design uses exactly these three, by name, everywhere below:
+
+- **Tier 1 — CI RUNS, unconditionally. Structural, verified.** `.github/workflows/ci.yml`'s
+  `backend` job's only content step is `run: mix letflow.check` (no `if:`, no
+  `continue-on-error:`, verified at the file's own line). `mix.exs`'s `letflow.check` alias
+  (lines 91-108, verified read this session) is a fixed, non-optional Mix list including
+  `letflow.lint_handoffs` already, unconditionally, today. GitHub Actions runs this job on
+  every `push`/`pull_request` event by workflow trigger, not by an agent choosing to invoke
+  it, and Mix does not skip an alias entry because an agent forgot to ask for it. **Nothing
+  about whether this tier fires depends on any agent's memory or judgement.**
+- **Tier 2 — a violation is therefore always DETECTED and RECORDED. Structural, verified.**
+  Tier 1 firing unconditionally means `mix letflow.lint_handoffs`'s H1 check always runs
+  against every push, and its non-zero exit and violation report are always produced and
+  always visible in the CI run's own log — this follows mechanically from Tier 1 and adds
+  no further assumption. **This is the load-bearing guarantee this design actually
+  delivers: detection cannot be skipped.**
+- **Tier 3 — whether that detection BLOCKS THE MERGE. Procedural, NOT structural, and
+  demonstrably violated in this repo's own history (PR #848, above).** Detection stopping a
+  merge requires either GitHub-enforced branch protection (absent — the 404 above) or the
+  merging agent choosing to honor a red result (`GIT_MERGE.md`'s CI-green gate is a written
+  MUST, the same character of guarantee as the §1.3 claim rework-1 already corrected — a
+  documented procedure a human-equivalent agent is expected to follow, not something GitHub
+  enforces server-side on this repository as currently configured).
 
 ```
 letflow.check_toolchain
 letflow.check_requirements_registration
 letflow.check_deferral_staleness
-letflow.lint_handoffs          <- already here, unconditionally, today
+letflow.lint_handoffs          <- already here, unconditionally, today (Tier 1)
 format --check-formatted
 compile --warnings-as-errors
 letflow.check.test
 ```
 
-There is no agent decision anywhere in this chain: GitHub Actions runs the job on every
-`push`/`pull_request` event by workflow trigger, not by an agent choosing to invoke it, and
-the alias is a straight-line Mix list — Mix does not skip a list entry because an agent
-forgot to ask for it. **A PR cannot merge in this pipeline without this job going green**
-(WF-02 Step Final / `GIT_MERGE.md`'s CI-green gate is itself a hard, unconditional
-precondition, not a discretionary check). This is the strongest unavoidable action available
-in the whole pipeline, because it requires no per-host setup at all — it runs in GitHub's own
-runner image, not on any agent's workstation.
+**What ISS-0440's own title asks for ("make the violation structurally impossible") is
+therefore NOT fully achievable in this repo's current configuration, and this design says
+so plainly rather than leaving the title silently unmet.** What this design achieves is
+Tier 1 + Tier 2 at full strength (unconditional detection, no agent decision involved) plus
+two procedural enforcement points (Mechanism B's early catch, §3; Tier 3's existing
+CI-green-gate MUST). What would close the gap to true Tier-3 structural enforcement is
+**branch protection on `main` with `mix letflow.check`'s job set as a required status
+check** — a one-time GitHub repository administration action, not a code change this design
+can specify, and explicitly out of scope for this fix (see §6.4, new). ORCH is filing that
+as its own follow-up issue; this design references it as a known, named gap rather than
+implying Tier 1+2 alone already closes it.
 
-This is why §2's autofix change rides here and nowhere else: it does not need a new call
+This is why §2's autofix change rides Tier 1/2 and nowhere else: it does not need a new call
 site. `mix letflow.lint_handoffs` already executes on this path today; the only change is
-what it does with a bad value it finds, and only for the closed, verified-safe subset.
+what it does with a bad value it finds, and only for the closed, verified-safe subset. Read
+"unavoidable action #1" in this design's later sections as shorthand for "Tier 1/2 fires
+unconditionally" — never as a claim that Tier 3 (merge blocking) is unconditional, which it
+is not.
 
 ### 1.2 Unavoidable-in-practice action #2 — ORCH's dispatch-time handoff commit (`HANDOFF_PROTOCOL.md` §1.3), a PROCEDURAL not a CODE guarantee
 
@@ -105,11 +145,12 @@ by ORCH authoring its own handoff.** The read this design adds does not ask the
 error-prone party to catch itself; it asks ORCH — a party with a clean record on this
 specific defect, executing a procedure with its own clean record since ISS-0196 — to read
 a file *before* an action ORCH already reliably performs (the pre-dispatch commit). See §3
-for exactly where in that existing procedure the read is inserted, and §3.5 for the
-consequence of B being procedural rather than structural: it is not, on its own, what makes
-the violation "structurally impossible" — that word is earned by Mechanism A alone (§1.1),
-and B's honest role is a latency improvement layered on top of it, not a second independent
-guarantee.
+for exactly where in that existing procedure the read is inserted, and §3.5 (corrected at
+rework-2 — see §1's three-tier framing) for the consequence of B being procedural rather
+than structural: it does not, on its own, deliver Tier 1/2's unconditional-detection
+guarantee — that is Mechanism A's alone (§1.1) — and B's honest role is an early-catch
+latency improvement layered on top of it, not a second independent guarantee, and neither
+mechanism reaches Tier 3 (§1, §6.4).
 
 ---
 
@@ -166,6 +207,95 @@ hardcoded default does, and no `--autofix` means the corrective branch (§2.4) n
 executes. CI's path is therefore identical in behaviour to today's, by construction — the
 new flags are strictly additive surface `run/1` exposes for local/test invocation, not a
 change to what CI does.
+
+### 2.1a `--dir`'s own misuse surface, guarded — NEW, per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 2
+
+§2.1 above is unchanged (settled at rework-1). This subsection adds the two guards
+rework-2 requires; it does not alter `resolve_dir/1`'s default-preserving contract in any
+way.
+
+**(a) A scoped run must never be visually indistinguishable from a genuine clean full-corpus
+run.** `--dir some/empty/or/wrong/dir` would otherwise report "0 violations, exit 0" —
+identical in shape to the real output of a clean 1900-file corpus scan (§2.5). An agent (or
+a human) reading only the exit code, or a truncated log tail, could mistake a
+near-vacuous scoped run for a verified-clean full corpus. This design adopts **both**
+guards named in the rework dispatch, not one — they address different failure points:
+
+- **A hard guard on zero discovered files.** When `handoff_files(dir)` returns `[]` for a
+  directory that does not equal `@handoffs_dir`'s resolved value, `run/1` treats this as a
+  usage error, not a clean result:
+  ```
+  @spec guard_empty_scope(dir :: String.t(), files :: [String.t()]) :: :ok | no_return()
+  # files == [] and dir was explicitly supplied via --dir -> Mix.raise/1 naming the
+  # directory and stating "0 files discovered -- refusing to report success for an
+  # empty or non-existent scan target"; non-zero exit.
+  # files == [] and dir is the DEFAULT (@handoffs_dir, i.e. no --dir given at all) is
+  # NOT this case -- an empty real handoffs/ directory would be a genuinely different,
+  # pre-existing anomaly (see note below), not a --dir misuse symptom, so the guard
+  # applies only when --dir was explicitly passed.
+  ```
+  This closes the *worst* misreading (an empty/mistyped scope silently reporting success)
+  outright, at the cost of exit code alone.
+- **An unmissable banner naming the scanned directory and file count, on every run,
+  including a healthy one.** Independent of (and in addition to) the empty-scope guard,
+  because a *non-empty but wrong* `--dir` (e.g. a stale or partial fixture directory that
+  happens to contain a few files) would pass the empty-scope guard while still not being
+  the real corpus. `run/1`'s existing summary line (today: `"letflow.lint_handoffs: OK --
+  0 new violations across #{length(files)} handoff files..."` at line 267) already carries
+  a file count — this design requires it to **also** name the directory scanned, on every
+  invocation, e.g. prefixed `"[scope: #{dir}]"` or folded into the existing sentence
+  (`"...across #{length(files)} handoff files under #{dir}..."` — exact wording is
+  ELIXIR-DEV's to pick, the requirement is that the directory string appears in the one
+  line most likely to be read even from a truncated log). This banner is unconditional —
+  present on the default no-`--dir` path too — so a reader never has to infer scope from
+  absence of a flag; it is always stated.
+
+  **Why both, not one alone (justifying the choice per the rework dispatch's own
+  instruction):** the empty-scope guard alone would let a *non-empty but still-wrong*
+  directory pass silently with a misleading "OK" — the exact ambiguity AC1's own
+  demonstration risks if read carelessly (a reader skimming step 5's "no scan of the
+  fixture directory" confirmation must be able to tell which directory was actually
+  scanned from the output alone). The banner alone would let a genuinely empty/mistyped
+  `--dir` still exit 0, which is the specific "green but meaningless" hazard named in the
+  rework dispatch. Together, a `--dir` misuse either hard-fails (empty case) or is legible
+  in the output (non-empty-but-wrong case) — no combination of the two hazards passes
+  unlabelled.
+
+**(b) `--autofix --dir <the real corpus>` is a real, if currently inert, mass-rewrite
+surface — stated plainly, not left implicit.** Passing `--autofix` together with `--dir
+handoffs` (or simply omitting `--dir`, since `--autofix` alone still resolves to
+`@handoffs_dir` per §2.1's parsing) runs Mechanism A's corrective rewrite over the entire
+real handoff corpus, not a fixture. This design does **not** restrict `--autofix` to
+non-default directories — restricting it would silently reintroduce exactly the
+"agent must remember to use the safe flag combination" failure mode this whole design
+exists to eliminate (§0), and would also block the legitimate use case of an
+ORCH/developer running `mix letflow.lint_handoffs --autofix` locally against the real
+corpus to fix a **just-discovered** violation before pushing, which is a real, intended
+use of Mechanism A (§6.3). What makes this safe rather than merely unrestricted:
+
+  - The map is closed and safe by construction (§2.2/§2.5): only `{PASS, COMPLETE, DONE}`
+    are ever rewritten, only ever to `COMPLETED`, and only the `status` field is touched —
+    there is no broader "rewrite anything matching a pattern" surface here to misuse.
+  - Every fixed file is reported by path and by old→new value (§2.3) — an `--autofix` run
+    against the real corpus is not silent even when it does act; the caller sees exactly
+    what changed.
+  - **Today, against the real corpus, it is a verified no-op**: 1900 files, zero bad
+    values (§2.5) — stated explicitly as a fact about today's corpus state, not a safety
+    property of the flag, per the rework dispatch's own instruction not to conflate the
+    two. A future run where a bad value genuinely exists in `handoffs/` would see
+    `--autofix` correct the safe subset and refuse the rest (§2.3), exactly as designed —
+    which is the intended behaviour, not a hazard to be restricted away.
+  - This is a lower-stakes surface than it may first appear precisely *because* of the
+    grandfathering discipline `lint_handoffs.ex` already applies elsewhere (§2.5): no
+    historical file is silently touched by anything in this design — autofix only ever
+    acts on a file whose top-level `status` is presently in the unsafe/closed set, which
+    the corpus scan shows is currently empty.
+
+  **Note on the "default `--dir` with zero files" carve-out above:** if a future
+  `handoffs/` directory were ever legitimately empty (e.g. a fresh checkout before any run
+  has occurred), that is a pre-existing edge case of `handoff_files/1`'s own default
+  behaviour, not one this design's `--dir` flag introduces — out of scope for this fix,
+  named here only so the guard's carve-out is not mistaken for an oversight.
 
 ### 2.2 The mapping, closed, no fifth case
 
@@ -351,36 +481,64 @@ option (b)/(c) as literally "call `mix letflow.lint_handoffs` at every dispatch"
 to pay 74.7s × (dispatches per run) under contention, which is exactly why §5.2 rejects that
 literal reading of (b)/(c) in favor of the field-read shown above.
 
-### 3.5 Where the actual structural guarantee lives, stated honestly
+### 3.5 Where the actual guarantee lives, at the correct tier — stated honestly, rework-2 correction
 
-**Only Mechanism A (§1.1/§2) carries a structural guarantee.** It rides GitHub Actions'
-own trigger and a merge precondition neither agent memory nor a skipped instruction can
-route around. Mechanism B (§1.2/§3.1-3.4) does not add a second, independent structural
-guarantee — it is procedural, inheriting §1.3's track record, which is strong but not
-code-enforced. Stated as the consequence the validator asked this design to address
-head-on: **if Mechanism B were silently dropped from some future ORCH session — the same
-way six prior prose mitigations were — the violation would still be caught, every time,
-by Mechanism A at CI**, before merge. Nothing about "structurally impossible to merge"
-depends on B.
+**Corrected again per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1.** Rework-1's version of
+this section said Mechanism A guarantees the violation "would still be caught, every time,
+... before merge" and that "structurally impossible to merge" was literally true. That
+conflated Tier 2 (detection) with Tier 3 (merge-blocking) — §1's rewrite is the source of
+truth for the distinction; this section restates only what follows from it for Mechanism A
+vs. Mechanism B specifically.
 
-**So why keep B at all, rather than shipping A alone?** Because B is a real, free latency
-win layered on top of an unconditional backstop, not an alternative to one. Under A alone,
-every occurrence is caught only at push/CI time — minutes after the mistake, the same
-timing every one of the 8 real occurrences already had. Under A+B, the same violation is
-caught **inline, between steps, before the very commit that would first put it in git** —
-before CI even runs — on the strength of a procedure with a clean record since ISS-0196 and
-zero marginal cost (§3.3/§3.4: no linter invocation at all). That is real value even though
-it is not a second guarantee.
+**Mechanism A (§1.1/§2) delivers Tier 1 + Tier 2 at full, unconditional strength: the
+violation is always DETECTED and RECORDED in CI output.** That part of the original claim —
+"nothing bypasses CI" — is true and re-verified (`ci.yml`'s step has no `if:`/
+`continue-on-error:`). What is **not** true, and is withdrawn here, is that detection
+implies the violation "cannot reach `main`": `main` has no branch protection (verified,
+§1), and PR #848 — this run's own — merged today with a FAILURE conclusion present in its
+rollup. **Mechanism A's honest guarantee is "always detected and recorded," not "cannot
+reach main."** Whether a detected violation actually blocks a given merge is Tier 3,
+procedural: it depends on the merging agent honoring `GIT_MERGE.md`'s CI-green-gate MUST,
+which is the same character of guarantee as the §1.3 claim rework-1 already corrected for
+Mechanism B — a written procedure, not a GitHub-enforced server-side rule, given this
+repo's current configuration.
 
-**ORCH's own framing, evaluated:** "CI-guaranteed plus a procedural early-catch" is adopted
-as this design's honest self-description, for the reason ORCH gave — it is a materially
-better answer than six prose-only predecessors, specifically *because* the CI half
-genuinely cannot be skipped, so the worst case if the procedural half ever lapses is a
-return to today's status quo (caught at CI), not a silent miss. What this design does not
-do, and what would repeat the overclaiming mistake this rework fixes, is describe that
-combination as "structurally impossible to violate" — the correct sentence is "structurally
-impossible to **merge** with the violation still present," which is what A alone
-guarantees, with B making the common case faster to catch.
+**Mechanism B (§1.2/§3.1-3.4) does not add a second, independent Tier-1/2-strength
+guarantee either** — it is procedural throughout, inheriting §1.3's track record (strong,
+not code-enforced). Stated as the consequence both blockers together require: **if
+Mechanism B were silently dropped from some future ORCH session — the same way six prior
+prose mitigations were — Tier 2 still holds: the violation is still detected and recorded
+by Mechanism A at CI**, exactly as before. What is *not* guaranteed, with or without B, is
+that detection alone stops the merge — that is Tier 3, and it is the same gap regardless of
+which mechanism did the detecting.
+
+**So, stated at the precision both rework rounds have now converged on:** this design
+delivers unconditional detection (Tier 1+2, via Mechanism A) plus two procedural
+enforcement points (Mechanism B's early, pre-CI catch at the dispatch boundary, and the
+pre-existing CI-green-gate MUST that is supposed to act on Tier 2's output at Tier 3). It
+does **not** deliver a code-enforced guarantee that a detected violation is blocked from
+`main` — that gap is real, it is named explicitly (§1, §6.4), and closing it requires repo
+administration this design does not perform.
+
+**Why this combination is still worth having, even though ISS-0440's literal title is not
+fully met.** Every one of the 6 prior prose mitigations produced **no reliable detection at
+all** — each depended on some agent remembering to look. This design's Tier 1+2 is
+detection that cannot be skipped, which is a categorically different — and strictly
+stronger — property than anything tried before, even though it stops short of Tier 3.
+Under A alone, every occurrence is caught at push/CI time, with the result visible in CI
+output even if a merge proceeds past it (as PR #848 shows can happen). Under A+B, the same
+violation is additionally caught **inline, between steps, before the very commit that would
+first put it in git** — before CI even runs — at zero marginal linter cost (§3.3/§3.4). That
+is real, useful value on the common path; it is not, and is no longer described as, a
+second independent guarantee, and it does nothing for Tier 3 either.
+
+**ORCH's own framing, evaluated at the corrected precision:** "unconditional detection plus
+two procedural enforcement points" is adopted as this design's honest self-description —
+materially better than six prose-only predecessors that produced no detection at all, but
+explicitly **not** "structurally impossible to violate" and **not** "structurally
+impossible to merge." The correct sentence is: *a violation is always detected and recorded
+by CI; whether it is then blocked from merging depends on a procedure (`GIT_MERGE.md`'s
+CI-green gate) that this repository does not currently enforce server-side.*
 
 ---
 
@@ -462,17 +620,33 @@ role's own mandate that every acceptance criterion maps to something concrete.)
 
 ### AC1 — "make the violation structurally impossible... catch a deliberately-introduced bad status before CI, demonstrated by a real run"
 
-Two catches, of two different strengths (per §3.5 — not restated at length here):
+**Corrected per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1 — this heading's own premise
+("structurally impossible") is answered at the tier precision §1/§3.5 establish, not
+asserted at face value.** True structural (Tier 3, merge-blocking) enforcement is NOT
+achieved by this design in this repo's current configuration — `main` has no branch
+protection (verified, §1) and a red CI run has demonstrably merged before (PR #848). What
+*is* achieved, at full unconditional strength, is Tier 1+2: detection. Two catches, both
+real, neither claiming more than its tier supports:
 
-- **Mechanism A** catches (and for the safe subset, self-heals) it **at CI**, as a hard gate
-  that already exists and already blocks merge. This is the one that makes "structurally
-  impossible to merge with the violation present" literally true, because nothing bypasses
-  CI.
+- **Mechanism A** catches (and for the safe subset, self-heals) it **at CI** — Tier 1+2,
+  unconditional: the check always runs and a violation is always detected and recorded in
+  CI's output. This does **not** mean the violation is blocked from `main` — that is Tier 3,
+  which depends on the merging agent honoring `GIT_MERGE.md`'s CI-green gate, a written
+  procedure this repository does not enforce server-side (§1).
 - **Mechanism B** catches it **before CI even runs** — at the moment ORCH would otherwise
   commit the very handoff carrying the bad value, per §3.2 step 2 — *when the documented
   §1.3 procedure is followed*, which it reliably has been since ISS-0196 but is not
-  code-enforced. B is the earlier catch on the common path, not a second guarantee; if it
-  is ever skipped, A still catches the same violation at CI, just later.
+  code-enforced (procedural, same tier-3-adjacent character as the CI-green gate itself). B
+  is the earlier catch on the common path, not a second guarantee; if it is ever skipped,
+  Tier 1+2 still holds — A still detects and records the same violation at CI, just later,
+  and whether that then blocks the merge is Tier 3 either way.
+
+So AC1's "catch... before CI" clause is satisfied by Mechanism B (procedurally reliable,
+not code-guaranteed) and its "demonstrated by a real run" clause is satisfied by the
+steps below; AC1's implicit premise that this makes the violation *structurally impossible
+to merge* is not fully met, and this design says so explicitly rather than implying
+otherwise — see §1's closing paragraph for the named, out-of-scope gap (branch protection)
+that would close it.
 
 **How this is demonstrated, concretely, per the handoff's own self-referential
 instruction** ("this run's own handoffs are written by the very agents that produce these
@@ -527,12 +701,15 @@ never `handoffs/` itself and is therefore never linted by any other host's CI:
 
 ### AC2 — "an unconfigured host must either still be protected, or have its non-setup detected by an existing gate"
 
-Directly satisfied, and the reasoning is why (a)/the hook was rejected rather than adopted
-as a required piece: **Mechanism A requires zero per-host configuration.** It rides CI
-(§1.1), which runs on GitHub's own runner image regardless of anything any workstation has
-or hasn't set up. There is no "setup step" for a host to skip — every host's changes pass
-through the identical CI gate before merge, so "unconfigured" is not a state that exists for
-this mechanism. **This is the design's actual answer to AC2, not a caveat**: rather than
+Directly satisfied **at the Tier 1+2 (detection) strength §1/§3.5 establish** — AC2's own
+wording asks for detection ("have its non-setup detected"), not merge-blocking, so this
+criterion does not run into the Tier 3 gap named there. The reasoning is also why (a)/the
+hook was rejected rather than adopted as a required piece: **Mechanism A requires zero
+per-host configuration.** It rides CI (§1.1), which runs on GitHub's own runner image
+regardless of anything any workstation has or hasn't set up. There is no "setup step" for a
+host to skip — every host's changes are scanned by the identical CI gate, unconditionally
+(Tier 1), so "unconfigured" is not a state that exists for this mechanism's *detection*
+property. **This is the design's actual answer to AC2, not a caveat**: rather than
 building a new gate to detect missing hook setup (which ISSUE-FIXER showed would itself only
 be able to run inside `mix letflow.check` — i.e., inside the very CI gate that already
 catches the underlying defect directly), this design makes the enforcement itself
@@ -612,6 +789,23 @@ future change wants CI to self-heal and push a fix commit, that is a separate, l
 decision (write access from a CI job, atomicity with the rest of the check run) and is
 explicitly not decided here.
 
+### 6.4 The Tier 3 gap — branch protection — is a NAMED, out-of-scope repo-administration follow-up, not silently left unaddressed
+
+**New, per CODE-DESIGN-VALIDATOR rework-2 BLOCKER 1.** §1/§3.5/AC1 establish that this
+design achieves Tier 1+2 (unconditional detection) but not Tier 3 (a detected violation
+provably cannot merge), because `main` carries no branch protection today (`404` on
+`repos/tvolodi/letflow/branches/main/protection`) and PR #848 shows a red run merging in
+practice. Closing that gap requires **GitHub branch protection on `main` with
+`mix letflow.check`'s "Backend gate" job (and, if desired, "Frontend gate") configured as a
+required status check** — a repository-settings action taken through GitHub's API or web
+UI, not a code or documentation change any of this design's two mechanisms can specify or
+implement. This is explicitly **out of scope for this design and for ELIXIR-DEV's
+implementation of it** — no `.ex`, `.md`, or `.yml` change proposed here performs it. ORCH
+is filing this as its own follow-up issue (per `docs/agents/protocols/ISSUE_QUEUE.md`); this
+design records the gap by name, with the exact verification command that demonstrates it
+today (`gh api repos/tvolodi/letflow/branches/main/protection`), so a future reader finds a
+named, tracked gap rather than an implication that Tier 1+2 alone already closed it.
+
 ---
 
 ## 7. Summary of concrete elements for ELIXIR-DEV
@@ -634,17 +828,30 @@ explicitly not decided here.
      rather than one generic message.
    - `letflow.check` alias in `mix.exs` is **unchanged** — still calls plain
      `letflow.lint_handoffs` with no arguments, so no `--autofix` and no `--dir` (§6.3).
+   - **New, §2.1a:** a hard guard refusing (`Mix.raise/1`, non-zero exit) an explicitly
+     `--dir`-supplied directory that discovers zero files, and an unconditional summary
+     banner naming the scanned directory (in addition to the existing file count) on
+     every run, default path included — both guard against a scoped `--dir` run being
+     mistaken for a genuine clean full-corpus result.
 2. `docs/agents/shared/HANDOFF_PROTOCOL.md` §1.3: insert the §3.2 clause into the existing
    dispatch-commit procedure (exact prose is ELIXIR-DEV's/DOC-UPDATER's to draft, content
    constraints per §3.2 and §6.2) — worded as a procedural addition to §1.3's existing MUST,
    not as a claim that the insertion is itself code-enforced (§1.2/§3.5).
 3. `docs/anti-patterns.md`: per the issue's explicit instruction, do **not** add an eighth
    tally line as the fix. If anything is appended here, it should be a closing note stating
-   this occurrence's mitigation combines a structural gate (Mechanism A, at CI — nothing
-   bypasses it) with a procedural early-catch (Mechanism B, riding §1.3's track record) —
-   described at that precision, not as uniformly "structural" — rather than a ninth
-   recurrence entry. DOC-UPDATER's call at Step 6, not this step's.
+   this occurrence's mitigation delivers unconditional detection (Tier 1+2, Mechanism A at
+   CI — the check itself always runs and always records a violation) plus two procedural
+   enforcement points (Mechanism B's early catch, and the pre-existing CI-green-gate MUST
+   that Tier 3/merge-blocking still depends on, since `main` carries no branch protection
+   today) — described at that three-tier precision, never as uniformly "structural" or as
+   "cannot reach main" — rather than a ninth recurrence entry. DOC-UPDATER's call at
+   Step 6, not this step's.
 4. Test fixtures for AC1's demonstration live under `scratch/` or `test/fixtures/` (per File
    Placement Rules), always **outside** `handoffs/`, invoked via the new `--dir` flag
    (§2.1, §5 AC1) — never inside `handoffs/` (hazard: any other host's CI would lint it
    too) and never mutating a real `handoffs/**/*.json` file to prove the mechanism.
+5. **New — out of scope for this implementation, but tracked (§6.4):** GitHub branch
+   protection on `main` with `mix letflow.check`'s job(s) as required status checks is the
+   action that would close the Tier 3 gap (a detected violation provably cannot merge).
+   ELIXIR-DEV does not perform this — it is repo administration, filed by ORCH as its own
+   follow-up issue, referenced here so it is not silently left unaddressed.

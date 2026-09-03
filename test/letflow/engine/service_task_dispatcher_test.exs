@@ -1086,8 +1086,14 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
                "true; only config/test.exs is meant to override it)"
     end
 
-    test "application.ex appends service_task_dispatcher_children() as its own call, alongside and distinct from scheduler_children()" do
-      source = File.read!(Path.join(File.cwd!(), "lib/letflow/application.ex"))
+    test "Letflow.Supervisor.Pollers appends service_task_dispatcher_children() as its own call, alongside and distinct from scheduler_children()" do
+      # REQ-219 (design req219-supervision-layering.md §1.2/§2) relocated
+      # both scheduler_children/0 and service_task_dispatcher_children/0,
+      # along with their call site, out of lib/letflow/application.ex (now
+      # just a 3-child list of the new layer supervisors) into
+      # lib/letflow/supervisor/pollers.ex -- this test's own source-text
+      # assertions move with them.
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/supervisor/pollers.ex"))
 
       # Both entries present, and NEITHER folded into the other -- i.e. this
       # is not a single combined helper silently returning both children

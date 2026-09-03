@@ -34,6 +34,31 @@ defmodule Letflow.Scheduler.Poller do
   already-established isolation boundary for no additional safety
   property.
 
+  ## REQ-219 addition -- test-only forced-crash seam (`force_poller_crash`)
+
+  `handle_info(:tick, state)`'s first expression is a double-gated guard
+  that unconditionally raises when both gates are open, used by
+  `test/letflow/supervisor/pollers_test.exs`'s AC4 crash-loop-isolation
+  test (`req219-supervision-layering.md` §5) to reproduce, on demand, the
+  exact "Poller raises on every tick" scenario that motivated
+  `Letflow.Supervisor.Pollers`' own `max_restarts: 5, max_seconds: 60`
+  override. Mirrors `lib/letflow/repository/activation.ex`'s own
+  `@activation_test_hooks_enabled?` double-gate pattern exactly, and
+  DELIBERATELY REUSES that same existing, already-committed compile-time
+  config key rather than introducing a new one (a new key would need its
+  own `config/test.exs` entry, violating REQ-219 AC7's "no config file
+  changes" bar). Structurally unreachable in a compiled dev/prod release:
+  `@poller_test_hooks_enabled?` is resolved once at compile time and folds
+  to a literal `false` in every build except one compiled with
+  `:activation_test_hooks_enabled?: true` (only `config/test.exs` sets
+  this), so no runtime `Application.put_env(:letflow, :force_poller_crash,
+  true)` call -- by a future ops script, console session, or otherwise --
+  can ever reach this branch outside a test build. The runtime
+  `Application.get_env/3` check (read fresh per call, matching this
+  module's own existing "config read fresh on every tick" convention) is
+  what lets one specific test flip the behavior on/off without a fresh
+  compile.
+
   ## REQ-218 addition -- admission-control wiring on the six sequential
   per-tenant operations (design `req218-poller-admission-wiring.md`)
 
@@ -105,6 +130,17 @@ defmodule Letflow.Scheduler.Poller do
           last_tick_started_at: DateTime.t() | nil
         }
 
+  # See "REQ-219 addition" moduledoc section above. Resolved once at
+  # compile time (not a runtime Mix.env() call, which is unavailable in a
+  # compiled release) -- becomes a literal true/false in the compiled BEAM
+  # code. Deliberately reuses activation.ex's own
+  # :activation_test_hooks_enabled? config key rather than a new one.
+  @poller_test_hooks_enabled? Application.compile_env(
+                                :letflow,
+                                :activation_test_hooks_enabled?,
+                                false
+                              )
+
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(_opts) do
     GenServer.start_link(
@@ -122,6 +158,10 @@ defmodule Letflow.Scheduler.Poller do
 
   @impl true
   def handle_info(:tick, state) do
+    if @poller_test_hooks_enabled? and Application.get_env(:letflow, :force_poller_crash, false) do
+      raise "forced crash for REQ-219 AC4 crash-loop isolation test"
+    end
+
     now = DateTime.utc_now()
     observed_lag_ms = compute_lag(get_last_tick_started_at(state), now)
 

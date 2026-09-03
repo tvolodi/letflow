@@ -27,16 +27,19 @@ defmodule Letflow.Engine.PluginRegistryTest do
   observed at SEED time (`do_register/2` runs with `frozen?: false` only
   inside `seed_registrations/1`, design doc §6.1/§6.4) -- so this file
   restarts the real, application-supervised child with a deliberately
-  malformed seed list via `Supervisor.start_child(Letflow.Supervisor,
-  {PluginRegistry, seed_list})`, asserts on the resulting boot failure, then
-  restores the default (empty) registry in `on_exit` before the next test
-  runs. AC5's cross-tenant/AC6's shadowing tests restart it with a
-  deliberately VALID seed list instead, for the same reason -- there is no
-  other way to get a live, resolvable registration into this singleton from
-  a test.
+  malformed seed list via `Supervisor.start_child(Letflow.Supervisor.Infrastructure,
+  {PluginRegistry, seed_list})` (REQ-219 moved `PluginRegistry`, along with
+  the rest of the original flat 20-child list, one level down from
+  `Letflow.Supervisor`'s own direct children into
+  `Letflow.Supervisor.Infrastructure`), asserts on the resulting boot
+  failure, then restores the default (empty) registry in `on_exit` before
+  the next test runs. AC5's cross-tenant/AC6's shadowing tests restart it
+  with a deliberately VALID seed list instead, for the same reason -- there
+  is no other way to get a live, resolvable registration into this
+  singleton from a test.
 
   This is why `async: true` would be unsafe here (this file mutates a
-  node-wide singleton child of `Letflow.Supervisor`) -- every test either
+  node-wide singleton child of `Letflow.Supervisor.Infrastructure`) -- every test either
   reads the always-frozen default registry (safe) or brackets its own
   mutation with `seed_registry!/1` + `on_exit` restoration (serialized,
   `async: false`, matching `engine_execution_error_test.exs`'s own
@@ -67,12 +70,12 @@ defmodule Letflow.Engine.PluginRegistryTest do
   # ---------------------------------------------------------------------
 
   defp stop_registry_child do
-    case Supervisor.terminate_child(Letflow.Supervisor, PluginRegistry) do
+    case Supervisor.terminate_child(Letflow.Supervisor.Infrastructure, PluginRegistry) do
       :ok -> :ok
       {:error, :not_found} -> :ok
     end
 
-    case Supervisor.delete_child(Letflow.Supervisor, PluginRegistry) do
+    case Supervisor.delete_child(Letflow.Supervisor.Infrastructure, PluginRegistry) do
       :ok -> :ok
       {:error, :not_found} -> :ok
     end
@@ -80,7 +83,7 @@ defmodule Letflow.Engine.PluginRegistryTest do
 
   defp restore_default_registry do
     stop_registry_child()
-    {:ok, _pid} = Supervisor.start_child(Letflow.Supervisor, {PluginRegistry, []})
+    {:ok, _pid} = Supervisor.start_child(Letflow.Supervisor.Infrastructure, {PluginRegistry, []})
     :ok
   end
 
@@ -93,7 +96,7 @@ defmodule Letflow.Engine.PluginRegistryTest do
   defp seed_registry!(seed_list) do
     stop_registry_child()
     on_exit(fn -> restore_default_registry() end)
-    Supervisor.start_child(Letflow.Supervisor, {PluginRegistry, seed_list})
+    Supervisor.start_child(Letflow.Supervisor.Infrastructure, {PluginRegistry, seed_list})
   end
 
   defp unique_key(prefix \\ "PLUGIN") do

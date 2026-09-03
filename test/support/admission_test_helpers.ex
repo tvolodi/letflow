@@ -64,8 +64,13 @@ defmodule Letflow.AdmissionTestHelpers do
   end
 
   defp do_restart do
-    Supervisor.terminate_child(Letflow.Supervisor, Admission)
-    {:ok, _pid} = Supervisor.restart_child(Letflow.Supervisor, Admission)
+    # REQ-219 (design req219-supervision-layering.md §1.1) moved
+    # Letflow.Admission, along with the rest of the original flat 20-child
+    # list, one level down from Letflow.Supervisor's own direct children
+    # into Letflow.Supervisor.Infrastructure -- this restart must target
+    # that same sub-supervisor now, not the top-level Letflow.Supervisor.
+    Supervisor.terminate_child(Letflow.Supervisor.Infrastructure, Admission)
+    {:ok, _pid} = Supervisor.restart_child(Letflow.Supervisor.Infrastructure, Admission)
     :ok
   end
 end

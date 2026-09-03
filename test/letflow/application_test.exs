@@ -27,8 +27,13 @@ defmodule Letflow.ApplicationTest do
     assert Process.alive?(pid)
   end
 
-  test "Letflow.Supervisor supervises the OIDC worker as a real child, not just config-referenced" do
-    children = Supervisor.which_children(Letflow.Supervisor)
+  test "Letflow.Supervisor.Infrastructure supervises the OIDC worker as a real child, not just config-referenced" do
+    # REQ-219 (design req219-supervision-layering.md §1.1) moved the OIDC
+    # worker, along with the rest of the original flat 20-child list, one
+    # level down from Letflow.Supervisor's own direct children into
+    # Letflow.Supervisor.Infrastructure -- it is no longer a direct child
+    # of Letflow.Supervisor itself, only of this named sub-supervisor.
+    children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     oidc_child =
       Enum.find(children, fn

@@ -238,8 +238,12 @@ defmodule Letflow.AdmissionTest do
   # tree, with its moduledoc stating explicitly whether it has an ordering
   # dependency.
   describe "AC6: present in the live supervision tree, no ordering dependency documented" do
-    test "Letflow.Admission is supervised as its own child of Letflow.Supervisor" do
-      children = Supervisor.which_children(Letflow.Supervisor)
+    test "Letflow.Admission is supervised as its own child of Letflow.Supervisor.Infrastructure" do
+      # REQ-219 (design req219-supervision-layering.md §1.1) moved
+      # Letflow.Admission, along with the rest of the original flat
+      # 20-child list, one level down from Letflow.Supervisor's own direct
+      # children into Letflow.Supervisor.Infrastructure.
+      children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
       admission_child =
         Enum.find(children, fn

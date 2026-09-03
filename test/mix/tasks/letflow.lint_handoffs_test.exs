@@ -42,6 +42,8 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
 
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureIO
+
   alias Mix.Tasks.Letflow.LintHandoffs
 
   @fixture_dir "test/fixtures/lint_handoffs/h6"
@@ -383,6 +385,347 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
 
       assert new_h6 == [],
              "expected zero new H6 violations against the real handoffs/ tree, got: #{inspect(new_h6)}"
+    end
+  end
+
+  # ==================================================================
+  # ISS-0440 -- --dir and restricted --autofix (regression, WF03-ISS0440-20260903)
+  #
+  # Spec: test/specs/ISS-0440.md. Design:
+  # lib/letflow/design/iss440-handoff-status-enforcement.md sections 2, 2.1a.
+  # Run: WF03-ISS0440-20260903, WF-03 Step 4.
+  #
+  # `resolve_dir/1`, `find_dir_flag/1`, `guard_empty_scope/2`, `run_autofix/1`,
+  # `autofix_file/1`, and `write_json!/2` are ALL NEW functions this fix adds
+  # -- there is no pre-fix version of any of them to check out and prove red
+  # against ("UndefinedFunctionError" would be trivially true of every test
+  # here and prove nothing about whether the tests discriminate correct from
+  # wrong). Per WF-03's "When the pre-fix failure is 'the code under test does
+  # not exist'" clause, fail-first is satisfied here instead by MUTATING the
+  # shipped logic and recording which named tests below fail for each mutant
+  # -- see this test-designer's handoff result.summary for the full mutant
+  # table (M1/M2/M3), each applied in a throwaway git worktree, none left in
+  # this tree.
+  #
+  # Every fixture here lives under System.tmp_dir!/0 in a unique subdirectory,
+  # cleaned up via on_exit -- never inside handoffs/, and --autofix is never
+  # run against the real handoffs/ corpus by any test in this file.
+  # ==================================================================
+
+  describe "ISS-0440 -- resolve_dir/1 and find_dir_flag (CLI flag parsing)" do
+    test "F-DIR-DEFAULT -- resolve_dir/1 with no --dir returns @handoffs_dir unchanged" do
+      # This is the property CI's own no-flag invocation depends on: run([])
+      # must resolve identically to today's hardcoded default.
+      assert LintHandoffs.resolve_dir([]) == "handoffs"
+    end
+
+    test "F-DIR-EXPLICIT -- resolve_dir/1 with --dir <path> returns that path verbatim" do
+      assert LintHandoffs.resolve_dir(["--dir", "some/fixture/dir"]) == "some/fixture/dir"
+    end
+
+    test "F-DIR-ORDER-INDEPENDENT -- --dir is found regardless of position among other args" do
+      assert LintHandoffs.resolve_dir(["--autofix", "--dir", "x/y"]) == "x/y"
+      assert LintHandoffs.resolve_dir(["--dir", "x/y", "--autofix"]) == "x/y"
+    end
+
+    test "F-DIR-MISSING-VALUE -- --dir with no following value Mix.raise-s" do
+      assert_raise Mix.Error, ~r/--dir given with no path argument/, fn ->
+        LintHandoffs.resolve_dir(["--dir"])
+      end
+    end
+  end
+
+  describe "ISS-0440 -- guard_empty_scope/2 (empty --dir scope is a hard usage error)" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0440-empty-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "F-EMPTY-DIR-RAISES -- an explicitly-supplied --dir with zero handoff files Mix.raise-s",
+         %{dir: dir} do
+      files = LintHandoffs.handoff_files(dir)
+      assert files == []
+
+      assert_raise Mix.Error, ~r/discovered 0 files -- refusing to report success/, fn ->
+        LintHandoffs.guard_empty_scope(dir, files)
+      end
+    end
+
+    test "F-NONEXISTENT-DIR-RAISES -- a --dir pointing at a directory that doesn't exist also raises" do
+      missing_dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0440-missing-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      refute File.exists?(missing_dir)
+      files = LintHandoffs.handoff_files(missing_dir)
+      assert files == []
+
+      assert_raise Mix.Error, ~r/discovered 0 files/, fn ->
+        LintHandoffs.guard_empty_scope(missing_dir, files)
+      end
+    end
+
+    test "F-DEFAULT-EMPTY-DOES-NOT-RAISE -- the DEFAULT @handoffs_dir carve-out is not the --dir misuse case" do
+      # guard_empty_scope/2's carve-out: files == [] is only a hard error when
+      # dir != @handoffs_dir (i.e. --dir was explicitly given). A real empty
+      # handoffs/ is a separate, pre-existing edge case, out of scope here --
+      # this test proves the guard does not fire for the default dir even
+      # with an (impossible-in-practice, but exercised directly) empty list.
+      assert LintHandoffs.guard_empty_scope("handoffs", []) == :ok
+    end
+
+    test "F-NONEMPTY-DIR-OK -- a --dir scope with at least one file does not raise", %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      File.write!(path, ~s({"status": "COMPLETED"}))
+
+      files = LintHandoffs.handoff_files(dir)
+      assert files != []
+      assert LintHandoffs.guard_empty_scope(dir, files) == :ok
+    end
+  end
+
+  describe "ISS-0440 -- run/1 end-to-end via --dir, isolated tmp fixtures" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0440-run-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    defp write_handoff!(path, status, extra \\ %{}) do
+      body =
+        Map.merge(
+          %{
+            "status" => status,
+            "context" => %{},
+            "task" => %{},
+            "result" => %{}
+          },
+          extra
+        )
+
+      File.write!(path, Jason.encode!(body, pretty: true) <> "\n")
+    end
+
+    test "T-DIR-SCOPED-SCAN -- --dir <fixture> scans ONLY the fixture, and the banner names it",
+         %{dir: dir} do
+      write_handoff!(Path.join(dir, "step-01-agent.json"), "COMPLETED")
+
+      io =
+        capture_io(fn ->
+          assert LintHandoffs.run(["--dir", dir]) == :ok
+        end)
+
+      assert io =~ inspect(dir)
+      assert io =~ "across 1 handoff files"
+      refute io =~ "handoffs/WF"
+    end
+
+    test "T-DIR-MISSING-VALUE-RAISES -- `mix letflow.lint_handoffs --dir` with no value Mix.raise-s" do
+      assert_raise Mix.Error, ~r/--dir given with no path argument/, fn ->
+        capture_io(fn -> LintHandoffs.run(["--dir"]) end)
+      end
+    end
+
+    test "T-DIR-EMPTY-SCOPE-RAISES -- --dir at a directory with zero handoff files Mix.raise-s, not a clean OK",
+         %{dir: dir} do
+      empty_subdir = Path.join(dir, "empty")
+      File.mkdir_p!(empty_subdir)
+
+      assert_raise Mix.Error, ~r/discovered 0 files -- refusing to report success/, fn ->
+        capture_io(fn -> LintHandoffs.run(["--dir", empty_subdir]) end)
+      end
+    end
+
+    test "T-AUTOFIX-PASS -- --autofix rewrites top-level status PASS -> COMPLETED", %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "PASS")
+
+      io =
+        capture_io(fn ->
+          assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+        end)
+
+      assert io =~ "AUTOFIX -- FIXED"
+      assert io =~ ~s("PASS" -> "COMPLETED")
+
+      rewritten = path |> File.read!() |> Jason.decode!()
+      assert rewritten["status"] == "COMPLETED"
+    end
+
+    test "T-AUTOFIX-COMPLETE -- --autofix rewrites top-level status COMPLETE -> COMPLETED",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "COMPLETE")
+
+      capture_io(fn -> assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok end)
+
+      assert (path |> File.read!() |> Jason.decode!())["status"] == "COMPLETED"
+    end
+
+    test "T-AUTOFIX-DONE -- --autofix rewrites top-level status DONE -> COMPLETED", %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "DONE")
+
+      capture_io(fn -> assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok end)
+
+      assert (path |> File.read!() |> Jason.decode!())["status"] == "COMPLETED"
+    end
+
+    test "T-AUTOFIX-REFUSES-FAIL -- --autofix REFUSES FAIL: file is BYTE-IDENTICAL, refusal printed",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "FAIL")
+
+      before = File.read!(path)
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, ~r/found 1 new violation/, fn ->
+            LintHandoffs.run(["--dir", dir, "--autofix"])
+          end
+        end)
+
+      after_content = File.read!(path)
+
+      # Byte-identity, not merely "status is still FAIL" -- read the file
+      # before and after and compare the raw bytes directly.
+      assert after_content == before,
+             "expected the refused file to be BYTE-IDENTICAL, but it changed"
+
+      assert io =~ "AUTOFIX -- REFUSED"
+      assert io =~ ~s(found "FAIL")
+      assert io =~ "ambiguous between a lifecycle FAILED handoff"
+    end
+
+    test "T-AUTOFIX-REFUSES-OUTSIDE-MAP -- an arbitrary string outside the closed map is untouched and refused",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "BOGUS_VALUE")
+
+      before = File.read!(path)
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, fn -> LintHandoffs.run(["--dir", dir, "--autofix"]) end
+        end)
+
+      assert File.read!(path) == before
+      assert io =~ "AUTOFIX -- REFUSED"
+      assert io =~ ~s(found "BOGUS_VALUE")
+    end
+
+    test "T-AUTOFIX-REFUSES-LEGAL-BUT-WRONG-ENUM -- a legal enum member outside the autofix map is untouched and refused",
+         %{dir: dir} do
+      # "PENDING" is a legal top-level status (per @legal_statuses) but is not
+      # a key in the closed autofix map -- it must not be silently rewritten,
+      # and must not be silently accepted either (it is not itself an H1
+      # violation, so --autofix has nothing to "fix"; verify it is left
+      # alone and the run still succeeds since PENDING is not a hard
+      # violation on its own).
+      path = Path.join(dir, "step-01-agent.json")
+      write_handoff!(path, "PENDING")
+
+      before = File.read!(path)
+
+      io =
+        capture_io(fn ->
+          assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+        end)
+
+      assert File.read!(path) == before
+      refute io =~ "AUTOFIX -- FIXED"
+      refute io =~ "AUTOFIX -- REFUSED"
+    end
+
+    test "T-AUTOFIX-DOES-NOT-TOUCH-NESTED-RESULT-STATUS -- top-level COMPLETED with nested result.status PASS is untouched",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+
+      write_handoff!(path, "COMPLETED", %{
+        "result" => %{"status" => "PASS", "summary" => "looks good"}
+      })
+
+      before = File.read!(path)
+
+      capture_io(fn ->
+        assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+      end)
+
+      assert File.read!(path) == before,
+             "expected a byte-identical file: --autofix must never touch nested result.status"
+    end
+
+    test "T-AUTOFIX-EVERY-FIX-AND-REFUSAL-ON-STDOUT -- both a fix and a refusal are reported on stdout",
+         %{dir: dir} do
+      write_handoff!(Path.join(dir, "step-01-fixable.json"), "PASS")
+      write_handoff!(Path.join(dir, "step-02-refused.json"), "FAIL")
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, fn -> LintHandoffs.run(["--dir", dir, "--autofix"]) end
+        end)
+
+      assert io =~ "AUTOFIX -- FIXED"
+      assert io =~ "step-01-fixable.json"
+      assert io =~ "AUTOFIX -- REFUSED"
+      assert io =~ "step-02-refused.json"
+    end
+
+    test "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS -- default no-flag invocation still scans @handoffs_dir" do
+      # Cheap check per the handoff's own instruction: does not re-verify the
+      # whole H1-H6/grandfathering/exit-behaviour corpus (already covered by
+      # the "existing .json handoff behavior (H1-H5) is unaffected" and H6
+      # describe blocks above, and by T-H6-ZERO-NEW / F-GRANDFATHERED-* in
+      # this same file) -- only proves resolve_dir([]) still feeds run/1
+      # @handoffs_dir, i.e. that this fix's new flag-parsing branch did not
+      # change the zero-flag call path.
+      io = capture_io(fn -> assert LintHandoffs.run([]) == :ok end)
+
+      assert io =~ ~s(under "handoffs")
+      refute io =~ "AUTOFIX"
+    end
+  end
+
+  describe "ISS-0440 -- run_autofix/1 (structured return shape, direct unit test)" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0440-runautofix-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "F-RUN-AUTOFIX-SHAPE -- returns %{fixed: [...], refused: [...]} with the documented entry shape",
+         %{dir: dir} do
+      pass_path = Path.join(dir, "step-01-pass.json")
+      fail_path = Path.join(dir, "step-02-fail.json")
+      ok_path = Path.join(dir, "step-03-ok.json")
+
+      File.write!(pass_path, ~s({"status": "PASS"}))
+      File.write!(fail_path, ~s({"status": "FAIL"}))
+      File.write!(ok_path, ~s({"status": "COMPLETED"}))
+
+      files = LintHandoffs.handoff_files(dir)
+      %{fixed: fixed, refused: refused} = LintHandoffs.run_autofix(files)
+
+      assert [%{path: ^pass_path, from: "PASS", to: "COMPLETED"}] = fixed
+      assert [%{path: ^fail_path, found: "FAIL", reason: reason}] = refused
+      assert reason =~ "ambiguous"
     end
   end
 end

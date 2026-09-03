@@ -58,10 +58,80 @@ affected_files:
 related:
   - ISS-0190
   - ISS-0426
+  - ISS-0441
+  - ISS-0442
+  - ISS-0443
 source: >
   PR #848's first CI run (WF03-ISS0426-20260902's own Step Final), where
   letflow.lint_handoffs failed with "1 new (un-grandfathered) violation" on
   [H1] for step-03-elixir-dev.json.
 queue_task_id: 440
 github_issue: 849
-status: open
+status: instrumented
+superseded_by: ISS-0441
+resolved_in_run: WF03-ISS0440-20260903
+resolved_at: "2026-09-03T18:11:32Z"
+resolution_note: >
+  INSTRUMENTED, not resolved -- deliberate judgement, not the default. What
+  shipped this run is real, verified, useful work: Mechanism A
+  (lib/mix/tasks/letflow.lint_handoffs.ex gains --dir, a restricted --autofix
+  over a closed 3-value map {PASS,COMPLETE,DONE} -> COMPLETED, an
+  unconditional scan banner, and an empty-scope guard) plus Mechanism B (a
+  procedural clause added to docs/agents/shared/HANDOFF_PROTOCOL.md 1.3).
+  Both gates passed: SECURITY-REVIEWER (03b) and REVIEWER (03c, two
+  non-blocking MINORs filed as ISS-0442/ISS-0443). Full suite 3156
+  passed/0 failures; the changed file's 43 tests independently re-derived
+  three times (TEST-DESIGNER, TEST-DESIGN-VALIDATOR applying mutants M1/M2
+  itself at 40/43 each, TEST-RUNNER's own 43/43 re-run); regression test at
+  test/mix/tasks/letflow.lint_handoffs_test.exs. lint_handoffs itself: 0 new
+  violations.
+
+  Root cause NOT removed. The diagnosis (step-01) named the actual
+  discriminator this fix is judged against: "the check must fire as a
+  mechanical consequence of an action the pipeline cannot avoid taking, with
+  zero agent decision about whether to run it." Neither shipped mechanism
+  meets that bar. Mechanism A only runs, and only autofixes, when
+  `mix letflow.lint_handoffs` is invoked -- an agent can still write an
+  invalid top-level status and never trigger it locally, exactly as before
+  this run. Mechanism B is explicit in its own text (HANDOFF_PROTOCOL.md
+  1.3, ISS-0440 addition) that it "is not a code-enforced gate: nothing here
+  blocks ORCH from skipping it" -- it is the same reliability class as the
+  five prior prose mitigations that each failed at least once. The only
+  structural change is that CI runs the linter on every push (true before
+  this run too) and, new this run, --autofix can self-heal the specific
+  3-value pattern once the linter does execute -- "detected and recorded",
+  not "cannot occur". ISS-0441 (filed this run, MAJOR, open) independently
+  establishes that even CI's gate is not merge-blocking: main carries no
+  branch protection, so a red gate does not structurally stop a merge
+  either. The design doc itself (lib/letflow/design/iss440-handoff-status-enforcement.md)
+  states this distinction plainly: Mechanism A's CI leg is
+  structurally enforced, Mechanism B is procedurally enforced, and the
+  overall guarantee is "always detected and recorded", explicitly not
+  "cannot be merged" -- REVIEWER (step-03c item 3/4) independently confirmed
+  no overclaim beyond that settled position exists anywhere in the shipped
+  docs or code.
+
+  Superseded by ISS-0441, which is not a placeholder pointer -- it already
+  exists (filed this same run, MAJOR, open) and is scoped exactly to the
+  remaining gap: making pipeline gates structurally rather than procedurally
+  enforced (branch protection / merge-blocking on CI). ISS-0440's own design
+  cites ISS-0441 by name as the reason its guarantee is worded the way it
+  is. A narrower successor scoped only to "trigger the linter without any
+  agent decision" (e.g. a tracked pre-push hook, per the original diagnosis's
+  option (a)) was considered and rejected as the supersedor: ISS-0441 is
+  the correct target because it subsumes that narrower gap -- even a
+  pre-push hook is bypassable client-side and would not close the
+  structural hole ISS-0441 documents at the server/merge level, whereas a
+  fix to ISS-0441 would make this defect class's write-time gap moot by
+  making CI (which already runs the linter) an actual merge gate.
+
+  WHAT THIS RUN DOES NOT COVER, stated plainly so the record does not
+  overclaim: an agent can still write an invalid top-level `status` value
+  today with zero structural obstruction at write-time; the value is only
+  ever corrected (by --autofix, if run) or blocked (by CI, if CI is
+  reached and its result is honored) after the fact. Occurrence 8 remains
+  possible under the letter of the original defect; what has changed is
+  that it now self-heals cheaply once caught (`mix letflow.lint_handoffs
+  --autofix`) instead of requiring a manual field edit, and that
+  docs/anti-patterns.md's entry now points at that remediation path instead
+  of re-analysing from scratch.

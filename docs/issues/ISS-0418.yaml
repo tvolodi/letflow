@@ -28,6 +28,38 @@ description: >
   single-incident flake report -- it is the sixth recurrence of a known,
   already-diagnosed, already-load-bearing-per-its-own-issue-record defect
   whose fix has been deferred six times running.
+recurrence_2026_09_03: >
+  ANOTHER RECURRENCE, observed live 2026-09-03T20:36:26Z by ORCH during
+  WF03-ISS0440-20260903's Step Final, on PR #866's backend gate re-run
+  (GitHub Actions run 33800044829). Recorded here rather than filed as a new
+  issue, since this is the exact class this issue already owns.
+
+  SHAPE: the MAIN suite passed clean in that same run -- "Result: 3192 passed
+  (6 properties, 3186 tests), 21 excluded", 0 failures. The failure was in the
+  ISOLATED `mix test --only wasm_hang` subprocess stage that runs afterwards:
+  "Result: 6/7 passed" / "Failed: 1 test", i.e. exactly the isolated-subprocess
+  surface this issue is named for, not the ordinary suite.
+
+  FAILING TEST: test/letflow/engine/wasm/host_api_write_test.exs:460 --
+  "write_variable: discard on every failure arm ... REQ-170's wall-clock
+  timeout abandons the staged write". Failure mode was
+  ** (ExUnit.TimeoutError) test timed out after 180000ms, stack ending in
+  :proc_lib.sync_start/2 at `start_instance("req172_write_then_hang.wat",
+  ["var:write"])` -- i.e. the instance never came up within 180s, the
+  concurrent-WASM-invocation starvation this issue's OQ-5 cap exists to fix.
+  Not an assertion failure.
+
+  ATTRIBUTION CONTEXT worth keeping: PR #866 touches only
+  lib/mix/tasks/letflow.lint_handoffs.ex, its test, and a design doc -- no WASM
+  code whatsoever. Across three CI runs of that same tree the gate failed three
+  times on THREE DIFFERENT tests in three different documented flake classes
+  (executor_test.exs:625 :lua_wallclock_race/ISS-0426; then
+  service_task_dispatcher_test.exs:1113 on_exit teardown race, filed as
+  ISS-0446; then this one), never twice on the same test, while the identical
+  tree passed 3192/3192 locally on an exclusive database. That pattern is
+  itself evidence for this issue's premise: the backend gate is currently
+  flaky enough that an unrelated branch expects roughly a coin-flip per run,
+  which is precisely what trains agents to merge past red -- see ISS-0441.
 affected_files:
   - test/letflow/engine/wasm/call_timeout_test.exs
   - test/letflow/engine/wasm/plugin_handler_test.exs

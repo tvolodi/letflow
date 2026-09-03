@@ -1625,6 +1625,28 @@ dedicated `mix letflow.lint_handoffs` call inserted into every review-role agent
 dispatch template remains the only fix that would catch this without relying on a human or
 ORCH noticing the wording.
 
+**ISS-0440 (7th occurrence, WF03-ISS0440-20260903): tooling now exists -- go there, not
+here.** This entry's own text above already declares "document it again" EXHAUSTED after
+occurrence 6; occurrence 7 (ELIXIR-DEV, PR #848) confirmed that call was right, and this
+run did not add an 8th tally line. Instead: `mix letflow.lint_handoffs` gained `--autofix`
+(a restricted, closed-map correction of exactly `PASS`/`COMPLETE`/`DONE` -> `COMPLETED`,
+with an unconditional scan banner and refusal on anything ambiguous -- see the task's own
+moduledoc in `lib/mix/tasks/letflow.lint_handoffs.ex`), and
+`docs/agents/shared/HANDOFF_PROTOCOL.md` 1.3 gained a procedural clause telling ORCH to
+check the just-received handoff's top-level status before writing the next one. Full
+design rationale: `lib/letflow/design/iss440-handoff-status-enforcement.md`. **This is not
+closure of the class** -- both mechanisms are judged in `docs/issues/ISS-0440.yaml`
+(`status: instrumented`, not `resolved`) as stopping short of the "fires without any agent
+choosing to run it" bar the diagnosis itself set: `--autofix` only runs when someone
+invokes the task, and the HANDOFF_PROTOCOL.md clause is explicit that it is not
+code-enforced. `docs/issues/ISS-0441.yaml` (MAJOR, open) carries the remaining structural
+gap -- main has no branch protection, so even CI is advisory, not a merge gate. If this
+recurs as occurrence 8: run `mix letflow.lint_handoffs --autofix` first (it will fix the
+three known-safe values in one shot and tell you on stdout what it touched); if the value
+isn't one of those three, fix it by hand per the tool's own refusal message; then go read
+ISS-0441 before writing a ninth prose mitigation here, because prose is what this class has
+already proven doesn't hold.
+
 ## A test embeds `git diff main...HEAD` directly, assuming a local `main` branch always exists
 
 **What happened.** REQ-165's `plugin_handler_test.exs` had a test asserting

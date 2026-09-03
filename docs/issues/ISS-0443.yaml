@@ -1,0 +1,58 @@
+id: ISS-0443
+title: "lint_handoffs silently ignores unknown flags: a mistyped --autofix or --dir exits 0 with a confident OK, hiding that the intended action never ran"
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0440-20260903
+discovered_at: "2026-09-03T11:20:00Z"
+severity: MINOR
+tags: [tooling, handoffs, cli-ergonomics, s6]
+description: >
+  Found by REVIEWER during WF03-ISS0440-20260903 (step-03c) and independently
+  reproduced by ORCH.
+
+  WHAT HAPPENS: run/1 parses --dir and --autofix by hand rather than via
+  OptionParser, with no strict:/aliases: contract. An unrecognized flag is
+  therefore silently discarded. ORCH ran `mix letflow.lint_handoffs
+  --bogus-flag-xyz` and got the normal healthy output -- OK, 0 new violations
+  across 1928 handoff files, exit code 0 -- with no indication whatsoever that
+  the flag was meaningless.
+
+  WHY IT MATTERS, and why it is worth filing despite being safe-by-direction:
+  the failure mode is a CONFIDENT GREEN for an action that never happened. A
+  mistyped --autofx does not autofix, and a mistyped --dr scans the real corpus
+  instead of the intended fixture -- in both cases the caller sees a clean OK
+  and reasonably concludes their command did what they asked. That is the same
+  shape as the defect ISS-0440 itself exists to prevent: a plausible-looking
+  input silently producing a wrong-but-green result nobody notices until much
+  later. ISS-0440 added a --dir banner and an empty-scope refusal precisely so a
+  scoped run could never be mistaken for a full one; unknown-flag silence
+  reopens a narrower version of that hole from the other direction.
+
+  SEVERITY IS MINOR, deliberately: the direction of failure is safe. An ignored
+  flag means the tool does LESS (no autofix, or a full-corpus scan), never more,
+  and it can never rewrite files that were not going to be rewritten. REVIEWER
+  filed it non-blocking and noted the hand-parsed contract was specified by
+  ISS-0440's own design and already passed CODE-DESIGN-VALIDATOR, so this is a
+  follow-up refinement rather than an implementation defect against that design.
+
+  SCOPE: make an unrecognized flag a loud error rather than silence. Options,
+  none prescribed: (a) OptionParser.parse/2 with strict: [dir: :string,
+  autofix: :boolean] and Mix.raise on the invalid list -- most idiomatic for a
+  Mix task and gets aliases for free; (b) keep the hand parsing but validate
+  against a known-flag allowlist and Mix.raise on anything else; (c) accept it
+  and document the behaviour in the moduledoc. (c) is the weakest -- it leaves
+  the confident-green shape in place, which is the actual complaint.
+
+  SEQUENCING: ISS-0442 also touches run/1's vicinity (autofix re-serialization),
+  so whoever takes both should sequence them rather than racing the same
+  function.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+related:
+  - ISS-0440
+  - ISS-0442
+source: >
+  WF03-ISS0440-20260903 step-03c REVIEWER gate, MINOR issue 2 of 2; ORCH
+  independently reproduced the silent-ignore with --bogus-flag-xyz.
+queue_task_id: 443
+github_issue: 853
+status: open

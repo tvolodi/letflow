@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-final",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0440-20260903/step-final-git-merge.json",
+  "created_at": "2026-09-03T18:13:41Z",
+  "started_at": "2026-09-03T18:13:41Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0440"],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/issues/ISS-0440.yaml",
+      "handoffs/WF03-ISS0440-20260903/step-04c-test-runner.json",
+      "handoffs/WF03-ISS0440-20260903/step-05-issue-fixer-close.json"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 STEP FINAL -- GIT MERGE for ISS-0440, per docs/agents/protocols/GIT_MERGE.md. Step 00 was ORCH-owned (not ELIXIR-DEV), so ORCH executes this step directly rather than dispatching. All gates green: SECURITY-REVIEWER PASS (03b), REVIEWER PASS (03c), TEST-DESIGNER PASS (04), TEST-DESIGN-VALIDATOR PASS (04b, mutants M1/M2 independently reproduced), TEST-RUNNER PASS (04c: 3156 passed / 0 failures, compile --warnings-as-errors clean), ISSUE-FIXER PASS (05, ISS-0440 closed as `instrumented` with superseded_by ISS-0441; GH#849 closed with an evidence comment). Rebase onto origin/main (37 commits ahead -- a sibling session landed REQ-219/220), re-verify format/compile/test after rebase, push, open the PR, wait for CI, merge, and return this checkout to main."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

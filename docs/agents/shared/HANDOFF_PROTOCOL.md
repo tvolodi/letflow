@@ -230,6 +230,26 @@ dispatch (§4's registry rule, §5's append-only rule). A handoff sat on in the 
 between dispatch and completion is the defect this rule closes, not a smaller version of
 the rule that is still acceptable at small sizes.
 
+**ISS-0440 addition — check the just-received handoff's status before writing the next
+one.** This dispatch-time commit is not "commit the new `PENDING` handoff" in isolation —
+every dispatch after Step 00 is preceded by ORCH having just received the *previous* step's
+completed handoff. Before writing that next `PENDING` handoff, ORCH reads the just-received
+handoff's top-level `status` field. If it is not one of the six legal enum values
+(`PENDING`/`IN_PROGRESS`/`COMPLETED`/`FAILED`/`ESCALATED`/`CANCELLED`), ORCH stops and
+corrects it by hand first — using the file's own content (its `result.status`, timestamps,
+and `next_action`) to judge what actually happened, the same `PASS`/`COMPLETE`/`DONE` →
+`COMPLETED` judgement `mix letflow.lint_handoffs --autofix` applies to that same safe
+subset; a literal `FAIL` or any other ambiguous value is a lifecycle-vs-result-shape
+judgement call ORCH makes itself, the tool will not guess it either. This is a procedural
+addition to this subsection's existing MUST, inseparable from the dispatch-time commit step
+it sits inside — **it is not a code-enforced gate**: nothing here blocks ORCH from skipping
+it the way a validator or CI check would. Its reliability rests on the same track record
+this subsection's own commit-at-dispatch rule already has since ISS-0196, not on any new
+mechanism. Independently of whether this step is followed on a given dispatch, a bad
+top-level status is still detected and recorded by `mix letflow.lint_handoffs` at CI,
+whenever CI reaches that check in the `letflow.check` alias — see that task's own
+`--autofix` section for the mapping this step mirrors.
+
 **The incident this rule was written against.** In `WF03-ISS0117-20260821`, a receiving
 agent completing `step-03d-reviewer-regate.json` replaced ORCH's own **6,290-character**
 dispatched `task.description` with a **156-character** pointer reading "See the PENDING

@@ -1,0 +1,73 @@
+id: ISS-0445
+title: "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS asserts run([]) == :ok against the LIVE handoffs/ corpus, so any other session's enum violation turns this branch's suite red"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0440-20260903
+discovered_at: "2026-09-03T18:47:00Z"
+severity: MINOR
+tags: [testing, test-isolation, handoffs, lint-handoffs, s6]
+description: >
+  DISCOVERED during WF03-ISS0440-20260903's own Step Final, by the post-rebase
+  full-suite run that GIT_MERGE.md step 5d requires -- i.e. by the check
+  working exactly as designed, catching something the pre-rebase run could not
+  have seen.
+
+  WHAT HAPPENS: test/mix/tasks/letflow.lint_handoffs_test.exs:686
+  (T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS, added by this same run to satisfy
+  coverage point 9 -- "default no-flag invocation still scans @handoffs_dir")
+  does `capture_io(fn -> assert LintHandoffs.run([]) == :ok end)`. run([])
+  scans the REAL handoffs/ directory and Mix.raise-s on any new
+  un-grandfathered violation. So the assertion is not merely testing that the
+  zero-flag path resolves to @handoffs_dir -- it is transitively asserting THE
+  WHOLE REPOSITORY IS CURRENTLY CLEAN.
+
+  OBSERVED FAILURE, not hypothetical: after rebasing onto origin/main, the full
+  suite came back 3191/3192 with this single test failing on
+  `** (Mix.Error) letflow.lint_handoffs found 1 new violation(s)`. The cause was
+  entirely external to this branch -- a SIBLING session's handoff,
+  handoffs/WF01-REQ219-220-20260903/step-validator-recheck.json, carried
+  top-level status "PASSED" (occurrence 8 of ISS-0440's own defect class; see
+  ISS-0441's later_evidence, and note it had already been reddening main's
+  Backend gate across four consecutive CI runs). ORCH corrected that one field
+  (commit 8b44aceb) and the file went 43/43 green with no change to any test.
+
+  WHY IT MATTERS: this couples an unrelated branch's test result to the
+  repository's global state at the moment the suite runs. In a pipeline that
+  explicitly runs concurrent sessions against one repo (CLAUDE.md's
+  "Concurrent / sibling sessions"), that is a cross-session false-failure
+  generator. The failure is also MISATTRIBUTING by construction: it surfaces as
+  a failure in the ISS-0440 test file, pointing a reader at this branch's
+  change, when the actual defect is in a different run's handoff entirely.
+  GIT_MERGE.md's own "Failure Attribution Is Structural" rule is what saved it
+  here, but a weaker reader would reasonably have concluded ISS-0440's fix was
+  broken.
+
+  NOTE THE TEST IS NOT WRONG ABOUT WHAT IT WANTS: proving run([]) still feeds
+  @handoffs_dir after the --dir branch was added is legitimate and was
+  explicitly required. It is the MECHANISM that overreaches -- asserting :ok
+  (a whole-corpus cleanliness claim) where it only needs to assert WHICH
+  DIRECTORY WAS SCANNED.
+
+  SCOPE, options for whoever picks this up, none prescribed: (a) assert only on
+  the banner -- keep `capture_io`, drop `== :ok`, and let the test tolerate a
+  raise while still proving `under "handoffs"` appears (needs care: a Mix.raise
+  escapes capture_io, so it likely wants a try/rescue or an assert_raise that
+  accepts either outcome); (b) assert resolve_dir([]) == @handoffs_dir directly
+  as a unit, never invoking a corpus scan at all -- smallest and most precise,
+  and it tests the actual claim; (c) keep the end-to-end shape but point it at
+  a tmp fixture and assert the DEFAULT resolution separately. (b) is the
+  obvious first candidate since the property under test is purely about
+  resolve_dir/1's zero-flag branch.
+affected_files:
+  - test/mix/tasks/letflow.lint_handoffs_test.exs
+related:
+  - ISS-0440
+  - ISS-0441
+  - ISS-0442
+  - ISS-0443
+source: >
+  WF03-ISS0440-20260903 Step Final's post-rebase `mix letflow.check.test` run:
+  3191/3192 passed, the single failure being this test at
+  test/mix/tasks/letflow.lint_handoffs_test.exs:686, cleared by fixing another
+  session's handoff rather than by touching any test or lib code.
+github_issue: 860
+status: open

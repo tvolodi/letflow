@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-00",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0440-20260903/step-00-git-setup.json",
+  "created_at": "2026-09-03T09:58:38Z",
+  "started_at": "2026-09-03T09:58:38Z",
+  "completed_at": "2026-09-03T09:58:38Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0440.yaml",
+      "docs/agents/protocols/GIT_SETUP.md"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "docs/anti-patterns.md",
+      "docs/guides/backend_developer_guide.md",
+      ".githooks/"
+    ]
+  },
+  "task": {
+    "description": "Git setup for ISS-0440: claim queue task 440, create fix branch from main. Sizing rule (ORCHESTRATOR.md section 10) FAILS -- the change touches more than one file and adds new behaviour to a Mix task -- so this routes through the full WF-03 chain.\n\nSELF-REFERENTIAL PROPERTY, noted here because it shapes the whole run: ISS-0440's fix targets the handoff-linting machinery that THIS RUN's own handoffs are written by and checked against. That is an advantage, not a hazard, if used deliberately -- this run's own handoff files are live test data for whatever enforcement gets built, and a fix that cannot catch a violation in its own run's handoffs has not been demonstrated to work. It also means care is needed not to break the linter for every other in-flight run on other hosts."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 440 claimed via get_next_task (agent_id TVOLODI-orch, locked_at 2026-09-03T09:57:45Z, issue_ref ISS-0440, github_issue_number 849). NOTE: the queue returned the very issue ORCH filed at the end of WF03-ISS0426-20260902 -- expected LIFO behaviour (task_type issue, newest first), not an error. Branch feature/WF03-ISS0440-20260903 created from main (8ecbee98) and pushed.\n\nFACTS GATHERED FOR THE DIAGNOSIS, so downstream agents need not rediscover them:\n  - mix letflow.lint_handoffs currently takes 8.4 SECONDS over 1915 handoff files (measured this session: `time` -> real 0m8.381s), reporting 'OK -- 0 new violations (25 pre-existing grandfathered, traced to ISS-0190)'. This number is load-bearing for AC5 (the fix must not slow the normal path enough to change agent behaviour).\n  - The task's entry point is `def run(_args)` at lint_handoffs.ex:233 -- it IGNORES its arguments and always lints the entire corpus via handoff_files/0. There is currently NO way to lint a single file or a subset. Any per-file or per-commit enforcement therefore requires adding that capability.\n  - The H1 check itself already exists and is correct (@legal_statuses at line 102 = PENDING IN_PROGRESS COMPLETED FAILED ESCALATED CANCELLED). The defect is NOT a missing check -- it is that the existing check runs only at CI, minutes-to-hours after the bad value was written.\n  - Hook infrastructure: .git/hooks contains ONLY .sample files, there is no tracked .githooks directory, and core.hooksPath is unset. git version 2.50.1.windows.1 (so core.hooksPath IS supported -- it needs git >= 2.9).\n  - docs/guides/backend_developer_guide.md exists and is where a documented setup step would belong if the design goes that way.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

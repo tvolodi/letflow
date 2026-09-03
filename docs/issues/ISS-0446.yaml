@@ -1,0 +1,87 @@
+id: ISS-0446
+title: "service_task_dispatcher_test's throwaway-supervisor on_exit is a check-then-act race: Supervisor.stop/1 exits :shutdown when the linked supervisor is already terminating"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0440-20260903
+discovered_at: "2026-09-04T20:20:00Z"
+severity: MINOR
+tags: [testing, flake, otp, teardown, service-task-dispatcher, ci, s6]
+description: >
+  DISCOVERED as a CI-only failure on PR #866 (WF03-ISS0440-20260903's own Step
+  Final), on a branch that touches NONE of the implicated code -- ISS-0440's
+  branch changes only lib/mix/tasks/letflow.lint_handoffs.ex, its test, and a
+  design doc. Attribution is structural, not count-based.
+
+  FAILING TEST: test/letflow/engine/service_task_dispatcher_test.exs:1113 --
+  "service_task_dispatcher_children/0's child spec is independently startable
+  as a real GenServer under a throwaway supervisor". Introduced by REQ-214
+  (commit 81e2dea8, "SERVICE_TASK dispatch orchestration core", PR #847), i.e.
+  by the sibling session's work already on main, not by this branch.
+
+  OBSERVED FAILURE (GH Actions run 33800044829, backend gate, 2026-09-03
+  20:06:23Z):
+    ** (exit) exited in: GenServer.stop(#PID<0.27328.0>, :normal, :infinity)
+        ** (EXIT) exited in: :sys.terminate(#PID<0.27328.0>, :normal, :infinity)
+            ** (EXIT) shutdown
+    stacktrace:
+      (elixir 1.20.3) lib/gen_server.ex:1144: GenServer.stop/3
+      (ex_unit 1.20.3) lib/ex_unit/on_exit_handler.ex:140: ExUnit.OnExitHandler.exec_callback/1
+  Note the stacktrace is entirely inside ExUnit's on_exit runner -- no
+  assertion in the test body failed. The test's actual subject (the child spec
+  is valid and produces a live, uniquely-named process) passed; only teardown
+  blew up.
+
+  ROOT CAUSE, read from the source at lines 1131-1133:
+    on_exit(fn ->
+      if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid)
+    end)
+  This is CHECK-THEN-ACT across a process boundary. The supervisor is created
+  with Supervisor.start_link/2, so it is LINKED to the test process and is
+  already being torn down as that process exits. Process.alive?/1 can therefore
+  return true and the supervisor can die before Supervisor.stop/1's monitored
+  call completes -- at which point stop/1 exits :shutdown rather than returning
+  :ok. The guard cannot close this window; there is no atomic
+  check-and-stop, and the race is inherent to guarding a linked process this
+  way. It is timing-dependent, which is why it is intermittent and why loaded
+  shared CI hardware surfaces it far more often than a local run.
+
+  EVIDENCE IT IS A FLAKE AND NOT A REAL REGRESSION, measured this run:
+  - Local full suite on the identical branch tree: 3192 passed, 0 failures
+    (mix letflow.check.test, exclusive DB, nothing else connected).
+  - The implicated file run in isolation locally: 42 passed.
+  - The immediately-preceding CI run on the same PR failed on a DIFFERENT test
+    (test/letflow/engine/lua/executor_test.exs:625, the known
+    :lua_wallclock_race wall-clock family, ISS-0426) -- two different
+    single-test failures across two runs of an otherwise identical tree is the
+    signature of nondeterminism, not of a defect this branch introduced.
+
+  WHY FILE IT RATHER THAN JUST RE-RUNNING: this is a real teardown defect in
+  shipped test code, and it will keep reddening unrelated branches' gates
+  exactly as it did here -- costing every future run an attribution
+  investigation. It also compounds ISS-0441: on an unprotected main with an
+  advisory CI, an intermittently-red gate trains agents to merge past red,
+  which is precisely the habit that let occurrence 8 of ISS-0440's defect class
+  sit on main through four consecutive red runs.
+
+  SCOPE, options for whoever picks this up, none prescribed: (a) drop the
+  on_exit entirely -- the supervisor is start_link'ed to the test process and
+  is torn down automatically when the test exits, so the callback may be
+  redundant; verify that claim before relying on it; (b) keep an explicit stop
+  but make it race-tolerant, e.g. wrap in try/catch :exit or use
+  Supervisor.stop(sup_pid) with the exit trapped, accepting :shutdown/:noproc
+  as success; (c) start the supervisor unlinked (start_link then unlink, or a
+  supervised start under a test-owned supervisor) so ownership and teardown
+  order are unambiguous. (a) is the obvious first thing to check since it
+  removes the race rather than tolerating it.
+affected_files:
+  - test/letflow/engine/service_task_dispatcher_test.exs
+related:
+  - ISS-0426
+  - ISS-0441
+  - ISS-0440
+source: >
+  GitHub Actions run 33800044829 (Backend gate) on PR #866, failing 3191/3192
+  with the single failure being an on_exit teardown exit at
+  test/letflow/engine/service_task_dispatcher_test.exs:1113, while the same
+  tree passed 3192/3192 locally and 42/42 for that file in isolation.
+github_issue: 868
+status: open

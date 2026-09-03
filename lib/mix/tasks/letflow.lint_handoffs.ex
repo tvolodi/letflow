@@ -86,10 +86,43 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   ## Usage
 
       mix letflow.lint_handoffs
+      mix letflow.lint_handoffs --dir <path>
+      mix letflow.lint_handoffs --autofix
+      mix letflow.lint_handoffs --autofix --dir <path>
 
   Exits non-zero (`Mix.raise/1`) iff at least one un-grandfathered hard
   violation exists. WARN/INFO output goes to stdout and never affects the
   exit code.
+
+  ### `--dir <path>` (ISS-0440)
+
+  Overrides the directory scanned, in place of the hardcoded `@handoffs_dir`
+  default. With no `--dir` given at all (CI's own invocation, via the
+  `letflow.check` alias in `mix.exs`), the scanned directory is exactly
+  `@handoffs_dir` -- unchanged from before this flag existed. Every run,
+  with or without `--dir`, prints a banner naming the directory actually
+  scanned and the file count found there, so a scoped run is never
+  mistaken for a full-corpus result from output alone. An explicitly
+  supplied `--dir` that discovers zero files is a hard usage error (raises,
+  non-zero exit) rather than a silent "0 violations" success -- this
+  carve-out does not apply to the default `@handoffs_dir` itself, since a
+  genuinely empty real `handoffs/` is a separate, pre-existing edge case,
+  not a `--dir` misuse symptom.
+
+  ### `--autofix` (ISS-0440)
+
+  Applies a closed, three-entry correction map to each file's top-level
+  `status`: `"PASS"`, `"COMPLETE"`, and `"DONE"` are rewritten in place to
+  `"COMPLETED"` and reported as fixed. `"FAIL"` and every other
+  missing/non-string/unrecognized value are refused -- left untouched,
+  reported by path and by the literal value found, and still counted as a
+  hard violation for exit-code purposes. `--autofix` never guesses at an
+  ambiguous status; it only ever acts on the three values with zero
+  historical counterexamples. Combining `--autofix` with the default
+  directory (i.e. omitting `--dir`, or passing `--dir handoffs`) runs the
+  same restricted correction over the real handoff corpus -- this is
+  intended, not restricted away, and every fixed file is reported so the
+  action is never silent.
   """
 
   use Mix.Task
@@ -100,6 +133,19 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @rule String.duplicate("=", 72)
 
   @legal_statuses ~w(PENDING IN_PROGRESS COMPLETED FAILED ESCALATED CANCELLED)
+
+  # ISS-0440 §2.2 -- the closed, no-fifth-case --autofix mapping. `FAIL` MUST
+  # NOT appear as a key here, and must not be added later without
+  # re-deriving the ambiguity question the design's §6.1 leaves open on
+  # purpose: `FAIL` is ambiguous between a lifecycle FAILED handoff and a
+  # COMPLETED step with a failing result.status, and this tool will not
+  # guess. Missing/non-string status values are likewise never keys here --
+  # they fall through to the refuse path in run_autofix/1 below.
+  @autofix_map %{
+    "PASS" => "COMPLETED",
+    "COMPLETE" => "COMPLETED",
+    "DONE" => "COMPLETED"
+  }
 
   @schema_top_keys ~w(
     handoff_id run_id workflow_id step from_agent to_agent file created_at
@@ -230,16 +276,32 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
-  def run(_args) do
-    files = handoff_files()
+  def run(args) do
+    dir = resolve_dir(args)
+    autofix? = "--autofix" in args
+
+    files = handoff_files(dir)
+
+    guard_empty_scope(dir, files)
+
+    refused =
+      if autofix? do
+        %{fixed: fixed, refused: refused} = run_autofix(files)
+        print_autofix_report(fixed)
+        refused
+      else
+        []
+      end
+
     protocol = File.read!(@protocol_file)
     not_agent_attested_schema = parse_not_agent_attested_schema(protocol)
 
     results = Enum.map(files, &lint_file(&1, not_agent_attested_schema))
 
-    registry_result = check_registry_coverage(files)
+    registry_result = check_registry_coverage(files, dir)
 
     print_hard_violations(results)
+    print_autofix_refused(refused)
     print_advisory(results)
     print_registry(registry_result)
 
@@ -263,13 +325,164 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
       grandfathered_count =
         results |> Enum.flat_map(& &1.hard_grandfathered) |> length()
 
+      # ISS-0440 §2.1a(b) -- unconditional banner naming the directory
+      # scanned, on every run including this healthy one, so a scoped
+      # (--dir) run's output is never visually indistinguishable from a
+      # genuine full-corpus clean result.
       IO.puts(
         "letflow.lint_handoffs: OK -- 0 new violations across #{length(files)} handoff files " <>
-          "(#{grandfathered_count} pre-existing grandfathered, traced to ISS-0190)."
+          "under #{inspect(dir)} (#{grandfathered_count} pre-existing grandfathered, " <>
+          "traced to ISS-0190)."
       )
 
       IO.puts(@rule)
       :ok
+    end
+  end
+
+  # -- CLI flag parsing (ISS-0440 §2.1) ------------------------------------
+
+  # No "--dir" present in args -> returns @handoffs_dir, byte-identical to
+  # today's hardcoded default -- this is the property CI's own no-flag
+  # invocation (via the `letflow.check` alias, which calls plain
+  # "letflow.lint_handoffs" with no arguments) depends on. "--dir" present
+  # -> returns the next arg verbatim; a "--dir" with no following value is a
+  # usage error (raises), never a silent fallback to @handoffs_dir -- a
+  # silent fallback would let a typo'd --dir invocation quietly re-lint the
+  # real corpus while claiming to have checked something else.
+  @spec resolve_dir([String.t()]) :: String.t()
+  def resolve_dir(args) do
+    case find_dir_flag(args) do
+      :not_present -> @handoffs_dir
+      {:ok, value} -> value
+      :missing_value -> Mix.raise("letflow.lint_handoffs: --dir given with no path argument")
+    end
+  end
+
+  defp find_dir_flag(["--dir", value | _rest]), do: {:ok, value}
+  defp find_dir_flag(["--dir"]), do: :missing_value
+  defp find_dir_flag([_other | rest]), do: find_dir_flag(rest)
+  defp find_dir_flag([]), do: :not_present
+
+  # ISS-0440 §2.1a(a) -- a hard guard: an EXPLICITLY-supplied --dir that
+  # discovers zero files is a usage error (Mix.raise/1, non-zero exit), not
+  # a clean result. Does NOT apply when dir is the default @handoffs_dir
+  # (i.e. no --dir was given at all) -- a genuinely empty real handoffs/ is
+  # a separate, pre-existing edge case of handoff_files/1's own default
+  # behaviour, not a --dir misuse symptom, and is out of scope here.
+  @spec guard_empty_scope(dir :: String.t(), files :: [String.t()]) :: :ok | no_return()
+  def guard_empty_scope(dir, files) do
+    if files == [] and dir != @handoffs_dir do
+      Mix.raise(
+        "letflow.lint_handoffs: --dir #{inspect(dir)} discovered 0 files -- refusing to " <>
+          "report success for an empty or non-existent scan target"
+      )
+    else
+      :ok
+    end
+  end
+
+  # -- --autofix (ISS-0440 §2.2-§2.5) --------------------------------------
+
+  @spec run_autofix(files :: [String.t()]) :: %{
+          fixed: [%{path: String.t(), from: String.t(), to: String.t()}],
+          refused: [%{path: String.t(), found: String.t(), reason: String.t()}]
+        }
+  def run_autofix(files) do
+    files
+    |> Enum.filter(&(handoff_kind(&1) == :json))
+    |> Enum.reduce(%{fixed: [], refused: []}, fn path, acc ->
+      case autofix_file(path) do
+        {:fixed, from, to} ->
+          %{acc | fixed: [%{path: path, from: from, to: to} | acc.fixed]}
+
+        {:refused, found, reason} ->
+          %{acc | refused: [%{path: path, found: found, reason: reason} | acc.refused]}
+
+        :skip ->
+          acc
+      end
+    end)
+    |> then(fn %{fixed: fixed, refused: refused} ->
+      %{fixed: Enum.reverse(fixed), refused: Enum.reverse(refused)}
+    end)
+  end
+
+  # Reads one file's top-level status and decides fixed / refused / skip
+  # (skip = already-legal status, nothing for --autofix to do; the plain
+  # lint pass that runs afterward still evaluates it normally).
+  defp autofix_file(path) do
+    with {:ok, raw} <- File.read(path),
+         {:ok, data} <- Jason.decode(raw) do
+      case Map.get(data, "status") do
+        status when is_map_key(@autofix_map, status) ->
+          to = Map.fetch!(@autofix_map, status)
+          data |> Map.put("status", to) |> write_json!(path)
+          {:fixed, status, to}
+
+        "FAIL" ->
+          {:refused, "FAIL",
+           "FAIL is ambiguous between a lifecycle FAILED handoff and a COMPLETED step " <>
+             "with a failing result.status -- this tool will not guess; correct the " <>
+             "top-level status field by hand."}
+
+        status when is_binary(status) and status in @legal_statuses ->
+          :skip
+
+        status when is_binary(status) ->
+          {:refused, status,
+           "top-level status #{inspect(status)} is not one of #{inspect(@legal_statuses)} " <>
+             "and is not in the closed --autofix map -- this tool will not guess; correct " <>
+             "the top-level status field by hand."}
+
+        other ->
+          {:refused, "missing/non-string (#{inspect(other)})",
+           "missing or non-string top-level status (#{inspect(other)}) -- this tool will " <>
+             "not guess; correct the top-level status field by hand."}
+      end
+    else
+      _ -> :skip
+    end
+  end
+
+  # Rewrites only the top-level "status" key, preserving every other field.
+  # Jason.decode/1 returns a regular map, which does not preserve original
+  # key order on re-encode -- acceptable here per the design (§7 item 1
+  # leaves the exact re-serialization approach to ELIXIR-DEV) since no
+  # consumer of these files depends on top-level key order, only on the
+  # keys and values themselves (H3 checks membership, not order).
+  defp write_json!(data, path) do
+    encoded = Jason.encode!(data, pretty: true)
+    File.write!(path, encoded <> "\n")
+  end
+
+  defp print_autofix_report(fixed) do
+    if fixed != [] do
+      IO.puts(@rule)
+      IO.puts("AUTOFIX -- FIXED (status rewritten to COMPLETED):")
+
+      Enum.each(fixed, fn %{path: path, from: from, to: to} ->
+        IO.puts("  #{path}: #{inspect(from)} -> #{inspect(to)}")
+      end)
+    end
+  end
+
+  # ISS-0440 §2.3 -- refused files are reported distinctly from fixed
+  # files AND distinctly from the "NEW HARD VIOLATIONS" heading the normal
+  # H1 lint pass will also separately print for the same file (it is still
+  # untouched, so the plain lint pass still finds and counts it there too --
+  # that is deliberate: --autofix never removes a refused file from the
+  # hard-violation count). This heading exists so the caller does not have
+  # to infer "this was an --autofix candidate that got refused" from the
+  # generic H1 message alone.
+  defp print_autofix_refused(refused) do
+    if refused != [] do
+      IO.puts(@rule)
+      IO.puts("AUTOFIX -- REFUSED (REQUIRES HUMAN-EQUIVALENT DECISION):")
+
+      Enum.each(refused, fn %{path: path, found: found, reason: reason} ->
+        IO.puts("  #{path}: found #{inspect(found)} -- #{reason}")
+      end)
     end
   end
 
@@ -655,10 +868,17 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
 
   # -- registry coverage ------------------------------------------------------
 
-  defp check_registry_coverage(files) do
+  # `dir` is the directory actually scanned (§2.1's resolve_dir/1 result) --
+  # identical to @handoffs_dir on the default no-flag path, so this
+  # function's behaviour there is unchanged from before ISS-0440. Threading
+  # it through (rather than hardcoding @handoffs_dir here) avoids computing
+  # nonsense run_ids when `files` came from a --dir scratch fixture, since
+  # H5 registry-coverage reporting was never meant to run against anything
+  # but the directory that was actually scanned.
+  defp check_registry_coverage(files, dir) do
     disk_run_ids =
       files
-      |> Enum.map(&(&1 |> Path.relative_to(@handoffs_dir) |> Path.split() |> hd()))
+      |> Enum.map(&(&1 |> Path.relative_to(dir) |> Path.split() |> hd()))
       |> Enum.uniq()
       |> MapSet.new()
 

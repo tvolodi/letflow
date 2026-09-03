@@ -1,0 +1,220 @@
+# Test run report — WF-03 Step 4c (TEST-RUNNER) for ISS-0426
+# "Lua executor wall-clock tests flake under CPU contention" — Lua-side fix
+# (sync seams for Group 1, tag-isolation for Group 2). Handoff:
+# handoffs/WF03-ISS0426-20260902/step-04c-test-runner.json
+
+workflow: WF-03
+step: "04c"
+agent: TEST-RUNNER
+run_id: WF03-ISS0426-20260902
+issue_id: ISS-0426
+date_utc_start: "2026-09-03T03:52:42Z"
+date_utc_end: "2026-09-03T06:15:39Z"
+
+git:
+  branch: feature/WF03-ISS0426-20260902
+  commit: ace1bd9e
+  working_tree_at_start: clean except this handoff file (status IN_PROGRESS)
+
+environment:
+  toolchain: local — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] / Elixir 1.20.3"
+  mix_version: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  containers: >
+    letflow-2-postgres-1 (port 5472 per this workspace's untracked .env
+    LETFLOW_DB_PORT=5472) and letflow-2-keycloak-1 (port 8082), both already
+    Up/healthy (44h uptime) before this run started — no `docker compose up -d`
+    issued, matching README.md guidance to skip it when already running.
+  host_cores: 16
+
+pre_run_host_contention_note: >
+  Before running item 1, discovered a genuinely live `mix test` process (PID
+  36004, started 2026-09-03T08:43:39 local, an `erl.exe` child of a git-bash
+  `sh.exe`) still running on the host, contradicting the dispatch's host note
+  that ORCH's background run had already been stopped. Per HANDOFF_PROTOCOL.md
+  §1.1 ("a handoff's factual premises are checkable, and may be wrong"), did
+  not trust the note at face value: verified via `Get-CimInstance Win32_Process`
+  that the process was real, alive, and steadily consuming CPU (587s -> 806s
+  over ~10 minutes of polling), i.e. genuinely progressing, not hung. Could not
+  positively confirm ownership/working directory from Windows process
+  inspection alone, so — rather than kill an unowned process or race it (which
+  ISS-0219/ISS-0222 document produces spurious connection failures) — waited
+  for it to exit naturally (confirmed ended ~2026-09-03T04:17Z) before starting
+  item 1. This is reported as a MINOR issue below; it did not block or corrupt
+  any of the four required runs, all of which were launched only after
+  confirming via `Get-CimInstance Win32_Process -Filter "Name='erl.exe'"` that
+  no test-related erl.exe process remained beyond the standing ElixirLS
+  language-server ones (PIDs 39680/24620, present for the whole session).
+
+self_inflicted_contention_note: >
+  While running item 3 (`mix letflow.check.test`), an earlier throwaway
+  `... > check_test.log 2>&1 &` attempt (intended only to probe whether
+  backgrounding would persist across tool-call boundaries — it does not, per
+  this environment's own documented behavior) was immediately followed by a
+  second, foreground invocation of the same command without confirming the
+  first had actually been reaped. Both ended up running concurrently against
+  the same Postgres instance for their full ~1880-1890s duration, producing
+  two interleaved Result: blocks in one log (20 failures in one block, 14 in
+  the other) — the exact ISS-0219/ISS-0222 contention class the dispatch
+  warned about, self-inflicted rather than encountered incidentally. Neither
+  of those two results is reported as ISS-0426 evidence: both are discarded,
+  the log was deleted, and item 3 was re-run once, alone, cleanly (verified via
+  `Get-CimInstance Win32_Process -Filter "Name='erl.exe'"` immediately before
+  launch that only the standing ElixirLS processes remained). The clean rerun
+  is what is reported below. Reported as a MINOR issue (process-management
+  error, not a suite or environment defect) rather than silently discarded.
+
+results:
+
+  item_1_full_serial_suite:
+    command: "mix test"
+    result: PASS
+    result_line_verbatim: "Result: 3057 passed (6 properties, 3051 tests), 21 excluded"
+    finished_line_verbatim: "Finished in 1815.3 seconds (20.8s async, 1794.4s sync)"
+    failures: 0
+    baseline_reconciliation:
+      baseline_claimed_in_dispatch: "3049 passed (6 properties, 3043 tests), 21 excluded, 0 failures"
+      arithmetic_check: >
+        TOTAL ITEMS reconcile exactly: baseline total = 3049 passed + 21 excluded
+        = 3070. +8 new tests (TEST-DESIGNER) = 3078 expected. Actual total =
+        3057 passed + 21 excluded = 3078. MATCH.
+      passed_vs_excluded_split_does_NOT_match_dispatch_prediction: >
+        Dispatch predicted "roughly 3046 passed / 32 excluded" (i.e. assumed
+        the pre-change 21-excluded baseline was keycloak(3)+wasm_hang(7)=10,
+        +11 new lua_wallclock_race = 21+11=32). Measured instead: 3057 passed
+        / 21 excluded — same 21 as the stated baseline, not 32.
+      root_cause_of_the_discrepancy_verified_empirically: >
+        Ran `mix test --only <tag>` for each of the three excluded tags in
+        isolation to get authoritative per-tag counts directly from ExUnit
+        (not grep, which over-counts on prose/comment mentions of "@tag
+        :lua_wallclock_race" and on this file's own meta-test asserting the
+        count): lua_wallclock_race = 11 passed/3067 excluded, wasm_hang = 7
+        passed/3071 excluded, keycloak = 3 passed/3075 excluded. 11+7+3 = 21,
+        exactly matching both this run's "21 excluded" and item 2's own count.
+        Separately confirmed via `git show main:test/test_helper.exs` that
+        main's pre-change exclude list is `[:keycloak, :wasm_hang]` only, and
+        via `git show main:<file>` tag counts on main that keycloak(3)+
+        wasm_hang(7)=10, not 21. CONCLUSION: the dispatch's stated pre-change
+        baseline figure of "21 excluded" does not reconcile against main's own
+        tag counts (10, not 21) — it appears to be a stale or mistaken copy
+        (plausibly the post-change number transposed onto the pre-change
+        line), not a fact about this branch's actual behavior. This is a
+        verified disagreement with the handoff's factual premise per
+        HANDOFF_PROTOCOL.md §1.1 — reported here rather than silently
+        inherited or silently corrected. It does not change the verdict: the
+        measured total (3078) reconciles exactly, no test vanished, no test
+        was double-counted, and the tag mechanism (10 pre-existing + 11 new
+        lua_wallclock_race = 21) is internally consistent and independently
+        re-derived, not merely asserted.
+      verdict: "Reconciles on TOTAL count (3078 = 3078). Does NOT reconcile on the passed/excluded SPLIT the dispatch predicted, because that prediction's own baseline premise (21 excluded pre-change) is itself unsupported by main's actual tag counts (10). No test coverage gap found."
+
+  item_2_isolated_tag_partition:
+    command: "mix test --only lua_wallclock_race test/letflow/engine/lua/executor_test.exs"
+    result: PASS
+    result_line_verbatim: "Result: 11 passed, 45 excluded"
+    failures: 0
+    note: "Matches the dispatch's expected 11 passed exactly. Confirms the 11 lua_wallclock_race-tagged tests still execute (not silently excluded everywhere)."
+
+  item_3_ci_equivalent_gate:
+    command: "mix letflow.check.test"
+    result: PASS
+    note: "First attempt was invalidated by the self-inflicted concurrent-run contention described above and discarded. This is the clean, single, re-run result."
+    phase_1_default_suite:
+      result_line_verbatim: "Result: 3057 passed (6 properties, 3051 tests), 21 excluded"
+      finished_line_verbatim: "Finished in 1770.0 seconds (17.3s async, 1752.7s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings."
+    phase_2_isolated_wasm_hang_subprocess:
+      result_line_verbatim: "Result: 7 passed, 3071 excluded"
+      finished_line_verbatim: "Finished in 19.6 seconds (9.0s async, 10.5s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- isolated :wasm_hang run also passed clean."
+    phase_3_isolated_lua_wallclock_race_subprocess:
+      result_line_verbatim: "Result: 11 passed, 3067 excluded"
+      finished_line_verbatim: "Finished in 7.7 seconds (7.7s async, 0.03s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean."
+    consistency_check: "Phase 1's default-suite result (3057 passed, 21 excluded, 0 failures) is byte-identical to item 1's standalone `mix test` result — internally consistent."
+
+  item_4_ac6_parallel_runs:
+    command: "TEST_PARALLEL_N=6 scripts/test_parallel.sh"
+    result: PASS
+    rationale_for_N: "Host has 16 cores; N=6 is the exact partition count that produced the originally-filed ISS-0426 flake."
+    run_1:
+      combined_line_verbatim: "combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)"
+      per_partition:
+        - "partition 1: 456 tests, 1 property, 0 failures, exit 0"
+        - "partition 2: 496 tests, 4 properties, 0 failures, exit 0"
+        - "partition 3: 452 tests, 0 properties, 0 failures, exit 0"
+        - "partition 4: 587 tests, 0 properties, 0 failures, exit 0"
+        - "partition 5: 560 tests, 1 property, 0 failures, exit 0"
+        - "partition 6: 497 tests, 0 properties, 0 failures, exit 0"
+      any_partition_warnings: none
+      infra_failure_mode_hit: none (no too_many_connections, no pre-Result: crash)
+    run_2:
+      combined_line_verbatim: "combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)"
+      per_partition:
+        - "partition 1: 456 tests, 1 property, 0 failures, exit 0"
+        - "partition 2: 496 tests, 4 properties, 0 failures, exit 0"
+        - "partition 3: 452 tests, 0 properties, 0 failures, exit 0"
+        - "partition 4: 587 tests, 0 properties, 0 failures, exit 0"
+        - "partition 5: 560 tests, 1 property, 0 failures, exit 0"
+        - "partition 6: 497 tests, 0 properties, 0 failures, exit 0"
+      any_partition_warnings: none
+      infra_failure_mode_hit: none
+    both_runs_identical: true
+    serial_vs_parallel_combined_count_gap_note: >
+      Parallel combined total (3054 = 3048 tests + 6 properties) is 3 lower
+      than the serial/check.test total (3057 = 3051 tests + 6 properties),
+      reproducibly, in both runs. Checked this is not new: an earlier
+      main-branch report (test/reports/report-2026-09-02-WF04.yaml,
+      pre-ISS-0426, TEST_PARALLEL_N=4) shows the same class of gap between
+      that run's own parallel-combined example_tests (3046) and its
+      contemporaneous serial baseline — i.e. `mix test --partitions N`
+      interacting with the tag-exclude list already produced a small
+      serial-vs-parallel count delta before this change existed. Not treated
+      as an ISS-0426 regression; flagged here for visibility, not filed as a
+      new issue (per this run's own scope: report plainly, do not register).
+    calibration_per_dispatch: >
+      Per the gate-approved design's §4, these two clean runs are CONFIRMATORY
+      for Group 1 (the originally-filed AC7 failure and its 14 call sites),
+      whose correctness is established STRUCTURALLY —
+      {:error, {:wallclock_timeout, _}} is unreachable from those call sites
+      by construction, independent of what any run observes — and are
+      LOAD-BEARING only for Group 2's residual statistical risk (tests that
+      still race a real `after` clause, now isolated to a low-concurrency
+      partition rather than restructured). Two clean runs are good evidence
+      and are exactly what ISS-0426's AC6 asks for, but do NOT by themselves
+      prove the Group 1 fix (that rests on the structural argument, not on
+      these runs), and do NOT prove the original flake would have been
+      caught here: ISSUE-FIXER could not reproduce that original flake on
+      demand even under 24 CPU burners, so a clean run here is not evidence
+      the flake mechanism is gone, only that it did not recur in these two
+      attempts.
+
+overall_verdict: PASS
+
+issues:
+  - severity: MINOR
+    description: >
+      Dispatch's host note ("I had launched a background mix test before
+      dispatching you -- I have now STOPPED it") did not match the observed
+      host state: a live mix test process (PID 36004) was found still running
+      and steadily progressing at the start of this run. Waited for it to
+      exit naturally (~25 minutes) rather than trust the note or race it.
+      No data/result was affected. See pre_run_host_contention_note above.
+  - severity: MINOR
+    description: >
+      Self-inflicted: an exploratory backgrounded attempt at item 3
+      (`mix letflow.check.test ... &`) was not confirmed reaped before a
+      second, foreground invocation of the same command was started, causing
+      two full check.test runs to race each other for ~31 minutes and
+      corrupting that log's failure counts (20 and 14 failures respectively,
+      neither real). Discarded both, re-ran once cleanly; the clean re-run
+      (reported above) shows 0 failures across all three phases and is
+      byte-identical to item 1's independent serial result where they
+      overlap (the default-suite phase). See self_inflicted_contention_note
+      above. Recorded so the pattern is visible, not because it affects the
+      PASS verdict.
+
+next_action: "Route to Step 5 (ISSUE-FIXER closes the issue record)"

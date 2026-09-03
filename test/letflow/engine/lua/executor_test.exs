@@ -250,42 +250,41 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   describe "instruction budget (REQ-154)" do
     # AC-1: configurable budget -- two different budgets produce different outcomes
     # for a loop that exceeds 500 instructions but not 5000.
+    # ISS-0426 design §2.1.1: no assertion here depends on wall-clock time -- the
+    # outcome is fully determined by the workload alone -- so this call is routed
+    # through Executor.run_script_sync/3 (no Task/Task.yield in its call chain)
+    # instead of racing execute_with_manifest/3's wall-clock kill under contention.
     test "AC-1: smaller budget halts sooner than larger budget on the same loop" do
       # This loop runs many more than 500 instructions but fewer than 50000.
       loop_script = "for i = 1, 5000 do end"
+      empty_manifest = %Manifest{script_id: "", capabilities: []}
 
       assert {:error, {:budget_exceeded, 500}} =
-               Executor.execute_with_manifest(loop_script, "h",
-                 max_instructions: 500,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
-               )
+               Executor.run_script_sync(empty_manifest, loop_script, 500)
 
       assert {:ok, %{manifest_hash: _}} =
-               Executor.execute_with_manifest(loop_script, "h",
-                 max_instructions: 50000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
-               )
+               Executor.run_script_sync(empty_manifest, loop_script, 50000)
     end
 
     # AC-2: while true terminates under a budget rather than hanging.
+    # ISS-0426 design §2.1.1: routed through the synchronous seam, see AC-1 above.
     test "AC-2: while true do end terminates with budget_exceeded rather than hanging" do
       assert {:error, {:budget_exceeded, 1000}} =
-               Executor.execute_with_manifest("while true do end", "h",
-                 max_instructions: 1000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "while true do end",
+                 1000
                )
     end
 
     # AC-3: budget exhaustion is distinguishable by pattern match from other error arms.
+    # ISS-0426 design §2.1.1: routed through the synchronous seam, see AC-1 above.
     test "AC-3: budget_exceeded is a structured error, not a bare string or atom" do
       result =
-        Executor.execute_with_manifest("while true do end", "h",
-          max_instructions: 500,
-          timeout_ms: 5_000,
-          max_heap_words: nil
+        Executor.run_script_sync(
+          %Manifest{script_id: "", capabilities: []},
+          "while true do end",
+          500
         )
 
       # Must NOT match {:error, msg} (string) or {:error, :invalid_script_ref}
@@ -296,6 +295,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # The inner loop stops, pcall returns {false, "instruction budget exceeded"}, and
     # Lua.eval!/2 returns normally. This is expected layer-1 behavior: the script
     # receives control back after pcall. Layer 2 (REQ-155) provides the non-catchable kill.
+    # ISS-0426 design §2.1.1: routed through the synchronous seam, see AC-1 above.
     test "AC-4: pcall-caught budget exhaustion returns {:ok, _} -- layer-1 pcall-catchable" do
       script = """
       local ok, err = pcall(function() while true do end end)
@@ -303,11 +303,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       """
 
       assert {:ok, %{manifest_hash: _}} =
-               Executor.execute_with_manifest(script, "h",
-                 max_instructions: 1000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
-               )
+               Executor.run_script_sync(%Manifest{script_id: "", capabilities: []}, script, 1000)
     end
   end
 
@@ -317,7 +313,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   #
   # All tests here target execute_with_manifest/3 so each test drives its own
   # :timeout_ms independent of Application config (test/specs/REQ-155.md's stated
-  # rationale). config/test.exs sets a short :lua_wallclock_timeout_ms (200ms) for
+  # rationale). config/test.exs sets a short :lua_wallclock_timeout_ms (5000ms) for
   # any incidental /2-arity default-path use, but no test below relies on it.
 
   describe "wall-clock timeout (REQ-155)" do
@@ -327,6 +323,11 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # measurably different elapsed wall-clock time on the same hanging script, and
     # the shorter one's error carries its own configured value (not a hardcoded
     # constant).
+    # ISS-0426 design §2.2: genuinely races the wall-clock kill (numeric elapsed-time
+    # comparison) -- tag-isolated into the low-concurrency :lua_wallclock_race
+    # partition rather than restructured, since this test's own property requires the
+    # race.
+    @tag :lua_wallclock_race
     test "AC-1: a shorter configured timeout terminates measurably sooner than a longer one" do
       {short_elapsed_us, short_result} =
         :timer.tc(fn ->
@@ -386,6 +387,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # budget error via pcall (proving the script observed and ignored it), then
     # continues running via `goto`, invisible to :max_instructions, so only the
     # wall-clock layer can end the call.
+    # ISS-0426 design §2.2: race outcome (wallclock_timeout must win) is the point of
+    # this test -- tag-isolated, not restructured.
+    @tag :lua_wallclock_race
     test "AC-2: wall-clock timeout still fires when the script traps its own budget error and loops again via a construct the instruction budget does not instrument" do
       script = """
       local ok, err = pcall(function() while true do end end)
@@ -404,6 +408,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     end
 
     # T3/AC-3: the killed task's process is actually dead, not merely abandoned.
+    # ISS-0426 design §2.2: post-kill supervisor state depends on the real timeout
+    # kill firing -- tag-isolated, not restructured.
+    @tag :lua_wallclock_race
     test "AC-3: the task's process is dead and no longer tracked by the supervisor after a timeout" do
       children_before = Task.Supervisor.children(Letflow.Engine.Lua.TaskSupervisor)
 
@@ -428,6 +435,8 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     end
 
     # T4/AC-4: the timeout error is a distinct, pattern-matchable shape.
+    # ISS-0426 design §2.2: race outcome -- tag-isolated, not restructured.
+    @tag :lua_wallclock_race
     test "AC-4: wallclock_timeout does not match budget_exceeded, a bare string, or invalid_script_ref" do
       result =
         Executor.execute_with_manifest(@infinite_loop, "h",
@@ -445,13 +454,13 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # T5/AC-4: regression guard -- budget_exceeded remains its own distinct shape
     # and is never confused with wallclock_timeout, even under a generous timeout
     # that plays no role in the outcome.
+    # ISS-0426 design §2.1.1: this assertion is fully determined by the workload
+    # (budget_exceeded on an infinite loop with a tight budget) and never mentions
+    # wall-clock time -- routed through the synchronous seam instead of racing the
+    # (irrelevant to this test) wall-clock kill under contention.
     test "AC-4 regression guard: budget_exceeded is unaffected by a generous timeout and stays distinct" do
       result =
-        Executor.execute_with_manifest(@infinite_loop, "h",
-          max_instructions: 500,
-          timeout_ms: 5_000,
-          max_heap_words: nil
-        )
+        Executor.run_script_sync(%Manifest{script_id: "", capabilities: []}, @infinite_loop, 500)
 
       assert {:error, {:budget_exceeded, 500}} = result
       refute match?({:error, {:wallclock_timeout, _}}, result)
@@ -460,6 +469,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     end
 
     # T6/AC-5: execution runs under the named, dedicated supervisor.
+    # ISS-0426 design §2.2: in-flight task state + eventual timeout -- tag-isolated,
+    # not restructured.
+    @tag :lua_wallclock_race
     test "AC-5: the running script is a child of Letflow.Engine.Lua.TaskSupervisor while in flight" do
       test_pid = self()
 
@@ -602,22 +614,34 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # demonstrates the configured value is load-bearing (not a no-op), per design
     # §8 AC-1 and test/specs/REQ-156.md T1's "outcome differs" alternative to a pure
     # timing comparison.
+    # ISS-0426 design §2.1.2: neither arm's outcome depends on wall-clock time (both
+    # assert memory_limit_exceeded/:ok, never wallclock_timeout), so both calls are
+    # routed through Executor.run_with_heap_limit_sync/4 (no `after` clause in its
+    # receive block) instead of racing run_with_heap_limit/5's own caller-timeout
+    # kill under contention. Both scripts are fixed-iteration loops that terminate
+    # either by natural completion or by tripping max_heap_words -- satisfying that
+    # seam's binding usage contract (design §2.1.2a, restated in the seam's own
+    # @doc false).
     test "AC-1: a smaller configured max_heap_words halts sooner than a larger one on the same allocating script" do
+      empty_manifest = %Manifest{script_id: "", capabilities: []}
+
       {small_elapsed_us, small_result} =
         :timer.tc(fn ->
-          Executor.execute_with_manifest(@moderate_allocating_script, "h",
-            max_instructions: 1_000_000_000,
-            timeout_ms: 5_000,
-            max_heap_words: @small_alloc_heap_words
+          Executor.run_with_heap_limit_sync(
+            empty_manifest,
+            @moderate_allocating_script,
+            1_000_000_000,
+            @small_alloc_heap_words
           )
         end)
 
       {large_elapsed_us, large_result} =
         :timer.tc(fn ->
-          Executor.execute_with_manifest(@moderate_allocating_script, "h",
-            max_instructions: 1_000_000_000,
-            timeout_ms: 5_000,
-            max_heap_words: trunc(200 * 1024 * 1024 / @word_size_bytes)
+          Executor.run_with_heap_limit_sync(
+            empty_manifest,
+            @moderate_allocating_script,
+            1_000_000_000,
+            trunc(200 * 1024 * 1024 / @word_size_bytes)
           )
         end)
 
@@ -641,18 +665,31 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # regression removed the memory-kill path entirely, this call would return
     # {:error, {:wallclock_timeout, 5_000}} instead (still a structured error, not a
     # hang), and the assertion below would fail loudly rather than the suite hanging.
+    # ISS-0426 design §2.1.2: routed through the synchronous heap-limited seam, see
+    # AC-1 above -- this script's own comment already establishes it terminates via
+    # the BEAM heap-kill, satisfying the seam's binding usage contract.
     test "AC-2: a script attempting to allocate 1 GB under a 16 MB configured limit fails cleanly" do
       assert {:error, :memory_limit_exceeded} =
-               Executor.execute_with_manifest(@gigabyte_allocating_script, "h",
-                 max_instructions: 1_000_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: @sixteen_mb_in_words
+               Executor.run_with_heap_limit_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 @gigabyte_allocating_script,
+                 1_000_000_000,
+                 @sixteen_mb_in_words
                )
     end
 
     # AC-3/T3: the memory-limit error is pattern-distinguishable from REQ-154's
     # budget_exceeded and REQ-155's wallclock_timeout -- one case/cond construct
     # matches all three arms distinctly, proving no two can unify under one pattern.
+    #
+    # ISS-0426 design §2.4: mixed test -- one of its three calls (timeout_result)
+    # genuinely races the wall-clock kill, so the whole test is tag-isolated. The
+    # other two calls (budget_result, memory_result) are deliberately left as
+    # literal execute_with_manifest/3 calls rather than converted to §2.1's
+    # synchronous seams -- they inherit this tag's contention mitigation "for free"
+    # once the whole test is isolated; see design §2.4 for why converting only two of
+    # three calls in one test body was rejected.
+    @tag :lua_wallclock_race
     test "AC-3: memory_limit_exceeded is pattern-distinguishable from budget_exceeded and wallclock_timeout" do
       budget_result =
         Executor.execute_with_manifest("while true do end", "h",
@@ -741,6 +778,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # observable exactly as before -- a nil-limit execution still shows up as a
     # Letflow.Engine.Lua.TaskSupervisor child while in flight, unlike a
     # memory-limited execution (design §5.4).
+    # ISS-0426 design §2.2: in-flight task state + eventual timeout -- tag-isolated,
+    # not restructured.
+    @tag :lua_wallclock_race
     test "a nil max_heap_words leaves the REQ-155 TaskSupervisor-based path unchanged" do
       test_pid = self()
 
@@ -785,6 +825,11 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # left all 32 then-existing REQ-156/154/155 tests passing (no test exercised this
     # branch), and reverting the mutation restored the pre-mutation pass count -- so
     # this test was added to close that gap, not merely to report it.
+    # ISS-0426 design §2.2: race outcome (caller-kill branch, not heap-kill) is the
+    # entire point of this test -- tag-isolated, not restructured. Still exercises
+    # run_with_heap_limit/5's own `after` clause, untouched by this run's two new
+    # seams.
+    @tag :lua_wallclock_race
     test "a memory-limited call whose script hangs without tripping the heap limit is terminated by the caller's own timeout kill, not the BEAM heap-kill path" do
       # A tight `while true do end` loop allocates essentially nothing on the Lua
       # heap, so a heap limit generous enough to never trip (200 MB, same order of
@@ -809,12 +854,15 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
   describe "SCRIPT_ERROR capture (REQ-162)" do
     # AC1: a structured SCRIPT_ERROR carries a stack trace and capability state at
     # failure -- asserted individually.
+    # ISS-0426 design §2.1.1: script_error is fully determined by the workload
+    # (1 // 0 always raises), no wall-clock assertion here -- routed through the
+    # synchronous seam.
     test "AC1: an uncaught runtime error produces SCRIPT_ERROR with a stack trace and capability state, asserted individually" do
       assert {:error, {:script_error, script_error}} =
-               Executor.execute_with_manifest("return 1 // 0", "h",
-                 max_instructions: 1_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "return 1 // 0",
+                 1_000_000
                )
 
       # Stack trace, asserted individually
@@ -858,22 +906,19 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # AC4: 1//0 (integer floor division) raises "attempt to divide by zero" in this
     # Lua 5.3 runtime; 1/0 (float division) does not raise at all -- it evaluates to
     # inf, per Lua 5.3 §3.4.1 (design §8, moduledoc REQ-162 section).
+    # ISS-0426 design §2.1.1: both calls' outcomes are fully determined by the
+    # workload (1 // 0 raises, 1 / 0 doesn't), no wall-clock assertion -- routed
+    # through the synchronous seam.
     test "AC4: 1 // 0 raises 'attempt to divide by zero'; 1 / 0 does not raise" do
+      empty_manifest = %Manifest{script_id: "", capabilities: []}
+
       assert {:error, {:script_error, script_error}} =
-               Executor.execute_with_manifest("return 1 // 0", "h",
-                 max_instructions: 1_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
-               )
+               Executor.run_script_sync(empty_manifest, "return 1 // 0", 1_000_000)
 
       assert script_error.message =~ "attempt to divide by zero"
 
       assert {:ok, %{manifest_hash: _}} =
-               Executor.execute_with_manifest("return 1 / 0", "h",
-                 max_instructions: 1_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
-               )
+               Executor.run_script_sync(empty_manifest, "return 1 / 0", 1_000_000)
     end
 
     # AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms
@@ -884,6 +929,12 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # req161-lua-platform-fail.md establishes, since that raw shape is what a real
     # caller (a Task.yield/2 `{:exit, reason}` clause, or a :DOWN message) actually
     # observes.
+    #
+    # ISS-0426 design §1.2(b)/§2.4: mixed test -- timeout_result genuinely races the
+    # wall-clock kill, so the whole test is tag-isolated rather than restructured.
+    # The other calls (script_error_result, budget_result, memory_result) are
+    # deliberately left as literal execute_with_manifest/3 calls -- see design §2.4.
+    @tag :lua_wallclock_race
     test "AC5: SCRIPT_ERROR is pattern-match-distinguishable from all 4 other real arms" do
       script_error_result =
         Executor.execute_with_manifest("return 1 // 0", "h",
@@ -980,14 +1031,16 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # an 'Elixir.' prefix -- structurally guaranteed (design §6.1/§6.3) but asserted
     # anyway so a future library change that starts populating `source` from a real
     # file path is caught by a failing test.
+    # ISS-0426 THE FILED FAILURE (design §2.1's table): script_error is fully
+    # determined by the workload (1 // 0 always raises), no wall-clock assertion --
+    # routed through the synchronous seam so {:error, {:wallclock_timeout, _}} is
+    # unreachable from this call site by construction.
     test "AC7: stack trace frames contain no '/' path separator or 'Elixir.' prefix" do
       assert {:error, {:script_error, script_error}} =
-               Executor.execute_with_manifest(
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
                  "local function f() return 1 // 0 end return f()",
-                 "h",
-                 max_instructions: 1_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
+                 1_000_000
                )
 
       for frame <- script_error.stack_trace do
@@ -1049,12 +1102,14 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # carrying a non-negative :instruction_count. If a future tv-labs/lua upgrade
     # removes or renames either field, this test fails loudly instead of the
     # SCRIPT_ERROR silently reporting {:configured_budget, _} forever with no signal.
+    # ISS-0426 design §2.1.1: script_error is fully determined by the workload, no
+    # wall-clock assertion -- routed through the synchronous seam.
     test "regression guard (design §7): a real uncaught VM opcode error carries a non-negative consumed instruction_count" do
       assert {:error, {:script_error, script_error}} =
-               Executor.execute_with_manifest("return 1 // 0", "h",
-                 max_instructions: 1_000_000,
-                 timeout_ms: 5_000,
-                 max_heap_words: nil
+               Executor.run_script_sync(
+                 %Manifest{script_id: "", capabilities: []},
+                 "return 1 // 0",
+                 1_000_000
                )
 
       assert {:consumed, count} = script_error.instruction_count
@@ -1062,6 +1117,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert count >= 0
     end
 
+    # ISS-0426 design §2.2: numeric elapsed-time comparison, genuinely races the
+    # wall-clock kill -- tag-isolated, not restructured.
+    @tag :lua_wallclock_race
     test "AC-5: shorter wall-clock timeout terminates sooner than a longer one" do
       script = "while true do end"
       huge_budget = 10_000_000_000
@@ -1089,6 +1147,9 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
       assert short_elapsed_ms < long_elapsed_ms
     end
 
+    # ISS-0426 design §2.2: race outcome (the timeout must still fire after the
+    # script traps its own budget error) -- tag-isolated, not restructured.
+    @tag :lua_wallclock_race
     test "AC-6: a timeout still kills a script after it traps its own budget exhaustion" do
       script = """
       local ok, err = pcall(function() while true do end end)
@@ -1101,6 +1162,288 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
                  timeout_ms: 100,
                  max_heap_words: nil
                )
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0426 -- wall-clock test contention fix: seam-equivalence and tag-partition
+  # integrity coverage (design lib/letflow/design/iss426-wallclock-test-contention.md)
+  # ---------------------------------------------------------------------------------
+  #
+  # Fourteen Group-1 call sites (REQ-154/155/156/162's own AC tests, above) were
+  # repointed from execute_with_manifest/3's wall-clock-racing path onto two new
+  # @doc false test-only seams, run_script_sync/3 and run_with_heap_limit_sync/4,
+  # whose entire reason to exist is that {:error, {:wallclock_timeout, _}} is
+  # unreachable from their call chains BY CONSTRUCTION (design §4) -- no Task.yield
+  # anywhere in run_script_sync/3's chain, no `after` clause anywhere in
+  # run_with_heap_limit_sync/4's receive block. WF-03's fail-first requirement does
+  # not transfer mechanically here: ISSUE-FIXER could not reproduce the filed flake
+  # even under 24 concentrated OS-level CPU burners plus 48 runs (step-01 handoff),
+  # so a "test that fails pre-fix" would itself be a probabilistic, host-dependent
+  # test -- exactly the speculation core-directives.md forbids. Coverage here instead
+  # locks in the three properties this fix's own correctness argument depends on:
+  #
+  #   (a) seam equivalence -- the two new seams return the SAME outcome as their
+  #       racing execute_with_manifest/3 counterpart for the same workload, for
+  #       every outcome shape Group 1 uses (:ok, budget_exceeded, script_error,
+  #       memory_limit_exceeded). This is the highest-value property: 14 call sites
+  #       were repointed to new code paths, and a subtly different return shape
+  #       (e.g. a seam that silently swallowed an error, or wrapped it differently)
+  #       would let the repointed AC tests keep passing for the wrong reason.
+  #   (b) the memory limit still binds through run_with_heap_limit_sync/4 -- the
+  #       REQ-156/LUA-09 bound must be shown intact through the new path, not
+  #       assumed carried over from run_with_heap_limit/5.
+  #   (c) the :lua_wallclock_race tag partition is wired correctly, and each of the
+  #       11 tagged tests still contains a genuine wallclock_timeout assertion --
+  #       i.e. the tagging fix's worst failure mode (tests excluded everywhere,
+  #       silently never running again) is structurally guarded against, not just
+  #       observed to currently work.
+  #
+  # Fail-first for THIS coverage is satisfied per WF-03's "when the pre-fix failure
+  # is the code under test does not exist" section, via mutation -- not via a
+  # pre-fix run of this file, since run_script_sync/3 and run_with_heap_limit_sync/4
+  # did not exist before this fix (any test calling them pre-fix fails with
+  # UndefinedFunctionError, which proves the functions are new and nothing about
+  # whether these tests discriminate a correct seam from a wrong one). The mutants
+  # that probe (a)/(b)/(c) below, and their measured per-mutant results, are
+  # recorded in test/specs/ISS-0426.md, not in this file (mutants are reverted
+  # before commit, per WF-03 -- a mutant left in the tree is a step failure).
+  describe "ISS-0426: seam equivalence (property a)" do
+    @empty_manifest %Manifest{script_id: "", capabilities: []}
+
+    # (a) :ok outcome -- REQ-154 AC-4's own pcall-catch workload, run through BOTH
+    # the seam and its racing counterpart with a timeout generous enough that the
+    # racing counterpart's own wall-clock kill cannot plausibly fire first (this
+    # comparison call itself is intentionally NOT tagged into the isolated
+    # partition -- see the moduletag-scope note below for why that is safe).
+    test "run_script_sync/3 returns the same :ok shape as execute_with_manifest/3 for a natural-completion workload" do
+      script = "return 1 + 1"
+
+      sync_result = Executor.run_script_sync(@empty_manifest, script, 500_000)
+
+      racing_result =
+        Executor.execute_with_manifest(script, "h",
+          max_instructions: 500_000,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      assert {:ok, %{manifest_hash: sync_hash}} = sync_result
+      assert {:ok, %{manifest_hash: racing_hash}} = racing_result
+      assert sync_hash == racing_hash
+    end
+
+    # (a) budget_exceeded outcome -- same workload/budget pair through both paths.
+    test "run_script_sync/3 returns the same budget_exceeded shape as execute_with_manifest/3" do
+      script = "while true do end"
+
+      sync_result = Executor.run_script_sync(@empty_manifest, script, 500)
+
+      racing_result =
+        Executor.execute_with_manifest(script, "h",
+          max_instructions: 500,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      assert {:error, {:budget_exceeded, 500}} = sync_result
+      assert sync_result == racing_result
+    end
+
+    # (a) script_error outcome -- REQ-162 AC7's own filed-failure workload (the
+    # exact script shape ISS-0426's own filing failure hit) through both paths.
+    # Compares message/stack_trace/capabilities fields individually rather than a
+    # blind structural == because instruction_count's {:consumed, count} arm can
+    # legitimately differ by a handful of VM instructions between two independent
+    # evaluations of the same script (different sandbox instance per call) -- the
+    # design does not claim instruction-for-instruction determinism, only that the
+    # ERROR SHAPE and its message/stack_trace content match.
+    test "run_script_sync/3 returns the same script_error shape as execute_with_manifest/3" do
+      script = """
+      local function f()
+        return 1 // 0
+      end
+      f()
+      """
+
+      sync_result = Executor.run_script_sync(@empty_manifest, script, 1_000_000)
+
+      racing_result =
+        Executor.execute_with_manifest(script, "h",
+          max_instructions: 1_000_000,
+          timeout_ms: 5_000,
+          max_heap_words: nil
+        )
+
+      assert {:error, {:script_error, sync_error}} = sync_result
+      assert {:error, {:script_error, racing_error}} = racing_result
+      assert sync_error.message == racing_error.message
+      assert sync_error.stack_trace == racing_error.stack_trace
+      assert sync_error.capabilities == racing_error.capabilities
+    end
+
+    # (a) memory_limit_exceeded outcome -- REQ-156 AC-2's own gigabyte-allocating
+    # workload through both the heap-limited seam and run_with_heap_limit/5 itself
+    # (the racing counterpart run_with_heap_limit_sync/4 was carved out of).
+    test "run_with_heap_limit_sync/4 returns the same memory_limit_exceeded shape as execute_with_manifest/3's heap-limited path" do
+      script = """
+      local t = {}
+      for i = 1, 1000000 do
+        t[i] = string.rep("x", 1024)
+      end
+      return #t
+      """
+
+      word_size_bytes = :erlang.system_info(:wordsize)
+      sixteen_mb_in_words = trunc(16 * 1024 * 1024 / word_size_bytes)
+
+      sync_result =
+        Executor.run_with_heap_limit_sync(
+          @empty_manifest,
+          script,
+          1_000_000_000,
+          sixteen_mb_in_words
+        )
+
+      racing_result =
+        Executor.execute_with_manifest(script, "h",
+          max_instructions: 1_000_000_000,
+          timeout_ms: 5_000,
+          max_heap_words: sixteen_mb_in_words
+        )
+
+      assert {:error, :memory_limit_exceeded} = sync_result
+      assert sync_result == racing_result
+    end
+  end
+
+  describe "ISS-0426: memory limit still binds through the unbounded-wait seam (property b)" do
+    @empty_manifest %Manifest{script_id: "", capabilities: []}
+
+    # (b) REQ-156/LUA-09's own bound, shown intact THROUGH run_with_heap_limit_sync/4
+    # specifically -- a smaller configured max_heap_words halts an allocating script
+    # (memory_limit_exceeded) while a materially larger one on the SAME script
+    # completes successfully. If the fix had accidentally dropped the
+    # max_heap_size spawn_opt (per this test spec's mutant 2), both calls below
+    # would return :ok and this test would be the one to catch it -- see
+    # test/specs/ISS-0426.md's mutant table for the measured proof.
+    test "a smaller configured max_heap_words still halts an allocating script; a larger one still lets it complete" do
+      script = """
+      local t = {}
+      for i = 1, 20000 do
+        t[i] = string.rep("x", 1024)
+      end
+      return #t
+      """
+
+      word_size_bytes = :erlang.system_info(:wordsize)
+      small_heap_words = trunc(1 * 1024 * 1024 / word_size_bytes)
+      large_heap_words = trunc(200 * 1024 * 1024 / word_size_bytes)
+
+      small_result =
+        Executor.run_with_heap_limit_sync(
+          @empty_manifest,
+          script,
+          1_000_000_000,
+          small_heap_words
+        )
+
+      large_result =
+        Executor.run_with_heap_limit_sync(
+          @empty_manifest,
+          script,
+          1_000_000_000,
+          large_heap_words
+        )
+
+      assert {:error, :memory_limit_exceeded} = small_result
+      assert {:ok, %{manifest_hash: _}} = large_result
+    end
+  end
+
+  describe "ISS-0426: :lua_wallclock_race tag-partition integrity (property c)" do
+    # (c) Structural/mechanism-level check, same idiom as
+    # test/support/tenant_slug_test.exs's ISS-0065 regression test: parses THIS
+    # file's own source with Code.string_to_quoted/1 and walks the AST rather than
+    # scanning text, because this describe block's own comments legitimately
+    # mention "@tag :lua_wallclock_race" in prose -- a raw substring count would
+    # over-count against its own docstrings. Counts actual @tag :lua_wallclock_race
+    # AST nodes (a {:@, _, [{:tag, _, [:lua_wallclock_race]}]} node immediately
+    # preceding a test/2 or test/3 call, structurally -- not merely present
+    # somewhere in the file) and asserts the count is exactly 11, matching design
+    # §2.2/§2.4's own enumerated table (9 pure Group 2 + 2 mixed). A tagging fix's
+    # worst failure mode is silent over- or under-tagging -- e.g. a copy/paste that
+    # tags a 12th test, or a rebase that drops one of the 11 -- and this guard
+    # fails loudly on either.
+    test "exactly 11 tests in this file carry @tag :lua_wallclock_race" do
+      {:ok, ast} = Code.string_to_quoted(File.read!(__ENV__.file))
+
+      {_ast, tag_count} =
+        Macro.prewalk(ast, 0, fn
+          {:@, _, [{:tag, _, [:lua_wallclock_race]}]} = node, acc -> {node, acc + 1}
+          node, acc -> {node, acc}
+        end)
+
+      assert tag_count == 11,
+             "expected exactly 11 @tag :lua_wallclock_race nodes (design §2.2/§2.4's " <>
+               "9 pure Group 2 + 2 mixed tests) -- found #{tag_count}. A drift here means " <>
+               "either a test that should race the wall clock lost its isolation tag (will " <>
+               "flake under contention again) or an unrelated test gained one (silently " <>
+               "excluded from every default run for no reason)."
+    end
+
+    # (c) The exclusion wiring itself -- test/test_helper.exs must actually exclude
+    # :lua_wallclock_race by default, mirroring :wasm_hang's own precedent. A tag
+    # applied to tests with nothing excluding it by default is not a fix at all
+    # (Group 2 would still race under scripts/test_parallel.sh's N-way partitioning
+    # exactly as before ISS-0426). Reads the real file, not a copy or a hardcoded
+    # expectation of its content.
+    test "test/test_helper.exs's ExUnit.start/1 excludes :lua_wallclock_race" do
+      helper_path = Path.join([__DIR__, "..", "..", "..", "test_helper.exs"])
+      assert File.exists?(helper_path), "test/test_helper.exs not found at #{helper_path}"
+
+      {:ok, ast} = Code.string_to_quoted(File.read!(helper_path))
+
+      {_ast, found?} =
+        Macro.prewalk(ast, false, fn
+          {{:., _, [{:__aliases__, _, [:ExUnit]}, :start]}, _, [opts]} = node, acc
+          when is_list(opts) ->
+            excluded = Keyword.get(opts, :exclude, [])
+            {node, acc or :lua_wallclock_race in excluded}
+
+          node, acc ->
+            {node, acc}
+        end)
+
+      assert found?,
+             "test/test_helper.exs's ExUnit.start/1 call does not exclude :lua_wallclock_race " <>
+               "-- Group 2 tests would race under contention in every default `mix test` and " <>
+               "scripts/test_parallel.sh partition again, exactly as before ISS-0426"
+    end
+
+    # (c) The 11 tagged tests still genuinely assert wallclock_timeout -- i.e. they
+    # can still FAIL if the production wall-clock kill regressed. Runs the isolated
+    # partition itself (mix test --only lua_wallclock_race, the same invocation
+    # `mix letflow.check.test` uses) as a subprocess and asserts BOTH that it exits
+    # 0 (the 11 tests currently pass, matching both reviewers' prior counts) AND
+    # that its own output reports exactly 11 tests, not fewer -- catching the
+    # "excluded everywhere, so it silently never runs or fails again" failure mode
+    # the task description specifically calls out, at the point where it would
+    # actually matter (the real isolated run, not just the tag count above).
+    @tag timeout: 60_000
+    test "the isolated --only lua_wallclock_race partition runs and passes exactly 11 tests" do
+      {output, exit_code} =
+        System.cmd(
+          "mix",
+          ["test", "--only", "lua_wallclock_race", "test/letflow/engine/lua/executor_test.exs"],
+          stderr_to_stdout: true
+        )
+
+      assert exit_code == 0,
+             "isolated :lua_wallclock_race partition did not exit 0 -- output:\n#{output}"
+
+      assert output =~ ~r/Result: 11 passed/,
+             "expected the isolated run to report exactly 11 passed tests -- output:\n#{output}"
     end
   end
 end

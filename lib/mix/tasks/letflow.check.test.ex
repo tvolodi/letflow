@@ -98,6 +98,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
       true ->
         Mix.shell().info("mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings.")
         run_wasm_hang_tests()
+        run_lua_wallclock_race_tests()
     end
   end
 
@@ -127,6 +128,42 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     end
 
     Mix.shell().info("mix letflow.check.test: OK -- isolated :wasm_hang run also passed clean.")
+  end
+
+  # ISS-0426: run the tag-isolated :lua_wallclock_race tests (REQ-155/156/162,
+  # test/letflow/engine/lua/executor_test.exs) in their own subprocess, isolated
+  # from the main run above -- same shape as run_wasm_hang_tests/0, see
+  # lib/letflow/design/iss426-wallclock-test-contention.md §2.3 and this module's
+  # moduledoc's ISS-0352 section. Unlike :wasm_hang, these tests don't leak
+  # anything -- they just need to run without racing 30+ concurrently-scheduled
+  # siblings for wall-clock-sensitive timing.
+  defp run_lua_wallclock_race_tests do
+    {race_output, race_exit_code} =
+      stream_and_capture("mix", ["test", "--only", "lua_wallclock_race"])
+
+    if race_exit_code != 0 do
+      Mix.raise(
+        "mix letflow.check.test: FAILED -- isolated `mix test --only lua_wallclock_race` " <>
+          "run exited #{race_exit_code} (real test failure/error)."
+      )
+    end
+
+    if String.contains?(race_output, @target_substring) do
+      offending_lines =
+        race_output
+        |> String.split("\n")
+        |> Enum.filter(&String.contains?(&1, @target_substring))
+        |> Enum.join("\n")
+
+      Mix.raise(
+        "mix letflow.check.test: FAILED -- \"#{@target_substring}\" warning found in the " <>
+          "isolated :lua_wallclock_race run (ISS-0069's own class recurring):\n#{offending_lines}"
+      )
+    end
+
+    Mix.shell().info(
+      "mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean."
+    )
   end
 
   # Runs `cmd` as a subprocess via an OS-level Port so its combined

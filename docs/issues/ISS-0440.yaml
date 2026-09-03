@@ -1,0 +1,67 @@
+id: ISS-0440
+title: "Make the handoff top-level status enum violation structurally impossible (7th occurrence; docs/anti-patterns.md declares re-documenting exhausted)"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0426-20260902
+discovered_at: "2026-09-03T06:35:00Z"
+severity: MINOR
+tags: [ci, tooling, handoffs, anti-pattern-recurrence, s6]
+description: >
+  SEVENTH occurrence of a documented, already-analysed defect class.
+  docs/anti-patterns.md's section "Subagents write a handoff's top-level
+  `status` field with an ad hoc value instead of the schema enum" records
+  occurrences 1-6 (WF02-REQ160-20260827 x3, WF02-REQ161-20260827,
+  WF02-REQ181-20260829 x2, WF02-REQ196-20260830) and states explicitly that
+  whoever addresses this class next should treat "document it again" as
+  EXHAUSTED and instead make it structurally impossible.
+
+  OCCURRENCE 7 (WF03-ISS0426-20260902, PR #848): ELIXIR-DEV wrote top-level
+  `status: "PASS"` on handoffs/WF03-ISS0426-20260902/step-03-elixir-dev.json.
+  PASS is a result value, not a lifecycle state; the enum is PENDING /
+  IN_PROGRESS / COMPLETED / FAILED / ESCALATED / CANCELLED. Its own
+  result.status correctly held PASS. Caught only when CI failed -- both
+  backend-gate jobs failed in 45-66s, the documented fast-static-lint tell
+  that distinguishes this from a real test failure. ORCH fixed the single
+  field and reverified locally (0 new violations across 1898 handoff files).
+
+  WHY IT KEEPS RECURRING: the mitigation is not enforced anywhere upstream of
+  CI. No pre-commit hook, no pre-push hook, no dispatch-time check. Every
+  agent writes a nested result.status (free-form, legitimately holds
+  PASS/FAIL/DONE) directly adjacent to the schema-constrained top-level
+  status field, and the nested field's word choice bleeds into its sibling.
+
+  INVESTIGATED DURING THIS RUN, so the next agent need not rediscover it: the
+  repo has NO hook infrastructure at all -- .git/hooks contains only samples,
+  there is no tracked .githooks directory, and core.hooksPath is unset. The
+  fix therefore cannot be a local .git/hooks/pre-push file: that is untracked
+  and per-clone, so it would protect this workstation and no other host.
+
+  SCOPE: make the violation structurally impossible rather than documenting it
+  a seventh time. Options for CODE-DESIGNER to weigh, none prescribed:
+  (a) a tracked .githooks/pre-push running mix letflow.lint_handoffs, wired
+  via a documented core.hooksPath setup step -- but state how a host that
+  never ran the setup is caught, since an enforcement that silently does
+  nothing is not a fix; (b) ORCH mechanically lints every handoff it did not
+  itself author before dispatching the next step (the anti-pattern entry's own
+  suggestion, currently manual); (c) a mix letflow.lint_handoffs call inserted
+  into every producing/validating role's dispatch template, so the authoring
+  agent checks its own file before completing; (d) make the schema
+  self-correcting -- lint_handoffs gains an --autofix mode for this specific
+  unambiguous case, since PASS/FAIL/DONE/COMPLETE map onto enum members
+  without ambiguity.
+
+  DO NOT simply add a seventh tally line to docs/anti-patterns.md and close
+  this -- that is the exact action the existing entry declares exhausted.
+affected_files:
+  - docs/anti-patterns.md
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+  - docs/agents/shared/HANDOFF_PROTOCOL.md
+related:
+  - ISS-0190
+  - ISS-0426
+source: >
+  PR #848's first CI run (WF03-ISS0426-20260902's own Step Final), where
+  letflow.lint_handoffs failed with "1 new (un-grandfathered) violation" on
+  [H1] for step-03-elixir-dev.json.
+queue_task_id: 440
+github_issue: 849
+status: open

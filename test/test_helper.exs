@@ -30,7 +30,26 @@ Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
 # afterward, so their permanent leaks die with that process instead of
 # starving anything else. Deliberate inclusion for a plain local run:
 # `mix test --include wasm_hang test/letflow/engine/wasm/`.
-ExUnit.start(exclude: [:keycloak, :wasm_hang])
+#
+# ISS-0426: excludes every test tagged `@tag :lua_wallclock_race` (11 tests in
+# test/letflow/engine/lua/executor_test.exs, REQ-155/156/162) whose assertion
+# depends on which of two racing wall-clock outcomes wins -- e.g. a shorter
+# configured timeout terminating measurably sooner, or a wall-clock kill firing
+# before a script's own instruction budget would otherwise let it continue. Under
+# scripts/test_parallel.sh's N-way partitioning, BEAM scheduler contention across
+# partitions can make Task.yield(timeout_ms) (or run_with_heap_limit/5's own
+# `after` clause) observe scheduler unavailability rather than actual Lua
+# execution time, producing a spurious {:error, {:wallclock_timeout, _}} the test
+# doesn't expect (ISS-0426). Unlike :wasm_hang, these tests don't leak anything --
+# they finish in milliseconds, they just need to not race for scheduler time
+# against 30+ concurrent siblings -- so a distinct tag name is deliberate rather
+# than reusing :wasm_hang's (see lib/letflow/design/iss426-wallclock-test-contention.md
+# §2.2 for why conflating the two would mislead a future reader). `mix
+# letflow.check.test` runs these excluded tests in their own isolated `mix test
+# --only lua_wallclock_race` subprocess, same shape as the :wasm_hang subprocess
+# above. Deliberate inclusion for a plain local run: `mix test --include
+# lua_wallclock_race test/letflow/engine/lua/executor_test.exs`.
+ExUnit.start(exclude: [:keycloak, :wasm_hang, :lua_wallclock_race])
 
 ExUnit.after_suite(fn _stats ->
   Letflow.TenantSchemaReaper.sweep_orphans()

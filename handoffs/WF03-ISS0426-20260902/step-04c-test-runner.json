@@ -1,0 +1,70 @@
+{
+  "handoff_id": "WF03-ISS0426-20260902-step-04c",
+  "run_id": "WF03-ISS0426-20260902",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0426-20260902/step-04c-test-runner.json",
+  "created_at": "2026-09-03T03:52:42Z",
+  "started_at": "2026-09-03T03:52:42Z",
+  "completed_at": "2026-09-03T06:16:42Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0426"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0426-20260902/step-04b-test-design-validator.json",
+      "test/specs/ISS-0426.md",
+      "docs/issues/ISS-0426.yaml",
+      "lib/letflow/design/iss426-wallclock-test-contention.md",
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/issues/ISS-0219.yaml",
+      "docs/issues/ISS-0222.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0426-20260902",
+    "owned_modules": [
+      "test/reports/"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 4 RUNNER -- run the suite and report real results for ISS-0426. TEST-DESIGN-VALIDATOR has PASSED (step-04b): it independently reproduced mutant 1 in a throwaway worktree and got an EXACT match on both the failure count (4) and the failing test set, so the coverage is verified as discriminating rather than merely present.\n\nWHAT TO RUN AND QUOTE (No Speculation -- real output, every time):\n\n1. FULL SERIAL SUITE: `mix test`. This is the AC3 gate (the fix must not trade parallel-safety for serial correctness). Baseline to compare against: ELIXIR-DEV's pre-test-addition run measured 'Finished in 1787.0 seconds ... Result: 3049 passed (6 properties, 3043 tests), 21 excluded' with zero failures. With TEST-DESIGNER's 8 new tests and 11 newly-tagged exclusions, expect roughly 3046 passed / 32 excluded -- reconcile whatever you actually get against that arithmetic and SAY whether it reconciles. NOTE: ORCH launched a `mix test` in the background before dispatching you; it may still be running. Check for it rather than racing it -- two concurrent full suites on one host will produce spurious Postgres connection failures (ISS-0219/ISS-0222 document this exact class). If ORCH's run has already produced a summary you may quote it, stating that you did so and where it came from; otherwise run your own once the host is free.\n\n2. THE ISOLATED TAG PARTITION: `mix test --only lua_wallclock_race test/letflow/engine/lua/executor_test.exs`. This proves the 11 tagged tests still execute rather than being silently excluded everywhere -- a tagging fix's worst failure mode. Expect 11 passed.\n\n3. `mix letflow.check.test` -- the real CI-equivalent gate, which runs the default suite AND the isolated :wasm_hang subprocess AND (new in this change) the isolated lua_wallclock_race subprocess. This is what CI actually invokes via `mix letflow.check` (.github/workflows/ci.yml:126). If it fails, diagnose whether the failure is THIS change's or a pre-existing/environmental one, and say which with evidence.\n\n4. AC6 -- THE PARALLEL RUNS. ISS-0426's acceptance criterion 6 asks that the suite be run via scripts/test_parallel.sh at a contended partition count and REPEATED at least twice, with both combined-result lines quoted, to show the flake is actually gone rather than not-reproduced-this-time. Run `TEST_PARALLEL_N=6 scripts/test_parallel.sh` TWICE and quote both combined-result lines. This host has 16 cores, and N=6 is the exact condition that produced the original filed failure.\n   READ ISS-0219 AND ISS-0222 FIRST. They document this script's known host-capacity failure modes: a run launched immediately after a prior full-suite run can produce a transient too_many_connections in one partition (wait a few seconds and re-run), and on a host whose N exceeds its Postgres/CPU budget every partition can crash during ecto.create/migrate before any Result: line. NEITHER is a regression in this change. If you hit one, say so explicitly, distinguish it from a real failure, and re-run -- do not report an infrastructure limit as an ISS-0426 defect, and do not report a real failure as an infrastructure limit.\n   CALIBRATION ON WHAT AC6 CAN AND CANNOT PROVE: the gate-approved design's section 4 is explicit that the Group 1 fix (which includes the originally-filed AC7 failure) is verified STRUCTURALLY -- {:error, {:wallclock_timeout, _}} is unreachable from those 14 call sites by construction -- and that AC6's repeated runs are CONFIRMATORY for Group 1 and load-bearing only for Group 2's residual risk. So: two clean parallel runs are good evidence and are what ISS-0426 literally asks for, but do NOT report them as proving the Group 1 fix, and do NOT treat a clean run as proof the original flake would have been caught -- ISSUE-FIXER could not reproduce that flake on demand even under 24 CPU burners. Report what the runs actually show, with that framing.\n\nIF ANYTHING FAILS: diagnose it. Identify whether the failure is caused by this change, is a pre-existing failure also present on main, or is environmental. Quote the actual failure output. A pre-existing failure is not this run's to fix but MUST be reported plainly (and is a candidate for a new issue via ISSUE_QUEUE.md, which ORCH would register -- do not register it yourself).\n\nWrite your structured report to test/reports/ per your role's convention. Complete the handoff with every result quoted verbatim, then commit and push to branch feature/WF03-ISS0426-20260902. next_action: 'Route to Step 5 (ISSUE-FIXER closes the issue record)' on PASS."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All four required runs executed and reported with real output. Item 1 (full serial mix test, AC3 gate): Result: 3057 passed (6 properties, 3051 tests), 21 excluded, 0 failures. Finished in 1815.3 seconds. Total-item arithmetic reconciles exactly against baseline (3049+21=3070 baseline +8 new tests = 3078 expected; actual 3057+21=3078, MATCH). The passed/excluded SPLIT does not match the dispatch's own predicted 3046/32 split -- measured 3057/21 instead -- because the dispatch's stated pre-change baseline of \"21 excluded\" does not reconcile against main's actual tag counts (verified via mix test --only <tag> for each of keycloak=3, wasm_hang=7, lua_wallclock_race=11, summing to 21 exactly on this branch; and via git show main:test/test_helper.exs plus per-file tag counts showing main's pre-change keycloak+wasm_hang total is 10, not 21). Reported as a verified handoff-premise disagreement per HANDOFF_PROTOCOL.md section 1.1, not silently inherited -- does not change the PASS verdict, since the total item count and the tag-exclusion mechanism are both independently confirmed correct. Item 2 (isolated tag partition, mix test --only lua_wallclock_race test/letflow/engine/lua/executor_test.exs): Result: 11 passed, 45 excluded, 0 failures -- matches the expected 11 exactly, confirming the tagged tests still execute. Item 3 (mix letflow.check.test, the real CI-equivalent gate): PASS across all 3 phases after a clean re-run (first attempt was invalidated by a self-inflicted concurrent double-launch, discarded -- see issues below). Default suite: Result: 3057 passed (6 properties, 3051 tests), 21 excluded, 0 failures, \"mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings.\" Isolated :wasm_hang subprocess: Result: 7 passed, 3071 excluded, 0 failures, \"OK -- isolated :wasm_hang run also passed clean.\" Isolated :lua_wallclock_race subprocess: Result: 11 passed, 3067 excluded, 0 failures, \"OK -- isolated :lua_wallclock_race run also passed clean.\" The clean default-suite phase result is byte-identical to item 1's standalone result. Item 4 (AC6, TEST_PARALLEL_N=6 scripts/test_parallel.sh run twice): both runs produced identical clean results -- \"combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)\" both times, all 6 partitions 0 failures/exit 0 in each run, no ISS-0219/ISS-0222 infrastructure symptom encountered (no too_many_connections, no pre-Result: partition crash). Per the gate-approved design section 4, these two clean runs are reported as CONFIRMATORY for Group 1 (whose correctness rests on the structural argument that wallclock_timeout is unreachable from those 14 call sites by construction, not on run outcomes) and LOAD-BEARING only for Group 2's residual statistical risk -- explicitly not claimed as proof the original flake would have been caught, since ISSUE-FIXER could not reproduce it on demand even under 24 CPU burners. Three MINOR issues encountered and reported (none change the PASS verdict): (a) a live mix test process from before this dispatch was found still running despite the host note saying it had been stopped -- waited for it to exit naturally rather than trust the note or race it, per HANDOFF_PROTOCOL.md section 1.1; (b) a self-inflicted concurrent double-launch of mix letflow.check.test corrupted item 3's first attempt -- discarded and re-run cleanly; (c) a shell backtick-quoting mistake while editing this handoff's own result JSON triggered an unintended stray 'mix test' invocation after all four required runs were already complete and recorded -- harmless to the reported results (all data above was already captured from the clean runs before this happened) but left a background process that this report's authoring session waited out rather than kill mid-compile. Full detail, all verbatim result lines, and both reconciliation derivations are in test/reports/report-20260903-WF03-ISS0426-20260902.yaml.",
+    "artifacts_out": [
+      "test/reports/report-20260903-WF03-ISS0426-20260902.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Dispatch host note claimed a background mix test had already been stopped; a live mix test process (PID 36004) was actually still running and progressing at run start. Waited for it to exit naturally (~25 min) rather than trust the note or race it -- no data affected.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Self-inflicted: an exploratory backgrounded mix letflow.check.test attempt was not confirmed reaped before a second foreground invocation was started, racing two full check.test runs for ~31 minutes and corrupting that log (20 and 14 spurious failures in two interleaved blocks). Discarded, re-ran once cleanly (0 failures). Recorded for visibility.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "Handoff task.description's stated pre-change baseline (\"3049 passed, 21 excluded\") and its derived prediction (\"expect roughly 3046 passed / 32 excluded\" post-change) do not reconcile against main's own measured tag counts (keycloak=3 + wasm_hang=7 = 10 excluded pre-change, not 21). Verified via git show main:test/test_helper.exs and per-tag mix test --only counts. Total item count (3078) still reconciles exactly; only the stated split does not. Flagged per HANDOFF_PROTOCOL.md section 1.1 rather than silently inherited.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "A shell backtick-quoting error while writing this handoff's own result JSON (backticks inside a Python string were interpreted by the shell as command substitution) triggered an unintended stray plain 'mix test' invocation after all four required test runs were already complete and their results captured. Did not corrupt or re-race any reported result; noted for process hygiene.",
+        "affected_requirement": null
+      }
+    ],
+    "next_action": "Route to Step 5 (ISSUE-FIXER closes the issue record)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

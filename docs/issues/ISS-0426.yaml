@@ -1,79 +1,190 @@
 id: ISS-0426
 title: "Lua executor wall-clock tests flake under CPU contention: a 0.3s test hits its 5000ms timeout when the suite runs 6-way parallel"
 discovered_by: ORCH
-discovered_in_run: ORCH-adhoc-20260902-arch-review
-discovered_at: "2026-09-02T18:18:49Z"
+discovered_in_run: ORCH-adhoc-20260902
+discovered_at: "2026-09-02T18:18:45Z"
 severity: MAJOR
-tags: [testing, flake, parallelism, lua, wasm, s6]
+tags: [test-flake, ci, lua, wasm, parallel, s6]
 description: >
-  MEASURED, reproducible. Found while benchmarking
-  scripts/test_parallel.sh (REQ-113) as a candidate speedup for ISS-0423.
+  MEASURED, reproducible. Found while benchmarking scripts/test_parallel.sh
+  (REQ-113) as a candidate speedup for ISS-0423.
 
-  SYMPTOM: the full suite run as 6 parallel partitions on a 16-core host
-  produced exactly one failure, in a test that passes reliably serially:
+  SYMPTOM: running the full suite as 6 parallel partitions on a 16-core host
+  produced exactly one failure, in a test that passes reliably in a serial run:
+  "test SCRIPT_ERROR capture (REQ-162) AC7: stack trace frames contain no '/'
+  path separator or 'Elixir.' prefix (Letflow.Engine.Lua.ExecutorTest)" at
+  test/letflow/engine/lua/executor_test.exs:983 --
+  left: {:error, {:script_error, script_error}},
+  right: {:error, {:wallclock_timeout, 5000}}.
 
-    1) test SCRIPT_ERROR capture (REQ-162) AC7: stack trace frames
-       contain no '/' path separator or 'Elixir.' prefix
-       (Letflow.Engine.Lua.ExecutorTest)
-       test/letflow/engine/lua/executor_test.exs:983
-       left:  {:error, {:script_error, script_error}}
-       right: {:error, {:wallclock_timeout, 5000}}
+  The test asserts a Lua script fails with a SCRIPT_ERROR (integer division by
+  zero). Instead Letflow.Engine.Lua.Executor's own wall-clock kill fired first.
 
-  The test asserts a Lua script fails with SCRIPT_ERROR (integer division
-  by zero). Instead Letflow.Engine.Lua.Executor's wall-clock kill fired
-  first.
+  EVIDENCE IT IS CONTENTION, NOT A DEFECT: the same test, same worktree, same
+  commit, run in isolation immediately afterward passed in 0.3 seconds against
+  a 5000 ms budget -- roughly a 16,000x margin -- collapsing to a timeout purely
+  because 6 partitions were competing for 16 cores. The full serial run of the
+  same commit passed 3060/3060 with zero failures (1805.1 seconds).
 
-  EVIDENCE IT IS CONTENTION, NOT A DEFECT -- same test, same worktree,
-  same commit, run in isolation immediately afterward:
+  WHY THIS MATTERS BEYOND ONE TEST: Letflow.Engine.Lua.Executor and
+  Letflow.Engine.Wasm.CallTimeout are the two subsystems whose CORRECTNESS is
+  defined in wall-clock terms (REQ-155's LUA-10 layer-2 host-enforced kill,
+  REQ-169/REQ-170's fuel and epoch interruption). Their tests assert on real
+  elapsed time, making them structurally sensitive to scheduler pressure in a
+  way no other test in this suite is. Any move to run the suite in parallel --
+  in CI or locally -- will surface this class of flake, and it will look like a
+  random unrelated failure to whoever hits it. ISS-0352's own wasm_hang cascade
+  is the same family of problem.
 
-    Finished in 0.3 seconds (0.3s async, 0.00s sync)
-    Result: 1 passed, 47 excluded
+  SCOPE: identify the wall-clock-sensitive tests and make them robust under
+  contention. Options for CODE-DESIGNER to weigh, none prescribed: (a) tag them
+  and run them in their own low-concurrency partition, mirroring the wasm_hang
+  precedent already in test_helper.exs; (b) raise the timeout budgets used
+  specifically in tests, being careful not to weaken what the test proves;
+  (c) restructure the assertions so they do not depend on which of two racing
+  outcomes wins. Option (b) alone is the weakest -- it moves the threshold
+  without removing the sensitivity.
 
-  0.3s against a 5000 ms budget (~16,000x margin) collapsing purely
-  because 6 partitions competed for 16 cores. The serial run of the same
-  commit passed 3060/3060, zero failures (Finished in 1805.1 seconds).
-
-  WHY IT MATTERS BEYOND ONE TEST: Letflow.Engine.Lua.Executor and
-  Letflow.Engine.Wasm.CallTimeout are the two subsystems whose
-  CORRECTNESS is defined in wall-clock terms (REQ-155's LUA-10 layer-2
-  host-enforced kill; REQ-169/REQ-170 fuel and epoch interruption). Their
-  tests assert on real elapsed time, making them structurally sensitive
-  to scheduler pressure in a way no other test here is. Any move to run
-  the suite in parallel will surface this class of flake, and it will
-  look like a random unrelated failure to whoever hits it. ISS-0352's
-  wasm_hang cascade is the same family (solved there by excluding those
-  tests into a dedicated subprocess via mix letflow.check.test).
-
-  SCOPE: enumerate and harden the wall-clock-sensitive tests across lua/
-  and wasm/. Options for CODE-DESIGNER, none prescribed: (a) tag them and
-  run them in their own low-concurrency partition, mirroring the
-  wasm_hang precedent already in test_helper.exs; (b) raise the
-  test-side timeout budgets, careful not to weaken what is proven;
-  (c) restructure assertions so they do not depend on which of two
-  racing outcomes wins. Option (b) alone is weakest -- it moves the
-  threshold without removing the sensitivity.
-
-  DO NOT change Letflow.Engine.Lua.Executor's production timeout
-  semantics to fix a test-environment problem -- the wall-clock kill is a
-  security control against untrusted tenant scripts (LUA-10) and its
-  behaviour under load is the thing being asserted.
+  DO NOT change Letflow.Engine.Lua.Executor's production timeout semantics to
+  fix a test-environment problem -- the wall-clock kill is a security control
+  against untrusted tenant scripts (LUA-10) and its behaviour under load is the
+  thing being asserted, not an implementation detail to relax.
 affected_files:
   - test/letflow/engine/lua/executor_test.exs
-  - test/letflow/engine/wasm/call_timeout_test.exs
   - test/test_helper.exs
+  - lib/mix/tasks/letflow.check.test.ex
 related:
-  - ISS-0423
   - ISS-0352
+  - ISS-0418
+  - ISS-0423
   - REQ-113
   - REQ-155
   - REQ-162
+  - REQ-169
+  - REQ-170
 source: >
-  Direct measurement during the architecture review, 2026-09-02:
-  TEST_PARALLEL_N=6 bash scripts/test_parallel.sh (616s wall clock,
-  combined 3056/3057 passed, 1 failure in partition 1), contrasted
-  against the same commit's serial run (1805.1s, 3060 passed, 0
-  failures) and an isolated rerun of the failing test (0.3s, passed).
+  Live 6-partition scripts/test_parallel.sh benchmark run on this host,
+  2026-09-02, while evaluating parallel execution as a speedup for ISS-0423.
 queue_task_id: 426
 github_issue: 830
+status: resolved
+resolved_in_run: WF03-ISS0426-20260902
+resolved_at: "2026-09-03T06:22:12Z"
+scope_note: >
+  Concurrent-run coordination (2026-09-02, WF03-ISS0426-20260902): the live
+  sibling run WF03-ISS0418-20260902 owns lib/letflow/engine/wasm and the wasm
+  test files (call_timeout_test.exs, plugin_handler_test.exs,
+  host_api_write_test.exs) plus lib/mix/tasks/letflow.check.test.ex while it
+  implements the OQ-5 concurrency cap. This run therefore scopes itself to the
+  LUA side plus test_helper.exs, and enumerates -- without editing -- the
+  wall-clock-sensitive wasm tests, so ISS-0418's fix is not raced. This note
+  remains accurate as of closure: the wasm-side tests were enumerated (see
+  step-01 diagnosis handoff) but never edited by this run.
+resolution: >
+  STATUS CHOSEN: resolved, not instrumented and not no_defect -- judged against
+  docs/agents/protocols/ISSUE_QUEUE.md's "Issue status vocabulary" definitions,
+  not defaulted.
 
-status: open
+  Why `resolved` and not `instrumented`: `instrumented` applies when verified
+  work shipped but "the underlying defect's root cause is not removed."
+  That is not this case. The filed defect's root cause -- 14 Group 1 call
+  sites (11 nil-heap, 3 heap-limited) racing a wall-clock OBSERVATION window
+  (Task.yield/2's timeout_ms, or a receive block's `after timeout_ms ->`
+  clause) against ordinary BEAM scheduler contention, producing the filed
+  {:error, {:wallclock_timeout, 5000}} at executor_test.exs:983 where
+  {:error, {:script_error, _}} was asserted -- is now structurally unreachable
+  BY CONSTRUCTION from all 14 call sites: the 11 nil-heap sites no longer call
+  Task.yield/2 at all, and the 3 heap-limited sites no longer evaluate any
+  `after timeout_ms ->` clause at all. This is confirmed by a static, one-time
+  source/diff read (grep each seam's body for Task.yield / an `after` clause
+  inside its receive block -- both absent), not by a repeated-run count, which
+  is the design's own explicitly stated preference (see
+  lib/letflow/design/iss426-wallclock-test-contention.md section 4) precisely
+  because the flake could not be reproduced on demand (see honesty note
+  below). "Root cause removed, evidenced structurally" is exactly resolved's
+  bar, not instrumented's.
+
+  Why `resolved` and not `no_defect`: a real defect was diagnosed (Step 1) and
+  a real fix shipped and passed every gate (CODE-DESIGN-VALIDATOR after 2
+  reworks, SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER) --
+  this is not an investigated-and-found-nothing outcome.
+
+  The genuine tension, stated plainly rather than smoothed over: 11 tests in
+  Group 2 (tagged @tag :lua_wallclock_race) still race a REAL wall-clock
+  timeout by design -- hard constraint 4 of the diagnosis/design required
+  keeping that race, because those tests exist to assert the LUA-10
+  wall-clock kill (REQ-155) actually fires; removing the race would remove
+  the property under test. Their contention exposure is REDUCED (isolated
+  single-file `mix test --only lua_wallclock_race` subprocess: no async:true
+  siblings, no scripts/test_parallel.sh cross-partition contention) rather
+  than eliminated -- see design section 4's own "what would still require a
+  repeated-run check, and why this design doesn't lean on it" paragraph. This
+  retained Group 2 race is judged NOT to be the filed defect: the filed
+  failure was a Group 1 test (AC7, a fast script_error assertion with a
+  generous 5000ms budget that never intended to race the timeout at all) and
+  was explicitly out of scope for full contention-immunity per hard
+  constraint 4 and ISS-0426's own AC framing. A future flake surfacing from
+  one of the 11 Group 2 tests under sufficient isolated-subprocess load would
+  be a NEW issue against that residual, narrower, deliberately-retained risk
+  -- not a recurrence of this one -- and should be filed as such rather than
+  reopening this record.
+
+  HONESTY REQUIREMENT ON WHAT WAS AND WAS NOT DEMONSTRATED (this record
+  outlives the run, so stating this plainly matters): the original filed
+  flake was NEVER reproduced on demand, at any point in this run. Step 1
+  (ISSUE-FIXER) could not trigger it under 24 concurrent OS-level CPU-burner
+  processes plus 48 concentrated back-to-back runs of the exact failing
+  AC7 test -- all 48 passed cleanly -- and recorded that as an honest
+  negative result, not as evidence the defect didn't exist. The fix
+  therefore does NOT rest on "reproduced the flake, applied the fix,
+  confirmed the flake is gone." It rests on STRUCTURAL verification: the
+  failure branch ({:error, {:wallclock_timeout, _}}) is unreachable from the
+  14 Group 1 call sites by construction, confirmable by reading the diff
+  without running anything. TEST-RUNNER's two clean TEST_PARALLEL_N=6
+  scripts/test_parallel.sh runs (AC6, both "combined: 3048 tests, 6
+  properties, 0 failures (3054/3054 passed)") are CONFIRMATORY evidence for
+  Group 1 and load-bearing only for Group 2's residual, narrower risk -- not
+  proof the Group 1 fix works, and not proof the original flake would have
+  been caught by these runs even pre-fix, since it was never reproduced
+  pre-fix either. Do not read this record as "flake reproduced and shown
+  gone"; it was never reproduced at all, before or after the fix.
+
+  EVIDENCE CITED (all verified this run, not inherited):
+  - Fix: two additive @doc false test-only seams on
+    Letflow.Engine.Lua.Executor (run_script_sync/3,
+    run_with_heap_limit_sync/4). lib/letflow/engine/lua/executor.ex diff vs
+    main: 113 insertions, 0 deletions. AC4 holds: production wall-clock kill
+    semantics byte-for-byte unchanged, config/config.exs:17 untouched.
+    REQ-155's LUA-10 security control intact.
+  - 11 genuinely-racing Group 2 tests tagged @tag :lua_wallclock_race,
+    excluded by default in test/test_helper.exs, isolated in a new additive
+    subprocess in lib/mix/tasks/letflow.check.test.ex (37 insertions, 0
+    deletions -- zero existing lines touched, which mattered because that
+    file is shared with the concurrent sibling run WF03-ISS0418-20260902).
+  - Coverage: 8 new tests. Fail-first satisfied by MUTATION per WF-03's rule
+    for new/repointed code, since the pre-fix failure mode here is
+    non-existence: 4 mutants each producing a discriminating failure set
+    (4/45, 4/45, 12/45, 1/56). TEST-DESIGN-VALIDATOR independently
+    reproduced mutant 1 in a throwaway git worktree and matched both the
+    failure count (4/45) and the exact failing-test set.
+  - TEST-RUNNER (test/reports/report-20260903-WF03-ISS0426-20260902.yaml):
+    full serial `mix test` -> "Result: 3057 passed (6 properties, 3051
+    tests), 21 excluded", 0 failures (AC3). Isolated
+    `--only lua_wallclock_race` partition -> 11 passed, 45 excluded, 0
+    failures. `mix letflow.check.test` -> PASS all 3 phases (default suite,
+    isolated :wasm_hang subprocess, isolated :lua_wallclock_race subprocess).
+    AC6 -> two TEST_PARALLEL_N=6 scripts/test_parallel.sh runs, both
+    "combined: 3048 tests, 6 properties, 0 failures (3054/3054 passed)", all
+    6 partitions clean both times, no ISS-0219/ISS-0222 infrastructure
+    symptoms encountered.
+  - AC6's literal-criterion concern: TEST-DESIGN-VALIDATOR filed a MINOR at
+    step-04b noting AC6's literal text (>=2 repeated end-to-end
+    scripts/test_parallel.sh runs) was not addressed within its own gate's
+    scope (correctly, since that AC was never TEST-DESIGNER's to satisfy).
+    TEST-RUNNER has since satisfied it directly with the two real runs cited
+    above -- that concern is closed.
+
+  Regression test: test/letflow/engine/lua/executor_test.exs (3 new describe
+  blocks, 8 new tests, committed alongside the fix). Diagnosis handoff:
+  handoffs/WF03-ISS0426-20260902/step-01-issue-fixer-diagnosis.json. Design:
+  lib/letflow/design/iss426-wallclock-test-contention.md.

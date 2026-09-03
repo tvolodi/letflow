@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-00",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-00-git-setup.json",
+  "created_at": "2026-09-03T23:57:37Z",
+  "started_at": "2026-09-03T23:57:37Z",
+  "completed_at": "2026-09-04T00:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "docs/issues/ISS-0446.yaml",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": ["test/letflow/engine/service_task_dispatcher_test.exs"]
+  },
+  "task": {
+    "description": "Git setup for ISS-0446: a check-then-act teardown race in service_task_dispatcher_test.exs:1131-1133 that intermittently reddens unrelated branches' CI gates. Queue task 453 claimed.\n\nSIZING VERDICT (ORCHESTRATOR.md section 10): FAILS -- routes through the full WF-03 chain. Checks 1, 2, 3 and 5 pass cleanly (one file, no new public function/module/@spec, no migration, no tenant-data path). Checks 4 and 6 are BOTH ambiguous, and section 10 is explicit that an ambiguous check is a 'no': (4) the file is not itself a supervision-tree source file, but the change is squarely about supervisor ownership and teardown ordering, which is the property check 4 exists to protect; (6) the change is TO test code, and option (a) would delete a teardown step outright -- whether that alters asserted behaviour is precisely the question the fix has to answer, so it cannot be assumed away at sizing time. Two ambiguous checks, therefore full chain."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 453 claimed via get_next_task (agent_id letflow-2-orch, locked_at 2026-09-03T23:57:15Z, github_issue_number 868). Branch fix/ISS-0446-throwaway-supervisor-teardown-race-20260904 created from main (72aeb342) and pushed.\n\nQUEUE-METADATA DISCREPANCY, recorded so no downstream agent chases it: the queue task's issue_ref field reads 'ISS-0453', which does NOT exist on disk. The real issue is ISS-0446 (docs/issues/ISS-0446.yaml), and the task's own title and body describe ISS-0446 verbatim. The queue appears to have derived issue_ref from its own task id (453) rather than from the filed issue id. Treat ISS-0446 as authoritative; task 453 is the correct lock to release at Step Final.\n\nFACTS GATHERED FOR THE DIAGNOSIS, so ISSUE-FIXER need not rediscover them:\n  - The implicated teardown is at test/letflow/engine/service_task_dispatcher_test.exs:1131-1133, inside the test at line 1113. Confirmed present on main at 72aeb342, verbatim as the issue quotes it.\n  - The test module is `use Letflow.DataCase, async: false` (line 35). So the race is NOT caused by concurrent ExUnit processes within this file; it is between the test process's own exit-time link teardown and the on_exit callback, which is exactly what the issue's root-cause reading claims.\n  - This is the ONLY Supervisor.stop/1 call anywhere in test/ (verified by grep across the whole test tree). There is no in-suite precedent for option (b)'s race-tolerant-explicit-stop shape to follow, and adopting one would be establishing a new pattern rather than matching an existing one.\n  - There IS a well-established in-suite precedent for the underlying need: ExUnit's own start_supervised/start_supervised!, used at test/letflow/admission_test.exs:19 and test/letflow/scheduler/poller_test.exs:148 and :400. start_supervised puts the process under ExUnit's own supervisor with defined teardown ordering and no user-written on_exit at all -- which is closer to option (c) (unambiguous ownership) than to (a) or (b), and is worth evaluating alongside the three options the issue lists rather than being left out of the comparison.\n  - Toolchain is live in this environment: Elixir 1.20.3 / Erlang OTP 29, mix available. Tests CAN be run and a fail-then-pass proof CAN be produced locally -- with the caveat that this is a timing-dependent race that passed 3192/3192 locally on the reporting run, so a naive local rerun proving 'it passes' is NOT evidence of a fix. Any claim of resolution must rest on removing the race structurally, not on a green local run.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

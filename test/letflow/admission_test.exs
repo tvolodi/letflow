@@ -135,16 +135,39 @@ defmodule Letflow.AdmissionTest do
     end
 
     test "release/1 is idempotent on an unknown/already-released ref" do
-      {_pid, name} = start_admission(pool_size: 4, reserved_headroom: 2)
+      # cap == 1 (deliberately, not 2+) so the closing behavioral proof
+      # below can distinguish "no-op releases freed nothing" from "a no-op
+      # release phantom-freed a unit" with a single further acquisition.
+      {_pid, name} = start_admission(pool_size: 3, reserved_headroom: 2)
       {:ok, ref} = Admission.try_acquire(:global, name)
 
       assert :ok = Admission.release(ref, name)
-      # second release of the same ref is a documented no-op, not a raise
-      assert :ok = Admission.release(ref, name)
+      state_after_real_release = :sys.get_state(name)
 
-      # a hand-constructed, never-issued ref is also a no-op
+      # second release of the same ref is a documented no-op, not a raise --
+      # and, critically, must NOT further decrement global_in_use. A buggy
+      # {:release,...} clause that always decrements regardless of whether
+      # the ref is still a live member of state.refs would return :ok here
+      # too, so asserting only the return value (as this test used to)
+      # cannot tell a correct no-op apart from a state-corrupting
+      # double-release -- assert on the actual counter instead.
+      assert :ok = Admission.release(ref, name)
+      assert :sys.get_state(name).global_in_use == state_after_real_release.global_in_use
+
+      # a hand-constructed, never-issued ref is also a no-op -- same
+      # state-corruption concern: a forged ref must not free a phantom unit.
       forged = %Admission.Ref{id: make_ref(), pool: :global}
       assert :ok = Admission.release(forged, name)
+      assert :sys.get_state(name).global_in_use == state_after_real_release.global_in_use
+
+      # behavioral proof, independent of internal field names: the freed
+      # unit from the one REAL release above is still the only extra
+      # capacity available -- exactly one further :global acquisition
+      # succeeds, and the next one after that is rejected. If either no-op
+      # release above had phantom-freed a unit, a second acquisition here
+      # would also succeed.
+      assert {:ok, _} = Admission.try_acquire(:global, name)
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
     end
   end
 

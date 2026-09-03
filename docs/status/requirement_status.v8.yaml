@@ -703,3 +703,34 @@ history:
       Admission-control core (closes ISS-0431 part 1). Queue task 434
       (GH#839) locked. Branch feature/WF02-REQ216-20260902 created from
       main. Dispatching Step 1 (CODE-DESIGNER).
+
+  - req: REQ-216
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-03T01:28:40Z"
+    note: >
+      WF02-REQ216-20260902 done (queue task 434, GH#839, stage S6).
+      RELEASE-VALIDATOR independently re-verified all 7 acceptance criteria
+      PASS (full suite 3074/3076 via mix letflow.check.test, 2 failures
+      structurally attributed to a pre-existing environmental rustc-ENOENT
+      gap unrelated to this branch; mix compile --warnings-as-errors --force
+      clean). Ships new module Letflow.Admission (lib/letflow/admission.ex),
+      a hand-rolled pure-BEAM GenServer implementing a global + per-tenant
+      counting semaphore tied to config/runtime.exs's POOL_SIZE
+      (global_cap = pool_size - reserved_headroom, per-tenant cap = equal
+      fair-share split with a floor of 1, both gates checked on every
+      tenant acquisition), added to Letflow.Application's supervision tree
+      (lib/letflow/application.ex line 65, moduledoc states no start-order
+      dependency). Core module only -- no HTTP-path or Poller wiring in
+      this requirement; REQ-217 (HTTP entry-path wiring, queue task 435,
+      GH#840) and REQ-218 (Poller wiring, queue task 436, GH#841) remain
+      pending. Closes ISS-0431/GH#835 part 1 of 3 only -- ISS-0431 itself
+      stays status: open until REQ-217/REQ-218 also land, per its own
+      orch_routing_note (verified unchanged and still accurate: no update
+      needed there, since both dependent requirements are still pending).
+      Path: 1 CODE-DESIGN-VALIDATOR rework round (step-01c/01d) and 1
+      TEST-DESIGNER rework round (step-06/07) before both passed clean.
+      docs/migration/stage-6-operational-cross-cutting.md and
+      docs/agents/AGENT_SYSTEM.md checked directly (grep for "ISS-0431" and
+      "admission"): neither references the admission-control gap, so
+      neither needed a staleness update from this step.

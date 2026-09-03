@@ -1,0 +1,58 @@
+{
+  "handoff_id": "WF02-REQ217-20260903-step-01",
+  "run_id": "WF02-REQ217-20260903",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ217-20260903/step-01-code-designer.json",
+  "created_at": "2026-09-03T02:36:04Z",
+  "started_at": "2026-09-03T02:36:04Z",
+  "completed_at": "2026-09-03T02:36:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-217"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/admission.ex",
+      "lib/letflow/plugs/api_pipeline.ex",
+      "lib/letflow/plugs/auth_pipeline.ex",
+      "lib/letflow/tenant_provisioning.ex",
+      "lib/letflow/api/response.ex",
+      "lib/letflow/plugs/tenant_status.ex",
+      "lib/letflow/plugs/http_metrics.ex",
+      "deps/bandit/lib/bandit/pipeline.ex",
+      "deps/plug/lib/plug/error_handler.ex"
+    ],
+    "branch_name": "feature/WF02-REQ217-20260903",
+    "requirement_text": "Second half of ISS-0431/GH#835's fix for its own stated PRIMARY\nsurface, atop REQ-216's core module. Mirrors REQ-186/REQ-187's and\nREQ-214/REQ-215's own \"core module first, wiring requirement(s)\nsecond, disjoint files\" split precedent in this file.\n\nTWO ADMISSION GATES, NOT ONE, because tenant identity is not known\nuntil partway through `Letflow.Plugs.ApiPipeline`'s existing chain --\nread in full (lib/letflow/plugs/api_pipeline.ex): `Plug.Parsers` runs\nfirst, then `assign_trace_id`, then `Letflow.Plugs.AuthPipeline`\n(which itself resolves tenant identity via a DB read -- token\nverification, tenant-by-realm/slug resolution, JIT provisioning --\ni.e. AuthPipeline's OWN work already consumes a DB connection BEFORE\nany tenant identity exists to gate on), then\n`Letflow.Plugs.TenantStatus`, then `match`/`dispatch`. Given that\nordering, a single per-tenant-only gate cannot run early enough to\ncover AuthPipeline's own connection use. Resolved as follows, stated\nas an accepted, disclosed limitation rather than silently glossed\nover (matching this project's own honesty convention for a limitation\nthat cannot be fully closed within one requirement's scope, e.g.\ndecision 0014's own disclosed WASM native-crash gap):\n\n1. GLOBAL gate, mounted FIRST in the chain -- before `Plug.Parsers`,\nso a request rejected for lack of capacity is rejected before any\nbody-parsing work is spent on it. Calls\n`Letflow.Admission.try_acquire(:global)`. Covers AuthPipeline's own\nconnection use (the gap named above) because it runs before\nAuthPipeline and gates ALL downstream DB-connection-holding work,\nauth included.\n2. PER-TENANT gate, mounted immediately AFTER `Letflow.Plugs.AuthPipeline`\n(tenant identity now resolved into `conn.assigns.auth_context.tenant_id`)\nand BEFORE `Letflow.Plugs.TenantStatus`/`match`/`dispatch`. Calls\n`Letflow.Admission.try_acquire({:tenant, schema_name})`, resolving\n`schema_name` the same way `Letflow.Plugs.TenantStatus` and\n`Letflow.Scheduler.Poller` already do (tenant-id -> schema-name\nresolution already exists in this codebase; reuse it, do not\nre-derive). Covers TenantStatus's own DB lookup and every sub-router's\ndispatch work -- the dominant share of connection-holding time per\nREQ-056/ISS-0431's own round-trip profiling.\nDISCLOSED LIMITATION: AuthPipeline's own DB work (steps 1-4 of its\nmoduledoc) is covered by the global gate only, not a per-tenant one,\nbecause tenant identity does not exist yet at that point in the\nchain. This is accepted, not silently omitted -- state it in this\nplug's own moduledoc.\n3. Both gates: on `{:error, :capacity}`, respond immediately (halt the\nplug chain, no further plugs run) via\n`Letflow.Api.Response.service_unavailable/2` (REQ-066, ALREADY\nEXISTING -- do not add a new response helper), with the\n`Retry-After` header set explicitly on the conn first (matching\n`Response.rate_limited/2`'s own documented \"caller sets Retry-After\"\nconvention) to a fixed, configured seconds value (config, default 1)\n-- NOT a computed estimate, since this admission mechanism has no\nqueueing/backoff-timing model to estimate from (a fixed short value\nmatching `Letflow.Plugs.TenantStatus`'s own existing `@retry_after_seconds\n\"30\"` precedent's SHAPE, though the specific number here is\nindependently justified: admission rejection is a near-instant\ndecision with no wait queue behind it, unlike TenantStatus's\nmigration-in-progress case, so a MUCH shorter retry-after is\nappropriate -- state this reasoning in the plug's moduledoc rather\nthan copying TenantStatus's 30-second value uncritically).\n4. On success at BOTH gates: the plug stores both `admission_ref()`s\nin `conn.assigns` and registers a `Plug.Conn.register_before_send/2`\n(or equivalent, matching how this codebase already threads\nrequest-scoped cleanup -- state which mechanism is chosen and why) or\ncalls `Letflow.Admission.release/1` for both refs when the response is\nsent, so an admitted request's slot is freed exactly once, on every\nresponse path including a request that raises inside a downstream\nplug or router (verified in the acceptance criteria below).\nNOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore logic;\nno change to `Letflow.Plugs.RateLimit` (still deferred, unmounted,\nunrelated mechanism); no Poller wiring (REQ-218); no tier-weighted\nper-tenant caps (REQ-216's own recorded open question).\n"
+  },
+  "task": {
+    "description": "WF-02 Step 1 (code design) for REQ-217: produce lib/letflow/design/req217-http-admission-wiring.md covering both admission gates' exact plug shape/mount points, the {:error, :capacity} halt-and-respond behavior via the existing Response.service_unavailable/2, the Retry-After config key/default, and -- most safety-critically -- the exact ref-release mechanism that survives a downstream raise, verified against this codebase's real Bandit/Plug source rather than assumed.",
+    "acceptance_criteria": [
+      "with REQ-216's global cap artificially forced to 0 (test config override), every request to any /api/v1/* route -- including one that would otherwise pass auth -- receives HTTP 503 with a Retry-After header and Plug.Parsers never runs (no body-parsing side effect observable), confirmed by a request carrying a body too large for the parser's own limit still returning 503 rather than 413",
+      "with the global cap open but a specific tenant's per-tenant cap artificially forced to 0, a request authenticated as that tenant receives HTTP 503 with Retry-After, while a request authenticated as a DIFFERENT tenant (same global cap) succeeds -- both requests observed in the same test",
+      "a successfully admitted request that completes normally releases both its global and per-tenant admission_ref()s exactly once, verified by exhausting the cap, making one full round-trip request, and observing a subsequent request now succeeds",
+      "a successfully admitted request whose downstream handler RAISES still releases both admission_ref()s (no permanent slot leak on an error path) -- a test that forces a raise in a route handler and then verifies a subsequent request still succeeds",
+      "the 503 response body matches Letflow.Api.Response.service_unavailable/2's existing Error.service_unavailable/1 document shape exactly (same fields REQ-066's own test/letflow/api/error_test.exs already asserts), confirmed by comparing against that existing test's expected shape rather than asserting a new ad hoc body shape",
+      "the plug chain order change is confirmed by reading lib/letflow/plugs/api_pipeline.ex: the global admission plug is the very first plug (before Plug.Parsers), and the per-tenant admission plug is positioned after Letflow.Plugs.AuthPipeline and before Letflow.Plugs.TenantStatus",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc written at lib/letflow/design/req217-http-admission-wiring.md. Key decisions: (1) ONE parameterized Plug module, Letflow.Plugs.Admission, mounted twice (pool: :global before Plug.Parsers; pool: :tenant after AuthPipeline/before TenantStatus) rather than two near-duplicate modules. (2) Per-tenant schema derivation reuses Letflow.TenantProvisioning.schema_name_for_tenant/1 (the same pure function AuthPipeline itself already calls), read from conn.assigns.auth_context.tenant_id -- confirmed exact key path by reading auth_pipeline.ex's attach_auth_context/4. (3) Rejection path: put_resp_header(\"retry-after\", ...) then Response.service_unavailable/2 then halt/1, config key :letflow, :admission, :retry_after_seconds (default 1), added alongside REQ-216's existing :reserved_headroom key in the same keyword list. (4) Ref-release/raise-safety (the safety-critical part): verified by reading deps/bandit/lib/bandit/pipeline.ex directly that register_before_send/2 callbacks run only inside commit_response!/1 and are SKIPPED ENTIRELY on any catch/rescue -- Bandit's handle_error/7 sends its crash response straight off the raw transport, never touching the crashed conn. So Mechanism A (register_before_send, releasing the conn.assigns ref) covers every non-crashing response path but NOT a downstream raise. For the raise path (AC4), added Mechanism B: a narrowly-scoped `use Plug.ErrorHandler` on Letflow.Plugs.ApiPipeline whose handle_errors/2 releases refs then lets Plug.ErrorHandler's own machinery unconditionally re-raise (Bandit's existing generic crash response is unchanged -- no new response contract introduced). Also verified by reading Plug.ErrorHandler's macro expansion that the conn visible inside handle_errors/2 is bound to the ORIGINAL pre-pipeline conn parameter, not the downstream-rebound conn carrying the admission-ref assigns -- so conn.assigns is NOT a reliable read channel there. Mechanism B therefore reads refs from a process-dictionary list (Process.put/get/delete under :letflow_admission_refs) populated by the same plug's success branch, independent of which conn binding is in scope at crash time. Both mechanisms are always active and rely on Letflow.Admission.release/2's documented idempotency to make any overlap harmless rather than trying to cleanly partition the two paths. No implementation code included -- signatures/@spec/@type/prose only.",
+    "design_doc": "lib/letflow/design/req217-http-admission-wiring.md",
+    "open_questions": [
+      "OQ-1: no shared repo-wide convention yet for reserved process-dictionary key prefixes if a future requirement wants the same raise-survival trick -- not blocking, flagged for REVIEWER.",
+      "OQ-2: the per-tenant gate's believed-unreachable {:error, :invalid_tenant_id} / missing-:auth_context branches are left to crash (relying on Mechanism B's cleanup) rather than routed through Response.internal_error/1 -- flagged as a compatible alternative if REVIEWER prefers it."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

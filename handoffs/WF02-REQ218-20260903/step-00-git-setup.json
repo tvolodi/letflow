@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF02-REQ218-20260903-step-00",
+  "run_id": "WF02-REQ218-20260903",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ218-20260903/step-00-git-setup.json",
+  "created_at": "2026-09-03T08:45:00Z",
+  "started_at": "2026-09-03T08:45:00Z",
+  "completed_at": "2026-09-03T08:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-218"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/admission.ex"
+    ],
+    "branch_name": "feature/WF02-REQ218-20260903",
+    "requirement_text": "Third and final part of ISS-0431/GH#835's fix, covering its own\nexplicitly-named SECONDARY surface: \"Poller's per-tenant sweeps and\nfuture LISTEN/NOTIFY work (ISS-0430) are secondary surfaces to cover\nby the same decision rather than each inventing its own cap.\" Atop\nREQ-216's core module; does not touch REQ-217's HTTP-path wiring.\n\nWHAT `lib/letflow/scheduler/poller.ex` ACTUALLY DOES TODAY (read in\nfull, not assumed): `handle_info(:tick, ...)` calls\n`Enum.each(schemas, fn schema_name -> Scheduler.poll_and_fire(schema_name)\nend)` -- SEQUENTIAL, one tenant schema at a time, not concurrent. The\nsame sequential pattern repeats for\n`maybe_run_retention_sweep/2`, `maybe_run_alert_detection/3`,\n`maybe_run_ordering_cycle/1`, `maybe_run_ordering_sweeper/1`,\n`maybe_run_ordering_metrics/1`. So THIS module does not exhibit\nunbounded CONCURRENT demand the way the HTTP path does (each call\nblocks the single Poller GenServer process, so at most one DB\nconnection is held by Poller work at any instant) -- the real gap\nhere is ACCOUNTING, not concurrency: Poller's one held connection is\ninvisible to REQ-216's admission budget, so REQ-216's global cap\n(`pool_size - reserved_headroom`) can only be a safe ceiling on\nHTTP-path concurrency if `reserved_headroom` already reserves enough\nslack for Poller's own use -- an implicit, untested assumption today.\nThis requirement makes that assumption explicit and enforced rather\nthan merely documented.\n\nSCOPE:\n1. Before each of the six sequential per-tenant operations named\nabove (the timer poll-and-fire loop plus the five `maybe_run_*`\nsweeps), acquire ONE global admission slot via\n`Letflow.Admission.try_acquire(:global)` for that operation's single\nRepo-touching call, and release it immediately after that call\nreturns (success or the operation's own already-established rescue\npath -- do not weaken any existing per-operation try/rescue\nisolation boundary documented in poller.ex's moduledoc, e.g.\n`maybe_run_alert_detection/3`'s own `rescue _ -> :ok`; the\nacquire/release wraps around the existing isolation, it does not\nreplace it).\n2. On `{:error, :capacity}` from `try_acquire(:global)` for a given\nschema's operation within a tick: skip that one schema's operation\nfor that tick only (do not crash the GenServer, do not skip every\nother schema's turn, do not skip that schema's OTHER operations this\ntick if a later `try_acquire` call for a different operation\nsucceeds) -- mirroring `fetch_tenant_schemas/0`'s own existing\nper-tick-degrades-gracefully philosophy already documented in this\nmodule's moduledoc, applied per-schema-per-operation rather than\nper-tick.\n3. Poller does NOT use REQ-216's per-tenant semaphore -- only\n`:global`. Reasoning: Poller's sweep already iterates every tenant\nschema once per tick by design (REQ-186's own decision), so a\nper-tenant CAP on Poller would not bound fairness between tenants the\nway it does for bursty HTTP traffic, it would only cause a tenant to\nbe silently skipped some ticks for no client-visible reason -- a\nstrictly worse outcome for a background sweep whose whole contract is\n\"every tenant gets a turn.\" Stated explicitly rather than left\nimplicit.\n4. No change to `Letflow.Application`'s supervision tree (no new\nprocess; Poller remains the sole caller, same GenServer, same child\nentry) and no change to `Letflow.Scheduler`'s own `poll_and_fire/1`\ncontract (unchanged input/output; the acquire/release wraps its call\nsite in `poller.ex`, per §1 above).\nNOT IN THIS REQUIREMENT: no change to REQ-216's core semaphore or\nREQ-217's HTTP-path wiring; no change to ISS-0430's future LISTEN/\nNOTIFY work (named by ISS-0431 as a future secondary surface to cover\n\"by the same decision,\" not this requirement's own job to build); no\nchange to any `maybe_run_*` function's own internal per-schema\nrescue logic beyond wrapping it in acquire/release.\n"
+  },
+  "task": {
+    "description": "Git setup for REQ-218: wire admission control into Poller's per-tick tenant sweep (closes ISS-0431 part 3, secondary surface). Lock queue task 436, create feature branch from main, flip REQ-218 to in_progress, append started event."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 436 locked via set_lock (agent_id: orch-ai-dala, unblocked by REQ-216's merge; REQ-217 -- the other REQ-216 dependent -- already merged too, no conflict expected on files this touches). Branch feature/WF02-REQ218-20260903 created from main (includes REQ-216's Letflow.Admission and REQ-217's HTTP wiring). REQ-218 flipped to in_progress in docs/requirements.yaml. started event appended to docs/status/requirement_status.v8.yaml, index entry count bumped to 23."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

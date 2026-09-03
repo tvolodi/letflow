@@ -4182,6 +4182,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #850 merged to main, queue task 435 released done",
       "note": "WF-02 requirement-implementation run for REQ-217: wire admission control into the HTTP entry path (two gates -- global before Plug.Parsers, per-tenant after AuthPipeline), 503+Retry-After on rejection. Closes ISS-0431 part 2 of 3. Depends on REQ-216 (done, merged)."
+    },
+    {
+      "run_id": "WF02-REQ218-20260903",
+      "requirement_id": "REQ-218",
+      "issue_id": null,
+      "queue_task_id": 436,
+      "github_issue_number": 841,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/scheduler/poller.ex"
+      ],
+      "started_at": "2026-09-03T08:45:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "note": "WF-02 requirement-implementation run for REQ-218: wire admission control into Pollers per-tick tenant sweep (global-only acquire/release around each of 6 sequential per-tenant operations). Closes ISS-0431 part 3 of 3 (secondary surface). Depends on REQ-216 (done, merged)."
     }
   ]
 }

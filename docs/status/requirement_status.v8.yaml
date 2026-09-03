@@ -961,3 +961,13 @@ history:
       a false problem. Closes ISS-0431 part 2 of 3 (primary HTTP surface);
       REQ-218 (Poller wiring, queue task 436, GH#841) remains pending as
       part 3.
+  - req: REQ-218
+    event: started
+    agent: ORCH
+    at: "2026-09-03T08:45:00Z"
+    note: >
+      Wire admission control into Poller's per-tick tenant sweep (closes
+      ISS-0431 part 3, secondary surface). Queue task 436 (GH#841)
+      locked, unblocked by REQ-216's merge. Branch
+      feature/WF02-REQ218-20260903 created from main. Dispatching Step 1
+      (CODE-DESIGNER).

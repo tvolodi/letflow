@@ -12867,7 +12867,7 @@ requirements:
   - id: REQ-218
     title: Wire admission control into Poller's per-tick tenant sweep, closing ISS-0431 part 3 (secondary surface)
     owner: ELIXIR-DEV
-    status: pending
+    status: in_progress
     stage: S6
     impl_order: 436  # letflow-queue task id, GH#841
     description: >

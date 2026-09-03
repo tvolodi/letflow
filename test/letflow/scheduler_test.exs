@@ -581,6 +581,70 @@ defmodule Letflow.SchedulerTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0444 -- claim_due_timer_ids/2's/poll_and_fire/1's/run_retention_sweep/1's
+  # own contracts against a tenant schema that is genuinely absent (a
+  # `"tenant_" <> 32-hex-chars` string that passes
+  # `TenantProvisioning.tenant_id_for_schema_name/1`'s format regex but has NO
+  # physical `CREATE SCHEMA` ever run for it -- distinct from a present schema
+  # missing only one table). See
+  # `lib/letflow/design/iss0444-poller-schema-availability.md` §1/§4/§6. No
+  # `provisioned_tenant/0` fixture involved -- these tests deliberately never
+  # provision anything for `schema_name`.
+  # ---------------------------------------------------------------------------------
+
+  defp never_provisioned_schema_name do
+    "tenant_" <> (Ecto.UUID.generate() |> String.replace("-", ""))
+  end
+
+  describe "ISS-0444: claim_due_timer_ids/2 against a genuinely-absent tenant schema" do
+    test "returns [] instead of raising a Postgrex.Error, and logs a warning naming the schema" do
+      schema_name = never_provisioned_schema_name()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert Scheduler.claim_due_timer_ids(schema_name, 10) == []
+        end)
+
+      assert log =~ "tenant schema unavailable"
+      assert log =~ schema_name
+    end
+  end
+
+  describe "ISS-0444: poll_and_fire/1's own 'never raises' contract now holds for a genuinely-absent schema" do
+    test "returns an all-zero poll_result() instead of raising, and logs a warning" do
+      schema_name = never_provisioned_schema_name()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert Scheduler.poll_and_fire(schema_name) == %{
+                   tenant_schema: schema_name,
+                   claimed: 0,
+                   fired: 0,
+                   errored: 0,
+                   exhausted: 0
+                 }
+        end)
+
+      assert log =~ "tenant schema unavailable"
+    end
+  end
+
+  describe "ISS-0444: run_retention_sweep/1 against a genuinely-absent tenant schema" do
+    test "returns {:error, {:schema_unavailable, _}} instead of raising, and logs a warning" do
+      schema_name = never_provisioned_schema_name()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert Scheduler.run_retention_sweep(schema_name) ==
+                   {:error, {:schema_unavailable, schema_name}}
+        end)
+
+      assert log =~ "tenant schema unavailable"
+      assert log =~ "retention sweep"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # AC9 -- no route or controller file added or modified (structural, no git
   # history dependency -- see test/letflow/dlq_test.exs's own AC6 comment for
   # why a hardcoded-commit-SHA git check is this project's own documented

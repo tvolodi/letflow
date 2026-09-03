@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF03-ISS0444-20260903-step-02c",
+  "run_id": "WF03-ISS0444-20260903",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0444-20260903/step-02c-code-designer-rework.json",
+  "created_at": "2026-09-03T15:30:00Z",
+  "started_at": "2026-09-03T15:20:00Z",
+  "completed_at": "2026-09-03T15:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-218", "REQ-188", "REQ-186"],
+    "issue_ids": ["ISS-0444"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0444-20260903/step-02b-code-design-validator.json",
+      "lib/letflow/design/iss0444-poller-schema-availability.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/event_store.ex",
+      "test/letflow/event_store_test.exs",
+      "test/letflow/engine/reconstruction_test.exs"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0444-poller-schema-availability.md"
+    ],
+    "branch_name": "fix/ISS-0444-poller-missing-schema-20260903"
+  },
+  "task": {
+    "description": "Rework: correct §4's fabricated 'archive/1 has several OTHER callers/contexts' justification per CODE-DESIGN-VALIDATOR's step-02b FAIL verdict, without changing anything else in the design."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Independently re-ran `grep -rn \"EventStore.archive(\" lib/ test/` before touching the doc. Confirms CODE-DESIGN-VALIDATOR's finding exactly: EventStore.archive/1's ONLY production call site in lib/ is lib/letflow/scheduler.ex:565 (run_retention_sweep/1 itself). All other call sites are direct unit-test invocations: 8 occurrences in test/letflow/event_store_test.exs (lines 693, 777, 783, 817, 849, 869, 1053, 1087) and 1 in test/letflow/engine/reconstruction_test.exs:353. No other production caller exists anywhere in lib/.\n\nReplaced §4's rescue-placement justification sentence (previously: 'archive/1 is a general-purpose context function with several OTHER callers/contexts implied by its own moduledoc ... widening ITS rescue behavior is a larger, less-scoped change than run_retention_sweep/1 ... catching the same narrow error at its own call site'). The new text: (1) states the re-verified grep fact plainly -- one production caller (run_retention_sweep/1 itself), ~10 unit-test call sites, no other production callers exist today; (2) reframes the actual justification around CONTRACT ownership rather than caller count -- archive/1 is EventStore's general-purpose primitive by design intent (moduledoc documents retention-policy precedence and idempotency as reusable properties for whatever calls it, now or later), and its own unit tests deliberately exercise it in isolation and may want a raise on a genuinely-missing schema to propagate (to catch a real bug) rather than be silently folded into {:error, {:schema_unavailable, _}}; widening archive/1's rescue behavior would need checking against every one of those ~10 existing assertions for a behavioral change outside this fix's scope; (3) ties the placement back to §1's own idiom -- rescue at the outermost function whose contract promises graceful degradation (run_retention_sweep/1, the function this design is actually repairing), not inside the shared lower-level primitive it delegates to. The underlying placement decision (rescue in run_retention_sweep/1, not archive/1) is unchanged -- only the stated reason is corrected. No other section of the design doc was touched.",
+    "routing": "Route to CODE-DESIGN-VALIDATOR (step 2c) to re-check only the corrected §4 justification sentence against the grep evidence above; all other checks already passed in step-02b and require no re-verification per that verdict's own routing."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

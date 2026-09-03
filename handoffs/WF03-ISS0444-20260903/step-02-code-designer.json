@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF03-ISS0444-20260903-step-02",
+  "run_id": "WF03-ISS0444-20260903",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0444-20260903/step-02-code-designer.json",
+  "created_at": "2026-09-03T14:28:47Z",
+  "started_at": "2026-09-03T14:00:00Z",
+  "completed_at": "2026-09-03T14:28:47Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-218", "REQ-188", "REQ-186"],
+    "issue_ids": ["ISS-0444"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0444-20260903/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/tenant_provisioning/backfill.ex",
+      "lib/letflow/obs/alerts.ex",
+      "lib/letflow/engine/pin_rebind.ex",
+      "lib/letflow/design/req218-poller-admission-wiring.md",
+      "test/letflow/scheduler_test.exs"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0444-poller-schema-availability.md"
+    ],
+    "branch_name": "fix/ISS-0444-poller-missing-schema-20260903"
+  },
+  "task": {
+    "description": "Design a fix for ISS-0444 (Letflow.Scheduler.poll_and_fire/1's undocumented raise on a tenant with a fully-missing Postgres schema, crashing the whole tick's Poller Enum.each for every tenant) per the Step-1 diagnosis, resolving the four design-judgment points the diagnosis explicitly deferred: (1) rescue boundary placement, (2) what poll_result() reports for a skipped schema, (3) exact Logger.warning/1 call shape with real precedent, (4) whether to fix the identical run_retention_sweep/1 gap in the same pass."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Wrote lib/letflow/design/iss0444-poller-schema-availability.md. Read lib/letflow/scheduler.ex and lib/letflow/scheduler/poller.ex in full, plus the two Logger.warning/1 precedents (backfill.ex:37-49, alerts.ex:585-593) and pin_rebind.ex:372-390 (a third, closer precedent for the RESCUE SHAPE specifically, not cited in the diagnosis).\n\n(1) Rescue boundary: placed inside claim_due_timer_ids/2 itself (the one statement that actually performs the risky Repo.all call), not in poll_and_fire/1's body and not as a poller.ex call-site rescue. Rejected the poller.ex-call-site option (the pattern the other 5 maybe_run_* sweeps use) because poller.ex's own moduledoc explicitly declines a redundant rescue there specifically because it trusts poll_and_fire/1's own contract -- patching only the call site would leave that documented contract false for every other caller (direct test calls, any future non-Poller caller). Rescuing at the exact call site (not one level up in poll_and_fire/1) matches this codebase's own idiom: pin_rebind.ex's lock_projection_nowait/2 and poller.ex's fetch_tenant_schemas/0 both rescue around their OWN risky call, not their caller's. claim_due_timer_ids/2's public @spec/return type (`[Ecto.UUID.t()]`) is UNCHANGED -- it returns [] on a matched error, preserving test/letflow/scheduler_test.exs:578-579's existing length/1 assertions verbatim.\n\nRescue is narrow, not a bare `rescue _`: matches `error in Postgrex.Error` then tests postgres.code against [:undefined_table, :undefined_schema] via match?/2 (mirroring pin_rebind.ex:372-390's own narrow-match-else-reraise shape), re-raising via reraise/2 for any other code or exception type. Chosen over alert_detection's bare `rescue _ -> :ok` because this is a DB-schema-availability check, not a blanket 'insulate an untrusted callee' boundary -- a bare rescue would silently fold a genuinely different bug (bad query, FunctionClauseError, schema drift) into 'zero due timers,' indistinguishable from a routine empty poll.\n\n(2) poll_result(): left the @type COMPLETELY UNCHANGED -- no new field. A schema-unavailable tick reports the existing all-zero shape (claimed/fired/errored/exhausted all 0), identical to a tick that legitimately finds nothing due; the sole externally-visible distinguishing signal is the one Logger.warning/1 line, emitted once at the true source. Documented and rejected two alternatives: a new `schema_available: boolean()` field (would require a side-channel from claim_due_timer_ids/2 back to poll_and_fire/1 with no query-doubling -- the only mechanism found, a process-dictionary hand-off, has no precedent anywhere in this codebase and was judged not worth the risk for a signal no acceptance criterion names) and a tagged-tuple top-level return (would break poll_and_fire/1's unconditional map-return contract every existing caller/test relies on).\n\n(3) Logger.warning/1 shape: message string + keyword metadata (schema:, reason: :schema_unavailable), matching alerts.ex:588's shape -- explicitly NOT backfill.ex:37's single-interpolated-string-only shape. Justified by the closer, more local precedent: poller.ex's OWN with_admission/3 (this same REQ-218 cycle) already chose the alerts.ex:588 message+keyword shape for an analogous schema-plus-context skip log, over backfill.ex's shape, in the very same file. run_retention_sweep/1's rescue reuses the identical clause shape and log-metadata keys (different message text only).\n\n(4) Scope: fixed BOTH gaps in this one design. run_retention_sweep/1 gains the identical narrow rescue shape at its own call site (not inside EventStore.archive/1, which has other callers/contexts implied by its own moduledoc -- narrower change stays scoped to the one function REQ-188's Poller integration actually calls). No type change needed there -- its @spec already includes {:error, term()} and its only caller (maybe_run_retention_sweep/2 in poller.ex) already discards the return value entirely, so poller.ex needs zero changes for this half to take effect. Reasoning given for NOT filing a second issue: the defect is already fully traced by ISSUE-FIXER (exact call chain, exact error shape, exact fix shape) and reuses an already-existing {:error, term()} branch -- filing a fresh issue for something this well-understood, when fixing costs no more than describing it, would itself risk violating 'No Issue Left Local-Only' in spirit.\n\nAlso addressed: poller.ex moduledoc does NOT need updating (its 'no redundant rescue because the contract holds' statement was already true in intent; this fix makes it true in fact, restoring rather than changing the architecture it describes). No interaction with REQ-218's with_admission/3 admission wiring -- both fixed functions keep returning the same bare value shapes at the same call points, `after`-release is unaffected. Test approach specified for TEST-DESIGNER (not implemented): fail-first repro against a syntactically-valid-but-never-provisioned schema string (the exact fixture gap ISSUE-FIXER flagged as untested), post-fix assertions for both the timer-poll and retention paths, a tick-survives-mixed-schemas blast-radius test in both tenant orderings, and confirmation that scheduler_test.exs's existing claim_due_timer_ids/2 assertions are unaffected.\n\nNo implementation code in the design doc -- initial draft contained a rescue-clause code fence and one full run_retention_sweep/1 function body (matching this exact session's prior REQ-157/REQ-217/REQ-218 rework pattern for literal Elixir code in design docs); self-caught on re-read and rewritten as prose describing the same rescue-clause shape and function body in words, with only @type/@spec blocks and one cited (not authored) existing-code quote from pin_rebind.ex retained, and even that citation was converted to a prose description of the read code rather than a quoted fence, to stay unambiguously on the safe side of the precedent. Verified via grep: no ``` code fences and no `def`/`defp` lines remain in the final file.",
+    "routing": "Route to Step 2b CODE-DESIGN-VALIDATOR to gate lib/letflow/design/iss0444-poller-schema-availability.md before ELIXIR-DEV/TEST-DESIGNER proceed. Pay particular attention to: (1) §1's decision to rescue inside claim_due_timer_ids/2 rather than poll_and_fire/1 or poller.ex -- confirm this genuinely makes poll_and_fire/1's own '@doc Never raises' claim true for every caller, not just Poller's; (2) §2's firm no-new-poll_result()-field decision -- confirm this is acceptable given ISS-0444's actual (unseen by this design, beyond the Step-1 diagnosis's own framing) formal acceptance criteria, if any exist beyond the handoff already read; (3) §4's in-scope fix for run_retention_sweep/1 and the reasoning for not filing a second issue; (4) confirm independently (not by trusting this summary) that no implementation code remains in the design doc -- grep for ``` and def/defp yourself."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

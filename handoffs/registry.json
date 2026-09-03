@@ -4221,6 +4221,23 @@
       "released_lock": true,
       "last_known_step": "RELEASE-VALIDATOR PASS on all 8 ACs (step-06). Full CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework round) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS) -> REVIEWER (PASS, 2 non-blocking cleanups applied) -> TEST-DESIGNER (found and reported a real double-wrap defect) -> ELIXIR-DEV fix -> TEST-DESIGNER test update -> TEST-DESIGN-VALIDATOR (PASS, mutation-tested) -> TEST-RUNNER (format-only FAIL, fixed, rerun PASS: full suite 3139/3139) -> RELEASE-VALIDATOR (PASS) -> DOC-UPDATER (status: done) pipeline complete. Implementation committed as 826d1f6a. Step Final (rebase/push/PR/CI/merge) in progress.",
       "note": "WF-02 requirement-implementation run for REQ-215: SERVICE_TASK engine wiring -- async-park dispatch on token arrival, re-entry on dispatcher outcome (closes ISS-0411 part 2, atop REQ-214's now-merged dispatch core). Mirrors REQ-187's own TIMER-node role. All four depends_on (REQ-214, REQ-177, REQ-049, REQ-061) confirmed done before locking. CODE-DESIGN-VALIDATOR's 1 rework round caught 4 real BLOCKERs (implementation code in the design doc, a re-entry call-site proposal contradicting REQ-214's own settled scope boundary, an unregistered event type, an incomplete error-union match), all fixed and re-verified. TEST-DESIGNER found a genuine implementation defect (double-wrapped :advance return crashing the poller) while writing tests, not just a coverage gap -- fixed by ELIXIR-DEV, confirmed via TEST-DESIGN-VALIDATOR's own mutation test. Handoff files step-00 through step-06 in handoffs/WF02-REQ215-20260903/ are a mix of contemporaneous (step-00) and retroactive-but-accurate (step-01 through step-06, written immediately after RELEASE-VALIDATOR's PASS from this same conversation's real transcript, honestly labeled as reconstructed) -- RELEASE-VALIDATOR itself flagged the gap and this entry documents its closure."
+    },
+    {
+      "run_id": "WF03-ISS0444-20260903",
+      "requirement_id": null,
+      "issue_id": "ISS-0444",
+      "queue_task_id": 444,
+      "github_issue_number": 855,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/scheduler.ex",
+        "lib/letflow/scheduler/poller.ex"
+      ],
+      "started_at": "2026-09-03T14:25:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 issue-resolving run for ISS-0444: a tenant schema missing its Postgres schema entirely crashes Letflow.Scheduler.poll_and_fire/1, contradicting poller.ex own never-raises moduledoc claim. Found during REQ-218 own work, filed as a tracked follow-up."
     }
   ]
 }

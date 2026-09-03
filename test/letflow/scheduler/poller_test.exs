@@ -29,6 +29,7 @@ defmodule Letflow.Scheduler.PollerTest do
 
   import Ecto.Query
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Letflow.Admission
   alias Letflow.AdmissionTestHelpers
   alias Letflow.Definitions
@@ -38,10 +39,13 @@ defmodule Letflow.Scheduler.PollerTest do
   alias Letflow.EventStore.ArchivedEvent
   alias Letflow.EventStore.Event
   alias Letflow.EventStore.InstanceSequence
+  alias Letflow.Identity.Tenant
   alias Letflow.Scheduler
   alias Letflow.Scheduler.Poller
   alias Letflow.Scheduler.Timer
   alias Letflow.TenantFixture
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.Registration
   alias Letflow.WebhookTestServer
 
   defp provisioned_tenant(slug_prefix \\ "req186-poller") do
@@ -783,6 +787,139 @@ defmodule Letflow.Scheduler.PollerTest do
             do: path
 
       assert genserver_files == [Path.join(root, "lib/letflow/scheduler/poller.ex")]
+    end
+  end
+
+  # ===================================================================================
+  # ISS-0444 -- a tenant_schemas row whose PHYSICAL Postgres schema was never
+  # created (or was dropped out-of-band) must not crash the whole tick. See
+  # lib/letflow/design/iss0444-poller-schema-availability.md §1/§4/§6. This is
+  # the "blast-radius" scenario: `tenant_schemas/0` (poller.ex) lists this row
+  # exactly like any other provisioned schema (it only filters on
+  # `migrations_applied_at` not being nil, matching
+  # `lib/letflow/tenant_provisioning/backfill.ex`'s own documented "Registration
+  # row exists but its physical schema no longer exists" case), so
+  # `Scheduler.poll_and_fire/1`/`run_retention_sweep/1` are called against it
+  # exactly as for any real schema -- pre-fix, this crashed the whole
+  # `Enum.each` (and therefore `handle_info/2`) the moment the bad schema was
+  # reached; post-fix, each is caught and logged at its own call site,
+  # `Enum.each` continues, and every OTHER schema's own operations proceed
+  # unaffected.
+  #
+  # A dedicated, real `Tenant`/`Registration` row pair is built directly here
+  # (NOT `TenantFixture.provisioned_tenant!/1`, which always calls
+  # `provision_tenant_schema/1` + `replay_migrations/2` -- this fixture
+  # deliberately skips both, since the whole point is a Registration row with
+  # NO physical `CREATE SCHEMA` ever run for it) -- teared down manually since
+  # there is no physical schema for `TenantFixture`'s own teardown to `DROP
+  # SCHEMA` against.
+  # ===================================================================================
+
+  defp registered_but_unprovisioned_schema_name! do
+    # Matches `TenantFixture.provisioned_tenant!/1`'s own first line -- without
+    # this, a bad-schema fixture built BEFORE any `provisioned_tenant/1` call
+    # in the same test stays scoped to the DataCase's shared-mode transaction,
+    # while `provisioned_tenant/1`'s own later `Sandbox.mode(Repo, :auto)`
+    # call switches the connection this test's later queries actually use --
+    # making the row invisible to `Poller.handle_info/2`'s own `tenant_schemas/0`
+    # query. Idempotent to call from either ordering.
+    Sandbox.mode(Repo, :auto)
+
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{
+          slug: Letflow.TenantSlugFixture.unique_slug("iss0444-missing-schema"),
+          display_name: "ISS-0444 missing-schema tenant"
+        },
+        :disabled
+      )
+      |> Repo.insert!()
+
+    {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant.id)
+
+    %Registration{}
+    |> Registration.changeset(%{
+      tenant_id: tenant.id,
+      schema_name: schema_name,
+      migrations_applied_at: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+    })
+    |> Repo.insert!()
+
+    on_exit(fn ->
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+    end)
+
+    schema_name
+  end
+
+  describe "ISS-0444: a registered-but-physically-absent tenant schema does not crash the tick, either ordering" do
+    test "bad schema registered BEFORE the real schema is provisioned -- real schema's timer still fires" do
+      bad_schema_name = registered_but_unprovisioned_schema_name!()
+
+      %{schema_name: real_schema_name} = provisioned_tenant("iss0444-order-a-real")
+      timer_id = due_timer_for!(real_schema_name, "iss0444-order-a")
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+        end)
+
+      assert timer_status!(real_schema_name, timer_id) == "fired"
+      assert log =~ "tenant schema unavailable"
+      assert log =~ bad_schema_name
+    end
+
+    test "bad schema registered AFTER the real schema is provisioned -- real schema's timer still fires" do
+      %{schema_name: real_schema_name} = provisioned_tenant("iss0444-order-b-real")
+      timer_id = due_timer_for!(real_schema_name, "iss0444-order-b")
+
+      bad_schema_name = registered_but_unprovisioned_schema_name!()
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+        end)
+
+      assert timer_status!(real_schema_name, timer_id) == "fired"
+      assert log =~ "tenant schema unavailable"
+      assert log =~ bad_schema_name
+    end
+  end
+
+  describe "ISS-0444: the retention sweep for the same registered-but-absent schema does not crash the tick" do
+    test "with retention enabled, the bad schema's sweep is skipped-and-logged while the real schema's own sweep still runs" do
+      put_scheduler_config(retention_enabled: true, retention_interval_ms: 0, retention_days: 30)
+
+      %{schema_name: real_schema_name} = provisioned_tenant("iss0444-retention-real")
+      instance_id = Ecto.UUID.generate()
+      seed_instance_sequence!(real_schema_name, instance_id)
+
+      old_created_at =
+        DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.truncate(:microsecond)
+
+      seed_event!(real_schema_name, instance_id, old_created_at)
+
+      bad_schema_name = registered_but_unprovisioned_schema_name!()
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:noreply, new_state} = Poller.handle_info(:tick, state)
+          assert %DateTime{} = new_state.last_retention_run_at
+        end)
+
+      assert table_count(Event, real_schema_name) == 0
+      assert table_count(ArchivedEvent, real_schema_name) == 1
+      assert log =~ "tenant schema unavailable"
+      assert log =~ "retention sweep"
+      assert log =~ bad_schema_name
     end
   end
 end

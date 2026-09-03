@@ -26,6 +26,24 @@ defmodule Letflow.Plugs.Admission do
   limitation of this requirement's scope, not an oversight — closing it would require
   tenant identity earlier in the chain than this codebase currently resolves it.
 
+  **`release_global_ref/1` (REQ-217 rework, design doc §10.1):** mounted by
+  `Letflow.Plugs.ApiPipeline` as `:release_global_admission`, between
+  `AuthPipeline` and the `pool: :tenant` mount above. Releases the global
+  gate's already-held ref immediately once `AuthPipeline` completes, so the
+  tenant gate's own `try_acquire({:tenant, schema})` call — which also
+  consumes a global unit, per `Letflow.Admission`'s composing rule — is the
+  ONLY global unit a request holds from that point forward, not a second one
+  stacked on an already-held first (the original wiring's double-global-
+  consumption defect). **Admission at the global gate is therefore a
+  re-checked, not reserved, precondition for admission at the tenant gate:**
+  a request admitted at the global gate can still receive
+  `{:error, :capacity}` at the tenant gate, after `AuthPipeline`'s own work
+  has already run, because the global gate's unit is released immediately
+  after `AuthPipeline` completes and the tenant gate performs a fresh,
+  independent `try_acquire/2` call rather than reusing or extending the
+  first grant. This is intentional and must not be "fixed" by
+  re-introducing overlap between the two gates' held refs.
+
   ## `Retry-After` — 1 second, not `TenantStatus`'s 30
 
   `Letflow.Admission.try_acquire/2` is a single synchronous `GenServer.call/2`
@@ -183,6 +201,40 @@ defmodule Letflow.Plugs.Admission do
 
   defp release_ref(nil), do: :ok
   defp release_ref(ref), do: Admission.release(ref)
+
+  # REQ-217 rework (design doc §10.1) -- releases the GLOBAL gate's already-held
+  # ref immediately after Letflow.Plugs.AuthPipeline completes, so the tenant
+  # gate's own subsequent try_acquire({:tenant, schema}) call (which, per
+  # Letflow.Admission's composing rule, ALSO consumes a global unit) is the
+  # ONLY global unit this request holds from that point forward, not a second
+  # one stacked on top of an already-held first. Mounted by
+  # Letflow.Plugs.ApiPipeline as a thin :release_global_admission wrapper,
+  # positioned between AuthPipeline and the `pool: :tenant` mount -- see that
+  # module and the design doc §10.1 item 3 for the exact chain position.
+  #
+  # Defensive nil-check (should not occur on this path: the global gate is
+  # mounted first and always assigns this key or halts before this plug is
+  # ever reached) rather than assuming the invariant -- matches this module's
+  # existing "idempotent, never raise on a no-op release" posture.
+  @spec release_global_ref(Plug.Conn.t()) :: Plug.Conn.t()
+  def release_global_ref(conn) do
+    case conn.assigns[:global_admission_ref] do
+      nil ->
+        conn
+
+      ref ->
+        Admission.release(ref)
+
+        updated_refs =
+          @admission_refs_pdict_key
+          |> Process.get([])
+          |> List.delete(ref)
+
+        Process.put(@admission_refs_pdict_key, updated_refs)
+
+        assign(conn, :global_admission_ref, nil)
+    end
+  end
 
   # §3: {:error, :capacity} -- halt and respond.
   defp reject(conn, detail) do

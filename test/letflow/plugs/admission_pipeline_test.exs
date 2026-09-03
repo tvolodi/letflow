@@ -2,9 +2,13 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
   @moduledoc """
   End-to-end HTTP-level tests for REQ-217 (admission control wired into
   `Letflow.Plugs.ApiPipeline`), dispatched through the REAL `Letflow.Router.call/2`
-  chain — `Plug.Parsers` -> `Letflow.Plugs.Admission` (global) ->
-  `:assign_trace_id` -> `Letflow.Plugs.AuthPipeline` -> `Letflow.Plugs.Admission`
-  (tenant) -> `Letflow.Plugs.TenantStatus` -> `:match`/`:dispatch`.
+  chain — `Letflow.Plugs.Admission` (global) -> `Plug.Parsers` ->
+  `:assign_trace_id` -> `Letflow.Plugs.AuthPipeline` ->
+  `:release_global_admission` -> `Letflow.Plugs.Admission` (tenant) ->
+  `Letflow.Plugs.TenantStatus` -> `:match`/`:dispatch`. The
+  `:release_global_admission` step is the REQ-217 rework (design doc §10.1)
+  that fixes the double-global-consumption defect SECURITY-REVIEWER's step-03
+  gate failed on -- see the dedicated `describe` block below.
 
   See `docs/requirements.yaml`'s REQ-217 entry for the full acceptance-criteria
   text this file maps to (cited per-`describe` block below).
@@ -161,18 +165,18 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
 
   describe "AC3: a successfully admitted request that completes normally releases both refs exactly once" do
     test "cap of 1 concurrent request: two sequential requests both succeed -- the first releases before the second is admitted" do
-      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 1)
-      # global_cap == 2. Each single HTTP request acquires from the GLOBAL
-      # pool TWICE (once at the global gate, once again as the global half of
-      # the tenant gate's own atomic {:tenant, _} acquisition, per
-      # Letflow.Admission's own moduledoc "Atomicity algorithm") -- so
-      # global_cap == 2 is the smallest value that admits even ONE full
-      # request end to end; it is still exactly "cap of 1 concurrent
-      # request" in the sense AC3 means (a second, CONCURRENT request would
-      # be rejected; a second SEQUENTIAL one, after the first's before_send
-      # has released both its refs, succeeds -- which is what this test
-      # actually exercises). With exactly one tenant ever tracked, that
-      # tenant's own per-tenant cap is max(div(2,1),1) == 2, at least as
+      AdmissionTestHelpers.restart_admission!(pool_size: 2, reserved_headroom: 1)
+      # global_cap == 1. Under the REQ-217 rework (design doc §10.1),
+      # :release_global_admission releases the global gate's ref immediately
+      # after AuthPipeline completes and BEFORE the tenant gate's own
+      # try_acquire({:tenant, schema}) call runs -- so at no instant does a
+      # single request hold two global units simultaneously; the tenant
+      # gate's acquisition is the ONLY global unit in play by the time it
+      # runs, having just been freed by the global gate's own release. This
+      # makes global_cap == 1 the smallest value that admits even ONE full
+      # request end to end (previously 2, before the double-global-
+      # consumption fix). With exactly one tenant ever tracked, that
+      # tenant's own per-tenant cap is max(div(1,1),1) == 1, at least as
       # large as the global cap, so it never independently constrains this.
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac3")
       {_user, plaintext} = platform_admin_token!(tenant)
@@ -195,10 +199,12 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
 
   describe "AC4 (Mechanism A): a raise inside the matched route handler still releases both refs" do
     test "a malformed :id inside Letflow.Routers.Identity's GET /users/:id raises Plug.Conn.WrapperError; a subsequent request still succeeds" do
-      # global_cap == 2 -- see AC3's test above for why a single request needs
-      # at least 2 (one unit per admission gate, both drawing on the same
-      # global counter for the SAME request).
-      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 1)
+      # global_cap == 1 -- see AC3's test above: under the REQ-217 rework,
+      # :release_global_admission frees the global gate's ref before the
+      # tenant gate's own try_acquire({:tenant, schema}) call runs, so a
+      # single request never holds two global units simultaneously and
+      # global_cap == 1 is the smallest value that admits one request.
+      AdmissionTestHelpers.restart_admission!(pool_size: 2, reserved_headroom: 1)
       tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-ac4-mecha")
       {user, plaintext} = platform_admin_token!(tenant)
 
@@ -222,11 +228,10 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
 
       # Both admission refs must have been released by handle_errors/2 (via
       # Letflow.Plugs.Admission.release_pending_refs/0) for this to succeed --
-      # global_cap is exactly 2 (the smallest value one request's own two
-      # acquisitions can fit under, see the setup comment above), so a leaked
-      # ref from the crashed request would make this next request 503
-      # instead (only 1 spare global unit would remain, not the 2 a fresh
-      # request needs).
+      # global_cap is exactly 1 (the smallest value one request's own
+      # acquisition can fit under, see the setup comment above), so a leaked
+      # ref from the crashed request would leave zero spare global units for
+      # the follow-up request, making it 503 instead.
       follow_up_conn =
         api_token_request(
           :get,
@@ -241,7 +246,7 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
   end
 
   describe "AC6: chain order (read lib/letflow/plugs/api_pipeline.ex directly)" do
-    test "the global admission plug is first (before Plug.Parsers); the tenant admission plug is after AuthPipeline and before TenantStatus" do
+    test "the global admission plug is first (before Plug.Parsers); :release_global_admission runs between AuthPipeline and the tenant admission plug; the tenant admission plug is before TenantStatus" do
       source = File.read!(Path.join([File.cwd!(), "lib", "letflow", "plugs", "api_pipeline.ex"]))
 
       global_admission_idx =
@@ -250,6 +255,9 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
       parsers_idx = :binary.match(source, "plug(Plug.Parsers,") |> elem(0)
       auth_pipeline_idx = :binary.match(source, "plug(Letflow.Plugs.AuthPipeline)") |> elem(0)
 
+      release_global_admission_idx =
+        :binary.match(source, "plug(:release_global_admission)") |> elem(0)
+
       tenant_admission_idx =
         :binary.match(source, "plug(Letflow.Plugs.Admission, pool: :tenant)") |> elem(0)
 
@@ -257,8 +265,65 @@ defmodule Letflow.Plugs.AdmissionPipelineTest do
 
       assert global_admission_idx < parsers_idx
       assert parsers_idx < auth_pipeline_idx
-      assert auth_pipeline_idx < tenant_admission_idx
+      assert auth_pipeline_idx < release_global_admission_idx
+      assert release_global_admission_idx < tenant_admission_idx
       assert tenant_admission_idx < tenant_status_idx
+    end
+  end
+
+  describe "REQ-217 rework (design doc §10.1): the global gate's ref is released before the tenant gate acquires, so a single request never holds two global units" do
+    test "global_cap == 1 admits one full request end to end (would have needed global_cap == 2 under the pre-fix double-consumption bug)" do
+      # This is the direct re-derivation §10.4 of the design doc flags: under
+      # the OLD (buggy) wiring, a single request held the global gate's ref
+      # AND the tenant gate's own global-composing acquisition simultaneously,
+      # so global_cap == 1 was never sufficient to admit even one request
+      # (the tenant gate's try_acquire({:tenant, _}) would see the global
+      # counter already at its cap and reject with {:error, :capacity}).
+      # Under the fix, :release_global_admission frees the global gate's ref
+      # before the tenant gate's call runs, so global_cap == 1 is sufficient.
+      AdmissionTestHelpers.restart_admission!(pool_size: 1, reserved_headroom: 0)
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-fix-cap1")
+      {_user, plaintext} = platform_admin_token!(tenant)
+
+      conn =
+        api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
+        |> dispatch()
+
+      refute conn.status == 503
+      assert conn.status == 404
+    end
+
+    test "at no instant during a single request's lifetime are two global units held simultaneously" do
+      # Strongest practical proof available without instrumenting
+      # Letflow.Admission's own GenServer loop: force global_cap == 1 (so
+      # holding even a SECOND global unit at any instant would make the
+      # sole request in flight self-reject), and additionally confirm
+      # directly, via Letflow.Admission's own state, that immediately after
+      # dispatch completes exactly zero global units remain held (i.e. every
+      # unit acquired during the request's lifetime -- one at the global
+      # gate, one at the tenant gate -- was released, and never more than
+      # one was outstanding at once, since global_cap == 1 would have
+      # rejected the request outright had two ever been required
+      # concurrently).
+      AdmissionTestHelpers.restart_admission!(pool_size: 1, reserved_headroom: 0)
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req217-fix-instant")
+      {_user, plaintext} = platform_admin_token!(tenant)
+
+      conn =
+        api_token_request(:get, "/api/v1/identity/anything", plaintext, tenant.tenant.slug)
+        |> dispatch()
+
+      refute conn.status == 503
+      assert conn.status == 404
+
+      # After the response has been sent, Mechanism A has released the
+      # tenant gate's ref (the global gate's own ref was already released
+      # earlier, mid-request, by :release_global_admission) -- so the global
+      # counter must be back to fully free, proving no unit leaked and, by
+      # global_cap == 1 admitting the request at all, that no more than one
+      # global unit was ever held at once.
+      assert {:ok, probe_ref} = Admission.try_acquire(:global)
+      Admission.release(probe_ref)
     end
   end
 end

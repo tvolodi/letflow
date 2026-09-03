@@ -1478,7 +1478,7 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 26
+    entries: 27
     note: >
       Composed to 26 at feature/WF02-REQ215-20260903's Step Final rebase
       (second conflict, this branch's own REQ-215 done-event append,

@@ -1073,3 +1073,14 @@ history:
       handoffs/registry.json NOT touched by this step -- ORCH already
       updated REQ-215's entry there to status: COMPLETED in commit
       8773858a.
+  - req: REQ-219
+    event: started
+    agent: ORCH
+    at: "2026-09-03T17:00:00Z"
+    note: >
+      Layer Letflow.Application's flat 20-child supervision tree into
+      Infrastructure / Pollers / Http, with explicit restart intensity
+      isolating poller crash-loops from Repo and HTTP (closes ISS-0425
+      parts 1+partial-2). Queue task 445 (GH#858) locked. Branch
+      feature/WF02-REQ219-20260903 created from main. Dispatching Step 1
+      (CODE-DESIGNER).

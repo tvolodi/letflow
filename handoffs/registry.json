@@ -4273,6 +4273,23 @@
       "released_lock": false,
       "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
       "note": "WF-03 issue-resolving run for ISS-0425: flat supervision tree, 15 peers of Repo under one :one_for_one with default restart intensity, no dependency layering, no domain-owning supervisor, Task.Supervisor sprawl (6 separate ones). Issue predicted a 7th ad-hoc supervisor if not settled before REQ-214 -- now 4+ new supervision entries have landed since filing (REQ-214, REQ-216 Admission, ISS-0429 Alerts.TaskSupervisor, REQ-215 dispatcher poller)."
+    },
+    {
+      "run_id": "WF02-REQ219-20260903",
+      "requirement_id": "REQ-219",
+      "issue_id": null,
+      "queue_task_id": 445,
+      "github_issue_number": 858,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/application.ex",
+        "lib/letflow/supervisor/"
+      ],
+      "started_at": "2026-09-03T17:00:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "note": "WF-02 requirement-implementation run for REQ-219: layer the flat 20-child Letflow.Application supervision tree into Infrastructure/Pollers/Http sibling supervisors, with Pollers getting an explicit restart-intensity override to structurally isolate a poller crash-loop from Repo/HTTP. Closes ISS-0425 parts 1+2. HIGH RISK -- touches app-wide boot sequence, must preserve two hand-maintained ordering constraints (ISS-0224, ISS-0429)."
     }
   ]
 }

@@ -12496,7 +12496,7 @@ requirements:
   - id: REQ-215
     title: Wire SERVICE_TASK nodes into the engine -- async-park dispatch on token arrival, re-entry on dispatcher outcome (closes ISS-0411 part 2, REQ-061's own deferred AC8 caller)
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S3
     impl_order: 417  # letflow-queue task id, GH#814
     description: >

@@ -1478,20 +1478,28 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 25
+    entries: 26
     note: >
-      Composed to 25 at feature/WF02-REQ215-20260903's Step Final rebase,
-      which conflicted at requirement_status.v8.yaml's tail against the
-      REQ-217/REQ-218/ISS-0426 chain below (landed on main after this
-      branch's Step 00 commit). This branch's own REQ-215 started-event
-      (05:01:17Z) sorts chronologically BEFORE all three of those entries
-      (earliest at 06:47:02Z), so it was interleaved into that position in
-      the volume file rather than appended after -- `grep -c "^  - req:"
-      docs/status/requirement_status.v8.yaml` = 25 on-disk entries after
-      composition, no content lost, recounted directly rather than summing
-      either side's independently-computed count (24 declared here pre-
-      rebase, 20 computed by this branch's own Step 00 commit against its
-      stale base).
+      Composed to 26 at feature/WF02-REQ215-20260903's Step Final rebase
+      (second conflict, this branch's own REQ-215 done-event append,
+      14:14:17Z). That event sorts chronologically AFTER the entire
+      REQ-217/REQ-218/ISS-0426 chain below (latest at 13:17:18Z), so it
+      was appended at the tail of the volume file rather than interleaved
+      -- `grep -c "^  - req:" docs/status/requirement_status.v8.yaml` = 26
+      on-disk entries after composition, no content lost, recounted
+      directly rather than carrying forward either side's independently-
+      computed count (24 declared here pre-rebase, 21 computed by this
+      branch's own pre-rebase DOC-UPDATER commit against its stale base
+      of 20). `wc`: 1075 lines / 65895 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+
+      Composed to 25 at this same branch's Step Final rebase (first
+      conflict, this branch's own REQ-215 started-event, 05:01:17Z),
+      which sorted chronologically BEFORE the REQ-217/REQ-218/ISS-0426
+      chain below (earliest at 06:47:02Z) and was interleaved into that
+      position rather than appended after -- 25 on-disk entries at that
+      point in the rebase, since superseded by the done-event composition
+      above.
 
       Incremented to 24 by DOC-UPDATER's WF02-REQ218-20260903 done-event
       append (REQ-218, closing ISS-0431 entirely).

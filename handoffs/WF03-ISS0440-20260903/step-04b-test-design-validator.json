@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-04b",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0440-20260903/step-04b-test-design-validator.json",
+  "created_at": "2026-09-03T13:18:18Z",
+  "started_at": "2026-09-03T13:18:18Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0440"],
+    "artifacts_in": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-04-test-designer.json",
+      "handoffs/WF03-ISS0440-20260903/step-03c-reviewer.json",
+      "docs/agents/workflows/WF-03_issue_resolving.md",
+      "docs/issues/ISS-0440.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 STEP 4b -- TEST COVERAGE HARD GATE for ISS-0440. TEST-DESIGNER (step-04) reported PASS: 18 new tests in test/mix/tasks/letflow.lint_handoffs_test.exs (43 passing in that file), full suite 3156 passed / 0 failures, lint 0 new violations, and three mutants measured in a throwaway git worktree -- M1 (@autofix_map widened to include FAIL => COMPLETED) 40/43, M2 (guard_empty_scope/2 neutered to always :ok) 40/43, M3 (print_autofix_report/1 neutered) 41/43.\n\nYOUR CORE OBLIGATION, stated in WF-03 in capital letters and non-negotiable: 'TEST-DESIGN-VALIDATOR must independently APPLY at least one of the reported mutants and run it -- accepting the reported pass counts is copying a claim, not validating one.' Do that. APPLY AT LEAST ONE MUTANT YOURSELF (M1 is the highest-value choice -- the FAIL refusal is the single safety property SECURITY-REVIEWER's PASS rests on; apply a second if time permits) and REPRODUCE THE COUNTS. If your reproduced count differs from the reported one, that is a finding, not a rounding error -- report the exact numbers you measured and treat the discrepancy as at least MAJOR.\n\nMUTANT HYGIENE IS PART OF THIS GATE, not an afterthought. WF-03: 'A mutant is a TEMPORARY PROBE. Leaving one in the tree is a step failure.' PREFERRED -- use a throwaway `git worktree` of this branch so the working checkout is never mutated; remove it when done. If you mutate in place instead, revert with `git checkout -- <path>` and VERIFY: quote `git status --porcelain lib/ test/` empty AND a green re-run of the test file against restored code, both in your result.summary. Also VERIFY TEST-DESIGNER's own cleanup: confirm the mutation worktree they used is actually gone (`git worktree list`) and that lib/ and test/ on this branch contain no mutant residue -- diff lib/mix/tasks/letflow.lint_handoffs.ex against the step-03 committed state.\n\nCOVERAGE VALIDATION. The step-04 handoff's task.description lists 9 required coverage points. Walk them one by one against the ACTUAL test code -- read the tests, do not read TEST-DESIGNER's summary and agree with it. For each point state: which named test covers it, and whether that test actually DISCRIMINATES (would it fail if the behaviour were wrong?) or merely executes the path. Give particular scrutiny to:\n  - Point 5 (FAIL refusal): the handoff required BYTE-IDENTITY asserted by reading the file before and after, not merely 'status is still FAIL'. Confirm the test does the strong assertion. Note that ISS-0442 (filed this run) establishes that --autofix REFORMATS a whole file when it does write, so a weak assertion here would be especially misleading.\n  - Point 7 (nested result.status untouched): a file with top-level COMPLETED and result.status PASS must come back byte-identical. This is the exact confusion ISS-0440 is about; confirm it is genuinely tested.\n  - Point 3 (empty scope raises): confirm the test asserts a raise, not just a non-zero-ish outcome.\n\nTHINGS THAT WOULD BE A FAIL: a coverage point with no discriminating test; a mutant count you cannot reproduce; mutant residue anywhere in lib/ or test/; any test that touches the real handoffs/ corpus or could run --autofix against it (grep the test file for @handoffs_dir / \"handoffs\" literals and check every hit); tests that pass for the wrong reason (e.g. a tmp-dir path that silently matches nothing -- TEST-DESIGNER reported hitting exactly this Windows Path.wildcard separator bug and fixing it with Path.expand/1, so verify the fix is real and applied everywhere, not just where it was noticed); missing on_exit cleanup leaving tmp dirs behind.\n\nALSO CHECK, briefly: that the new tests do not assert as DESIRED the behaviours ISS-0442 (whole-file reformat on autofix) and ISS-0443 (unknown flags silently ignored) exist to change. A test that pins the current reformat behaviour as an expectation would make ISS-0442 harder to fix later; if you find one, report it at MINOR with the test name.\n\nRUN THINGS YOURSELF. Re-run `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` and quote the real output. Re-run `mix letflow.lint_handoffs` and quote it. Do not inherit any number from step-04's summary without re-deriving it (docs/anti-patterns.md, 'Inheriting a claim from a record instead of re-deriving it from the source').\n\nYou may READ anything. Do not EDIT lib/ or test/ except as a temporary, reverted-and-verified mutant. Complete the handoff with a clear PASS/FAIL in result.status and per-coverage-point verdicts in result.summary; on PASS route to TEST-RUNNER (step 04c). Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

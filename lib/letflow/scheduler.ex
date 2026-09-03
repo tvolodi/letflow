@@ -78,6 +78,7 @@ defmodule Letflow.Scheduler do
   """
 
   import Ecto.Query
+  require Logger
 
   alias Ecto.Multi
   alias Letflow.Dlq
@@ -232,6 +233,23 @@ defmodule Letflow.Scheduler do
       |> lock("FOR UPDATE SKIP LOCKED")
 
     Repo.all(query, prefix: tenant_schema)
+  rescue
+    error in Postgrex.Error ->
+      if match?(
+           %Postgrex.Error{postgres: %{code: code}}
+           when code in [:undefined_table, :undefined_schema],
+           error
+         ) do
+        Logger.warning(
+          "scheduler: tenant schema unavailable, skipping timer poll for this tick",
+          schema: tenant_schema,
+          reason: :schema_unavailable
+        )
+
+        []
+      else
+        reraise error, __STACKTRACE__
+      end
   end
 
   # ===========================================================================
@@ -563,6 +581,23 @@ defmodule Letflow.Scheduler do
           {:ok, EventStore.archive_result()} | {:error, term()}
   def run_retention_sweep(tenant_schema) when is_binary(tenant_schema) do
     EventStore.archive(prefix: tenant_schema, retention_days: retention_days())
+  rescue
+    error in Postgrex.Error ->
+      if match?(
+           %Postgrex.Error{postgres: %{code: code}}
+           when code in [:undefined_table, :undefined_schema],
+           error
+         ) do
+        Logger.warning(
+          "scheduler: tenant schema unavailable, skipping retention sweep for this tick",
+          schema: tenant_schema,
+          reason: :schema_unavailable
+        )
+
+        {:error, {:schema_unavailable, tenant_schema}}
+      else
+        reraise error, __STACKTRACE__
+      end
   end
 
   @doc """

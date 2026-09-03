@@ -547,12 +547,21 @@ defmodule Letflow.EngineTest do
   end
 
   # ---------------------------------------------------------------------------------
-  # Disclosed limitation that genuinely remains today: node types no
-  # dispatch clause implements yet (:SERVICE_TASK/:TIMER/:SUB_PROCESS).
+  # REQ-215 (lib/letflow/design/req215-service-task-engine-wiring.md) gave
+  # :SERVICE_TASK a real dispatch clause -- this describe block used to
+  # assert the old {:node_type_not_yet_implemented, :SERVICE_TASK, _} stub
+  # error; :SERVICE_TASK is no longer part of that disclosed limitation
+  # (only genuinely-unrecognized node_type atoms are, which this file does
+  # not otherwise construct a fixture for). Full AC-level SERVICE_TASK
+  # dispatch/end-to-end coverage is TEST-DESIGNER's own job for REQ-215 --
+  # this test is narrowed to lock in, at this file's own create/2 level,
+  # that a valid inline_url SERVICE_TASK node now parks the instance
+  # :active (awaiting REQ-214's poller) with one service_task_dispatches
+  # row inserted, rather than failing activation.
   # ---------------------------------------------------------------------------------
 
-  describe "a definition whose first non-START node is a type with no dispatch clause yet fails create/2 entirely" do
-    test "returns {:error, {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, _}}}, writing zero rows except the benign snapshot orphan" do
+  describe "create/2 -- a definition whose first non-START node is :SERVICE_TASK (REQ-215)" do
+    test "a valid inline_url SERVICE_TASK node parks the instance :active with one service_task_dispatches row inserted" do
       %{schema_name: schema_name} = provisioned_tenant()
 
       graph = %{
@@ -573,18 +582,20 @@ defmodule Letflow.EngineTest do
 
       definition = active_definition!(schema_name, graph)
 
-      assert {:error,
-              {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
-               Engine.create(base_attrs(definition), prefix: schema_name)
+      assert {:ok, result} = Engine.create(base_attrs(definition), prefix: schema_name)
 
-      assert projection_count(schema_name) == 0
-      assert token_count(schema_name) == 0
-      assert event_count(schema_name) == 0
+      assert result.status == :active
+      assert result.current_nodes == ["svc"]
 
-      # Same benign snapshot-orphan exception as before (design §5 step 7 /
-      # §9 OQ-4): the snapshot call runs -- and commits -- before the pure
-      # activate/3 dispatch that fails.
+      assert projection_count(schema_name) == 1
+      assert token_count(schema_name) == 1
+      assert event_count(schema_name) == 1
       assert snapshot_count(schema_name) == 1
+
+      dispatch_rows =
+        Repo.all(Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch, prefix: schema_name)
+
+      assert [%{node_id: "svc", status: "pending", attempt_index: 0}] = dispatch_rows
     end
   end
 
@@ -1001,8 +1012,17 @@ defmodule Letflow.EngineTest do
             const_pin_lookup({:ok, %{resolved_id: "sid", version: "1.0.0"}}, {:error, :not_found})
         })
 
-      assert {:error,
-              {:activation_failed, {:node_type_not_yet_implemented, :SERVICE_TASK, "svc"}}} =
+      # REQ-215 (lib/letflow/design/req215-service-task-engine-wiring.md
+      # §2.2 step 3) gave :SERVICE_TASK a real dispatch clause -- this fixture's
+      # own graph_start_service_task_end/1 sets BOTH "endpoint" and
+      # "service_id", so ServiceTask.parse_config_from_node_attributes/1
+      # resolves route_kind: :catalog_service (service_id takes precedence),
+      # which always reaches validate_rendered_url/1 with rendered_url: nil
+      # (no real service_catalog exists yet, S6, unbuilt) -- a deliberate
+      # design decision (§2.2 step 3), not a bug: the activation failure this
+      # test now asserts is :service_task_url_rendered_empty, not the old
+      # :node_type_not_yet_implemented stub.
+      assert {:error, {:activation_failed, {:service_task_url_rendered_empty, "svc"}}} =
                Engine.create(attrs, prefix: schema_name)
 
       assert projection_count(schema_name) == 0

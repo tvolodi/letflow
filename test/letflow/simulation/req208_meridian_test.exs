@@ -26,24 +26,54 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   now-successful second-call behavior instead of the pre-fix HTTP 500 -- they no
   longer reproduce a defect, they lock in its fix.
 
-  **Still NOT fully verified by this file, unchanged by ISS-0397:** AC1/AC2's
-  own fuller claims (full quorum across all 3 branches through to disbursement,
-  EO-002's negative assertion) remain out of reach of a real end-to-end run --
-  `disburse-loan`/`credit-committee-vote`/`l1-approval` sit behind
-  `SERVICE_TASK` nodes this engine does not yet dispatch (§0.8/§3 below, a
-  platform-wide gap REQ-206/207 already found, unrelated to ISS-0397). This is
-  stated explicitly in the report (§6) rather than silently assumed to hold,
-  matching the same "report an in-flight caveat rather than proceeding as if
-  the dependency were closed" discipline REQ-208's own requirement text
-  already establishes for AC4/REQ-199.
+  **Still NOT fully verified by this file's ORIGINAL two describe blocks below
+  (unchanged since REQ-208, kept for their own historical/ISS-0397-fix-locking
+  value, not rewritten):** AC1/AC2's own fuller claims (full quorum across all
+  3 branches through to disbursement, EO-002's negative assertion) remain out
+  of reach of a real end-to-end run there -- `disburse-loan`/
+  `credit-committee-vote`/`l1-approval` sit behind `SERVICE_TASK` nodes this
+  engine did not yet dispatch at the time those two describe blocks were
+  written (§0.8/§3 below, a platform-wide gap REQ-206/207 already found,
+  unrelated to ISS-0397).
+
+  ## CLOSED by REQ-215 (2026-09-03) -- the SERVICE_TASK dispatch gap itself
+
+  `Letflow.Engine.Transition.dispatch_node/4` now has a real `:SERVICE_TASK`
+  clause (`lib/letflow/design/req215-service-task-engine-wiring.md`); REQ-214
+  built the dispatch-core poller this requirement's re-entry function
+  (`Letflow.Engine.advance_after_service_task_outcome/4`) hands a resolved
+  outcome to. **REQ-215's own AC2 is exactly this file's own long-standing
+  gap:** "`req208_meridian_test.exs`'s committee-vote/quorum-2-of-3/
+  disbursement paths (previously unreached) are reached and pass end to
+  end." The new `"meridian-loan-origination-above-threshold, full committee-
+  vote quorum through disbursement (REQ-215 AC2)"` describe block below
+  closes it -- a THIRD describe block, added rather than rewriting the first
+  two (which independently lock in ISS-0397's own fix and stay valid,
+  unchanged, on their own narrower claim). It exercises the real
+  `credit-committee-vote` (HUMAN_TASK) -> `create-facility` (a REAL
+  `SERVICE_TASK` node now, not elided) -> `disburse-loan` (HUMAN_TASK) path,
+  driven via direct `Letflow.Engine`/`Letflow.Tasks` API calls (not
+  `Runner.run/1` against the existing scenario YAMLs, which have no step
+  primitive for "resolve a pending SERVICE_TASK dispatch" and were never
+  updated past the point they originally truncated at -- extending the YAML
+  format itself is out of REQ-215's own scope). `attempt_dispatch/2` +
+  `advance_after_service_task_outcome/4` are called directly rather than via
+  `ServiceTaskDispatcher.poll_and_dispatch/1`, since `poll_and_dispatch/1`
+  currently crashes on a genuine `:advance` outcome -- see
+  `test/letflow/engine/service_task_wiring_test.exs`'s own "DEFECT" describe
+  block for the full report; not re-derived here, just avoided the same way
+  that file's own working tests avoid it.
 
   ## SERVICE_TASK limitation (design §0.8/§3, same platform-wide gap REQ-206/207
-  already found)
-  `Letflow.Engine` does not yet dispatch SERVICE_TASK nodes. The real
-  `process_claim_intake.yaml`/`process_policy_binding.yaml` fixtures have
+  already found) -- applies ONLY to the original two describe blocks below,
+  NOT to the new third one (which restores a real SERVICE_TASK node, above)
+  `Letflow.Engine` did not yet dispatch SERVICE_TASK nodes as of REQ-208. The
+  real `process_claim_intake.yaml`/`process_policy_binding.yaml` fixtures have
   SERVICE_TASKs on their critical paths. Test-local simplified process graphs
   (`@simple_loan_origination_graph`, `@simple_regulatory_review_graph`) replace
-  them with direct edges/END nodes, mirroring REQ-206/207's own precedent exactly.
+  them with direct edges/END nodes, mirroring REQ-206/207's own precedent
+  exactly -- unchanged, since rewriting those two would lose their own
+  historical ISS-0397-fix-locking value.
 
   ## Token roles are a separate namespace from process `attributes.role` strings
   (design §0.7, re-confirmed this session)
@@ -80,6 +110,10 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias Letflow.Definitions
+  alias Letflow.Engine
+  alias Letflow.Engine.ServiceTaskDispatcher
+  alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
   alias Letflow.Identity
   alias Letflow.Identity.OnboardingRecord
   alias Letflow.Identity.Tenant
@@ -88,6 +122,7 @@ defmodule Letflow.Simulation.Req208MeridianTest do
   alias Letflow.Simulation.Runner
   alias Letflow.Simulation.ScenarioFixture
   alias Letflow.Simulation.Seed
+  alias Letflow.Tasks
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
 
@@ -267,6 +302,153 @@ defmodule Letflow.Simulation.Req208MeridianTest do
         "source" => "credit-committee-vote",
         "target" => "disburse-loan"
       },
+      %{"id" => "e27", "source" => "disburse-loan", "target" => "end-disbursed"}
+    ]
+  }
+
+  # ── REQ-215 AC2: @loan_origination_graph_with_service_task ────────────────
+  # A second variant of the above graph, for the new describe block this
+  # requirement adds below: `create-facility` is restored as a REAL
+  # SERVICE_TASK node (process_claim_intake.yaml's own real node,
+  # process_claim_intake.yaml:74-78, `endpoint: POST /core-banking/facilities`)
+  # instead of being elided the way @simple_loan_origination_graph elides
+  # every SERVICE_TASK. Every other node/edge (the parallel-assessment-fork,
+  # KYC/AML track's own edge, eligibility-gate, authority-routing, l1/l2
+  # approval chain, credit-committee-vote) is kept identical to
+  # @simple_loan_origination_graph above -- this graph exists ONLY to prove
+  # REQ-215's own AC2 (committee-vote/quorum-2-of-3/disbursement paths
+  # reached and passing end to end), not to re-prove anything the original
+  # two describe blocks below already lock in.
+  @loan_origination_graph_with_service_task %{
+    "nodes" => [
+      %{"id" => "start", "node_type" => "START"},
+      %{"id" => "parallel-assessment-fork", "node_type" => "PARALLEL_GATEWAY"},
+      %{
+        "id" => "credit-memo-review",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-credit-manager"}
+      },
+      %{
+        "id" => "risk-assessment",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-risk-manager"}
+      },
+      %{"id" => "assessment-join", "node_type" => "PARALLEL_GATEWAY"},
+      %{"id" => "eligibility-gate", "node_type" => "EXCLUSIVE_GATEWAY"},
+      %{"id" => "authority-routing", "node_type" => "EXCLUSIVE_GATEWAY"},
+      %{
+        "id" => "l1-approval",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-credit-manager"}
+      },
+      %{
+        "id" => "l2-approval",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-credit-director"}
+      },
+      %{
+        "id" => "credit-committee-vote",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-committee-member"}
+      },
+      # REAL SERVICE_TASK node, unlike @simple_loan_origination_graph's own
+      # direct-edge elision -- endpoint is a test-time placeholder, patched to
+      # a real local WebhookTestServer URL at test setup time (this graph
+      # constant itself cannot know the server's OS-assigned port).
+      %{
+        "id" => "create-facility",
+        "node_type" => "SERVICE_TASK",
+        "attributes" => %{
+          "endpoint" => "SERVICE_TASK_ENDPOINT_PLACEHOLDER",
+          "timeout_ms" => 5_000
+        }
+      },
+      %{
+        "id" => "disburse-loan",
+        "node_type" => "HUMAN_TASK",
+        "attributes" => %{"role" => "role-loan-ops"}
+      },
+      %{"id" => "end-disbursed", "node_type" => "END"},
+      %{"id" => "end-declined", "node_type" => "END"}
+    ],
+    "edges" => [
+      %{"id" => "e0", "source" => "start", "target" => "parallel-assessment-fork"},
+      %{"id" => "e1", "source" => "parallel-assessment-fork", "target" => "credit-memo-review"},
+      %{"id" => "e2", "source" => "parallel-assessment-fork", "target" => "risk-assessment"},
+      %{"id" => "e3", "source" => "parallel-assessment-fork", "target" => "assessment-join"},
+      %{"id" => "e4", "source" => "credit-memo-review", "target" => "assessment-join"},
+      %{"id" => "e6", "source" => "risk-assessment", "target" => "assessment-join"},
+      %{"id" => "e14", "source" => "assessment-join", "target" => "eligibility-gate"},
+      %{
+        "id" => "e15",
+        "source" => "eligibility-gate",
+        "target" => "authority-routing",
+        "condition" =>
+          "variables.credit_decision == 'pass' && variables.risk_rating != 'unacceptable'"
+      },
+      %{
+        "id" => "e16",
+        "source" => "eligibility-gate",
+        "target" => "end-declined",
+        "condition" =>
+          "variables.credit_decision == 'fail' || variables.risk_rating == 'unacceptable'"
+      },
+      %{
+        "id" => "e17",
+        "source" => "authority-routing",
+        "target" => "l1-approval",
+        "condition" => "variables.requested_amount_eur <= 500000"
+      },
+      %{
+        "id" => "e18",
+        "source" => "authority-routing",
+        "target" => "credit-committee-vote",
+        "condition" => "variables.requested_amount_eur > 500000"
+      },
+      %{
+        "id" => "e19",
+        "source" => "l1-approval",
+        "target" => "l2-approval",
+        "condition" => "variables.l1_decision == 'approve' || variables.l1_decision == 'escalate'"
+      },
+      %{
+        "id" => "e20",
+        "source" => "l1-approval",
+        "target" => "end-declined",
+        "condition" => "variables.l1_decision == 'reject'"
+      },
+      %{
+        "id" => "e21",
+        "source" => "l2-approval",
+        "target" => "create-facility",
+        "condition" => "variables.l2_decision == 'approve'"
+      },
+      %{
+        "id" => "e22",
+        "source" => "l2-approval",
+        "target" => "end-declined",
+        "condition" => "variables.l2_decision == 'reject'"
+      },
+      %{
+        "id" => "e23",
+        "source" => "credit-committee-vote",
+        "target" => "create-facility",
+        "condition" => "variables.committee_outcome == 'approved'"
+      },
+      %{
+        "id" => "e24",
+        "source" => "credit-committee-vote",
+        "target" => "end-declined",
+        "condition" => "variables.committee_outcome == 'rejected'"
+      },
+      %{"id" => "fallback-l1-approval", "source" => "l1-approval", "target" => "l2-approval"},
+      %{"id" => "fallback-l2-approval", "source" => "l2-approval", "target" => "create-facility"},
+      %{
+        "id" => "fallback-credit-committee-vote",
+        "source" => "credit-committee-vote",
+        "target" => "create-facility"
+      },
+      %{"id" => "e26", "source" => "create-facility", "target" => "disburse-loan"},
       %{"id" => "e27", "source" => "disburse-loan", "target" => "end-disbursed"}
     ]
   }
@@ -473,7 +655,20 @@ defmodule Letflow.Simulation.Req208MeridianTest do
       schema_name: schema_name,
       unique: unique,
       actors: actors,
-      definitions: %{loan: definition_loan, review: definition_review}
+      definitions: %{loan: definition_loan, review: definition_review},
+      # REQ-215 AC2's own new describe block drives its steps via direct
+      # Letflow.Engine/Letflow.Tasks calls (not Runner.run/1 -- see this
+      # module's own moduledoc, "CLOSED by REQ-215" section, for why) and
+      # needs real actor_id UUIDs, not just API tokens.
+      actor_ids: %{
+        lars: lars.id,
+        julia: julia.id,
+        thomas: thomas.id,
+        ben: ben.id,
+        eva: eva.id,
+        marcus: marcus.id,
+        claudia: claudia.id
+      }
     }
   end
 
@@ -843,6 +1038,222 @@ defmodule Letflow.Simulation.Req208MeridianTest do
 
       {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
       assert final_projection.status == :active
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # REQ-215 AC2 -- committee-vote/quorum-2-of-3/disbursement paths reached
+  # and passing end to end, now that SERVICE_TASK dispatch is wired. See this
+  # module's own moduledoc, "CLOSED by REQ-215" section.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "loan-origination above-threshold, full committee-vote through disbursement (REQ-215 AC2)" do
+    setup %{schema_name: schema_name, actor_ids: actor_ids} do
+      Application.put_env(:letflow, :service_task_ssrf_validation_enabled, false)
+      on_exit(fn -> Application.delete_env(:letflow, :service_task_ssrf_validation_enabled) end)
+
+      %{url: server_url} =
+        Letflow.WebhookTestServer.start(200, ~s({"facility_id":"FAC-9001"}))
+
+      graph =
+        put_in(
+          @loan_origination_graph_with_service_task["nodes"],
+          Enum.map(@loan_origination_graph_with_service_task["nodes"], fn
+            %{"id" => "create-facility"} = node ->
+              put_in(node, ["attributes", "endpoint"], server_url)
+
+            node ->
+              node
+          end)
+        )
+
+      name =
+        "LoanOriginationWithServiceTask-" <>
+          to_string(System.unique_integer([:positive, :monotonic]))
+
+      {:ok, d} =
+        Definitions.create(
+          %{
+            name: name,
+            version: "1.0",
+            description:
+              "REQ-215 AC2 test-local process: same shape as SimpleLoanOrigination but " <>
+                "keeps create-facility as a real SERVICE_TASK node instead of eliding it.",
+            graph: graph,
+            created_by: actor_ids.lars
+          },
+          prefix: schema_name
+        )
+
+      {:ok, %{definition: activated}} = Definitions.activate(d.id, prefix: schema_name)
+
+      %{definition: activated, server_url: server_url}
+    end
+
+    test "quorum-2-of-3 join fires, committee approves, create-facility SERVICE_TASK dispatches and resolves, disbursement completes the instance",
+         %{schema_name: schema_name, actor_ids: actor_ids, definition: definition} do
+      # Step 1 -- above-threshold amount (750000 > 500000), same as
+      # loan-origination-above-threshold.yaml's own initial_variables.
+      assert {:ok, create_result} =
+               Engine.create(
+                 %{
+                   definition_id: definition.id,
+                   initial_variables: %{"requested_amount_eur" => 750_000},
+                   actor_id: actor_ids.lars,
+                   idempotency_key: "req215-ac2-create-" <> Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      instance_id = create_result.instance_id
+
+      # 2 real HUMAN_TASKs from the fork (the KYC/AML track is the immediate,
+      # unconditioned edge straight to assessment-join, same as
+      # @simple_loan_origination_graph -- see that graph's own comment).
+      {:ok, %{items: fork_tasks}} =
+        Tasks.list_tasks(%{instance_id: instance_id, status: :pending, page_size: 10},
+          prefix: schema_name
+        )
+
+      fork_task_node_ids = Enum.map(fork_tasks, fn {task, _fv} -> task.node_id end) |> Enum.sort()
+      assert fork_task_node_ids == ["credit-memo-review", "risk-assessment"]
+
+      credit_memo_task =
+        Enum.find(fork_tasks, fn {t, _fv} -> t.node_id == "credit-memo-review" end) |> elem(0)
+
+      risk_task =
+        Enum.find(fork_tasks, fn {t, _fv} -> t.node_id == "risk-assessment" end) |> elem(0)
+
+      # Complete both real, separate branches -- ISS-0397's own durable
+      # join_counters fix (moduledoc) lets each SEPARATE complete_task/3
+      # call route through assessment-join correctly. The join fires on the
+      # SECOND completion (2-of-3 already received from credit-memo-review +
+      # risk-assessment + the KYC/AML track's own immediate edge = quorum
+      # reached at assessment-join, a real PARALLEL_GATEWAY join, in-degree 3).
+      assert {:ok, _} =
+               Engine.complete_task(
+                 credit_memo_task.id,
+                 %{
+                   output_variables: %{"credit_decision" => "pass"},
+                   actor_id: actor_ids.julia,
+                   idempotency_key: "req215-ac2-credit-memo-" <> Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      assert {:ok, risk_complete_result} =
+               Engine.complete_task(
+                 risk_task.id,
+                 %{
+                   output_variables: %{"risk_rating" => "acceptable"},
+                   actor_id: actor_ids.thomas,
+                   idempotency_key: "req215-ac2-risk-" <> Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      # The join fired -- current_nodes narrows past assessment-join, past
+      # eligibility-gate (pass/acceptable -> authority-routing), past
+      # authority-routing (750000 > 500000 -> credit-committee-vote), landing
+      # the token at credit-committee-vote -- real, quorum-driven multi-hop
+      # advance in one complete_task/3 call, proving quorum-2-of-3 genuinely
+      # fired (not just "the join counter incremented").
+      assert risk_complete_result.instance_status == :active
+      assert risk_complete_result.current_nodes == ["credit-committee-vote"]
+
+      {:ok, %{items: committee_tasks}} =
+        Tasks.list_tasks(%{instance_id: instance_id, status: :pending, page_size: 10},
+          prefix: schema_name
+        )
+
+      assert [{committee_task, _fv}] = committee_tasks
+      assert committee_task.node_id == "credit-committee-vote"
+      assert committee_task.assignee_ref == "role-committee-member"
+
+      # Committee votes "approved" -- routes to create-facility, a REAL
+      # SERVICE_TASK node. The token PARKS there (no automatic outgoing
+      # traversal, design doc §1.4) -- a real service_task_dispatches row is
+      # created in the SAME transaction (REQ-215 AC3's own guarantee, proven
+      # generically in service_task_wiring_test.exs; here proven in the
+      # context AC2 actually names: the real Meridian committee-vote path).
+      assert {:ok, committee_complete_result} =
+               Engine.complete_task(
+                 committee_task.id,
+                 %{
+                   output_variables: %{"committee_outcome" => "approved"},
+                   actor_id: actor_ids.eva,
+                   idempotency_key: "req215-ac2-committee-" <> Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      assert committee_complete_result.instance_status == :active
+      assert committee_complete_result.current_nodes == ["create-facility"]
+
+      assert [dispatch] =
+               ServiceTaskDispatch
+               |> Ecto.Query.where([d], d.instance_id == ^instance_id)
+               |> Repo.all(prefix: schema_name)
+
+      assert dispatch.status == "pending"
+      assert dispatch.node_id == "create-facility"
+
+      # REQ-214's already-shipped transport call resolves it -- a real 2xx
+      # JSON response from the real local server (facility_id, the exact
+      # kind of downstream-system response create-facility's own real
+      # endpoint, POST /core-banking/facilities, would return).
+      assert {:ok, {:advance, decoded_body}} =
+               ServiceTaskDispatcher.attempt_dispatch(dispatch.id, schema_name)
+
+      assert decoded_body == %{"facility_id" => "FAC-9001"}
+
+      # This requirement's own re-entry function -- advances the token off
+      # create-facility onto disburse-loan, merging the decoded body into
+      # instance variables (REQ-049's VariableMerge.merge/3, exercised here
+      # in the real Meridian committee-vote/disbursement context AC2 names,
+      # not just a synthetic graph).
+      assert {:ok, :advanced} =
+               Engine.advance_after_service_task_outcome(
+                 dispatch.id,
+                 {:advance, decoded_body},
+                 Repo,
+                 schema_name
+               )
+
+      {:ok, projection_after_advance} = Instances.get_by_id(instance_id, prefix: schema_name)
+      assert projection_after_advance.status == :active
+      assert projection_after_advance.current_nodes == ["disburse-loan"]
+      assert projection_after_advance.variables["facility_id"] == "FAC-9001"
+
+      {:ok, %{items: disburse_tasks}} =
+        Tasks.list_tasks(%{instance_id: instance_id, status: :pending, page_size: 10},
+          prefix: schema_name
+        )
+
+      assert [{disburse_task, _fv}] = disburse_tasks
+      assert disburse_task.node_id == "disburse-loan"
+      assert disburse_task.assignee_ref == "role-loan-ops"
+
+      # Disbursement itself -- the loan-ops actor completes disburse-loan,
+      # reaching end-disbursed. This is AC2's own literal "disbursement path
+      # ... reached and pass end to end" claim, closed for real: the
+      # instance actually COMPLETES.
+      assert {:ok, disburse_complete_result} =
+               Engine.complete_task(
+                 disburse_task.id,
+                 %{
+                   output_variables: %{},
+                   actor_id: actor_ids.marcus,
+                   idempotency_key: "req215-ac2-disburse-" <> Ecto.UUID.generate()
+                 },
+                 prefix: schema_name
+               )
+
+      assert disburse_complete_result.instance_status == :completed
+
+      {:ok, final_projection} = Instances.get_by_id(instance_id, prefix: schema_name)
+      assert final_projection.status == :completed
+      assert final_projection.current_nodes == []
     end
   end
 end

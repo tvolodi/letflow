@@ -253,8 +253,11 @@ discipline (none introduced by S7's own diff — each confirmed pre-existing via
 discovery) and have SINCE BEEN FIXED, independently of this stage's own scope, before
 this sign-off entry was written: (1) `join_counters: %{}` hardcoded on every
 `complete_task/3` call, preventing any `PARALLEL_GATEWAY` join from firing across two
-separate task-completion HTTP calls — blocked both Meridian loan-origination scenarios'
-committee-vote/quorum/disbursement paths (`ISS-0397`, resolved); (2) `walk_to_gateway/3`
+separate task-completion HTTP calls (`ISS-0397`, resolved) — this defect alone did not
+fully unblock the Meridian loan-origination scenarios' committee-vote/quorum/disbursement
+paths, since those paths sit behind `SERVICE_TASK` nodes; see item (d) below and
+`ISS-0411`/REQ-215 for the `SERVICE_TASK`-dispatch gap that was the real, remaining
+blocker (REQ-215, this stage's own follow-up work, closes it); (2) `walk_to_gateway/3`
 failing any fork branch containing a multi-outgoing-edge node before reaching its join —
 blocked the Meridian committee scenario's original KYC-routing design (`ISS-0398`,
 resolved); (3) an `Ecto.Multi` `:task_records` key collision when a `SUB_PROCESS` child
@@ -291,7 +294,10 @@ and those paths are now independently confirmed still unreached, for a separate 
 `Letflow.Engine`'s `Transition.dispatch_node/4` has no `SERVICE_TASK` dispatch, and the
 committee-vote/disbursement paths sit behind `SERVICE_TASK` nodes; see `ISS-0411` for the
 full diagnosis) — re-running them to actually exercise those paths against the fixed Engine
-is not part of REQ-210's own scope and is named as follow-up work below. (e) `test/fixtures/simulation/
+is not part of REQ-210's own scope and is named as follow-up work below. **This follow-up
+work is REQ-215** (`lib/letflow/design/req215-service-task-engine-wiring.md`), whose own
+AC1/AC2 are exactly this re-run: `req208_meridian_test.exs`'s committee-vote/
+quorum-2-of-3/disbursement paths reached and passing. (e) `test/fixtures/simulation/
 {swiftroute,vortex,meridian}/scenarios/*.yaml` remain disclosed-synthetic, not
 byte-for-byte ports of R-Co's real scenario corpus (`ISS-0391`/`ISS-0393`, both open,
 confirmed to be the same underlying gap with ISS-0393 carrying the superset scope —

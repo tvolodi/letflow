@@ -929,6 +929,23 @@ defmodule Letflow.TenantProvisioning do
       }
     },
     %{
+      name: "SERVICE_TASK_COMPLETED",
+      schema_version: 1,
+      description:
+        "Emitted by Letflow.Engine.advance_after_service_task_outcome/4 (REQ-215) when a " <>
+          "SERVICE_TASK dispatch's :advance outcome is applied and its VariableMerge.merge/3 " <>
+          "output is persisted.",
+      json_schema: %{
+        "type" => "object",
+        "properties" => %{
+          "dispatch_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "decoded_body" => %{"type" => "object"}
+        },
+        "required" => ["dispatch_id", "node_id", "decoded_body"]
+      }
+    },
+    %{
       name: "effect_applied",
       schema_version: 1,
       description:

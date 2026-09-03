@@ -44,6 +44,17 @@ config :letflow, start_http: false
 # its own instance explicitly.
 config :letflow, start_scheduler: false
 
+# REQ-214: don't start Letflow.Engine.ServiceTaskDispatcher.Poller under
+# test either -- identical DBConnection.OwnershipError hazard as
+# start_scheduler above (its own first tick runs with zero delay and
+# queries Letflow.Repo from a process no test process is an ancestor of).
+# A distinct, independent config key from :start_scheduler -- see
+# lib/letflow/application.ex's service_task_dispatcher_children/0.
+# Letflow.Engine.ServiceTaskDispatcher's own tests call poll_and_dispatch/1
+# directly; a test of the Poller GenServer itself starts its own instance
+# explicitly.
+config :letflow, start_service_task_dispatcher: false
+
 # Same per-workspace host port as config/dev.exs (this repo's config files
 # don't cascade — each env file loads independently). See config/db_port.exs.
 {db_port, _bindings} = Code.eval_file(Path.expand("db_port.exs", __DIR__))

@@ -486,7 +486,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_901_030_001, Letflow.Repo.Migrations.AddJoinCountersToInstanceProjections,
      "20260901030001_add_join_counters_to_instance_projections.exs"},
     {20_260_902_000_001, Letflow.Repo.Migrations.MakeTokensBranchIdNullable,
-     "20260902000001_make_tokens_branch_id_nullable.exs"}
+     "20260902000001_make_tokens_branch_id_nullable.exs"},
+    {20_260_902_010_001, Letflow.Repo.Migrations.CreateServiceTaskDispatches,
+     "20260902010001_create_service_task_dispatches.exs"}
   ]
 
   @doc """

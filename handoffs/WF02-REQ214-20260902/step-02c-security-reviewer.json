@@ -1,0 +1,62 @@
+{
+  "handoff_id": "9e45727d-7e76-4014-a39a-1e7055bce8fd",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "02c",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ214-20260902/step-02c-security-reviewer.json",
+  "created_at": "2026-09-02T14:30:00Z",
+  "started_at": "2026-09-02T14:35:00Z",
+  "completed_at": "2026-09-02T15:00:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["b8ab3376-0890-4b65-a674-f63b5f1336ed"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ214-20260902/step-02a-elixir-dev.json",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/engine/service_task_dispatcher/poller.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Step 2c security gate on REQ-214's diff. Scope test, then check every applicable INV-1..INV-9, with special emphasis on INV-9 (tenant-controlled outbound URL validation) since this requirement's own acceptance criteria name it a BLOCKER hard gate.",
+    "acceptance_criteria": [
+      "Scope test run explicitly against the actual diff",
+      "Each applicable invariant checked with a recorded PASS/FAIL",
+      "INV-9 specifically: confirm UrlValidator.validate/2 is called immediately before every :httpc.request/4 call site, for both route_kind values",
+      "General diff hygiene: no hardcoded secrets, malformed-input handling on any new code path that processes stored/external data"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact from the run's real, on-disk evidence: the current lib/letflow/engine/service_task_dispatcher.ex carries inline comments explicitly attributing config_from_snapshot/1's error-returning shape and do_attempt_dispatch/2's {:error, _malformed_reason} clause to 'BLOCKER fix (SECURITY-REVIEWER, queue task 415)' -- direct textual, on-disk confirmation that this finding was real and was made by SECURITY-REVIEWER at this step. Timestamps are reconstructed approximations. 1 BLOCKER, INV-8 (fail-loud/no-silent-catch discipline extended to this finding's actual failure mode -- an unhandled raise reaching a shared process). config_from_snapshot/1, as ELIXIR-DEV's initial pass wrote it, could raise (FunctionClauseError or ArgumentError-shaped) on a malformed config_snapshot -- a route_kind or method value outside its known set had no catch-all clause and would fall through every case/with clause without a match. Repo.transaction/1 does not swallow a raise (it propagates), so a single corrupted row (a future bug elsewhere writing a bad snapshot, a manual DB edit, or a value written before a later atom-set change) would crash the shared Poller GenServer mid-tick -- taking down every tenant's pending service_task_dispatches rows in that poll cycle, not merely failing the one bad row. This is a real availability hazard scoped beyond the single tenant that owns the malformed row: the Poller is a single shared process polling across all tenant schemas (confirmed by reading poller.ex's fetch_tenant_schemas/0 and its Enum.each over every provisioned schema), so one bad row degrades dispatch for the whole platform until the supervisor restarts it (and, per OTP restart-intensity limits, repeated crashes on the same poll cycle risk exceeding the supervisor's restart intensity entirely, per the identical hazard class Letflow.Scheduler.Poller's own boot-gating comment already documents for a different trigger). No SSRF/confidentiality/cross-tenant-reach issue was found -- INV-9's own placement (http_transport/3 calling UrlValidator.validate/2 immediately before do_http_transport/3, unconditionally, for the one shared transport call site both route_kind values that reach real HTTP funnel through) is structurally correct as written. This is filed as a correctness/availability BLOCKER under this project's INV-8 (no unhandled raise on a path that processes externally-influenced/stored data reaching a shared process), not a confidentiality or injection finding.",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "BLOCKER", "description": "config_from_snapshot/1 can raise (FunctionClauseError/ArgumentError-shaped) on a malformed config_snapshot (bad route_kind or method value) -- no catch-all clause exists. Repo.transaction/1 does not swallow a raise, so this crashes the shared Poller GenServer, taking down dispatch for every tenant's pending rows in that poll cycle. Fix: give route_kind_atom/1 and method_from_snapshot/1 explicit catch-all clauses returning a typed {:error, ...}; have config_from_snapshot/1 return {:ok, Config.t()} | {:error, :invalid_route_kind | :invalid_method}; wrap attempt_dispatch/2's outer call in a try/rescue mirroring Letflow.Scheduler.attempt_fire/2's exact shape (lib/letflow/scheduler.ex, its own try/rescue around fire_timer/2, converting any exception to {:error, {:raised, exception}}).", "affected_requirement": "REQ-214"}
+    ],
+    "next_action": "Rework ELIXIR-DEV -- 1 BLOCKER above, rework iteration 1 of 3"
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-02T15:00:00Z",
+      "status": "FAIL",
+      "summary": "1 BLOCKER (INV-8): config_from_snapshot/1 could raise on malformed config_snapshot data with no catch-all clause; Repo.transaction/1 does not swallow raises, so this crashes the shared Poller GenServer across every tenant's pending rows in that poll cycle. INV-9 (SSRF gate placement) independently checked and confirmed correct as written.",
+      "issues": [
+        "config_from_snapshot/1 (and its route_kind_atom/1, method_from_snapshot/1 helpers) can raise on malformed stored data with no typed-error catch-all, crashing the shared Poller process"
+      ],
+      "next_action": "Rework ELIXIR-DEV"
+    }
+  ]
+}

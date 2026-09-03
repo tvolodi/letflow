@@ -1,0 +1,57 @@
+{
+  "handoff_id": "816940a8-4542-48b9-b943-77bfec95f43a",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "02a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ214-20260902/step-02a-elixir-dev-rework1.json",
+  "created_at": "2026-09-02T15:00:00Z",
+  "started_at": "2026-09-02T15:00:00Z",
+  "completed_at": "2026-09-02T15:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["9e45727d-7e76-4014-a39a-1e7055bce8fd"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ214-20260902/step-02c-security-reviewer.json",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/scheduler.ex"
+    ],
+    "owned_modules": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Rework iteration 1: fix step-02c's INV-8 BLOCKER -- config_from_snapshot/1 (and its route_kind_atom/1, method_from_snapshot/1 helpers) can raise on malformed stored config_snapshot data, crashing the shared Poller GenServer. Give both helpers explicit catch-all clauses returning typed {:error, ...}; make config_from_snapshot/1 return {:ok, Config.t()} | {:error, atom()}; wrap attempt_dispatch/2 in an outer try/rescue mirroring Letflow.Scheduler.attempt_fire/2's exact shape. Add regression tests."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact from the run's real, on-disk state (the current service_task_dispatcher.ex file, independently read at reconstruction time, contains exactly this fix with an inline comment attributing it to 'BLOCKER fix (SECURITY-REVIEWER, queue task 415)'); timestamps are reconstructed approximations. route_kind_atom/1 given a catch-all clause: route_kind_atom(_other), do: {:error, :invalid_route_kind} (confirmed present, alongside the two real clauses for \"inline_url\" and \"catalog_service\"). method_from_snapshot/1 given a catch-all clause: method_from_snapshot(_other), do: {:error, :invalid_method} (confirmed present, alongside the five real HTTP-verb clauses). config_from_snapshot/1's @spec confirmed updated to {:ok, ServiceTask.Config.t()} | {:error, :invalid_route_kind | :invalid_method}, built via a with-chain over both helpers so either failure short-circuits to a typed error tuple rather than a raise. do_attempt_dispatch/2 confirmed to carry a new {:error, _malformed_reason} case clause routing a malformed snapshot through handle_failure/4 with failure_kind :request_build_error (the same failure_kind design §5.2/§5.6 already define for a request that could never be built) -- reading retry_limit directly from the raw snapshot map, since it does not depend on route_kind/method having parsed successfully. attempt_dispatch/2 confirmed to now wrap its entire Repo.transaction/1 call in an outer try/rescue that converts any exception to {:error, {:raised, exception}} -- read directly against Letflow.Scheduler.attempt_fire/2 (lib/letflow/scheduler.ex) at reconstruction time and confirmed to be the identical shape: a bare try/rescue around the transaction call, the rescue clause producing the same {:error, {:raised, exception}} tuple. This backfill independently confirmed all four changes are present in the current file; it cannot recover this specific rework session's own test-run transcript, but 3 regression tests are present in test/letflow/engine/service_task_dispatcher_test.exs covering this exact class (a malformed route_kind, a malformed method, and confirmation that neither raises past config_from_snapshot/1), consistent with the task's own instruction to add regression coverage.",
+    "artifacts_out": [
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-02T15:00:00Z",
+      "status": "FAIL",
+      "summary": "1 BLOCKER (INV-8): config_from_snapshot/1 could raise on malformed config_snapshot data with no catch-all clause; Repo.transaction/1 does not swallow raises, so this crashes the shared Poller GenServer across every tenant's pending rows in that poll cycle.",
+      "issues": [
+        "config_from_snapshot/1 (and its route_kind_atom/1, method_from_snapshot/1 helpers) can raise on malformed stored data with no typed-error catch-all, crashing the shared Poller process"
+      ],
+      "next_action": "Rework ELIXIR-DEV"
+    }
+  ]
+}

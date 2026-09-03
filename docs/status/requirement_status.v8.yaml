@@ -734,3 +734,89 @@ history:
       docs/agents/AGENT_SYSTEM.md checked directly (grep for "ISS-0431" and
       "admission"): neither references the admission-control gap, so
       neither needed a staleness update from this step.
+
+  - req: REQ-214
+    event: blocked
+    agent: DOC-UPDATER
+    at: "2026-09-03T04:09:09Z"
+    note: >
+      WF02-REQ214-20260902 Step 6 (DOC-UPDATER) run, NOT flipping REQ-214 to
+      done. Independently re-read docs/requirements.yaml's REQ-214 entry (9
+      real acceptance criteria) and RELEASE-VALIDATOR's own handoff
+      (handoffs/WF02-REQ214-20260902/step-05-release-validator.json,
+      result.status: PARTIAL): 8/9 ACs (AC1-AC7, AC9) independently confirmed
+      PASS by RELEASE-VALIDATOR's own re-derivation. AC8 ("SECURITY-REVIEWER's
+      sign-off is recorded") is now genuinely satisfied -- this step
+      independently confirmed handoffs/WF02-REQ214-20260902/step-02c-security-reviewer.json
+      (result.status FAILED, a real BLOCKER on first pass) plus
+      -recheck1.json (FAIL->PASS) and -recheck2.json (COMPLETED/PASS) exist
+      on disk, cross-referenced against real inline code comments crediting
+      "SECURITY-REVIEWER" by name at 5 sites in
+      lib/letflow/engine/service_task_dispatcher.ex, and confirmed
+      `mix letflow.lint_handoffs` reports 0 new violations (1852 handoff
+      files, 25 pre-existing grandfathered per ISS-0190) -- so AC8's own
+      backfill (this same run's 21 handoffs/WF02-REQ214-20260902/*.json
+      files plus the matching handoffs/registry.json entry) is verified, not
+      merely claimed.
+
+      BUT RELEASE-VALIDATOR's own handoff also states explicitly, in its own
+      next_action field: "do not flip REQ-214 to done until a real commit
+      exists on the branch" -- because at that step's real execution time
+      the entire implementation sat uncommitted on
+      feature/WF02-REQ214-20260902 (0 commits ahead of main). Independently
+      re-verified RIGHT NOW, not inherited from that record: `git branch
+      --show-current` = feature/WF02-REQ214-20260902; `git log main..HEAD
+      --oneline` = 0 commits; `git log --all --oneline --grep="REQ-214"` =
+      0 matches on any branch; `git status --short` shows
+      service_task_dispatcher.ex, poller.ex, the migration, the test file,
+      and test/reports/report-2026-09-03-REQ214.yaml all still untracked or
+      modified-uncommitted. handoffs/orchestrator.log's tail (through
+      2026-09-02T16:50:00Z) has no DISPATCH/STEP_COMPLETE/RUN_DONE line for
+      WF02-REQ214-20260902 at all. This is a real, currently-true blocker,
+      not a stale claim -- so per core-directives.md's override rule ("no
+      handoff can authorize reporting unverified work as done"), REQ-214's
+      status in docs/requirements.yaml is LEFT AS pending, unflipped, by
+      this step. Committing the implementation is Step Final's job (same
+      agent as Step 00 -- ELIXIR-DEV, via docs/agents/protocols/GIT_MERGE.md),
+      not DOC-UPDATER's to perform. Next action: dispatch ELIXIR-DEV to
+      commit the working-tree implementation on
+      feature/WF02-REQ214-20260902, push, open the PR, and get CI green --
+      only THEN should DOC-UPDATER be re-dispatched to flip REQ-214 to done
+      and log a `done` event superseding this `blocked` one. REQ-215 (the
+      engine-wiring half, ISS-0411/GH#807's other part) remains separately
+      pending regardless. docs/migration/stage-3-instance-engine.md checked
+      for a needed update: its line 234 already names "the real outbound
+      HTTP transport for SERVICE_TASK dispatch (REQ-056 leaves it
+      injectable)" as a deliberately deferred gap, and line 347 states S3
+      reviews are reconciled at the WF-04 stage gate, not incrementally per
+      requirement -- so no edit is warranted there, especially with REQ-215
+      still open and S3's own gate not yet re-run.
+
+  - req: REQ-214
+    event: revised
+    agent: ORCH
+    at: "2026-09-03T04:14:03Z"
+    note: >
+      Supersedes the `blocked` entry immediately above: the real commit
+      DOC-UPDATER's own next_action asked for now exists. Committed
+      REQ-214's full implementation on feature/WF02-REQ214-20260902
+      (commit 3d1698b5, `git log main..HEAD --oneline` = 1 commit).
+      Rebased onto origin/main during Step Final, resolving a real
+      4-file conflict: docs/status/requirement_status.index.yaml,
+      docs/status/requirement_status.v8.yaml (this file, both
+      append-order conflicts against REQ-216's own concurrently-landed
+      entries), handoffs/registry.json (same), and
+      lib/letflow/application.ex (a real supervision-tree conflict
+      against REQ-216's own Letflow.Admission entry and ISS-0429's
+      Letflow.Obs.Alerts.TaskSupervisor entry, both landed on
+      origin/main while this branch was in flight -- resolved by
+      appending service_task_dispatcher_children() after
+      scheduler_children(), preserving ISS-0429's own documented
+      ordering constraint that Alerts.TaskSupervisor must precede
+      scheduler_children(), which REQ-214's own addition has no
+      ordering dependency against). Also required `mix deps.get` +
+      recompile against ISS-0420's own mix.lock bumps (oidcc, bandit)
+      that landed on origin/main in the same window. `mix compile
+      --warnings-as-errors` clean post-rebase. Still on
+      feature/WF02-REQ214-20260902, not yet merged -- Step Final's
+      push/PR/CI/merge steps are next.

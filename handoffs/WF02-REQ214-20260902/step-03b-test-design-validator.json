@@ -1,0 +1,57 @@
+{
+  "handoff_id": "c8cbd20a-394b-4076-b62c-85eda1906ab5",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ214-20260902/step-03b-test-design-validator.json",
+  "created_at": "2026-09-02T19:00:00Z",
+  "started_at": "2026-09-02T19:05:00Z",
+  "completed_at": "2026-09-02T19:20:00Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["756a90ec-0bdc-4719-8845-94f4e41ac187", "3c2fc84d-2565-4710-9b00-212c6c3c694f"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ214-20260902/step-02d-reviewer-recheck1.json",
+      "docs/requirements.yaml#REQ-214",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/webhooks/url_validator_test.exs",
+      "lib/letflow/webhooks/url_validator.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard-gate independent re-verification of TEST-DESIGNER's coverage over test/letflow/engine/service_task_dispatcher_test.exs against rework2's implementation. Every real REQ-214 AC re-mapped to genuine test evidence read directly. AC2 specifically requires a DNS-rebinding test case mirroring test/letflow/webhooks/url_validator_test.exs's own three SSRF-rejection cases -- confirm this exists via the new http_transport/4 injectable-resolver seam."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact from the run's real, on-disk evidence: the current test/letflow/engine/service_task_dispatcher_test.exs carries a 'http_transport/4 -- DNS rebinding' describe block (confirmed present at reconstruction time, containing two tests -- one rejecting a hostname resolving to 169.254.169.254 via an injected resolver, one covering the DNS-rebinding scenario itself) whose own header comment cites 'queue task 415, REQ-214 AC2' explicitly, plus a comment stating this coverage was added because 'the seam existed but no such test had been written yet' -- direct, on-disk confirmation this FAIL was real and this exact gap was found. Timestamps are reconstructed approximations. 1 narrow gap: REQ-214's real AC2 (docs/requirements.yaml, independently re-read at reconstruction time) requires 'a dispatch row whose rendered URL resolves to a blocked SSRF range... and a DNS-rebinding case via an injected resolver, mirroring test/letflow/webhooks/url_validator_test.exs's own three cases' -- the real file at that path (test/letflow/webhooks/url_validator_test.exs, confirmed to exist at this exact path, not the lib/ path an earlier draft of this task assumed) has three resolver-injected rejection cases (loopback 127.0.0.1, private RFC-1918 10.0.0.1, and a rebinding-shaped case at 169.254.169.254 -- all via an injected resolver fn). At this point in the run, rework2 had just added the http_transport/3->4 split (the seam), but no test yet exercised it for a DNS-rebinding-shaped rejection specifically -- rework2's own new tests covered the genuine :advance and genuine retriable-failure paths, not this SSRF-rejection-via-injected-resolver case. Independently re-verified everything else: re-ran the file directly (39 tests at this point, all passing), re-mapped every other REQ-214 AC to real assertions read directly (not trusted from test/specs/REQ-214.md alone, which did not yet exist at this point in the run), and independently re-ran 2 of the 6 mutations TEST-DESIGNER's step-03 report claimed to have tried -- both still caught by the current test suite. Test isolation re-confirmed (setup-based tenant fixtures, no setup_all, no shared mutable state).",
+    "artifacts_out": [],
+    "issues": [
+      {"severity": "MAJOR", "description": "AC2 requires a DNS-rebinding test case via an injected resolver, mirroring test/letflow/webhooks/url_validator_test.exs's own three cases. The seam (http_transport/4, added in rework2) exists but no DNS-rebinding-shaped rejection test has been written against it yet.", "affected_requirement": "REQ-214"}
+    ],
+    "next_action": "Route back to TEST-DESIGNER (rework iteration 1 of this step) to add the missing DNS-rebinding test coverage via http_transport/4's injectable resolver, mirroring url_validator_test.exs's own precedent."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-02T19:20:00Z",
+      "status": "FAIL",
+      "summary": "1 MAJOR gap: AC2's DNS-rebinding test case (via an injected resolver, mirroring url_validator_test.exs's own three cases) not yet written -- the http_transport/4 seam exists (from rework2) but is unexercised for this specific case. All other coverage independently re-verified sound.",
+      "issues": [
+        "AC2 DNS-rebinding coverage missing despite the test seam existing"
+      ],
+      "next_action": "Rework TEST-DESIGNER"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "handoff_id": "22422870-22ef-4ebf-936a-8c8a783b48aa",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ214-20260902/step-01b-code-design-validator-recheck1.json",
+  "created_at": "2026-09-02T11:40:00Z",
+  "started_at": "2026-09-02T11:45:00Z",
+  "completed_at": "2026-09-02T12:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["2e90a7be-3593-48d2-90d8-7d03f086749a", "3a443425-1a5b-463b-b863-e7ab73569b7c"],
+    "artifacts_in": [
+      "lib/letflow/design/service_task_dispatcher.md",
+      "handoffs/WF02-REQ214-20260902/step-01-code-designer-rework1.json",
+      "lib/letflow/webhooks.ex",
+      "lib/letflow/scheduler.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Rework re-check of lib/letflow/design/service_task_dispatcher.md against the prior FAIL's 2 BLOCKERs. Independently re-verify CODE-DESIGNER's rework claim rather than trusting its self-report."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact; timestamps are reconstructed approximations. Independently re-verified both fixes by reading the design doc and its cited sources directly, at reconstruction time. (1) OQ-3: design doc's §10 OQ-3 reads 'RESOLVED', citing Letflow.Webhooks.attempt_loop/7's freeze-once/re-validate-fresh/never-re-render discipline -- confirmed by independently reading lib/letflow/webhooks.ex's attempt_loop/7 directly, which matches the citation. §4.1/§5.2/§5.6 step 2 all consistently state the frozen-rendered_url discipline. (2) Locking: design doc's §5.4 was independently re-read in full -- it now specifies the exact two-step select-then-lock: Step 1 unlocked join query selecting eligible ids (no lock/1 call), Step 2 a single-table bare lock(\"FOR UPDATE SKIP LOCKED\") on service_task_dispatches only, re-selecting by id. Independently re-grepped the codebase for FOR UPDATE OF: confirmed still zero matches, and confirmed the design's own citation of Letflow.Scheduler.claim_due_timer_ids/2 as the shape mirror is accurate (that function's query is a single-table, no-join, bare-lock SELECT, read directly in lib/letflow/scheduler.ex). No new implementation code introduced by the rework -- both fixes remain signatures, illustrative query shapes, and prose, consistent with the design doc's own established convention. No knock-on inconsistency found in any other section: §3 (service_task_dispatches schema), §6/§7 (poller/context module split), and §8 (AC map) are all unaffected by these two fixes. Design is APPROVED for ELIXIR-DEV. NOTE ON THIS RECONSTRUCTION'S LIMITS: this backfill independently re-confirms the FINAL STATE of the design doc and its cited sources match what this PASS claims -- it cannot recover the original validator session's own moment-by-moment reasoning, but the artefact-level evidence (the doc's current §5.4/§10 OQ-3 text, matched against the real precedent files) is the strongest verification available after the fact and is what this summary reports.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to Step 2a ELIXIR-DEV to implement lib/letflow/design/service_task_dispatcher.md as approved."
+  },
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-02T11:05:00Z",
+      "status": "FAIL",
+      "summary": "2 BLOCKERs: (1) OQ-3 URL-freeze-on-retry left open despite the real Letflow.Webhooks.attempt_loop/7 precedent already existing and directly applicable. (2) Claim-query locking specified an invented lock(\"FOR UPDATE OF d0 SKIP LOCKED\") syntax with zero codebase precedent.",
+      "issues": [
+        "OQ-3 not resolved despite a directly-applicable real precedent being reachable in the same session",
+        "Invented FOR UPDATE OF qualified-lock syntax with no codebase or verified-doc precedent"
+      ],
+      "next_action": "Rework CODE-DESIGNER"
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-02T12:00:00Z",
+      "status": "PASS",
+      "summary": "Independently re-verified both fixes against real source: OQ-3 resolved citing Letflow.Webhooks.attempt_loop/7's real freeze-once/re-validate-fresh discipline; locking rewritten as a verified two-step select-then-lock mirroring Letflow.Scheduler.claim_due_timer_ids/2's bare, unqualified, no-join lock exactly. No new implementation code, no knock-on inconsistency.",
+      "issues": [],
+      "next_action": "Route to ELIXIR-DEV (Step 2a)"
+    }
+  ]
+}

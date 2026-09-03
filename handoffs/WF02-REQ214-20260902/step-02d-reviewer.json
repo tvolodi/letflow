@@ -1,0 +1,53 @@
+{
+  "handoff_id": "407a2d59-adaa-4896-b031-15add4fd0611",
+  "run_id": "WF02-REQ214-20260902",
+  "workflow_id": "WF-02",
+  "step": "02d",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ214-20260902/step-02d-reviewer.json",
+  "created_at": "2026-09-02T16:05:00Z",
+  "started_at": "2026-09-02T16:10:00Z",
+  "completed_at": "2026-09-02T16:35:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-214"],
+    "requirement_text": {
+      "REQ-214": "See handoffs/WF02-REQ214-20260902/step-01-code-designer.json's context.requirement_text.REQ-214 for the full verbatim description; not repeated here."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["cfe6b204-a2e3-4f63-84b2-dc13b04a09ca"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ214-20260902/step-02c-security-reviewer-recheck1.json",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/engine/service_task_dispatcher/poller.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/application.ex",
+      "docs/migration/decisions/"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Step 2d idiom/scope/decision-record gate on REQ-214's diff per docs/agents/workflows/WF-02_requirement_implementation.md and .claude/agents/reviewer.md.",
+    "acceptance_criteria": [
+      "Scope-creep check: diff implements exactly the design's own module set, nothing else",
+      "Poller.ex idiom checked against Letflow.Scheduler.Poller's shape -- mirrors appropriately, without over-mirroring later feature accretions (retention, metrics, alerts, ordering) that belong specifically to Scheduler.Poller",
+      "Two-step claim query re-verified as avoiding a TOCTOU gap",
+      "Test fixture changes (tenant_fixture.ex, tenant_fixture_test.exs) minimal and correct",
+      "Decision-record consistency (no new HTTP client dependency decision needed -- :httpc reuse)",
+      "Moduledoc accuracy"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "RECONSTRUCTED HANDOFF -- written 2026-09-03 after the fact from the run's real, on-disk state; timestamps are reconstructed approximations, not real clock reads. SCOPE: diff at this point covers exactly the design's own artefact set -- the migration, the context module, the poller module, the application.ex boot-gate entry, the tenant_provisioning.ex manifest registration, config/test.exs, the two tenant-fixture files, and the initial+rework1 test file content. No unrelated file touched. IDIOM (Poller.ex vs Scheduler.Poller): read lib/letflow/engine/service_task_dispatcher/poller.ex's own moduledoc directly -- it states explicitly 'no REQ-188/194/199/201-style feature accretion (retention, metrics, alerts, ordering all belong to Letflow.Scheduler.Poller specifically and are not duplicated here)', confirming the module deliberately mirrors only Scheduler.Poller's core shape (init/1 schedules :tick with zero delay; handle_info(:tick,...) fetches tenant schemas, dispatches per schema, reschedules) without importing later, unrelated accretions Scheduler.Poller has picked up over time -- correct idiom, not a naive full-copy. Boot-gating comment in poller.ex's own moduledoc independently re-confirmed to name the identical Ecto.Adapters.SQL.Sandbox :manual-mode hazard Scheduler.Poller's own application.ex comment documents, and to use a genuinely distinct config key (:start_service_task_dispatcher, not a reuse of :start_scheduler) -- correct per the design's own explicit instruction not to overload the existing gate. TWO-STEP CLAIM QUERY: re-verified claim_due_dispatch_ids/2 directly -- Step 1 (unlocked join-based eligibility select) and Step 2 (single-table bare lock(\"FOR UPDATE SKIP LOCKED\") re-select by id) reproduce Letflow.Scheduler.claim_due_timer_ids/2's own no-join-under-lock discipline exactly; confirmed no TOCTOU gap beyond what SKIP LOCKED already tolerates by design (a row claimed by a concurrent tick between Step 1 and Step 2 is simply absent from Step 2's result, not double-dispatched). FIXTURE CHANGES: test/support/tenant_fixture.ex's addition of \"service_task_dispatches\" to its expected-tables list and the corresponding count-bump in test/letflow/support/tenant_fixture_test.exs are both minimal, one-line-shaped additions consistent with how REQ-186's own timers-table addition was made previously -- no unrelated refactor bundled in. SCOPE BOUNDARY: confirmed zero touches to lib/letflow/engine/transition.ex or lib/letflow/engine.ex -- this requirement's own explicit exclusion (dispatch_node/4's :SERVICE_TASK clause and the activation-time async-park write belong to REQ-215) is honored. DECISION-RECORD CONSISTENCY: no new docs/migration/decisions/ entry needed or added -- :httpc is already this project's established outbound-HTTP mechanism (REQ-183's own precedent), reused identically, not a new library dependency; confirmed no unrelated dependency added to mix.exs. MODULEDOC ACCURACY: both new modules' moduledocs independently read and confirmed to accurately describe what the code does (no aspirational or stale claim found) at reconstruction time. This backfill's evidence is the current, post-rework1 state of the diff (rework2's TEST-DESIGNER-found defects had not yet surfaced at this point in the real run) -- consistent with this step's own place in the sequence, before Step 3.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER (Step 3) to write/expand test specs per docs/agents/workflows/WF-02_requirement_implementation.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

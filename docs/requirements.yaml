@@ -12945,3 +12945,202 @@ requirements:
       - "an existing per-operation rescue path (e.g. maybe_run_alert_detection/3's rescue _ -> :ok) still catches its own operation's raise with the new acquire/release wrapped around it -- a test forcing that operation to raise still leaves the admission slot released (no leak) and the tick completes"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-216]
+
+  - id: REQ-219
+    title: Layer Letflow.Application's flat 20-child supervision tree into Infrastructure / Pollers / Http, with explicit restart intensity isolating poller crash-loops from Repo and HTTP (closes ISS-0425 parts 1+partial-2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the layering and restart-intensity portions of ISS-0425/GH#829
+      (queue task 425), sized per ISSUE-FIXER's own diagnosis
+      (handoffs/WF03-ISS0425-20260903/step-01-issue-fixer-diagnosis.json):
+      Letflow.Application.start/2 (lib/letflow/application.ex:26-139, read
+      2026-09-03) builds ONE flat list of 20 children -- Letflow.Repo,
+      Ecto.Migrator, Oidcc.ProviderConfiguration.Worker, Letflow.Registry,
+      Letflow.Metrics.Registry, Letflow.Admission (REQ-216),
+      Letflow.InstanceSupervisor, 7 Task.Supervisors (SandboxPool, Plugin,
+      Lua, Wasm.ModuleRegistry, Wasm.CapabilityGate,
+      Wasm.ModuleVersionRegistry, Obs.Alerts), Letflow.SandboxPool,
+      Letflow.Engine.PluginRegistry, Letflow.Engine.Wasm.ModuleVersionRegistry,
+      Letflow.Scheduler.Poller (REQ-186, gated :start_scheduler),
+      Letflow.Engine.ServiceTaskDispatcher.Poller (REQ-214, gated
+      :start_service_task_dispatcher), and Bandit (gated :start_http) -- all
+      as peers under one `Supervisor.start_link(children, strategy:
+      :one_for_one, name: Letflow.Supervisor)` with no
+      max_restarts/max_seconds override (OTP default: 3 restarts/5s).
+      DOCUMENTED, NON-HYPOTHETICAL INCIDENT THIS REQUIREMENT MUST MAKE
+      STRUCTURALLY IMPOSSIBLE: scheduler_children/0's own comment
+      (application.ex:154-172) and ISS-0421 both describe a Poller whose
+      zero-delay first tick (`Process.send_after(self(), :tick, 0)`) raises
+      DBConnection.OwnershipError repeatedly under Ecto sandbox mode until
+      the shared top-level supervisor's restart intensity is exceeded and
+      the WHOLE application -- Letflow.Repo and Bandit included -- shuts
+      down. REQ-214's ServiceTaskDispatcher.Poller (application.ex:181-197)
+      documents the IDENTICAL hazard for a second, independent poller. Both
+      are currently worked around only by disabling them under test
+      (config/test.exs), not by any structural isolation -- a real
+      production crash-loop in either poller still takes the whole node
+      down today.
+      DECISIONS (settled here, not left to CODE-DESIGNER, per this
+      project's own REQ-216/217/218 design-gate precedent of resolving
+      real open questions at the requirement stage):
+      1. TOP-LEVEL SHAPE: three new sibling supervisor modules under
+      lib/letflow/supervisor/ -- Letflow.Supervisor.Infrastructure,
+      Letflow.Supervisor.Pollers, Letflow.Supervisor.Http (each `use
+      Supervisor`, own start_link/1 and init/1) -- become the ONLY 3
+      children of Letflow.Application's own Supervisor.start_link/2 call,
+      under strategy: :one_for_one (NOT :rest_for_one, deliberately
+      diverging from ISS-0425's own "candidate shape" text: ISSUE-FIXER's
+      diagnosis names the concrete reason -- :rest_for_one at the top would
+      cascade-restart every LATER-listed layer whenever an EARLIER one's
+      supervisor exits, e.g. a rare Infrastructure exit would force-restart
+      Pollers AND Http even though neither holds a pid-based dependency on
+      any Infrastructure child, since every named-process infra child
+      (Repo, both Registries, all 7 Task.Supervisors, InstanceSupervisor)
+      is looked up BY NAME at each call site, never by stored pid).
+      :one_for_one at the top means a Pollers crash-loop exhausting ITS OWN
+      restart intensity kills and restarts ONLY Letflow.Supervisor.Pollers
+      -- Infrastructure (Repo included) and Http are never touched. This is
+      the structural fix for the documented incident above.
+      2. LAYER MEMBERSHIP (every one of the 20 current children assigned):
+      Letflow.Supervisor.Infrastructure owns, in EXACTLY their current
+      relative order (preserving both hand-maintained ordering constraints
+      below as a property of Supervisor's own sequential per-child startup,
+      not a comment): Letflow.Repo, Ecto.Migrator,
+      Oidcc.ProviderConfiguration.Worker, Letflow.Registry,
+      Letflow.Metrics.Registry, Letflow.Admission, Letflow.InstanceSupervisor,
+      SandboxPool.TaskSupervisor, Letflow.SandboxPool,
+      Engine.PluginTaskSupervisor, Engine.PluginRegistry,
+      Engine.Lua.TaskSupervisor, Engine.Wasm.ModuleRegistryTaskSupervisor,
+      Engine.Wasm.CapabilityGateTaskSupervisor,
+      Engine.Wasm.ModuleVersionRegistry,
+      Engine.Wasm.ModuleVersionRegistryTaskSupervisor,
+      Obs.Alerts.TaskSupervisor -- strategy: :one_for_one, OTP default
+      restart intensity (crash-looping infra, e.g. Repo itself, indicates a
+      fault severe enough that taking the whole app down is still the
+      correct behavior; this requirement does not change that). Letflow.
+      Supervisor.Pollers owns Letflow.Scheduler.Poller and
+      Letflow.Engine.ServiceTaskDispatcher.Poller (each still individually
+      gated by its own existing :start_scheduler /
+      :start_service_task_dispatcher config key -- an empty children list
+      when both are false, as under config/test.exs today, must start and
+      run without error). Letflow.Supervisor.Http owns Bandit (still gated
+      by :start_http).
+      3. RESTART INTENSITY PER LAYER: Letflow.Supervisor.Infrastructure and
+      Letflow.Supervisor.Http keep the OTP default (3 restarts/5s) -- no
+      documented incident motivates changing either. Letflow.
+      Supervisor.Pollers gets an EXPLICIT override, looser than the OTP
+      default to tolerate a handful of transient per-tick failures (a
+      single bad HTTP dispatch, a single locked row) without exiting:
+      max_restarts: 5, max_seconds: 60, recorded with this rationale in the
+      module's own moduledoc. Whichever value is chosen, the requirement's
+      AC4 below is the real bar -- a sustained crash-loop must still
+      exceed it and cause Letflow.Supervisor.Pollers (only) to exit and be
+      restarted once by the top-level Letflow.Supervisor.
+      4. ORDERING CONSTRAINTS PRESERVED (verified in application.ex as of
+      2026-09-03, both currently comment-enforced only): (a) ISS-0224 --
+      SandboxPool.TaskSupervisor before {Letflow.SandboxPool, []}, within
+      Letflow.Supervisor.Infrastructure's own list, unchanged relative
+      order; (b) ISS-0429 -- Obs.Alerts.TaskSupervisor before either
+      Poller's first tick can reach it, now structural: Letflow.
+      Supervisor.Infrastructure completes its ENTIRE startup (Supervisor's
+      own guarantee: each child's init/1 returns before the next child
+      starts) before Letflow.Supervisor.Pollers starts at all, which is a
+      strictly stronger guarantee than list-position-within-one-flat-list.
+      SEQUENCING NOTE FOR ISS-0421: ISS-0421 (Scheduler.Poller SPOF, 7
+      serial per-tenant sweeps) is explicitly waiting on this requirement
+      to settle restart-intensity policy before it decides its own,
+      narrower, Poller-internal fix (per both issues' own text: "whichever
+      runs second reads the other's outcome"). This requirement's decision
+      3 above (Letflow.Supervisor.Pollers: max_restarts 5, max_seconds 60)
+      is that settled input; ISS-0421's own fix must build on it, not
+      re-decide a conflicting intensity policy.
+      NOT IN THIS REQUIREMENT, AND WHY:
+      (a) ISS-0421's own internal Poller fix (bounding the 7 serial
+      per-tenant sweeps, e.g. via Task.async_stream) -- separate, narrower,
+      sequenced to land after this requirement per both issues' own text.
+      (b) ISS-0422's CLAUDE.md/requirements.yaml wording drift -- confirmed
+      documentation-only and unrelated; not touched here.
+      (c) The Task.Supervisor sprawl review (ISS-0425 part 3) -- REQ-220.
+      (d) Reversing REQ-045's row-based-instance decision, or giving
+      Letflow.InstanceSupervisor real children -- ISS-0425's own text is
+      explicit this is NOT in scope. InstanceSupervisor is placed inside
+      Letflow.Supervisor.Infrastructure alongside the other currently-inert
+      leaf children, matching its CURRENT behavior (an empty
+      DynamicSupervisor); this is not a claim about which layer it belongs
+      in once (if ever) a future requirement gives it real children -- left
+      as an explicitly open question for that future requirement, not
+      guessed at here.
+    acceptance_criteria:
+      - "Letflow.Application.start/2's own Supervisor.start_link/2 call takes exactly 3 children -- Letflow.Supervisor.Infrastructure, Letflow.Supervisor.Pollers, Letflow.Supervisor.Http (or equivalently named per the new modules' own moduledocs) -- under strategy: :one_for_one; none of the 20 current leaf children (Repo, Migrator, Oidcc worker, both Registries, Admission, InstanceSupervisor, all 7 Task.Supervisors, SandboxPool, PluginRegistry, Wasm.ModuleVersionRegistry, both Pollers, Bandit) remain directly in Letflow.Application's own children list -- confirmed by reading application.ex"
+      - "Letflow.Supervisor.Infrastructure owns Letflow.Repo, Ecto.Migrator, Oidcc.ProviderConfiguration.Worker, Letflow.Registry, Letflow.Metrics.Registry, Letflow.Admission, Letflow.InstanceSupervisor, all 7 Task.Supervisors, Letflow.SandboxPool, Letflow.Engine.PluginRegistry and Letflow.Engine.Wasm.ModuleVersionRegistry, started under strategy: :one_for_one in EXACTLY the relative order they hold today; ISS-0224's SandboxPool.TaskSupervisor-before-SandboxPool ordering still holds (explicit test or documented startup-order proof)"
+      - "Letflow.Supervisor.Pollers owns exactly Letflow.Scheduler.Poller and Letflow.Engine.ServiceTaskDispatcher.Poller, each still individually gated by its own existing config flag; with both :start_scheduler and :start_service_task_dispatcher false (config/test.exs's current setting), Letflow.Supervisor.Pollers starts and runs with zero children without error"
+      - "reproducing the exact scenario scheduler_children/0's own comment and ISS-0421 describe -- a Poller raising an exception on every tick fast enough to exceed Letflow.Supervisor.Pollers' own restart intensity (max_restarts: 5, max_seconds: 60) -- causes ONLY Letflow.Supervisor.Pollers to exit and be restarted by the top-level Letflow.Supervisor; Letflow.Repo, every Letflow.Supervisor.Infrastructure child, and Letflow.Supervisor.Http (where started) remain running and reachable throughout -- verified by a test asserting Letflow.Repo's own pid is unchanged before and after the induced crash-loop, not by a claim alone"
+      - "Letflow.Supervisor.Http owns exactly Bandit (still gated by :start_http, empty children list when false) under strategy: :one_for_one"
+      - "config/test.exs, config/dev.exs and config/prod.exs need no changes -- all three existing gate keys (:start_scheduler, :start_service_task_dispatcher, :start_http) continue to work exactly as before, confirmed by `mix test` passing under config/test.exs's existing gates-false settings"
+      - "Letflow.Supervisor.Pollers' own moduledoc records the max_restarts/max_seconds override and the rationale (transient per-tick failure tolerance vs. the documented crash-loop incident), matching this requirement's decision 3"
+      - "REVIEWER's sign-off is recorded confirming: the new 3-layer shape does not weaken ISS-0224's or ISS-0429's real ordering guarantee; Letflow.InstanceSupervisor's placement inside Letflow.Supervisor.Infrastructure is not itself a claim that it now supervises real children (REQ-045 AC5 / ISS-0422 unaffected); and the choice of :one_for_one over :rest_for_one at the top level is justified against the actual 20-child dependency graph, not assumed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted; mix test specifically includes the new isolation test from AC4, not just a restructuring that happens to still compile"
+    depends_on: [REQ-214, REQ-216]
+
+  - id: REQ-220
+    title: Task.Supervisor sprawl review -- one consolidated rationale for all 7, consolidate only if the review itself concludes it's safe (closes ISS-0425 part 3)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the third, lighter part of ISS-0425/GH#829: "worth one
+      deliberate review pass; keeping all seven [Task.Supervisors] with
+      consolidated rationale is a defensible outcome" (the issue's own
+      text, corrected from "six" to the current, verified count of 7 --
+      ISS-0429 added Obs.Alerts.TaskSupervisor after the issue was filed).
+      Builds on REQ-219's Letflow.Supervisor.Infrastructure module, which
+      is where all 7 Task.Supervisors live after that requirement lands --
+      this requirement depends on REQ-219 to avoid two requirements editing
+      the same section of application.ex concurrently.
+      THE 7, EACH ALREADY INDIVIDUALLY JUSTIFIED IN ITS OWN INLINE COMMENT
+      TODAY (lib/letflow/application.ex, read 2026-09-03) -- this
+      requirement's job is to bring that reasoning together in ONE place
+      and make a real recommendation, not to re-derive it from scratch:
+      SandboxPool.TaskSupervisor (ISS-0224: isolates SandboxPool's own
+      Ecto-sandbox-ownership async_nolink calls so a claim/2 failure cannot
+      exit the pool); Engine.PluginTaskSupervisor (REQ-057: generic
+      plugin-handler execution); Engine.Lua.TaskSupervisor (REQ-155:
+      wall-clock kill isolation for LUA-10 layer 2, deliberately NOT
+      sharing PluginTaskSupervisor -- a killed Lua task must not risk a
+      concurrently running plugin task); Engine.Wasm.ModuleRegistryTaskSupervisor
+      (REQ-166: crash-isolates Wasmex.start_link/1's unresolved-import EXIT
+      signal during module registration, an upload-time-only path);
+      Engine.Wasm.CapabilityGateTaskSupervisor (REQ-167: the same
+      crash-isolation need, but for capability-gated instantiation -- an
+      orthogonal caller/input from ModuleRegistry per req166 design §2.2,
+      deliberately not reusing it); Engine.Wasm.ModuleVersionRegistryTaskSupervisor
+      (REQ-173: the hot-reload invoke/4 path's own outer async_nolink task
+      plus its nested instantiation-attempt task); Obs.Alerts.TaskSupervisor
+      (ISS-0429: I/O-bound HTTP alert-hook delivery, unrelated to any
+      sandbox/plugin/Lua/Wasm concern above).
+      REAL RECOMMENDATION (not "study it further"): KEEP ALL 7 AS
+      SEPARATE Task.Supervisors. None share a crash domain or a
+      resource-contention profile that would make consolidation
+      meaningfully safer or cheaper, and each pairing a reader might
+      plausibly propose merging already has a stated, on-record reason not
+      to (Lua vs. Plugin: wall-clock-kill blast radius; the three Wasm
+      supervisors: three genuinely orthogonal call paths per req166 §2.2 --
+      module registration, capability-gated instantiation, and hot-reload
+      invocation, each independently crash-isolated on purpose). This
+      requirement's deliverable is DOCUMENTATION consolidating that
+      reasoning into one place, not a merge -- per the issue's own text,
+      "keeping all [seven] with consolidated rationale is a defensible
+      outcome."
+      NOT IN THIS REQUIREMENT: no change to any Task.Supervisor's actual
+      behavior, name, or child spec unless the review itself concludes
+      consolidation is safe for a specific pair (see AC3); no change to
+      REQ-219's layer assignment of these 7 (all remain inside Letflow.
+      Supervisor.Infrastructure).
+    acceptance_criteria:
+      - "Letflow.Supervisor.Infrastructure's moduledoc (or a dedicated comment section immediately above its 7 Task.Supervisor children) contains ONE consolidated list naming all 7, each with a one-line distinct justification and its originating requirement/issue (REQ-057, REQ-155, REQ-166, REQ-167, REQ-173, ISS-0224, ISS-0429) -- a reader does not need to hunt 7 separate scattered comments to see why none should merge"
+      - "the review explicitly considers, and rejects with a stated reason (not silently skips), the two most plausible consolidation candidates: (a) the three Wasm Task.Supervisors (ModuleRegistryTaskSupervisor, CapabilityGateTaskSupervisor, ModuleVersionRegistryTaskSupervisor) into one shared Wasm Task.Supervisor; (b) Engine.PluginTaskSupervisor and Engine.Lua.TaskSupervisor into one shared Engine Task.Supervisor"
+      - "no Task.Supervisor is removed, renamed, or merged as a side effect of this documentation pass; IF the review's own written justification concludes a specific consolidation is in fact safe, REVIEWER's sign-off is required on that actual change before it lands, at the same hard-gate bar as any other supervision-tree change -- this requirement's own default recommendation (KEEP ALL 7) does not need that sign-off, only a deviation from it does"
+      - "mix compile --warnings-as-errors and mix test both pass with real output quoted"
+    depends_on: [REQ-219]

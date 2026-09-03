@@ -23,6 +23,20 @@ This design answers that question first, states which unavoidable action each of
 mechanisms it adopts rides on, and only then works through the four candidates and the five
 acceptance criteria.
 
+**One distinction this design must not blur, because blurring it is exactly how a seventh
+mitigation becomes an eighth tally line: "unavoidable" is not one uniform property across
+the two mechanisms this design adopts.** §1.1's CI gate is **structurally
+(code/infrastructure) enforced** — GitHub Actions runs the workflow on its own trigger,
+independent of any agent's memory, and a red `mix letflow.check` structurally cannot merge.
+§1.2's ORCH dispatch-time commit is **procedurally enforced** — a documented MUST that ORCH
+has followed with a strong track record (§1.2 states the evidence), but it is still prose
+an agent executes, not something code forces ORCH to do. This design keeps both mechanisms
+and is explicit throughout about which class each belongs to, rather than presenting both
+as the same strength of guarantee. §1.2 states this in full for Mechanism B; §3.5 draws the
+consequence: only Mechanism A carries the structural guarantee, and the pair's value is
+that B adds an early, procedurally-reliable catch on top of an unconditional CI backstop —
+not a second independent guarantee.
+
 ---
 
 ## 1. The two unavoidable actions this design rides on
@@ -56,21 +70,46 @@ This is why §2's autofix change rides here and nowhere else: it does not need a
 site. `mix letflow.lint_handoffs` already executes on this path today; the only change is
 what it does with a bad value it finds, and only for the closed, verified-safe subset.
 
-### 1.2 Unavoidable action #2 — ORCH's dispatch-time handoff commit (`HANDOFF_PROTOCOL.md` §1.3)
+### 1.2 Unavoidable-in-practice action #2 — ORCH's dispatch-time handoff commit (`HANDOFF_PROTOCOL.md` §1.3), a PROCEDURAL not a CODE guarantee
 
-§1.3 states, unconditionally, no size threshold, no judgement gate: "the moment ORCH writes
-a `PENDING` handoff file, it commits that file... before spawning the receiving agent...
-every dispatch, every time." This rule already holds — it is the ISS-0196 precedent
-ISSUE-FIXER points at, and it has not recurred since being written into a single mechanical
-procedure rather than left as advice.
+**Correction from this design's first iteration, made explicit here per CODE-DESIGN-VALIDATOR's
+rework-1 finding.** §1.3 is itself prose: "the moment ORCH writes a `PENDING` handoff file,
+it commits that file... before spawning the receiving agent... every dispatch, every time"
+is a documented MUST (`ORCHESTRATOR.md:23`'s MUST list points at it) that ORCH executes by
+following written instructions — nothing in the toolchain forces ORCH to run
+`git add && git commit` before spawning the next agent. **This design's first draft claimed
+"there is no path through this procedure that reaches step 4 without having passed step 2"
+— that claim is not literally true and is withdrawn.** A future ORCH session could, in
+principle, skip the read the same way it could skip the commit itself: nothing but the
+written procedure stops either.
 
-The relevant asymmetry, verified this session against ISSUE-FIXER's own count: **all 8
-occurrences were written by the *completing* agent, never by ORCH authoring its own
-handoff.** So the read this design adds does not ask the error-prone party to catch itself;
-it asks ORCH — a party with a clean record on this defect — to read a file *before* an
-action ORCH is already unconditionally performing (the pre-dispatch commit). See §3 for
-exactly where in that existing procedure the read is inserted, and why it cannot be
-separated from it.
+**What is true, and is the actual basis for adopting Mechanism B: §1.3 has a strong,
+verified track record, not a structural one.** `docs/anti-patterns.md:1123` records the
+single incident that *caused* §1.3 to be written (a dispatched handoff sat untracked in the
+working tree, and the record of what was asked existed in no git object until the receiving
+agent's own later commit) — and no recurrence of that specific failure is logged since. This
+run's own unsquashed branch shows the real dispatch-then-complete pattern live: commit
+`45ac032a` (ORCH's dispatch) followed by `dc7431b9` (CODE-DESIGNER's completion) — two
+separate, ordered commits, exactly the shape §1.3 describes. (CODE-DESIGN-VALIDATOR also
+found that `main`'s own history is the wrong place to verify this from directly, because
+squash-merges collapse a run's internal commit sequence — an apparent "88.5% single-commit"
+figure on `main` is a squash artifact, not evidence against §1.3 compliance; the
+unsquashed branch is the correct place to look, and it confirms the pattern.)
+
+**So: Mechanism B inherits §1.3's *reliability class* — strong track record, procedurally
+enforced, not code-guaranteed — and this design states that plainly rather than implying
+CI-gate-strength unavoidability.** The relevant asymmetry, still true and still the reason
+this mechanism is worth having despite being procedural: verified this session against
+ISSUE-FIXER's own count, **all 8 occurrences were written by the *completing* agent, never
+by ORCH authoring its own handoff.** The read this design adds does not ask the
+error-prone party to catch itself; it asks ORCH — a party with a clean record on this
+specific defect, executing a procedure with its own clean record since ISS-0196 — to read
+a file *before* an action ORCH already reliably performs (the pre-dispatch commit). See §3
+for exactly where in that existing procedure the read is inserted, and §3.5 for the
+consequence of B being procedural rather than structural: it is not, on its own, what makes
+the violation "structurally impossible" — that word is earned by Mechanism A alone (§1.1),
+and B's honest role is a latency improvement layered on top of it, not a second independent
+guarantee.
 
 ---
 
@@ -78,23 +117,55 @@ separated from it.
 
 ### 2.1 Scope, precisely
 
-Extends `Mix.Tasks.Letflow.LintHandoffs` with a second entry point.
+Extends `Mix.Tasks.Letflow.LintHandoffs` with two new, independent, orthogonal flags on
+its existing single entry point.
 
 ```
 @spec run([String.t()]) :: :ok
 ```
-unchanged in behaviour for `run([])` / `run(["--check"])`-shaped invocation (i.e. no flag ⇒
-today's read-only lint, byte-for-byte the same exit-code contract as today). Add:
+
+`run(_args)` currently ignores its argument entirely (confirmed at line 233/234 this
+session — the body calls `handoff_files/0` with zero arguments, never touching the bound
+parameter). This design requires `run/1` to actually parse `args` for two flags:
+
+- **`"--autofix"`** — enables Mechanism A's corrective behaviour, per §2.2 below.
+- **`"--dir <path>"`** — overrides which directory is scanned, addressing
+  CODE-DESIGN-VALIDATOR's rework-1 finding (BLOCKER 2) that AC1's demonstration cannot
+  execute today because `run/1` never threads anything into `handoff_files/1`'s
+  already-parameterized `dir` argument (verified at line 279:
+  `def handoff_files(dir \\ @handoffs_dir)` — the capability already exists one layer down,
+  it is simply unreachable from the CLI).
+
+**Default-preserving contract, stated explicitly since CI depends on it:** `run([])` (no
+flags at all — CI's exact invocation, `mix letflow.check`'s alias entry
+`"letflow.lint_handoffs"`, unchanged) must resolve to `handoff_files(@handoffs_dir)`,
+byte-for-byte the same call CI makes today. This means:
 
 ```
-handling of "--autofix" as a member of the args list passed to run/1
+@spec resolve_dir([String.t()]) :: String.t()
+# no "--dir" present in args -> returns @handoffs_dir (the literal "handoffs"),
+# unchanged from today's hardcoded default.
+# "--dir" present -> returns the next arg verbatim, no validation beyond
+# "the flag has a following argument" (a missing value is a usage error,
+# reported and non-zero exit, not a silent fallback to @handoffs_dir --
+# a silent fallback would let a typo'd --dir invocation quietly re-lint the
+# real corpus and misreport what was actually checked).
 ```
 
-`run(_args)` currently ignores its argument (confirmed at line 233/234 this session — the
-body calls `handoff_files/0`, never touches the bound parameter). This design requires
-`run/1` to actually inspect `args` for the literal flag `"--autofix"`. This is the one
-required behavioural change to `run/1`'s signature-level contract; no other flag is defined
-by this design.
+`run/1`'s body becomes: parse `args` for both flags (order-independent — `--dir` and
+`--autofix` may appear together or separately, since AC1's demonstration needs exactly
+that combination in step 3 below), resolve the directory via `resolve_dir/1`, call
+`handoff_files(dir)` instead of today's zero-arg `handoff_files()`, then proceed exactly as
+today (or, if `--autofix` is set, via §2.4's autofix path) over that file set.
+
+**Confirmation this cannot change CI's no-flag behaviour:** CI's only invocation is
+`mix letflow.check`, which runs the alias entry `"letflow.lint_handoffs"` — a bare Mix task
+name with **no arguments appended**, unchanged by this design. A bare invocation parses an
+empty `args` list, `resolve_dir([])` returns `@handoffs_dir` exactly as the current
+hardcoded default does, and no `--autofix` means the corrective branch (§2.4) never
+executes. CI's path is therefore identical in behaviour to today's, by construction — the
+new flags are strictly additive surface `run/1` exposes for local/test invocation, not a
+change to what CI does.
 
 ### 2.2 The mapping, closed, no fifth case
 
@@ -159,13 +230,33 @@ computed exactly as today, against the corrected files. This design does **not**
 
 ### 2.5 Why this is safe against the corpus finding
 
-ORCH independently scanned all 1899 current handoff JSONs this run and found zero bad
-values — so `--autofix` has nothing to correct today. This design is deliberately **not** a
-migration: it does not run once over history, does not touch any of the 6
-`@grandfathered` entries (none is an H1 entry today — H1's grandfather list is empty;
-verified by reading `@grandfathered` above, which lists only H2/H3 entries), and only ever
-acts on a *new* violation introduced going forward. `--autofix` is invoked on the exact same
-`handoff_files/0` discovery as today — no new discovery logic, no historical replay.
+**Corrected per CODE-DESIGN-VALIDATOR rework-1 MINOR finding.** ORCH's original scan used a
+broad glob (`handoffs/**/*.json`) rather than the linter's own discovery pattern
+(`handoffs/**/step*.*`, `handoff_files/1` at line 279) and reported a null-status file that
+turned out not to exist under the linter's actual discovery — the file it cited is not even
+matched by `handoff_files/1`'s basename filter, and the null field it found was the
+unrelated `result.status`, not the top-level `status` this design governs. Rescanned with
+the linter's own pattern: **1900 files, zero bad, missing, null, or non-string top-level
+`status` values.** `--autofix` therefore has nothing to correct in the corpus today, under
+either scan. This design is deliberately **not** a migration: it does not run once over
+history, does not touch any of the 6 `@grandfathered` entries (none is an H1 entry today —
+H1's grandfather list is empty; verified by reading `@grandfathered` above, which lists only
+H2/H3 entries), and only ever acts on a *new* violation introduced going forward.
+`--autofix` is invoked on the same `handoff_files/1` discovery as today (now reachable via
+`--dir`, per §2.1) — no new discovery logic, no historical replay.
+
+**Since null/missing is confirmed absent from the corpus today, but "currently unpopulated"
+is not the same claim as "cannot occur," §2.2's mapping table already specifies (and this
+section restates so the path is not left implicit just because nothing exercises it today)
+that a missing or non-string top-level `status` is in the refuse set, identically to
+`"FAIL"`: `--autofix` leaves such a file untouched, still counts it as a hard violation, and
+reports it with a reason naming the actual condition found (`"missing"` or the actual
+non-string type/value present) rather than reusing the `FAIL`-specific ambiguity wording —
+the caller should be told *what was found*, not given a message written for a different
+case. This is a defensive specification, not a response to an observed occurrence: `check_h1_status/2`
+(verified at lines 411-435) already has a distinct non-string/missing clause today, separate
+from its enum-mismatch clause, and `--autofix`'s refuse path is specified to mirror that
+same distinction rather than collapsing both into one generic "refused" case.
 
 ---
 
@@ -213,13 +304,18 @@ ORCH's existing procedure (§1.3), annotated — nothing renumbered, one clause 
   5. Spawn the receiving agent.
 ```
 
-The load-bearing property: step 2 is not a separate call ORCH can forget to make — it sits
-**inside** the same procedural block whose step 4 (the git commit) is already unconditional
-and already has a clean compliance record since ISS-0196. There is no path through this
-procedure that reaches step 4 without having passed step 2, because they are written as one
-numbered sequence, the same shape §1.3 already uses successfully. This is the literal
-combination ISSUE-FIXER recommended and this design adopts it, refined only by making the
-correction procedure explicit (§3.2 step 2) rather than leaving it as "ORCH decides."
+**The load-bearing property, stated at the correct strength (corrected per
+CODE-DESIGN-VALIDATOR rework-1 — see §1.2):** step 2 is not a separate call ORCH can forget
+to make *in the sense that a validator or gate would block it* — nothing here is
+code-enforced. What is true is narrower and still real: step 2 sits **inside** the same
+five-step procedural block whose step 4 (the git commit) is a documented MUST with a clean
+compliance record since ISS-0196, written as one numbered sequence rather than as a
+separately-skippable instruction. That is the same shape §1.3 already uses successfully, and
+it is the reason this design expects step 2 to be followed with §1.3's own reliability, not
+with CI's structural certainty. This is the literal combination ISSUE-FIXER recommended and
+this design adopts it, refined by (a) making the correction procedure explicit (§3.2 step 2)
+rather than leaving it as "ORCH decides," and (b) being explicit, per §3.5 below, that this
+mechanism's guarantee is procedural, not structural.
 
 ### 3.3 Cost, judged against the contended number
 
@@ -254,6 +350,37 @@ existing call site (CI), Mechanism B needs no linter call. A design that instead
 option (b)/(c) as literally "call `mix letflow.lint_handoffs` at every dispatch" would have
 to pay 74.7s × (dispatches per run) under contention, which is exactly why §5.2 rejects that
 literal reading of (b)/(c) in favor of the field-read shown above.
+
+### 3.5 Where the actual structural guarantee lives, stated honestly
+
+**Only Mechanism A (§1.1/§2) carries a structural guarantee.** It rides GitHub Actions'
+own trigger and a merge precondition neither agent memory nor a skipped instruction can
+route around. Mechanism B (§1.2/§3.1-3.4) does not add a second, independent structural
+guarantee — it is procedural, inheriting §1.3's track record, which is strong but not
+code-enforced. Stated as the consequence the validator asked this design to address
+head-on: **if Mechanism B were silently dropped from some future ORCH session — the same
+way six prior prose mitigations were — the violation would still be caught, every time,
+by Mechanism A at CI**, before merge. Nothing about "structurally impossible to merge"
+depends on B.
+
+**So why keep B at all, rather than shipping A alone?** Because B is a real, free latency
+win layered on top of an unconditional backstop, not an alternative to one. Under A alone,
+every occurrence is caught only at push/CI time — minutes after the mistake, the same
+timing every one of the 8 real occurrences already had. Under A+B, the same violation is
+caught **inline, between steps, before the very commit that would first put it in git** —
+before CI even runs — on the strength of a procedure with a clean record since ISS-0196 and
+zero marginal cost (§3.3/§3.4: no linter invocation at all). That is real value even though
+it is not a second guarantee.
+
+**ORCH's own framing, evaluated:** "CI-guaranteed plus a procedural early-catch" is adopted
+as this design's honest self-description, for the reason ORCH gave — it is a materially
+better answer than six prose-only predecessors, specifically *because* the CI half
+genuinely cannot be skipped, so the worst case if the procedural half ever lapses is a
+return to today's status quo (caught at CI), not a silent miss. What this design does not
+do, and what would repeat the overclaiming mistake this rework fixes, is describe that
+combination as "structurally impossible to violate" — the correct sentence is "structurally
+impossible to **merge** with the violation still present," which is what A alone
+guarantees, with B making the common case faster to catch.
 
 ---
 
@@ -335,37 +462,68 @@ role's own mandate that every acceptance criterion maps to something concrete.)
 
 ### AC1 — "make the violation structurally impossible... catch a deliberately-introduced bad status before CI, demonstrated by a real run"
 
-Two independent catches, either sufficient alone, both present:
+Two catches, of two different strengths (per §3.5 — not restated at length here):
 
-- **Mechanism B** catches it **before CI even runs** — at the moment ORCH would otherwise
-  commit the very handoff carrying the bad value, per §3.2 step 2. This is strictly *before*
-  CI, on every run, unconditionally.
 - **Mechanism A** catches (and for the safe subset, self-heals) it **at CI**, as a hard gate
-  that already exists and already blocks merge.
+  that already exists and already blocks merge. This is the one that makes "structurally
+  impossible to merge with the violation present" literally true, because nothing bypasses
+  CI.
+- **Mechanism B** catches it **before CI even runs** — at the moment ORCH would otherwise
+  commit the very handoff carrying the bad value, per §3.2 step 2 — *when the documented
+  §1.3 procedure is followed*, which it reliably has been since ISS-0196 but is not
+  code-enforced. B is the earlier catch on the common path, not a second guarantee; if it
+  is ever skipped, A still catches the same violation at CI, just later.
 
 **How this is demonstrated, concretely, per the handoff's own self-referential
 instruction** ("this run's own handoffs are written by the very agents that produce these
 violations... a fix that cannot catch a violation planted in its own run's handoffs has not
-been shown to work"): ELIXIR-DEV, once Mechanism A is implemented, must run a demonstration
-against **this run's own handoff files** as the concrete test fixture:
+been shown to work"), **and corrected per CODE-DESIGN-VALIDATOR rework-1 BLOCKER 2**: the
+first draft of this plan placed the fixture *outside* `handoffs/` and expected a bare
+`mix letflow.lint_handoffs` invocation to see it — that cannot work, because
+`run(_args)` calls `handoff_files()` with no argument and today's hardcoded default is
+`@handoffs_dir = "handoffs"` (verified), so anything outside `handoffs/` is invisible to a
+real CLI run. §2.1's new `--dir` flag exists specifically to make this demonstration
+executable as a **real run with real, quotable output**, using a fixture directory that is
+never `handoffs/` itself and is therefore never linted by any other host's CI:
 
 1. Take a **copy** of one of this run's already-completed handoff files (e.g.
-   `handoffs/WF03-ISS0440-20260903/step-01-issue-fixer-diagnosis.json`) into a scratch path
-   (`scratch/`, per File Placement Rules — never edit the real handoff), or use a synthetic
-   fixture file under `test/fixtures/` shaped like one, with top-level `status` deliberately
-   set to `"PASS"`.
-2. Run `mix letflow.lint_handoffs` (no flag) against a fixture set including that file —
-   demonstrate it is flagged as a new H1 violation, non-zero exit, exactly the CI-time
-   catch.
-3. Run `mix letflow.lint_handoffs --autofix` against the same fixture — demonstrate the file
-   is rewritten to `"COMPLETED"` and the run exits 0, quoting real output.
-4. Repeat steps 1-3 with `status` set to `"FAIL"` — demonstrate the run still exits non-zero
-   under `--autofix` and the file is left untouched, quoting the refusal message.
-5. This is TEST-DESIGNER/TEST-RUNNER's job (ExUnit tests over `handoff_files/1`'s
-   already-parameterized `dir` argument, pointed at a scratch fixture directory — no
-   production file is ever mutated by the test suite), not something CODE-DESIGNER runs
-   itself; named here so the acceptance criterion has a stated, concrete demonstration path
-   rather than "trust the design."
+   `handoffs/WF03-ISS0440-20260903/step-01-issue-fixer-diagnosis.json`) into a scratch
+   fixture directory **outside `handoffs/`** — e.g. `scratch/iss440-fixtures/` (per File
+   Placement Rules; never edit the real handoff) or a `test/fixtures/handoffs_lint/`
+   directory if TEST-DESIGNER prefers a committed fixture — with top-level `status`
+   deliberately set to `"PASS"`.
+2. Run `mix letflow.lint_handoffs --dir scratch/iss440-fixtures` (no `--autofix`) — a real
+   CLI invocation, now able to see the fixture directory because of §2.1's override —
+   demonstrating the planted value is flagged as a new H1 violation, non-zero exit, quoting
+   real output. This is the "before CI" catch demonstrated live: the same check CI would
+   run, run locally, against a directory CI never even scans, with the bad value visible to
+   the CLI for the first time.
+3. Run `mix letflow.lint_handoffs --dir scratch/iss440-fixtures --autofix` against the same
+   fixture directory — demonstrate the file is rewritten to `"COMPLETED"` in place and the
+   run exits 0, quoting real output.
+4. Repeat steps 1-3 with `status` set to `"FAIL"` in a second fixture file — demonstrate the
+   run still exits non-zero under `--autofix --dir ...`, the file is left untouched, and the
+   refusal message names the file, the literal value found, and the stated ambiguity reason
+   (§2.3).
+5. **Confirm the no-flag/no-`--dir` path is unaffected**, closing the loop on §2.1's
+   default-preserving contract: run bare `mix letflow.lint_handoffs` (no flags at all) and
+   confirm the scratch fixture directory is **not** scanned (it reports the same file count
+   over the real `handoffs/` corpus as before the fixture existed) — proving `--dir`'s
+   addition changed nothing about CI's own invocation.
+6. This is TEST-DESIGNER/TEST-RUNNER's job (ExUnit tests calling `run/1` with an explicit
+   `["--dir", fixture_dir]` args list pointed at a scratch/test fixture directory — no
+   production file under `handoffs/` is ever mutated by the test suite), not something
+   CODE-DESIGNER runs itself; named here so the acceptance criterion has a stated, concrete,
+   *executable* demonstration path rather than "trust the design." If TEST-DESIGNER instead
+   prefers a fixture committed **inside** `handoffs/` under a dedicated scratch run-id (e.g.
+   `handoffs/_fixtures-iss440/`) rather than using `--dir`, that path carries a hazard this
+   design flags rather than endorses: a bad-status file left inside `handoffs/` would be
+   linted by **every other host's** `mix letflow.check`, including CI, and would break their
+   builds the moment it is committed. `--dir` avoids that hazard entirely by construction
+   (the fixture lives outside `handoffs/`, so no other host's default-directory invocation
+   ever sees it) and is this design's recommended path for exactly that reason — a
+   committed-inside-`handoffs/` fixture is not adopted by this design and is not guaranteed
+   safe to commit under any circumstance.
 
 ### AC2 — "an unconfigured host must either still be protected, or have its non-setup detected by an existing gate"
 
@@ -424,7 +582,10 @@ ambiguity this design was told to respect.
 
 This design specifies the **content** of the inserted step (§3.2) and states it must live
 inside §1.3's existing numbered procedure (not as a new, separately-skippable section) so it
-inherits that section's "no size threshold, no judgement gate" framing. It does not draft
+inherits that section's "no size threshold, no judgement gate" **wording** — the same
+documented-MUST framing §1.3 already uses, with the same procedural (not code-enforced)
+reliability class stated explicitly in §1.2/§3.5, not a stronger claim than §1.3 itself
+makes. It does not draft
 the exact prose/heading ELIXIR-DEV (or whichever role edits `HANDOFF_PROTOCOL.md` — this is
 a docs change, in scope for this fix per the issue's own `affected_files` list) will commit,
 since that is implementation of the documentation, not a design-level decision. The one hard
@@ -456,24 +617,34 @@ explicitly not decided here.
 ## 7. Summary of concrete elements for ELIXIR-DEV
 
 1. `lib/mix/tasks/letflow.lint_handoffs.ex`:
-   - `run/1` inspects `args` for `"--autofix"` (currently ignored — becomes read, not
-     ignored).
+   - `run/1` parses `args` for `"--autofix"` and `"--dir <path>"` (currently ignored
+     entirely — becomes read, not ignored), per §2.1. No-flag invocation (CI's own,
+     unchanged) must resolve identically to today's hardcoded `@handoffs_dir` default —
+     this is the specific property to test, not just narrate.
    - New `@autofix_map` (or equivalently named) closed map, exactly
-     `%{"PASS" => "COMPLETED", "COMPLETE" => "COMPLETED", "DONE" => "COMPLETED"}`.
+     `%{"PASS" => "COMPLETED", "COMPLETE" => "COMPLETED", "DONE" => "COMPLETED"}` — `FAIL`
+     and missing/non-string values are never keys in this map (§2.2/§2.5).
    - New function (name/shape per §2.4) applying that map file-by-file, producing
      `fixed`/`refused` lists, and rewriting only the `status` field of `fixed` files in
      place (preserve every other field and key order as far as Jason's encoder allows;
      ELIXIR-DEV decides the exact re-serialization approach — not a design-level concern).
-   - Output sections per §2.3: fixed files reported distinctly from refused files, refused
-     files still counted toward the non-zero exit.
+   - Output sections per §2.3/§2.5: fixed files reported distinctly from refused files,
+     refused files still counted toward the non-zero exit, and a refused file's reported
+     reason names the actual condition found (missing vs. `FAIL` vs. other non-enum value)
+     rather than one generic message.
    - `letflow.check` alias in `mix.exs` is **unchanged** — still calls plain
-     `letflow.lint_handoffs`, no `--autofix` (§6.3).
+     `letflow.lint_handoffs` with no arguments, so no `--autofix` and no `--dir` (§6.3).
 2. `docs/agents/shared/HANDOFF_PROTOCOL.md` §1.3: insert the §3.2 clause into the existing
    dispatch-commit procedure (exact prose is ELIXIR-DEV's/DOC-UPDATER's to draft, content
-   constraints per §3.2 and §6.2).
+   constraints per §3.2 and §6.2) — worded as a procedural addition to §1.3's existing MUST,
+   not as a claim that the insertion is itself code-enforced (§1.2/§3.5).
 3. `docs/anti-patterns.md`: per the issue's explicit instruction, do **not** add an eighth
    tally line as the fix. If anything is appended here, it should be a closing note stating
-   this occurrence's mitigation is structural (pointing at this design + the two mechanisms)
-   rather than a ninth recurrence entry — DOC-UPDATER's call at Step 6, not this step's.
-4. Test fixtures for AC1's demonstration live under `test/fixtures/` or `scratch/` (per File
-   Placement Rules) — never mutate a real `handoffs/**/*.json` file to prove the mechanism.
+   this occurrence's mitigation combines a structural gate (Mechanism A, at CI — nothing
+   bypasses it) with a procedural early-catch (Mechanism B, riding §1.3's track record) —
+   described at that precision, not as uniformly "structural" — rather than a ninth
+   recurrence entry. DOC-UPDATER's call at Step 6, not this step's.
+4. Test fixtures for AC1's demonstration live under `scratch/` or `test/fixtures/` (per File
+   Placement Rules), always **outside** `handoffs/`, invoked via the new `--dir` flag
+   (§2.1, §5 AC1) — never inside `handoffs/` (hazard: any other host's CI would lint it
+   too) and never mutating a real `handoffs/**/*.json` file to prove the mechanism.

@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-04c",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-04c-test-runner.json",
+  "created_at": "2026-09-03T17:37:16Z",
+  "started_at": "2026-09-03T17:37:16Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0440"],
+    "artifacts_in": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "handoffs/WF03-ISS0440-20260903/step-04-test-designer.json",
+      "handoffs/WF03-ISS0440-20260903/step-04b-test-design-validator.json",
+      "docs/issues/ISS-0440.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 STEP 4c -- FULL SUITE VERIFICATION for ISS-0440. TEST-DESIGNER (step-04) and TEST-DESIGN-VALIDATOR (step-04b) have both PASSED; the validator independently reproduced mutants M1 and M2 (40/43 each, same named tests failing) and verified mutant hygiene -- both mutation worktrees removed, lib/mix/tasks/letflow.lint_handoffs.ex byte-identical to the REVIEWER-passed commit. Your job is the independent full-suite run that turns those per-file claims into a whole-repo verdict.\n\nRUN, and quote REAL output for each (No Speculation -- if something cannot run in this environment, say so explicitly rather than estimating):\n  1. `mix letflow.check.test` -- the project's full-suite entry point. Run it to COMPLETION, synchronously; do not truncate, do not sample, do not background it and report early. Quote the final tally line verbatim (tests, failures, excluded, skipped) and the task's own OK/FAIL line.\n  2. `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` -- the changed file on its own. Quote the tally.\n  3. `mix letflow.lint_handoffs` -- quote the final OK line including the file count and the grandfathered count.\n  4. `mix compile --warnings-as-errors` (or the project's equivalent if check.test already covers it -- say which you relied on and why). Quote the result. A new compiler warning introduced by this branch is a finding.\n\nBASELINE COMPARISON IS THE POINT, not just a green run. TEST-DESIGNER reported 3156 passed / 0 failures for the full suite and 43 passed for the changed file, and TEST-DESIGN-VALIDATOR independently re-derived the 43. Re-derive BOTH yourself. If your full-suite number differs from 3156, that is a finding to report with both numbers and your reading of the cause -- a legitimately different count (another session's tests landing on main, a flaky exclusion) is not automatically a failure, but it must be NAMED and explained rather than silently absorbed. Do not inherit any number from a prior handoff without re-running the command that produces it (docs/anti-patterns.md, 'Inheriting a claim from a record instead of re-deriving it from the source').\n\nFLAKE DISCIPLINE. This repo has a documented flake, ISS-0352 (wasm_hang). If a failure appears, do NOT classify it as a flake by pattern-matching the name: re-run the failing test in isolation, quote both runs, and state on the evidence whether it is the documented flake or a real regression this branch introduced. A real regression is a FAIL and routes back to ELIXIR-DEV; a reproduced-as-flaky failure is a PASS with the flake named and its issue cited. Getting this classification wrong in either direction is the failure mode worth guarding against here.\n\nDO NOT FIX ANYTHING. You diagnose and report; you do not edit lib/ or test/. If the suite is red, your deliverable is a precise diagnosis (which test, which assertion, actual vs expected, and whether this branch's diff plausibly causes it) plus a FAIL verdict -- not a repair attempt.\n\nNever run `mix letflow.lint_handoffs --autofix` against the real handoffs/ directory.\n\nComplete the handoff with a clear PASS/FAIL in result.status and every quoted command output in result.summary; on PASS route to ISSUE-FIXER (Step 5, close the issue). Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

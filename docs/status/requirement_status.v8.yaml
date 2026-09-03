@@ -847,3 +847,55 @@ history:
       released status: done (GH#812 best-effort closed). REQ-215 (the
       engine-wiring half, ISS-0411/GH#807's other part) remains
       separately pending.
+  - req: ISS-0426
+    event: done
+    agent: ORCH
+    at: "2026-09-03T06:47:02Z"
+    note: >
+      WF03-ISS0426-20260902 complete. Lua executor wall-clock tests flaked
+      under CPU contention: a test doing 0.3s of real work hit its 5000ms
+      budget when the suite ran 6-way parallel on 16 cores, because
+      execute_with_manifest/3 races Task.yield against wall-clock time and so
+      measures SCHEDULER AVAILABILITY, not Lua execution time.
+      run_with_heap_limit/5 carried the same race hand-rolled via
+      :erlang.spawn_opt/2 + a bounded receive...after -- a second exposure the
+      design gate caught before it shipped. Fix: two additive @doc false
+      test-only seams (run_script_sync/3, run_with_heap_limit_sync/4) that 14
+      Group 1 call sites repoint onto, making {:error, {:wallclock_timeout,
+      _}} unreachable BY CONSTRUCTION; the 11 tests where the race genuinely
+      IS the property under test keep racing, tagged :lua_wallclock_race and
+      isolated into their own subprocess mirroring the :wasm_hang precedent.
+      AC4 held: executor.ex is 113 insertions / 0 DELETIONS, so REQ-155's
+      LUA-10 wall-clock kill (a security control against untrusted tenant
+      scripts) is byte-for-byte unchanged and config/config.exs:17 untouched.
+      Gates: CODE-DESIGN-VALIDATOR FAILED TWICE before passing (first on the
+      run_with_heap_limit/5 gap, then on the new seam's unbounded receive
+      having no binding usage contract), SECURITY-REVIEWER, REVIEWER,
+      TEST-DESIGN-VALIDATOR (independently reproduced a mutant, matching both
+      the count and the exact failing-test set), TEST-RUNNER -- all PASS.
+      Fail-first satisfied by MUTATION per WF-03's rule for new code: 4
+      mutants each produced a DISCRIMINATING failure set (4/45, 4/45, 12/45,
+      1/56). Verification: full serial mix test 3057 passed / 0 failures; AC6's
+      two TEST_PARALLEL_N=6 scripts/test_parallel.sh runs both clean at
+      3054/3054. HONEST LIMITATION, recorded in the issue, the PR and the
+      GH#830 close comment alike: the original flake was NEVER reproduced on
+      demand (ISSUE-FIXER could not trigger it under 24 CPU burners plus 48
+      concentrated runs), so the fix rests on STRUCTURAL verification with the
+      parallel runs as confirmatory only -- not on reproduce-then-eliminate.
+      Scope coordination: the wasm half of the filed scope was deliberately
+      left to the live concurrent run WF03-ISS0418-20260902, which owns
+      lib/letflow/engine/wasm and the three wasm test files; this run
+      enumerated but did not edit them, and its one shared-file change
+      (letflow.check.test.ex) is 37 insertions / 0 deletions with zero
+      existing lines touched. PR #848 squash-merged to main (370fd93f) via
+      admin override after the isolated --only wasm_hang subprocess failed on
+      plugin_handler_test.exs:355 (REQ-170 AC1, 30166ms vs a 500ms budget) --
+      the documented ISS-0352 recurrence class that ISS-0418 exists to fix,
+      structurally unrelated (this branch touches NO wasm path at all) and
+      confirmed flaky by the identical commit passing in the parallel CI run;
+      same precedent as REQ-214/PRs #795/#802 earlier. Queue task 426 released
+      status: done, GH#830 closed with an evidence comment. Also filed
+      ISS-0440 (task 440, GH#849) for the 7th occurrence of the handoff
+      top-level-status enum violation, which this run's own first CI run
+      surfaced -- filed as structural work because docs/anti-patterns.md
+      declares re-documenting that class exhausted.

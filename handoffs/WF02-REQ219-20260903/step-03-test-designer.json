@@ -1,0 +1,74 @@
+{
+  "handoff_id": "WF02-REQ219-20260903-step-03",
+  "run_id": "WF02-REQ219-20260903",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ219-20260903/step-03-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219"],
+    "issue_ids": ["ISS-0425", "ISS-0421", "ISS-0224", "ISS-0429", "ISS-0451"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ219-20260903/step-02-elixir-dev.json",
+      "handoffs/WF02-REQ219-20260903/step-02d-reviewer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF02-REQ219-20260903/step-02d-reviewer.json (REVIEWER PASS, full)",
+      "lib/letflow/design/req219-supervision-layering.md (approved design, full)",
+      "docs/requirements.yaml REQ-219 entry (all 10 acceptance_criteria, fresh read)",
+      "test/letflow/supervisor/infrastructure_test.exs, pollers_test.exs, http_test.exs (full read, current state)",
+      "test/letflow/application_test.exs, test/letflow/scheduler/poller_test.exs, test/letflow/engine/service_task_dispatcher_test.exs (full read)",
+      "lib/letflow/supervisor/infrastructure.ex, pollers.ex, http.ex (full read)"
+    ],
+    "branch_name": "feature/WF02-REQ219-20260903"
+  },
+  "task": {
+    "description": "WF-02 Step 3: independent TEST-DESIGNER pass over REQ-219's implementation. Build a fresh AC-to-test traceability map by reading the actual test files (not trusting ELIXIR-DEV's or REVIEWER's summaries), look specifically for coverage gaps neither prior agent mentioned, confirm no accidental coverage claim over the out-of-scope ISS-0451 persistent-crash-cascade finding, close any genuine gap with new test code, and run mix letflow.check.test in the foreground with real output quoted."
+  },
+  "result": {
+    "status": "PASS",
+    "ac_traceability_map": {
+      "AC1_exactly_3_top_level_children": "test/letflow/supervisor/infrastructure_test.exs:23-43 -- strict list-equality assertion (not membership), which alone proves count=3 and excludes every one of the 20 former leaf children",
+      "AC2_infrastructure_precedes_pollers_cold_boot_test": "test/letflow/supervisor/pollers_test.exs:132-164 -- genuine Application.stop(:letflow) + ensure_all_started/1 cold-boot test with a pollers_init_probe firing from inside Pollers.init/1, message-passing Process.whereis(Obs.Alerts.TaskSupervisor)'s result",
+      "AC3_infrastructure_17_children_exact_order_plus_ISS0224": "test/letflow/supervisor/infrastructure_test.exs:45-74 (strict 17-atom list equality) and :76-87 (ISS-0224 index comparison)",
+      "AC4_pollers_owns_exactly_two_gated_children": "zero-children-when-both-false half: test/letflow/supervisor/pollers_test.exs:45-51 (pre-existing). owns-exactly-the-two-when-true half: GAP FOUND AND CLOSED -- new test at pollers_test.exs:53-81",
+      "AC5_crash_loop_isolation": "test/letflow/supervisor/pollers_test.exs:83-129 (pre-existing) -- real induced crash-loop via lib/letflow/scheduler/poller.ex's double-gated guard, asserts Repo/Infrastructure pids unchanged and a new, distinct Pollers pid appears",
+      "AC6_http_owns_exactly_bandit": "gated-false half: test/letflow/supervisor/http_test.exs:25-29 (pre-existing). gated-true half: GAP FOUND AND CLOSED -- new test at http_test.exs:31-58",
+      "AC7_no_config_file_changes": "confirmed by inspection: `git diff main...HEAD -- config/` is empty, plus full suite passing under config/test.exs's unmodified gates",
+      "AC8_pollers_moduledoc_records_override_rationale": "confirmed by reading lib/letflow/supervisor/pollers.ex moduledoc lines 15-46 (documentation fact, not independently ExUnit-testable)",
+      "AC9_reviewer_signoff_recorded": "handoffs/WF02-REQ219-20260903/step-02d-reviewer.json PASS verdict explicitly confirms all 3 sub-points (process fact, not a test)",
+      "AC10_mix_test_and_compile_pass_including_ac5_test": "mix compile --warnings-as-errors clean; mix letflow.check.test full-suite run includes pollers_test.exs's crash-loop test -- real output quoted below"
+    },
+    "coverage_gaps_found_and_closed": [
+      {
+        "gap": "Letflow.Supervisor.Http's :start_http gate was only tested gated OFF; AC6's 'owns exactly Bandit' half had zero test coverage",
+        "why_a_live_restart_test_was_rejected": "flipping :start_http to true and restarting the live, already-booted Letflow.Supervisor.Http singleton would actually bind Bandit to a real TCP port, reintroducing ISS-0015's exact port-collision hazard config/test.exs's start_http:false exists to avoid under this project's two-worktree concurrent mix test setup",
+        "fix": "new test in test/letflow/supervisor/http_test.exs calling Letflow.Supervisor.Http.init/1 directly (a plain, side-effect-free function call per Supervisor.init/2's own documented {:ok,{flags,child_specs}} contract -- starts no process) with :start_http and :http_port overridden for the assertion's duration only, restored via on_exit/1",
+        "note": "found empirically during this fix that Bandit's own custom child_spec/1 tags its id as {Bandit, unique_ref}, not the bare Bandit atom -- test asserts the tagged-tuple shape, not assumed"
+      },
+      {
+        "gap": "Letflow.Supervisor.Pollers' 'owns exactly the two gated pollers' half of AC4 had no child-id-list assertion when gates are true -- the existing crash-loop test flips :start_scheduler true and restarts the live singleton but immediately induces a crash, never asserting which_children/1's id list",
+        "fix": "new test in test/letflow/supervisor/pollers_test.exs calling Letflow.Supervisor.Pollers.init(nil) directly (same side-effect-free Supervisor.init/2 contract) with both :start_scheduler and :start_service_task_dispatcher overridden to true (restored via on_exit/1), asserting the returned child-spec ids equal [Letflow.Scheduler.Poller, Letflow.Engine.ServiceTaskDispatcher.Poller] in order",
+        "safety_note": "confirmed safe to call directly by reading lib/letflow/supervisor/pollers.ex:107-117 -- maybe_run_pollers_init_probe/0 no-ops when :pollers_init_probe isn't set in Application env, which this new test never sets"
+      }
+    ],
+    "iss_0451_scope_confirmation": "Read pollers_test.exs's crash-loop test closely (lines 94-113): it deliberately clears :force_poller_crash immediately after observing the first :DOWN specifically so the test does NOT exercise a second exhaustion cycle -- it proves AC5's own text (a single top-level restart event survives), not the persistent-fault cascade scenario ISS-0451 tracks. Neither gap fix above touches or implies coverage of that scenario.",
+    "files_changed": [
+      "test/letflow/supervisor/http_test.exs (added 1 test, async: true -> async: false)",
+      "test/letflow/supervisor/pollers_test.exs (added 1 test)",
+      "test/specs/REQ-219.md (new -- full AC traceability map, gap writeup, verification run)"
+    ],
+    "verification_performed": {
+      "mix_compile_warnings_as_errors": "clean, 0 warnings",
+      "mix_test_targeted_files": "test/letflow/supervisor/ test/letflow/application_test.exs test/letflow/scheduler/poller_test.exs test/letflow/engine/service_task_dispatcher_test.exs -- 72/72 passed (foreground), after fixing 2 bugs found in the 2 new tests themselves (missing :http_port override; wrong assumed Bandit child-spec id shape)",
+      "mix_letflow_check_test_full_suite": "Run to completion in the foreground (blocked on the subprocess PIDs directly rather than relying on a background-task notification, per ORCH's explicit correction mid-step that a subagent cannot receive one). Finished in 1678.0 seconds (~28 minutes). Result: 3179/3181 passed (6/6 properties, 3173/3175 tests), 21 excluded. Failed: 2 tests -- both Mix.Tasks.Letflow.CheckToolchainTest 'rust pin' tests (System.cmd(\"rustc\", [\"--version\"], ...) ErlangError/:enoent), independently reconfirmed via `which rustc` exiting 1 (not on PATH in this sandbox) -- the exact same 2 pre-existing, environment-only failures ELIXIR-DEV and REVIEWER both already reported at Step 2a/2d, unrelated to REQ-219 or to any file this step touched. Because the underlying `mix test` subprocess exits non-zero, mix letflow.check.test's own top-level task exits FAILED and (by its own documented design) never reaches its second --only wasm_hang subprocess -- expected, pre-existing sandbox behavior, not a regression from this step's 2 new tests (both present and passing inside the 3179 count). Grepped the full captured output for the fixed substring \"default values for the optional arguments\" (ISS-0069's own check): zero matches."
+    },
+    "verdict_summary": "PASS. Fresh AC-to-test traceability map built for all 10 ACs by reading current test files directly. Two genuine coverage gaps found (Http's gated-ON branch untested; Pollers' gated-ON exact-children-list untested) and closed with new, side-effect-free init/1-direct tests that deliberately avoid reintroducing ISS-0015's port-collision hazard. Confirmed the existing crash-loop test does not (and my additions do not) imply coverage of the out-of-scope ISS-0451 persistent-cascade finding. mix compile clean; mix letflow.check.test's only 2 failures are the same pre-existing, environment-only rustc-absence failures already on record from Step 2a/2d, not a regression."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

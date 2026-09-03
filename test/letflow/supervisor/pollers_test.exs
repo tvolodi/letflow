@@ -50,6 +50,38 @@ defmodule Letflow.Supervisor.PollersTest do
     assert Supervisor.which_children(Letflow.Supervisor.Pollers) == []
   end
 
+  test "AC4: init/1 includes exactly the two gated poller children, in order, when both gates are true (pure -- no process started)" do
+    # Coverage gap this test closes: the crash-loop test below flips
+    # :start_scheduler to true and restarts the LIVE Letflow.Supervisor.Pollers
+    # singleton, but that restart is immediately followed by an induced crash
+    # -- nothing in this file previously asserted the actual which_children/1
+    # id list Letflow.Supervisor.Pollers.init/1 produces when BOTH gates are
+    # true (the "owns exactly Letflow.Scheduler.Poller and
+    # Letflow.Engine.ServiceTaskDispatcher.Poller" half of AC4's own text, as
+    # opposed to the "zero children when both false" half AC7 above already
+    # covers). Calling init/1 directly is a plain, side-effect-free function
+    # call (Supervisor.init/2's own documented contract: it returns
+    # {:ok, {flags, child_specs}}, it starts nothing) -- this does not touch
+    # the live supervision tree or spawn either Poller GenServer, so it
+    # carries none of the zero-delay-first-tick/DBConnection.OwnershipError
+    # hazard the crash-loop test below exists to reproduce deliberately.
+    original_scheduler = Application.get_env(:letflow, :start_scheduler, true)
+    original_dispatcher = Application.get_env(:letflow, :start_service_task_dispatcher, true)
+
+    on_exit(fn ->
+      Application.put_env(:letflow, :start_scheduler, original_scheduler)
+      Application.put_env(:letflow, :start_service_task_dispatcher, original_dispatcher)
+    end)
+
+    Application.put_env(:letflow, :start_scheduler, true)
+    Application.put_env(:letflow, :start_service_task_dispatcher, true)
+
+    {:ok, {_flags, children}} = Letflow.Supervisor.Pollers.init(nil)
+
+    ids = Enum.map(children, & &1.id)
+    assert ids == [Letflow.Scheduler.Poller, Letflow.Engine.ServiceTaskDispatcher.Poller]
+  end
+
   describe "AC4: crash-loop isolation" do
     test "a Poller crash-looping past Pollers' own restart intensity restarts only Letflow.Supervisor.Pollers" do
       repo_pid_before = Process.whereis(Letflow.Repo)

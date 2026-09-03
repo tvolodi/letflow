@@ -81,3 +81,18 @@ queue_task_id: 425
 github_issue: 829
 
 status: open
+orch_routing_note: >
+  ORCH (2026-09-03): ISSUE-FIXER's sizing pass
+  (handoffs/WF03-ISS0425-20260903/step-01-issue-fixer-diagnosis.json)
+  confirmed the current real state (20 children, 7 Task.Supervisors, two
+  Pollers sharing the identical restart-intensity hazard) and the
+  predicted accretion pattern is actively worsening. Routed to
+  REQ-ANALYST, which drafted REQ-219 (supervision layering + restart
+  intensity, queue task 445, GH#858) and REQ-220 (Task.Supervisor sprawl
+  review, queue task 446, GH#859, depends on REQ-219). REQ-VALIDATOR
+  failed REQ-219 once (an unverifiable ordering guarantee for ISS-0429's
+  constraint), REQ-ANALYST fixed it with a grep+test-verifiable
+  acceptance criterion, REQ-VALIDATOR passed both on re-check. This
+  record stays open, status unchanged, pending those two requirements'
+  completion -- closing it directly would misrepresent an
+  undiagnosed-but-unfixed gap as resolved.

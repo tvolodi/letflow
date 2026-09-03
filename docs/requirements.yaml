@@ -12951,6 +12951,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 445  # letflow-queue task id, GH#858
     description: >
       Closes the layering and restart-intensity portions of ISS-0425/GH#829
       (queue task 425), sized per ISSUE-FIXER's own diagnosis
@@ -13090,6 +13091,7 @@ requirements:
     owner: ELIXIR-DEV
     status: pending
     stage: S6
+    impl_order: 446  # letflow-queue task id, GH#859
     description: >
       Closes the third, lighter part of ISS-0425/GH#829: "worth one
       deliberate review pass; keeping all seven [Task.Supervisors] with

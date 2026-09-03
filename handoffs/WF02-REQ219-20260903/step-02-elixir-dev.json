@@ -1,0 +1,107 @@
+{
+  "handoff_id": "WF02-REQ219-20260903-step-02",
+  "run_id": "WF02-REQ219-20260903",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ219-20260903/step-02-elixir-dev.json",
+  "created_at": "2026-09-03T18:45:00Z",
+  "started_at": "2026-09-03T17:35:00Z",
+  "completed_at": "2026-09-03T18:45:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219"],
+    "issue_ids": ["ISS-0425", "ISS-0421", "ISS-0224", "ISS-0429"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ219-20260903/step-01b-code-design-validator.json (PASS, iteration 2)",
+      "lib/letflow/design/req219-supervision-layering.md",
+      "docs/requirements.yaml REQ-219 entry",
+      "lib/letflow/application.ex (pre-change, 20-child flat list)",
+      "lib/letflow/repository/activation.ex lines 226-247 (double-gate precedent)",
+      "config/test.exs line 209 (:activation_test_hooks_enabled? true)"
+    ],
+    "branch_name": "feature/WF02-REQ219-20260903",
+    "requirement_text": "Layer Letflow.Application's flat 20-child supervision tree into Letflow.Supervisor.Infrastructure / .Pollers / .Http, with explicit restart intensity isolating poller crash-loops from Repo and HTTP (closes ISS-0425 parts 1+partial-2). Full text in docs/requirements.yaml REQ-219 entry (unchanged since REQ-VALIDATOR PASS)."
+  },
+  "task": {
+    "description": "WF-02 Step 2a: implement lib/letflow/design/req219-supervision-layering.md exactly as approved -- 3 new supervisor modules, Letflow.Application.start/2's reduction to a 3-child list, the double-gated force_poller_crash guard in Letflow.Scheduler.Poller, and the new/changed tests enumerated in the design's §8.",
+    "acceptance_criteria": [
+      "Letflow.Application.start/2's Supervisor.start_link/2 takes exactly 3 children -- Infrastructure, Pollers, Http -- under :one_for_one; none of the 20 original leaf children remain direct children",
+      "Infrastructure precedes Pollers in that list, verified by grep/read AND a dedicated cold-boot test asserting Obs.Alerts.TaskSupervisor's whereis is non-nil at the moment Pollers.init/1 runs",
+      "Infrastructure owns the 17 named children in exact relative order, :one_for_one, ISS-0224 ordering preserved and test-backed",
+      "Pollers owns exactly the 2 gated pollers, each independently gated; empty children list under config/test.exs's current settings starts/runs without error",
+      "a Poller crash-looping past Pollers' own max_restarts:5/max_seconds:60 exits/restarts only Pollers -- Letflow.Repo's pid unchanged, test-backed",
+      "Http owns exactly Bandit, :one_for_one",
+      "config/test.exs, config/dev.exs, config/prod.exs need no changes",
+      "Pollers' own moduledoc records the restart-intensity override and rationale verbatim",
+      "REVIEWER sign-off confirming ISS-0224/ISS-0429 guarantees hold, InstanceSupervisor placement is not a children-claim, and :one_for_one over :rest_for_one is justified against the real dependency graph",
+      "mix test and mix compile --warnings-as-errors both pass with real, quoted output, including the new AC4 isolation test"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "files_changed": {
+      "new": [
+        "lib/letflow/supervisor/infrastructure.ex",
+        "lib/letflow/supervisor/pollers.ex",
+        "lib/letflow/supervisor/http.ex",
+        "test/letflow/supervisor/infrastructure_test.exs",
+        "test/letflow/supervisor/pollers_test.exs",
+        "test/letflow/supervisor/http_test.exs"
+      ],
+      "modified": [
+        "lib/letflow/application.ex -- start/2 shrunk to 3-child list [Infrastructure, Pollers, Http], :one_for_one, no other logic left",
+        "lib/letflow/scheduler/poller.ex -- added @poller_test_hooks_enabled? (compile_env, reused :activation_test_hooks_enabled? key) and the double-gated force_poller_crash raise as handle_info(:tick, state)'s first expression, plus moduledoc section",
+        "test/support/admission_test_helpers.ex -- do_restart/0's Supervisor.terminate_child/restart_child target updated from Letflow.Supervisor to Letflow.Supervisor.Infrastructure (Letflow.Admission moved down a layer; NOT covered by the design doc's own scope, but required for the existing suite to still pass under the new tree shape)",
+        "test/letflow/admission_test.exs -- AC6 test updated to inspect Letflow.Supervisor.Infrastructure instead of Letflow.Supervisor directly",
+        "test/letflow/application_test.exs -- OIDC-worker-as-real-child test updated to inspect Letflow.Supervisor.Infrastructure",
+        "test/letflow/engine/plugin_registry_test.exs -- all 4 Supervisor.{terminate_child,delete_child,start_child} call sites (PluginRegistry restart helpers) retargeted from Letflow.Supervisor to Letflow.Supervisor.Infrastructure, moduledoc updated to match",
+        "test/letflow/engine/service_task_dispatcher_test.exs -- the application.ex source-text assertion test retargeted to read lib/letflow/supervisor/pollers.ex instead, since scheduler_children/0 and service_task_dispatcher_children/0 relocated there per design §1.2/§2"
+      ]
+    },
+    "build_verification": {
+      "mix_compile_warnings_as_errors": "PASS, clean, no output/warnings (Elixir 1.20.3 / OTP 29 via asdf, this environment has a real toolchain)",
+      "mix_test_full_suite": "3177/3179 passed (6/6 properties, 3171/3173 tests), 21 excluded. 2 failures: Mix.Tasks.Letflow.CheckToolchainTest's two rust-pin tests (test/mix/tasks/letflow_check_toolchain_test.exs:274,289) -- PRE-EXISTING, UNRELATED to this change: `System.cmd(\"rustc\", [\"--version\"])` raises :enoent because rustc is not installed/on PATH in this sandbox environment at all (confirmed independently: `which rustc` / `rustc --version` both fail identically outside any test run). Nothing in REQ-219 touches the Rust toolchain or that mix task.",
+      "mix_test_supervisor_dir": "8/8 passed, run 3x consecutively with no flakiness (test/letflow/supervisor/{infrastructure,pollers,http}_test.exs)",
+      "mix_test_pollers_specifically": "3/3 passed, run 5x consecutively with no flakiness"
+    },
+    "self_review_checklist": {
+      "state_transition_changed": "No state-machine transition changed (this is a supervision-tree/OTP-structure change, not a gen_statem/workflow-state change) -- README.md's ASCII state diagram is unaffected; grepped README.md for any existing supervision-tree diagram to update and found none.",
+      "process_instance_ex_touched": "Not touched -- no property-test coverage impact.",
+      "migration_added": "None.",
+      "config_files_unchanged": "Confirmed via `git diff --stat -- config/test.exs config/dev.exs config/prod.exs` -- empty output, no changes, satisfying AC7.",
+      "mutation_testing": [
+        "Swapped application.ex's children list order to [Pollers, Infrastructure, Http] -- test/letflow/supervisor/pollers_test.exs's AC2 cold-boot test correctly failed with `whereis_result == nil` (the exact counterfactual the design's §4.4 predicted). Reverted, confirmed clean again.",
+        "Disabled the force_poller_crash guard in poller.ex (`if false and ...`) -- AC4's crash-loop test correctly failed (`no matching message after 5000ms`, no :DOWN ever received). Reverted, confirmed clean again."
+      ]
+    },
+    "genuine_findings_beyond_design_scope": [
+      {
+        "finding": "AC4 test mechanism bug found via mutation testing (not anticipated by the design doc): the first draft of the AC4 test monitored `pollers_pid_before` (captured BEFORE the manual terminate_child/restart_child used only to make Pollers re-read the :force_poller_crash/:start_scheduler env overrides) -- but `terminate_child/2` itself always produces a `:DOWN` for that pid regardless of whether any crash-loop ever happens, so the test passed even with the guard clause fully disabled (a false-positive test). Fixed by monitoring the PID CAPTURED AFTER the manual restart instead, so the asserted `:DOWN` can only come from the poller's OWN subsequent, automatic crash-loop-triggered exit. Documented in the test file's own comments.",
+        "finding_2": "A second, more serious timing hazard found via the same mutation-testing pass, also not anticipated by the design: once the crash-looping Pollers layer exits and the top-level Letflow.Supervisor restarts it automatically, :force_poller_crash was still `true` in the freshly-restarted Pollers' env -- so the new instance immediately crash-looped AGAIN, fast enough to also exhaust the TOP-LEVEL supervisor's own default restart intensity (3/5s) and take the WHOLE :letflow application down mid-test (observed directly: `[notice] Application letflow exited: shutdown`). Fixed by clearing both `:force_poller_crash` and `:start_scheduler` immediately after observing the first `:DOWN`, which reliably wins the race against the top-level supervisor's own restart (which must still traverse Pollers.init/1 -> the Poller GenServer's own start_link/init -> its zero-delay first :tick, several BEAM message-passing hops the synchronously-resumed test process does not have to wait through) -- verified stable across 5 consecutive runs.",
+        "finding_3": "Supervisor.which_children/1 returns children in REVERSE start order (OTP's own documented/observed behavior, each child prepended to the supervisor's internal list as it starts) -- test/letflow/supervisor/infrastructure_test.exs's ordering assertions reverse the raw result before comparing against the expected child-spec order. Not called out in the design doc; discovered when the first draft of that test failed against the real running tree."
+      },
+      {
+        "finding": "Design's own §9 Q4 (does :logger.add_primary_filter/2 raise on a duplicate filter id) is now EMPIRICALLY RESOLVED: this environment has a real Elixir/OTP toolchain the design environment did not. Running the AC2 cold-boot test WITHOUT its :logger.remove_primary_filter/1 defensive step (temporary local edit, reverted before committing) completed with no raise and no logged error on Elixir 1.20.3 / OTP 29 -- :logger.add_primary_filter/2 is a silent no-op (or ignored error return) on a duplicate id here, contradicting the original inline comment's own stated assumption in lib/letflow/application.ex ('raises on a duplicate filter id'). The defensive removal step is KEPT anyway, per the design's own stated reasoning (a no-op removal-then-readd is never a hazard either way, and it stays faithful to that comment's 'exactly once per node' assumption rather than relying on one runtime's observed-but-undocumented behavior). Documented in test/letflow/supervisor/pollers_test.exs's own moduledoc."
+      },
+      {
+        "finding": "5 pre-existing test files/helpers referenced Letflow.Supervisor directly for children that moved one layer down under this design (Letflow.Admission, Oidcc.ProviderConfiguration.Worker, Letflow.Engine.PluginRegistry all moved into Letflow.Supervisor.Infrastructure; scheduler_children/0 and service_task_dispatcher_children/0's own source moved into Letflow.Supervisor.Pollers). These were NOT enumerated in the design doc's §8 test-file summary (which focused only on the 3 new test files) and were NOT flagged as needing changes anywhere in the design or its two CODE-DESIGN-VALIDATOR passes. Fixing them was necessary for `mix test` to pass at all (a direct AC10 requirement) and was done as the minimal retargeting needed (Letflow.Supervisor -> Letflow.Supervisor.Infrastructure at each call site), not a redesign of those tests. Flagged here explicitly for REVIEWER since it is a deviation from 'implement exactly what the design says and nothing else' -- it was a necessary, mechanical consequence of the design's own approved restructuring, not an independent design decision."
+      }
+    ],
+    "security_review_routing_decision": {
+      "routed_to": "REVIEWER only, not SECURITY-REVIEWER",
+      "rationale": "Checked docs/agents/instructions/security-invariants.md's actual INV-1..INV-9 criteria against this change: no new API route, no migration, no secrets handling, no response shaping, no tenant-scoped query, and no new data-access path is introduced -- this is purely an OTP supervision-tree restructuring plus one test-only, double-gated (compile-time AND runtime) guard clause that raises inside an already-existing GenServer's already-existing tick handler. None of INV-1 (tenant isolation), INV-2 (field authorization), INV-4 (secrets by reference), INV-6 (new data-access path), INV-7 (SQL interpolation), or INV-9 (outbound URL validation) apply. This is a REVIEWER-critical OTP-idiom/availability change (per the task brief), not a tenant-data-path change, so SECURITY-REVIEWER is correctly skipped."
+    },
+    "reviewer_focus_points": [
+      "Confirm §7's checklist against the actual code: ISS-0224/ISS-0429 ordering guarantees, InstanceSupervisor placement disclaimer, :one_for_one-vs-:rest_for_one justification (every named infra child looked up by name, never stored pid)",
+      "Confirm the deliberate :activation_test_hooks_enabled? key reuse (§4.2/§5.1/§7 of the design) is an acceptable trade, not scope creep or accidental coupling -- CODE-DESIGN-VALIDATOR already judged it acceptable-and-disclosed at the design gate, but flagged it as REVIEWER's call to bless, not a closed question",
+      "Confirm the 5 pre-existing test/helper retargets (listed above under files_changed.modified and genuine_findings_beyond_design_scope) are correct and minimal, not scope creep",
+      "Confirm the two AC4-test timing-hazard fixes (both documented in test/letflow/supervisor/pollers_test.exs's own inline comments) are sound OTP reasoning, not a fragile race dressed up as a fix"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

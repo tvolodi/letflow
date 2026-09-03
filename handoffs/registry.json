@@ -4173,14 +4173,14 @@
       "issue_id": null,
       "queue_task_id": 435,
       "github_issue_number": 840,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/plugs/api_pipeline.ex"
       ],
       "started_at": "2026-09-03T02:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 06 REVIEWER COMPLETED -- PASS, dispatching to TEST-DESIGNER",
+      "lock_released_at": "2026-09-03T08:40:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #850 merged to main, queue task 435 released done",
       "note": "WF-02 requirement-implementation run for REQ-217: wire admission control into the HTTP entry path (two gates -- global before Plug.Parsers, per-tenant after AuthPipeline), 503+Retry-After on rejection. Closes ISS-0431 part 2 of 3. Depends on REQ-216 (done, merged)."
     }
   ]

@@ -857,7 +857,7 @@ history:
       released status: done (GH#812 best-effort closed). REQ-215 (the
       engine-wiring half, ISS-0411/GH#807's other part) remains
       separately pending.
-  - req: ISS-0426
+  - req: SCOPE-CHANGE
     event: done
     agent: ORCH
     at: "2026-09-03T06:47:02Z"

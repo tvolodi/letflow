@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-03c",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-03c-reviewer.json",
+  "created_at": "2026-09-03T11:15:37Z",
+  "started_at": "2026-09-03T11:15:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440",
+      "ISS-0441"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0440-20260903/step-03b-security-reviewer.json",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/migration/decisions/0004-humanless-pipeline.md",
+      "docs/issues/ISS-0440.yaml",
+      "docs/issues/ISS-0441.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3 IDIOM/DESIGN-INTEGRITY GATE for ISS-0440. SECURITY-REVIEWER has PASSED (step-03b): out of INV-1..INV-9 scope, FAIL-refusal independently re-derived, six adjacent cases probed (missing key, null, number, list/object, legal-but-wrong, malformed JSON) all safe, mass-rewrite surface judged acceptable with the residual gap named, CI path re-verified unchanged. Do not re-run the security scope test. Review for YOUR scope: idiomatic Elixir/Mix usage, scope creep, and decision-record consistency.\n\n1. MIX TASK IDIOM. The change adds --dir and --autofix flag parsing to run/1, plus resolve_dir/1, guard_empty_scope/2, @autofix_map, run_autofix/1 and autofix_file/1. Judge as Mix task code: is the argument parsing idiomatic (OptionParser vs hand-rolled -- and if OptionParser, are strict:/aliases: used appropriately so an unknown flag is an error rather than silently ignored)? Is Mix.raise the right failure mechanism for guard_empty_scope/2, consistent with how this task's existing hard-violation path exits? Is the file-rewrite implementation sound -- how is the JSON re-encoded, and does a rewrite preserve key order, formatting and trailing newline, or does it reformat the whole file? THAT LAST POINT MATTERS MORE THAN USUAL: if autofix reformats a handoff wholesale rather than changing one field, its diff becomes unreviewable, which would defeat the per-file-visibility property SECURITY-REVIEWER's PASS partly rests on. Check it concretely.\n\n2. THE UNPLANNED CHANGE. The implementer threaded `dir` into check_registry_coverage/2, which the design did not specify, reportedly so H5 does not compute nonsense run_ids against a --dir fixture. SECURITY-REVIEWER confirmed it is a no-op on the default path and feeds only report-only H5 output. Judge it as SCOPE: is it a justified, minimal consequence of adding --dir (the kind of thing a design legitimately leaves to implementation), or is it scope creep that should have gone back to CODE-DESIGNER? Either verdict is fine if reasoned.\n\n3. DOCS CHANGE. HANDOFF_PROTOCOL.md 1.3 gained Mechanism B's procedural clause. Verify it reads as an inseparable part of the existing dispatch procedure rather than a bolt-on step that could be skipped independently -- that positioning is the entire basis of Mechanism B's claimed value. Also verify it does NOT overclaim: after three design rework cycles specifically about overclaiming, the protocol text must not assert structural enforcement it does not have. The design's settled position is that Mechanism B is procedural (1.3's reliability class) and that detection is guaranteed only once the linter executes.\n\n4. NO REINTRODUCED OVERCLAIM IN CODE. Check every new @moduledoc line, comment and user-facing output string in lint_handoffs.ex for unqualified enforcement claims. The banner and the refusal message are user-facing and will be read by future agents; they must not assert more than the design allows. This is the fourth checkpoint for this specific defect class in this run -- it has appeared at a different layer each time.\n\n5. SCOPE CREEP GENERALLY. Confirm nothing else rode along: no change to @legal_statuses, the grandfathering lists, H1-H6's existing verdicts, or any other check's behaviour. `git diff main...HEAD --stat` is your starting point.\n\n6. DECISION-RECORD CONSISTENCY. Check against docs/migration/decisions/ -- particularly 0004-humanless-pipeline.md, since this change touches the enforcement model that decision record describes, and ISS-0441 (filed this run) documents that the model's gates are procedurally rather than structurally enforced. Confirm nothing here silently re-decides that.\n\nYou may READ anything. Do not edit lib/ or test/. Do NOT run --autofix against the real handoffs/ corpus -- scratch directory outside the repo only. Complete the handoff with a clear PASS/FAIL and per-item verdicts; on PASS route to TEST-DESIGNER. Commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -124,7 +124,18 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
   defp start_pool!(opts) do
     name = :"req040_assertion_rerun_test_pool_#{System.unique_integer([:positive, :monotonic])}"
     {:ok, pid} = SandboxPool.start_link(Keyword.put_new(opts, :name, name))
-    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+    # ISS-0452: tolerate the process already being gone. It is linked to
+    # the test process via start_link/1, and on_exit runs after that
+    # process exits, so it may already be terminating -- check-then-act
+    # races and exits :shutdown from the teardown.
+    on_exit(fn ->
+      try do
+        GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
     pid
   end
 

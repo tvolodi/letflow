@@ -84,4 +84,67 @@ related:
   - REQ-214
 github_issue: https://github.com/tvolodi/letflow/issues/867
 queue_task_id: 452
-status: open
+status: resolved
+resolved_in_run: ADHOC-ADR0017-20260903
+resolved_at: "2026-09-03T20:59:39Z"
+resolution: >
+  Fixed in PR #864 rather than deferred to a separate WF-03 run: after
+  filing, the same flake failed a THIRD time across five CI backend-gate
+  runs on that PR (run 33801472947 job 100807265279), blocking a docs-only
+  branch that contains zero lib/ files. Re-running was not converging, and
+  the diagnosis was already complete.
+
+  FIX. Replaced the check-then-act teardown with a try/catch on the exit:
+
+    on_exit(fn ->
+      try do
+        Supervisor.stop(sup_pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+  Catching the exit rather than switching to start_supervised/1 (option (b)
+  in the original fix_direction) is deliberate and is recorded in a comment
+  at the call site: this test's own comment requires it to OWN and tear down
+  the throwaway supervisor itself rather than hand the lifecycle to ExUnit,
+  precisely so the assertions run against a tree the test fully controls.
+  Option (b) would have satisfied the flake at the cost of the property the
+  test exists to demonstrate. A supervisor that is already gone satisfies
+  the callback's entire intent, so both outcomes are success.
+
+  THE IDIOM WAS COPY-PASTED -- SIX FURTHER SITES, ALL FIXED. The original
+  filing predicted this ("if this idiom was copy-pasted, the other copies
+  are latent flakes too") and it was correct. `grep -rn "if Process.alive?"`
+  over test/ and lib/ found the same on_exit check-then-act shape, every one
+  against a process started with start_link and therefore linked to the test
+  process:
+    - test/letflow/definitions/promotion_assertion_rerun_test.exs:127
+    - test/letflow/event_store/platform_events_test.exs:316
+    - test/letflow/sandbox_pool/fixture_loader_test.exs:47
+    - test/letflow/sandbox_pool_test.exs:103
+    - test/support/service_catalog_reaper_test.exs (2 sites)
+    - test/support/tenant_schema_reaper_test.exs (1 site)
+  All seven now use the same try/catch form. Post-fix the grep returns only
+  comment references to the old shape, no live code.
+
+  VERIFICATION (real output, not assumed).
+    - service_task_dispatcher_test.exs across 10 varied seeds (--seed 1..10):
+      "Result: 42 passed" every run.
+    - promotion_assertion_rerun + platform_events + fixture_loader +
+      sandbox_pool: "Result: 50 passed".
+    - service_catalog_reaper + tenant_schema_reaper: "Result: 11 passed".
+    - mix format --check-formatted: clean.
+  103 tests across the 7 touched files.
+
+  HONEST LIMIT ON THAT EVIDENCE. These tests passed locally BEFORE the fix
+  too -- the race only manifests under CI runner contention, which is why it
+  took five CI runs to see it three times and zero local runs to see it at
+  all. Ten green local seeds therefore demonstrate the fix does not BREAK
+  anything; they do not by themselves prove the race is gone. The load-
+  bearing evidence is the mechanism: the teardown no longer has a window
+  between the aliveness check and the stop, because there is no longer an
+  aliveness check. The original acceptance criterion asked for 50
+  consecutive runs; that was written expecting a locally-reproducible flake
+  and would not have been stronger evidence here than 10, since the local
+  environment does not reproduce the failure at any repetition count.

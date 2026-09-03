@@ -100,7 +100,16 @@ defmodule Letflow.SandboxPoolTest do
   defp start_pool!(opts) do
     name = :"sandbox_pool_test_#{System.unique_integer([:positive, :monotonic])}"
     {:ok, pid} = SandboxPool.start_link(Keyword.put_new(opts, :name, name))
-    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid) end)
+    # ISS-0452: tolerate the process already being gone (see that issue --
+    # check-then-act on a linked process races its own shutdown).
+    on_exit(fn ->
+      try do
+        GenServer.stop(pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
     pid
   end
 

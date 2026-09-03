@@ -305,8 +305,15 @@ defmodule Letflow.TenantSchemaReaperTest do
           parameters: [application_name: fake_tag]
         )
 
+      # ISS-0452: tolerate the connection process already being gone -- it is
+      # linked to the test process, and on_exit runs after that process
+      # exits, so check-then-act races its own shutdown.
       on_exit(fn ->
-        if Process.alive?(other_conn), do: GenServer.stop(other_conn)
+        try do
+          GenServer.stop(other_conn)
+        catch
+          :exit, _ -> :ok
+        end
       end)
 
       # Sanity: the fake connection really is visible to Postgres under its tag --

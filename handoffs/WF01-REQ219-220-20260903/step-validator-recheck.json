@@ -1,0 +1,48 @@
+{
+  "handoff_id": "step-validator-recheck-WF01-REQ219-220-20260903",
+  "run_id": "WF01-REQ219-220-20260903",
+  "workflow_id": "WF-01",
+  "step": "02",
+  "from_agent": "REQ-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF01-REQ219-220-20260903/step-validator-recheck.json",
+  "created_at": "2026-09-03T16:48:33Z",
+  "started_at": "2026-09-03T16:30:00Z",
+  "completed_at": "2026-09-03T16:48:33Z",
+  "status": "PASSED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219", "REQ-220"],
+    "issue_ids": ["ISS-0425", "ISS-0421", "ISS-0422", "ISS-0224", "ISS-0429"],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "handoffs/WF01-REQ219-220-20260903/step-validator.json",
+      "lib/letflow/application.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Re-check REQ-219 after REQ-ANALYST's rework (commit b9ab5797) addressing the sole prior BLOCKER: no grep/test-verifiable acceptance criterion requiring Letflow.Supervisor.Infrastructure to precede Letflow.Supervisor.Pollers in Letflow.Application.start/2's children list, which decision 4(b)'s ISS-0429 'now structural' claim depends on.",
+    "acceptance_criteria": [
+      "New AC present, worded closely to what was reported, and genuinely closes the gap -- checked for parity against AC2's own bar for ISS-0224.",
+      "New AC's test (Process.whereis(Obs.Alerts.TaskSupervisor) non-nil at the moment Pollers' own init/1 runs) independently judged for whether it actually distinguishes correct from incorrect top-level ordering, given real OTP Supervisor.start_link/2 semantics.",
+      "git diff confirms only the one AC insertion changed in docs/requirements.yaml -- nothing else in REQ-219 or REQ-220 moved.",
+      "REQ-220 re-confirmed to need no changes, since it depends_on: [REQ-219] and was already independently passed."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REQ-219's rework (commit b9ab5797, single line inserted after the original AC1 in docs/requirements.yaml around line 13077) closes the prior BLOCKER. The new AC states: 'Letflow.Supervisor.Infrastructure's list index in Letflow.Application.start/2's own top-level children list precedes Letflow.Supervisor.Pollers' list index (Infrastructure listed strictly before Pollers) ... grep/read-verified in application.ex, AND a dedicated test asserts Process.whereis(Obs.Alerts.TaskSupervisor) is already non-nil at the moment Letflow.Supervisor.Pollers' own init/1 runs ... not review judgment alone, matching the test-backed bar AC2 below already sets for ISS-0224.' This is worded closely to the fix_required text in my prior FAIL verdict and genuinely closes the identified gap: it pins down the exact top-level list-order fact decision 4(b) depends on (grep/read-verifiable, same mechanism AC1 already uses for the 3-children claim) AND backs it with a dedicated test, which is actually a STRICTER bar than AC2's own ('explicit test OR documented startup-order proof' -- disjunctive) rather than merely matching it -- so the parity claim holds with margin, not just nominally. REQ-220 confirmed unchanged and still needs no rework; both are now eligible for WF-02 registration together.",
+    "checks_run": {
+      "req219_new_ac_gap_closure": "PASS. Confirmed present verbatim via git diff e986cf40..b9ab5797 -- docs/requirements.yaml, inserted as a new bullet directly after the original AC1 (the 3-children/no-order-stated AC) and before the original AC2 (ISS-0224 ordering AC). It explicitly names Letflow.Application.start/2's children list, the required strict ordering (Infrastructure before Pollers), and the reason (decision 4(b)'s structural claim depends on it, citing Supervisor.start_link/2's sequential-start semantics correctly). AC2 immediately below it reads unchanged: 'ISS-0224's SandboxPool.TaskSupervisor-before-SandboxPool ordering still holds (explicit test or documented startup-order proof)'. The new AC requires grep/read-verification AND a dedicated test -- both prongs mandatory -- which is at least as strong as, and in fact stronger than, AC2's own test-OR-documentation bar. Gap closed.",
+      "req219_new_ac_technical_soundness": "PASS -- independently reasoned through real Elixir/OTP Supervisor semantics, not taken on the requirement's own say-so. Supervisor.start_link/2 starts a supervisor's children strictly sequentially and blocks on each child's own init/1 (and, for a child that is itself a Supervisor, its full subtree) completing before starting the next sibling. With the top-level Letflow.Application list as [Infrastructure, Pollers, Http] under :one_for_one: Infrastructure's start_link (and every one of its own children's init/1, including Obs.Alerts.TaskSupervisor, which decision 2 places inside Infrastructure) must return successfully BEFORE the top-level supervisor even calls Pollers.start_link/1, which is what invokes Pollers' own init/1. So under CORRECT order, Process.whereis(Obs.Alerts.TaskSupervisor) is guaranteed non-nil the instant Pollers' init/1 begins executing -- Infrastructure's entire subtree already fully registered by then. Under INCORRECT order ([Pollers, Infrastructure, Http] or any ordering with Pollers first), the top-level supervisor calls Pollers.start_link/1 -- and therefore Pollers' own init/1 -- BEFORE Infrastructure has been started at all, so Obs.Alerts.TaskSupervisor cannot yet be registered and Process.whereis/1 must return nil at that same moment. The two orderings produce genuinely different, mutually exclusive observable outcomes for this exact assertion at this exact moment -- this is not a vacuous check that would pass regardless of order (e.g. it is not merely checking that the process exists SOMETIME after full boot, which would pass under either order once all children eventually start; it is anchored to the moment Pollers' init/1 runs, which is the one point in the startup sequence that order actually controls). The AC's own suggested implementation ('a test child spec or trace hook record the whereis/1 result during Pollers' init') is a real, buildable mechanism -- e.g. instrumenting Pollers.init/1 in a test-only build path, or a :sys/:telemetry trace hook capturing the moment -- so this is testable in practice, not just in principle. No hidden OTP guarantee (e.g. registry pre-population, application start_phases, or eager compilation-time registration) supplies Obs.Alerts.TaskSupervisor's name independently of Infrastructure actually running, since it is only ever registered by being started as one of Infrastructure's own supervised children (per decision 2, already verified against the real 20-child list in my original pass). Conclusion: the new AC's test WOULD distinguish correct from incorrect ordering, not pass vacuously.",
+      "req219_req220_diff_scope": "PASS. git diff e986cf40 (REQ-ANALYST's original draft commit) ..b9ab5797 (the rework commit) against docs/requirements.yaml shows exactly one hunk: one new AC line inserted into REQ-219's acceptance_criteria list (after the original 3-children AC1, before the ISS-0224 AC2). No other line in REQ-219 changed (title, description, all 8 decisions, NOT-IN-THIS-REQUIREMENT section, depends_on, other ACs -- all byte-identical to what I already validated). REQ-220 (starts at line 13088, well after the touched region) has zero diff -- confirmed untouched.",
+      "req220_recheck": "PASS, no changes needed. REQ-220 passed every check cleanly in my original pass (all 5 WF-01 checks plus the per-Task.Supervisor justification cross-check against application.ex's real inline comments) and is unmodified by this rework. Its depends_on: [REQ-219] is now satisfiable since REQ-219 passes."
+    },
+    "issues": [],
+    "next_action": "Both REQ-219 and REQ-220 pass all required checks and are eligible for WF-02 registration. Route to ORCH to register both in the task queue (REQ-220 remains gated on REQ-219's depends_on ordering, unchanged)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

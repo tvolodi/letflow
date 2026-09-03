@@ -13147,3 +13147,250 @@ requirements:
       - "no Task.Supervisor is removed, renamed, or merged as a side effect of this documentation pass; IF the review's own written justification concludes a specific consolidation is in fact safe, REVIEWER's sign-off is required on that actual change before it lands, at the same hard-gate bar as any other supervision-tree change -- this requirement's own default recommendation (KEEP ALL 7) does not need that sign-off, only a deviation from it does"
       - "mix compile --warnings-as-errors and mix test both pass with real output quoted"
     depends_on: [REQ-219]
+
+  - id: REQ-222
+    title: "letflow-queue: read-only GET /tasks listing endpoint with computed eligibility -- decision 0017 §B"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    impl_order: 449  # letflow-queue task id, GH#862. Title carries a
+      # "[REPO: tvolodi/letflow-queue]" marker so a claiming agent on any host cannot
+      # mistake this for a lib/letflow/ change -- this is the first cross-repo task in
+      # the queue. (Task 450/GH#863 is a duplicate of this registration, created and
+      # retired the same minute; it was never worked. See docs/anti-patterns.md.)
+      # The task's TITLE still reads "REQ-219" -- this entry was drafted as REQ-219 and
+      # renumbered on rebase after a concurrent session's own REQ-219 landed first, and
+      # letflow-queue exposes no update operation, so a registered title cannot be
+      # corrected in place. GH#862 carries a comment stating the real id. That a
+      # one-word correction requires a GitHub comment because the API is write-only-
+      # by-claim is itself evidence for this requirement's own premise (decision 0017).
+    description: >
+      TARGET REPO IS NOT THIS ONE. This requirement changes
+      `tvolodi/letflow-queue` (checked out at
+      `c:\Users\tvolo\dev\ai-dala\letflow-queue\`), not `lib/letflow/`.
+      It is the first requirement in this file to do so; per decision 0008
+      pick 1 (tag non-porting tooling with the stage active at draft time)
+      it carries `stage: S6` with no S6 subsystem-lineage claim implied.
+      The implementing agent works in that repo, runs that repo's `mix test`,
+      and opens its PR there -- letflow's own suite is untouched and proves
+      nothing about this change.
+
+      WHY. Decision record 0017 (`docs/migration/decisions/0017-task-queue-selection-model.md`)
+      establishes that `letflow-queue`'s atomic-claim guarantee lives entirely
+      in `get_next_task/1`'s single `UPDATE ... WHERE id = COALESCE(...)
+      RETURNING` statement (verified against
+      `letflow-queue/lib/letflow_queue/tasks.ex`), NOT in the fact that it
+      returns one task. Reading was never the racy half. The service today has
+      no side-effect-free way to be queried at all, which has been patched
+      around four separate times (0017 §E3) and caused one real incident: a
+      `get_next_task` call used as a reachability probe claimed and locked an
+      unrelated live task (#161/ISS-0075, `docs/anti-patterns.md`). This
+      requirement adds the missing read.
+
+      SCOPE (all in `letflow-queue`):
+      1. `LetflowQueue.Tasks.list_tasks/1` -- a new context function taking a
+      filter map and returning a list of tasks. It performs NO write of any
+      kind: no lock, no status transition, and specifically it must NOT call
+      `import_open_github_issues/0` (which `get_next_task/1` runs first and
+      which inserts rows). This is the single most important property of the
+      requirement -- a "read-only" endpoint that imports is not read-only.
+      2. Each returned task carries every existing field the other operations
+      return (the id under both its names, `title`, `description`,
+      `acceptance_criteria`, `depends_on`, `stage`, `task_type`, `status`,
+      `locked_by`, `locked_at`, `github_issue_number`, `issue_ref`, `body`,
+      timestamps) PLUS two computed
+      fields: `blocked_by` (the subset of `depends_on` whose tasks are not
+      `status: "done"` -- empty list when all are satisfied) and `eligible`
+      (boolean: `status == "open"` AND `locked_by IS NULL` AND `blocked_by ==
+      []`).
+      3. `eligible`/`blocked_by` MUST be computed from the same predicate
+      `get_next_task/1`'s claim query uses (open, unlocked, every `depends_on`
+      id `done`) -- a second, independently-written predicate that drifts from
+      the claim query is the defect this requirement is most likely to ship.
+      Extract the shared predicate rather than restating it in a second place.
+      4. Optional filters, all combinable, absent = no filtering: `status`,
+      `task_type`, `stage`, `eligible` (boolean).
+      5. `GET /tasks` routed in `LetflowQueueWeb.Router` inside the existing
+      `scope "/tasks"` under the same `[:api, :authenticated]` pipeline as the
+      other four -- bearer-token gated exactly as they are. Note the route
+      collides with nothing: the existing four are `post "/"`, `get "/next"`,
+      `post "/:id/lock"`, `post "/:id/release"`.
+      6. `TaskController.index/2` rendering the list as JSON under a `"tasks"`
+      key.
+      7. `README.md`'s "Design" section rewritten: the "exactly four
+      externally-callable operations" framing is retired per 0017's Consequences,
+      replaced by the invariant it was standing in for -- exactly ONE mutating
+      claim path. Both of `TASK_QUEUE.md`'s citations of the four-count rest on
+      this README text, so leaving it unchanged leaves the contradiction on
+      record.
+      NOT IN THIS REQUIREMENT: no change to `get_next_task/1`'s claim query,
+      its two-tier priority, or its GitHub-import step; no change to `set_lock`
+      (that is REQ-223); no pagination (the queue is a few hundred rows and
+      YAGNI applies); no `letflow`-side consumption of the endpoint (REQ-224);
+      no change to the api_keys surface.
+    acceptance_criteria:
+      - "GET /tasks with a valid bearer token returns 200 and a JSON body with a \"tasks\" key whose value is a list covering every task in the database"
+      - "GET /tasks without a bearer token returns 401, same as the other four operations -- asserted by a test, confirming it sits behind the :authenticated pipeline"
+      - "a test asserts GET /tasks performs ZERO writes: with a task locked by another agent and an open GitHub-importable issue available, calling GET /tasks twice leaves every row's locked_by, locked_at, status and updated_at byte-identical and creates no new rows (this is the requirement's central property -- it must be tested directly, not inferred from the code containing no Repo.update call)"
+      - "GitHub's list_open_issues is never called during GET /tasks -- verified by a test using the same mock/stub mechanism the existing GitHub-sync tests use, asserting zero invocations"
+      - "for a task whose depends_on names two tasks, one done and one open, the response's blocked_by contains exactly the open one's id and eligible is false"
+      - "for a task whose depends_on are all done, unlocked, status open, blocked_by is [] and eligible is true"
+      - "a task that get_next_task would claim right now has eligible: true in GET /tasks output, and after that get_next_task call claims it, the same task reports eligible: false (locked) -- a live cross-check that the two predicates agree rather than two separately-written predicates that merely look similar"
+      - "each of the four filters (status, task_type, stage, eligible) returns only matching tasks, and two combined filters intersect rather than union -- one test per filter plus one combination test"
+      - "README.md's Design section no longer claims exactly four externally-callable operations and states the one-mutating-claim-path invariant instead, naming GET /tasks as read-only"
+      - "letflow-queue's own mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+
+  - id: REQ-223
+    title: "letflow-queue: set_lock refuses an ineligible task (unmet depends_on / non-open status) -- decision 0017 §D"
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    # impl_order: UNREGISTERED -- blocked-by: REQ-222 -- same repo and same doc-ordering
+    # constraint as REQ-222; register both once REQ-224 has landed the protocol rewrite.
+    description: >
+      TARGET REPO IS NOT THIS ONE -- `tvolodi/letflow-queue`, as REQ-222.
+      Read REQ-222's description for the cross-repo framing; it is not
+      repeated here.
+
+      WHY. This is the safety half of decision 0017 and it must not ship
+      after the freedom half is in use. Today `set_lock/2` checks ONLY lock
+      state -- verified in `letflow-queue/lib/letflow_queue/tasks.ex`: its
+      `Multi.run(:locked, ...)` tests `is_nil(task.locked_by) or
+      task.locked_by == agent_id` and nothing else. It never consults
+      `status` or `depends_on`. That was harmless while `get_next_task/1`
+      was the only way to select work, because the claim query had already
+      applied the full eligibility predicate before any agent saw a task id.
+      Once 0017 §C lets ORCH pick a task itself from `GET /tasks` and claim
+      it by id, `set_lock` becomes the load-bearing gate -- and as written it
+      would happily lock a task whose dependencies are unmet or that is
+      already `done`/`blocked`, letting an agent start dependency-blocked
+      work. That is a genuine regression the current coupled design prevents
+      only as a side effect, and 0017 §D requires closing it.
+
+      SCOPE (all in `letflow-queue`):
+      1. `set_lock/2` applies the SAME eligibility predicate REQ-222
+      extracted (open, unlocked, every `depends_on` id `done`) in addition to
+      its existing lock-ownership check. Reuse REQ-222's extracted predicate
+      -- do not write a third copy.
+      2. New error `{:error, :not_eligible, unmet_dependency_ids}` (or an
+      equivalent shape carrying the ids -- the implementing design picks the
+      exact term, but the unmet ids MUST be carried, not just the fact of
+      ineligibility, so a caller can report WHY without a second query).
+      Rendered as HTTP 409 with a JSON error naming the unmet dependency ids
+      and/or the offending status.
+      3. Ordering of the two checks is specified, not incidental: a task both
+      locked-by-another AND ineligible returns the EXISTING
+      `:locked_by_other`/409, not `:not_eligible` -- the lock conflict is the
+      more actionable answer for a caller that should simply pick a different
+      task, and changing which error an already-handled case returns would be
+      a silent behavioural break for existing callers.
+      4. The re-lock-by-same-agent recovery path is PRESERVED for a task the
+      agent already holds: a host re-acquiring its own lock after a crash
+      must still succeed even though the task it holds is (by definition of
+      being locked) not `eligible` under the predicate. Implement this as an
+      explicit carve-out -- `task.locked_by == agent_id` short-circuits the
+      eligibility check. Missing this would break `set_lock`'s original
+      documented purpose while fixing its new one, and it is the single most
+      likely regression in this requirement.
+      5. `README.md`'s `set_lock` bullet updated to state the eligibility gate
+      and the same-agent carve-out.
+      NOT IN THIS REQUIREMENT: no change to `get_next_task/1`; no change to
+      `release_lock/2` including its `force` override (0017 §E leaves force
+      exactly as it is); no new endpoint.
+    acceptance_criteria:
+      - "set_lock on an unlocked, status-open task whose depends_on are all done still returns 200 and locks it -- the existing happy path is unchanged, asserted by the pre-existing test still passing unmodified"
+      - "set_lock on an unlocked task with one not-done dependency returns 409 and a body naming that dependency's id, and the task's locked_by remains NULL afterwards (verified by re-reading the row, not just by the response)"
+      - "set_lock on an unlocked task whose status is done returns 409 and does not lock it"
+      - "set_lock on an unlocked task whose status is blocked returns 409 and does not lock it"
+      - "set_lock by the SAME agent_id on a task that agent already holds returns 200 and refreshes locked_at, even though that task is not eligible under the predicate (it is locked) -- the crash-recovery carve-out, asserted explicitly"
+      - "a task that is BOTH locked by a different agent AND has an unmet dependency returns the locked_by_other error, not not_eligible -- pinning the specified check order"
+      - "set_lock on a nonexistent id still returns the existing not_found error, unchanged"
+      - "the eligibility predicate used by set_lock is the same extracted function REQ-222 uses -- grep-verified that no second copy of the depends_on/status condition exists in lib/"
+      - "letflow-queue's own mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-222]
+
+  - id: REQ-224
+    title: "TASK_QUEUE.md rewritten against decision 0017: Hard Rule restated around the lock invariant, claim-then-release lookup dance deleted"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    # impl_order: UNREGISTERED -- blocked-by: REQ-222 -- this doc describes the endpoint
+    # REQ-222 builds; writing the protocol before the endpoint exists would document a
+    # call that returns 404. Register after REQ-222 merges.
+    description: >
+      This one IS in this repo (`docs/`), unlike REQ-222/REQ-223.
+
+      WHY. Decision 0017 changes what agents are permitted to do, and
+      `docs/agents/protocols/TASK_QUEUE.md` is the document every ORCH
+      session actually reads -- a decision record that never reaches it
+      changes nothing. The current text forbids in several places exactly
+      what 0017 now permits, and carries procedures that 0017 §B deletes
+      outright rather than amends.
+
+      SCOPE:
+      1. Hard Rule section restated per 0017 §F. It currently conflates
+      three prohibitions into one; the rewrite separates them into what is
+      STILL forbidden (working a task without holding its lock; reading
+      `docs/requirements.yaml` or any file to SELECT work; falling back to
+      file-order selection when the queue is unreachable -- an unreachable
+      queue remains a blocked state to report, because no lock can be
+      obtained) and what is NOW permitted (reading full queue state via
+      `GET /tasks` for any purpose; choosing among eligible tasks, provided
+      the choice is realized through `set_lock` and the 409/not_eligible
+      answers are obeyed). State the governing invariant once, in these
+      words or equivalent: no agent works a task it does not hold a lock on,
+      and no lock is obtained anywhere but from the queue.
+      2. New section documenting `GET /tasks` as a fifth operation, with a
+      working `curl` example matching the file's existing style, the response
+      shape including `blocked_by`/`eligible`, and the filter parameters. The
+      0017 §F invariant MUST be restated at this call site -- 0017's own
+      Consequences section names "a visible queue is easier to select from
+      without locking than an invisible one" as the risk this change accepts,
+      and mitigating it in the decision record alone does not mitigate it
+      where agents read.
+      3. The "A human names a specific issue/GH-issue-number directly"
+      section's bounded claim-then-release procedure is DELETED, not amended
+      -- its steps 1/2/3 exist solely because there was no lookup, and
+      `GET /tasks` filtered by `github_issue_number` replaces it outright.
+      The replacement procedure is: look it up, `set_lock` it, work it,
+      `release_lock(status: "done")`.
+      4. The reachability section keeps `GET /health` as the health check but
+      drops the framing that treats "never probe with get_next_task" as the
+      only available guidance -- `GET /tasks` is now also side-effect-free.
+      5. `set_lock` section updated for REQ-223's eligibility gate: the 409
+      cases, the unmet-dependency ids in the error, the same-agent recovery
+      carve-out, and the explicit instruction that a 409 means pick a
+      different task and is NEVER routed around with `release_lock`'s
+      `force` (0017 §E).
+      6. The two citations of "exactly four operations"
+      (`TASK_QUEUE.md:117-118` and `:386`) corrected -- both rest on README
+      text REQ-222 rewrites.
+      7. `docs/anti-patterns.md`'s "Working a user-named GitHub issue without
+      ever locking it" entry gains a dated note that its mistake (1) --
+      `get_next_task` used as a probe -- is now structurally impossible, and
+      that its mistake (2) is unchanged and still binding.
+      8. A NEW `docs/anti-patterns.md` entry written pre-emptively per 0017's
+      Consequences: selecting from a visible queue without locking. It has
+      not happened yet; the entry exists because the endpoint makes it newly
+      possible and the project's own convention is to write the warning where
+      agents read it.
+      9. `docs/agents/ORCHESTRATOR.md` §1's queue instruction updated to
+      mention that selection may now go through `GET /tasks` + `set_lock`,
+      with `get_next_task` remaining the default path.
+      NOT IN THIS REQUIREMENT: no change to `ISSUE_QUEUE.md`'s filing flow
+      (it already routes through `register_task`, unaffected by 0017); no
+      change to `docs/requirements.yaml`'s own schema or its mirror role
+      (0017 leaves it unchanged); no change to the WF-01..WF-05 workflow
+      files.
+    acceptance_criteria:
+      - "TASK_QUEUE.md's Hard Rule section states the still-forbidden and now-permitted lists separately and states the lock invariant verbatim once, and no longer contains any text asserting that agents may not read queue state"
+      - "TASK_QUEUE.md documents GET /tasks with a curl example, the blocked_by/eligible response fields, and all four filters, and restates the lock invariant within that same section"
+      - "the claim-then-release bounded procedure (steps 1/2/3 of 'A human names a specific issue') is absent from the file -- grep for 'release_lock it back to open' and equivalent phrasing returns nothing"
+      - "TASK_QUEUE.md's set_lock section documents the 409 not_eligible case, the unmet-dependency ids in the error body, the same-agent recovery carve-out, and states that a 409 is answered by picking another task and never by force"
+      - "neither of the two 'exactly four operations' citations remains in TASK_QUEUE.md, and no sentence in the file claims the service has exactly four operations"
+      - "docs/anti-patterns.md's existing user-named-GitHub-issue entry carries a dated note that its probe mistake is now structurally impossible while its locking mistake still binds"
+      - "docs/anti-patterns.md contains a new entry on selecting from a visible queue without locking, written as a pre-emptive warning and labelled as such (no fabricated incident date or run id)"
+      - "docs/agents/ORCHESTRATOR.md §1 mentions GET /tasks + set_lock as a sanctioned selection path with get_next_task as the default"
+      - "every REQ-222/REQ-223 behaviour this file describes matches what those requirements actually shipped -- the writer re-reads letflow-queue's merged code rather than this requirement's own description, and quotes the endpoint's real response shape"
+    depends_on: [REQ-222, REQ-223]

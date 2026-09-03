@@ -1478,8 +1478,22 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 26
+    entries: 28
     note: >
+      Appended to 27 by the decision-0017 drafting run (2026-09-03T19:11:25Z,
+      `req: SCOPE-CHANGE`, `event: revised`) -- ADR 0017 plus three requirements
+      drafted (REQ-222/223/224 as merged; drafted as 219/220/221 against a stale
+      base and renumbered on rebase, see the volume's own follow-up entry), one
+      registered as queue task 449, plus a 19:24:26Z follow-up event
+      correcting those ids to REQ-222/223/224 after a concurrent session's
+      own REQ-219/220 was found on main during the pre-branch fetch (the
+      earlier event is left unedited per the append-only rule). Both events
+      are the latest in the volume, so both were appended at the tail, no
+      interleaving. `wc`: 1149 lines / 70812 bytes, still under the
+      1200-line/120000-byte roll ceiling, so no roll triggered. Count
+      recounted directly on disk (`grep -c "^  - req:"` = 28), not carried
+      forward from the 26 below.
+
       Composed to 26 at feature/WF02-REQ215-20260903's Step Final rebase
       (second conflict, this branch's own REQ-215 done-event append,
       14:14:17Z). That event sorts chronologically AFTER the entire

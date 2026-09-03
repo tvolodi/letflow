@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-03b",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0440-20260903/step-03b-security-reviewer.json",
+  "created_at": "2026-09-03T11:10:34Z",
+  "started_at": "2026-09-03T11:10:34Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440"
+    ],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-03-elixir-dev.json",
+      "docs/agents/shared/HANDOFF_PROTOCOL.md",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/issues/ISS-0440.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3 SECURITY GATE for ISS-0440. Apply your INV-1..INV-8 scope test and checks in full. This description names the run-specific risk.\n\nWHAT CHANGED: lib/mix/tasks/letflow.lint_handoffs.ex gains a --dir <path> flag and a restricted --autofix mode; docs/agents/shared/HANDOFF_PROTOCOL.md 1.3 gains a procedural clause. No application code, no tenant data path, no migration, no API route, no secrets (expected: INV-1..INV-8 largely NOT-APPLICABLE -- but confirm rather than assume, and say so explicitly).\n\nTHE REAL RISK HERE IS NOT TENANT DATA -- IT IS PIPELINE INTEGRITY, so assess it under that heading even though it is unusual for your role:\n\n  1. --autofix REWRITES FILES IN PLACE. It mutates the pipeline's own audit record -- the handoff corpus that documents what every agent did and concluded. Assess: can it rewrite anything it should not? Verify the mapping is genuinely closed ({PASS, COMPLETE, DONE} -> COMPLETED only), that it touches ONLY the top-level status field and no other field, and that every rewrite is reported by path and old->new value rather than silent.\n  2. THE FAIL REFUSAL IS THE SAFETY-CRITICAL PROPERTY. Silently converting a genuinely FAILED handoff to COMPLETED would falsify the pipeline's record of a failure -- worse than the violation being fixed. ORCH independently tested this and confirms: planting top-level status FAIL produced an [H1] violation, an 'AUTOFIX -- REFUSED (REQUIRES HUMAN-EQUIVALENT DECISION)' report naming the ambiguity, a non-zero exit, and a BYTE-IDENTICAL file (sha256 unchanged before/after). RE-DERIVE this yourself rather than accepting ORCH's test -- it is the one property whose failure would be worse than the original defect. Also probe the adjacent cases ORCH did not: a missing status key, a null status, a non-string status (number/list/object), and a status that is already legal but wrong for the file's actual state. Confirm none of them is silently rewritten.\n  3. --autofix + --dir POINTED AT THE REAL CORPUS is an unreviewed mass-rewrite surface. The design deliberately does NOT restrict this, arguing that a restriction would reintroduce the 'agent must remember the safe flag' failure mode the whole issue exists to eliminate, and citing the closed map, status-field-only scope and per-file reporting as what bounds the risk. CODE-DESIGN-VALIDATOR judged that reasoning sound. Give your own SECURITY verdict on it -- a different question from the design-ergonomics one it was judged on. Consider specifically: could an agent or human run `--autofix` against the whole corpus and mass-rewrite history in a way that passes review unnoticed? Is the per-file reporting sufficient to make such a run visible in a diff?\n  4. CI PATH INTEGRITY. This file is a HARD CI GATE every in-flight run on every host depends on -- there are concurrent Letflow sessions live on this workstation right now. Confirm the no-flag path is unchanged. ORCH verified `git diff main...HEAD -- mix.exs .github/workflows/ci.yml` is EMPTY (neither file touched) and that a no-flag run still reports 'OK -- 0 new violations ... (25 pre-existing grandfathered)'. Re-derive both.\n  5. The implementer also threaded `dir` into check_registry_coverage/2, which was hardcoded to @handoffs_dir -- reportedly a no-op on the default path, done so H5 does not compute nonsense run_ids against a --dir fixture. This was NOT in the design. Verify it is genuinely a no-op by default and does not weaken H5's real-corpus behaviour.\n\nAlso confirm no new dependency, no network call, no shell-out, and no file write outside the explicit --autofix path.\n\nYou may READ anything. Do not edit lib/ or test/ except transiently for a probe you revert and verify (quote `git status --porcelain lib/ test/` empty if you do). Do NOT run --autofix against the real handoffs/ corpus -- use a scratch directory outside the repo, and say which. Complete the handoff with a clear PASS/FAIL and per-item verdicts; commit to branch feature/WF03-ISS0440-20260903."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

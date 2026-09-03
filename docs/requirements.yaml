@@ -12779,7 +12779,7 @@ requirements:
   - id: REQ-217
     title: Wire admission control into the HTTP entry path -- 503 + Retry-After on rejection, closing ISS-0431 part 2 (primary surface)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 435  # letflow-queue task id, GH#840
     description: >

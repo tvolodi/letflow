@@ -7,11 +7,46 @@ defmodule Letflow.Plugs.ApiPipeline do
   All middleware that must NOT run on `GET /health` lives here and here only —
   sub-routers declare no plug chains.
 
-  `&Letflow.Api.Context.assign_trace_id/1` (REQ-072) is mounted first —
-  immediately after `Plug.Parsers`, before `Letflow.Plugs.AuthPipeline` — so
-  every request, including one that fails authentication, gets a trace id.
-  This is `trace.zig`'s port; it no longer needs its own deferred-plug row
-  below.
+  `&Letflow.Api.Context.assign_trace_id/1` (REQ-072) is mounted immediately
+  after `Plug.Parsers`, before `Letflow.Plugs.AuthPipeline` — so every
+  request, including one that fails authentication, gets a trace id. This is
+  `trace.zig`'s port; it no longer needs its own deferred-plug row below.
+
+  ## Admission control (REQ-216/REQ-217, ISS-0431/GH#835)
+
+  `Letflow.Plugs.Admission` is mounted TWICE: once with `pool: :global` as the
+  very FIRST plug in this chain (before `Plug.Parsers`, so a request rejected
+  for lack of capacity costs no body-parsing work), and once with
+  `pool: :tenant` immediately after `Letflow.Plugs.AuthPipeline` and before
+  `Letflow.Plugs.TenantStatus` (tenant identity is not resolved until
+  `AuthPipeline` completes). See `Letflow.Plugs.Admission`'s own moduledoc for
+  the full rationale, including the disclosed limitation that `AuthPipeline`'s
+  own DB work is covered only by the global gate.
+
+  **REQ-217 rework (design doc §10.1):** `:release_global_admission` is
+  mounted between `AuthPipeline` and the `pool: :tenant` mount. It releases
+  the GLOBAL gate's already-held ref immediately after `AuthPipeline`
+  completes, so the tenant gate's own subsequent
+  `try_acquire({:tenant, schema})` call — which, per `Letflow.Admission`'s
+  composing rule, ALSO consumes a global unit — is the only global unit this
+  request holds from that point forward, not a second one stacked on top of
+  an already-held first (the original REQ-217 wiring's double-global-
+  consumption defect, fixed here). This deliberately means admission at the
+  global gate is a re-checked, not reserved, precondition for admission at
+  the tenant gate: a request admitted at the global gate can still receive
+  `{:error, :capacity}` at the tenant gate. This is intentional (see the
+  design doc §10.3) and must not be "fixed" by re-introducing overlap
+  between the two gates' held refs. See
+  `Letflow.Plugs.Admission.release_global_ref/1` for the mechanics.
+
+  `use Plug.ErrorHandler` + `handle_errors/2` below is Mechanism B of
+  `Letflow.Plugs.Admission`'s raise-safety net — pure cleanup plumbing (drains
+  and releases whatever admission refs this process accumulated before a raise
+  that occurred in a plug running before `:dispatch`), never a response
+  helper. It introduces no new response body/status/contract: `handle_errors/2`
+  returns the conn unchanged and `Plug.ErrorHandler`'s own generated `call/2`
+  unconditionally re-raises afterward, so Bandit's existing crash-response
+  path runs exactly as it does today.
 
   ## Deferred plugs (not yet declared — added by owning stage)
 
@@ -44,6 +79,11 @@ defmodule Letflow.Plugs.ApiPipeline do
   """
 
   use Plug.Router
+  use Plug.ErrorHandler
+
+  # REQ-217 -- global admission gate, first plug in the chain (before
+  # Plug.Parsers). See Letflow.Plugs.Admission's moduledoc.
+  plug(Letflow.Plugs.Admission, pool: :global)
 
   # 2 MB cap — matches R-Co's `max_body_size` default; large enough for any
   # single-workflow payload while preventing unbounded reads. This root
@@ -77,6 +117,21 @@ defmodule Letflow.Plugs.ApiPipeline do
 
   plug(:assign_trace_id)
   plug(Letflow.Plugs.AuthPipeline)
+
+  # REQ-217 rework (design doc §10.1) -- releases the global gate's
+  # already-held ref immediately after AuthPipeline completes, BEFORE the
+  # tenant gate's own try_acquire({:tenant, schema}) call runs, so that call
+  # (which also consumes a global unit, per Letflow.Admission's composing
+  # rule) is the only global unit this request holds from here on, not a
+  # second one stacked on an already-held first. See
+  # Letflow.Plugs.Admission.release_global_ref/1's own doc.
+  plug(:release_global_admission)
+
+  # REQ-217 -- per-tenant admission gate, after AuthPipeline (tenant identity
+  # now resolved) and before TenantStatus. See Letflow.Plugs.Admission's
+  # moduledoc.
+  plug(Letflow.Plugs.Admission, pool: :tenant)
+
   plug(Letflow.Plugs.TenantStatus)
   plug(:match)
   plug(:dispatch)
@@ -104,4 +159,27 @@ defmodule Letflow.Plugs.ApiPipeline do
   # capture — so this thin 2-arity wrapper is the mount point; the real
   # implementation stays in `Letflow.Api.Context`, per REQ-072's design.
   defp assign_trace_id(conn, _opts), do: Letflow.Api.Context.assign_trace_id(conn)
+
+  # REQ-217 rework (design doc §10.1) -- same "Plug.Router's plug DSL only
+  # accepts a local 2-arity function atom, never a remote function capture"
+  # constraint as :assign_trace_id above. Delegates straight to
+  # Letflow.Plugs.Admission.release_global_ref/1, ignoring opts.
+  defp release_global_admission(conn, _opts), do: Letflow.Plugs.Admission.release_global_ref(conn)
+
+  # REQ-217 Mechanism B (see Letflow.Plugs.Admission's moduledoc "Ref storage
+  # and release" section) -- covers a raise inside a plug running BEFORE
+  # :dispatch (AuthPipeline, TenantStatus, or Letflow.Plugs.Admission's own
+  # believed-unreachable branches), where conn.assigns carries neither
+  # admission-ref assign. Process-dictionary state survives that raise
+  # regardless of which conn binding is in scope at crash time.
+  #
+  # Pure cleanup plumbing: returns conn unchanged, introduces no new response
+  # body/status. Plug.ErrorHandler's own generated call/2 unconditionally
+  # re-raises after this returns, so Bandit's existing crash-response path is
+  # unaffected.
+  @impl Plug.ErrorHandler
+  def handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack}) do
+    Letflow.Plugs.Admission.release_pending_refs()
+    conn
+  end
 end

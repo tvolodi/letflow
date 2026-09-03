@@ -4166,6 +4166,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #848 squash-merged to main (370fd93f), queue task 426 released done, GH#830 closed with evidence, run-history entry appended to v8 (20 entries / 901 lines).",
       "note": "WF-03 issue-resolving run for ISS-0426: Lua executor wall-clock tests flake under CPU contention (a 0.3s test hits its 5000ms budget when the suite runs 6-way parallel on 16 cores). CONCURRENT-RUN COORDINATION: live sibling run WF03-ISS0418-20260902 owns lib/letflow/engine/wasm, the wasm test files, and lib/mix/tasks/letflow.check.test.ex while implementing the OQ-5 concurrency cap. This run therefore narrows to the LUA side plus test_helper.exs/config/test.exs and enumerates-without-editing the wall-clock-sensitive wasm tests, rather than racing ISS-0418. | Step Final: rebased onto main after REQ-214/REQ-216 landed (no file-level overlap with this run's changed files); mix deps.get needed for bandit/oidcc lock updates main introduced. Post-rebase re-verified: 45 passed/11 excluded default, 11 passed/45 excluded isolated."
+    },
+    {
+      "run_id": "WF02-REQ217-20260903",
+      "requirement_id": "REQ-217",
+      "issue_id": null,
+      "queue_task_id": 435,
+      "github_issue_number": 840,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/plugs/api_pipeline.ex"
+      ],
+      "started_at": "2026-09-03T02:45:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 06 REVIEWER COMPLETED -- PASS, dispatching to TEST-DESIGNER",
+      "note": "WF-02 requirement-implementation run for REQ-217: wire admission control into the HTTP entry path (two gates -- global before Plug.Parsers, per-tenant after AuthPipeline), 503+Retry-After on rejection. Closes ISS-0431 part 2 of 3. Depends on REQ-216 (done, merged)."
     }
   ]
 }

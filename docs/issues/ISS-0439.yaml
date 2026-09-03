@@ -1,0 +1,90 @@
+id: ISS-0439
+title: "Design exploration: should Letflow offer typed business-object templates (1C-style Directory/Document/Register/Report) over the generic entity subsystem? Deliberately DEFERRED pending real usage"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-03T02:02:48Z"
+severity: MINOR
+tags: [design-exploration, deferred-decision, data-model, product-direction, s6]
+description: >
+  DESIGN-EXPLORATION issue, filed to CAPTURE a decision and its reasoning
+  so it is not re-litigated from scratch later. It deliberately builds
+  nothing. Raised by the user 2026-09-02, who explicitly framed it as
+  forward-looking with no committed user or domain yet.
+
+  THE PROPOSAL. 1C gives developers typed business-object templates
+  rather than one generic record type, plus low-code helpers per type:
+    1. Directories -- relatively constant reference data.
+    2. Documents -- record an OPERATION/INTENT, typically with a posting step.
+    3. Registers -- record the CONSEQUENCES of posting (balances, turnovers).
+    4. Reports -- query/presentation over registers.
+
+  WHY THE TAXONOMY IS GOOD, stated so a later reader does not dismiss it:
+  it encodes a real insight -- documents record INTENT, registers record
+  CONSEQUENCES, and conflating them destroys the ability to re-post or
+  reverse a document and deterministically rebuild its registers. That
+  maps well onto machinery Letflow ALREADY has: the append-only event log
+  is a document journal, projections are registers, and
+  Letflow.EventStore.Registry already versions typed payload schemas. It
+  is a naming/ergonomics layer over an existing shape, not a foreign
+  concept.
+
+  WHY DEFERRED ANYWAY -- three reasons, in weight order:
+
+  (1) THE SUBSTRATE IS NOT PORTED. R-Co already designed a generic,
+  UNTYPED dynamic entity subsystem (~3400 lines, src/design/entities.md,
+  EXP-201/EXP-202) with NO Directory/Document/Register distinction --
+  one flat entity concept. Typed templates would specialise that
+  substrate, which is not only unported but untracked (ISS-0438, queue
+  task 438). Designing the specialisation first would likely produce a
+  second parallel data model rather than a layer.
+
+  (2) NO EVIDENCE FOR WHICH FOUR TYPES ARE RIGHT. 1C reached its taxonomy
+  from decades of accounting-domain traffic. Letflow is a general BPM
+  platform whose engine is MORE general than 1C's model. Picking four
+  templates now means guessing. A wrong template is worse than none --
+  it becomes a schema every tenant builds on and cannot be retracted
+  without breaking them.
+
+  (3) OPPORTUNITY COST. The largest scope expansion proposed in this
+  project -- a platform layer (typed templates + low-code helpers + query
+  surface + UI conventions + migration story) -- against 2 remaining core
+  requirements (REQ-214/215) and an open queue including two HIGH CVEs
+  (ISS-0420), a live platform-wide scheduler defect (ISS-0429), and an
+  unfixed flake blocking parallel test adoption (ISS-0426).
+
+  RECORDED DECISION (user-confirmed 2026-09-02): forward-looking, no
+  committed user. Settle/port the GENERIC entity subsystem first
+  (ISS-0438), let real workflows use it untyped, and WATCH WHAT TENANTS
+  ACTUALLY BUILD. If Directory/Document/Register patterns emerge from
+  real usage, formalise them then -- they will fit, because they will
+  have been EXTRACTED from evidence rather than guessed. Typed templates
+  can be added later; removing them once tenants depend on them is far
+  harder.
+
+  WHAT WOULD CHANGE THIS -- named so the deferral is reviewable, not
+  permanent: a concrete tenant/domain with real business objects needing
+  it; OR observed duplication where several tenants independently build
+  the same Directory- or Register-shaped thing on the generic subsystem;
+  OR a decision to target an ERP-adjacent market where the 1C vocabulary
+  is itself the selling point.
+
+  ONLY DELIVERABLE if picked up: a design-exploration artefact mapping
+  the 1C taxonomy onto Letflow's existing event-log/projection/
+  EventStore.Registry machinery, identifying what would genuinely be NEW
+  versus what is renaming of existing shapes. Explicitly NOT
+  requirements, NOT implementation, NOT a schema.
+affected_files:
+  - docs/migration/decisions/
+related:
+  - ISS-0438
+depends_on_queue_tasks:
+  - 438
+source: >
+  User question 2026-09-02: "what can we introduce at this stage / is it
+  required at all", citing 1C's typed-object model. Deferral option chosen
+  by the user when the tradeoff was presented. R-Co's untyped entity design
+  read from src/design/entities.md and src/entities/mod.zig.
+queue_task_id: 439
+github_issue: 846
+
+status: open

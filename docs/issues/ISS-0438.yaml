@@ -1,0 +1,70 @@
+id: ISS-0438
+title: "The dynamic entity/data-model subsystem is deferred to 'S5/S6' in a router comment but claimed by neither stage doc and expanded into zero requirements -- it is invisible to task selection"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-03T02:02:48Z"
+severity: MINOR
+tags: [coverage-gap, entities, data-model, stage-expansion, s6]
+description: >
+  COVERAGE GAP, same failure class as ISS-0428 (work that looks covered
+  but is not). Found while assessing whether Letflow needs 1C-style
+  business-object templates.
+
+  WHAT IS DEFERRED. lib/letflow/router.ex's "Deferred routes (not yet
+  mounted)" table names two unported routers and assigns them a stage:
+    Letflow.Routers.Entities    | entities.zig     | S5/S6 (entity/data-model subsystem)
+    Letflow.Routers.EntityQuery | entity_query.zig | S5/S6 (same, plus query compiler)
+
+  WHAT BACKS THEM IN R-Co -- a designed subsystem, not a stub:
+    src/entities/definition.zig  16 KB
+    src/entities/validator.zig   43 KB
+    src/entities/commands.zig    23 KB
+    src/entities/projector.zig  7.8 KB
+    src/entities/events.zig     4.2 KB
+    plus mod.zig and query/ -- ~3400 lines, and a 737-line design
+    artefact at src/design/entities.md (EXP-201/EXP-202).
+  Its shape: entity TYPES defined by JSON schemas; entity RECORDS managed
+  exclusively through event-sourced commands; definitions stored as
+  Repository artifacts (kind = "entity") so they participate in the
+  existing activation/versioning system; three new event types registered
+  in event_type_registry alongside INSTANCE_STARTED/TASK_COMPLETED.
+
+  THE GAP: grep finds NO mention of "entities" or "entity_query" in
+  docs/migration/stage-5-scripting-plugins.md or
+  stage-6-operational-cross-cutting.md, and zero requirements carry it
+  (S5 has 28, S6 has 29, none of them this). A subsystem that exists and
+  is designed upstream, has two API routers reserved for it in Letflow's
+  own router, and is a plausible dependency for future business-data
+  work, is tracked ONLY as a comment in a route table. ORCH's
+  get_next_task can never surface it; no stage gate would notice.
+
+  WHY IT MATTERS: this is the substrate any structured business-data
+  feature sits on. ISS-0439 weighs 1C-style typed templates
+  (Directory/Document/Register/Report), which would be a TYPED
+  SPECIALISATION over exactly this generic, untyped subsystem. Deciding
+  the specialisation while the general case is untracked would likely
+  produce a second parallel data model rather than a layer.
+
+  SCOPE: decide and record where the subsystem belongs, then expand it
+  into real requirements -- OR record an explicit decision that Letflow
+  deliberately does not port it, and remove the two deferred router rows
+  so the table stops implying planned work. Both outcomes legitimate;
+  leaving it as a comment is not. NOT in scope: implementing it.
+affected_files:
+  - lib/letflow/router.ex
+  - docs/requirements.yaml
+  - docs/migration/stage-5-scripting-plugins.md
+  - docs/migration/stage-6-operational-cross-cutting.md
+related:
+  - ISS-0439
+  - ISS-0428
+source: >
+  Found while answering the user's question about 1C-style business-object
+  templates, 2026-09-02. Deferred-router rows read from lib/letflow/router.ex;
+  R-Co subsystem sizes measured with ls/wc against
+  c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\; absence from both stage
+  docs and from docs/requirements.yaml verified by grep.
+queue_task_id: 438
+github_issue: 845
+
+status: open

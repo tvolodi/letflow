@@ -4240,6 +4240,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #857 merged to main, queue task 444 released done",
       "note": "WF-03 issue-resolving run for ISS-0444: a tenant schema missing its Postgres schema entirely crashes Letflow.Scheduler.poll_and_fire/1, contradicting poller.ex own never-raises moduledoc claim. Found during REQ-218 own work, filed as a tracked follow-up."
+    },
+    {
+      "run_id": "WF03-ISS0442-20260903",
+      "requirement_id": null,
+      "issue_id": "ISS-0442",
+      "queue_task_id": 442,
+      "github_issue_number": 852,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.lint_handoffs.ex"
+      ],
+      "started_at": "2026-09-03T16:40:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 issue-resolving run for ISS-0442: lint_handoffs --autofix re-encodes the whole JSON document (Jason alphabetically re-sorts keys), producing an ~84-line diff for a semantically one-field status fix. Found by REVIEWER during ISS-0440, independently re-measured by ORCH."
     }
   ]
 }

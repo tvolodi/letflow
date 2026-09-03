@@ -1,0 +1,64 @@
+id: ISS-0442
+title: "lint_handoffs --autofix reformats the whole handoff JSON: a one-field fix produces an ~84-line diff, defeating per-file review visibility"
+discovered_by: REVIEWER
+discovered_in_run: WF03-ISS0440-20260903
+discovered_at: "2026-09-03T11:20:33Z"
+severity: MINOR
+tags: [tooling, lint-handoffs, autofix, s6]
+description: >
+  Found by REVIEWER during WF03-ISS0440-20260903 (step-03c) by actually
+  reproducing it, and independently re-measured by ORCH on a real
+  handoff file.
+
+  WHAT HAPPENS: write_json/2 at lib/mix/tasks/letflow.lint_handoffs.ex:454-457
+  does Jason.encode!(data, pretty: true) on the WHOLE decoded map rather
+  than patching the single status field. Jason does not preserve
+  original key order, so every key is alphabetically re-sorted and the
+  file is fully reformatted. ORCH measured on a real handoff
+  (step-00-git-setup.json, top-level status set to DONE, then
+  --autofix): the fix is CORRECT (status becomes COMPLETED) but the diff
+  is 84 CHANGED LINES for what is semantically a one-field change.
+
+  WHY IT MATTERS: SECURITY-REVIEWER passed ISS-0440 partly on the stated
+  ground that every autofix is visible twice over -- once on stdout,
+  once as a one-line status change in git diff. The second half of that
+  is FALSE as implemented. A human or agent skimming git diff --stat
+  sees a full-file rewrite and cannot distinguish a legitimate one-field
+  autofix from an unintended wholesale change. That does NOT invalidate
+  ISS-0440 -- SECURITY-REVIEWER stated other independent grounds (closed
+  3-value map, unconditional stdout reporting of every fix and refusal,
+  the verified FAIL-refusal) which hold on their own, and REVIEWER filed
+  this as MINOR/non-blocking rather than failing the gate. But the
+  reviewability property is real and was claimed, so it should either
+  hold or stop being claimed.
+
+  NOTE THE IMPLEMENTER DID NOT HIDE THIS: lint_handoffs.ex:450-453
+  carries a comment explicitly acknowledging the key reordering and
+  reasoning that no consumer depends on top-level key order (H3 checks
+  membership, not order). That reasoning is correct as far as it goes --
+  nothing BREAKS. The gap is that it considers machine consumers and not
+  human/agent reviewers, which is exactly who the visibility property
+  was for.
+
+  SCOPE: make an --autofix rewrite produce a minimal diff. Options for
+  CODE-DESIGNER, none prescribed: (a) Jason.OrderedObject or an
+  equivalent order-preserving decode/encode round trip; (b) a targeted
+  string substitution on the status line only, never re-encoding the
+  document at all -- simplest and most surgical, but needs care with
+  escaping and with a status value appearing elsewhere in the file; (c)
+  leave the behaviour and instead CORRECT the claim wherever it is made
+  (SECURITY-REVIEWER-style reasoning, the design doc, any anti-patterns
+  note) so nothing rests on a property that does not hold. (c) is
+  legitimate if (a)/(b) prove disproportionate -- but the claim must
+  then be removed everywhere, not just softened.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+related:
+  - ISS-0440
+source: >
+  handoffs/WF03-ISS0440-20260903/step-03c-reviewer.json (REVIEWER's own
+  reproduction), independently re-measured by ORCH on a real handoff
+  file.
+queue_task_id: 442
+github_issue: 852
+status: open

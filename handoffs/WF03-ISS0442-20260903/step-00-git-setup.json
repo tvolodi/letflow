@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0442-20260903-step-00",
+  "run_id": "WF03-ISS0442-20260903",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0442-20260903/step-00-git-setup.json",
+  "created_at": "2026-09-03T16:40:00Z",
+  "started_at": "2026-09-03T16:40:00Z",
+  "completed_at": "2026-09-03T16:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0442"],
+    "artifacts_in": ["docs/issues/ISS-0442.yaml"],
+    "branch_name": "fix/ISS-0442-lint-handoffs-autofix-diff-20260903"
+  },
+  "task": {
+    "description": "Git setup for ISS-0442: lock queue task, create fix branch from main. mix letflow.lint_handoffs --autofix reformats the whole handoff JSON (Jason re-sorts keys alphabetically), producing an ~84-line diff for a one-field status fix, defeating the per-file review visibility SECURITY-REVIEWER's ISS-0440 sign-off partly relied on."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 442 locked via get_next_task (agent_id: orch-ai-dala). Branch fix/ISS-0442-lint-handoffs-autofix-diff-20260903 created from main, pushed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

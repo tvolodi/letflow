@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0440-20260903-step-03",
+  "run_id": "WF03-ISS0440-20260903",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0440-20260903/step-03-elixir-dev.json",
+  "created_at": "2026-09-03T11:01:16Z",
+  "started_at": "2026-09-03T11:01:16Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": [
+      "ISS-0440"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss440-handoff-status-enforcement.md",
+      "handoffs/WF03-ISS0440-20260903/step-02b-code-design-validator-regate3.json",
+      "docs/issues/ISS-0440.yaml",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "mix.exs",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF03-ISS0440-20260903",
+    "owned_modules": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 3 -- IMPLEMENT the ISS-0440 fix. The design at lib/letflow/design/iss440-handoff-status-enforcement.md is GATE-APPROVED (CODE-DESIGN-VALIDATOR PASS at commit aad7358c, after THREE rework cycles). Section 7 is an explicit summary of concrete elements for you -- start there, then read sections 2.1, 2.1a and 5 in full. Build exactly what is specified.\n\nWHY THE DESIGN IS SO INSISTENT ABOUT WORDING, so you carry the same care into code comments and output strings: this issue exists because SIX prior mitigations for the same defect class overclaimed and failed. The design was failed three times at the gate for claiming more enforcement strength than it has -- first about the dispatch-time check, then about CI blocking merges, then about detection itself. Any user-facing string, @moduledoc, or comment you write must not reintroduce an unqualified claim. If you describe the guarantee, describe it as the design does: a violation is always detected and recorded ONCE THE LINTER EXECUTES.\n\nWHAT TO BUILD (per the design; section 7 is authoritative on the list):\n  1. A `--dir <path>` flag on Mix.Tasks.Letflow.LintHandoffs.run/1, threading into the EXISTING handoff_files/1 dir parameter (lib/mix/tasks/letflow.lint_handoffs.ex:279 already takes it; run/1 at line 233 currently calls handoff_files() with no args). resolve_dir/1 must return @handoffs_dir when the flag is absent.\n  2. A restricted `--autofix` mode: {PASS, COMPLETE, DONE} -> COMPLETED ONLY. It MUST REFUSE -- loudly, non-zero exit, file untouched, named reason -- on FAIL and on anything else, including a missing/null/non-string status. This refusal is the single most important behaviour in the change: silently converting a genuinely FAILED handoff to COMPLETED would corrupt the pipeline's own record of what happened, which is WORSE than the violation being fixed. The FAIL case is ambiguous on purpose -- its one historical instance is squash-merged out of recoverable history, so nobody can say whether it should have been FAILED or COMPLETED.\n  3. Both --dir guards from section 2.1a: a hard refusal when an EXPLICITLY-SUPPLIED --dir discovers zero files (note the deliberate carve-out: a legitimately empty DEFAULT @handoffs_dir is NOT the misuse case), and an unconditional banner on every run naming the scanned directory and file count, default path included.\n\nTHE HARD CONSTRAINT -- CI'S PATH MUST BE BYTE-IDENTICAL. lib/mix/tasks/letflow.lint_handoffs.ex is a HARD CI GATE that EVERY in-flight run on EVERY host depends on. CI invokes `mix letflow.check` with NO arguments (.github/workflows/ci.yml:126 -> mix.exs's alias). Your no-flag path must behave exactly as today. A defect here breaks every other session's ability to merge, including the concurrent runs live on this workstation right now. Prove the no-flag behaviour is unchanged and quote the proof.\n\nVERIFICATION YOU MUST RUN AND QUOTE (No Speculation -- real output):\n  - `mix compile` clean, and `mix format --check-formatted` clean.\n  - `mix letflow.lint_handoffs` with NO flags: must still report OK with 0 new violations and 25 pre-existing grandfathered. ORCH's own baseline on this branch: 'OK -- 0 new violations across 1923 handoff files (25 pre-existing grandfathered, traced to ISS-0190)'. The file count will drift as this run adds handoffs -- the 0-new and 25-grandfathered figures are what must hold (AC3).\n  - AC1's DEMONSTRATION, which is the acceptance criterion this whole change exists to satisfy. Follow section 5's specified steps: plant a bad status in a SCRATCH FIXTURE OUTSIDE handoffs/ (the design explicitly REJECTS an inside-handoffs/ fixture because a committed bad handoff would break every other host's CI -- do not do that), then quote all of: plain lint against it CATCHES the bad status; --autofix CORRECTS a PASS; --autofix REFUSES a FAIL; the zero-file --dir guard REFUSES; the banner appears; and the no-flag path still scans only the real corpus.\n  - Do NOT commit the scratch fixture. Verify with `git status --porcelain` before you finish and quote it.\n\nSCOPE: do NOT change @legal_statuses, the grandfathering lists, H1-H6's existing verdicts, or any other check's behaviour. This is additive. Do NOT write tests -- TEST-DESIGNER owns Step 4. Do NOT touch docs/anti-patterns.md -- DOC-UPDATER owns that per the design's section 7 item 3, and the design specifies what that note must and must not claim.\n\nComplete the handoff with every verification quoted, then commit and push to branch feature/WF03-ISS0440-20260903. next_action: 'Route to SECURITY-REVIEWER then REVIEWER'."
+  },
+  "result": {
+    "status": null,
+    "summary": null,
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,99 @@
+run_id: WF02-REQ216-20260902
+requirement_ids: [REQ-216]
+generated_by: TEST-RUNNER
+generated_at: "2026-09-03T00:50:00Z"
+branch: feature/WF02-REQ216-20260902
+
+pre_run_checks:
+  other_mix_test_processes: "checked via `ps aux | grep \"mix test\"` before starting -- none running"
+  docker_compose: "postgres + keycloak already Running (brought up via `sudo docker compose up -d`; docker group membership on this host requires sudo)"
+
+runs_performed:
+  - method: "mix letflow.check.test"
+    note: >
+      Ran first per dispatch instructions. Single (unpartitioned) mix test process.
+    seed_info: "single process, MIX_ENV=test"
+    duration: "1530.3 seconds (14.9s async, 1515.4s sync)"
+    result_line: "Result: 3073/3076 passed (6/6 properties, 3067/3070 tests), 10 excluded"
+    failed: 3
+    exit: "mix letflow.check.test: FAILED -- underlying `mix test` run exited 2"
+
+  - method: "scripts/test_parallel.sh"
+    note: >
+      This project's canonical WF-02 Step 4 gate per
+      docs/agents/workflows/WF-02_requirement_implementation.md -- run as the
+      authoritative combined result for this report. N derived from nproc (no
+      $TEST_PARALLEL_N override set).
+    partition_count: 8
+    partition_count_source: nproc
+    test_pool_size: "10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=2)"
+    per_partition:
+      - {partition: 1, tests: 416, properties: 0, failures: 1, exit: 2}
+      - {partition: 2, tests: 313, properties: 1, failures: 0, exit: 0}
+      - {partition: 3, tests: 312, properties: 0, failures: 0, exit: 0}
+      - {partition: 4, tests: 396, properties: 0, failures: 2, exit: 2}
+      - {partition: 5, tests: 383, properties: 0, failures: 0, exit: 0}
+      - {partition: 6, tests: 412, properties: 1, failures: 0, exit: 0}
+      - {partition: 7, tests: 494, properties: 4, failures: 0, exit: 0}
+      - {partition: 8, tests: 341, properties: 0, failures: 0, exit: 0}
+    combined_result_line: "combined: 3067 tests, 6 properties, 3 failures (3070/3073 passed)"
+
+combined_totals:
+  passed: 3070
+  failed: 3
+  properties_passed: "6/6"
+  status: "FAIL (3 failures, both categorized below as pre-existing/environmental -- neither is a regression in Letflow.Admission or lib/letflow/application.ex)"
+
+failures:
+  - test: "test A9: every indexed volume's declared entries: count equals what is actually on disk (Letflow.Docs.RequirementStatusInvariantsTest)"
+    file: "test/docs/requirement_status_invariants_test.exs:464"
+    category: "genuine failure, but NOT connected to Letflow.Admission/lib/letflow/application.ex"
+    root_cause: >
+      docs/status/requirement_status.index.yaml declares
+      docs/status/requirement_status.v8.yaml at "entries: 14" (index line 1481),
+      but this branch's own Step 00 commit (3e29072f, "WF02-REQ216-20260902 Step 00
+      -- requirement started, queue task 434 locked") appended a 15th entry to
+      v8.yaml (the "started" event for REQ-216 itself) without bumping the
+      declared count in the index, per HOW-TO-APPEND step 6. Actual on-disk
+      entries: 15, declared: 14 -- exactly the drift this test exists to catch.
+    ownership: >
+      Out of TEST-RUNNER's ownership (docs/status/, not test/). This is a
+      workflow bookkeeping gap introduced by ORCH's own Step 00 commit on this
+      branch, not by ELIXIR-DEV/TEST-DESIGNER's Admission work. Flagging for
+      ORCH/DOC-UPDATER to bump requirement_status.index.yaml's declared
+      "entries:" for v8.yaml from 14 to 15 before Step Final.
+    reproduced_in: "both mix letflow.check.test and scripts/test_parallel.sh (partition 1)"
+
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    category: "known pre-existing environmental flake"
+    root_cause: >
+      ** (ErlangError) Erlang error: :enoent from System.cmd("rustc", ["--version"], ...).
+      Confirmed via `which rustc` (exit 1) -- no rustc toolchain installed in this
+      sandboxed environment. Matches the "rustc-ENOENT CheckToolchainTest" known
+      flake named explicitly in this dispatch's briefing.
+    reproduced_in: "both mix letflow.check.test and scripts/test_parallel.sh (partition 4)"
+
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    category: "known pre-existing environmental flake"
+    root_cause: "same :enoent/no-rustc-installed cause as above."
+    reproduced_in: "both mix letflow.check.test and scripts/test_parallel.sh (partition 4)"
+
+not_reproduced_this_run:
+  - "Letflow.Engine.Lua.PlatformTest (REQ-161) -- did not fail in either run. Ran clean in partition 7 (telemetry-handler log lines reference its test names but no failure entry). No TenantSchemaReaper/ServiceCatalogReaper deferral-flavored failures observed; a few informational deferral log lines appeared (grep count: partition-5=9, partition-6=2, all others=0) but none correlated with a test failure."
+
+admission_specific_verification:
+  file: "test/letflow/admission_test.exs"
+  isolated_run: "mix test test/letflow/admission_test.exs"
+  result: "Result: 15 passed (0 failures), Finished in 0.2 seconds"
+  note: "All 15 Letflow.Admission tests pass in isolation, and none of the 3 combined-suite failures involve Letflow.Admission or lib/letflow/application.ex."
+
+verdict: >
+  No regression connected to Letflow.Admission or lib/letflow/application.ex.
+  3 failures total, all pre-existing/environmental: 2 are the known rustc-ENOENT
+  CheckToolchainTest flake (no rust toolchain in this environment), 1 is a
+  docs bookkeeping drift (requirement_status.index.yaml declared-count vs.
+  on-disk entries) introduced by this branch's own Step 00 commit, unrelated
+  to the Admission implementation, and out of TEST-RUNNER's file ownership to
+  fix directly.

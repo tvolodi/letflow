@@ -1478,8 +1478,15 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 21
+    entries: 22
     note: >
+      Incremented to 22 by ORCH's Step-Final rebase of
+      WF02-REQ217-20260903 (second rebase round, absorbing REQ-217's own
+      DOC-UPDATER done-event append from `entries: 18` interleaved with
+      REQ-214/ISS-0426's own concurrently-landed entries) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v8.yaml` = 22 on-disk
+      entries, no content lost.
+
       Incremented to 21 by ORCH's Step-Final rebase of
       WF02-REQ217-20260903: this branch's own entries (REQ-217 started at
       02:45, plus REQ-217 done appended by DOC-UPDATER later in this same
@@ -1510,6 +1517,13 @@ volumes:
       entries after the merge, no entry lost. `wc`: 822 lines / 50550
       bytes, well under the 1200-line/120000-byte roll ceiling, so no
       roll triggered.
+
+      Incremented to 18 by WF02-REQ217-20260903 (DOC-UPDATER)'s own REQ-217
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 18 on-disk entries, no
+      rebase conflict on this file at the time it was written. `wc`: 796
+      lines / 48188 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
 
       Incremented to 16 by WF02-REQ216-20260902 (DOC-UPDATER)'s own REQ-216
       done-event append (Step 6) -- `grep -c "^  - req:"

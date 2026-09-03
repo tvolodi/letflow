@@ -909,3 +909,55 @@ history:
       top-level-status enum violation, which this run's own first CI run
       surfaced -- filed as structural work because docs/anti-patterns.md
       declares re-documenting that class exhausted.
+
+  - req: REQ-217
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-03T06:50:13Z"
+    note: >
+      WF02-REQ217-20260903 done (queue task 435, GH#840, stage S6).
+      RELEASE-VALIDATOR independently re-verified all 7 acceptance criteria
+      PASS (scripts/test_parallel.sh 3091/3093, mix letflow.check.test
+      3094/3096, both failure sets isolated to the pre-existing
+      environmental rustc-ENOENT gap in Mix.Tasks.Letflow.CheckToolchainTest,
+      structurally unrelated to this branch; mix compile
+      --warnings-as-errors --force clean). Wires two admission-control gates
+      into the HTTP entry path atop REQ-216's core module:
+      lib/letflow/plugs/admission.ex (new Letflow.Plugs.Admission plug,
+      mounted twice with pool: :global and pool: :tenant) and
+      lib/letflow/plugs/api_pipeline.ex (mount points and chain ordering).
+      Global gate mounted first, before Plug.Parsers, covering
+      AuthPipeline's own DB work as a disclosed limitation (tenant identity
+      does not exist yet at that point); per-tenant gate mounted after
+      AuthPipeline and before TenantStatus. Both reject with
+      Letflow.Api.Response.service_unavailable/2 (REQ-066, no new response
+      helper) plus an explicit Retry-After header (fixed 1s default,
+      independently justified against TenantStatus's 30s precedent).
+      Dual crash-safety mechanism: Mechanism A (conn.assigns +
+      Plug.Conn.register_before_send/2) covers every non-crashing response
+      path and a route-handler raise (wrapped in Plug.Conn.WrapperError);
+      Mechanism B (process-dictionary ref list + Plug.ErrorHandler's
+      handle_errors/2) covers a raise inside a plug running before
+      :dispatch, where conn.assigns is not a reliable read channel. Path:
+      2 CODE-DESIGN-VALIDATOR rework cycles (step-01b/01c: a crash-safety
+      trace correction to the design's stated mechanism; step-01d/01e/01f:
+      SECURITY-REVIEWER found a real double-global-consumption defect in
+      the first implementation -- the tenant gate's own try_acquire also
+      consumes a global unit per Letflow.Admission's composing rule, so the
+      original wiring stacked a second global unit on top of an
+      already-held first -- fixed via :release_global_admission, mounted
+      between AuthPipeline and the tenant gate, releasing the global gate's
+      already-held ref immediately so admission at the global gate becomes
+      a re-checked, not reserved, precondition for admission at the tenant
+      gate). Both moduledocs (admission.ex, api_pipeline.ex) spot-checked
+      against the actual shipped code and found accurate/complete, no edit
+      needed. docs/migration/stage-6-operational-cross-cutting.md grepped
+      for REQ-216/REQ-217/ISS-0431/admission: zero references, so no
+      staleness update was warranted there. docs/issues/ISS-0431.yaml's
+      orch_routing_note checked: it does not assert all three requirements
+      are pending (it states the record "stays open ... pending those
+      three requirements' completion", which remains literally true with
+      REQ-218 still pending) -- left unedited rather than rewritten for
+      a false problem. Closes ISS-0431 part 2 of 3 (primary HTTP surface);
+      REQ-218 (Poller wiring, queue task 436, GH#841) remains pending as
+      part 3.

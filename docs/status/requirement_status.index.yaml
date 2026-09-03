@@ -1478,8 +1478,21 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 24
+    entries: 25
     note: >
+      Composed to 25 at feature/WF02-REQ215-20260903's Step Final rebase,
+      which conflicted at requirement_status.v8.yaml's tail against the
+      REQ-217/REQ-218/ISS-0426 chain below (landed on main after this
+      branch's Step 00 commit). This branch's own REQ-215 started-event
+      (05:01:17Z) sorts chronologically BEFORE all three of those entries
+      (earliest at 06:47:02Z), so it was interleaved into that position in
+      the volume file rather than appended after -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 25 on-disk entries after
+      composition, no content lost, recounted directly rather than summing
+      either side's independently-computed count (24 declared here pre-
+      rebase, 20 computed by this branch's own Step 00 commit against its
+      stale base).
+
       Incremented to 24 by DOC-UPDATER's WF02-REQ218-20260903 done-event
       append (REQ-218, closing ISS-0431 entirely).
       Incremented to 22 by ORCH's Step-Final rebase of

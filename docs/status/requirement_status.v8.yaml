@@ -857,6 +857,19 @@ history:
       released status: done (GH#812 best-effort closed). REQ-215 (the
       engine-wiring half, ISS-0411/GH#807's other part) remains
       separately pending.
+
+  - req: REQ-215
+    event: started
+    agent: ORCH
+    at: "2026-09-03T05:01:17Z"
+    note: >
+      Engine-wiring half of ISS-0411/GH#807's fix (queue task 417, GH#814),
+      atop REQ-214's now-merged dispatch core. Queue task 417 locked.
+      Branch feature/WF02-REQ215-20260903 created from main (936d3306,
+      already includes REQ-214's merge). All four depends_on (REQ-214,
+      REQ-177, REQ-049, REQ-061) confirmed done. Dispatching CODE-DESIGNER
+      next.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

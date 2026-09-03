@@ -4256,6 +4256,23 @@
       "released_lock": true,
       "last_known_step": "Diagnosis-only, blocked on ISS-0440 merging first -- queue task 442 released open",
       "note": "WF-03 issue-resolving run for ISS-0442: lint_handoffs --autofix re-encodes the whole JSON document (Jason alphabetically re-sorts keys), producing an ~84-line diff for a semantically one-field status fix. Found by REVIEWER during ISS-0440, independently re-measured by ORCH."
+    },
+    {
+      "run_id": "WF03-ISS0425-20260903",
+      "requirement_id": null,
+      "issue_id": "ISS-0425",
+      "queue_task_id": 425,
+      "github_issue_number": 829,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/application.ex",
+        "lib/letflow/instance_supervisor.ex"
+      ],
+      "started_at": "2026-09-03T16:55:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
+      "note": "WF-03 issue-resolving run for ISS-0425: flat supervision tree, 15 peers of Repo under one :one_for_one with default restart intensity, no dependency layering, no domain-owning supervisor, Task.Supervisor sprawl (6 separate ones). Issue predicted a 7th ad-hoc supervisor if not settled before REQ-214 -- now 4+ new supervision entries have landed since filing (REQ-214, REQ-216 Admission, ISS-0429 Alerts.TaskSupervisor, REQ-215 dispatcher poller)."
     }
   ]
 }

@@ -4097,6 +4097,23 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #842 merged to main, queue task 429 released done",
       "note": "WF-03 issue-resolving run for ISS-0429: Process.sleep inside alert-hook delivery blocks the platform-wide Scheduler.Poller GenServer for up to tens of seconds per hook per tenant, stalling every tenant timer. Issue asks to reconcile placement with ISS-0425 (concurrent supervision-tree redesign proposal) rather than inventing one -- ISSUE-FIXER sizing pass first."
+    },
+    {
+      "run_id": "WF02-REQ216-20260902",
+      "requirement_id": "REQ-216",
+      "issue_id": null,
+      "queue_task_id": 434,
+      "github_issue_number": 839,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/admission.ex (new)",
+        "lib/letflow/application.ex"
+      ],
+      "started_at": "2026-09-02T22:45:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to CODE-DESIGNER",
+      "note": "WF-02 requirement-implementation run for REQ-216: admission-control core, a pure-BEAM global + per-tenant counting semaphore tied to POOL_SIZE, closing ISS-0431 part 1. Core-only, no HTTP-path or Poller wiring (REQ-217/218 do that)."
     }
   ]
 }

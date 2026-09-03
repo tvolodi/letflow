@@ -12610,7 +12610,7 @@ requirements:
   - id: REQ-216
     title: Admission-control core -- a pure-BEAM global + per-tenant counting semaphore tied to POOL_SIZE, closing ISS-0431 part 1
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 434  # letflow-queue task id, GH#839
     description: >

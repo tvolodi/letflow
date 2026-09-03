@@ -1478,15 +1478,24 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 14
+    entries: 16
     note: >
-      Incremented to 14 by ORCH's WF03-ISS0411-20260902 done-event append
-      (SCOPE-CHANGE) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v8.yaml` = 14 on-disk entries, no roll
-      triggered (697 lines / well under the 1200-line/120000-byte ceiling).
-      This increment was itself missed in the entry's own commit (PR #823)
-      and caught by CI's A9 invariant test, corrected here in a follow-up
-      commit on the same branch before merge.
+      Incremented to 16 by WF02-REQ216-20260902 (DOC-UPDATER)'s own REQ-216
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 16 on-disk entries, no
+      rebase conflict on this file at the time it was written. `wc`: 736
+      lines / 44511 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+
+      Incremented to 15 by ORCH's WF02-REQ216-20260902 started-event append
+      -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 15 on-disk entries, no roll
+      triggered (705 lines / well under the 1200-line/120000-byte ceiling).
+      This increment was itself missed in the entry's own commit (Step 00,
+      commit 3e29072f) and caught by CI's A9 invariant test, corrected
+      here in a follow-up commit on the same branch before merge. Prior
+      history: incremented to 14 by WF03-ISS0411-20260902's done-event
+      append (PR #823), same miss-then-fix pattern.
 
       Incremented to 13 by ORCH's WF03-ISS0419-20260902 done-event append
       (SCOPE-CHANGE) -- `grep -c "^  - req:"

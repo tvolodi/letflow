@@ -9,6 +9,30 @@ otherwise have had to make (top-level shape, layer membership, per-layer
 restart intensity, ordering-constraint preservation) — this design does not
 re-open any of them; it turns them into exact file/module contents.
 
+**Rework iteration 2 (this revision)** — CODE-DESIGN-VALIDATOR FAILed
+iteration 1 (`handoffs/WF02-REQ219-20260903/step-01b-code-design-validator.json`)
+on two points, both fixed below and nowhere else in this doc:
+
+1. §4's AC2 test mechanism (previously: restart only the already-running
+   `Letflow.Supervisor.Pollers` child after a normal boot) had zero
+   discriminating power against the exact top-level-list-order regression
+   AC2 exists to catch, because it never re-ran the real cold-boot sequence.
+   §4 is now a genuine cold-boot test: it stops and restarts the entire
+   `:letflow` OTP application, with the probe installed beforehand, and
+   walks the concrete counterfactual trace for both the correct-order and
+   swapped-order cases.
+2. §4/§5's `pollers_init_probe`/`force_poller_crash` test hooks used only a
+   bare runtime `Application.get_env/3` check, weaker than this codebase's
+   own established double-gate precedent (`lib/letflow/repository/
+   activation.ex`'s `@activation_test_hooks_enabled?`, `Application.
+   compile_env/3`-resolved, default `false`, `true` only in
+   `config/test.exs`). Both hooks now reuse that exact, already-committed
+   compile-time flag (see §4.2/§5.1) rather than introduce a new one — a
+   new key would need its own `config/test.exs` entry, which would violate
+   AC7's "no config file changes" bar; reusing the existing, already-`true`
+   -under-test key satisfies both the double-gate precedent and AC7 at
+   once, and is called out explicitly (not silently) for REVIEWER in §7.
+
 ## 0. Inputs read in full before this design
 
 * `lib/letflow/application.ex` (current state, read in full, lines 1–228,
@@ -38,6 +62,31 @@ re-open any of them; it turns them into exact file/module contents.
   re-read an env override without any code change.
 * No `lib/letflow/supervisor/` directory exists yet — the three new
   files are new, not edits to existing ones.
+* `lib/letflow/repository/activation.ex` lines 205–247 (`test_opts`/
+  `@activation_test_hooks_enabled?`, re-read 2026-09-03 for this rework) —
+  this codebase's own established double-gate pattern for a test-only
+  production seam: a private/`@typep` opt so the seam is invisible on the
+  public `@spec`, PLUS a functional clause additionally gated behind a
+  module attribute resolved once via `Application.compile_env(:letflow,
+  :activation_test_hooks_enabled?, false)`, default `false`, `true` only
+  in `config/test.exs:209` (`config :letflow, activation_test_hooks_enabled?:
+  true` — confirmed present today, predates this requirement, added under
+  REQ-203). Because it is resolved at compile time into a literal `true`/
+  `false`, a compiled dev/prod release can never execute the gated branch
+  regardless of any runtime `Application.put_env/3` call. §4.2 and §5.1
+  below adopt this exact pattern, reusing this exact existing config key
+  rather than adding a new one (see rework-iteration-2 note above and §7).
+* `test/support/admission_test_helpers.ex` (re-read in full for this
+  rework) — confirms two conventions this design leans on: (a) restarting
+  a real, application-supervised singleton via `Supervisor.terminate_child/2`
+  + `Supervisor.restart_child/2` against the top-level `Letflow.Supervisor`
+  is this codebase's accepted mechanism for a *targeted* single-child
+  restart test (used unchanged in §5 below, which was not the part
+  CODE-DESIGN-VALIDATOR failed); (b) its own moduledoc's explicit reliance
+  on "ExUnit's own scheduling: async modules all run to completion before
+  ANY async: false module starts, and async: false modules run one at a
+  time relative to each other" — the same guarantee §4.3 below leans on to
+  justify stopping/restarting the entire `:letflow` application safely.
 
 ## 1. Three new modules
 
@@ -167,7 +216,10 @@ exceeding this budget exits and restarts only this supervisor, never
 `Letflow.Repo` or Bandit (the documented incident this requirement
 closes, cross-referenced to ISS-0425/ISS-0421/the `scheduler_children/0`
 historical comment, which itself relocates here as historical context,
-marked superseded-by-structure rather than deleted).
+marked superseded-by-structure rather than deleted); the `@supervisor_
+test_hooks_enabled?`/`pollers_init_probe` double-gated test seam (§4.2),
+including the explicit note that it reuses `activation.ex`'s existing
+`:activation_test_hooks_enabled?` config key rather than a new one.
 
 ### 1.3 `Letflow.Supervisor.Http` (`lib/letflow/supervisor/http.ex`)
 
@@ -256,92 +308,246 @@ matching the requirement's own text.
 
 ## 4. AC2's ordering-test mechanism — exact design
 
-**Mechanism: a test-only, env-var-injected 1-arity callback that
-`Letflow.Supervisor.Pollers.init/1` invokes, if configured, as the very
-first expression in its body, passing it the result of
-`Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)`.**
+**Why iteration 1's mechanism was unsound (kept here as a permanent
+record, per CODE-DESIGN-VALIDATOR's finding):** restarting only
+`Letflow.Supervisor.Pollers` via `terminate_child`/`restart_child` against
+an ALREADY-fully-booted application never touches `Letflow.
+Supervisor.Infrastructure`, so `Obs.Alerts.TaskSupervisor` stays
+registered throughout regardless of what order the top-level
+`Letflow.Application.start/2` children list originally used. It proves
+"Infrastructure, once up, stays up across a Pollers restart," not "the
+original boot started Infrastructure before Pollers." A genuine test of
+AC2 must observe the probe during a REAL, FRESH run of `Letflow.
+Application.start/2`'s own top-level `Supervisor.start_link/2` call, with
+`Obs.Alerts.TaskSupervisor` NOT already registered from a previous boot
+(otherwise a swapped-order regression would still show it non-nil by
+leftover registration, exactly the flaw found). That requires actually
+tearing the whole `:letflow` application down first, not just one of its
+three top-level children.
 
-Exact shape:
+### 4.1 Mechanism
 
-* `Letflow.Supervisor.Pollers.init/1`'s body starts with: read
-  `Application.get_env(:letflow, :pollers_init_probe)`. If it is a
-  1-arity function (`(pid() | nil -> any())`), call it with
-  `Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)` as its sole
-  argument, ignoring the callback's return value, before doing anything
-  else (before computing the two gated poller entries). If the config
-  key is unset (the default — no `config/*.exs` file sets it, satisfying
-  AC7's "no config file changes" bar) or not a 1-arity function, this
-  step is skipped entirely — zero behavioral difference from today in
-  every environment except a test that explicitly sets it. This keeps
-  the probe a pure test seam: `mix test`/`dev`/`prod` never set this key,
-  so `Letflow.Supervisor.Pollers.init/1`'s production behavior is
-  byte-for-byte what §1.2 already specifies.
-* **Test procedure** (lives in a new or existing
-  `test/letflow/supervisor/pollers_test.exs`, `async: false` — it
-  mutates a global `Application.put_env/3` key and restarts a real,
-  application-supervised singleton, matching this codebase's own
-  `restart_admission!/2` precedent in `test/support/
-  admission_test_helpers.ex` for the same class of test):
-  1. Capture `test_pid = self()`.
-  2. `Application.put_env(:letflow, :pollers_init_probe, fn whereis_result
-     -> send(test_pid, {:pollers_init_whereis, whereis_result}) end)`.
-     Register `on_exit(fn -> Application.delete_env(:letflow,
-     :pollers_init_probe) end)` immediately after, so a failing
-     assertion never leaks the override into a later test.
-  3. Force `Letflow.Supervisor.Pollers.init/1` to run again on the REAL,
-     already-application-booted supervisor tree (the probe must observe
-     the actual production startup ordering, not a standalone test
-     instance) via `Supervisor.terminate_child(Letflow.Supervisor,
-     Letflow.Supervisor.Pollers)` followed by
-     `Supervisor.restart_child(Letflow.Supervisor,
-     Letflow.Supervisor.Pollers)` — both against the top-level,
-     application-registered `Letflow.Supervisor` name, child id
-     `Letflow.Supervisor.Pollers` (a bare-module child spec's `id`
-     defaults to the module name itself). `restart_child/2` re-invokes
-     `Letflow.Supervisor.Pollers.start_link/1`, which re-invokes
-     `init/1`, re-running the probe check.
-  4. `assert_receive {:pollers_init_whereis, whereis_result}, 1_000`.
-  5. `assert whereis_result != nil` — proves
-     `Letflow.Obs.Alerts.TaskSupervisor` (the LAST child of `Letflow.
-     Supervisor.Infrastructure`, §1.1) was already registered and alive
-     at the exact moment `Letflow.Supervisor.Pollers.init/1` ran, i.e.
-     the whole of `Letflow.Supervisor.Infrastructure` had already
-     finished starting — the AC2 property, observed via a real
-     `whereis/1` call at the real moment, not inferred from list
-     position alone.
-  * Why restarting `Letflow.Supervisor.Pollers` (rather than only
-    observing the original application boot) is a valid test of the
-    SAME property: `Letflow.Supervisor.Infrastructure` is never
-    restarted by this action (the top-level `:one_for_one` strategy only
-    restarts the ONE child that exited, `Letflow.Supervisor.Pollers`
-    itself, per `terminate_child`/`restart_child`'s own targeted-child
-    semantics) — so `Obs.Alerts.TaskSupervisor` stays registered and
-    alive throughout, under the exact same "Infrastructure fully started
-    before Pollers' own init runs" invariant §1's design guarantees for
-    every start of `Letflow.Supervisor.Pollers`, whether it is the
-    original application boot or any later restart. The test exercises
-    the real, production `init/1` code path (not a stand-in), just
-    triggered a second time.
+**A test-only, config-injected 1-arity callback that
+`Letflow.Supervisor.Pollers.init/1` invokes, if enabled, as the very first
+expression in its body, passing it the result of
+`Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)`** — same probe shape
+as iteration 1, now gated by the double-gate in §4.2 and exercised by the
+cold-boot test in §4.3.
+
+### 4.2 Double gate (fix for CODE-DESIGN-VALIDATOR's second issue)
+
+`Letflow.Supervisor.Pollers` gains one module attribute, resolved once at
+compile time, reusing the SAME already-committed config key
+`lib/letflow/repository/activation.ex` already established (see §0's
+activation.ex bullet above) rather than introducing a new one:
+
+`@supervisor_test_hooks_enabled? Application.compile_env(:letflow,
+:activation_test_hooks_enabled?, false)` — one module attribute, same
+shape as `activation.ex`'s own `@activation_test_hooks_enabled?` line.
+
+`init/1`'s probe step becomes: **only if `@supervisor_test_hooks_enabled?`
+is `true`** (compiled to a literal `true`/`false` — `false` in every
+dev/prod build, since only `config/test.exs:209` sets
+`activation_test_hooks_enabled?: true`), read
+`Application.get_env(:letflow, :pollers_init_probe)`; if it is a 1-arity
+function, call it with `Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)`
+as its sole argument, ignoring the return value, before computing the two
+gated poller entries. If `@supervisor_test_hooks_enabled?` is `false`, the
+whole branch is dead code at compile time (mirrors `activation.ex`'s own
+`if @activation_test_hooks_enabled? and ...` shape) — a compiled dev/prod
+release cannot reach `Application.get_env(:letflow, :pollers_init_probe)`
+at all, regardless of any runtime `Application.put_env/3` call, closing
+exactly the residual-production-risk gap CODE-DESIGN-VALIDATOR flagged
+(the risk that "no config file happens to set this key today" was the
+ONLY safety net). Naming note for REVIEWER: reusing
+`:activation_test_hooks_enabled?` (rather than a new
+`:supervisor_test_hooks_enabled?` key, which would need its own
+`config/test.exs` line) is a deliberate trade against AC7's "no config
+file changes" bar — flagged explicitly here and in §7, not silently done;
+a future requirement introducing a third consumer of this pattern is a
+reasonable point to rename the key to something generic, not required now.
+
+### 4.3 Cold-boot test procedure
+
+Lives in a new `test/letflow/supervisor/pollers_test.exs`, `async: false`
+(mutates global `Application` config and, uniquely among this design's
+tests, stops/restarts the entire `:letflow` OTP application — leans on
+the same "async modules finish before any async: false module starts,
+and async: false modules run one at a time" ExUnit guarantee `test/
+support/admission_test_helpers.ex`'s moduledoc already documents and
+relies on for a lighter-weight single-singleton restart). Requires
+`config :letflow, activation_test_hooks_enabled?: true` to already be set
+(it is, unconditionally, in `config/test.exs:209`, predating this
+requirement — no config change needed here). Does NOT `use
+Letflow.DataCase` and does not check out a Sandbox connection of its own
+(any connection it held would be invalidated when `Letflow.Repo` itself
+is torn down in step 2 below).
+
+1. Capture `test_pid = self()`. `Application.put_env(:letflow,
+   :pollers_init_probe, fn whereis_result -> send(test_pid,
+   {:pollers_init_whereis, whereis_result}) end)`. Register
+   `on_exit(fn -> Application.delete_env(:letflow, :pollers_init_probe)
+   end)` immediately after, so a failing assertion never leaks the
+   override into a later test (the currently-running, freshly-rebooted
+   application from step 2 below needs no further restart to be clean —
+   deleting the config key only prevents a FUTURE incidental restart,
+   e.g. by another test, from re-invoking a stale probe closure whose
+   `test_pid` no longer refers to a live test process).
+2. `:ok = Application.stop(:letflow)` — a genuine, synchronous full
+   application stop: OTP's application controller terminates
+   `Letflow.Supervisor` (the real top-level supervisor `Letflow.
+   Application.start/2` registers under that name) and, transitively,
+   every child under it, INCLUDING `Letflow.Supervisor.Infrastructure`
+   and, within it, `Obs.Alerts.TaskSupervisor` — `Application.stop/1`
+   does not return until this full teardown completes, so
+   `Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)` is guaranteed
+   `nil` immediately afterward. This is the step iteration 1's mechanism
+   never performed, and is what makes the regression trace in §4.4 below
+   actually distinguish the two orderings.
+3. `:logger.remove_primary_filter(:letflow_secrets_redaction)`, return
+   value ignored (`:ok`, or `{:error, {:not_found, _}}` if for any reason
+   already absent — either is fine to ignore). Rationale: `Letflow.
+   Application.start/2`'s first line calls `:logger.add_primary_filter/2`
+   with this same fixed id, and that function's own moduledoc comment
+   states it "raises on a duplicate filter id, which would only happen on
+   a second `Letflow.Application.start/2` call in the same node -- not
+   expected in normal operation." Step 4 below IS exactly that second
+   call, in the same node, so this design does not gamble on whatever
+   `:logger.add_primary_filter/2` actually does with a duplicate id
+   (return an error tuple vs. raise — left unverified since this
+   environment has no reachable Elixir/OTP runtime to check empirically);
+   instead it removes the previously-registered filter first, so the
+   restart's own `:logger.add_primary_filter/2` call is a genuine
+   first-time registration again, faithful to the comment's own stated
+   "exactly once per node" assumption rather than violating it. Flagged
+   for ELIXIR-DEV/TEST-RUNNER: if this line turns out to be unnecessary
+   (i.e. a spike shows the duplicate call is harmless), it is still
+   correct to keep — a no-op removal-then-readd is not a hazard.
+4. `{:ok, _apps} = Application.ensure_all_started(:letflow)` — re-invokes
+   `Letflow.Application.start/2` for real (its `:letflow` dependency apps
+   — `ecto_sql`, `bandit`, etc. — are already started and are not
+   restarted; only `:letflow` itself is). This runs the ACTUAL top-level
+   `Supervisor.start_link(children, strategy: :one_for_one, name:
+   Letflow.Supervisor)` call from §2's 3-element list, in whatever order
+   that list currently specifies — the exact code path AC2 exists to
+   pin down. `Ecto.Migrator` is a no-op on this second boot
+   (`skip_migrations?/0` is `true` whenever `RELEASE_NAME` is unset, true
+   under `mix test`) and `Oidcc.ProviderConfiguration.Worker` re-fetches
+   discovery from the same local Keycloak the ORIGINAL suite boot already
+   depended on (no new external dependency introduced — if Keycloak were
+   unreachable, the original suite boot would already have failed before
+   this test could even run).
+5. `assert_receive {:pollers_init_whereis, whereis_result}, 5_000` — the
+   probe fires exactly once, synchronously inside step 4's
+   `Supervisor.start_link/2` call, as soon as `Letflow.
+   Supervisor.Pollers.init/1` runs.
+6. `assert whereis_result != nil` — the AC2 assertion itself.
+7. No further app restart is needed for cleanup: step 4 already leaves
+   `:letflow` running normally (this was a real boot, not a test double);
+   step 1's `on_exit/1` deleting `:pollers_init_probe` is the only
+   teardown required. `Ecto.Adapters.SQL.Sandbox`'s pool for `Letflow.
+   Repo` reverts to its documented default ownership mode (`:manual`) on
+   this fresh start — this suite's `test/test_helper.exs` never calls
+   `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :manual)` itself
+   (confirmed by grep), i.e. `:manual` is already the suite's implicit
+   baseline rather than something this test's restart could regress.
+
+### 4.4 Concrete counterfactual trace (both orderings)
+
+**Correct order (today's actual, and §2's specified,
+`[Infrastructure, Pollers, Http]`):**
+
+1. Step 2 tears down the old tree; `Obs.Alerts.TaskSupervisor` is `nil`.
+2. Step 4's `Supervisor.start_link/2` starts child 1,
+   `Letflow.Supervisor.Infrastructure` — by `Supervisor`'s own contract,
+   this child's `start_link/1` (which runs its full 17-child `init/1` to
+   completion, per §1.1, including registering `Obs.Alerts.TaskSupervisor`
+   as its LAST child) must return `{:ok, pid}` before the top-level
+   supervisor moves on to child 2.
+3. Child 2, `Letflow.Supervisor.Pollers`, starts next. Its `init/1` runs
+   the probe (§4.2): `Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)`
+   is a live pid, because step 2 above already fully completed.
+4. Probe sends `{:pollers_init_whereis, pid}` (non-nil) to `test_pid`.
+   `assert whereis_result != nil` → **PASS.**
+
+**Swapped-order regression (the exact fault AC2 exists to catch — §2's
+list accidentally edited to `[Pollers, Infrastructure, Http]`):**
+
+1. Step 2 tears down the old tree identically; `Obs.Alerts.TaskSupervisor`
+   is `nil` — this is a real, fresh cold boot, so there is no leftover
+   registration from any earlier boot to mask the regression (this is the
+   exact gap iteration 1's mechanism had: it never got `Obs.Alerts.
+   TaskSupervisor` back to `nil` before triggering the child it was
+   testing).
+2. Step 4's `Supervisor.start_link/2` now starts child 1, which under
+   this regression is `Letflow.Supervisor.Pollers`. Its `init/1` runs
+   the probe IMMEDIATELY, as the very first child startup in the whole
+   tree — `Letflow.Supervisor.Infrastructure` has not been started at
+   all yet (it is child 2 in this broken list; `Supervisor.start_link/2`
+   starts children strictly in order, one complete `start_link` before
+   the next begins). `Process.whereis(Letflow.Obs.Alerts.TaskSupervisor)`
+   returns `nil`.
+3. Probe sends `{:pollers_init_whereis, nil}` to `test_pid`.
+   `assert whereis_result != nil` → **FAILS**, correctly catching the
+   regression.
+4. (For completeness, matching CODE-DESIGN-VALIDATOR's own observation:
+   `Letflow.Supervisor.Infrastructure` then starts second and finishes
+   without crashing, and the application as a whole still reaches a
+   "booted" state — under `config/test.exs`'s gates, `Pollers` starting
+   first is empty/harmless. This is exactly why a post-hoc "is the app
+   up" check has zero power here, and exactly why this design instead
+   captures the probe's argument via message-passing at the precise
+   moment `Pollers.init/1` ran, before Infrastructure ever started — the
+   assertion does not depend on the final, fully-booted state at all.)
+
+This is the same rigor as the ISS-0224/ISS-0429 static-order argument in
+§1.1, applied to a dynamic (runtime-observed) property instead of a
+list-position fact, because AC2's own text specifically asks for a test,
+not review judgment alone.
 
 ## 5. AC4's crash-loop-isolation-test mechanism — exact design
 
-**Mechanism: a test-only, env-var-gated guard clause at the top of
+**Mechanism: a test-only, double-gated guard clause at the top of
 `Letflow.Scheduler.Poller.handle_info(:tick, state)` that unconditionally
-raises when the flag is set — never referenced by any committed
-`config/*.exs` file, so it changes production behavior only when a test
-explicitly flips it at runtime.**
+raises when both gates are open — structurally unreachable in a compiled
+dev/prod release, matching §4.2's fix for the same class of hook.**
 
-Exact shape: `Letflow.Scheduler.Poller.handle_info(:tick, state)`'s body
-gains one guard as its first expression: if
-`Application.get_env(:letflow, :force_poller_crash, false)` is true,
+### 5.1 Double gate (fix for CODE-DESIGN-VALIDATOR's second issue)
+
+`Letflow.Scheduler.Poller` gains its own module attribute, resolved once
+at compile time, reusing the SAME existing config key as §4.2 (not a new
+one — same AC7 rationale, same REVIEWER-facing naming note applies here
+too):
+
+`@poller_test_hooks_enabled? Application.compile_env(:letflow,
+:activation_test_hooks_enabled?, false)` — same shape as §4.2's
+`@supervisor_test_hooks_enabled?`, a separate module-local attribute
+reading the same config key (each module resolves its own compile-time
+constant independently; no shared cross-module state is needed or
+implied).
+
+`handle_info(:tick, state)`'s body gains one guard as its first
+expression: if `@poller_test_hooks_enabled?` is `true` **and**
+`Application.get_env(:letflow, :force_poller_crash, false)` is `true`,
 `raise "forced crash for REQ-219 AC4 crash-loop isolation test"`
 immediately, before any of the six existing per-tenant operations run.
-Default `false`, read fresh per-call (mirrors this module's own existing
-"config read fresh on every tick" convention, per its moduledoc) — no
-`config/*.exs` file sets this key (AC7's "no config file changes" bar
-holds), so every environment that never calls
-`Application.put_env(:letflow, :force_poller_crash, true)` is completely
-unaffected.
+The runtime `Application.get_env/3` check is kept (read fresh per-call,
+mirroring this module's own existing "config read fresh on every tick"
+convention) IN ADDITION TO the compile-time gate, not instead of it — the
+runtime check is what lets one specific test flip the behavior on/off
+without a fresh compile, while the compile-time gate is what makes the
+whole guard clause dead code (`@poller_test_hooks_enabled?` folds to a
+literal `false`) in any dev/prod build, regardless of any runtime
+`Application.put_env(:letflow, :force_poller_crash, true)` call a future
+ops script or console session might make — closing exactly the residual
+production risk CODE-DESIGN-VALIDATOR flagged (iteration 1's single
+runtime gate relied solely on "no config file happens to set this key
+today," which does not protect against that call ever being made against
+a live release). No `config/*.exs` file needs a new entry for either gate
+(AC7 holds): `:force_poller_crash` is never set by any config file,
+exactly as in iteration 1, and `:activation_test_hooks_enabled?` is
+already `true` under test today (`config/test.exs:209`, predates this
+requirement).
 
 **Test procedure** (same test file/module as §4, `async: false`):
 
@@ -406,11 +612,14 @@ This is the ONE piece of this design that touches a file
 (`lib/letflow/scheduler/poller.ex`) outside the three new supervisor
 modules and `application.ex` — flagged explicitly (also in §7) since
 ELIXIR-DEV must add this guard clause for AC4 to be testable at all, and
-REVIEWER should confirm a single `Application.get_env/3`-gated `raise`,
-defaulting to `false` and unreferenced by any config file, is an
-acceptable, test-only addition rather than scope creep — it changes no
-production behavior in any environment that does not call
-`Application.put_env(:letflow, :force_poller_crash, true)`.
+REVIEWER should confirm the double-gated `raise` (§5.1 — compile-time
+`@poller_test_hooks_enabled?` AND runtime `:force_poller_crash`,
+defaulting to `false`/unreferenced by any config file) is an acceptable,
+test-only addition rather than scope creep — it changes no production
+behavior in any environment that does not both (a) compile with
+`:activation_test_hooks_enabled?: true` (only `config/test.exs` does)
+and (b) call `Application.put_env(:letflow, :force_poller_crash, true)`
+at runtime.
 
 ## 6. Empty-children-list behavior for `Letflow.Supervisor.Pollers`
 
@@ -455,10 +664,25 @@ REVIEWER checklist, not a suggestion):
   poller under Ecto sandbox / any sustained per-tick fault no longer
   takes down `Letflow.Repo` or Bandit); the sibling-restart consequence
   noted in §3 (both pollers restart together when this supervisor's own
-  budget is exhausted).
+  budget is exhausted); the `@supervisor_test_hooks_enabled?`/
+  `pollers_init_probe` double gate (§4.2), including the explicit note
+  that it deliberately reuses `activation.ex`'s existing
+  `:activation_test_hooks_enabled?` config key rather than a new one, to
+  satisfy AC7's "no config file changes" bar — REVIEWER should confirm
+  this reuse is an acceptable, explicitly-flagged trade rather than
+  scope creep or accidental coupling between the activation and
+  supervisor test seams (the two features share nothing but this one
+  boolean compile-time gate).
 * **`Letflow.Supervisor.Http`**: the `:start_http` gate and ISS-0015's
   port-collision-under-test rationale (relocated verbatim from today's
   `http_child/0` comment); OTP-default restart intensity, unchanged.
+* **`Letflow.Scheduler.Poller`** (existing module, not one of the three
+  new ones, but touched by §5.1): its moduledoc must gain the same
+  `@poller_test_hooks_enabled?`/`:force_poller_crash` double-gate note as
+  `Letflow.Supervisor.Pollers` above, including the same
+  reused-config-key callout, so a future reader of `poller.ex` alone
+  (without cross-referencing this design doc) understands why the guard
+  clause exists and why it is safe in a compiled release.
 * **`Letflow.Application`**: its own `@moduledoc` (today `false`) may
   stay `false` — REQ-219 does not require documenting the top-level
   module itself beyond what `start/2`'s own shape (§2) already makes
@@ -486,11 +710,19 @@ REVIEWER checklist, not a suggestion):
   Supervisor.Infrastructure)` returns the 17 expected ids in order, and
   a targeted ISS-0224 check (SandboxPool.TaskSupervisor's position
   precedes SandboxPool's).
-* `test/letflow/supervisor/pollers_test.exs` (new) — AC2 (§4), AC4 (§5),
-  AC7 (empty-children-list-under-`config/test.exs`'s-current-settings,
-  §6 — a trivial `Process.whereis(Letflow.Supervisor.Pollers) != nil`
-  plus `:supervisor.which_children/1` returning `[]` under the
-  suite's own default config, no override needed).
+* `test/letflow/supervisor/pollers_test.exs` (new) — AC2 (§4.3, a genuine
+  `Application.stop(:letflow)` + `Application.ensure_all_started(:letflow)`
+  cold-boot test — the one test in this design that stops/restarts the
+  whole application, so it should run LAST in this file, after AC4's and
+  AC7's tests below, to avoid perturbing them with an extra full-app
+  restart if it can be avoided; no acceptance criterion requires a
+  specific order, this is a runtime-hygiene suggestion for TEST-DESIGNER,
+  not a gate), AC4 (§5, targeted `Letflow.Supervisor.Pollers` restart —
+  unaffected by the AC2 fix, no full-app restart needed here), AC7
+  (empty-children-list-under-`config/test.exs`'s-current-settings, §6 — a
+  trivial `Process.whereis(Letflow.Supervisor.Pollers) != nil` plus
+  `:supervisor.which_children/1` returning `[]` under the suite's own
+  default config, no override needed).
 * `test/letflow/supervisor/http_test.exs` (new, small) — AC6: under
   `config/test.exs`'s `start_http: false`, `Letflow.Supervisor.Http`
   starts with zero children (same empty-list argument as §6).
@@ -512,12 +744,27 @@ REVIEWER checklist, not a suggestion):
   (§5 step 2) should itself be factored into a shared `test/support/`
   helper** (mirroring `test/support/admission_test_helpers.ex`'s
   `restart_admission!/2` precedent) rather than inlined per test file —
-  left to TEST-DESIGNER; both `pollers_test.exs`'s AC2 and AC4 tests
-  restart the same supervisor by the same mechanism, so a shared
-  `restart_pollers!/1`-shaped helper (taking the env overrides to apply)
-  is likely worth extracting, but this design does not mandate the
-  exact helper signature since it carries no behavioral consequence for
-  the acceptance criteria themselves.
+  left to TEST-DESIGNER; §5's AC4 test restarts `Letflow.
+  Supervisor.Pollers` by the targeted `terminate_child`/`restart_child`
+  mechanism, so a `restart_pollers!/1`-shaped helper (taking the env
+  overrides to apply) is likely worth extracting for that ONE test, but
+  this design does not mandate the exact helper signature since it
+  carries no behavioral consequence for the acceptance criteria
+  themselves. (Note: this is now scoped to §5/AC4 only — §4.3's AC2 test,
+  after this rework, uses a full `Application.stop/1` +
+  `ensure_all_started/1` cycle instead, a structurally different and
+  heavier mechanism not sharing a helper with the targeted-restart one.)
+* **Q4 — whether `:logger.add_primary_filter/2` actually raises (vs.
+  returns an ignored error tuple) on a duplicate filter id** (§4.3 step
+  3's rationale) is left for ELIXIR-DEV/TEST-RUNNER to observe empirically
+  when this test is first run (this design environment had no reachable
+  Elixir/OTP runtime to verify it directly). §4.3 step 3 already removes
+  the primary filter defensively before every cold-boot restart
+  specifically so this design does not depend on the answer either way —
+  if a future spike shows the removal step is unnecessary, it is still
+  correct to keep it (a no-op removal-then-readd is not a hazard), so
+  this open question does not block implementation, only explains why
+  the defensive step exists.
 * **Q3 — REQ-220's dependency on this requirement (`depends_on:
   [REQ-219]`)** confirms REQ-220's own consolidated Task.Supervisor
   rationale doc (its AC1) is written against `Letflow.

@@ -537,34 +537,65 @@ defmodule Letflow.Engine.TransitionTest do
   end
 
   # ---------------------------------------------------------------------
-  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for the 1
-  # remaining node_type() variant outside the 7-way dispatch (REQ-062 gave
-  # :SUB_PROCESS its own real dispatch clause -- design doc §2.3/§2.4 -- and
+  # Beyond REQ-044's 6 bare acceptance criteria -- the catch-all for every
+  # node_type() variant outside the real dispatch table (REQ-062 gave
+  # :SUB_PROCESS its own real dispatch clause -- design doc §2.3/§2.4 --
   # REQ-187 gave :TIMER its own real dispatch clause -- design doc §1.4 --
-  # narrowing the catch-all down to 1; see the "-- :SUB_PROCESS
-  # entry/completion (REQ-062)" describe blocks below and
-  # test/letflow/engine/sub_process_test.exs for :SUB_PROCESS's own
-  # coverage, and the "-- :TIMER" describe block below for :TIMER's own
-  # coverage), plus a bogus atom. Not separately named by an AC (only the
-  # 5-way dispatch is), but necessary for transition/3's own "never raises"
-  # totality bar (design doc §6.6) and cheap to lock in as a regression
-  # test, matching the test/letflow/definitions/graph_test.exs precedent of
-  # testing beyond the bare AC list where the design doc flags a real,
-  # deliberate behavior.
+  # and REQ-215 gave :SERVICE_TASK its own real dispatch clause -- design
+  # doc §1.3/§1.4, lib/letflow/design/req215-service-task-engine-wiring.md
+  # -- narrowing the catch-all down to 0 real Graph.node_type() variants;
+  # see the "-- :SUB_PROCESS entry/completion (REQ-062)" describe blocks
+  # below, test/letflow/engine/sub_process_test.exs, the "-- :TIMER"
+  # describe block below, and the "-- :SERVICE_TASK" describe block below
+  # for each one's own coverage), plus a bogus atom -- the catch-all itself
+  # is still real (Node.t().node_type is not a closed dialyzer-enforced
+  # union at the atom level, so a malformed definition_snapshot could still
+  # reach it). Not separately named by an AC (only the 5-way dispatch is),
+  # but necessary for transition/3's own "never raises" totality bar
+  # (design doc §6.6) and cheap to lock in as a regression test, matching
+  # the test/letflow/definitions/graph_test.exs precedent of testing beyond
+  # the bare AC list where the design doc flags a real, deliberate behavior.
   # ---------------------------------------------------------------------
 
-  describe "transition/3 -- catch-all for node types outside the 7-way dispatch (design doc §6.6, beyond the bare AC list)" do
-    test "SERVICE_TASK and an unrecognized node_type atom both return a named error, never raise" do
-      for {node_type, node_id} <- [
-            {:SERVICE_TASK, "svc"},
-            {:NOT_A_REAL_TYPE, "bogus"}
-          ] do
-        g = graph([node(node_id, node_type)], [])
-        state = instance_state([token(node_id, "t1")])
+  describe "transition/3 -- catch-all for node types outside the 8-way dispatch (design doc §6.6, beyond the bare AC list)" do
+    test "an unrecognized node_type atom returns a named error, never raises" do
+      g = graph([node("bogus", :NOT_A_REAL_TYPE)], [])
+      state = instance_state([token("bogus", "t1")])
 
-        assert Transition.transition(g, state, {:advance_token, "t1"}) ==
-                 {:error, {:node_type_not_yet_implemented, node_type, node_id}}
-      end
+      assert Transition.transition(g, state, {:advance_token, "t1"}) ==
+               {:error, {:node_type_not_yet_implemented, :NOT_A_REAL_TYPE, "bogus"}}
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-215 -- :SERVICE_TASK is no longer part of the catch-all above; it
+  # has its own real dispatch clause (design doc §1.3/§1.4,
+  # lib/letflow/design/req215-service-task-engine-wiring.md). This one test
+  # here exists only to lock in, at this file's own "beyond the bare AC
+  # list" catch-all boundary, that :SERVICE_TASK genuinely left the
+  # catch-all (a regression here would otherwise only be caught in a
+  # different file) -- mirrors the ":TIMER entry" test below exactly.
+  # ---------------------------------------------------------------------
+
+  describe "transition/3 -- :SERVICE_TASK entry (REQ-215, design doc §1.4)" do
+    test "a token freshly arriving at a SERVICE_TASK node is NOT caught by the node_type_not_yet_implemented catch-all" do
+      g = graph([node("svc", :SERVICE_TASK)], [])
+      state = instance_state([token("svc", "t1")])
+
+      assert {:ok, new_state, [{:service_task_dispatch_requested, "t1", "svc"}]} =
+               Transition.transition(g, state, {:advance_token, "t1"})
+
+      assert new_state.pending_service_task_nodes == [
+               %Letflow.Engine.Token{
+                 token_id: "t1",
+                 node_id: "svc",
+                 branch_id: nil,
+                 waiting_child_instance_id: nil
+               }
+             ]
+
+      assert new_state.pending_task_nodes == []
+      assert new_state.tokens == state.tokens
     end
   end
 

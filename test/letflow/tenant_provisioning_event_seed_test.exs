@@ -287,7 +287,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # ---------------------------------------------------------------------------------
 
   describe "OQ-1: replay_migrations/2 re-run against an already-seeded tenant stays idempotent" do
-    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 12 rows are not duplicated" do
+    test "a second replay_migrations/2 call for the same tenant still returns :ok overall, and the 13 rows are not duplicated" do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       assert {:ok, _} = TenantProvisioning.replay_migrations(tenant_id)
@@ -298,7 +298,10 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
           []
         )
 
-      assert count == 12
+      # REQ-215 (lib/letflow/design/req215-service-task-engine-wiring.md §3.2)
+      # added SERVICE_TASK_COMPLETED to @platform_event_type_seed_attrs,
+      # raising the seeded total from 12 to 13.
+      assert count == 13
 
       # And the seeded types are still all usable after the re-seed no-op.
       attrs = append_attrs("TASK_COMPLETED", minimal_payload_for("TASK_COMPLETED"))
@@ -316,12 +319,13 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
   # one test covers both halves"
   #
   # This tree cannot literally provision a tenant under the pre-REQ-140 code (the
-  # only @platform_event_type_seed_attrs this module has IS the 10-entry, REQ-140-plus-REQ-186
-  # list), so "provisioned BEFORE this change" is reproduced structurally instead:
-  # provision a tenant normally (seeding all 12 rows, since replay_migrations/2 is
+  # @platform_event_type_seed_attrs list has since grown further, most recently
+  # REQ-215's SERVICE_TASK_COMPLETED entry -- 13 entries total as of this test),
+  # so "provisioned BEFORE this change" is reproduced structurally instead:
+  # provision a tenant normally (seeding all 13 rows, since replay_migrations/2 is
   # already generic over the list's length per REQ-140's design §5.1), then
   # directly delete the exact 3 rows REQ-140 added -- reproducing the
-  # only-9-rows-present state a pre-REQ-140 tenant would actually be in -- and
+  # only-10-rows-present state a pre-REQ-140 tenant would actually be in -- and
   # confirm a subsequent replay_migrations/2 call (the REAL, already-shipped
   # maybe_seed_platform_event_types/2, unmodified by this file) re-adds exactly
   # those 3 rows. A second replay_migrations/2 call after that must be a pure
@@ -334,7 +338,9 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       %{tenant_id: tenant_id, schema_name: schema_name} = provisioned_tenant()
 
       # Reproduce the pre-REQ-140 (6-row) state: delete exactly the 3 rows
-      # REQ-140 added, leaving the other 6 (ISS-0072's own set) untouched.
+      # REQ-140 added, leaving the other rows (ISS-0072's own 6, plus every
+      # later addition -- TIMER_FIRED/effect_applied/
+      # ordering_lag_threshold_exceeded/SERVICE_TASK_COMPLETED) untouched.
       req140_types = [
         "DEFINITION_PROMOTED",
         "DEFINITION_VERSION_ROLLED_BACK",
@@ -350,7 +356,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       count_before =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_before == 9
+      assert count_before == 10
 
       # First replay_migrations/2 call after the simulated pre-existing state --
       # backfills the 3 missing rows.
@@ -374,6 +380,7 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
                  "DEFINITION_VERSION_ROLLED_BACK",
                  "PROMOTION_ASSERTION_TEARDOWN_FAILED",
                  "TIMER_FIRED",
+                 "SERVICE_TASK_COMPLETED",
                  "effect_applied",
                  "ordering_lag_threshold_exceeded"
                ])
@@ -403,13 +410,13 @@ defmodule Letflow.TenantProvisioningEventSeedTest do
       assert event.event_type == "DEFINITION_PROMOTED"
 
       # Second replay_migrations/2 call: a no-op, still returns success, and
-      # does NOT duplicate any of the 10 rows.
+      # does NOT duplicate any of the 13 rows.
       assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant_id)
 
       count_after_second_call =
         Repo.aggregate(EventType, :count, prefix: schema_name)
 
-      assert count_after_second_call == 12
+      assert count_after_second_call == 13
     end
   end
 end

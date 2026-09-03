@@ -41,6 +41,15 @@ defmodule Letflow.Engine.Transition do
   before it; `dispatch_timer_arrival/3` reads only its own already-supplied
   `token`/`node.id` arguments and never resolves `node.attributes["duration_iso8601"]`
   or reads a clock, so this extension adds no new `Repo`/clock call.
+  REQ-215 extends `pending_event()` with a fifth variant,
+  `{:service_task_dispatch_requested, token_id, node_id}` — the token is
+  appended to `InstanceState.pending_service_task_nodes`, a new list field
+  disjoint from `pending_task_nodes` (§1.1 of
+  `lib/letflow/design/req215-service-task-engine-wiring.md`).
+  `dispatch_service_task/3` reads only its own already-supplied
+  `token`/`node.id` arguments and never resolves `node.attributes`, renders a
+  URL, or performs any HTTP/file call, so this extension adds no new impure
+  dependency.
 
   Verification (grep/`mix xref`-checkable, matching the precedent
   `Letflow.Definitions.Graph`'s own design already established):
@@ -128,6 +137,14 @@ defmodule Letflow.Engine.Transition do
   clock itself; the impure caller re-resolves `node_id` against its own
   `Graph.t()` to compute `fire_at` and calls `Letflow.Scheduler.create/2`.
   It deliberately carries no duration and no timestamp.
+  `{:service_task_dispatch_requested, token_id, node_id}` is REQ-215's own
+  addition (`lib/letflow/design/req215-service-task-engine-wiring.md` §1.2)
+  — the same pattern's fifth variant: `dispatch_service_task/3` leaves the
+  token in place and returns this instead of parsing `node.attributes`,
+  rendering a URL template, or performing any HTTP call itself; the impure
+  caller re-resolves `node_id` against its own `Graph.t()`, parses the
+  SERVICE_TASK config, renders/validates the URL, and INSERTs the first
+  `service_task_dispatches` row. It carries no config and no HTTP detail.
   """
   @type pending_event ::
           {:parallel_split, origin_token_id :: String.t(), gateway_node_id :: String.t(),
@@ -137,6 +154,7 @@ defmodule Letflow.Engine.Transition do
           | {:parallel_join_cancelled, join_node_id :: String.t(), origin_token_id :: String.t()}
           | {:sub_process_start, token_id :: String.t(), node_id :: String.t()}
           | {:timer_armed, token_id :: String.t(), node_id :: String.t()}
+          | {:service_task_dispatch_requested, token_id :: String.t(), node_id :: String.t()}
 
   @typedoc """
   Every failure `transition/3` can return. `:unknown_event_type` and
@@ -324,11 +342,20 @@ defmodule Letflow.Engine.Transition do
     dispatch_timer_arrival(instance_state, token, node)
   end
 
-  # Catch-all: :SERVICE_TASK (the 1 remaining variant of
-  # Letflow.Definitions.Graph.node_type()'s 8-variant union not part of this
-  # module's own dispatch), and any node whose node_type is not one of the 8
-  # known atoms at all. Necessary for transition/3 to be total over every
-  # value Node.t().node_type can actually hold -- a partial match with no
+  defp dispatch_node(
+         _definition_snapshot,
+         instance_state,
+         token,
+         %Node{node_type: :SERVICE_TASK} = node
+       ) do
+    dispatch_service_task(instance_state, token, node)
+  end
+
+  # Catch-all: any node whose node_type is not one of the 8 known atoms at
+  # all (every real Letflow.Definitions.Graph.node_type() variant now has
+  # its own dispatch_node/4 clause above, REQ-215's :SERVICE_TASK clause
+  # being the last). Necessary for transition/3 to be total over every value
+  # Node.t().node_type can actually hold -- a partial match with no
   # catch-all clause would raise on any of these, violating the purity
   # contract's "never raise" bar (design doc §6.6).
   defp dispatch_node(_definition_snapshot, _instance_state, _token, %Node{
@@ -460,12 +487,20 @@ defmodule Letflow.Engine.Transition do
   # struct-updated copy with waiting_child_instance_id already cleared) --
   # this function itself performs no clearing, only edge evaluation +
   # advance_token/3.
+  #
+  # REQ-215 design doc §1.5 -- widened from `defp` to `@doc false def` so
+  # Letflow.Engine.advance_after_service_task_outcome/4 (a different module)
+  # can reuse this exact algorithm directly, rather than adding a second,
+  # redundant public wrapper with no new logic (Decision (a), matching
+  # advance_after_timer_fired/3's own technically-public-but-undocumented
+  # cross-module precedent, engine.ex:1895). Body unchanged.
+  @doc false
   @spec advance_off_completed_node(Graph.t(), InstanceState.t(), Token.t(), [Graph.Edge.t()]) ::
           {:ok, InstanceState.t(), [pending_event()]}
           | {:error,
              {:no_matching_edge, node_id :: String.t(),
               evaluated_conditions :: [evaluated_condition()]}}
-  defp advance_off_completed_node(_definition_snapshot, instance_state, token, outgoing_edges) do
+  def advance_off_completed_node(_definition_snapshot, instance_state, token, outgoing_edges) do
     {conditioned_edges, default_candidates} =
       Enum.split_with(outgoing_edges, &really_conditioned?/1)
 
@@ -611,6 +646,31 @@ defmodule Letflow.Engine.Transition do
          id: node_id
        }) do
     {:error, {:token_not_at_timer, node_type, node_id}}
+  end
+
+  # --- :SERVICE_TASK (REQ-215 design doc §1.4) --------------------------------
+
+  # Entry: a token landing on a :SERVICE_TASK node. The token's position is
+  # not changed -- a :SERVICE_TASK node has no automatic outgoing traversal,
+  # the same async-park shape as dispatch_human_task/3 (§0 precedent table).
+  # Zero I/O, zero HTTP call here -- this module's own "Purity" moduledoc
+  # section; resolving node.attributes into a Config.t(), rendering the URL
+  # template, and INSERTing the first service_task_dispatches row is
+  # entirely the impure caller's job (Letflow.Engine's
+  # prepare_service_task_dispatch/5), triggered by the
+  # {:service_task_dispatch_requested, ...} pending_event() this clause
+  # emits. The token is appended to pending_service_task_nodes (§1.1's new
+  # InstanceState field, disjoint from pending_task_nodes) -- mirrors
+  # dispatch_human_task/3's exact "append to a list field, emit one park
+  # event, unchanged token position" shape, with pending_task_nodes swapped
+  # for pending_service_task_nodes.
+  @spec dispatch_service_task(InstanceState.t(), Token.t(), Node.t()) ::
+          {:ok, InstanceState.t(), [pending_event()]}
+  defp dispatch_service_task(%InstanceState{} = instance_state, %Token{} = token, %Node{} = node) do
+    new_pending = instance_state.pending_service_task_nodes ++ [token]
+
+    {:ok, %InstanceState{instance_state | pending_service_task_nodes: new_pending},
+     [{:service_task_dispatch_requested, token.token_id, node.id}]}
   end
 
   # --- :EXCLUSIVE_GATEWAY (REQ-050 design doc §5, EE-05) ----------------------

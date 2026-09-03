@@ -50,6 +50,20 @@ defmodule Letflow.Engine.InstanceState do
   reaching the same join node while an earlier cohort is still outstanding
   (e.g. loop re-entry) would overwrite the earlier entry — out of scope for
   this requirement, flagged as an open question (design doc §12.1).
+
+  ## `pending_service_task_nodes` (REQ-215)
+
+  Added by `lib/letflow/design/req215-service-task-engine-wiring.md` §1.1:
+  the `:SERVICE_TASK`-node analogue of `pending_task_nodes`, appended to by
+  `Letflow.Engine.Transition`'s `dispatch_service_task/3` alone. Deliberately
+  a second, disjoint list field rather than an overload of
+  `pending_task_nodes` — `pending_task_nodes` is documented (below) as the
+  guard for REQ-047's `tasks`-row materialization, and every one of its
+  existing consumers assumes every entry becomes a human-facing `tasks` row.
+  A SERVICE_TASK dispatch never becomes a `tasks` row (it becomes a
+  `service_task_dispatches` row, a distinct schema with distinct
+  pending/advanced/given_up lifecycle semantics, no human actor) — a token
+  parked here never appears in `pending_task_nodes` and vice versa.
   """
 
   alias Letflow.Engine.JoinCounter
@@ -62,6 +76,7 @@ defmodule Letflow.Engine.InstanceState do
     tokens: [],
     variables: %{},
     pending_task_nodes: [],
+    pending_service_task_nodes: [],
     join_counters: %{}
   ]
 
@@ -73,6 +88,7 @@ defmodule Letflow.Engine.InstanceState do
           tokens: [Token.t()],
           variables: map(),
           pending_task_nodes: [Token.t()],
+          pending_service_task_nodes: [Token.t()],
           join_counters: %{optional(String.t()) => JoinCounter.t()}
         }
 end

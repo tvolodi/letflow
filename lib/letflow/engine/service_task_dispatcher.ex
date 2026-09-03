@@ -461,6 +461,61 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   end
 
   # ===========================================================================
+  # cancel_pending_dispatches/4 -- REQ-215 design doc §4, cancellation wiring
+  # ===========================================================================
+
+  @doc """
+  `Letflow.Engine.cancel_instance/3`'s own `:service_task_dispatch_cancellations`
+  Multi step (design doc §4) — marks every still-`"pending"`
+  `service_task_dispatches` row for `instance_id` as `"given_up"`, in the
+  SAME transaction as the instance's own status flip. Mirrors
+  `Letflow.Engine.TaskActivation.cancel_pending_timers/5`'s own
+  `update_all`-on-a-`"pending"`-status-filter shape exactly, placed here
+  (the table-owning-adjacent module) rather than on
+  `Letflow.Engine.TaskActivation` itself, for the same "table-owning-adjacent
+  module, not the schema's own defining module" reason that precedent
+  follows.
+
+  `status: "given_up"`, not `"cancelled"` — deliberate, not a typo.
+  `service_task_dispatches.status`'s own CHECK constraint
+  (`chk_service_task_dispatches_status`) admits only
+  `"pending"`/`"advanced"`/`"given_up"`; no `"cancelled"` value exists in
+  this table's own domain (the migration's own comment says so explicitly).
+  `last_failure_kind: "instance_cancelled"` is the distinguishing marker
+  instead, mirroring `cancel_task_rows/3`'s/`cancel_token_rows/3`'s own
+  established `cancelled_at`-reuse idiom, adapted to this table's own
+  narrower status domain.
+
+  `claim_due_dispatch_ids/2`'s own `WHERE d.status == "pending"` filter
+  already excludes any row this function flips to `"given_up"` — REQ-214's
+  dispatcher never dispatches a cancelled row, with zero change to that
+  query needed (AC5).
+  """
+  @spec cancel_pending_dispatches(
+          repo :: Ecto.Repo.t(),
+          instance_id :: Ecto.UUID.t(),
+          cancelled_at :: DateTime.t(),
+          prefix :: String.t()
+        ) :: {:ok, non_neg_integer()}
+  def cancel_pending_dispatches(repo, instance_id, cancelled_at, prefix) do
+    {count, _updated} =
+      ServiceTaskDispatch
+      |> where([d], d.instance_id == ^instance_id and d.status == "pending")
+      |> repo.update_all(
+        [
+          set: [
+            status: "given_up",
+            dispatched_at: cancelled_at,
+            last_failure_kind: "instance_cancelled"
+          ]
+        ],
+        prefix: prefix
+      )
+
+    {:ok, count}
+  end
+
+  # ===========================================================================
   # poll_and_dispatch/1 -- design §5.5, the tick entry point
   # ===========================================================================
 
@@ -477,6 +532,21 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
   never by application code directly. Never raises — every per-row failure
   is caught internally (`attempt_dispatch/2`'s own `Repo.transaction/1`
   boundary) and folded into the returned counts (design §5.5, INV-STD-5).
+
+  REQ-215 design doc §3.1 -- this reduce loop is the one, sole call site for
+  `Letflow.Engine.advance_after_service_task_outcome/4`: strictly AFTER
+  `attempt_dispatch/2`'s own transaction for a given `dispatch_id` has
+  already committed and returned its typed `dispatch_outcome()`, never from
+  inside `handle_success/3`/`handle_give_up/4`'s own bodies (this module's
+  own "Scope boundary" moduledoc section — this module never calls
+  `Letflow.Engine.*` from inside its own transaction; `poll_and_dispatch/1`
+  is this module's own tick-entry orchestration function, not
+  `attempt_dispatch/2` itself, so calling out to the engine here, with an
+  already-closed transaction and an already-fully-resolved outcome in hand,
+  does not violate that boundary). `{:ok, :retry_scheduled}` and
+  `{:ok, :already_final}` outcomes need no further action and are NOT
+  passed to `advance_after_service_task_outcome/4` at all, matching
+  `fold_attempt_result/2`'s own pre-existing handling for both.
   """
   @spec poll_and_dispatch(tenant_schema :: String.t()) :: dispatch_poll_result()
   def poll_and_dispatch(tenant_schema) when is_binary(tenant_schema) do
@@ -492,18 +562,57 @@ defmodule Letflow.Engine.ServiceTaskDispatcher do
         given_up: 0
       },
       fn dispatch_id, acc ->
-        fold_attempt_result(attempt_dispatch(dispatch_id, tenant_schema), acc)
+        dispatch_id
+        |> attempt_dispatch(tenant_schema)
+        |> maybe_advance_after_outcome(dispatch_id, tenant_schema)
+        |> fold_attempt_result(acc)
       end
     )
   end
 
-  defp fold_attempt_result({:ok, {:advance, _decoded_body}}, acc),
-    do: %{acc | advanced: acc.advanced + 1}
+  # REQ-215 design doc §3.1's own call-site list: only {:advance, _} and
+  # {:give_up, _} outcomes call into Letflow.Engine.advance_after_service_task_outcome/4.
+  # An {:error, _} result from that call folds the same defensive way
+  # fold_attempt_result/2's own {:error, _reason} clause already does --
+  # counted in neither :advanced nor :given_up, not a new failure mode this
+  # module surfaces further.
+  defp maybe_advance_after_outcome(
+         {:ok, {:advance, _decoded_body}} = outcome,
+         dispatch_id,
+         tenant_schema
+       ) do
+    call_advance_after_service_task_outcome(outcome, dispatch_id, tenant_schema)
+  end
+
+  defp maybe_advance_after_outcome(
+         {:ok, {:give_up, _standalone_error_attrs}} = outcome,
+         dispatch_id,
+         tenant_schema
+       ) do
+    call_advance_after_service_task_outcome(outcome, dispatch_id, tenant_schema)
+  end
+
+  defp maybe_advance_after_outcome(other, _dispatch_id, _tenant_schema), do: other
+
+  defp call_advance_after_service_task_outcome({:ok, engine_outcome}, dispatch_id, tenant_schema) do
+    case Letflow.Engine.advance_after_service_task_outcome(
+           dispatch_id,
+           engine_outcome,
+           Repo,
+           tenant_schema
+         ) do
+      {:ok, :advanced} -> {:ok, {:advance, :applied}}
+      {:ok, :error_set} -> {:ok, {:give_up, :applied}}
+      {:ok, :already_final} -> {:ok, :already_final}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp fold_attempt_result({:ok, {:advance, _}}, acc), do: %{acc | advanced: acc.advanced + 1}
 
   defp fold_attempt_result({:ok, :retry_scheduled}, acc), do: %{acc | retried: acc.retried + 1}
 
-  defp fold_attempt_result({:ok, {:give_up, _standalone_error_attrs}}, acc),
-    do: %{acc | given_up: acc.given_up + 1}
+  defp fold_attempt_result({:ok, {:give_up, _}}, acc), do: %{acc | given_up: acc.given_up + 1}
 
   defp fold_attempt_result({:ok, :already_final}, acc), do: acc
   defp fold_attempt_result({:error, _reason}, acc), do: acc

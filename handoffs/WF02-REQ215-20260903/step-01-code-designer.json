@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF02-REQ215-20260903-step-01",
+  "run_id": "WF02-REQ215-20260903",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ215-20260903/step-01-code-designer.json",
+  "created_at": "2026-09-03T05:02:00Z",
+  "started_at": null,
+  "completed_at": "2026-09-03T14:09:12Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-215"],
+    "issue_ids": ["ISS-0411"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ215-20260903/step-00-git-setup.json",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/engine/transition.ex",
+      "lib/letflow/engine.ex"
+    ],
+    "branch_name": "feature/WF02-REQ215-20260903"
+  },
+  "task": {
+    "description": "Design REQ-215: SERVICE_TASK engine wiring (async-park dispatch, re-entry on dispatcher outcome), atop REQ-214's merged dispatch core. Produce lib/letflow/design/req215-service-task-engine-wiring.md covering the 5 SCOPE items and all 8 acceptance criteria, mirroring REQ-187's TIMER-node role."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Produced lib/letflow/design/req215-service-task-engine-wiring.md (1084 lines). First draft failed CODE-DESIGN-VALIDATOR (step-01b) with 4 BLOCKERs: real implementation code in the design doc (WF-02 Step 1b check 2e), a re-entry call-site proposal (inside ServiceTaskDispatcher.handle_success/3/handle_give_up/4) that contradicted REQ-214's own design doc line 164 and moduledoc scope boundary, an unregistered new event type (SERVICE_TASK_COMPLETED) that would hard-fail EventStore.append/2, and an incomplete error-union match in the :give_up path (missing {:error, {:instance_already_error, _}}). All 4 fixed in rework round 1 (step-01c): stripped all code blocks to @spec/@type/prose, relocated the re-entry call to ServiceTaskDispatcher.poll_and_dispatch/1's reduce loop (strictly after attempt_dispatch/2's own transaction commits), added the SERVICE_TASK_COMPLETED registration via tenant_provisioning.ex's @platform_event_type_seed_attrs mirroring the real TIMER_FIRED entry, and completed the :give_up error-union handling. Re-validation (step-01d) PASSED, all 4 fixes independently re-verified against real source, no regressions on already-cleared items. Committed as eed77d1a. RECONSTRUCTED HANDOFF: written retroactively at Step Final/RELEASE-VALIDATOR time (2026-09-03T14:09:12Z) to close a process gap RELEASE-VALIDATOR flagged -- only step-00 had been written contemporaneously, despite this design/validate/rework pipeline genuinely running via real Agent dispatches with a real commit (eed77d1a). Reconstructed from the real, on-disk design doc and the real subagent reports from this same conversation, not fabricated; created_at/started_at are approximated from adjacent real commit times since the exact original dispatch instant was not captured live.",
+    "artifacts_out": [
+      "lib/letflow/design/req215-service-task-engine-wiring.md"
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

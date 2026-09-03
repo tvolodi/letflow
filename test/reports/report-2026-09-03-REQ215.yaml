@@ -1,0 +1,285 @@
+# Test run report -- WF-02 Step 4 (Full Test Run) / WF-04 Step 1 shape
+# REQ-215 (letflow-queue task 417, GH#814) -- SERVICE_TASK engine wiring
+# (transition purity + activation-time caller + re-entry + cancellation +
+# stage-7 doc fix). Passed CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER,
+# REVIEWER, and TEST-DESIGN-VALIDATOR (mutation-tested) before reaching
+# this gate.
+#
+# RERUN (this pass): first_attempt (below, preserved) found everything
+# functionally green but blocked on `mix format --check-formatted` failing on
+# 5 files (2 lib/, 3 test/). ORCH ran `mix format` on those exact 5 files
+# (lib/letflow/engine.ex, lib/letflow/engine/service_task_dispatcher.ex,
+# test/letflow/engine/service_task_wiring_test.exs, test/letflow/engine_test.exs,
+# test/letflow/simulation/req208_meridian_test.exs) and reported the format
+# check now clean. This TEST-RUNNER rerun independently re-verified that claim
+# (did not just trust it) and re-ran the full suite once more. This report's
+# `rerun` section (below, top-level fields) is the current, authoritative
+# result; the `first_attempt` section at the bottom is kept for provenance.
+
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ215-20260903-rerun
+date_utc_start: 2026-09-03T13:01:00Z
+date_utc_end: 2026-09-03T13:19:01Z
+wall_clock_duration: "~18 min (independent format/compile re-verification, isolated REQ-215-touched-file rerun ~105s, full suite rerun ~9 min via bounded polling)"
+
+verdict: PASS
+
+git:
+  branch: feature/WF02-REQ215-20260903
+  branch_confirmed: true
+  working_tree: >
+    NOT clean (expected -- REQ-215's own uncommitted implementation/test files,
+    now including ORCH's formatting-only fix to the 5 files listed above; TEST-RUNNER
+    made no application or test code edits this rerun): modified
+    docs/migration/stage-7-simulation-uat-parity.md, lib/letflow/engine.ex,
+    lib/letflow/engine/instance_state.ex, lib/letflow/engine/service_task_dispatcher.ex,
+    lib/letflow/engine/transition.ex, lib/letflow/tenant_provisioning.ex,
+    test/letflow/engine/transition_test.exs, test/letflow/engine_test.exs,
+    test/letflow/simulation/req208_meridian_test.exs,
+    test/letflow/tenant_provisioning_event_seed_test.exs; untracked
+    test/letflow/engine/service_task_wiring_test.exs, test/specs/REQ-215.md,
+    test/reports/report-2026-09-03-REQ215.yaml. Confirmed via `git status --short`
+    at the start of this rerun.
+
+environment:
+  toolchain: local (not Docker fallback) -- mix/elixir reachable directly on PATH
+  containers: >
+    letflow-postgres-1 (port 5462, healthy, up 2 days) and letflow-keycloak-1
+    (port 8093, healthy, up 18h) already running before this rerun, confirmed via
+    `docker compose ps` -- no `docker compose up -d` needed. No untracked .env
+    LETFLOW_DB_PORT override in this workspace -- default port 5462 applied.
+  command_run: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+  TEST_PARALLEL_N: 4
+  TEST_PARALLEL_N_rationale: >
+    Same as first_attempt -- this host's documented known-good value (ISS-0219,
+    REQ-214's own report) under concurrent-sibling-session Postgres contention.
+    A handful of pre-existing erl.exe processes were observed via `tasklist` before
+    this run started, consistent with residual sibling activity.
+  polling_note: >
+    The initial foreground `sh scripts/test_parallel.sh` call was auto-moved to the
+    background by the tool itself at its own 10-minute call cap (not a choice made by
+    this agent, and not the forbidden "end turn expecting a cross-turn notification"
+    pattern -- no turn was ended). Per this role's explicit instructions, did not use
+    Monitor or wait idle for a notification to resume; instead polled the redirected
+    log file via a single bounded blocking `until grep -q "^combined:" ... ; sleep 10`
+    loop (capped at 550s) in the same style as REQ-214's report's documented
+    short-interval polling strategy. The loop found the combined result line after
+    ~290s.
+
+checks:
+  mix_format_check_formatted_reverify:
+    result: PASS
+    command: "mix format --check-formatted"
+    exit_code: 0
+    output_verbatim: "(none -- silent pass)"
+    description: >
+      Independently re-ran this exact check (did not trust ORCH's report of having
+      already fixed and re-verified it). Confirms the 5 files flagged in
+      first_attempt (lib/letflow/engine.ex, lib/letflow/engine/service_task_dispatcher.ex,
+      test/letflow/engine/service_task_wiring_test.exs, test/letflow/engine_test.exs,
+      test/letflow/simulation/req208_meridian_test.exs) are now formatted correctly,
+      along with everything else in the tree.
+
+  mix_compile_warnings_as_errors_reverify:
+    result: PASS
+    command: "mix compile --warnings-as-errors --force"
+    exit_code: 0
+    output_verbatim: |
+      Compiling 185 files (.ex)
+      Generated letflow app
+    note: "No warnings, no errors -- unchanged from first_attempt."
+
+  req215_touched_files_isolated_reverify:
+    result: PASS
+    command: >
+      MIX_ENV=test mix test test/letflow/engine/service_task_wiring_test.exs
+      test/letflow/simulation/req208_meridian_test.exs
+      test/letflow/engine/transition_test.exs test/letflow/engine_test.exs
+      test/letflow/tenant_provisioning_event_seed_test.exs --no-color
+    result_line_verbatim: "Result: 106 passed (1 property, 105 tests)"
+    failed: 0
+    note: >
+      Independently re-ran all 5 REQ-215-touched test files together in one pass
+      (first_attempt ran the two REQ-215-own files separately from the three other
+      touched files: 26 + 80 = 106, matching this rerun's combined 106 exactly).
+      Matches ORCH's reported 106/106. Only warning present is the pre-existing
+      ExUnit.Case.register_test/4 deprecation notice on transition_test.exs's
+      property test, not a failure.
+
+  test_suite_full:
+    result: PASS
+    command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+    combined_summary_line_verbatim: "combined: 3133 tests, 6 properties, 0 failures (3139/3139 passed)"
+    total: 3139
+    passed: 3139
+    failed: 0
+    properties: 6
+    example_tests: 3133
+    per_partition:
+      - partition: 1
+        line_verbatim: "partition 1: 893 tests, 4 properties, 0 failures, exit 0"
+      - partition: 2
+        line_verbatim: "partition 2: 636 tests, 0 properties, 0 failures, exit 0"
+      - partition: 3
+        line_verbatim: "partition 3: 790 tests, 0 properties, 0 failures, exit 0"
+      - partition: 4
+        line_verbatim: "partition 4: 814 tests, 2 properties, 0 failures, exit 0"
+    failed_test_names: []
+    grep_check: >
+      `grep -n "^Failed:"` against the full redirected test_parallel.sh log returned
+      zero matches -- cross-checked against the combined summary's "0 failures", not
+      relying on the summary line alone. Identical combined total (3139/3139) to
+      first_attempt's clean full-suite run, as expected for a formatting-only diff.
+
+  transition_purity_manual_grep:
+    result: PASS
+    description: >
+      Not re-run this pass -- no change to transition.ex's logic (format-only diff
+      confirmed by the check above). first_attempt's independent grep confirmation of
+      AC6 (no :httpc/HTTPoison/Req/File call site in transition.ex) stands.
+
+  stage7_doc_fix_spot_check:
+    result: PASS
+    description: >
+      Not re-run this pass -- docs/migration/stage-7-simulation-uat-parity.md was not
+      touched by the formatting fix. first_attempt's spot check of AC7 stands.
+
+known_classes_checked:
+  contention_signature_from_task_brief: >
+    Checked directly: zero occurrences of "another mix test invocation is
+    currently connected to this database" anywhere in this rerun's 4 partition-summary
+    lines or the isolated 106-test rerun output.
+  too_many_connections_contention: "Not observed this rerun (0 failures)."
+
+summary: >
+  Independently re-verified ORCH's claim rather than trusting it: `mix format
+  --check-formatted` now passes silently (exit 0) across the whole tree, `mix compile
+  --warnings-as-errors --force` is clean, and all 5 REQ-215-touched test files pass
+  106/106 together in isolation. Full suite rerun: 3139/3139 passed, 0 failures, across
+  all 4 partitions (exit 0 each) -- identical total to first_attempt's clean run, as
+  expected since the only change since then was a formatting-only diff. The single
+  blocking gap from first_attempt (mix format --check-formatted failing on 5 files) is
+  now closed. Every functional check from first_attempt (purity grep AC6, stage-7 doc
+  fix AC7) was already PASS and is unaffected by a format-only change, so not re-run
+  redundantly this pass -- only re-checked where the diff could plausibly matter
+  (format, compile, the touched tests, full suite).
+
+next_action_recommended: >
+  Ready for RELEASE-VALIDATOR. All gates now green: full suite 3139/3139, REQ-215's
+  own + touched-file tests 106/106 isolated, mix format --check-formatted clean, mix
+  compile --warnings-as-errors clean, AC6/AC7 spot checks confirmed (first_attempt).
+  No further TEST-RUNNER action needed for REQ-215.
+
+# ============================================================================
+# first_attempt: preserved verbatim below for provenance (was the sole content
+# of this file before this rerun). Superseded by the PASS verdict above.
+# ============================================================================
+first_attempt:
+  verdict: FAIL
+  date_utc_start: 2026-09-03T12:28:00Z
+  date_utc_end: 2026-09-03T12:57:31Z
+  wall_clock_duration: "~30 min total (env checks, orphan cleanup, one killed run, one clean full run ~12 min, isolated reruns, format check)"
+
+  environment:
+    toolchain: local (not Docker fallback) -- mix/elixir reachable directly on PATH
+    containers: >
+      letflow-postgres-1 (port 5462, healthy, up 2 days) and letflow-keycloak-1
+      (port 8093, healthy, up 17h) already running before this run, confirmed via
+      `docker compose ps`. No untracked .env LETFLOW_DB_PORT override in this
+      workspace (.env present but sets only QUEUE_AUTH_TOKEN and
+      LETFLOW_KEYCLOAK_PORT) -- default port 5462 applied.
+    command_run: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+    TEST_PARALLEL_N: 4
+    sibling_contention_incident: >
+      First full-suite attempt (foreground, single blocking Bash call) was killed by
+      the tool's own 10-minute call timeout while partitions 3 and 4 were still
+      actively running real queries -- this is the exact "long blocking wait
+      truncates a slow run" hazard the REQ-214 report already documented, not a test
+      failure. This left two orphaned erl.exe processes holding 21 Postgres
+      connections each after the parent script that would have cleaned them up was
+      killed. Force-terminated both PIDs and confirmed (via pg_stat_activity) their
+      connections cleared before retrying. Second attempt was launched detached
+      (nohup + disown) and polled via a sequence of bounded blocking Bash calls and
+      completed cleanly.
+
+  checks:
+    mix_compile_warnings_as_errors:
+      result: PASS
+      output_verbatim: |
+        Compiling 185 files (.ex)
+        Generated letflow app
+      note: "No warnings, no errors."
+
+    test_suite_full:
+      result: PASS
+      command: "TEST_PARALLEL_N=4 sh scripts/test_parallel.sh"
+      combined_summary_line_verbatim: "combined: 3133 tests, 6 properties, 0 failures (3139/3139 passed)"
+      total: 3139
+      passed: 3139
+      failed: 0
+      properties: 6
+      example_tests: 3133
+      per_partition:
+        - partition: 1
+          line_verbatim: "partition 1: 893 tests, 4 properties, 0 failures, exit 0"
+          own_result_line: "Result: 897 passed (4 properties, 893 tests), 3 excluded"
+        - partition: 2
+          line_verbatim: "partition 2: 636 tests, 0 properties, 0 failures, exit 0"
+          own_result_line: "Result: 636 passed, 1 excluded"
+        - partition: 3
+          line_verbatim: "partition 3: 790 tests, 0 properties, 0 failures, exit 0"
+          own_result_line: "Result: 790 passed, 9 excluded"
+        - partition: 4
+          line_verbatim: "partition 4: 814 tests, 2 properties, 0 failures, exit 0"
+          own_result_line: "Result: 816 passed (2 properties, 814 tests)"
+      failed_test_names: []
+
+    req215_own_tests_isolated:
+      result: PASS
+      command: "MIX_ENV=test mix test test/letflow/engine/service_task_wiring_test.exs test/letflow/simulation/req208_meridian_test.exs --no-color"
+      result_line_verbatim: "Result: 26 passed"
+      failed: 0
+
+    req215_other_touched_files:
+      result: PASS
+      command: "MIX_ENV=test mix test test/letflow/engine/transition_test.exs test/letflow/engine_test.exs test/letflow/tenant_provisioning_event_seed_test.exs --no-color"
+      result_line_verbatim: "Result: 80 passed (1 property, 79 tests)"
+      failed: 0
+
+    transition_purity_manual_grep:
+      result: PASS
+      description: >
+        Independently grepped lib/letflow/engine/transition.ex for
+        :httpc|HTTPoison|Req\.|File\. outside of the test suite's own self-check.
+        Only two matches, both inside the moduledoc's own documented purity-contract
+        text -- no real call site. Confirms AC6 independently.
+
+    stage7_doc_fix_spot_check:
+      result: PASS
+      description: >
+        Read docs/migration/stage-7-simulation-uat-parity.md's corrected REQ-210
+        sign-off entry directly. Matches AC7.
+
+    mix_format_check_formatted:
+      result: FAIL
+      command: "mix format --check-formatted"
+      exit_code: 1
+      unformatted_files:
+        - lib/letflow/engine.ex
+        - lib/letflow/engine/service_task_dispatcher.ex
+        - test/letflow/engine/service_task_wiring_test.exs
+        - test/letflow/engine_test.exs
+        - test/letflow/simulation/req208_meridian_test.exs
+      description: >
+        All 5 files are in REQ-215's own diff. Real, in-scope, mechanical formatting
+        gap -- every flagged file compiles and its own tests pass, but none had been
+        run through `mix format`. Not fixed here per this role's scope -- routed to
+        ELIXIR-DEV/TEST-DESIGNER. NOW FIXED -- see rerun section above.
+
+  summary: >
+    Full suite: 3139/3139 passed, 0 failures. REQ-215's own tests 26/26, touched-file
+    tests 80/80. AC6/AC7 spot-checked and confirmed. mix compile clean. HOWEVER: mix
+    format --check-formatted FAILED on 5 files -- blocked a clean PASS verdict despite
+    every functional test being green. RESOLVED in rerun above.

@@ -349,6 +349,8 @@ defmodule Letflow.Engine do
   alias Letflow.Engine.Reconstruction
   alias Letflow.Engine.SnapshotWriter
   alias Letflow.Engine.ServiceTask
+  alias Letflow.Engine.ServiceTaskDispatcher
+  alias Letflow.Engine.ServiceTaskDispatcher.ServiceTaskDispatch
   alias Letflow.Engine.SubProcess
   alias Letflow.Engine.Task
   alias Letflow.Engine.TaskActivation
@@ -432,11 +434,11 @@ defmodule Letflow.Engine do
 
     with :ok <- reject_tenant_id(attrs),
          :ok <- check_definition_reference(attrs),
-         {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, initial_variables} <- fetch_initial_variables(attrs),
          {:ok, definition} <- resolve_definition(attrs, opts) do
       correlation_key = Map.get(attrs, :correlation_key)
-      start_instance(definition, initial_variables, correlation_key, attrs, prefix)
+      start_instance(definition, initial_variables, correlation_key, attrs, tenant_id, prefix)
     end
   end
 
@@ -509,7 +511,7 @@ defmodule Letflow.Engine do
   # activate(instance_id, definition, initial_variables) to
   # activate(instance_id, graph, initial_variables) -- mechanical, avoids
   # building the same graph twice).
-  defp start_instance(definition, initial_variables, correlation_key, attrs, prefix) do
+  defp start_instance(definition, initial_variables, correlation_key, attrs, tenant_id, prefix) do
     instance_id = Ecto.UUID.generate()
     # REQ-187 design doc §3.1 -- "the arrival timestamp" (AC1) is one fixed
     # instant per hop-chain, read once here, before prepare_timer_arms/4
@@ -539,7 +541,15 @@ defmodule Letflow.Engine do
              prefix
            ),
          {:ok, prepared_timers} <-
-           prepare_timer_arms(pending_events, graph, instance_id, now) do
+           prepare_timer_arms(pending_events, graph, instance_id, now),
+         {:ok, prepared_service_task_dispatches} <-
+           prepare_service_task_dispatch_for_create(
+             pending_events,
+             graph,
+             instance_id,
+             new_instance_state.variables,
+             now
+           ) do
       persist(
         instance_id,
         definition,
@@ -549,11 +559,38 @@ defmodule Letflow.Engine do
         new_instance_state,
         prepared_children,
         prepared_timers,
+        prepared_service_task_dispatches,
+        tenant_id,
         pins,
         conflicts,
         attrs,
         prefix
       )
+    end
+  end
+
+  # create/2's own call site has no already-persisted parent instance to
+  # route an :empty_url_error into Letflow.Engine.ExecutionError against
+  # (design doc §2.1 point 3, mirroring prepare_sub_process_children/5's own
+  # "must write nothing on failure" contract) -- folds it into create/2's
+  # own {:activation_failed, _} error shape instead, aborting activation
+  # entirely.
+  defp prepare_service_task_dispatch_for_create(
+         pending_events,
+         graph,
+         instance_id,
+         variables,
+         now
+       ) do
+    case prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+      {:ok, prepared} ->
+        {:ok, prepared}
+
+      {:error, reason} ->
+        {:error, {:activation_failed, reason}}
+
+      {:empty_url_error, node_id, _variables} ->
+        {:error, {:activation_failed, {:service_task_url_rendered_empty, node_id}}}
     end
   end
 
@@ -699,6 +736,237 @@ defmodule Letflow.Engine do
     Enum.reduce(prepared_timers, multi, fn {token_id, arm_attrs}, acc_multi ->
       token_record_id = Map.fetch!(id_map, token_id)
       Scheduler.create(acc_multi, Map.put(arm_attrs, :token_id, token_record_id), prefix: prefix)
+    end)
+  end
+
+  # REQ-215 design doc §2.2 -- resolves every {:service_task_dispatch_requested,
+  # token_id, node_id} pending_event() surfaced by this hop-chain (matching
+  # prepare_timer_arms/4's own Enum.filter/reduce_while idiom exactly) into
+  # arm_attrs ready for ServiceTaskDispatch.arm_changeset/2, shared unchanged
+  # by create/2's, complete_task/3's, and advance_after_timer_fired/3's own
+  # hop chains (§2.1) -- a SERVICE_TASK's outgoing edge can lead into another
+  # SERVICE_TASK node just as readily as a :START or :TIMER edge can lead
+  # into one. `token_id` is deliberately left out of arm_attrs -- filled in
+  # once the real TokenRecord id is known (build_service_task_dispatch_multi/5,
+  # below), mirroring prepare_timer_arms/4's own deferred-token_id pattern.
+  #
+  # Unlike prepare_timer_arms/4, no "at most one per hop chain" guard is
+  # needed here (§2.5) -- build_service_task_dispatch_multi/5 keys each
+  # Multi.insert/4 step by a compound {:service_task_dispatch, token_record_id}
+  # tuple, not a bare atom, so more than one SERVICE_TASK dispatch prepared
+  # in the same hop chain (e.g. a PARALLEL_GATEWAY split reaching two
+  # SERVICE_TASK nodes) cannot collide.
+  @spec prepare_service_task_dispatch(
+          [Transition.pending_event()],
+          Graph.t(),
+          instance_id :: Ecto.UUID.t(),
+          variables :: map(),
+          now :: DateTime.t()
+        ) ::
+          {:ok, [prepared_service_task_dispatch()]}
+          | {:error, {:graph_structure_invalid, {:unknown_node_id, String.t()}}}
+          | {:error,
+             {:config_parse_failed, node_id :: String.t(), ServiceTask.config_parse_error()}}
+          | {:empty_url_error, node_id :: String.t(), variables :: map()}
+  @type prepared_service_task_dispatch :: %{
+          token_id: String.t(),
+          node_id: String.t(),
+          arm_attrs: map()
+        }
+  defp prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+    dispatch_requests =
+      Enum.filter(
+        pending_events,
+        &match?({:service_task_dispatch_requested, _token_id, _node_id}, &1)
+      )
+
+    dispatch_requests
+    |> Enum.reduce_while({:ok, []}, fn {:service_task_dispatch_requested, token_id, node_id},
+                                       {:ok, acc} ->
+      case Enum.find(graph.nodes, &(&1.id == node_id)) do
+        nil ->
+          {:halt, {:error, {:graph_structure_invalid, {:unknown_node_id, node_id}}}}
+
+        node ->
+          case resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now) do
+            {:ok, arm_attrs} ->
+              {:cont,
+               {:ok, [%{token_id: token_id, node_id: node_id, arm_attrs: arm_attrs} | acc]}}
+
+            {:error, reason} ->
+              {:halt, {:error, reason}}
+
+            {:empty_url_error, ^node_id} ->
+              {:halt, {:empty_url_error, node_id, variables}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, reason} -> {:error, reason}
+      {:empty_url_error, node_id, variables} -> {:empty_url_error, node_id, variables}
+    end
+  end
+
+  # design doc §2.2 steps 2-5. A ServiceTask.parse_config_from_node_attributes/1
+  # failure is a graph-authoring-time defect REQ-029's CHK-11-family
+  # validators are expected to have already caught -- folds into
+  # {:error, {:config_parse_failed, node_id, reason}}, aborting the whole
+  # hop-chain's Multi (same "abort, don't half-commit" contract
+  # prepare_timer_arms/4's own errors already have). A route_kind:
+  # :catalog_service config reaches step 4 (validate_rendered_url/1) with
+  # rendered_url: nil -- deliberately, not silently -- see design doc §2.2
+  # step 3 for the full rationale (no real service_catalog exists yet, so a
+  # :catalog_service row can never be usefully dispatched today regardless
+  # of which layer rejects it first).
+  defp resolve_service_task_arm_attrs(node, node_id, instance_id, variables, now) do
+    case ServiceTask.parse_config_from_node_attributes(node) do
+      {:error, reason} ->
+        {:error, {:config_parse_failed, node_id, reason}}
+
+      {:ok, %ServiceTask.Config{route_kind: :inline_url} = config} ->
+        rendered_url = render_service_task_url(config.url_template, variables)
+        finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now)
+
+      {:ok, %ServiceTask.Config{route_kind: :catalog_service} = config} ->
+        finish_service_task_arm_attrs(config, node_id, instance_id, nil, now)
+    end
+  end
+
+  defp finish_service_task_arm_attrs(config, node_id, instance_id, rendered_url, now) do
+    case ServiceTask.validate_rendered_url(rendered_url) do
+      {:error, :empty_rendered_url} ->
+        {:empty_url_error, node_id}
+
+      :ok ->
+        arm_attrs = %{
+          instance_id: instance_id,
+          node_id: node_id,
+          config_snapshot: config_snapshot_map(config, rendered_url),
+          attempt_index: 0,
+          next_attempt_at: now,
+          created_at: now
+        }
+
+        {:ok, arm_attrs}
+    end
+  end
+
+  # design doc §2.2 -- plain map projection of ServiceTask.Config.t() plus
+  # the one derived key "rendered_url", matching exactly the field set
+  # ServiceTaskDispatcher's own config_from_snapshot/1 reads back
+  # (service_task_dispatcher.ex:630-648). String-keyed, matching
+  # ServiceTaskDispatch.config_snapshot()'s own @type.
+  @spec config_snapshot_map(ServiceTask.Config.t(), rendered_url :: String.t() | nil) :: map()
+  defp config_snapshot_map(%ServiceTask.Config{} = config, rendered_url) do
+    %{
+      "route_kind" => to_string(config.route_kind),
+      "url_template" => config.url_template,
+      "service_id" => config.service_id,
+      "method" => to_string(config.method),
+      "body_template" => config.body_template,
+      "headers" => config.headers,
+      "timeout_ms" => config.timeout_ms,
+      "retry_limit" => config.retry_limit,
+      "rendered_url" => rendered_url
+    }
+  end
+
+  # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
+  # renderer. Scoped to exactly the syntax R-Co's own design doc names
+  # (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
+  # to url_template only (body_template rendering is out of this
+  # requirement's own scope, §7 Open Question 2). No existing rendering
+  # mechanism was found anywhere in this codebase to reuse (§0.1) -- this
+  # function is deliberately new, deliberately minimal, and is NOT the
+  # intended long-term shape for template rendering in this codebase: a
+  # future requirement needing richer syntax (nested paths, escaping,
+  # body_template rendering) should replace this function with a real one.
+  @spec render_service_task_url(template :: String.t() | nil, variables :: map()) ::
+          String.t() | nil
+  defp render_service_task_url(nil, _variables), do: nil
+
+  defp render_service_task_url(template, variables) when is_binary(template) do
+    Regex.replace(~r/\{\{\s*variables\.([a-zA-Z0-9_]+)\s*\}\}/, template, fn _match, key ->
+      variables |> Map.get(key) |> render_service_task_value()
+    end)
+  end
+
+  defp render_service_task_value(nil), do: ""
+  defp render_service_task_value(value) when is_binary(value), do: value
+
+  defp render_service_task_value(value) when is_number(value) or is_atom(value),
+    do: to_string(value)
+
+  defp render_service_task_value(value) when is_map(value) or is_list(value),
+    do: Jason.encode!(value)
+
+  # design doc §2.4 -- thin wrapper building ServiceTask.empty_url_context()
+  # from the hop-chain's already-in-scope values and calling
+  # ServiceTask.build_empty_url_error_attrs/1 unmodified. idempotency_key
+  # uses ServiceTask.build_idempotency_key/4 with attempt_index: 0 (no
+  # dispatch row exists yet at this failure point).
+  @spec build_service_task_empty_url_error(
+          instance_id :: Ecto.UUID.t(),
+          node_id :: String.t(),
+          variables :: map(),
+          actor_id :: Ecto.UUID.t() | nil,
+          idempotency_key :: String.t()
+        ) :: standalone_error_attrs()
+  defp build_service_task_empty_url_error(
+         instance_id,
+         node_id,
+         variables,
+         actor_id,
+         idempotency_key
+       ) do
+    context = %{
+      instance_id: instance_id,
+      node_id: node_id,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key,
+      variables: variables
+    }
+
+    ServiceTask.build_empty_url_error_attrs(context)
+  end
+
+  # REQ-215 design doc §2.5 -- wires prepare_service_task_dispatch/5's own
+  # output into the caller's already-open Multi, mirroring
+  # build_timer_arms_multi/4's own shape but calling
+  # ServiceTaskDispatch.arm_changeset/2 directly (no intermediary "create"
+  # function exists or is needed -- REQ-214's own moduledoc already
+  # documents arm_changeset/2 as "called only by REQ-215's future
+  # activation-time caller," i.e. this module). Named step key
+  # {:service_task_dispatch, token_record_id} (a compound tuple key,
+  # mirroring {:hop_chain_token_records, instance_id}'s own compound-key
+  # precedent) rather than a bare atom -- more than one SERVICE_TASK
+  # dispatch can be prepared in the same hop chain (§2.5's own note above).
+  @spec build_service_task_dispatch_multi(
+          Multi.t(),
+          [prepared_service_task_dispatch()],
+          id_map :: %{String.t() => String.t()},
+          tenant_id :: Ecto.UUID.t(),
+          prefix :: String.t()
+        ) :: Multi.t()
+  defp build_service_task_dispatch_multi(multi, prepared_dispatches, id_map, tenant_id, prefix) do
+    Enum.reduce(prepared_dispatches, multi, fn %{token_id: token_id, arm_attrs: arm_attrs},
+                                               acc_multi ->
+      token_record_id = Map.fetch!(id_map, token_id)
+      row_id = Ecto.UUID.generate()
+
+      attrs =
+        arm_attrs
+        |> Map.put(:id, row_id)
+        |> Map.put(:token_id, token_record_id)
+        |> Map.put(:tenant_id, tenant_id)
+
+      Multi.insert(
+        acc_multi,
+        {:service_task_dispatch, token_record_id},
+        ServiceTaskDispatch.arm_changeset(%ServiceTaskDispatch{}, attrs),
+        prefix: prefix
+      )
     end)
   end
 
@@ -945,6 +1213,8 @@ defmodule Letflow.Engine do
          new_instance_state,
          prepared_children,
          prepared_timers,
+         prepared_service_task_dispatches,
+         tenant_id,
          pins,
          conflicts,
          attrs,
@@ -1046,6 +1316,23 @@ defmodule Letflow.Engine do
         )
 
       build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+    end)
+    |> Multi.merge(fn changes ->
+      # REQ-215 design doc §2.1/§2.5 -- positioned alongside the timer-arms
+      # merge above (same "resolves real TokenRecord ids" precondition).
+      id_map =
+        TaskActivation.token_id_to_record_id(
+          new_instance_state.tokens,
+          Map.fetch!(changes, :token_record)
+        )
+
+      build_service_task_dispatch_multi(
+        Multi.new(),
+        prepared_service_task_dispatches,
+        id_map,
+        tenant_id,
+        prefix
+      )
     end)
     |> TaskActivation.append_multi(
       instance_id,
@@ -1699,7 +1986,9 @@ defmodule Letflow.Engine do
             complete_task_outcome: :completed,
             task: %Task{instance_id: instance_id},
             event: %{sequence_number: sequence_number},
-            transition: {:advanced, %InstanceState{} = final_instance_state}
+            transition:
+              {:advanced, %InstanceState{} = final_instance_state, _prepared_children,
+               _prepared_timers, _prepared_service_task_dispatches}
           }} = result,
          prefix
        ) do
@@ -2020,8 +2309,17 @@ defmodule Letflow.Engine do
     idempotency_key = "timer_fired:#{timer.id}"
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
-    with {:ok, prepared_timers} <-
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, prepared_timers} <-
            prepare_timer_arms(pending_events, graph, timer.instance_id, now),
+         {:ok, prepared_service_task_dispatches} <-
+           prepare_service_task_dispatch_abort_on_empty_url(
+             pending_events,
+             graph,
+             timer.instance_id,
+             advanced_state.variables,
+             now
+           ),
          {:ok, sub_process_outcome} <-
            prepare_sub_process_children_for_completion(
              advanced_state,
@@ -2084,6 +2382,27 @@ defmodule Letflow.Engine do
 
               build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
             end)
+            |> Multi.merge(fn _changes ->
+              # REQ-215 design doc §2.1 point 2/§2.5 -- every token_id in
+              # prepared_service_task_dispatches is already a real, persisted
+              # TokenRecord id by this point (same reasoning
+              # do_reconcile_token_records/4's own guard already enforces for
+              # final_instance_state as a whole), so the id_map is the
+              # identity map, mirroring the timer-arms merge immediately
+              # above.
+              id_map =
+                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                  {token_id, token_id}
+                end)
+
+              build_service_task_dispatch_multi(
+                Multi.new(),
+                prepared_service_task_dispatches,
+                id_map,
+                tenant_id,
+                prefix
+              )
+            end)
             |> append_sub_process_children_creation_multi(
               prepared_children,
               timer.instance_id,
@@ -2108,6 +2427,403 @@ defmodule Letflow.Engine do
           # failure.
           {:error, {:execution_error_not_supported_for_timer_fire, error_args}}
       end
+    end
+  end
+
+  # REQ-215 -- a :TIMER -> :SERVICE_TASK outgoing edge's own
+  # prepare_service_task_dispatch/5 call, for advance_after_timer_fired/3's
+  # own hop chain (design doc §2.1 point 2). Same "no ExecutionError wiring
+  # for the timer-fire path" scope boundary persist_timer_fired_advance/7's
+  # own {:execution_error, _} clause above already documents -- an
+  # :empty_url_error here folds into a typed error that rolls back this
+  # whole attempt the same way, rather than routing into
+  # Letflow.Engine.set_instance_error/2.
+  defp prepare_service_task_dispatch_abort_on_empty_url(
+         pending_events,
+         graph,
+         instance_id,
+         variables,
+         now
+       ) do
+    case prepare_service_task_dispatch(pending_events, graph, instance_id, variables, now) do
+      {:ok, prepared} ->
+        {:ok, prepared}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      {:empty_url_error, node_id, _variables} ->
+        {:error, {:service_task_url_rendered_empty_not_supported_for_timer_fire, node_id}}
+    end
+  end
+
+  # =========================================================================
+  # advance_after_service_task_outcome/4 (REQ-215, design doc §3) -- the
+  # SERVICE_TASK dispatcher poller's re-entry into the engine's own
+  # transition/completion machinery, once a service_task_dispatches row
+  # resolves to :advance or :give_up. Called from
+  # Letflow.Engine.ServiceTaskDispatcher.poll_and_dispatch/1's own reduce
+  # loop, STRICTLY AFTER attempt_dispatch/2's own transaction has already
+  # committed and returned its typed dispatch_outcome() -- NOT from inside
+  # handle_success/3/handle_give_up/4's own bodies (design doc §3.1's own
+  # call-site decision; ServiceTaskDispatcher's own moduledoc "Scope
+  # boundary" section forbids it from ever calling Letflow.Engine.* itself).
+  #
+  # Genuine, named divergence from advance_after_timer_fired/3's own
+  # "nests as a real Postgres SAVEPOINT inside the caller's already-open
+  # transaction" shape (design doc §3.2): this function opens its OWN
+  # Repo.transaction/1, separate from and running strictly after
+  # attempt_dispatch/2's own (already-committed) transaction. The dispatch
+  # row's own terminal-status write (handle_success/3's "advanced" or
+  # handle_give_up/4's "given_up") and this function's own EventStore.append/2
+  # (:advance) or set_instance_error/2 call (:give_up) are therefore always
+  # two separate commits, never one atomic transaction -- a deliberate,
+  # flagged gap (design doc §3.2/§3.3/§7 Open Question 1), the only shape
+  # consistent with REQ-214's own scope boundary.
+  # =========================================================================
+
+  @doc false
+  @spec advance_after_service_task_outcome(
+          dispatch_id :: Ecto.UUID.t(),
+          outcome :: ServiceTaskDispatcher.dispatch_outcome(),
+          repo :: Ecto.Repo.t(),
+          prefix :: String.t()
+        ) ::
+          {:ok, :advanced}
+          | {:ok, :error_set}
+          | {:ok, :already_final}
+          | {:error, {:instance_not_active, atom()}}
+          | {:error, term()}
+  def advance_after_service_task_outcome(dispatch_id, {:advance, decoded_body}, repo, prefix) do
+    repo.transaction(fn ->
+      case advance_service_task_dispatch(dispatch_id, decoded_body, repo, prefix) do
+        {:ok, result} -> result
+        {:error, reason} -> repo.rollback(reason)
+      end
+    end)
+  end
+
+  def advance_after_service_task_outcome(
+        dispatch_id,
+        {:give_up, standalone_error_attrs},
+        _repo,
+        prefix
+      ) do
+    give_up_service_task_dispatch(dispatch_id, standalone_error_attrs, prefix)
+  end
+
+  # design doc §3.2 step 1 -- re-locks the dispatch row by dispatch_id (a
+  # second lock-acquire on the same row is required regardless, since
+  # attempt_dispatch/2's own transaction, and its FOR UPDATE lock, has
+  # already closed by the time this function runs). A nil row, or one whose
+  # status is no longer "advanced" (this exact re-entry already ran once --
+  # a redelivery/retry-at-this-layer case), short-circuits to
+  # {:ok, :already_final}.
+  defp advance_service_task_dispatch(dispatch_id, decoded_body, repo, prefix) do
+    with {:ok, %ServiceTaskDispatch{status: "advanced"} = dispatch} <-
+           fetch_and_lock_service_task_dispatch(dispatch_id, repo, prefix),
+         {:ok, projection} <-
+           fetch_and_lock_instance_projection(repo, dispatch.instance_id, prefix),
+         {:ok, graph} <- fetch_graph(dispatch.instance_id, prefix) do
+      active_token_records = load_active_tokens(repo, dispatch.instance_id, prefix)
+      active_tokens = Enum.map(active_token_records, &to_pure_token/1)
+
+      with {:ok, own_token} <- find_token_for_service_task(dispatch, active_tokens) do
+        pending_task_tokens = load_pending_task_tokens(repo, dispatch.instance_id, prefix)
+        seed_state = build_instance_state(projection, active_tokens, pending_task_tokens)
+
+        case VariableMerge.merge(seed_state.variables, decoded_body, nil) do
+          {:ok, merged_variables, _merge_events} ->
+            state_with_merged_variables = %InstanceState{seed_state | variables: merged_variables}
+
+            persist_service_task_advance(
+              repo,
+              dispatch,
+              projection,
+              graph,
+              seed_state,
+              state_with_merged_variables,
+              active_token_records,
+              own_token,
+              decoded_body,
+              prefix
+            )
+
+          {:rejected, _unchanged_variables, _events} = rejection ->
+            {:error, {:variable_merge_rejected, rejection}}
+        end
+      end
+    else
+      {:ok, %ServiceTaskDispatch{}} -> {:ok, :already_final}
+      nil -> {:ok, :already_final}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # mirrors ServiceTaskDispatcher.fetch_and_lock_dispatch/2's own FOR UPDATE
+  # shape, callable from this module.
+  defp fetch_and_lock_service_task_dispatch(dispatch_id, repo, prefix) do
+    ServiceTaskDispatch
+    |> where([d], d.id == ^dispatch_id)
+    |> lock("FOR UPDATE")
+    |> repo.one(prefix: prefix)
+    |> case do
+      nil -> nil
+      %ServiceTaskDispatch{} = dispatch -> {:ok, dispatch}
+    end
+  end
+
+  # Mirrors find_token_for_timer/2's own defensive shape -- should be
+  # unreachable given the same TokenRecord-never-deleted invariant.
+  defp find_token_for_service_task(%ServiceTaskDispatch{token_id: token_id}, tokens) do
+    case Enum.find(tokens, &(&1.token_id == to_string(token_id))) do
+      nil -> {:error, {:unknown_token_id, token_id}}
+      token -> {:ok, token}
+    end
+  end
+
+  # design doc §3.2 step 4-5 -- dispatches Transition.advance_off_completed_node/4
+  # directly (the widened, @doc false, now-public function, §1.5's decision),
+  # clears own_token off pending_service_task_nodes (mirroring
+  # dispatch_sub_process_completion/4's own cleared_token step), then feeds
+  # the result into advance_until_stable/4 exactly as every other hop chain
+  # does, and persists via a Multi mirroring persist_timer_fired_advance/7's
+  # own shape. Does NOT re-update the dispatch row's own status (already
+  # "advanced", written by ServiceTaskDispatcher.handle_success/3 before this
+  # function was ever called) -- instead appends a SERVICE_TASK_COMPLETED
+  # domain event carrying the VariableMerge.merge/3 output.
+  defp persist_service_task_advance(
+         repo,
+         %ServiceTaskDispatch{} = dispatch,
+         %InstanceProjection{} = projection,
+         graph,
+         seed_state,
+         %InstanceState{} = state_with_merged_variables,
+         original_active_tokens,
+         own_token,
+         decoded_body,
+         prefix
+       ) do
+    outgoing_edges = Enum.filter(graph.edges, &(&1.source == own_token.node_id))
+
+    cleared_pending =
+      Enum.reject(
+        state_with_merged_variables.pending_service_task_nodes,
+        &(&1.token_id == own_token.token_id)
+      )
+
+    state_ready_to_advance = %InstanceState{
+      state_with_merged_variables
+      | pending_service_task_nodes: cleared_pending
+    }
+
+    hop_limit = length(graph.nodes) * 4 + 10
+
+    case Transition.advance_off_completed_node(
+           graph,
+           state_ready_to_advance,
+           own_token,
+           outgoing_edges
+         ) do
+      {:ok, new_instance_state, pending_events} ->
+        newly_pending =
+          tokens_needing_dispatch(
+            state_ready_to_advance.tokens,
+            new_instance_state.tokens,
+            own_token.token_id
+          )
+
+        case advance_until_stable(graph, new_instance_state, newly_pending, hop_limit - 1) do
+          {:ok, advanced_state, pending_events2} ->
+            do_persist_service_task_advance(
+              repo,
+              dispatch,
+              projection,
+              graph,
+              seed_state,
+              original_active_tokens,
+              advanced_state,
+              pending_events ++ pending_events2,
+              decoded_body,
+              prefix
+            )
+
+          {:error, reason} ->
+            {:error, {:transition_failed, reason}}
+        end
+
+      {:error, reason} ->
+        {:error, {:transition_failed, reason}}
+    end
+  end
+
+  defp do_persist_service_task_advance(
+         repo,
+         %ServiceTaskDispatch{} = dispatch,
+         %InstanceProjection{} = projection,
+         graph,
+         seed_state,
+         original_active_tokens,
+         %InstanceState{} = advanced_state,
+         pending_events,
+         decoded_body,
+         prefix
+       ) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    idempotency_key = "service_task_dispatch:#{dispatch.id}"
+
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, prepared_timers} <-
+           prepare_timer_arms(pending_events, graph, dispatch.instance_id, now),
+         {:ok, prepared_service_task_dispatches} <-
+           prepare_service_task_dispatch_abort_on_empty_url(
+             pending_events,
+             graph,
+             dispatch.instance_id,
+             advanced_state.variables,
+             now
+           ),
+         {:ok, sub_process_outcome} <-
+           prepare_sub_process_children_for_completion(
+             advanced_state,
+             original_active_tokens,
+             graph,
+             pending_events,
+             projection,
+             EventStore.platform_actor_id(),
+             idempotency_key,
+             prefix
+           ) do
+      case sub_process_outcome do
+        {:advanced, final_instance_state, prepared_children} ->
+          multi =
+            Multi.new()
+            |> Multi.merge(fn _changes ->
+              Multi.new()
+              |> Multi.run({:hop_chain_token_records, dispatch.instance_id}, fn repo, _changes ->
+                insert_hop_chain_new_token_records(
+                  repo,
+                  dispatch.instance_id,
+                  original_active_tokens,
+                  final_instance_state.tokens,
+                  prefix
+                )
+              end)
+              |> Multi.merge(fn changes ->
+                {id_map, hop_chain_new_records} =
+                  Map.fetch!(changes, {:hop_chain_token_records, dispatch.instance_id})
+
+                resolved_final_instance_state = rewrite_token_ids(final_instance_state, id_map)
+
+                Multi.new()
+                |> TaskActivation.append_multi_from_existing_records(
+                  dispatch.instance_id,
+                  graph,
+                  seed_state.pending_task_nodes,
+                  resolved_final_instance_state,
+                  prefix
+                )
+                |> reconcile_token_records(
+                  hop_chain_new_records ++ original_active_tokens,
+                  resolved_final_instance_state,
+                  now,
+                  prefix
+                )
+              end)
+            end)
+            |> Multi.merge(fn _changes ->
+              id_map =
+                Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
+
+              build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+            end)
+            |> Multi.merge(fn _changes ->
+              id_map =
+                Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+                  {token_id, token_id}
+                end)
+
+              build_service_task_dispatch_multi(
+                Multi.new(),
+                prepared_service_task_dispatches,
+                id_map,
+                tenant_id,
+                prefix
+              )
+            end)
+            |> append_sub_process_children_creation_multi(
+              prepared_children,
+              dispatch.instance_id,
+              EventStore.platform_actor_id(),
+              idempotency_key,
+              prefix
+            )
+            |> Multi.run(:service_task_completed_event, fn _repo, _changes ->
+              append_service_task_completed_event(dispatch, decoded_body, idempotency_key, prefix)
+            end)
+            |> Multi.run(:projection, fn inner_repo, _changes ->
+              reconcile_projection(inner_repo, projection, final_instance_state, now, prefix)
+            end)
+
+          case repo.transaction(multi) do
+            {:ok, _changes} -> {:ok, :advanced}
+            {:error, _failed_step, reason, _changes} -> {:error, reason}
+          end
+
+        {:execution_error, error_args} ->
+          {:error, {:execution_error_not_supported_for_service_task_advance, error_args}}
+      end
+    end
+  end
+
+  # design doc §3.2 step 5's "registration path" -- SERVICE_TASK_COMPLETED
+  # is seeded per-tenant via tenant_provisioning.ex's own
+  # @platform_event_type_seed_attrs (see that module for the seed entry
+  # itself), the same mechanism TIMER_FIRED already uses.
+  defp append_service_task_completed_event(
+         %ServiceTaskDispatch{} = dispatch,
+         decoded_body,
+         idempotency_key,
+         prefix
+       ) do
+    payload =
+      Jason.encode!(%{
+        dispatch_id: dispatch.id,
+        node_id: dispatch.node_id,
+        decoded_body: decoded_body
+      })
+
+    event_attrs = %{
+      instance_id: dispatch.instance_id,
+      event_type: "SERVICE_TASK_COMPLETED",
+      payload: payload,
+      actor_id: EventStore.platform_actor_id(),
+      idempotency_key: idempotency_key
+    }
+
+    case EventStore.append(event_attrs, prefix: prefix) do
+      {:ok, result} -> {:ok, result}
+      {:error, reason} -> {:error, {:event_append_failed, reason}}
+    end
+  end
+
+  # design doc §3.3 -- the :give_up outcome. Calls set_instance_error/2
+  # directly with REQ-214's already-built standalone_error_attrs -- no
+  # re-derivation, no re-fetch/re-lock of the dispatch row (unlike the
+  # :advance clause -- this clause needs no row data beyond what
+  # standalone_error_attrs already carries). dispatch_id is accepted for
+  # signature uniformity with the :advance clause and future logging/tracing
+  # use only.
+  #
+  # Both {:instance_terminal, _} and {:instance_already_error, _} fold to
+  # {:ok, :error_set} -- co-equal "someone else already reached a
+  # terminal-enough state first" races (design doc §3.3), not failures.
+  defp give_up_service_task_dispatch(_dispatch_id, standalone_error_attrs, prefix) do
+    case set_instance_error(standalone_error_attrs, prefix: prefix) do
+      {:ok, %{status: :error}} -> {:ok, :error_set}
+      {:error, {:instance_terminal, _status}} -> {:ok, :error_set}
+      {:error, {:instance_already_error, _error_detail}} -> {:ok, :error_set}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -2296,7 +3012,17 @@ defmodule Letflow.Engine do
             # finalize_instance_projection/5's own completed_at/cancelled_at
             # reuse precedent -- no second clock read.
             with {:ok, prepared_timers} <-
-                   prepare_timer_arms(pending_events, graph, projection.instance_id, completed_at) do
+                   prepare_timer_arms(pending_events, graph, projection.instance_id, completed_at),
+                 {:ok, prepared_service_task_dispatches} <-
+                   prepare_service_task_dispatch_for_completion(
+                     pending_events,
+                     graph,
+                     projection,
+                     advanced_state.variables,
+                     completed_at,
+                     actor_id,
+                     idempotency_key
+                   ) do
               case prepare_sub_process_children_for_completion(
                      advanced_state,
                      original_active_tokens,
@@ -2308,7 +3034,9 @@ defmodule Letflow.Engine do
                      prefix
                    ) do
                 {:ok, {:advanced, advanced_state2, prepared_children}} ->
-                  {:ok, {:advanced, advanced_state2, prepared_children, prepared_timers}}
+                  {:ok,
+                   {:advanced, advanced_state2, prepared_children, prepared_timers,
+                    prepared_service_task_dispatches}}
 
                 {:ok, {:execution_error, error_args}} ->
                   {:ok, {:execution_error, error_args}}
@@ -2316,6 +3044,9 @@ defmodule Letflow.Engine do
                 {:error, reason} ->
                   {:error, reason}
               end
+            else
+              {:error, {:empty_url_error, error_args}} -> {:ok, {:execution_error, error_args}}
+              {:error, reason} -> {:error, reason}
             end
 
           {:error, {:activation_failed, {:no_matching_edge, node_id, evaluated_conditions}}} ->
@@ -2354,6 +3085,54 @@ defmodule Letflow.Engine do
 
       {:error, reason} ->
         {:error, {:transition_failed, reason}}
+    end
+  end
+
+  # REQ-215 design doc §2.1 point 1/§2.4 -- dispatch_task_completion_hop_chain/7's
+  # own {:service_task_dispatch_requested, ...} pending_event() consumer.
+  # Unlike the :TIMER-fire and create/2 call sites, the parent instance
+  # already exists here and is already locked (M2,
+  # fetch_and_lock_instance_projection/3), so an :empty_url_error routes
+  # into the SAME {:execution_error, error_args} tagged-tuple channel
+  # dispatch_task_completion_hop_chain/7's own :no_matching_edge clauses
+  # already use (AC4) -- build_service_task_empty_url_error/5 builds the
+  # exact standalone_error_attrs() shape ExecutionError.append_multi/3
+  # expects. No service_task_dispatches row is ever inserted for this event
+  # (structurally -- prepare_service_task_dispatch/5 halts before building
+  # arm_attrs for it).
+  defp prepare_service_task_dispatch_for_completion(
+         pending_events,
+         graph,
+         projection,
+         variables,
+         now,
+         actor_id,
+         idempotency_key
+       ) do
+    case prepare_service_task_dispatch(
+           pending_events,
+           graph,
+           projection.instance_id,
+           variables,
+           now
+         ) do
+      {:ok, prepared} ->
+        {:ok, prepared}
+
+      {:error, reason} ->
+        {:error, reason}
+
+      {:empty_url_error, node_id, variables} ->
+        error_args =
+          build_service_task_empty_url_error(
+            projection.instance_id,
+            node_id,
+            variables,
+            actor_id,
+            idempotency_key
+          )
+
+        {:error, {:empty_url_error, error_args}}
     end
   end
 
@@ -2483,7 +3262,9 @@ defmodule Letflow.Engine do
   defp build_complete_task_tail_multi(
          %{
            merge: {:merged, merge_outcome},
-           transition: {:advanced, final_instance_state, prepared_children, prepared_timers}
+           transition:
+             {:advanced, final_instance_state, prepared_children, prepared_timers,
+              prepared_service_task_dispatches}
          } = changes,
          actor_id,
          output_variables,
@@ -2532,6 +3313,35 @@ defmodule Letflow.Engine do
       # not that (incorrect) precedent claim.
       id_map = Map.new(prepared_timers, fn {token_id, _arm_attrs} -> {token_id, token_id} end)
       build_timer_arms_multi(Multi.new(), prepared_timers, id_map, prefix)
+    end)
+    |> Multi.merge(fn _changes ->
+      # REQ-215 design doc §2.1 point 1/§2.5 -- positioned alongside the
+      # timer-arms merge immediately above, same identity-id_map reasoning
+      # (every token_id in prepared_service_task_dispatches is already a
+      # real, persisted TokenRecord id at this point in the hop chain).
+      # `prefix` was already validated by this function's own caller
+      # (complete_task/3's top-level `with` chain) -- the error branch here
+      # is unreachable in practice, but matched via `with` rather than a
+      # bare `=` so a future invariant break surfaces as a typed Multi
+      # error instead of a MatchError, consistent with this module's own
+      # with/<- idiom elsewhere (e.g. create/2, persist_timer_fired_advance/7).
+      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        id_map =
+          Map.new(prepared_service_task_dispatches, fn %{token_id: token_id} ->
+            {token_id, token_id}
+          end)
+
+        build_service_task_dispatch_multi(
+          Multi.new(),
+          prepared_service_task_dispatches,
+          id_map,
+          tenant_id,
+          prefix
+        )
+      else
+        {:error, reason} ->
+          Multi.error(Multi.new(), :service_task_dispatch_tenant_lookup, reason)
+      end
     end)
     |> Multi.run(:task_complete, fn repo, _changes ->
       complete_task_row(
@@ -3109,7 +3919,7 @@ defmodule Letflow.Engine do
             task: %Task{} = task,
             transition:
               {:advanced, %InstanceState{} = final_instance_state, _prepared_children,
-               _prepared_timers},
+               _prepared_timers, _prepared_service_task_dispatches},
             task_complete: %Task{} = completed_task
           }}
        ) do
@@ -3273,6 +4083,14 @@ defmodule Letflow.Engine do
         "instance_cancelled",
         prefix
       )
+    end)
+    |> Multi.run(:service_task_dispatch_cancellations, fn repo, _changes ->
+      # REQ-215 design doc §4 -- positioned identically to
+      # :timer_cancellations immediately above, for the identical
+      # lock-ordering reason: acquire the service_task_dispatches lock
+      # before the instance_projections lock, matching every other code
+      # path's lock order (avoids an AB-BA Postgres deadlock).
+      ServiceTaskDispatcher.cancel_pending_dispatches(repo, instance_id, cancelled_at, prefix)
     end)
     |> Multi.run(:instance_projection, fn repo, _changes ->
       fetch_and_lock_instance_projection_for_cancel(repo, instance_id, prefix)

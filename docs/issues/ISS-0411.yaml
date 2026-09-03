@@ -97,7 +97,8 @@ source: >
   independent per-requirement re-verification of REQ-208).
 queue_task_id: 411
 github_issue: 807
-status: open
+status: resolved
+resolved_at: "2026-09-03T15:19:03Z"
 orch_routing_note: >
   ORCH (2026-09-02, picked up for WF-03 processing): confirmed the diagnosis
   above is already complete and its sizing verdict stands -- this is not a
@@ -110,3 +111,17 @@ orch_routing_note: >
   pass). Routing the real gap (SERVICE_TASK dispatch) to REQ-ANALYST as a
   new requirement per the diagnosis note's own recommendation. This record
   stays open, status unchanged, pending that requirement's completion.
+resolution_note: >
+  ORCH (2026-09-03): resolved in full. Split into two requirements per the
+  diagnosis note's own "core module first, wiring second" recommendation --
+  REQ-214 (dispatch orchestration core: HTTP transport, SSRF-gated
+  inline_url dispatch, supervised polling process, PR #847, merged
+  2026-09-03 as commit 81e2dea8) and REQ-215 (engine wiring: async-park
+  dispatch on token arrival, re-entry on dispatcher outcome, cancellation,
+  PR #856, merged 2026-09-03 as commit 804baae5). Both independently
+  RELEASE-VALIDATOR PASSed. req208_meridian_test.exs's previously-unreached
+  committee-vote/quorum-2-of-3/disbursement paths (this issue's own
+  concrete regression target) are now reached and pass end to end,
+  confirmed by REQ-215's own test suite. The stage-7 doc's stale
+  join_counters attribution (this issue's own item 28-38) was corrected
+  as part of REQ-215's scope. GH#807 closed with an evidence comment.

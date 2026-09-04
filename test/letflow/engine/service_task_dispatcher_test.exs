@@ -1121,49 +1121,19 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       # this design's own documented zero-delay-first-tick hazard against
       # the sandboxed Repo connection this test process owns). Instead,
       # starts the exact same {Letflow.Engine.ServiceTaskDispatcher.Poller, []}
-      # child spec application.ex uses under an isolated, throwaway
-      # Supervisor this test fully owns and tears down itself -- proving the
-      # child spec is valid and produces a real, live, uniquely-named
-      # process (Letflow.Scheduler.Poller is not this process, confirmed by
-      # name), without touching the shared application supervision tree or
-      # its Repo-sandbox ownership.
-      {:ok, sup_pid} =
-        Supervisor.start_link(
-          [{Letflow.Engine.ServiceTaskDispatcher.Poller, []}],
-          strategy: :one_for_one,
-          name: __MODULE__.ThrowawaySupervisor
-        )
+      # child spec application.ex uses under ExUnit's own per-test supervisor
+      # (via start_supervised!/1), proving the child spec is valid and
+      # produces a real, live, uniquely-named process (Letflow.Scheduler.Poller
+      # is not this process, confirmed by name), without touching the shared
+      # application supervision tree or its Repo-sandbox ownership. Teardown
+      # is entirely ExUnit's own responsibility (monitor-and-wait, no
+      # check-then-act) -- no on_exit callback of any kind is needed here.
+      {:ok, sup} = ExUnit.fetch_test_supervisor()
+      pid = start_supervised!({Letflow.Engine.ServiceTaskDispatcher.Poller, []})
 
-      on_exit(fn ->
-        # ISS-0452: this teardown must tolerate the supervisor ALREADY being
-        # gone. It is started with Supervisor.start_link/2 above, so it is
-        # LINKED to the test process; on_exit callbacks run after that
-        # process exits, by which point the supervisor may already be
-        # shutting down on its own. The previous form was check-then-act --
-        # `if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid)` -- and
-        # raced: alive?/1 returned true, then :sys.terminate hit a process
-        # already terminating and exited :shutdown, failing the test from
-        # its teardown even though every assertion above had passed. That
-        # flaked three times across five CI backend-gate runs (PR #864,
-        # runs 33799741008 / 33801472947 job 100807265279), always under
-        # runner contention, never locally.
-        #
-        # Catching the exit rather than switching to start_supervised/1 is
-        # deliberate: this test's own comment (above) requires it to own and
-        # tear down the supervisor itself rather than hand its lifecycle to
-        # ExUnit, so that the assertions run against a tree this test fully
-        # controls. A supervisor that is already gone satisfies this
-        # callback's entire intent, so both outcomes are success.
-        try do
-          Supervisor.stop(sup_pid)
-        catch
-          :exit, _ -> :ok
-        end
-      end)
+      children = Supervisor.which_children(sup)
 
-      children = Supervisor.which_children(sup_pid)
-
-      assert [{Letflow.Engine.ServiceTaskDispatcher.Poller, pid, :worker, _modules}] = children
+      assert [{Letflow.Engine.ServiceTaskDispatcher.Poller, ^pid, :worker, _modules}] = children
       assert is_pid(pid)
       assert Process.alive?(pid)
       assert pid != Process.whereis(Letflow.Scheduler.Poller)

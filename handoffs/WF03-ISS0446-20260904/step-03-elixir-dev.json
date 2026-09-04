@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-03",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-03-elixir-dev.json",
+  "created_at": "2026-09-04T00:46:03Z",
+  "started_at": "2026-09-04T00:40:00Z",
+  "completed_at": "2026-09-04T00:46:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md",
+      "handoffs/WF03-ISS0446-20260904/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0446-20260904/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0446-20260904/step-02b-code-design-validator-regate.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3 for ISS-0446: implement the gate-approved design (lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md, section 3) in test/letflow/engine/service_task_dispatcher_test.exs only. Replace the ad-hoc Supervisor.start_link/2 + name: __MODULE__.ThrowawaySupervisor construction with ExUnit.fetch_test_supervisor/0 + start_supervised!/1, delete the on_exit block entirely with no replacement teardown, and apply the one assertion-wording change (pin ^pid instead of destructuring it). Update the test's stale inline comment. No production code, no other test files."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Implemented design section 3 exactly, no deviation. Sole file changed: test/letflow/engine/service_task_dispatcher_test.exs, lines 1113-1141 (the single test the design scopes to).\n\nBEFORE:\n```\n{:ok, sup_pid} =\n  Supervisor.start_link(\n    [{Letflow.Engine.ServiceTaskDispatcher.Poller, []}],\n    strategy: :one_for_one,\n    name: __MODULE__.ThrowawaySupervisor\n  )\n\non_exit(fn ->\n  if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid)\nend)\n\nchildren = Supervisor.which_children(sup_pid)\n\nassert [{Letflow.Engine.ServiceTaskDispatcher.Poller, pid, :worker, _modules}] = children\n```\n\nAFTER:\n```\n{:ok, sup} = ExUnit.fetch_test_supervisor()\npid = start_supervised!({Letflow.Engine.ServiceTaskDispatcher.Poller, []})\n\nchildren = Supervisor.which_children(sup)\n\nassert [{Letflow.Engine.ServiceTaskDispatcher.Poller, ^pid, :worker, _modules}] = children\n```\nThe three remaining assertions (`is_pid(pid)`, `Process.alive?(pid)`, `pid != Process.whereis(Letflow.Scheduler.Poller)`) are byte-identical to before, per design section 3 item 5. No on_exit call of any kind remains anywhere in this test, per design section 3 item 2 -- confirmed by re-reading the edited test body: zero on_exit calls in this test (the file's other four on_exit calls at lines 234/310/998/1016, unrelated Application.delete_env callbacks in other tests, are untouched). start_supervised!/1 used unqualified (auto-imported), matching in-suite style at test/letflow/admission_test.exs:19 and test/letflow/scheduler/poller_test.exs:148,400, per design section 3 item 1's note.\n\nALSO UPDATED (optional per design section 3 item 7, done for accuracy): the inline comment above the test body. Removed the stale claim that the test starts 'an isolated, throwaway Supervisor this test fully owns and tears down itself' (no longer true -- there is no ad-hoc supervisor or teardown code left) and replaced it with: the child spec is started 'under ExUnit's own per-test supervisor (via start_supervised!/1)' and 'teardown is entirely ExUnit's own responsibility (monitor-and-wait, no check-then-act) -- no on_exit callback of any kind is needed here.' Kept, verbatim in substance, the still-true and still-load-bearing part: this deliberately does NOT start the child under Letflow.Supervisor, because of the documented zero-delay-first-tick hazard against the sandboxed Repo connection the test process owns.\n\nNo production code (lib/) touched, no migration, no other test file touched -- confirmed by `git status --porcelain` showing exactly one modified path.\n\nVERIFICATION (real output quoted, nothing simulated):\n\n1. mix compile --warnings-as-errors -> exit 0, zero output (clean, no warnings).\n\n2. mix format --check-formatted -> exit 0, zero output (fully formatted, no reformatting needed).\n\n3. mix test test/letflow/engine/service_task_dispatcher_test.exs -> required starting this workspace's own Postgres first (`docker compose ps` showed no running containers; `docker compose up -d postgres` started letflow-2-postgres-1, confirmed healthy after ~6s via `docker compose ps postgres` Health field). Full real run:\n   `Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]` ... `Finished in 58.2 seconds (0.00s async, 58.2s sync)` ... `Result: 42 passed`, process exit code 0. 42 passed matches ISSUE-FIXER's Step 1 baseline count for this file ('the same ~42 tests in the file pass'). Zero failures, zero excluded beyond the standing tag exclusions, zero skipped.\n\n4. git status --porcelain (post-edit, pre-handoff) -> exactly one line: ` M test/letflow/engine/service_task_dispatcher_test.exs`. No scratch files created during this step (no probe script was needed -- the design's own probes in sections 0 and the validator's regate already independently verified the mechanism; this step is pure mechanical implementation of an already-gated call sequence).\n\nWHAT THIS GREEN RUN PROVES, STATED WITHOUT OVERCLAIMING, per the task's explicit instruction: it proves the replacement compiles, that all 42 tests in the file (including the rewritten one) still pass, and that the four assertions still hold under the new fixture shape -- i.e. no coverage regression from this diff. It does NOT prove the race is fixed. This is a timing-dependent race that the CI failure report itself observed alongside 3192/3192 passing locally on the same run -- a quiet local pass was never evidence of the race's absence before this fix, and is not evidence of the race's absence after it either.\n\nTHE SAFETY ARGUMENT IS STRUCTURAL, not empirical, per design sections 1.1 and 4.1: the fix does not make the race statistically less likely to lose, it removes the check-then-act entirely. There is no more user-written on_exit callback and no more ad-hoc Supervisor.start_link/2 call in this test for a Process.alive?-then-Supervisor.stop check-then-act to run against. Teardown of the framework's own test supervisor is now exclusively ExUnit.OnExitHandler's terminate_supervisor/2 (on_exit_handler.ex:59-70, independently re-verified present at those lines by both CODE-DESIGNER's rework and CODE-DESIGN-VALIDATOR's regate before this step): `ref = Process.monitor(sup)` followed by a blocking `receive do {:DOWN, ^ref, _, _, _} -> nil after timeout -> ... end` -- a monitor-and-block wait for the actual death signal, with no conditional alive-check anywhere in that path to race. This mechanism is unconditional framework behaviour for any test using start_supervised!/1, not a property of this test's own code that a future edit could quietly undo.\n\nDESIGN SECTION 4's WIDENED-TIMING REGRESSION PROBE: not built in this step, per the task's own instruction that TEST-DESIGNER owns that ('you do not need to build it'). Not run in this step either -- no such probe was executed here, so nothing about reproduction is reported one way or the other; that obligation is TEST-DESIGNER's at Step 4, per design section 4.2/6 Open Question 1.\n\nNo redesign performed -- the design's premise, call sequence, and assertion wording were implementable exactly as written; no blocker or disagreement to report.",
+    "issues": [],
+    "artifacts_out": [
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ],
+    "next_action": "Route to REVIEWER (test-only change to an existing test's fixture-teardown shape, no tenant-data path touched, so SECURITY-REVIEWER gate does not apply per its own scope) then TEST-DESIGNER for the section 4 widened-timing regression evidence"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

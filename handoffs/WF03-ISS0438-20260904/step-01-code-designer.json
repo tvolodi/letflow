@@ -1,0 +1,71 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000002",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0438-20260904/step-01-code-designer.json",
+  "created_at": "2026-09-04T15:32:44Z",
+  "started_at": "2026-09-04T15:32:44Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {
+      "lib/letflow/router.ex (Deferred routes table, two relevant rows)": "| `Letflow.Routers.Entities`          | `entities.zig`            | S5/S6 (entity/data-model subsystem)   |\n| `Letflow.Routers.EntityQuery`       | `entity_query.zig`        | S5/S6 (same, plus query compiler)     |"
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0438.yaml",
+      "docs/issues/ISS-0439.yaml",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/migration/README.md",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/repository.ex",
+      "lib/letflow/design/req202-artifact-repository.md",
+      "lib/letflow/design/req024-event-type-registry.md",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\definition.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\validator.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\commands.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\projector.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\events.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\mod.zig",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\query\\",
+      "C:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\design\\entities.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "docs/migration/decisions/",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/requirements.yaml"
+    ]
+  },
+  "task": {
+    "description": "This is a SCOPING/ARCHITECTURE DECISION, not an implementation-design task -- you are being dispatched in a scoping-decision capacity because ORCH is barred (ORCHESTRATOR.md's MUST-NOT list) from making implementation/module-boundary decisions itself, and this decision -- whether Letflow ports a whole ~3400-line subsystem -- is squarely that kind of decision.\n\nBACKGROUND: docs/issues/ISS-0438.yaml (read it in full -- it is the authoritative statement of the gap, already filed and registered as queue task 438 / GH#845 by a prior run) documents that lib/letflow/router.ex's 'Deferred routes' table names two unported routers (Letflow.Routers.Entities backed by entities.zig, and Letflow.Routers.EntityQuery backed by entity_query.zig) and assigns them stage 'S5/S6' -- but neither docs/migration/stage-5-scripting-plugins.md nor stage-6-operational-cross-cutting.md mentions 'entities' or 'entity_query' anywhere, and docs/requirements.yaml carries zero requirements for it. It is invisible to task selection: no stage gate would ever notice its absence, and ORCH's get_next_task can never surface it, because nothing claims it.\n\nWHAT BACKS IT IN R-CO (c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\): read every file listed in artifacts_in under the R-Co path, in full -- src/entities/definition.zig (16KB), validator.zig (43KB), commands.zig (23KB), projector.zig (7.8KB), events.zig (4.2KB), mod.zig, the query/ subdirectory (5 files: allowlist.zig, compiler.zig, cursor.zig, field_grants.zig, types.zig), and the 737-line design doc src/design/entities.md (EXP-201/EXP-202). This is a real, designed subsystem: entity TYPES are defined by JSON schemas, entity RECORDS are managed exclusively through event-sourced commands, entity type definitions are stored as Repository artifacts (kind = 'entity') so they participate in R-Co's existing activation/versioning system, and three new event types are registered in R-Co's event_type_registry alongside INSTANCE_STARTED/TASK_COMPLETED.\n\nYOUR JOB: produce a genuine, reasoned recommendation -- port now vs. explicitly defer/reject -- with the following mandatory elements, matching all 7 of ISS-0438's acceptance criteria (quoted below verbatim so you are judged against the same bar CODE-DESIGN-VALIDATOR will use):\n\nAC1. A decision on whether the dynamic entity subsystem is in Letflow's scope at all -- either (a) assign it to a specific stage, naming which requirements it would become (REQ-xxx numbering not required from you -- that is REQ-ANALYST's job if you recommend 'in scope' -- but you must state which stage, how many requirement-sized slices, and roughly what each covers), or (b) recommend a decision record stating it is deliberately not ported, with the reasoning.\nAC2. IF you recommend in-scope: state clearly enough for REQ-ANALYST to draft real REQ-xxx entries matching docs/requirements.yaml's existing sizing/schema convention (one agent turn each, explicit owner, testable acceptance criteria, depends_on chaining). You do not need to write the entries yourself -- CODE-DESIGNER's artefact format is design notes/interfaces, not requirement text -- but your recommendation must be actionable enough that REQ-ANALYST does not have to re-derive the R-Co source analysis.\nAC3. IF you recommend out-of-scope: state precisely that the two deferred router rows should be removed from lib/letflow/router.ex's table (you do not have to write the edit yourself in this design step -- state it as the recommendation's required follow-up action), and that a decision record must be written to docs/migration/decisions/0018-<slug>.md (0018 is confirmed as the next free number -- check docs/migration/decisions/ yourself to verify this is still true before finalizing).\nAC4. State explicitly how R-Co's entity subsystem's event-store relationship interacts with Letflow's ACTUAL Letflow.EventStore.Registry (read lib/letflow/event_store/registry.ex in full -- it is a real, working module: register_type/2, validate_payload/3, get_type/2, tenant-scoped, backed by JSON-schema validation via Letflow.EventStore.Registry.JsonSchema). R-Co registers three entity event types in its event_type_registry alongside INSTANCE_STARTED/TASK_COMPLETED -- your recommendation (whichever direction) must say whether a Letflow port would register entity events through this EXISTING Registry module rather than inventing a parallel event-type mechanism, and if there is any reason it could not (e.g. a schema/versioning mismatch), name it concretely.\nAC5. State explicitly how R-Co's design (entity type definitions as Repository artifacts, kind = 'entity') maps onto Letflow's ACTUAL Letflow.Repository module (read lib/letflow/repository.ex in full -- it already has create/2, versioning, dedup, activation via the sibling artifact_activations table from REQ-203). Does 'kind = entity' fit cleanly into Letflow.Repository.ArtifactKind's existing value list mechanism, or does it need an extension? Say so concretely, don't hand-wave.\nAC6. Sequence ISS-0438's outcome against ISS-0439 (read docs/issues/ISS-0439.yaml in full -- it's the 1C-style typed-business-object-template question, already deliberately DEFERRED by the user pending real usage, and its own text already states the typed layer cannot be designed before the untyped substrate's status is settled). State this sequencing relationship explicitly in your own recommendation -- you are not resolving ISS-0439, only confirming/restating how your ISS-0438 outcome constrains it.\nAC7. Your artefact must contain NO implementation code -- this is a scoping/design-rationale document, not the entity subsystem's actual @spec/schema design. If you recommend in-scope, sketch WHAT would need designing later (module boundaries, roughly which Ecto schemas), not the actual field-by-field schema. Implementation of the subsystem itself is explicitly out of scope for this issue (ISS-0438's own AC7).\n\nWrite your artefact under lib/letflow/design/ (this project's existing convention for CODE-DESIGNER output, per docs/agents/AGENT_SYSTEM.md's artifact-location table) as a markdown scoping-decision document, e.g. lib/letflow/design/iss0438-entity-subsystem-scoping.md. Do NOT write to docs/migration/decisions/ yourself in this step even if you recommend the decision-record path -- that file is written in a LATER step of this run (by CODE-DESIGNER or ELIXIR-DEV, per ORCH's routing, once your recommendation gates PASS) so it can incorporate CODE-DESIGN-VALIDATOR's gate findings. This step's deliverable is the recommendation artefact only.",
+    "acceptance_criteria": [
+      "Artefact exists under lib/letflow/design/, named for this issue, and is genuinely a scoping-decision document (not a partial implementation design)",
+      "A clear port-vs-defer recommendation is stated, with reasoning grounded in the actual R-Co source files read (cite specific files/line-count/content, not just the issue's own summary)",
+      "AC4 (EventStore.Registry relationship) is answered concretely against the real lib/letflow/event_store/registry.ex module, not asserted abstractly",
+      "AC5 (Repository relationship) is answered concretely against the real lib/letflow/repository.ex module and its ArtifactKind mechanism, not asserted abstractly",
+      "AC6 (ISS-0439 sequencing) is stated explicitly, consistent with ISS-0439's own already-recorded deferral reasoning",
+      "No implementation code (no Elixir function bodies, no literal Ecto schema field lists) appears in the artefact",
+      "If recommending in-scope: states target stage and rough requirement-slice breakdown, actionable by REQ-ANALYST without re-reading R-Co source",
+      "If recommending out-of-scope: states the router.ex edit needed and the decision-record path/number (0018) explicitly"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

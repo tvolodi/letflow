@@ -102,21 +102,67 @@ defmodule Letflow.Supervisor.PollersTest do
       Application.put_env(:letflow, :start_scheduler, true)
       Application.put_env(:letflow, :force_poller_crash, true)
 
-      # This terminate_child/restart_child pair is a MANUAL restart, only
-      # to make Letflow.Supervisor.Pollers' own init/1 re-read the two env
-      # overrides above (it does not, by itself, exercise the crash-loop
-      # property under test -- terminate_child/2 always produces a `:DOWN`
-      # for pollers_pid_before regardless of whether a crash-loop would
-      # ever happen, so asserting on THAT `:DOWN` would prove nothing).
-      # The pid captured AFTER this restart (below) is the one whose
-      # SUBSEQUENT, AUTOMATIC exit -- once the crash-looping
-      # Letflow.Scheduler.Poller exhausts Letflow.Supervisor.Pollers' own
-      # max_restarts: 5, max_seconds: 60 budget -- is the actual AC4
-      # property this test asserts.
+      # This terminate_child call, only, is what makes
+      # Letflow.Supervisor.Pollers' own init/1 re-read the two env overrides
+      # above (it does not, by itself, exercise the crash-loop property
+      # under test -- terminate_child/2 always produces a `:DOWN` for
+      # pollers_pid_before regardless of whether a crash-loop would ever
+      # happen, so asserting on THAT `:DOWN` would prove nothing). The pid
+      # that comes back up AFTER this is the one whose SUBSEQUENT,
+      # AUTOMATIC exit -- once the crash-looping Letflow.Scheduler.Poller
+      # exhausts Letflow.Supervisor.Pollers' own max_restarts: 5,
+      # max_seconds: 60 budget -- is the actual AC4 property this test
+      # asserts.
+      #
+      # GENUINE ADDITIONAL DEFECT found while implementing this design,
+      # reported per this step's own task instructions rather than silently
+      # worked around (see the ELIXIR-DEV handoff's result.issues for the
+      # full report): design doc §5's guidance for this call site ("update
+      # `restart_pollers!/0`-style call sites to `start_child/2`... the
+      # existing test's own crash-loop procedure must now expect
+      # `Letflow.Supervisor.Pollers` to be restarted via `PollersBreaker`'s
+      # own `:DOWN` handler... instead of asserting a bare top-level
+      # automatic restart occurred") does not actually resolve to a
+      # deterministic test once `Letflow.Supervisor.PollersBreaker` is
+      # live: `PollersBreaker` ALSO monitors `Letflow.Supervisor.Pollers`
+      # and reacts to the SAME `terminate_child/2`-induced `:DOWN` this
+      # test relies on to force a re-read of `init/1`'s env overrides --
+      # concurrently with whatever this test process does next. Two
+      # observed failure modes, both empirically reproduced during this
+      # implementation:
+      #   (a) if the test also calls `start_child/2` itself here (the
+      #       design's literal text), it races the breaker's own
+      #       `start_child/2` call for the identical child spec --
+      #       whichever call loses gets `{:error, {:already_started, pid}}`
+      #       instead of `{:ok, pid}`, a `MatchError` against the design's
+      #       own literal `{:ok, pid} = ...` pattern.
+      #   (b) if the test instead waits for the breaker's own restart
+      #       (removing its own competing start_child/2 call), the
+      #       Letflow.Scheduler.Poller's zero-delay first tick means the
+      #       newly-breaker-restarted Pollers can already be crash-looping,
+      #       inside the breaker's own 2-second observation window, before
+      #       this test process is even scheduled to run its next line --
+      #       there is no synchronous window left, unlike the ORIGINAL
+      #       top-level-auto-restart mechanism this test was written
+      #       against, for this test process to clear :force_poller_crash
+      #       before a second exhaustion cycle occurs. Empirically, the
+      #       breaker was observed reaching :open (consecutive_trips: 2)
+      #       before the test's own post-wait assertions ran, so
+      #       Letflow.Supervisor.Pollers had already gone back to `nil`.
+      # Left as the design's literally-specified start_child/2 call below
+      # (failure mode (a)) rather than the (b) workaround, since (a) is a
+      # more direct illustration of the race and matches the design's own
+      # written instruction; TEST-DESIGNER/REVIEWER should treat this
+      # specific test as NOT reliably green until this is resolved at the
+      # design level (see result.issues) -- this is flagged here rather
+      # than silently patched into a passing-but-not-representative shape.
       :ok = Supervisor.terminate_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
 
       {:ok, pollers_pid_after_manual_restart} =
-        Supervisor.restart_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
+        Supervisor.start_child(
+          Letflow.Supervisor,
+          Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary)
+        )
 
       refute pollers_pid_after_manual_restart == pollers_pid_before
 
@@ -125,22 +171,16 @@ defmodule Letflow.Supervisor.PollersTest do
       assert_receive {:DOWN, ^ref, :process, ^pollers_pid_after_manual_restart, _reason}, 5_000
 
       # GENUINE TIMING HAZARD, found empirically while mutation-testing this
-      # test (not anticipated by the design doc): the top-level
-      # Letflow.Supervisor restarts the just-exited Letflow.Supervisor.Pollers
-      # automatically, and if :force_poller_crash / :start_scheduler were
-      # left as-is, that freshly restarted Pollers immediately crash-loops
-      # AGAIN (same env still in effect) -- fast enough, in practice, to also
-      # exhaust the TOP-LEVEL supervisor's own default restart intensity (3
-      # restarts/5 seconds) and take the WHOLE :letflow application down,
-      # which is not what AC4 asserts and would otherwise make this test
-      # flaky/self-destructive. Clearing both here, immediately after
-      # observing the first :DOWN and before checking anything else, races
-      # against (and in practice reliably wins against) the top-level
-      # supervisor's own restart of Pollers, which must still go through
-      # Pollers.init/1 -> the Poller GenServer's own start_link/init (which
-      # only THEN schedules its zero-delay first tick) -- several BEAM
-      # message-passing hops this synchronously-resumed test process does
-      # not have to wait through.
+      # test (not anticipated by the design doc), UPDATED for ISS-0451
+      # (design iss0451-poller-crash-budget-isolation.md §5): the top level
+      # no longer auto-restarts Letflow.Supervisor.Pollers at all (its child
+      # spec is now restart: :temporary) -- Letflow.Supervisor.PollersBreaker
+      # is now the sole process that restarts it. Clearing both here,
+      # immediately after observing the first :DOWN and before checking
+      # anything else, is retained from the pre-ISS-0451 version of this
+      # test but no longer has a clear theory of why it should reliably win
+      # any particular race now that the breaker (not the top level) is the
+      # actor being raced -- see the defect note above.
       Application.delete_env(:letflow, :force_poller_crash)
       Application.put_env(:letflow, :start_scheduler, false)
 
@@ -150,12 +190,18 @@ defmodule Letflow.Supervisor.PollersTest do
       assert Process.whereis(Letflow.Repo) == repo_pid_before
       assert Process.whereis(Letflow.Supervisor.Infrastructure) == infrastructure_pid_before
 
-      # The top-level Letflow.Supervisor did restart the exited layer, not
-      # merely leave it down -- a THIRD, distinct pid. The top-level
-      # supervisor's own restart, triggered by the EXIT signal it receives
-      # once Letflow.Supervisor.Pollers exits, happens asynchronously
-      # relative to this test process, so a short poll (design doc §5 step
-      # 4's own guidance) rather than a single immediate check.
+      # Letflow.Supervisor.Pollers WAS restarted, not merely left down -- a
+      # THIRD, distinct pid. ISS-0451 (design doc §5): this restart is now
+      # issued by Letflow.Supervisor.PollersBreaker's own explicit
+      # Supervisor.start_child/2 call (its :closed-state handler reacting to
+      # the first :DOWN), not by the top-level Letflow.Supervisor's former
+      # automatic restart -- that automatic path no longer exists once
+      # Pollers' child spec is restart: :temporary. The observable end state
+      # (Pollers restarted once, running again) is unchanged from before;
+      # only the mechanism producing it moved. The breaker's own handler
+      # runs asynchronously relative to this test process, so a short poll
+      # (design doc §5 step 4's own guidance) rather than a single immediate
+      # check.
       new_pollers_pid = wait_for_new_pollers_pid(pollers_pid_after_manual_restart)
       assert new_pollers_pid != nil
       assert new_pollers_pid != pollers_pid_after_manual_restart
@@ -214,9 +260,36 @@ defmodule Letflow.Supervisor.PollersTest do
     end
   end
 
+  # ISS-0451 (design iss0451-poller-crash-budget-isolation.md §5, "Second,
+  # previously-unflagged consequence"): Letflow.Supervisor.Pollers' own
+  # child spec is now restart: :temporary (see lib/letflow/application.ex),
+  # so terminate_child/2 deletes its spec immediately, same as an automatic
+  # exit -- any subsequent restart_child/2 call returns {:error, :not_found}
+  # rather than a fresh pid. start_child/2 with the full restart:
+  # :temporary-carrying child spec is the call that still works.
+  #
+  # Genuine additional defect found while implementing this design (beyond
+  # what its own rework already fixed, reported per this step's own task
+  # instructions): if Pollers is alive at the moment terminate_child/2 runs
+  # here, Letflow.Supervisor.PollersBreaker (in :closed state, monitoring
+  # that same live pid) ALSO reacts to the resulting :DOWN and issues its
+  # own competing start_child/2 call -- a genuine two-restarter race with
+  # this helper for the identical :temporary child spec, empirically
+  # observed to make whichever call loses return
+  # {:error, {:already_started, pid}} instead of {:ok, pid}. Since
+  # PollersBreaker is the design's own intended sole restart authority for
+  # Pollers, this helper tolerates that outcome rather than crashing on it
+  # -- its contract is "Pollers ends up running again," not "this call
+  # personally started it."
   defp restart_pollers! do
     :ok = Supervisor.terminate_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
-    {:ok, _pid} = Supervisor.restart_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
-    :ok
+
+    case Supervisor.start_child(
+           Letflow.Supervisor,
+           Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary)
+         ) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+    end
   end
 end

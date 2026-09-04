@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-00-git-setup.json",
   "created_at": "2026-09-04T02:43:31Z",
   "started_at": "2026-09-04T02:43:31Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T02:44:20Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -38,10 +38,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Ran GIT_SETUP.md's standard (non-worktree) procedure: `git worktree list` confirmed a single worktree, so the worktree variant did not apply. `git checkout main` succeeded (already on main, clean tree). `git pull --ff-only origin main` exited 0 (already up to date -- origin/main tip 305a6338). No prior local or remote branch named fix/ISS-0451-persistent-poller-crash-budget-20260904 existed (checked both before creating), so no `git branch -D` was needed. `git checkout -b fix/ISS-0451-persistent-poller-crash-budget-20260904` succeeded; `git branch --show-current` confirmed the exact name. `git push -u origin fix/ISS-0451-persistent-poller-crash-budget-20260904` exited 0 and set up tracking against origin. HEAD on the new branch equals origin/main's tip (305a63385ba617f88518b795a683da3850b512dc) since no content commit was made in this step -- only the branch pointer and its push are this step's output. No application code was touched.",
     "artifacts_out": [],
     "issues": [],
-    "next_action": ""
+    "git_evidence": {
+      "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
+      "commit_sha_list": [],
+      "remote_branch": "origin/fix/ISS-0451-persistent-poller-crash-budget-20260904",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH routes to next step per active WF-03 workflow (ISS-0451 diagnosis/design/implementation on this branch)"
   },
   "rework_count": 0,
   "max_rework": 3

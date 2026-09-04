@@ -1,0 +1,57 @@
+{
+  "handoff_id": "730c7d70-53b2-46e3-90da-3e04a2e2df81",
+  "run_id": "WF03-ISS0439-20260904",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0439-20260904/step-final-git-merge.json",
+  "created_at": "2026-09-04T21:40:10Z",
+  "started_at": "2026-09-04T21:40:10Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "related_handoff_ids": [
+      "24d0aca6-096c-4378-81a5-1219fb53e084",
+      "33f34e06-2f3b-418b-90db-c167903d2ac8",
+      "75e3fbfc-6b79-4378-ab47-849a3a06e44d",
+      "07489ea1-ae61-4c87-960a-312341c94ea4"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Execute docs/agents/protocols/GIT_MERGE.md's full procedure (steps 1-10) on branch feature/WF03-ISS0439-20260904, currently checked out with all Steps 1/2/3/5 already committed on it. This run touches ONLY docs/issues/, lib/letflow/design/, docs/migration/decisions/, and handoffs/ -- no lib/letflow/ implementation code, no priv/repo/migrations/, no web/. Despite that, this run is NOT exempt from the git wrapper the way WF-01 is: WF-01's exemption applies only to docs/requirements.yaml-only runs; this run also writes a genuine design-exploration artefact and decision record, which is exactly the same file-shape CODE-DESIGNER/CODE-DESIGN-VALIDATOR/REVIEWER already gated it through, so route it through the full GIT_MERGE procedure rather than a shortcut.\n\nRun steps 5d's mix format/mix compile/mix test checks as normal even though this branch's own diff is docs-only -- the rebase could still surface an unrelated pre-existing failure, and GIT_MERGE.md's own attribution rule applies regardless of what this branch itself changed. Per this project's OWN new rule (added today, ISS-0467/PR #902): under NO circumstances push directly to main, even for a doc-only or one-file change -- always feature branch -> PR -> gh pr merge. You already know this; it is restated here because this run's own diff is unusually small and that is exactly the shape ISS-0467 was filed against.\n\nUse --title \"docs: ISS-0439 1C-taxonomy design exploration, deferral recorded as decision 0019 [WF03-ISS0439-20260904]\" for the PR (WF-03 branches use the \"fix\"/\"docs\" prefix matching the actual change shape; this is a docs change, not a fix, so \"docs:\" is the more accurate prefix -- use your judgement per GIT_MERGE.md step 7's own title guidance if you disagree, but state why in your result if you deviate).",
+    "acceptance_criteria": [
+      "All 10 steps of GIT_MERGE.md's procedure executed and reported",
+      "mix format --check-formatted, mix compile --warnings-as-errors, and mix test all run and their results reported with real numbers, not skipped merely because the diff looks docs-only",
+      "Any test failure is attributed per core-directives.md's Failure Attribution Is Structural rule before being called non-blocking, never by count-matching",
+      "PR opened, merged via gh pr merge (never a direct push to main), and both required CI checks (backend, frontend) confirmed green or the branch-protection --admin override path used with a stated, evidenced attribution -- per GIT_MERGE.md's Precondition section",
+      "Local checkout returned to a clean main synced with the merge commit"
+    ]
+  },
+  "result": {
+    "status": "",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0439-20260904",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0439-20260904",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

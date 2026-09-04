@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0454-20260904-step-final",
+  "run_id": "WF03-ISS0454-20260904",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0454-20260904/step-final-orch.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-04T03:10:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0454", "ISS-0452", "ISS-0446"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0454-20260904/step-00-git-setup.json",
+      "handoffs/WF03-ISS0454-20260904/step-01-issue-fixer-diagnosis.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0454-20260904/step-01-issue-fixer-diagnosis.json (classification + sizing verdict)"
+    ],
+    "branch_name": "feature/WF03-ISS0454-20260904"
+  },
+  "task": {
+    "description": "WF-03 Step Final: ISSUE-FIXER's sizing verdict passed all 6 of ORCHESTRATOR.md S10's direct-action checks (single file, no new public function, no migration, no supervision-tree touch, no tenant-data path, no test-asserted-behavior change), so ORCH applied the fix directly rather than dispatching ELIXIR-DEV/REVIEWER/TEST-RUNNER -- but still routes through a PR and CI per this pipeline's convention that direct ORCH action shortens the AGENT chain, not the CI gate, for any run that touches real code."
+  },
+  "result": {
+    "status": "PASS",
+    "fix_applied": "test/letflow/sandbox_pool_test.exs lines ~1466-1472 and ~1503-1509: both racy on_exit callbacks (Agent.start_link-linked counters) replaced check-then-act (if Process.alive?(counter), do: Agent.stop(counter)) with ISS-0452's established try/catch form. The other 2 grep hits (tenant_fixture_test.exs:503, sandbox_pool_test.exs:671) left unchanged -- ISSUE-FIXER classified both benign (unlinked targets; the second's act-half, Process.exit/2, never raises regardless of linkage).",
+    "verification": "mix compile --warnings-as-errors clean. test/letflow/sandbox_pool_test.exs: 23/23 passed across 6 runs (default seed + seeds 1-5). mix letflow.check.test: 3200/3202 passed, 2 failures -- both the pre-existing rustc-toolchain-gap (Mix.Tasks.Letflow.CheckToolchainTest), no new failure. Same honest limit ISS-0452 itself documented: this race only manifests under CI runner contention, not locally at any repetition count -- the load-bearing argument is the mechanism (no more check-then-act window), not local reproduction.",
+    "docs_updated": "docs/issues/ISS-0454.yaml flipped to status: resolved with full resolution text. handoffs/registry.json updated."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

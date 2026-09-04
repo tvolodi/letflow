@@ -63,4 +63,45 @@ related:
   - ISS-0446
 queue_task_id: 454
 github_issue: 870
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0454-20260904
+resolved_at: "2026-09-04T03:10:00Z"
+resolution: >
+  ISSUE-FIXER classified all 4 sites found by the fresh grep:
+  test/letflow/support/tenant_fixture_test.exs:503 (BENIGN -- target
+  started with Agent.start/1, unlinked, and the check-then-act runs
+  synchronously in the test process itself, not in an on_exit callback);
+  test/letflow/sandbox_pool_test.exs:671 (BENIGN -- target is spawn/1,
+  unlinked, and the act half is Process.exit/2 which never raises against
+  an already-dead pid regardless of linkage); test/letflow/sandbox_pool_test.exs:1467
+  and :1495 (RACY -- both Agent.start_link/1, linked, exact match to
+  ISS-0452's diagnosed and fixed shape).
+
+  Sizing (ORCHESTRATOR.md S10): single file (only sandbox_pool_test.exs
+  needed a change), no new public function, no migration, no
+  supervision-tree file, no tenant-data path, no test-asserted-behavior
+  change (try/catch vs. check-then-act alters no assertion) -- passes all
+  six checks, so ORCH applied the fix directly rather than dispatching
+  ELIXIR-DEV, per ISSUE-FIXER's own explicit sizing verdict.
+
+  FIX. Both racy sites' on_exit callbacks replaced check-then-act with
+  ISS-0452's established try/catch form:
+    on_exit(fn ->
+      try do
+        Agent.stop(counter)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+  VERIFICATION. mix compile --warnings-as-errors clean.
+  test/letflow/sandbox_pool_test.exs: 23/23 passed across 6 runs (default
+  seed + seeds 1-5). Full suite (mix letflow.check.test): 3200/3202 passed,
+  2 failures -- both the pre-existing rustc-toolchain-gap
+  (Mix.Tasks.Letflow.CheckToolchainTest), no new or REQ-219-related
+  failure. Same honest limit ISS-0452 itself documented: the race only
+  manifests under CI runner contention, not locally at any repetition
+  count, so this evidence demonstrates the fix does not break anything
+  rather than directly reproducing the race's absence -- the load-bearing
+  argument is the mechanism (no more check-then-act window), identical to
+  ISS-0452's own reasoning.

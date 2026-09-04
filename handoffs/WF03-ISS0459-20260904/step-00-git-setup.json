@@ -1,0 +1,46 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000001",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0459-20260904/step-00-git-setup.json",
+  "created_at": "2026-09-04T13:34:09Z",
+  "started_at": "2026-09-04T13:34:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0459.yaml",
+      "docs/agents/protocols/GIT_SETUP.md"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ]
+  },
+  "task": {
+    "description": "Run GIT_SETUP.md's procedure in THIS repo (letflow, not letflow-queue) for run-id WF03-ISS0459-20260904. Branch name feature/WF03-ISS0459-20260904. This run's own doc changes (TASK_QUEUE.md / ISSUE_QUEUE.md updates) land on this branch; a SEPARATE service repo (letflow-queue, checked out at c:/Users/tvolo/dev/ai-dala/letflow-queue) will be changed independently under its OWN git workflow, not this one — do not attempt to touch that repo in this step.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main succeeded",
+      "git branch --show-current == feature/WF03-ISS0459-20260904",
+      "git push -u origin feature/WF03-ISS0459-20260904 succeeded"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

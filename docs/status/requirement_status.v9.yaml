@@ -452,3 +452,71 @@ history:
       Full suite 3222/3224, 2 pre-existing rustc-gap failures; isolated
       :lua_wallclock_race group 11/11 unaffected. See
       docs/issues/ISS-0469.yaml for full detail.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T23:11:29Z"
+    note: >
+      WF03-ISS0430-20260905 resolved (queue task 430, GH#834, stage S6).
+      Design-first issue: adopt Postgres LISTEN/NOTIFY as the BEAM<->Postgres
+      push channel. ORCH corrected the filing's own stale premise before
+      writing docs/issues/ISS-0430.yaml: REQ-214 (then "pending") had already
+      shipped as Letflow.Engine.ServiceTaskDispatcher.Poller, and ISS-0425's
+      own follow-on requirements REQ-219/REQ-220 (supervision-tree layering)
+      had also both shipped -- reframed AC6 from a greenfield sequencing
+      question to a retrofit question against the two now-existing pollers.
+      ISSUE-FIXER's Step 0.5/1 confirmed no prior registry match (not a
+      recurrence) and pulled exact poller mechanics (both 5000ms default
+      interval, separate config-key namespaces, FOR UPDATE SKIP LOCKED
+      claim queries) plus decision 0003 Dimension B's :prefix mechanism
+      verbatim, flagging that Postgres NOTIFY has zero schema-scoping
+      concept. CODE-DESIGNER produced lib/letflow/design/
+      iss0430-notify-listen-decision.md answering all 5 named design
+      questions plus the retrofit question: (1) one application-wide
+      Postgrex.Notifications connection wrapped in a new
+      Letflow.Notify.Listener GenServer, placed as a child of
+      Letflow.Supervisor.Infrastructure (after Repo/Migrator, never inside
+      Pollers -- reasoned against ISS-0429/ISS-0451's existing guarantees);
+      (2) tenant isolation via a single shared channel, opaque
+      never-tenant-identifying routing-id payload only, receiver always
+      re-derives its own :prefix scope and discards unresolved ids -- both
+      the timing-signal and sequential-id-enumeration leak vectors reasoned
+      through explicitly and found acceptable/moot respectively (Letflow's
+      tables use disjoint per-schema id sequences); (3) notify-then-fetch,
+      ~10-36 byte payloads; (4) polling retained unconditionally at current
+      5000ms for both pollers, reasoned against all three NOTIFY failure
+      modes; (5) Ecto.Adapters.SQL.Sandbox shared-mode test strategy,
+      concrete 6-step procedure (self-corrected a MINOR ISS-0031
+      mis-citation along the way); (6) retrofit decided NOT NOW, argued
+      against the round-trip evidence (36T eliminated round trips/minute,
+      ~0.11ms co-located vs. the dev host's ~1.3ms/~92%-Docker-overhead
+      figure) against real added complexity to two already-hardened
+      pollers with no documented latency-SLA gap. All three hard gates
+      independently re-derived from real source, not copied:
+      CODE-DESIGN-VALIDATOR (all 8 ACs individually verdicted MET,
+      supervision placement and tenant-isolation reasoning both
+      independently checked against lib/letflow/application.ex and
+      decision 0003); SECURITY-REVIEWER (INV-1 sign-off independently
+      re-derived against real code -- lib/letflow/tenant_provisioning.ex
+      and the actual timers/service_task_dispatches/events migrations --
+      confirming the enumeration-risk argument is factually sound and
+      actually stronger than stated, since the two cited tables use UUID
+      primary keys, not sequences at all; INV-2/3/5/9 NOT-APPLICABLE,
+      INV-4/6/7/8 PASS; flagged a forward obligation for whichever future
+      implementation wires a real consumer to get its own INV-1 pass);
+      REVIEWER (OTP-idiom soundness of the GenServer-wrapper placement,
+      decision 0003/0009 consistency independently read and confirmed, the
+      "not now" retrofit verdict confirmed deliberate and complete, no
+      scope creep beyond ISS-0430's own 8 ACs). No ELIXIR-DEV/TEST-DESIGNER
+      step -- AC8 explicitly excludes implementation. ISSUE-FIXER's Step 5
+      worked through all three terminal statuses in ISSUE_QUEUE.md's
+      vocabulary before choosing resolved (not no_defect: a real artefact
+      was produced; not instrumented: no unremoved root cause and no
+      successor issue is needed, since AC1-AC8 are entirely about the
+      artefact's existence/content and all 8 are independently verified
+      true across three separate gates). docs/issues/ISS-0430.yaml:
+      status: resolved, with its own status_reasoning field recording
+      that determination. GitHub issue #834 closed with an evidence
+      comment citing the run, the artefact path, and all three gate
+      passes, stating plainly this is a design decision, not a shipped
+      feature. Queue task 430 released status:"done".

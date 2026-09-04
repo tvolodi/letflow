@@ -1,0 +1,52 @@
+{
+  "handoff_id": "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0430-20260905/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T22:59:53Z",
+  "started_at": "2026-09-04T22:59:53Z",
+  "completed_at": "2026-09-04T23:01:27Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "lib/letflow/design/iss0430-notify-listen-decision.md",
+      "handoffs/WF03-ISS0430-20260905/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's design artefact for ISS-0430, lib/letflow/design/iss0430-notify-listen-decision.md. Read docs/issues/ISS-0430.yaml in full for the 8 acceptance criteria and 5 named design questions. Independently re-derive your verdict from the artefact itself and from the real source files it cites -- do NOT accept CODE-DESIGNER's own claims about supervision-tree ordering or poller mechanics without checking them yourself against lib/letflow/application.ex, lib/letflow/supervisor/pollers.ex, and lib/letflow/supervisor/infrastructure.ex directly (per core-directives.md's 'Every producing step has a validating step' -- a validator that only reads the producer's own summary has not validated anything). Specifically verify: (1) the claimed placement (new child of Infrastructure, immediately after Repo/Ecto.Migrator, before Oidcc.ProviderConfiguration.Worker) does not contradict ISS-0429's or ISS-0451's already-documented ordering/restart-intensity guarantees -- read those modules' own moduledocs yourself; (2) the tenant-isolation mechanism (Question 2's 'option (a), opaque routing id, receiver re-derives its own :prefix scope') is reasoned concretely against decision 0003 Dimension B's actual mechanism, not asserted; check that the per-tenant sequential-id enumeration argument (schema-per-tenant means disjoint per-schema id sequences) is factually sound given Letflow's actual schema-per-tenant migration strategy; (3) all 8 ACs are individually satisfied -- go through each AC from ISS-0430.yaml by name and state a verdict against it; (4) no implementation code (.ex bodies, runnable migrations) is present -- the Question 3 schema sketch and Question 1's illustrative wrapper description are the two places most likely to have drifted into implementation, check both specifically; (5) the design's own self-reported correction (Question 5's ISS-0031 mis-citation) is itself accurate -- briefly confirm docs/issues/ISS-0031.yaml really is unrelated, as claimed. This is a hard gate: if any AC is unmet or any claim about existing source doesn't check out, FAIL with the specific gap named (per HANDOFF_PROTOCOL.md's validator-fail worked example), not a general impression.",
+    "acceptance_criteria": [
+      "Each of ISS-0430's 8 acceptance criteria individually verdicted (met/not met) against the artefact",
+      "Supervision-tree placement claim independently checked against lib/letflow/application.ex and the two supervisor modules' own moduledocs, not merely trusted",
+      "Tenant-isolation mechanism (Question 2) independently checked for concrete reasoning against decision 0003, not accepted on the producer's assertion alone",
+      "Confirms no implementation code (.ex bodies, runnable migration DDL) is present in the artefact",
+      "Confirms the Question 5 ISS-0031 self-correction is itself accurate",
+      "PASS or FAIL stated with specific evidence either way; on FAIL, next_action names CODE-DESIGNER for rework with the exact gaps"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Independently re-derived against lib/letflow/application.ex, lib/letflow/supervisor/pollers.ex, lib/letflow/supervisor/infrastructure.ex, docs/migration/decisions/0003-ecto-schema-strategy.md, and docs/issues/ISS-0031.yaml directly (not the artefact's or the diagnosis handoff's summaries). SUPERVISION PLACEMENT: confirmed accurate. application.ex:62-67 lists [Infrastructure, Supervisor.child_spec(Pollers, restart: :temporary), PollersBreaker, Http]; Infrastructure's own moduledoc lines 14-16 confirm children 1-3 are Letflow.Repo, Ecto.Migrator, Oidcc.ProviderConfiguration.Worker -- matching the artefact's claimed placement (new child after infra child 2, before child 3). ISS-0429's guarantee (Infrastructure moduledoc lines 41-51, 'Obs.Alerts.TaskSupervisor is the LAST child... supervisor-boundary guarantee') is unaffected because the new child sits earlier in Infrastructure's own list, still strictly before the Infrastructure->Pollers supervisor boundary. ISS-0451's restart:temporary override (pollers.ex moduledoc lines 15-46) is scoped to Pollers specifically; Infrastructure keeps plain OTP-default restart intensity per its own moduledoc (lines 8-10) -- the artefact correctly does not apply ISS-0451's guarantee to a child placed in Infrastructure. No contradiction found. TENANT ISOLATION (Q2): reasoned concretely against 0003 Dimension B's actual text (lines 37-45, 216-225: schema-per-tenant via Ecto :prefix, no session/connection-level tenant context, Addendum lines 326-396 explicitly rejects a GUC mechanism) -- not asserted. The opaque-routing-id/receiver-re-derives-:prefix mechanism is a sound response to NOTIFY's database-global, schema-blind delivery (Postgres does not consult :prefix/search_path when routing NOTIFY, which the artefact states and which is consistent with Postgres's documented behavior). The disjoint-per-schema-sequence claim is factually sound given decision 0003's schema-per-tenant description (separate physical tables per schema each carry their own PK sequence object) -- checked against 0003's own text describing real per-schema table provisioning (lines 143-181), not just accepted on the artefact's assertion. IMPLEMENTATION CODE: confirmed absent. Checked Question 1's wrapper description (prose only, explicitly 'illustrative name... not implemented here'), Question 3's schema sketch (a markdown field-name table plus descriptive prose, no code block, no defmodule/def), and Question 5's test strategy (numbered prose steps naming functions like Sandbox.checkout/1, no actual .exs content) -- the two places flagged as most likely to drift into implementation are both clean; no .ex body or migration DDL anywhere in the document. ISS-0031 SELF-CORRECTION: confirmed accurate by reading docs/issues/ISS-0031.yaml directly -- it is a :telemetry.attach/4 cross-process message-leak fix in tenant_status_test.exs (resolved 2026-08-17), unrelated to DDL visibility or non-sandboxed-connection testing technique, exactly as the artefact states. ALL 8 ACs FROM ISS-0430.yaml VERDICTED INDIVIDUALLY, ALL MET: (1) all 5 design questions answered explicitly -- MET. (2) Postgres remains source of truth, payload is routing-hint-only/untrusted -- MET (Q2/Q3, invariant I2). (3) polling explicitly retained, both intervals named (5000ms each, matching the diagnosis handoff's verified defaults) -- MET (Q4). (4) tenant isolation addressed as security property with named mechanism and SECURITY-REVIEWER sign-off explicitly flagged for implementation time -- MET (Q2, lines 336-340; appropriate for a design-only artefact per ISS-0430's own 'implementation is separate follow-on work' scope note). (5) reconciled with current supervision tree, LISTEN connection given a stated place, not an unplaced peer -- MET, independently confirmed above. (6) relationship to both shipped pollers stated explicitly (NOT NOW, argued) -- MET (Q6). (7) performance claim justified by eliminated round trips, notes ~92% Docker Desktop overhead and ~0.11ms co-located figure -- MET (Q6 'AC7' subsection, matches ISS-0430.yaml's own filed profiling numbers exactly). (8) no consumer implementation included -- MET, independently confirmed above.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ORCH: WF-03 design-first issue ISS-0430 has a PASSING design artefact (lib/letflow/design/iss0430-notify-listen-decision.md). No implementation follow-on is in scope per this issue's own filing ('Implementation is separate follow-on work') -- ORCH should close out this WF-03 run against the design artefact rather than routing to ELIXIR-DEV/FRONTEND-DEV."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

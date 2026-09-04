@@ -4702,6 +4702,25 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED -- PR #908 (main work, merged with --admin after structural CI-failure attribution) and PR #909 (self-caught handoff-finalization correction, merged clean) both squash-merged to main, final HEAD 1e4bffed. Queue task 439 released done, ISS-0439 resolved.",
       "note": "DESIGN-EXPLORATION-ONLY WF-03 run for ISS-0439 (should Letflow adopt 1C-style typed business-object templates -- deliberately DEFERRED by the user 2026-09-02, this run's job is only to durably RECORD that deferral, per the issue's own 6 ACs which are entirely about recording, not about the taxonomy question itself). Ad-hoc-shaped WF-03 skipping Steps 0.5/1/3/4 (no diagnosis/implement/regression-test phase applies -- no code is produced, per AC5) and routing Step 2 (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR) + REVIEWER directly to Step 5 (close) and Step Final. Two artefacts produced and independently gated PASS: lib/letflow/design/iss0439-1c-taxonomy-mapping.md (maps Directory/Document/Register/Report onto actually-read Letflow modules -- event log + EventStore.Registry for Document, InstanceProjection for Register, nothing yet for Directory/Report; corrects the 2026-09-02 filing's 'untracked substrate' framing to 'tracked (ISS-0438 resolved) but unbuilt (REQ-225..231 all pending)') and docs/migration/decisions/0019-defer-1c-typed-templates.md (the formal decision record: 3 reasons quoted verbatim, 3 review triggers, ISS-0438/REQ-225..231 dependency). CODE-DESIGN-VALIDATOR independently re-verified 4 factual claims against real source; REVIEWER independently confirmed no scope creep and decision-record consistency against 0004/0017/0018. ISSUE-FIXER closed as status: resolved (the recording gap, not the taxonomy question, is what resolved) after reading ISSUE_QUEUE.md's status vocabulary rather than assuming. Step Final needed 2 PRs after ELIXIR-DEV self-caught an accidental commit onto local main mid-step and corrected it via a second branch+PR rather than force-pushing past it. PR #908 merged --admin after two CI red runs, both structurally attributed (route 1: neither failing module in this docs-only branch's diff; route 3 additionally for a live OIDC econnrefused retry storm) -- both flakes cross-checked against docs/issues/ and found to be recurrences of already-open records (ISS-0469 for the Lua timing flake; ISS-0426/ISS-0352/ISS-0406/ISS-0413/ISS-0418/ISS-0456 for the WASM/OIDC class), so no new issue was registered. ORCH independently verified the final state against origin/main (fetched, matched) before writing RUN_DONE, not merely trusting ELIXIR-DEV's result.summary."
+    },
+    {
+      "run_id": "WF03-ISS0430-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0430",
+      "queue_task_id": 430,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 834,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/design/"
+      ],
+      "started_at": "2026-09-04T22:47:41Z",
+      "lock_released_at": "2026-09-04T23:12:09Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step 5 COMPLETED PASS (ISSUE-FIXER close) -- docs/issues/ISS-0430.yaml status: resolved, GH#834 closed with evidence. Queue task 430 released status:done. Routing to Step Final (git merge) next.",
+      "note": "DESIGN-FIRST WF-03 run for ISS-0430 (Postgres LISTEN/NOTIFY adoption decision). Task already claimed/locked pre-run (queue task 430, agent_id tvolodi-orch, locked 2026-09-04T22:47:41Z) per the dispatching agent instruction; ORCH wrote docs/issues/ISS-0430.yaml fresh (did not exist before this run) and corrected the filing text before writing it: the original filing framed this as \"settle before REQ-214 lands\", but REQ-214 (status done, PR #847) and ISS-0425 own follow-on requirements REQ-219/REQ-220 (both status done) have already shipped -- re-verified directly against docs/requirements.yaml and current lib/letflow/application.ex + lib/letflow/supervisor/*.ex before writing the issue file, per HANDOFF_PROTOCOL.md section 1.1 (a handoff/filing factual premise is checkable and may be wrong). Reframed AC6 as a retrofit question against the two already-shipped pollers rather than a greenfield sequencing choice. No implementation in scope (AC8) -- design artefact and decision only. SECURITY-REVIEWER sign-off is mandatory per AC4 even though this is design-only, since it governs a mechanism that will carry tenant-scoped signals."
     }
   ]
 }

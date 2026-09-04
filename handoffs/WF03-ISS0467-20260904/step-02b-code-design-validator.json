@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0467-20260904/step-02b-code-design-validator.json",
   "created_at": "2026-09-04T19:09:18Z",
   "started_at": "2026-09-04T19:09:18Z",
-  "completed_at": "2026-09-04T19:11:25Z",
-  "status": "COMPLETED",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -31,7 +31,7 @@
     "owned_modules": []
   },
   "task": {
-    "description": "Gate CODE-DESIGNER's design artefact at lib/letflow/design/iss-0467-direct-push-prohibition.md. This is a docs/protocol design (no @spec/module interface) -- your bar is: every ISS-0467.yaml acceptance criterion is covered by a concrete design element, the option choice (Option 2, prohibition) is honestly justified against ISSUE-FIXER's diagnosis rather than asserted, the exact verbatim text for both GIT_MERGE.md and ORCHESTRATOR.md sec.10 is unambiguous enough to apply without further judgement calls, no implementation code is present, and the reasoning about ORCHESTRATOR.md sec.10 (whether the sizing rule as currently written already prohibits a bare push, and whether a correction is still needed) is independently checked against the actual text of sec.10 and AGENT_SYSTEM.md sec.4 -- re-derive this yourself by reading those two sections directly, do not accept CODE-DESIGNER's characterization of them on trust. Also independently verify the claim that Option 1 (GitHub restrictions) is a genuine no-op given the single-identity auth setup -- re-read ISSUE-FIXER's live-verified evidence in step-01-issue-fixer.json directly rather than trusting CODE-DESIGNER's summary of it. Check placement instructions are unambiguous (exact insertion points named). Check AC3's claim that nothing regresses the gh pr merge/--admin path -- verify by reading GIT_MERGE.md's actual Step 8 and confirming the design proposes no edit to it.",
+    "description": "Gate CODE-DESIGNER's design artefact at lib/letflow/design/iss-0467-direct-push-prohibition.md. This is a docs/protocol design (no @spec/module interface) -- your bar is: every ISS-0467.yaml acceptance criterion is covered by a concrete design element, the option choice (Option 2, prohibition) is honestly justified against ISSUE-FIXER's diagnosis rather than asserted, the exact verbatim text for both GIT_MERGE.md and ORCHESTRATOR.md sec.10 is unambiguous enough to apply without further judgement calls, no implementation code is present, and the reasoning about ORCHESTRATOR.md sec.10 (whether the sizing rule as currently written already prohibits a bare push, and whether a correction is still needed) is independently checked against the actual text of sec.10 and AGENT_SYSTEM.md sec.4 -- re-derive this yourself by reading those two sections directly, do not accept CODE-DESIGNER's characterization of them on trust. Also independently verify the claim that Option 1 (GitHub restrictions) is a genuine no-op given the single-identity auth setup -- re-read ISSUE-FIXER's live-verified evidence in step-01-issue-fixer.json directly rather than trusting CODE-DESIGNER's summary of it. Check placement instructions are unambiguous (exact insertion points named). Check AC3's claim that nothing regresses the gh pr merge/--admin path -- verify by reading GIT_MERGE.md's actual Step 8 and confirming the design proposes no edit to it.\n\nREGATE (iteration 1): your prior FAIL (gate_history[0]) found exactly 1 BLOCKER -- design section 7 mislabeled its 3 acceptance criteria as verbatim from docs/issues/ISS-0467.yaml, which has no such field. CODE-DESIGNER's rework (commit 596564c9) retitled section 7 to 'Acceptance criteria mapping (as filed in GitHub issue #896 / this run's task framing)' and added an explicit sourcing note stating ISS-0467.yaml has no acceptance_criteria field, with a matching fix to section 6's echo. Re-verify: (a) confirm this specific correction actually landed as described by reading the current design file yourself, (b) confirm no other section changed (diff the current file's sections 1-6/Open Questions against your own iteration-0 findings -- they should be identical), (c) your other 7 iteration-0 findings do not need to be re-derived from scratch since nothing they depend on changed, but spot-check that the design file's insertion-point text for GIT_MERGE.md and ORCHESTRATOR.md sec.10 is still byte-identical to what you verified before (the rework should not have touched those quoted blocks).",
     "acceptance_criteria": [
       "Every ISS-0467.yaml acceptance criterion (1, 2, 3) mapped to a concrete design element, verified by you reading the design doc's own mapping section AND cross-checking it against the issue file",
       "Option 2 justification re-derived independently: read step-01-issue-fixer.json's actual diagnosis text and confirm it supports the 'no-op' conclusion the design draws from it",
@@ -55,6 +55,16 @@
     ],
     "next_action": "Route back to CODE-DESIGNER for rework: correct design section 7's citation so it accurately identifies the source of the three 'acceptance criteria' it maps against (they come from step-01-issue-fixer.json's task framing, not from docs/issues/ISS-0467.yaml, which has no acceptance_criteria field at all) -- either retitle/re-source section 7 accurately, or coordinate with REQ-ANALYST/ISSUE owner to add real acceptance_criteria to ISS-0467.yaml and remap. All other sections of the design (Option 2 justification, GIT_MERGE.md and ORCHESTRATOR.md sec.10 verbatim text and insertion points, AC3/no-regression claim, decision-record placement reasoning, absence of implementation code) independently verified and are correct as written -- do not need rework."
   },
-  "rework_count": 0,
-  "max_rework": 3
+  "rework_count": 1,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-04T19:11:25Z",
+      "status": "FAIL",
+      "summary": "1 BLOCKER: design section 7 labeled its 3 acceptance criteria as verbatim from docs/issues/ISS-0467.yaml, which has no acceptance_criteria field. All other 7 independently-derived checks (Option 2 justification, ORCHESTRATOR.md sec.10/AGENT_SYSTEM.md sec.4 reading, both verbatim insertion points, AC3/Step 8 no-regression, absence of implementation code, decision-record placement reasoning) PASS.",
+      "issues": ["Design section 7 misattributes its acceptance-criteria citation to docs/issues/ISS-0467.yaml, which has no such field."],
+      "next_action": "Route back to CODE-DESIGNER: correct section 7's source attribution only; leave every other section unchanged."
+    }
+  ]
 }

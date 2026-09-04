@@ -123,6 +123,42 @@ reopen or contradict the sentence above; S6's originally-scoped batches
 were and remain complete, and this is an additional, later-discovered
 subsystem in the same stage.
 
+**Note added 2026-09-04, after the note above (append, not an edit — same
+convention):** REQ-225 through REQ-231 were drafted, closing ISS-0438
+("port R-Co's dynamic entity/data-model subsystem into Letflow"). CODE-DESIGNER's
+scoping recommendation (`lib/letflow/design/iss0438-entity-subsystem-scoping.md`,
+passed by CODE-DESIGN-VALIDATOR) found this to be a real, already-battle-tested
+R-Co subsystem (`src/entities/` — `definition.zig`, `validator.zig`,
+`commands.zig`, `projector.zig`, `events.zig`, plus the `query/` subdirectory
+the original ISS-0438 filing did not size at all) whose two hard dependencies,
+REQ-202 (`Letflow.Repository`) and REQ-203 (per-tenant activation), are already
+done, and which is S6-scoped rather than S5 because its dependency graph
+resolves entirely to S2/S6 subsystems, not `src/lua/`/`src/wasm/`. Seven
+requirements, chained by the artefact's dependency order and split further
+where a slice was itself oversized: REQ-225 (entity definition JSON schema
+and structural validation rules), REQ-226 (`entity_definitions` persistence,
+CRUD, and the `ArtifactKind` `:entity` extension), REQ-227 (entity
+record-payload validation, ISS-0160/GH#481 parity), REQ-228 (entity event
+registration and record commands, idempotent replay, synthetic-instance-per-type),
+REQ-229 (projection and replay), REQ-230 (entity query DSL — operators,
+allowlist, SQL compiler — a tenant-data path under SECURITY-REVIEWER's hard
+gate), and REQ-231 (entity query DSL — cursor pagination and field-grant
+redaction). No route/controller layer is included in any of the seven,
+matching REQ-202's own "no consumer contract, don't build the surface"
+deferral — `router.ex`'s two entity-related deferred rows remain deferred.
+Three genuine open design questions the recommendation deliberately did not
+resolve are named explicitly inside the relevant requirement's own
+description, for that slice's own CODE-DESIGNER pass to decide: the
+`Letflow.EventStore.Registry.JsonSchema` cross-namespace reuse question
+(REQ-227), the entity-type tenant-vs-platform ownership model (REQ-225),
+and the synthetic-instance-per-type-vs-per-record model (REQ-228, defaulting
+to matching R-Co's actual shipped per-type behaviour rather than its
+design-doc hedge). This does not reopen or contradict "S6 is now complete"
+above, nor the 2026-09-01 REQ-211/212 note; it is a third, later-discovered
+subsystem landing in the same stage. ISS-0439 (the deferred 1C-style typed-template
+question) remains unresolved and unaffected — its own recorded decision names
+this exact port as its prerequisite, not as evidence to act on yet.
+
 **First batch (DLQ and webhooks):** REQ-176 (Dead-letter queue schema
 and core entry lifecycle, OBS-05 foundation); REQ-177 (Wire REQ-056's
 and REQ-061's existing hooks into the DLQ); REQ-178 (DLQ route layer

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000008",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0438-20260904/step-03-reviewer.json",
+  "created_at": "2026-09-04T15:53:19Z",
+  "started_at": "2026-09-04T15:53:19Z",
+  "completed_at": "2026-09-04T16:31:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226", "REQ-227", "REQ-228", "REQ-229", "REQ-230", "REQ-231"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "docs/requirements.yaml",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/migration/decisions/",
+      "lib/letflow/router.ex",
+      "docs/issues/ISS-0438.yaml",
+      "docs/issues/ISS-0439.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "This run (WF03-ISS0438-20260904) resolves ISS-0438 -- a scoping/architecture decision on whether Letflow ports R-Co's dynamic entity/data-model subsystem. The outcome is 'IN SCOPE, port now, as new S6 requirements' (CODE-DESIGNER's recommendation, CODE-DESIGN-VALIDATOR PASSed, REQ-VALIDATOR PASSed 7 resulting requirements REQ-225..231 after one rework iteration). No docs/migration/decisions/ record was written, because the decision-record path was only the OUT-OF-SCOPE branch's requirement (AC3) -- this run took the IN-SCOPE branch instead, whose evidence trail is the CODE-DESIGNER artefact plus the 7 gated requirements. Your job, per your normal REVIEWER duties (decision-record consistency, scope creep, idiom -- ORCHESTRATOR.md), is to independently gate the FINAL STATE of this run before Step Final merges it:\n\n1. Read lib/letflow/design/iss0438-entity-subsystem-scoping.md in full -- confirm the recommendation is genuinely reasoned (not a rubber-stamp) and does not silently contradict any existing docs/migration/decisions/ record. Check specifically against decision 0003 (schema-per-tenant conventions) and decision 0014 (scripting/plugin runtime strategy, since this subsystem's router row once carried an S5 hedge) for consistency.\n2. Confirm lib/letflow/router.ex's 'Deferred routes' table was NOT edited by this run (it should not be -- the outcome was in-scope/port, not the out-of-scope/remove-rows path). Read the file and confirm both Entities/EntityQuery rows are unchanged.\n3. Confirm docs/migration/stage-6-operational-cross-cutting.md's addendum (added by REQ-ANALYST) is genuinely additive -- the pre-existing 'S6 is now complete' line and the 2026-09-01 REQ-211/212 addendum must both still read exactly as before, byte for byte, with only a new paragraph appended after them.\n4. Spot-check at least two of the seven new requirements (REQ-225..231) in docs/requirements.yaml directly for idiomatic fit with this project's existing conventions -- tenant-scoping via prefix/tenant_id, no premature route/controller work, correct use of existing REQ-202/REQ-024 machinery rather than a parallel mechanism -- rather than trusting REQ-VALIDATOR's PASS alone (a second independent pass, per this project's redundancy principle).\n5. Confirm no scope creep: this run produced ONLY a design artefact, 7 requirement entries, one stage-doc addendum paragraph, and (in a later step) a docs/issues/ISS-0438.yaml status update -- no lib/letflow/ implementation code, no migrations, matching ISS-0438's own AC7 ('no implementation of the subsystem is included in this issue').\n6. State a PASS or FAIL verdict. This is a hard gate per your normal role -- do not rubber-stamp a producer's own claim of completeness.",
+    "acceptance_criteria": [
+      "Design artefact independently checked against docs/migration/decisions/0003 and 0014 for consistency, not assumed consistent",
+      "router.ex's Deferred routes table confirmed byte-for-byte unchanged by this run",
+      "stage-6-operational-cross-cutting.md's addendum confirmed genuinely additive, pre-existing text unchanged",
+      "At least two of the seven new requirements independently spot-checked for idiomatic/architectural fit, not only trusted from REQ-VALIDATOR's PASS",
+      "No scope creep confirmed -- no lib/ or priv/repo/migrations/ files touched by this run",
+      "A clear PASS or FAIL verdict stated"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently gated the final state of WF03-ISS0438-20260904. (1) Read lib/letflow/design/iss0438-entity-subsystem-scoping.md in full (508 lines) -- the recommendation is genuinely reasoned: it re-derives R-Co source directly (4,158 lines read, catching a real gap in ISS-0438's own ~3,400-line estimate that omitted the 1,064-line query/ subsystem), gives concrete file/function-level reuse mappings against REQ-202/REQ-203/REQ-024 (not hand-waved), and names five open design questions explicitly rather than silently resolving them. Checked against decision 0003 (schema-per-tenant, tenant_id derived from :prefix at write time): the artefact's ownership-model open question (tenant-scoped vs. platform-scoped entity types) correctly identifies tenant-scoped as 0003's natural default without silently assuming it, consistent with 0003 Decision B. Checked against decision 0014 (Lua/WASM runtime binding): the artefact resolves the router table's old 'S5/S6' hedge by showing the entity subsystem's actual dependency graph (src/repository, src/event_store, src/api/*) names zero dependency on src/lua/ or src/wasm/ (0014's actual scope) -- orthogonal to 0014's decided content, no contradiction. (2) git diff main...HEAD -- lib/letflow/router.ex is empty (zero changes); read router.ex lines 69-83 directly and confirmed both 'Letflow.Routers.Entities' (line 79) and 'Letflow.Routers.EntityQuery' (line 80) rows are present, unchanged, still deferred. (3) git diff main...HEAD -- docs/migration/stage-6-operational-cross-cutting.md shows a pure insertion (36 lines added, 0 removed) of one new paragraph positioned after the existing 2026-09-01 REQ-211/212 addendum note and before the 'First batch (DLQ and webhooks)' section -- the pre-existing 'S6 is now complete' line and the REQ-211/212 note are untouched by the diff, confirming byte-for-byte preservation. (4) Spot-checked REQ-225 (entity definition schema/validation) and REQ-226 (entity_definitions persistence/CRUD/ArtifactKind extension) directly, plus read REQ-230 (query DSL/SQL compiler) for its security framing. All three: correctly cite decision 0003 Decision B for tenant-scoping placement matching REQ-202/REQ-203/REQ-211's precedent; explicitly defer route/controller work citing REQ-202's 'no consumer contract' precedent rather than building premature surface; reuse existing machinery (Letflow.Repository.Canonicaliser via REQ-202, REQ-203's artifact_activations, REQ-067's cursor pagination, this project's existing Ecto.Query.fragment/1 SQL-injection discipline per docs/anti-patterns.md) rather than parallel mechanisms; REQ-230 correctly flags itself as a tenant-data-path change requiring SECURITY-REVIEWER's hard gate. No idiom or scope-creep issues found in the sampled requirements. (5) git diff main...HEAD --stat shows 13 files changed: 1 design artefact (lib/letflow/design/, prose only, no .ex/.exs code blocks), docs/requirements.yaml (7 new entries), docs/migration/stage-6-operational-cross-cutting.md (1 addendum paragraph), and handoff/orchestrator bookkeeping files (handoffs/, docs/migration/decisions/ not touched by this run). Explicitly confirmed via git diff --stat -- lib/ priv/repo/migrations/ that zero files under either path are touched -- matches ISS-0438's AC7 exactly. No scope creep found.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0438-20260904/step-03-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "PASS -- clear to proceed to TEST-DESIGNER / Step Final merge. No rework required. Note for whoever picks up REQ-225/REQ-226/REQ-227/REQ-228's own future CODE-DESIGNER passes: the design artefact's five open questions (JsonSchema cross-namespace reuse in REQ-227, entity-type ownership model in REQ-225, synthetic-instance-per-type model in REQ-228, query/ field-grant mapping onto an existing Letflow authz primitive, bulk operations deferral) are correctly carried forward into the relevant requirement's own description text rather than silently resolved -- future design passes for those requirements must still make and record each choice explicitly, this review did not adjudicate them (out of scope for a scoping-decision gate)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

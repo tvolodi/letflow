@@ -1,0 +1,48 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000009",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0438-20260904/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-04T15:55:22Z",
+  "started_at": "2026-09-04T15:55:22Z",
+  "completed_at": "2026-09-04T15:56:33Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0438.yaml",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "handoffs/WF03-ISS0438-20260904/step-03-reviewer.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": ["docs/issues/ISS-0438.yaml"]
+  },
+  "task": {
+    "description": "WF-03 Step 5: close ISS-0438. This run's decision is 'resolved' -- a real root cause WAS removed: the coverage gap ISS-0438 alleged ('a subsystem tracked only as a router comment, invisible to task selection') is closed because it is now tracked as 7 real, gated, queue-registered requirements (REQ-225 through REQ-231, letflow-queue task ids 460-466, GH issues 888-894), each independently claimable via get_next_task. This is the 'resolved' terminal state per ISSUE_QUEUE.md's vocabulary (a root cause actually removed), NOT 'instrumented' (nothing here is a partial/diagnostic-only fix -- CODE-DESIGN-VALIDATOR and REQ-VALIDATOR and REVIEWER all independently PASSed the actual deliverables) and NOT 'no_defect' (the gap was real and confirmed, not absent).\n\n1. Update docs/issues/ISS-0438.yaml: status: resolved, plus resolved_in_run: WF03-ISS0438-20260904, resolved_at: <real UTC timestamp from the clock>. State in the record (or confirm the existing description already covers it) that resolution took the form of a scoping decision (lib/letflow/design/iss0438-entity-subsystem-scoping.md) plus 7 registered requirements, NOT implementation -- ISS-0438's own AC7 explicitly excluded implementation, so 'resolved' here means the coverage/tracking gap is closed, not that the entity subsystem itself now exists in lib/letflow/.\n2. Close GH#845 with a --comment citing the resolving evidence: the run-id, the design artefact path, and the 7 new REQ ids with their queue task ids. Use: gh issue close 845 --comment \"Fixed in WF03-ISS0438-20260904. Scoping decision: IN SCOPE, port the generic entity subsystem into Stage 6. See lib/letflow/design/iss0438-entity-subsystem-scoping.md for the full recommendation (grounded in 4,158 lines of R-Co source read directly) and docs/issues/ISS-0438.yaml for the resolution record. Expanded into REQ-225 through REQ-231 in docs/requirements.yaml, each registered in letflow-queue (tasks 460-466, GH#888-894) and independently claimable via get_next_task.\"\n3. Complete this handoff: PASS, next_action: Route to Step Final (git merge).",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0438.yaml status is resolved with resolved_in_run/resolved_at keys, real UTC timestamp",
+      "GH#845 closed with a --comment citing the run-id, the design artefact, and the 7 new REQ ids/queue task ids",
+      "gh issue view 845 --json state,closedByPullRequestsReferences confirms state CLOSED after the close call"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ISS-0438 closed as resolved (not instrumented/no_defect): a root cause was actually removed. The coverage gap the issue alleged -- the entity/data-model subsystem tracked only as a 'S5/S6' comment in lib/letflow/router.ex's deferred-routes table, invisible to get_next_task and expanded into zero requirements -- is closed. Resolution took the form of a scoping decision (lib/letflow/design/iss0438-entity-subsystem-scoping.md: IN SCOPE, port the generic subsystem into Stage 6, grounded in 4,158 lines of R-Co source read directly) plus registration as 7 real, gated, queue-registered requirements (REQ-225 through REQ-231 in docs/requirements.yaml, letflow-queue task ids 460-466, GH issues 888-894), each independently claimable via get_next_task. Per ISS-0438's own AC7, implementation was explicitly out of scope for this issue, so 'resolved' means the coverage/tracking gap is closed, not that Letflow.Routers.Entities/EntityQuery now exist in lib/letflow/ -- confirmed no ambiguity here since Step 3 (CODE-DESIGN-VALIDATOR, REQ-VALIDATOR, REVIEWER) all independently PASSed the actual deliverables per handoffs/WF03-ISS0438-20260904/step-03-reviewer.json. docs/issues/ISS-0438.yaml updated: status: resolved, resolved_in_run: WF03-ISS0438-20260904, resolved_at: 2026-09-04T15:56:10Z (real UTC clock read), plus a resolution: field spelling out the above. GH#845 closed via `gh issue close 845 --comment ...` with the exact evidence-citing comment text specified in this handoff's task.description (run-id, design artefact path, all 7 REQ ids and their queue task ids/GH issue numbers). Verified post-close: `gh issue view 845 --json state,closedByPullRequestsReferences` returned state CLOSED (closedByPullRequestsReferences empty, which is expected and fine -- this step's own --comment is the evidence form used, not a linked PR, per WF-03 Step 5's 'EITHER (i) OR (ii)' evidence rule).",
+    "artifacts_out": [
+      "docs/issues/ISS-0438.yaml",
+      "handoffs/WF03-ISS0438-20260904/step-05-issue-fixer-close.json"
+    ],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

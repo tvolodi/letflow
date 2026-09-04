@@ -101,4 +101,69 @@ source: >
 queue_task_id: 428
 github_issue: 832
 
-status: open
+status: resolved
+
+resolution: >
+  RESOLVED by WF03-ISS0428-20260904, PR #899, squash-merged as 08c89520.
+
+  WHAT SHIPPED: mix letflow.check.test now invokes scripts/test_parallel.sh
+  instead of plain `mix test`, and its ISS-0069 warning gate reads the N
+  per-partition logs rather than the wrapper's aggregated stdout. No mix.exs
+  or ci.yml edit was needed -- CI's only gate is `mix letflow.check`, so
+  changing check.test's internals changed CI automatically.
+
+  MEASURED, re-taken on the current tree rather than inherited: this issue's
+  own 1805s serial baseline predated the ISS-0427 template-clone merge and
+  would have credited that separate win to parallelism. Fresh figures --
+  serial 1466s; TEST_PARALLEL_N=2 774s; N=16 ~300s. On real CI hardware the
+  runner reported N=4 (ubuntu-latest is 4 vCPU, not the 2 both this issue
+  and ORCH assumed), 3223/3223 passing across four partitions in ~5 minutes,
+  with the backend gate completing in 6m51s-7m28s against a 10-14 minute
+  pre-change baseline.
+
+  THIS ISSUE'S OWN RECOMMENDATION WAS DELIBERATELY REVERSED, on evidence.
+  ISS-0428 suggested keeping the runner selectable and leaving CI unchanged
+  "until measured", assuming the N=16 gain would not transfer and warning
+  adoption might trade a slow-but-green gate for a fast-but-flaky one.
+  Measured, N=2 was both faster AND clean, and CI turned out to be N=4. The
+  uncertainty the hedge existed for was closed, so the design switched
+  wholesale. REVIEWER independently agreed, adding that a selectable
+  fallback would itself be a latent-bug risk of a shape this project's
+  anti-patterns already document -- an alternate path exercised constantly
+  locally and almost never on CI.
+
+  THE TRAP THIS ISSUE CORRECTLY NAMED WAS REAL AND IS HANDLED. check.test
+  greps captured stdout for "default values for the optional arguments";
+  the parallel script prints only aggregate counts, so the check would have
+  gone green while inspecting almost nothing. It now discovers the log dir
+  from the runner's own marker line, globs partition-*.log with no hardcoded
+  N, and treats a missing marker, an unparseable one, or zero logs as HARD
+  failures. When the wrapper exits non-zero AND the marker is absent, the
+  non-zero exit is reported first -- the common case is a compile failure
+  that exits before the marker prints.
+
+  A PRECISION CORRECTION worth keeping: this issue (and an early design
+  draft) claimed the aggregate stdout would find the warning "nothing,
+  forever." CODE-DESIGN-VALIDATOR proved that imprecise -- the script's
+  unredirected Step 1 pre-compile does leak a warning to stdout. The real
+  situation is worse in a different way: grepping the aggregate would catch
+  a warning sometimes and miss it other times, making a silent regression
+  look like a flake.
+
+  COVERAGE: the three existing tests faked `mix` on PATH and went 0/3 once
+  the task began shelling to bash. Rewritten to fake bash at the seam the
+  code actually uses -- 6/6 in 0.7s, deterministic, driving the real run/1
+  end-to-end -- plus coverage for the three new hard-failure paths. Proven
+  non-vacuous by two real mutations, one of which neutered the substring
+  check and failed exactly the case that should fail. Before this, the suite
+  had ZERO durable coverage of that gate.
+
+  ALSO FIXED, unprompted and outside the design: scripts/test_parallel.sh
+  emits bash/MSYS's view of /tmp, which native-Windows Elixir cannot
+  resolve, so the re-pointed check would have found zero logs on this
+  project's own development host class. resolve_native_path/1 falls back to
+  cygpath only when the raw path does not resolve -- a no-op on Linux and CI.
+
+  FOLLOW-UP FILED: ISS-0468 (queue task 468 / GH#898), the template refcheck
+  still using a fixed schema name and colliding under parallel partitions.
+  A sibling session picked it up within the hour.

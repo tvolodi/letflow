@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-04",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-04-test-designer.json",
+  "created_at": "2026-09-04T03:51:00Z",
+  "started_at": "2026-09-04T03:51:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "test/letflow/supervisor/pollers_test.exs",
+      "docs/issues/ISS-0451.yaml"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Write the NEW regression test the design specifies in lib/letflow/design/iss0451-poller-crash-budget-isolation.md section 6 -- a new file test/letflow/supervisor/pollers_breaker_test.exs. Read section 6 in full for the exact procedure/mechanism/observables (this is the authoritative spec; do not invent a different shape). Summary of what it must prove: a PERSISTENT Poller fault (the force_poller_crash flag is set and NEVER cleared during the test, unlike REQ-219's own AC4 test) causes Letflow.Supervisor.Pollers to repeatedly exhaust its own restart budget and get repeatedly restarted by PollersBreaker, which itself eventually trips to :open (per the design's stated consecutive-trip threshold) and stops trying -- and throughout all of this, Letflow.Supervisor (top-level), Letflow.Repo, and the Bandit listener (via Letflow.Supervisor.Http) all remain alive and untouched. This is WF-03's own required fail-then-pass proof per docs/agents/workflows/WF-03_issue_resolving.md's Steps 2-4 section: since PollersBreaker is a NEW module (not a fix to existing behavior), the fail-then-pass requirement is satisfied via MUTATION testing per that section's 'When the pre-fix failure is code under test does not exist' subsection -- you must mutate the shipped pollers_breaker.ex logic in specific, targeted ways (e.g. remove the trip-threshold check so it never opens; remove the :temporary child-spec change so the top-level auto-restarts again; break the backoff schedule) and record which of your new test's assertions fail for each mutant, in a throwaway git worktree or via revert-and-verify per that WF-03 section's own two techniques -- do not leave a mutated pollers_breaker.ex or application.ex in the tree at the end of this step.\n\nAlso write the design's stated new assertion for the EXISTING AC4 test if not already fully covered (check test/letflow/supervisor/pollers_test.exs's current AC4 test against design section 5 -- ELIXIR-DEV already updated it, confirm it matches the design's spec rather than assuming).",
+    "acceptance_criteria": [
+      "test/letflow/supervisor/pollers_breaker_test.exs created per design section 6's exact procedure/observables",
+      "The test proves Letflow.Supervisor/Letflow.Repo/Letflow.Supervisor.Http all survive a PERSISTENT (never-cleared) fault, not just a single crash event",
+      "At least 2 targeted mutants applied to pollers_breaker.ex/application.ex's shipped logic, each mutant's effect on the new test's assertions recorded (which fail, which still pass)",
+      "Mutation performed in a throwaway worktree OR reverted-and-verified with git status --porcelain empty and a clean re-run quoted in result.summary, per WF-03's own mutant-is-a-temporary-probe rule",
+      "No mutated file left in the tree at handoff completion"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

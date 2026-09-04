@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF02-REQ219-20260903-step-01-rework2",
+  "run_id": "WF02-REQ219-20260903",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ219-20260903/step-01-code-designer.json",
+  "created_at": "2026-09-03T20:30:00Z",
+  "started_at": "2026-09-03T20:30:00Z",
+  "completed_at": "2026-09-03T21:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-219"
+    ],
+    "issue_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/application.ex",
+      "lib/letflow/design/req219-supervision-layering.md",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/repository/activation.ex",
+      "test/support/admission_test_helpers.ex",
+      "handoffs/WF02-REQ219-20260903/step-01b-code-design-validator.json"
+    ],
+    "branch_name": "feature/WF02-REQ219-20260903",
+    "requirement_text": "See handoffs/WF02-REQ219-20260903/step-01b-code-design-validator.json's own context.requirement_text (unchanged since iteration 1 -- REQ-219 in docs/requirements.yaml, re-read in full for this rework) for the complete requirement description (4 settled decisions + NOT-IN-SCOPE list). This handoff documents only the rework applied on top of it."
+  },
+  "task": {
+    "description": "WF-02 Step 1 rework iteration 2 for REQ-219, responding to CODE-DESIGN-VALIDATOR's FAIL (step-01b). Two required fixes: (1) redesign AC2's ordering-test mechanism -- iteration 1 only restarted the already-running Letflow.Supervisor.Pollers child against an already-fully-booted app, which cannot distinguish the correct boot order from the exact Infrastructure/Pollers-swapped regression AC2 exists to catch; must instead exercise a genuine cold boot. (2) Adopt (or explicitly justify departing from) lib/letflow/repository/activation.ex's established compile_env double-gate pattern for both pollers_init_probe and force_poller_crash test-only hooks, which iteration 1 gated only by a bare runtime Application.get_env/3 check.",
+    "acceptance_criteria": [
+      "AC2's test mechanism must genuinely exercise Letflow.Application.start/2's real top-level Supervisor.start_link/2 call from a cold boot (Obs.Alerts.TaskSupervisor not already registered from a prior boot), not a targeted restart of an already-running child, and the design must include a concrete counterfactual trace showing the mechanism distinguishes the correct order from the Infrastructure/Pollers-swapped regression",
+      "pollers_init_probe and force_poller_crash must each be gated by a compile-time flag (Application.compile_env/3, default false, true only in config/test.exs) in addition to their existing runtime Application.get_env/3 check, mirroring activation.ex's @activation_test_hooks_enabled? precedent, OR the design must explicitly justify why a weaker single-gate is acceptable for these two hooks specifically",
+      "all 10 of REQ-219's original acceptance_criteria (docs/requirements.yaml) remain covered by the revised design, re-verified fresh against the requirement's current text",
+      "the ISS-0224 and ISS-0429 ordering-preservation sections (previously PASSed by CODE-DESIGN-VALIDATOR) are left materially unchanged by this rework",
+      "no implementation code (function bodies) introduced -- signatures, child-spec tuples, module attributes as bare expressions, and prose only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/req219-supervision-layering.md revised in place (rework iteration 2 changelog note added at top). Fix 1 (AC2, now Design section 4): iteration 1's flawed mechanism is kept as a documented 'why it was unsound' note, then replaced with a genuine cold-boot test (new section 4.3): the test (a) installs the pollers_init_probe closure via Application.put_env, (b) calls Application.stop(:letflow) -- a real, synchronous full teardown of the top-level Letflow.Supervisor and everything under it, including Obs.Alerts.TaskSupervisor, guaranteeing Process.whereis/1 returns nil immediately after, (c) defensively calls :logger.remove_primary_filter/1 first (application.ex's own comment claims :logger.add_primary_filter/2 'raises on a duplicate filter id' on a second start/2 call in the same node -- this design does not gamble on whether that's actually true, since it could not be verified empirically in this environment with no reachable Elixir/OTP runtime; removing the filter first sidesteps the question entirely), then (d) Application.ensure_all_started(:letflow), which re-invokes the REAL start/2 and its real top-level children-list order. Section 4.4 walks the full counterfactual trace for both the correct order (Infrastructure's init completes -- including registering Obs.Alerts.TaskSupervisor -- strictly before Pollers starts, per Supervisor's own sequential-startup contract, so the probe observes a non-nil pid) and the swapped-order regression (Pollers would start FIRST against a freshly-nil registry, so the probe observes nil and the test fails, correctly catching the regression) -- explicitly noting the app would still finish booting successfully under the regression (config/test.exs's gates make Pollers-first harmless), which is exactly why the probe's message-passing snapshot at the moment of Pollers.init/1, not any post-hoc boot-success check, is what makes this test sound. Fix 2 (sections 4.2 and 5.1): both pollers_init_probe (in Letflow.Supervisor.Pollers) and force_poller_crash (in Letflow.Scheduler.Poller) now gain their own Application.compile_env/3-resolved module attribute (@supervisor_test_hooks_enabled? / @poller_test_hooks_enabled?), each reusing activation.ex's EXISTING :activation_test_hooks_enabled? config key (already true in config/test.exs:209, predating this requirement) rather than introducing a new key -- deliberately avoiding a new config/test.exs entry that would violate AC7's 'no config file changes' bar, called out explicitly for REVIEWER in section 7 (not silently reused) as a naming trade-off. Re-verified all 10 of REQ-219's acceptance_criteria against docs/requirements.yaml's current text: AC1->sec2, AC2->sec4 (fixed), AC3->sec1.1 (untouched), AC4->sec1.2/sec5, AC5->sec3/sec5, AC6->sec1.3, AC7->sec8 (still holds -- no config file changes, confirmed by the key-reuse decision), AC8->sec3/sec7, AC9->sec7, AC10->left to ELIXIR-DEV/TEST-RUNNER. ISS-0224 (sec1.1) and ISS-0429 (sec1.1/sec4.4) ordering-preservation content is unchanged from the iteration validator already PASSed. New open question Q4 added (sec9): whether :logger.add_primary_filter/2 actually raises on a duplicate id is left for ELIXIR-DEV/TEST-RUNNER to observe empirically -- the design does not depend on the answer either way since the defensive removal step is safe regardless. No implementation code added: the two new module attributes are bare compile_env expressions (same shape as activation.ex's own accepted precedent), no fenced code blocks, no function bodies."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

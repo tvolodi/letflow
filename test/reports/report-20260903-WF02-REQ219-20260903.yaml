@@ -1,0 +1,217 @@
+# Test run report -- WF-02 Step 4 (Full Test Run) for REQ-219
+# (Supervisor layering / infrastructure-pollers-http split, stage S6)
+#
+# Dispatched with a specific caveat carried forward from TEST-DESIGN-VALIDATOR
+# (step-03b): one earlier, UNLOGGED run of test/letflow/supervisor/ showed
+# 71/72 instead of 72/72, not reproduced across that validator's own 3 full
+# re-runs or 5 isolated pollers_test.exs runs, and the specific failing test
+# was never captured. This run's primary job was to hunt that anomaly with
+# enough repetition and logging discipline to either catch it in the act or
+# rule it out with real numbers -- not to wave it away.
+
+workflow: WF-02
+step: 4
+agent: TEST-RUNNER
+run_id: WF02-REQ219-20260903
+date_utc_start: 2026-09-03T20:49:00Z
+date_utc_end: 2026-09-03T21:34:00Z
+wall_clock_duration: "~45 min (10x foreground supervisor/ runs, one mix compile --warnings-as-errors, one full single-process mix letflow.check.test (~27 min), two isolated tag subsets, two full scripts/test_parallel.sh runs, one isolated 3x sandbox_pool_test.exs rerun)"
+
+verdict: PASS
+
+git:
+  branch: feature/WF02-REQ219-20260903
+  branch_confirmed: true
+  head_commit: 39865f87
+  working_tree: clean (git status --short empty at start and end of this run; no code or test edits made this step)
+
+environment:
+  toolchain: local -- asdf-managed Elixir 1.20.3 / Erlang-OTP 29 / Mix 1.20.3, reached
+    by sourcing ~/.asdf/asdf.sh and prepending ~/.asdf/shims to PATH (mix/elixir are
+    not on the default login PATH in this shell). rustc is NOT reachable even via the
+    asdf shims (`which rustc` empty, `rustc --version` -> "command not found") -- this
+    is the known, pre-existing rustc-toolchain-gap documented in README.md's Notes
+    section, confirmed directly this run (see checks.rustc_gap_reverified below).
+  containers: letflow-1-postgres-1 (port 5463, from this workspace's untracked .env
+    LETFLOW_DB_PORT=5463) already running and healthy before this run -- confirmed via
+    `docker ps` (required `sudo -n docker ...`; this user's shell docker group
+    membership does not resolve /var/run/docker.sock directly, but passwordless sudo
+    does). Did not run `docker compose up -d` myself since the stack was already up;
+    did not touch the separate `letflow-dev` container (mounted from a different
+    workspace path, /home/tvolodi/workspace/letflow, not this checkout -- correctly
+    left alone per this role's "don't share another checkout's container" instruction).
+  mix_deps_get: ran clean, all dependencies already fetched, no network issue this run.
+
+checks:
+  mix_compile_warnings_as_errors:
+    result: PASS
+    command: "mix compile --warnings-as-errors"
+    output: "(empty -- clean compile, 0 warnings)"
+
+  supervisor_suite_10x_foreground:
+    result: PASS -- anomaly NOT reproduced across 10 runs
+    command: "mix test test/letflow/supervisor/"
+    method: >
+      Run 10 times in a row, each one a separate foreground `mix test` invocation
+      (never backgrounded, never watched via Monitor), each run's full output
+      captured to its own log file before being discarded/overwritten by the next.
+    per_run_results:
+      - {run: 1, result: "Result: 10 passed"}
+      - {run: 2, result: "Result: 10 passed"}
+      - {run: 3, result: "Result: 10 passed"}
+      - {run: 4, result: "Result: 10 passed"}
+      - {run: 5, result: "Result: 10 passed"}
+      - {run: 6, result: "Result: 10 passed"}
+      - {run: 7, result: "Result: 10 passed"}
+      - {run: 8, result: "Result: 10 passed"}
+      - {run: 9, result: "Result: 10 passed"}
+      - {run: 10, result: "Result: 10 passed"}
+    assessment: >
+      10/10 clean runs, 0 failures observed in any single run. The step-03b-flagged
+      71/72 anomaly (test/letflow/supervisor/ folder alone -- 10 tests total across
+      infrastructure_test.exs/pollers_test.exs/http_test.exs, matching the 10-per-run
+      count here) did not recur across this run's 10 additional foreground
+      repetitions. Combined with step-03b's own prior 3 full targeted re-runs (72/72
+      each, wider scope including application_test.exs/poller_test.exs/
+      service_task_dispatcher_test.exs) and 5 isolated pollers_test.exs runs
+      (4/4 each), the anomaly has now failed to reproduce across 18 total runs since
+      its single unlogged occurrence. Not closing the book entirely -- an unreproduced
+      single anomaly with no captured failing-test detail cannot be root-caused from
+      absence -- but no further evidence of it surfaced this run.
+
+  mix_letflow_check_test:
+    result: FAIL (underlying mix test exited 2) -- attributed pre-existing, not
+      REQ-219-related
+    command: "mix letflow.check.test"
+    duration: "~1618s (26m58s) for the main mix test subprocess"
+    result_line: "Result: 3179/3181 passed (6/6 properties, 3173/3175 tests), 21 excluded"
+    failed_line: "Failed: 2 tests"
+    failing_tests:
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    failure_detail: >
+      Both raise `** (ErlangError) Erlang error: :enoent` from
+      `System.cmd("rustc", ["--version"], ...)` at
+      test/mix/tasks/letflow_check_toolchain_test.exs:69/76 -- rustc is not resolvable
+      as an executable from within the running BEAM's environment in this workspace,
+      even though `mix deps.get`/compile (which use rustler_precompiled, not a live
+      rustc invocation) succeeded fine.
+    attribution: >
+      PRE-EXISTING, structurally confirmed via form (a) of
+      core-directives.md's "Failure Attribution Is Structural" test:
+      `git diff --name-only main...HEAD` (full list re-checked this run) does NOT
+      include test/mix/tasks/letflow_check_toolchain_test.exs, lib/mix/tasks/
+      letflow.check_toolchain.ex, or any rustc-invocation code -- this branch's diff
+      touches only lib/letflow/application.ex, lib/letflow/supervisor/{http,
+      infrastructure,pollers}.ex, lib/letflow/scheduler/poller.ex, and their tests
+      plus REQ-219 design/spec/handoff docs. Independently re-confirmed the
+      environmental cause directly (`which rustc` empty, `rustc --version` ->
+      command not found, even with asdf shims on PATH) rather than assuming from the
+      error message alone.
+      Because this task raised (Mix.raise) on the main mix test step's nonzero exit,
+      it never reached its own downstream isolated :wasm_hang / :lua_wallclock_race
+      subprocess runs -- both were run separately instead (see below) to still get
+      that coverage.
+
+  wasm_hang_isolated:
+    result: PASS
+    command: "mix test --only wasm_hang"
+    result_line: "Result: 7 passed, 3195 excluded"
+
+  lua_wallclock_race_isolated:
+    result: PASS
+    command: "mix test --only lua_wallclock_race"
+    result_line: "Result: 11 passed, 3191 excluded"
+
+  scripts_test_parallel_sh_run_1:
+    result: FAIL (2 pre-existing + 1 transient, non-reproduced)
+    command: "scripts/test_parallel.sh"
+    N: 8
+    N_source: nproc
+    TEST_POOL_SIZE: 10 (computed)
+    per_partition:
+      - {partition: 1, tests: 446, properties: 2, failures: 0, exit: 0}
+      - {partition: 2, tests: 320, properties: 1, failures: 0, exit: 0}
+      - {partition: 3, tests: 441, properties: 0, failures: 3, exit: 2}
+      - {partition: 4, tests: 429, properties: 1, failures: 0, exit: 0}
+      - {partition: 5, tests: 421, properties: 0, failures: 0, exit: 0}
+      - {partition: 6, tests: 309, properties: 2, failures: 0, exit: 0}
+      - {partition: 7, tests: 373, properties: 0, failures: 0, exit: 0}
+      - {partition: 8, tests: 433, properties: 0, failures: 0, exit: 0}
+    combined: "3172 tests, 6 properties, 3 failures (3175/3178 passed)"
+    partition_3_failures:
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest) -- same pre-existing rustc gap as above"
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest) -- same"
+      - >
+        test provisioning does not block the pool's mailbox (ISS-0224 regression)
+        RT-6 (death path c): the provisioning worker Task crashing fails the claim
+        without taking the pool, a slot or a schema with it (Letflow.SandboxPoolTest)
+        -- test/letflow/sandbox_pool_test.exs:1076, `refute MapSet.member?(final,
+        o_schema)` failed (schema present when it should have been absent). This test
+        kills a Task mid-provision and asserts the in-progress CREATE SCHEMA never
+        committed; it is inherently timing-sensitive to DB round-trip latency, and the
+        same partition log shows a concurrent, unrelated `Postgrex.Protocol
+        disconnected: DBConnection.ConnectionError` / `statement_timeout` on a
+        different SandboxPoolTest test (retry_query_once/1) at the identical
+        timestamp (21:22:11), indicating a real transient DB-latency spike inside
+        that partition process at that moment.
+
+  sandbox_pool_test_isolated_3x:
+    result: PASS -- 3/3 clean, RT-6 not reproduced in isolation
+    command: "mix test test/letflow/sandbox_pool_test.exs"
+    per_run_results:
+      - {run: 1, result: "Result: 23 passed"}
+      - {run: 2, result: "Result: 23 passed"}
+      - {run: 3, result: "Result: 23 passed"}
+
+  scripts_test_parallel_sh_run_2:
+    result: FAIL (2 pre-existing only) -- confirms run_1's 3rd failure was transient
+    command: "scripts/test_parallel.sh"
+    N: 8
+    per_partition:
+      - {partition: 1, tests: 446, properties: 2, failures: 0, exit: 0}
+      - {partition: 2, tests: 320, properties: 1, failures: 0, exit: 0}
+      - {partition: 3, tests: 441, properties: 0, failures: 2, exit: 2}
+      - {partition: 4, tests: 429, properties: 1, failures: 0, exit: 0}
+      - {partition: 5, tests: 421, properties: 0, failures: 0, exit: 0}
+      - {partition: 6, tests: 309, properties: 2, failures: 0, exit: 0}
+      - {partition: 7, tests: 373, properties: 0, failures: 0, exit: 0}
+      - {partition: 8, tests: 433, properties: 0, failures: 0, exit: 0}
+    combined: "3172 tests, 6 properties, 2 failures (3176/3178 passed)"
+    partition_3_failures:
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    assessment: >
+      Only the 2 pre-existing rustc-gap failures recurred; the SandboxPoolTest RT-6
+      failure from run_1 did NOT recur here, and did not reproduce in the 3 isolated
+      reruns of its own file above either. Attribution: TRANSIENT DB-load timing
+      flake in a pre-existing test (file not touched by this branch's diff; the only
+      diff-adjacent connection is that Letflow.SandboxPool's supervisor host module
+      moved from application.ex into lib/letflow/supervisor/infrastructure.ex with its
+      relative start order to SandboxPool.TaskSupervisor explicitly preserved and
+      documented unchanged -- no behavioral change to SandboxPool's own claim/release/
+      provisioning code, which is what RT-6 actually exercises). This falls in the
+      same documented mechanism class as ISS-0220/ISS-0222/ISS-0287 (SandboxPool
+      tests' known sensitivity to DB-connection/latency contention under N-way
+      parallel test_parallel.sh runs), not a new regression. Not blocking this gate.
+
+overall_summary: >
+  No REQ-219-specific failure or flake found anywhere in this run. The
+  step-03b-flagged 71/72 supervisor/ anomaly did not reproduce across 10 additional
+  foreground runs (18 total clean runs of that suite across both steps now). The
+  only failures seen in any run this step were: (1) the pre-existing rustc-toolchain
+  gap (2 tests, structurally attributed via git-diff exclusion + direct rustc
+  reachability check, present in every full-suite run this session), and (2) one
+  single-occurrence SandboxPoolTest RT-6 timing flake in one scripts/test_parallel.sh
+  run that did not recur on immediate rerun or in 3 isolated reruns of its own file,
+  consistent with an already-documented DB-load-contention flake class unrelated to
+  this branch's diff. mix compile --warnings-as-errors is clean. Routing to
+  RELEASE-VALIDATOR.
+
+routing:
+  to_agent: RELEASE-VALIDATOR
+  rationale: >
+    All REQ-219-scoped tests pass consistently and repeatedly; both observed failure
+    classes are structurally attributed as pre-existing/environmental, not caused by
+    this branch's changes. RELEASE-VALIDATOR should independently re-run per its own
+    protocol rather than trust this report alone, per core-directives.md.

@@ -1,0 +1,59 @@
+id: ISS-0451
+title: "A persistent (non-transient) Poller crash-loop can still exhaust the top-level Letflow.Supervisor own restart budget, cascading past the Pollers layer REQ-219 was meant to isolate"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ219-20260903
+discovered_at: "2026-09-03T19:41:00Z"
+severity: MAJOR
+tags: [otp, supervision, availability, s6]
+description: >
+  Found by REVIEWER during WF02-REQ219-20260903
+  (handoffs/WF02-REQ219-20260903/step-02d-reviewer.json), while gating REQ-219's
+  own AC4 crash-loop test.
+
+  REQ-219 layered Letflow.Application into Infrastructure/Pollers/Http sibling
+  supervisors specifically so a crash-looping Poller cannot take down
+  Repo/Bandit -- Pollers now has its own max_restarts:5, max_seconds:60 budget,
+  isolated from the top-level supervisor by a supervisor boundary. AC4's own
+  test (test/letflow/supervisor/pollers_test.exs) verifies this for a SINGLE
+  crash-loop event: it sets a test-only force_poller_crash flag, observes
+  Pollers exhaust its own budget and exit once, then the TEST ITSELF (an
+  external actor) clears the flag right after the first :DOWN, before any
+  restart of Pollers by its own parent could re-trigger the same crash.
+
+  The crash-loop-to-budget-exhaustion cycle inside Pollers is fast -- well
+  under 60s -- so if a REAL production fault were PERSISTENT (unlike the test
+  flag, nothing clears it), Pollers exiting and being restarted by the
+  top-level supervisor would immediately crash-loop again just as fast, and
+  could exhaust the top-level Letflow.Supervisor's own default OTP restart
+  budget (3 restarts / 5 seconds, never overridden) before whatever caused the
+  original fault clears on its own. That would cascade into taking down
+  Infrastructure (Repo, Bandit) too -- the exact incident ISS-0425/REQ-219
+  exists to make structurally impossible.
+
+  This does not fail REQ-219 as literally written (AC4/decision 3 only require
+  correct isolation for a single restart event, which the design and
+  implementation both genuinely provide), so REVIEWER did not block the gate
+  on it. But a persistent-fault scenario (a bad migration, a config error, a
+  permanently unreachable dependency) is realistic and plausible for a Poller.
+
+  SCOPE: worth its own design pass. Options, none prescribed: (a) raise the
+  top-level Letflow.Supervisor's own restart intensity to tolerate a full
+  Pollers-budget exhaustion without exiting itself; (b) give Pollers a
+  circuit-breaker/backoff so a persistent fault degrades to a
+  stopped-but-not-crash-looping state rather than repeatedly exhausting its
+  own budget.
+affected_files:
+  - lib/letflow/application.ex
+  - lib/letflow/supervisor/pollers.ex
+related:
+  - ISS-0425
+  - ISS-0421
+  - REQ-219
+source: >
+  handoffs/WF02-REQ219-20260903/step-02d-reviewer.json (REVIEWER's own
+  analysis while gating REQ-219's AC4 test, distinguishing the test's
+  single-event isolation proof from a persistent-fault scenario the test
+  cannot and does not claim to cover).
+queue_task_id: 451
+github_issue: 865
+status: open

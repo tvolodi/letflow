@@ -1476,23 +1476,41 @@ volumes:
 
   - volume: 8
     path: docs/status/requirement_status.v8.yaml
-    status: current
+    status: closed
     opened: 2026-09-01
-    entries: 28
+    closed: 2026-09-04
+    entries: 30
+    lines: 1245
+    bytes_working_tree: 75455
+    # SHA-256 of lines 1..1213 with CRLF normalised to LF, i.e. the frozen prefix.
+    # The hashed stream terminates EVERY line with a single \n, including the
+    # last, so it ends in \n. Exact definition and reference implementations:
+    # lib/letflow/design/iss-0119-status-file-readability.md §8.
+    # Asserted unchanged by test/docs/requirement_status_invariants_test.exs.
+    frozen_prefix_lines: 1213
+    frozen_prefix_sha256: "c0595ffaa12ab9db8b19c216ef1dd8f4a7af16a2af3b4646fe061e2f613420ce"
+    closure_note: >
+      Closed at feature/WF02-REQ219-20260903's Step Final rebase, which
+      composed this branch's own REQ-219 done-event append against a
+      concurrent sibling's two SCOPE-CHANGE entries for decision 0017
+      (2026-09-03T19:11:25Z and T19:24:26Z) -- bringing this file to 1213
+      frozen-prefix lines / 30 entries, over its own declared roll_rule
+      ceiling (max_lines: 1200), confirmed via `wc -l` per this volume's
+      own "WHEN THIS VOLUME IS FULL" procedure. Both sides independently
+      computed 28 from a shared base of 26 (WF02-REQ219-20260903 appended
+      one REQ-219-started + one REQ-219-done event; the sibling appended
+      two SCOPE-CHANGE events) -- each count was correct pre-merge but
+      referred to a different tree; recounted directly on disk (30) rather
+      than carried forward from either side's independently-computed 28.
+      No content lost, no edit to either side's entries. Successor:
+      docs/status/requirement_status.v9.yaml.
     note: >
-      Appended to 27 by the decision-0017 drafting run (2026-09-03T19:11:25Z,
-      `req: SCOPE-CHANGE`, `event: revised`) -- ADR 0017 plus three requirements
-      drafted (REQ-222/223/224 as merged; drafted as 219/220/221 against a stale
-      base and renumbered on rebase, see the volume's own follow-up entry), one
-      registered as queue task 449, plus a 19:24:26Z follow-up event
-      correcting those ids to REQ-222/223/224 after a concurrent session's
-      own REQ-219/220 was found on main during the pre-branch fetch (the
-      earlier event is left unedited per the append-only rule). Both events
-      are the latest in the volume, so both were appended at the tail, no
-      interleaving. `wc`: 1149 lines / 70812 bytes, still under the
-      1200-line/120000-byte roll ceiling, so no roll triggered. Count
-      recounted directly on disk (`grep -c "^  - req:"` = 28), not carried
-      forward from the 26 below.
+      Incremented to 28 by WF02-REQ219-20260903 (DOC-UPDATER)'s own
+      REQ-219 done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v8.yaml` = 28 on-disk entries, no
+      rebase conflict on this file at the time it was written. `wc`:
+      1138 lines / 68500 bytes, well under the 1200-line/120000-byte
+      roll ceiling, so no roll triggered.
 
       Composed to 26 at feature/WF02-REQ215-20260903's Step Final rebase
       (second conflict, this branch's own REQ-215 done-event append,
@@ -1678,6 +1696,19 @@ volumes:
       `history:` list, per this index's `roll_rule.on_exceed` procedure.
       `entries:` will be incremented per HOW-TO-APPEND step 6 as real
       appends land.
+
+  - volume: 9
+    path: docs/status/requirement_status.v9.yaml
+    status: current
+    opened: 2026-09-04
+    entries: 0
+    note: >
+      Opened by ORCH at feature/WF02-REQ219-20260903's Step Final rebase,
+      successor to volume 8. Created with volume 8's header text verbatim
+      (volume number, opening date and predecessor path updated) and an
+      empty `history:` list, per this index's `roll_rule.on_exceed`
+      procedure. `entries:` will be incremented per HOW-TO-APPEND step 6
+      as real appends land.
 
 
 known_anomalies:

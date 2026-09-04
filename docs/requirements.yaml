@@ -12949,7 +12949,7 @@ requirements:
   - id: REQ-219
     title: Layer Letflow.Application's flat 20-child supervision tree into Infrastructure / Pollers / Http, with explicit restart intensity isolating poller crash-loops from Repo and HTTP (closes ISS-0425 parts 1+partial-2)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 445  # letflow-queue task id, GH#858
     description: >

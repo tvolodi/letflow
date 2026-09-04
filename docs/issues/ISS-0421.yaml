@@ -70,4 +70,48 @@ source: >
 queue_task_id: 421
 github_issue: 825
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0421-20260904
+resolved_at: "2026-09-04T14:05:00Z"
+resolution: >
+  ISSUE-FIXER re-diagnosed this issue's original 3-part scope against the
+  now-merged REQ-219 (supervision layering, Pollers' own
+  max_restarts:5/max_seconds:60) and ISS-0451 (PollersBreaker circuit
+  breaker isolating a persistent Poller fault from the top-level
+  supervisor's own restart budget): concerns 2 (platform-wide SPOF) and 3
+  (default restart intensity) were already fully, and more strongly,
+  resolved by those two -- ISS-0451's persistent-fault handling exceeds
+  what this issue's own AC2 asked for (a single crash-loop event). Only
+  concern 1 (unbounded per-tenant serial-sweep latency across the 7
+  ticks-per-sweep) remained open.
+
+  FIX. All 7 sweeps in lib/letflow/scheduler/poller.ex converted from
+  serial Enum.each to Task.async_stream/3 (on_timeout: :kill_task,
+  zip_input_on_exit: true, plus explicit per-task rescue at the 2 sites
+  that lacked one). The 6 Admission-gated sweeps derive their
+  max_concurrency LIVE from a new Letflow.Admission.global_cap/1
+  accessor; the 1 unwrapped sweep (maybe_refresh_active_instances/1)
+  derives its bound live from a new Letflow.Admission.reserved_headroom/1
+  accessor -- both mirror the existing try_acquire/2/release/2 idiom
+  exactly and are purely additive to Admission's state (reserved_headroom
+  needed a genuinely new state field; global_cap was already present).
+  Both accessors are read fresh every tick, per sweep, never
+  cached/hoisted, so the peak-concurrency safety argument
+  (global_cap + reserved_headroom = pool_size) holds per-instance for any
+  pool_size/reserved_headroom configuration, not just the default.
+  fetch_tenant_schemas/0 remains a single call per tick (AC4 preserved).
+
+  PATH: 2 CODE-DESIGN-VALIDATOR rework cycles at the original design gate
+  (a lockstep-config hazard where a hardcoded literal had to independently
+  stay equal to Admission's reserved_headroom with nothing enforcing it;
+  then a phantom state-field read the first fix introduced) plus 1 more
+  rework cycle triggered by REVIEWER during implementation review (a
+  hardcoded max_concurrency:8 for the gated sweeps silently assumed
+  Admission's live global_cap was always >= 8, breaking REQ-218's own
+  admission-gating tests under a tight test pool config -- fixed by
+  extending the same live-accessor pattern to global_cap). TEST-DESIGNER
+  added mutation-killing regression coverage for both accessors and for a
+  reversion to any hardcoded concurrency literal, independently
+  re-verified by TEST-DESIGN-VALIDATOR via its own throwaway-worktree
+  mutation testing. Full suite 3212/3214 (2 pre-existing rustc-toolchain-
+  gap failures), HTTP admission-plug path re-confirmed unaffected.

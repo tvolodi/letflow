@@ -260,3 +260,23 @@ history:
       passed; full suite (mix letflow.check.test) 3206/3208 passed, 2
       pre-existing rustc-toolchain-gap failures (Mix.Tasks.Letflow.
       CheckToolchainTest, rustc absent from this environment).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T14:10:00Z"
+    note: >
+      WF03-ISS0421-20260904 done (queue task 421, GH#825, stage S6).
+      Scheduler.Poller's 7 serial per-tenant sweeps bounded with
+      Task.async_stream, max_concurrency derived live from two new
+      Letflow.Admission accessors (global_cap/1, reserved_headroom/1)
+      rather than a hardcoded literal -- both mirror the existing
+      try_acquire/2/release/2 idiom, purely additive to Admission's
+      state. Closes ISS-0421's remaining concern (unbounded serial-sweep
+      latency); concerns 2/3 (platform-wide SPOF, default restart
+      intensity) were already resolved by REQ-219/ISS-0451. 3 total
+      rework cycles across design (2) and implementation-review (1),
+      each catching a real correctness gap (a lockstep-config hazard, a
+      phantom state-field read, a hardcoded concurrency bound that broke
+      REQ-218's own tests under a tight pool config). Full suite
+      3212/3214, 2 pre-existing rustc-toolchain-gap failures. See
+      docs/issues/ISS-0421.yaml for full resolution detail.

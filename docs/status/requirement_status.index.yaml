@@ -1701,7 +1701,7 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 3
+    entries: 4
     note: >
       Incremented to 1 by ORCH's own ISS-0451 done-event append
       (WF03-ISS0451-20260904) -- `grep -c "^  - req:"

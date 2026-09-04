@@ -1,0 +1,1172 @@
+defmodule Letflow.Test.TenantTemplate do
+  @moduledoc """
+  Builds a "tenant_template" Postgres schema once per BEAM VM / test-partition
+  database, then materialises per-test tenant schemas from it via
+  `CREATE TABLE (LIKE ... INCLUDING ALL)` plus the fix-ups Postgres's `LIKE`
+  does not perform (foreign keys, sequence ownership) and the table data it
+  never copies at all (`event_type_registry`, `schema_migrations`).
+
+  Implements `lib/letflow/design/iss0427-tenant-test-schema-template-clone.md`
+  — build from that design, don't invent a different shape. Test-only
+  (`test/support/`, compiled under `elixirc_paths(:test)`), **not** referenced
+  from `lib/`, **not** added to `lib/letflow/application.ex`'s supervision
+  tree, **not** a GenServer — a plain module, matching `Letflow.TenantFixture`'s
+  and `Letflow.TenantSchemaReaper`'s established shape for this directory.
+
+  ## Production path untouched (design §7)
+
+  `Letflow.TenantProvisioning.provision_tenant_schema/1` and
+  `replay_migrations/2` are not modified and are not called by this module —
+  see `ensure_template!/0`'s own moduledoc note for why. Zero new code is
+  reachable from real tenant onboarding.
+
+  ## No silent fallback (design §5)
+
+  Every function here either succeeds or raises/returns a tagged error. There
+  is no path that falls back to migration replay on failure — a broken
+  template must never silently serve broken clones.
+  """
+
+  import Ecto.Query, only: [from: 2]
+
+  alias Letflow.Identity.Tenant
+  alias Letflow.Repo
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.Registration
+
+  @typedoc "Design §2.1's template_state type — informational only, not stored as such."
+  @type template_state :: :not_built | :built | :stale
+
+  # Fixed literal name (design §2.2) -- deliberately NOT of the
+  # "tenant_" <> 32-hex shape schema_name_for_tenant/1 produces, so
+  # tenant_id_for_schema_name/1 can never resolve it as a real tenant (INV-1).
+  @template_schema "tenant_template"
+
+  # Advisory-lock key (design §4.3), same idiom as
+  # TenantProvisioning.provision_tenant_schema/1's own
+  # `pg_advisory_xact_lock(hashtext($1))` call -- keyed on this literal string
+  # rather than a per-tenant schema name, since there is exactly one template.
+  @advisory_lock_key @template_schema
+
+  # Process-local idempotency marker (design §4.2) -- a persistent_term, not a
+  # cross-VM mechanism. "Once" is scoped per BEAM VM / per test-partition
+  # database, which is what persistent_term already gives for free within one
+  # VM's lifetime.
+  @built_marker_key {__MODULE__, :template_built}
+
+  @doc """
+  Idempotent. Builds the `"tenant_template"` schema exactly once per BEAM VM /
+  test-partition database (design §4.2). Safe to call from many tests; see
+  §4.3's advisory-lock concurrency guard.
+
+  Raises (`ExUnit.AssertionError`, matching `TenantFixture.report_and_raise/3`'s
+  convention) if the template cannot be built or fails its own post-build
+  self-check (design §2.3 step 3) or parity self-check (design §3.4 use site
+  1). Never falls back to anything else — see design §5.
+  """
+  @spec ensure_template!() :: :ok
+  def ensure_template! do
+    if template_ready?() do
+      :ok
+    else
+      # SESSION-level advisory lock (pg_advisory_lock/pg_advisory_unlock), not
+      # the transaction-scoped pg_advisory_xact_lock provision_tenant_schema/1
+      # uses -- deliberately, because build_template!/0 below calls
+      # replay_migrations/2, whose Ecto.Migrator.run/4 checks out its OWN
+      # connection rather than participating in an ambient
+      # Repo.transaction/1's connection/transaction, so a transaction-scoped
+      # lock held on THIS connection would not serialize against it anyway.
+      # Explicitly unlocked in an `after` block so a raise inside
+      # build_template!/0 still releases it (design §4.3's concurrency guard,
+      # adapted to this function's own I/O shape).
+      Repo.query!("SELECT pg_advisory_lock(hashtext($1))", [@advisory_lock_key])
+
+      try do
+        # Re-check inside the lock: a concurrent first-caller may have already
+        # built the template while this call waited on the advisory lock.
+        unless template_built_in_db?() do
+          build_template!()
+        end
+      after
+        Repo.query!("SELECT pg_advisory_unlock(hashtext($1))", [@advisory_lock_key])
+      end
+
+      :persistent_term.put(@built_marker_key, true)
+      :ok
+    end
+  end
+
+  @doc """
+  Pure, no I/O beyond a fast local check (design §2.1) — lets a caller ask
+  whether a prior `ensure_template!/0` call in THIS process already completed
+  successfully, without forcing a build.
+  """
+  @spec template_ready?() :: boolean()
+  def template_ready? do
+    :persistent_term.get(@built_marker_key, false)
+  end
+
+  @doc """
+  The fixed physical schema name the template lives under. Pure, no I/O.
+  """
+  @spec template_schema_name() :: String.t()
+  def template_schema_name, do: @template_schema
+
+  @doc """
+  Clones `"tenant_template"` into a fresh schema for `source_tenant_id`, via
+  the full sequence design §2.3 specifies: `CREATE SCHEMA`, `CREATE TABLE
+  (LIKE ... INCLUDING ALL)` per table, foreign-key re-add with schema-qualifier
+  rewrite, sequence recreation + default repoint + `OWNED BY`, seed-data copy
+  (`event_type_registry`, `schema_migrations`), and the caller's `Registration`
+  row insert.
+
+  Preconditions: `ensure_template!/0` has already succeeded in this process's
+  lifetime — this function does NOT call it implicitly (design §2.1, "no
+  implicit chaining", matching `TenantProvisioning`'s own established
+  precedent between `provision_tenant_schema/1` and `replay_migrations/2`).
+
+  Returns `{:error, {:clone_failed, reason}}` on any failure instead of
+  raising, so `TenantFixture`'s own `report_and_raise/3` call sites can wrap
+  it uniformly. Never falls back to migration replay (design §5).
+  """
+  @spec clone_tenant_schema!(source_tenant_id :: Ecto.UUID.t()) ::
+          {:ok, schema_name :: String.t()}
+          | {:error, {:clone_failed, term()}}
+  def clone_tenant_schema!(source_tenant_id) do
+    with {:ok, clone_schema} <- TenantProvisioning.schema_name_for_tenant(source_tenant_id) do
+      do_clone(source_tenant_id, clone_schema)
+    else
+      {:error, reason} -> {:error, {:clone_failed, reason}}
+    end
+  rescue
+    exception -> {:error, {:clone_failed, exception}}
+  end
+
+  @doc """
+  The parity check (design §3, the crux). Raises `ExUnit.AssertionError` with
+  a full diff report on any mismatch across the thirteen structural
+  dimensions design §3.2 specifies. `reference_schema`/`candidate_schema` are
+  each normalized (schema-qualifier stripped) before comparison, so the same
+  function serves both of design §3.4's use sites regardless of which side is
+  "the real one".
+
+  Every dimension raises on its OWN first mismatch found (fail fast, full
+  diff assembled from every dimension's own findings) so a caller sees every
+  divergence in one run rather than one-at-a-time across repeated fixes.
+  """
+  @spec assert_clone_parity!(
+          reference_schema :: String.t(),
+          candidate_schema :: String.t(),
+          opts :: Keyword.t()
+        ) :: :ok
+  def assert_clone_parity!(reference_schema, candidate_schema, opts \\ []) do
+    dimensions = Keyword.get(opts, :dimensions, :all)
+
+    diffs =
+      dimension_checks()
+      |> Enum.filter(fn {n, _fun} -> dimensions == :all or n in dimensions end)
+      |> Enum.flat_map(fn {n, fun} ->
+        fun.(reference_schema, candidate_schema)
+        |> Enum.map(&"  [dim ##{n}] #{&1}")
+      end)
+
+    case diffs do
+      [] ->
+        :ok
+
+      _ ->
+        message =
+          "TENANT_TEMPLATE_PARITY reference=#{reference_schema} candidate=#{candidate_schema}\n" <>
+            Enum.join(diffs, "\n")
+
+        raise ExUnit.AssertionError, message: message
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Template build (design §2.3, ensure_template!/0's build sequence)
+  # ---------------------------------------------------------------------------
+
+  defp template_built_in_db? do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
+        [@template_schema]
+      )
+
+    case rows do
+      [] ->
+        false
+
+      _ ->
+        # A schema row existing is not proof the LAST build finished cleanly
+        # (e.g. a prior VM crashed mid-build). Re-run the self-check (§2.3
+        # step 3) rather than trusting bare existence.
+        template_self_check!()
+        true
+    end
+  end
+
+  # design §2.3 steps 1-4, and §2.2's "OQ-1 option (b)" resolution: build the
+  # template via the REAL, unmodified replay_migrations/2 (which already does
+  # the event-type seeding, design §2.2's "Event-type seeding for the
+  # template" paragraph) by sequencing it against a genuine, throwaway
+  # Tenant/Registration row -- then repointing the template schema name and
+  # discarding those rows, per design OQ-1 option (b): "have the test module
+  # build its OWN synthetic tenant ... and call the real, unmodified
+  # replay_migrations/2 ... discarding the Tenant/Registration rows
+  # afterward but keeping the schema". This keeps §7's "zero lib/ diff" claim
+  # literally true -- no new public function is added to
+  # lib/letflow/tenant_provisioning.ex.
+  #
+  # Concretely: replay_migrations/2 requires an EXISTING Registration row
+  # naming the schema it will migrate into (it looks the row up by
+  # tenant_id, then uses ITS OWN schema_name field -- it never derives the
+  # schema name itself). So this builds a real Tenant row (a throwaway
+  # UUID), inserts a Registration row whose schema_name is the LITERAL
+  # "tenant_template" (bypassing provision_tenant_schema/1, which would also
+  # issue its own CREATE SCHEMA IF NOT EXISTS -- redundant with step 1
+  # below, and this module already owns the CREATE SCHEMA step), lets
+  # replay_migrations/2 do the real migration run + event-type seed against
+  # that schema_name, then deletes BOTH throwaway rows -- keeping the schema
+  # itself, which is what "tenant_template" ends up naming. No Registration
+  # row for "tenant_template" survives this function, satisfying INV-4.
+  defp build_template! do
+    Repo.query!(~s(CREATE SCHEMA IF NOT EXISTS "#{@template_schema}"))
+
+    throwaway_tenant_id = insert_throwaway_tenant_and_registration!()
+
+    case TenantProvisioning.replay_migrations(throwaway_tenant_id) do
+      {:ok, _applied_versions} ->
+        :ok
+
+      {:error, reason} ->
+        raise ExUnit.AssertionError,
+          message: "TENANT_TEMPLATE_BUILD_FAILED replay_migrations/2 returned #{inspect(reason)}"
+    end
+
+    delete_throwaway_tenant_and_registration!(throwaway_tenant_id)
+
+    template_self_check!()
+    :ok
+  end
+
+  defp insert_throwaway_tenant_and_registration! do
+    tenant =
+      %Tenant{}
+      |> Tenant.create_changeset(
+        %{
+          slug: Letflow.TenantSlugFixture.unique_slug("tenant-template-build"),
+          display_name: "Tenant Template Build (throwaway)"
+        },
+        :disabled
+      )
+      |> Repo.insert!()
+
+    # Registration.changeset/2's validate_format/3 deliberately REJECTS
+    # "tenant_template" (it only accepts the "tenant_" <> 32-hex shape
+    # schema_name_for_tenant/1 produces) -- that rejection is INV-1 working
+    # exactly as designed (design §2.2): no code path that goes through the
+    # normal changeset can ever register the template as if it were a real
+    # tenant schema. This insert deliberately bypasses that changeset via
+    # Repo.insert_all/3 with a literal map (not Registration.changeset/2),
+    # because this row is required only transiently, to satisfy
+    # replay_migrations/2's own Registration-row lookup precondition, and is
+    # deleted again by delete_throwaway_tenant_and_registration!/1 before
+    # build_template!/0 returns -- see design §2.2's OQ-1 option (b). No
+    # Registration row naming "tenant_template" ever survives outside this
+    # one function's own transaction.
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    Repo.insert_all(Registration, [
+      %{
+        id: Ecto.UUID.generate(),
+        tenant_id: tenant.id,
+        schema_name: @template_schema,
+        provisioned_at: now
+      }
+    ])
+
+    tenant.id
+  end
+
+  defp delete_throwaway_tenant_and_registration!(tenant_id) do
+    Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+    Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+  end
+
+  # design §2.3 step 3: assert the template's own table set and migration
+  # version set are complete, THEN run the full parity self-check (design
+  # §3.4 use site 1) against a genuinely independent replay_migrations/2
+  # build. Raise immediately rather than serving clones from a broken
+  # template (design §5).
+  defp template_self_check!() do
+    expected = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
+    actual = MapSet.new(tables_in(@template_schema))
+
+    missing = MapSet.difference(expected, actual)
+    extra = MapSet.difference(actual, expected)
+
+    if MapSet.size(missing) > 0 or MapSet.size(extra) > 0 do
+      raise ExUnit.AssertionError,
+        message:
+          "TENANT_TEMPLATE_SELF_CHECK_FAILED table set mismatch: " <>
+            "missing=#{inspect(MapSet.to_list(missing))} extra=#{inspect(MapSet.to_list(extra))}"
+    end
+
+    manifest_versions =
+      TenantProvisioning.tenant_scoped_migrations()
+      |> Enum.map(fn {version, _module} -> version end)
+      |> MapSet.new()
+
+    applied_versions = MapSet.new(applied_versions_in(@template_schema))
+
+    versions_missing = MapSet.difference(manifest_versions, applied_versions)
+
+    if MapSet.size(versions_missing) > 0 do
+      raise ExUnit.AssertionError,
+        message:
+          "TENANT_TEMPLATE_SELF_CHECK_FAILED versions_missing=" <>
+            inspect(MapSet.to_list(versions_missing))
+    end
+
+    :ok
+  end
+
+  # ---------------------------------------------------------------------------
+  # Clone (design §2.3 steps 1-8)
+  # ---------------------------------------------------------------------------
+
+  defp do_clone(source_tenant_id, clone_schema) do
+    Repo.transaction(fn ->
+      # Step 2: no IF NOT EXISTS -- a collision means a caller reused a
+      # tenant_id that already has a live schema, a caller bug, not
+      # something to paper over (design §2.3 step 2).
+      Repo.query!(~s(CREATE SCHEMA "#{clone_schema}"))
+
+      tables = Letflow.TenantFixture.expected_tenant_tables() |> Enum.sort()
+
+      # Step 3: CREATE TABLE (LIKE ... INCLUDING ALL) per table, deterministic
+      # lexical order.
+      Enum.each(tables, fn table ->
+        Repo.query!(
+          ~s|CREATE TABLE "#{clone_schema}"."#{table}" (LIKE "#{@template_schema}"."#{table}" INCLUDING ALL)|
+        )
+      end)
+
+      # Step 4: foreign-key re-add, with the TEMPLATE schema's own qualifier
+      # textually rewritten to the CLONE schema's qualifier throughout the
+      # constraint definition (design §0.1 finding 1 -- NOT optional).
+      readd_foreign_keys!(clone_schema)
+
+      # Step 5: sequence re-creation, default repoint, OWNED BY, starting at 1.
+      recreate_sequences!(clone_schema)
+
+      # Step 6: seed-data copy (event_type_registry).
+      Repo.query!(
+        ~s(INSERT INTO "#{clone_schema}".event_type_registry SELECT * FROM "#{@template_schema}".event_type_registry)
+      )
+
+      # Step 7: schema_migrations row copy. schema_migrations itself is the
+      # migrator's own bookkeeping table (deliberately excluded from
+      # expected_tenant_tables/0's list, see that module attribute's own
+      # comment) and is never created by the per-table LIKE loop above, so it
+      # is cloned here explicitly, immediately before the row copy that needs
+      # it to exist.
+      Repo.query!(
+        ~s|CREATE TABLE "#{clone_schema}".schema_migrations (LIKE "#{@template_schema}".schema_migrations INCLUDING ALL)|
+      )
+
+      Repo.query!(
+        ~s(INSERT INTO "#{clone_schema}".schema_migrations SELECT * FROM "#{@template_schema}".schema_migrations)
+      )
+
+      # Step 8: the caller's Registration row, exactly as
+      # provision_tenant_schema/1 would have produced (plain Repo.insert!, not
+      # a call to provision_tenant_schema/1 itself -- design §2.3 step 8).
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      %Registration{}
+      |> Registration.changeset(%{
+        tenant_id: source_tenant_id,
+        schema_name: clone_schema,
+        migrations_applied_at: now
+      })
+      |> Repo.insert!()
+
+      clone_schema
+    end)
+    |> case do
+      {:ok, ^clone_schema} -> {:ok, clone_schema}
+      {:error, reason} -> {:error, {:clone_failed, reason}}
+    end
+  rescue
+    exception -> {:error, {:clone_failed, exception}}
+  end
+
+  # design §0.1 finding 1: pg_get_constraintdef emits TEMPLATE-qualified
+  # references. The template schema's own qualifier is textually replaced by
+  # the clone schema's qualifier throughout the definition string BEFORE
+  # execution -- skipping this reproduces the FK object but points it at the
+  # template's own tables.
+  defp readd_foreign_keys!(clone_schema) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT rel.relname AS table_name, con.conname, pg_get_constraintdef(con.oid) AS def
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1 AND con.contype = 'f'
+        """,
+        [@template_schema]
+      )
+
+    Enum.each(rows, fn [table_name, conname, def_sql] ->
+      rewritten = String.replace(def_sql, ~s(#{@template_schema}.), ~s(#{clone_schema}.))
+
+      Repo.query!(
+        ~s(ALTER TABLE "#{clone_schema}"."#{table_name}" ADD CONSTRAINT "#{conname}" #{rewritten})
+      )
+    end)
+  end
+
+  # design §0.1 finding 3 (pg_get_serial_sequence is the robust primitive,
+  # not pg_depend walking) and §0.1 finding 4 (end-to-end verified: after
+  # this fix-up, an insert into the clone advances ONLY the clone's own
+  # sequence). Design §2.3 step 5, INV-3: new sequence starts at its default
+  # (1), never inherits the template's current last_value.
+  defp recreate_sequences!(clone_schema) do
+    Enum.each(Letflow.TenantFixture.expected_tenant_tables(), fn table ->
+      columns = columns_in(@template_schema, table)
+
+      Enum.each(columns, fn column ->
+        %{rows: rows} =
+          Repo.query!("SELECT pg_get_serial_sequence($1, $2)", [
+            "#{@template_schema}.#{table}",
+            column
+          ])
+
+        case rows do
+          [[nil]] ->
+            :ok
+
+          [[qualified_seq]] ->
+            # qualified_seq is schema-qualified, e.g. "tenant_template.events_global_seq_seq"
+            # (double-quoted per Postgres's own rendering when needed). Extract
+            # the LOCAL sequence name so the clone gets a same-named,
+            # clone-local sequence object (design §2.3 step 5).
+            seq_local_name = local_identifier_name(qualified_seq)
+
+            Repo.query!(~s(CREATE SEQUENCE "#{clone_schema}"."#{seq_local_name}"))
+
+            Repo.query!(
+              ~s(ALTER TABLE "#{clone_schema}"."#{table}" ALTER COLUMN "#{column}" ) <>
+                ~s|SET DEFAULT nextval('"#{clone_schema}"."#{seq_local_name}"')|
+            )
+
+            Repo.query!(
+              ~s(ALTER SEQUENCE "#{clone_schema}"."#{seq_local_name}" OWNED BY ) <>
+                ~s("#{clone_schema}"."#{table}"."#{column}")
+            )
+        end
+      end)
+    end)
+  end
+
+  # pg_get_serial_sequence returns a value like `tenant_template.foo_seq` or,
+  # if the local name needs quoting, `tenant_template."Foo Seq"`. Every
+  # sequence name in this codebase's own migrations is a plain lowercase
+  # identifier (verified: no quoting needed in the real schema), so a plain
+  # split on the first "." is sufficient and matches what design §2.3 step 5
+  # specifies ("same local sequence name as the template's, re-qualified to
+  # the clone schema").
+  defp local_identifier_name(qualified_name) do
+    qualified_name
+    |> String.split(".", parts: 2)
+    |> List.last()
+    |> String.trim("\"")
+  end
+
+  defp columns_in(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT column_name FROM information_schema.columns " <>
+          "WHERE table_schema = $1 AND table_name = $2",
+        [schema_name, table_name]
+      )
+
+    Enum.map(rows, fn [column_name] -> column_name end)
+  end
+
+  defp tables_in(schema_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT table_name FROM information_schema.tables " <>
+          "WHERE table_schema = $1 AND table_type = 'BASE TABLE'",
+        [schema_name]
+      )
+
+    rows
+    |> Enum.map(fn [table_name] -> table_name end)
+    |> Enum.reject(&(&1 == "schema_migrations"))
+  end
+
+  defp applied_versions_in(schema_name) do
+    %{rows: rows} = Repo.query!(~s(SELECT version FROM "#{schema_name}".schema_migrations))
+    Enum.map(rows, fn [version] -> version end)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Parity dimensions (design §3.2, thirteen dimensions)
+  # ---------------------------------------------------------------------------
+
+  defp dimension_checks do
+    [
+      {1, &check_table_set/2},
+      {2, &check_columns/2},
+      {3, &check_constraints/2},
+      {4, &check_indexes/2},
+      {5, &check_sequences/2},
+      {6, &check_identity/2},
+      {7, &check_row_counts/2},
+      {8, &check_triggers_comments/2},
+      {9, &check_reloptions/2},
+      {10, &check_attstattarget/2},
+      {11, &check_statistics_ext/2},
+      {12, &check_ruled_out_properties/2},
+      {13, &check_type_collation_namespace/2}
+    ]
+  end
+
+  defp normalize(text, reference_schema, candidate_schema) do
+    text
+    |> String.replace(~s(#{reference_schema}.), "")
+    |> String.replace(~s(#{candidate_schema}.), "")
+  end
+
+  # dimension #1: table set, set-equal, both directions.
+  defp check_table_set(reference_schema, candidate_schema) do
+    ref_tables = MapSet.new(tables_in(reference_schema))
+    cand_tables = MapSet.new(tables_in(candidate_schema))
+
+    missing = MapSet.difference(ref_tables, cand_tables)
+    extra = MapSet.difference(cand_tables, ref_tables)
+
+    []
+    |> add_if(MapSet.size(missing) > 0, "table set: missing=#{inspect(MapSet.to_list(missing))}")
+    |> add_if(MapSet.size(extra) > 0, "table set: extra=#{inspect(MapSet.to_list(extra))}")
+  end
+
+  # dimension #2: columns -- name, data type, is_nullable, column_default
+  # (schema-qualifier-normalized), ordinal position.
+  defp check_columns(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref_cols = column_rows(reference_schema, table)
+      cand_cols = column_rows(candidate_schema, table)
+
+      ref_norm =
+        ref_cols
+        |> reindex_ordinal()
+        |> Enum.map(&normalize_column_row(&1, reference_schema, candidate_schema))
+
+      cand_norm =
+        cand_cols
+        |> reindex_ordinal()
+        |> Enum.map(&normalize_column_row(&1, reference_schema, candidate_schema))
+
+      if ref_norm != cand_norm do
+        [
+          "columns mismatch on table=#{table}: reference=#{inspect(ref_norm)} candidate=#{inspect(cand_norm)}"
+        ]
+      else
+        []
+      end
+    end)
+  end
+
+  defp column_rows(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT column_name, data_type, is_nullable, column_default, ordinal_position " <>
+          "FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 " <>
+          "ORDER BY ordinal_position",
+        [schema_name, table_name]
+      )
+
+    rows
+  end
+
+  # ordinal_position is absolute and includes gaps left by dropped columns
+  # (e.g. REQ-064's tenant_id-drop migrations) -- LIKE ... INCLUDING ALL does
+  # NOT preserve those gaps in the clone (Postgres renumbers to consecutive
+  # positions), which is cosmetically irrelevant: the RELATIVE order among
+  # live columns is what the clone must match, not the raw integer. Rows
+  # arrive already ordered by the query's own ORDER BY ordinal_position, so
+  # re-ranking here (1, 2, 3, ... over live columns only) makes the two sides
+  # comparable without asserting something LIKE was never meant to preserve.
+  defp reindex_ordinal(rows) do
+    rows
+    |> Enum.with_index(1)
+    |> Enum.map(fn {[name, data_type, nullable, default, _ordinal], index} ->
+      [name, data_type, nullable, default, index]
+    end)
+  end
+
+  defp normalize_column_row(
+         [name, data_type, nullable, default, ordinal],
+         reference_schema,
+         candidate_schema
+       ) do
+    normalized_default =
+      case default do
+        nil -> nil
+        text -> normalize(text, reference_schema, candidate_schema)
+      end
+
+    [name, data_type, nullable, normalized_default, ordinal]
+  end
+
+  # dimension #3: constraint kinds and definitions -- pg_constraint grouped by
+  # contype over the full six-member set {c,f,p,u,x,t}, compared as a
+  # multiset of normalized definitions per table (never by conname, per
+  # design §0.1 finding 2).
+  defp check_constraints(reference_schema, candidate_schema) do
+    ref = constraint_rows(reference_schema)
+    cand = constraint_rows(candidate_schema)
+
+    ref_norm =
+      ref
+      |> Enum.map(fn [table, contype, def_sql] ->
+        {table, contype, normalize(def_sql, reference_schema, candidate_schema)}
+      end)
+      |> Enum.frequencies()
+
+    cand_norm =
+      cand
+      |> Enum.map(fn [table, contype, def_sql] ->
+        {table, contype, normalize(def_sql, reference_schema, candidate_schema)}
+      end)
+      |> Enum.frequencies()
+
+    if ref_norm == cand_norm do
+      []
+    else
+      missing = Map.drop(ref_norm, Map.keys(cand_norm)) |> Map.keys()
+      extra = Map.drop(cand_norm, Map.keys(ref_norm)) |> Map.keys()
+
+      []
+      |> add_if(missing != [], "constraints: missing=#{inspect(missing)}")
+      |> add_if(extra != [], "constraints: extra=#{inspect(extra)}")
+      |> add_if(
+        missing == [] and extra == [],
+        "constraints: frequency mismatch #{inspect(ref_norm)} vs #{inspect(cand_norm)}"
+      )
+    end
+  end
+
+  defp constraint_rows(schema_name) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT rel.relname, con.contype::text, pg_get_constraintdef(con.oid)
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1
+        """,
+        [schema_name]
+      )
+
+    rows
+  end
+
+  # dimension #4: indexes -- pg_indexes.indexdef, schema-qualifier-normalized,
+  # compared as a multiset per table, explicitly NOT by indexname (design
+  # §0.1 finding 2).
+  defp check_indexes(reference_schema, candidate_schema) do
+    ref = index_defs(reference_schema, reference_schema, candidate_schema)
+    cand = index_defs(candidate_schema, reference_schema, candidate_schema)
+
+    ref_freq = Enum.frequencies(ref)
+    cand_freq = Enum.frequencies(cand)
+
+    if ref_freq == cand_freq do
+      []
+    else
+      ["indexes: reference=#{inspect(ref_freq)} candidate=#{inspect(cand_freq)}"]
+    end
+  end
+
+  defp index_defs(schema_name, reference_schema, candidate_schema) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT tablename, indexdef FROM pg_indexes WHERE schemaname = $1",
+        [schema_name]
+      )
+
+    Enum.map(rows, fn [table, def_sql] ->
+      {table, structural_indexdef(normalize(def_sql, reference_schema, candidate_schema))}
+    end)
+  end
+
+  # design §0.1 finding 2: LIKE ... INCLUDING ALL renames indexes to
+  # Postgres's own auto-generated default names, which do not match the
+  # template's actual index names -- so the index's OWN NAME (the
+  # `CREATE [UNIQUE] INDEX <name>` prefix) must never be part of an equality
+  # comparison, only the structural remainder (USING method, columns/
+  # expression, WHERE predicate) starting at `ON`. Uniqueness survives
+  # separately as the presence/absence of the literal "UNIQUE " token before
+  # "INDEX", which this strip preserves since it stays before "ON".
+  defp structural_indexdef(def_sql) do
+    case String.split(def_sql, " ON ", parts: 2) do
+      [prefix, rest] ->
+        unique? = String.contains?(prefix, "UNIQUE")
+        "#{if unique?, do: "UNIQUE", else: "NOT UNIQUE"} ON #{rest}"
+
+      [only] ->
+        only
+    end
+  end
+
+  # dimension #5: sequences reachable from a column default. Both sides must
+  # agree on which columns are sequence-backed, and the candidate's sequence
+  # must live IN the candidate schema (design §0's "sequence trap" check).
+  defp check_sequences(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      columns = columns_in(reference_schema, table)
+
+      Enum.flat_map(columns, fn column ->
+        ref_seq = serial_sequence(reference_schema, table, column)
+        cand_seq = serial_sequence(candidate_schema, table, column)
+
+        cond do
+          is_nil(ref_seq) and is_nil(cand_seq) ->
+            []
+
+          is_nil(ref_seq) != is_nil(cand_seq) ->
+            [
+              "sequence presence mismatch table=#{table} column=#{column} reference=#{inspect(ref_seq)} candidate=#{inspect(cand_seq)}"
+            ]
+
+          true ->
+            cand_ns = String.split(cand_seq, ".", parts: 2) |> List.first() |> String.trim("\"")
+
+            if cand_ns != candidate_schema do
+              [
+                "sequence namespace leak table=#{table} column=#{column} candidate_seq=#{cand_seq} expected_ns=#{candidate_schema}"
+              ]
+            else
+              []
+            end
+        end
+      end)
+    end)
+  end
+
+  defp serial_sequence(schema_name, table, column) do
+    %{rows: rows} =
+      Repo.query!("SELECT pg_get_serial_sequence($1, $2)", ["#{schema_name}.#{table}", column])
+
+    case rows do
+      [[nil]] -> nil
+      [[seq]] -> seq
+    end
+  end
+
+  # dimension #6: NOT NULL/identity -- attidentity equality per column
+  # (folded is_nullable already lives in dimension #2).
+  defp check_identity(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref = identity_rows(reference_schema, table)
+      cand = identity_rows(candidate_schema, table)
+
+      if ref != cand do
+        ["identity mismatch table=#{table}: reference=#{inspect(ref)} candidate=#{inspect(cand)}"]
+      else
+        []
+      end
+    end)
+  end
+
+  defp identity_rows(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT att.attname, att.attidentity
+        FROM pg_attribute att
+        JOIN pg_class rel ON rel.oid = att.attrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1 AND rel.relname = $2 AND att.attnum > 0 AND NOT att.attisdropped
+        ORDER BY att.attname
+        """,
+        [schema_name, table_name]
+      )
+
+    rows
+  end
+
+  # dimension #7: row counts for seeded tables -- event_type_registry
+  # (row count) and schema_migrations (row count AND version set).
+  defp check_row_counts(reference_schema, candidate_schema) do
+    ref_count = row_count(reference_schema, "event_type_registry")
+    cand_count = row_count(candidate_schema, "event_type_registry")
+
+    ref_versions = MapSet.new(applied_versions_in(reference_schema))
+    cand_versions = MapSet.new(applied_versions_in(candidate_schema))
+
+    []
+    |> add_if(
+      ref_count != cand_count,
+      "event_type_registry row count reference=#{ref_count} candidate=#{cand_count}"
+    )
+    |> add_if(
+      ref_versions != cand_versions,
+      "schema_migrations version set reference=#{inspect(MapSet.to_list(ref_versions))} candidate=#{inspect(MapSet.to_list(cand_versions))}"
+    )
+  end
+
+  defp row_count(schema_name, table_name) do
+    %{rows: [[count]]} = Repo.query!(~s|SELECT count(*) FROM "#{schema_name}"."#{table_name}"|)
+    count
+  end
+
+  # dimension #8: triggers (count-equal-to-zero on both sides today),
+  # table/column comments (compared, expected NULL/NULL today).
+  defp check_triggers_comments(reference_schema, candidate_schema) do
+    ref_triggers = trigger_count(reference_schema)
+    cand_triggers = trigger_count(candidate_schema)
+
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    comment_diffs =
+      Enum.flat_map(common_tables, fn table ->
+        ref_comment = table_comment(reference_schema, table)
+        cand_comment = table_comment(candidate_schema, table)
+
+        if ref_comment != cand_comment do
+          [
+            "table comment mismatch table=#{table} reference=#{inspect(ref_comment)} candidate=#{inspect(cand_comment)}"
+          ]
+        else
+          []
+        end
+      end)
+
+    []
+    |> add_if(
+      ref_triggers != cand_triggers,
+      "trigger count reference=#{ref_triggers} candidate=#{cand_triggers}"
+    )
+    |> Kernel.++(comment_diffs)
+  end
+
+  defp trigger_count(schema_name) do
+    %{rows: [[count]]} =
+      Repo.query!(
+        "SELECT count(*) FROM pg_trigger trg " <>
+          "JOIN pg_class rel ON rel.oid = trg.tgrelid " <>
+          "JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace " <>
+          "WHERE nsp.nspname = $1 AND NOT trg.tgisinternal",
+        [schema_name]
+      )
+
+    count
+  end
+
+  defp table_comment(schema_name, table_name) do
+    %{rows: [[comment]]} =
+      Repo.query!(
+        "SELECT obj_description(rel.oid) FROM pg_class rel " <>
+          "JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace " <>
+          "WHERE nsp.nspname = $1 AND rel.relname = $2",
+        [schema_name, table_name]
+      )
+
+    comment
+  end
+
+  # dimension #9: table-level storage parameters (pg_class.reloptions),
+  # set-equal per table.
+  defp check_reloptions(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref = reloptions(reference_schema, table)
+      cand = reloptions(candidate_schema, table)
+
+      if MapSet.new(ref) != MapSet.new(cand) do
+        [
+          "reloptions mismatch table=#{table} reference=#{inspect(ref)} candidate=#{inspect(cand)}"
+        ]
+      else
+        []
+      end
+    end)
+  end
+
+  defp reloptions(schema_name, table_name) do
+    %{rows: [[opts]]} =
+      Repo.query!(
+        "SELECT rel.reloptions FROM pg_class rel " <>
+          "JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace " <>
+          "WHERE nsp.nspname = $1 AND rel.relname = $2",
+        [schema_name, table_name]
+      )
+
+    opts || []
+  end
+
+  # dimension #10: per-column statistics target (pg_attribute.attstattarget).
+  defp check_attstattarget(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref = attstattarget_rows(reference_schema, table)
+      cand = attstattarget_rows(candidate_schema, table)
+
+      if ref != cand do
+        [
+          "attstattarget mismatch table=#{table}: reference=#{inspect(ref)} candidate=#{inspect(cand)}"
+        ]
+      else
+        []
+      end
+    end)
+  end
+
+  defp attstattarget_rows(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT att.attname, att.attstattarget
+        FROM pg_attribute att
+        JOIN pg_class rel ON rel.oid = att.attrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1 AND rel.relname = $2 AND att.attnum > 0 AND NOT att.attisdropped
+        ORDER BY att.attname
+        """,
+        [schema_name, table_name]
+      )
+
+    rows
+  end
+
+  # dimension #11: extended statistics objects (pg_statistic_ext),
+  # count-equal-to-zero rule-out today, per-table multiset of normalized
+  # definitions if any exist (same structural-not-name-based treatment as
+  # indexes/constraints).
+  defp check_statistics_ext(reference_schema, candidate_schema) do
+    ref = statistics_ext_defs(reference_schema, reference_schema, candidate_schema)
+    cand = statistics_ext_defs(candidate_schema, reference_schema, candidate_schema)
+
+    ref_freq = Enum.frequencies(ref)
+    cand_freq = Enum.frequencies(cand)
+
+    if ref_freq == cand_freq do
+      []
+    else
+      ["pg_statistic_ext: reference=#{inspect(ref_freq)} candidate=#{inspect(cand_freq)}"]
+    end
+  end
+
+  defp statistics_ext_defs(schema_name, reference_schema, candidate_schema) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT rel.relname, pg_get_statisticsobjdef(st.oid)
+        FROM pg_statistic_ext st
+        JOIN pg_class rel ON rel.oid = st.stxrelid
+        JOIN pg_namespace nsp ON nsp.oid = st.stxnamespace
+        WHERE nsp.nspname = $1
+        """,
+        [schema_name]
+      )
+
+    Enum.map(rows, fn [table, def_sql] ->
+      {table, structural_statisticsdef(normalize(def_sql, reference_schema, candidate_schema))}
+    end)
+  end
+
+  # Same name-independent treatment as structural_indexdef/1 above, per
+  # design §0.2 finding 4: LIKE ... INCLUDING ALL auto-renames extended
+  # statistics objects too. Format: "CREATE STATISTICS <name> (<kinds>) ON
+  # <columns> FROM <table>" -- strip the name, keep everything from "(" on.
+  defp structural_statisticsdef(def_sql) do
+    case Regex.run(~r/^CREATE STATISTICS \S+ (.*)$/, def_sql) do
+      [_, rest] -> rest
+      nil -> def_sql
+    end
+  end
+
+  # dimension #12: RLS, partitioning, tablespace, ownership -- checked and
+  # asserted equal (not-applicable today, but a live check, not a silent
+  # omission).
+  defp check_ruled_out_properties(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref = ruled_out_row(reference_schema, table)
+      cand = ruled_out_row(candidate_schema, table)
+
+      # relowner is a role OID, identical by construction (single configured
+      # role) -- excluded from comparison, not from the query, so a future
+      # reader can see it was fetched, per design §0.2 finding 5.
+      [_ref_owner | ref_rest] = ref
+      [_cand_owner | cand_rest] = cand
+
+      if ref_rest != cand_rest do
+        [
+          "ruled-out property mismatch table=#{table}: reference=#{inspect(ref)} candidate=#{inspect(cand)}"
+        ]
+      else
+        []
+      end
+    end)
+  end
+
+  defp ruled_out_row(schema_name, table_name) do
+    %{rows: [row]} =
+      Repo.query!(
+        "SELECT relowner, relrowsecurity, relforcerowsecurity, relkind, relispartition, reltablespace " <>
+          "FROM pg_class rel JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace " <>
+          "WHERE nsp.nspname = $1 AND rel.relname = $2",
+        [schema_name, table_name]
+      )
+
+    row
+  end
+
+  # dimension #13: column type and collation NAMESPACE -- structural, not
+  # name/string based (design §0.3, the rework-2 fix). A non-pg_catalog-owned
+  # type/collation's namespace on the CANDIDATE side must equal the
+  # candidate's own schema, never the reference's.
+  defp check_type_collation_namespace(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref_rows = type_collation_rows(reference_schema, table)
+      cand_rows = type_collation_rows(candidate_schema, table)
+
+      cand_by_name = Map.new(cand_rows, fn [name | rest] -> {name, rest} end)
+
+      Enum.flat_map(ref_rows, fn [name, ref_type_ns, ref_coll_ns] ->
+        case Map.fetch(cand_by_name, name) do
+          :error ->
+            []
+
+          {:ok, [cand_type_ns, cand_coll_ns]} ->
+            []
+            |> check_namespace_branch(
+              table,
+              name,
+              "type",
+              ref_type_ns,
+              cand_type_ns,
+              reference_schema,
+              candidate_schema
+            )
+            |> check_namespace_branch(
+              table,
+              name,
+              "collation",
+              ref_coll_ns,
+              cand_coll_ns,
+              reference_schema,
+              candidate_schema
+            )
+        end
+      end)
+    end)
+  end
+
+  defp check_namespace_branch(
+         acc,
+         table,
+         column,
+         kind,
+         ref_ns,
+         cand_ns,
+         reference_schema,
+         candidate_schema
+       ) do
+    cond do
+      ref_ns == "pg_catalog" and cand_ns == "pg_catalog" ->
+        acc
+
+      ref_ns == reference_schema and cand_ns == candidate_schema ->
+        acc
+
+      true ->
+        [
+          "column #{kind} namespace mismatch table=#{table} column=#{column} " <>
+            "reference_ns=#{ref_ns} candidate_ns=#{cand_ns}"
+          | acc
+        ]
+    end
+  end
+
+  defp type_collation_rows(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT att.attname,
+               type_nsp.nspname AS type_namespace,
+               COALESCE(coll_nsp.nspname, 'pg_catalog') AS collation_namespace
+        FROM pg_attribute att
+        JOIN pg_class rel ON rel.oid = att.attrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        JOIN pg_type typ ON typ.oid = att.atttypid
+        JOIN pg_namespace type_nsp ON type_nsp.oid = typ.typnamespace
+        LEFT JOIN pg_collation coll ON coll.oid = att.attcollation
+        LEFT JOIN pg_namespace coll_nsp ON coll_nsp.oid = coll.collnamespace
+        WHERE nsp.nspname = $1 AND rel.relname = $2 AND att.attnum > 0 AND NOT att.attisdropped
+        ORDER BY att.attname
+        """,
+        [schema_name, table_name]
+      )
+
+    rows
+  end
+
+  defp add_if(list, true, item), do: [item | list]
+  defp add_if(list, false, _item), do: list
+end

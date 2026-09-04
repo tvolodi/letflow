@@ -7,9 +7,9 @@
   "to_agent": "ELIXIR-DEV",
   "file": "handoffs/WF03-ISS0451-20260904/step-03-elixir-dev.json",
   "created_at": "2026-09-04T03:22:00Z",
-  "started_at": "2026-09-04T03:22:00Z",
-  "completed_at": "2026-09-04T03:30:42Z",
-  "status": "COMPLETED",
+  "started_at": "2026-09-04T03:40:29Z",
+  "completed_at": null,
+  "status": "PENDING",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -42,38 +42,34 @@
       "mix format --check-formatted passes",
       "test/letflow/supervisor/pollers_test.exs, infrastructure_test.exs, http_test.exs all still pass (REQ-219 AC2/AC4 no regression, per ISS-0451 AC3)",
       "No new persistent-fault regression test written by this step -- that is TEST-DESIGNER's job next"
-    ]
+    ],
+    "rework_note": "REWORK ITERATION 1 (of your own Step 3 -- this reuses the same handoff file rather than opening a new step number since it's the same task, now unblocked). CODE-DESIGNER resolved the race you found (result.issues[0] on this handoff, from your own prior attempt) by rewriting lib/letflow/design/iss0451-poller-crash-budget-isolation.md's section 5 -- CODE-DESIGN-VALIDATOR independently re-verified the fix and PASSED it (handoffs/WF03-ISS0451-20260904/step-02b-code-design-validator.json, gate_history[3]). The chosen fix is option 2 of your own three named directions: the AC4 test no longer issues its own competing Supervisor.start_child/2 call at all. Read the CURRENT section 5 in the design doc (it has been rewritten, do not rely on your memory of the old version that caused the FAIL) -- it now specifies: trigger with terminate_child/2 alone, then poll PollersBreaker.breaker_state()/Process.whereis/1 until a new Pollers pid appears while breaker_state() == :closed (proving the single-shot fault never tripped the breaker), then the original Repo/Infrastructure pid-unchanged assertions, plus one new assertion (breaker_state() == :closed). Your own production code (lib/letflow/supervisor/pollers_breaker.ex, lib/letflow/application.ex) needs NO further changes -- both CODE-DESIGNER and CODE-DESIGN-VALIDATOR independently confirmed this (git diff between the two design revisions touched only the .md file). Apply the new section 5 procedure to test/letflow/supervisor/pollers_test.exs's AC4 test (replacing your own prior implementation of the old, broken guidance), then re-run test/letflow/supervisor/pollers_test.exs, infrastructure_test.exs, and http_test.exs to confirm all pass reliably (run pollers_test.exs multiple times with varied --seed, the way you did before, to confirm the flakiness is actually gone this time -- don't assume it from the design doc alone). Finish this handoff normally per HANDOFF_PROTOCOL.md section 4 (status COMPLETED, full result block, completed_at from the real clock) -- if it now passes cleanly, route to SECURITY-REVIEWER next as the original task described."
   },
   "result": {
-    "status": "FAIL",
-    "summary": "Implemented all three required changes per the design exactly as specified: (1) new Letflow.Supervisor.PollersBreaker GenServer at lib/letflow/supervisor/pollers_breaker.ex, matching the design's :closed/:open/:half_open state machine, backoff schedule (1s/5s/30s/2m/5m cap), 2s observation window, Supervisor.start_child/2-based restart mechanism (never restart_child/2), and breaker_state/0 accessor; (2) lib/letflow/application.ex's children list changed to Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary) as a direct list entry, PollersBreaker added after Pollers/before Http, top-level max_restarts raised 3->5 (max_seconds stays 5); (3) test/letflow/supervisor/pollers_test.exs's restart_pollers!/0 helper corrected from terminate_child+restart_child to terminate_child+start_child/2 with the full child spec, made tolerant of {:error, {:already_started, pid}} since PollersBreaker can win a restart race against this helper too. mix compile --warnings-as-errors: clean (0 warnings). mix format --check-formatted: clean. infrastructure_test.exs (updated for the new 4th top-level child, PollersBreaker) and http_test.exs: 6/6 pass, every run. pollers_test.exs: 3 of its 4 tests pass every run; its 'AC4: crash-loop isolation' test is FLAKY -- it passed in 3 of 5 --seed-varied runs and failed with a MatchError in the other 2 (see result.issues for the root cause, which is a genuine design gap, not an implementation bug). Reported as FAIL per this step's own task instructions ('confirm they still pass... REQ-219's own AC2/AC4 tests... must not regress') since AC2/AC4 coverage is not reliably green -- not silently patched into a passing-but-unrepresentative shape. STOPPED here per the task's own 'if you find a genuine additional defect, stop and report' instruction rather than redesigning the existing AC4 test's semantics myself, since fixing it correctly requires a design-level decision (see result.issues) that CODE-DESIGNER/REVIEWER should make, not one I should make unilaterally while implementing.",
-    "artifacts_out": [
-      "lib/letflow/supervisor/pollers_breaker.ex",
-      "lib/letflow/application.ex",
-      "test/letflow/supervisor/pollers_test.exs",
-      "test/letflow/supervisor/infrastructure_test.exs"
-    ],
-    "issues": [
-      {
-        "severity": "BLOCKER",
-        "title": "Design doc §5's guidance for updating pollers_test.exs's existing AC4 test does not produce a deterministic test once Letflow.Supervisor.PollersBreaker is live -- a genuine, previously-unflagged two-restarter race, empirically reproduced (fails ~40% of --seed-varied runs)",
-        "detail": "lib/letflow/design/iss0451-poller-crash-budget-isolation.md §5's 'Second, previously-unflagged consequence' section instructs updating pollers_test.exs's manual terminate_child+restart_child call sites (including the AC4 test's own inline manual-restart step, lines ~116-119 as read for the design) to terminate_child+start_child/2, and says the test's crash-loop procedure must 'expect Letflow.Supervisor.Pollers to be restarted via PollersBreaker's own :DOWN handler... instead of asserting a bare top-level automatic restart occurred.' Implementing this literally (test/letflow/supervisor/pollers_test.exs, AC4 test body) surfaces a race the design did not anticipate: Letflow.Supervisor.PollersBreaker ALSO monitors Letflow.Supervisor.Pollers and reacts to the SAME terminate_child/2-induced :DOWN this test relies on to force init/1 to re-read its env overrides -- concurrently with whatever the test process does next. Two failure modes, both empirically reproduced during implementation: (a) if the test issues its own start_child/2 call for the freshly-terminated Pollers (the design's literal instruction), it races PollersBreaker's own start_child/2 call for the identical :temporary child spec -- whichever call loses gets {:error, {:already_started, pid}} instead of {:ok, pid}, a MatchError against the design's own literal {:ok, pid} = ... pattern. Reproduced deterministically with --seed 0, and flakily (2 of 5 runs) with varied seeds. (b) If the test instead removes its own competing start_child/2 call and waits for the breaker's restart (an alternative I tried and then reverted, since it does not preserve the original AC4 semantics either), Letflow.Scheduler.Poller's zero-delay first tick means the breaker-restarted Pollers can already be crash-looping, inside the breaker's own 2-second observation window, before the test process is even scheduled to run its next line -- there is no synchronous window left (unlike the ORIGINAL top-level-auto-restart mechanism this test was written against) for the test to clear :force_poller_crash before a second exhaustion cycle occurs; empirically the breaker reached :open (consecutive_trips: 2) before the test's post-wait assertions ran, so Process.whereis(Letflow.Supervisor.Pollers) was nil, not a stable third pid. Root cause: PollersBreaker's restart of Pollers is fundamentally asynchronous relative to the test process (a Process.monitor :DOWN message + handle_info dispatch + a synchronous but still message-passing-mediated start_child/2 call), whereas the ORIGINAL test relied on the test process's OWN synchronous terminate_child+restart_child call completing strictly before control returned to it -- a property that held for the top-level Supervisor's restart call but does not carry over to a race between the test process and a third, independently-scheduled GenServer both trying to restart the same :temporary child in reaction to the same underlying event.",
-        "recommendation": "This needs a design-level decision, not a test-only patch: either (1) give PollersBreaker a way to ignore a :DOWN it did not itself expect to be racing a test-initiated restart against (e.g. a test-only synchronization hook, double-gated like pollers_init_probe/force_poller_crash, that lets a test coordinate with the breaker's :closed-state handler before triggering its own terminate_child), or (2) redefine the AC4 test's own procedure to not attempt a manual pre-restart at all and instead drive the entire scenario (healthy Pollers -> crash flag set -> terminate -> breaker's restart -> crash-loop -> breaker's own exhaustion-detection -> :open -> :half_open recovery once the flag is cleared) as a single breaker-mediated flow matching ISS-0451's OWN new regression test's shape (design doc §6.2) rather than trying to preserve the original single-top-level-restart AC4 test's exact structure, or (3) some other mechanism CODE-DESIGNER/REVIEWER judges better. Left implemented as the design's literally-specified start_child/2 call (failure mode (a)) in the current test/letflow/supervisor/pollers_test.exs rather than the (b) workaround, since (a) is the more direct, more clearly design-traceable illustration of the race for whoever picks this up next."
-      }
-    ],
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
     "git_evidence": {
-      "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
-      "commit_sha_list": [
-        "e8cbef2e5b868ebcbdc81196c0cda1c9727036b3",
-        "6f03bc7a"
-      ],
-      "remote_branch": "origin/fix/ISS-0451-persistent-poller-crash-budget-20260904",
+      "branch_name": "",
+      "commit_sha_list": [],
+      "remote_branch": "",
       "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": "Route back to CODE-DESIGNER (not SECURITY-REVIEWER/REVIEWER) to resolve the pollers_test.exs AC4-test race documented in result.issues[0] -- a design-level decision is needed before this can proceed to the normal SECURITY-REVIEWER/REVIEWER gate sequence, since the currently-implemented production code (pollers_breaker.ex, application.ex) is believed correct and complete per the design and is not itself in question; only the existing AC4 test's adaptation is unresolved."
+    "next_action": ""
   },
-  "rework_count": 0,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-04T03:30:42Z",
+      "status": "FAIL",
+      "summary": "Production code (pollers_breaker.ex, application.ex) implemented correctly per the then-current design, compiled and formatted clean. But applying design section 5's THEN-guidance to pollers_test.exs's existing AC4 test surfaced a genuine, previously-unflagged race: PollersBreaker and the test process both react to the same terminate_child-induced :DOWN and race to restart Pollers -- reproduced deterministically at seed 0, flaky (2/5) otherwise.",
+      "issues": ["BLOCKER: two-restarter race in the AC4 test's adaptation, full detail retained in git history of this file (commit at 2026-09-04T03:30:42Z) -- routed to CODE-DESIGNER, resolved via a redesigned section 5 (single breaker-mediated flow, no test-issued competing start_child/2 call), independently re-verified PASS by CODE-DESIGN-VALIDATOR."],
+      "next_action": "Rework: apply the redesigned section 5 procedure to pollers_test.exs, re-verify pollers_test.exs/infrastructure_test.exs/http_test.exs all pass reliably."
+    }
+  ],
+  "rework_count": 1,
   "max_rework": 3
 }

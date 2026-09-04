@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-01",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-04T02:46:00Z",
+  "started_at": "2026-09-04T02:46:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0451.yaml",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "lib/letflow/supervisor/http.ex",
+      "lib/letflow/design/req219-supervision-layering.md",
+      "test/letflow/supervisor/pollers_test.exs",
+      "handoffs/WF02-REQ219-20260903/step-02d-reviewer.json"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "This is WF-03 Steps 0.5 (registry lookup) and 1 (diagnose) combined into one dispatch, per docs/agents/workflows/WF-03_issue_resolving.md. You are on branch fix/ISS-0451-persistent-poller-crash-budget-20260904 (already checked out and pushed by Step 00).\n\nSTEP 0.5: Search docs/issues/*.yaml for any resolved entry describing the same symptom class (a supervisor's restart-intensity budget being exhausted by a persistent/non-transient fault cascading to a parent). Note in your result whether a prior match exists, and if the same root cause has recurred before (which would raise severity to at least MAJOR regardless of the filed severity -- ISS-0451 is already filed MAJOR).\n\nSTEP 1: Reproduce ISS-0451 directly, don't diagnose from the issue's prose alone. The issue (docs/issues/ISS-0451.yaml, already filed) claims: Letflow.Supervisor (top-level, lib/letflow/application.ex) uses :one_for_one with the OTP DEFAULT restart intensity (3 restarts / 5 seconds, never overridden), and Letflow.Supervisor.Pollers has its own max_restarts: 5, max_seconds: 60. REQ-219's own test (test/letflow/supervisor/pollers_test.exs) only proves isolation for a SINGLE crash-loop-then-clear event -- the test clears its force-crash flag right after Pollers' first :DOWN, before the top-level supervisor's own restart of Pollers could re-trigger the same crash. Verify directly: (a) confirm the top-level Letflow.Supervisor's actual restart-intensity config in lib/letflow/application.ex (read it, don't take the issue's word for it), (b) confirm Pollers' actual max_restarts/max_seconds in lib/letflow/supervisor/pollers.ex, (c) work out and state the concrete restart-intensity arithmetic for what happens when a Poller fault is PERSISTENT (never cleared): how many times does Pollers itself have to exit-and-be-restarted-by-the-top-level before the top-level's own 3-in-5s budget is exhausted, and roughly how fast (in wall-clock seconds) would that actually happen given Pollers' own 60-second window, (d) if practical, write and run a throwaway probe (a small script or an iex -S mix session, NOT a permanent test file) that actually starts a minimal supervision tree shaped like this one with a poller that always crashes, and observes whether the top-level supervisor itself exits -- this is the kind of direct verification core-directives.md's 'No Speculation' and 'Re-derive under the conditions the property is actually about' sections require, not merely trusting the arithmetic. If you build a throwaway probe, put it in scratch/ (git-ignored) and do not commit it.\n\nDo NOT implement the fix. Your job is root-cause diagnosis only, and to recommend a routing path: does this need a full CODE-DESIGNER pass (design an explicit fix: raise the top-level's restart intensity, and/or add a circuit-breaker/backoff to Pollers, per the issue's own two candidate options), or is there a smaller mechanical fix. Given AGENT_SYSTEM.md's roster, this DOES need CODE-DESIGNER -- ISS-0451's own acceptance criteria require a documented restart-intensity arithmetic decision (AC2), which is a design decision, not a mechanical patch -- but confirm this yourself rather than taking that as given, and state your reasoning.\n\nWrite the diagnosis into result.summary: root cause (not just symptom), the concrete arithmetic from (c), what a fix needs to change, and whether your Step 0.5 registry lookup found any prior match.",
+    "acceptance_criteria": [
+      "result.summary states the top-level Letflow.Supervisor's actual restart-intensity value, quoted from the real file (not assumed to be the OTP default without checking)",
+      "result.summary states Letflow.Supervisor.Pollers' actual max_restarts/max_seconds value, quoted from the real file",
+      "result.summary contains the concrete restart-intensity arithmetic: how many Pollers-level budget-exhaustion cycles it takes to exhaust the top-level's budget, and the wall-clock timing reasoning",
+      "result.summary states whether a throwaway probe was run and, if so, what it observed (or explains why a probe was impractical and what evidence substitutes for it)",
+      "result.summary states the Step 0.5 registry-lookup outcome explicitly",
+      "next_action names the recommended next step (CODE-DESIGNER, with reasoning)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

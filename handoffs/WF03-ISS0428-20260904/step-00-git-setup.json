@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0428-20260904-step-00",
+  "run_id": "WF03-ISS0428-20260904",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0428-20260904/step-00-git-setup.json",
+  "created_at": "2026-09-04T12:10:45Z",
+  "started_at": "2026-09-04T12:10:45Z",
+  "completed_at": "2026-09-04T12:40:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0428"],
+    "artifacts_in": [
+      "docs/issues/ISS-0428.yaml",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "scripts/test_parallel.sh",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "fix/ISS-0428-parallel-runner-in-check-20260904",
+    "owned_modules": ["lib/mix/tasks/letflow.check.test.ex"]
+  },
+  "task": {
+    "description": "Git setup for ISS-0428: scripts/test_parallel.sh is wired into the agent workflow docs but NOT into mix letflow.check, which is what CI runs on every commit. Selected by the project owner asking what further test/CI performance work exists after ISS-0427 merged.\n\nSIZING VERDICT (ORCHESTRATOR.md section 10): FAILS -- full WF-03 chain. The issue itself names two non-trivial constraints (a safety gate that would silently stop gating, and unproven CI gains) and explicitly says a decided 'local only, CI unchanged' is a legitimate outcome -- i.e. there is a real decision to make, not a mechanical edit.\n\nDEPENDENCY CHECKED, NOT ASSUMED: ISS-0428 declares 'ISS-0426 should land first, or any parallel adoption will look intermittently red.' ISS-0426 is status: resolved. Dependency satisfied."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 428 locked via set_lock (agent_id letflow-2-orch, GH#832) -- set_lock rather than get_next_task because the user named the work class, which exempts SELECTION from TASK_QUEUE.md's Hard Rule but not LOCKING. Branch created from main 8187d4bb (ISS-0427's own merge) and pushed.\n\nMEASUREMENTS TAKEN BY ORCH BEFORE DISPATCHING, because the issue's own figures are stale and would have misled the design:\n  - The issue's 1805s serial baseline predates ISS-0427's template-clone work, which merged this session and cut per-schema provisioning 1.79x. Comparing today's parallel numbers against that figure would OVERSTATE the parallel gain by attributing ISS-0427's win to parallelism.\n  - Re-measured both on the CURRENT tree, same host, both to completion: SERIAL (mix test) 1466s wall, 3211/3217 with 6 failures; N=2 (TEST_PARALLEL_N=2, matching ubuntu-latest's 2 vCPU) 774s wall, 3214/3214 CLEAN; N=16 (16-core host default) ~300s, 3213/3213 clean.\n  - THEREFORE 1.89x AT CI'S ACTUAL PARALLELISM, and clean -- which CONTRADICTS the issue's own pessimism. ISS-0428 assumed the N=16 gain 'does NOT transfer' to 2 vCPU and warned adoption might trade a slow-but-green gate for a fast-but-flaky one. Measured: no crashes, no too_many_connections, partitions balanced at 765s/690s. The connection-exhaustion mode the issue feared needs a much higher N against a constrained budget; at N=2 it does not arise.\n  - The 6 serial-run failures were ALL Letflow.ServiceCatalogTest, the file ISS-0409/ISS-0414 already document as having cross-test isolation problems. Recorded so nobody reads it as evidence that parallel is safer OR that serial mode caused it.\n\nCI BASELINE for comparison: recent backend-gate runs measure 10-14 minutes wall clock (gh run list), so this is a real but bounded target -- not the ~30 minutes the local serial suite once implied.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

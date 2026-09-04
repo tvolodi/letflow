@@ -1,0 +1,49 @@
+{
+  "handoff_id": "b1e2c3d4-5f6a-4b7c-8d9e-0a1b2c3d4e5f",
+  "run_id": "WF03-ISS0467-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0467-20260904/step-01-issue-fixer.json",
+  "created_at": "2026-09-04T19:02:24Z",
+  "started_at": "2026-09-04T19:02:24Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0467.yaml",
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": [
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ]
+  },
+  "task": {
+    "description": "This covers WF-03 Step 0.5 (registry lookup) and Step 1 (diagnose) together, combined into one dispatch since this is a documentation/repo-administration issue, not a code defect with an unknown root cause requiring separate exploration. Step 0.5: read docs/issues/*.yaml for entries with status: resolved whose description mentions branch protection or direct-push bypass -- confirm whether this exact gap has been seen before (ISS-0441 is the parent finding but is NOT a prior fix of THIS gap; it configured required-status-checks, which is a different mechanism than push restrictions). Step 1: confirm the finding first-hand, do not take ISS-0467.yaml's description on faith. Specifically: (1) Run `gh api repos/tvolodi/letflow/branches/main/protection` and confirm the CURRENT live configuration -- specifically whether `restrictions` is still null today (0018's own record states it was configured null; confirm this has not changed since). (2) Determine what GitHub identity `git push`/`gh` currently authenticate as on this host -- run `gh auth status` and `gh api user --jq '.login'`, and determine whether that identity is a repository admin/owner (check `gh api repos/tvolodi/letflow --jq '.permissions'`). This matters because the fix decision hinges on whether a 'restrict who can push' rule could actually distinguish a legitimate ORCH direct-action push (ORCHESTRATOR.md section 10's sizing rule) from an accidental/illegitimate bypass, given both would come from the exact same GitHub identity. (3) State plainly whether the same identity that would be exempted/restricted is the same identity ORCH already merges PRs as -- i.e. is there ANY identity distinction available on this project's current auth setup that a push-restriction rule could exploit, or would 'restrict to administrators' simply restrict to the one identity that already does everything, making it a no-op. Do NOT implement any fix or write to 0018/GIT_MERGE.md yourself -- produce ONLY the diagnosis in result.summary: the live-verified current state of `restrictions`, the live-verified pushing identity and its admin status, and an explicit factual answer to whether GitHub's push-restriction mechanism can distinguish the two push classes on this project as currently configured. This diagnosis is what CODE-DESIGNER will use to decide between option 1 (configure restrictions) and option 2 (documented prohibition in GIT_MERGE.md) -- do not pre-decide which option should be chosen, just establish the facts.",
+    "acceptance_criteria": [
+      "Step 0.5: docs/issues/*.yaml scanned for a prior resolved entry covering this exact direct-push-bypass gap; result stated explicitly (found or not found, and why ISS-0441 does not itself count as a prior fix of this gap)",
+      "Live gh api call confirms current state of main's branch protection 'restrictions' field, with real quoted JSON output",
+      "Live gh auth status / gh api user / gh api repos permissions calls establish the exact identity and admin status ORCH's own pushes and gh pr merge calls authenticate as, with real quoted output",
+      "result.summary states explicitly, as a factual finding (not a recommendation), whether a GitHub push-restriction rule could distinguish a legitimate ORCH direct-action push from an illegitimate bypass given the current single-identity auth setup",
+      "No fix implemented, no file outside docs/issues/ (if any status update) or the handoff itself modified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

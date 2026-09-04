@@ -100,7 +100,24 @@ defmodule Letflow.Test.TenantTemplate do
         # Re-check inside the lock: a concurrent first-caller may have already
         # built the template while this call waited on the advisory lock.
         unless template_built_in_db?() do
-          build_template!()
+          # THE WHOLE BUILD runs unboxed, on ONE connection. Under a
+          # partitioned run (MIX_TEST_PARTITION, i.e. scripts/test_parallel.sh)
+          # the caller's connection is sandbox-owned, so build_template!/0's
+          # DDL would be rolled back the moment the test's checkout ends --
+          # while replay_migrations/2 still returns {:ok, versions}, because
+          # from its own point of view the migrations really did run. Measured
+          # symptom: the template schema EXISTED but held ZERO tables, and 354
+          # suite failures followed. It hid until a real partitioned run
+          # because against the default letflow_test database the same file
+          # passed 6/6.
+          #
+          # It must be the WHOLE build, not just the migration:
+          # replay_migrations/2 opens with Repo.get_by(Registration, ...), and
+          # the throwaway row is inserted by build_template!/0 itself. Wrapping
+          # only the migration puts that lookup on a different connection which
+          # cannot see the row, yielding {:error, :tenant_not_provisioned} --
+          # verified by trying exactly that first.
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn -> build_template!() end)
         end
       after
         Repo.query!("SELECT pg_advisory_unlock(hashtext($1))", [@advisory_lock_key])
@@ -251,6 +268,29 @@ defmodule Letflow.Test.TenantTemplate do
 
     throwaway_tenant_id = insert_throwaway_tenant_and_registration!()
 
+    # CONNECTION-BOUNDARY FIX (ORCH). replay_migrations/2 delegates to
+    # Ecto.Migrator.run/4, which CHECKS OUT ITS OWN CONNECTION rather than
+    # using this one. Under a partitioned run (MIX_TEST_PARTITION set, i.e.
+    # scripts/test_parallel.sh) that connection is still sandbox-owned, so
+    # Sandbox.mode(:auto) set on THIS connection never reaches it and every
+    # migration is rolled back the moment the checkout ends -- while
+    # replay_migrations/2 still returns {:ok, versions}, because from its own
+    # point of view the migrations really did run.
+    #
+    # Measured symptom before this fix: the template schema EXISTED (CREATE
+    # SCHEMA above runs on this connection and commits) but held ZERO tables,
+    # not even schema_migrations, and 354 suite failures followed from
+    # TENANT_TEMPLATE_SELF_CHECK_FAILED. The same test file passed 6/6
+    # against the default letflow_test database, which is why this hid until
+    # a real partitioned run.
+    #
+    # The fix cannot be applied to the migration call alone: replay_migrations/2
+    # begins with Repo.get_by(Registration, tenant_id: ...), and the throwaway
+    # Registration row is inserted on the sandbox connection. Running only the
+    # migration unboxed puts the lookup on a DIFFERENT connection that cannot
+    # see that row, so it returns {:error, :tenant_not_provisioned} instead.
+    # The whole build -- row insert, migration, cleanup -- has to run on one
+    # unboxed connection together. See ensure_template!/0's caller-side wrap.
     case TenantProvisioning.replay_migrations(throwaway_tenant_id) do
       {:ok, _applied_versions} ->
         :ok

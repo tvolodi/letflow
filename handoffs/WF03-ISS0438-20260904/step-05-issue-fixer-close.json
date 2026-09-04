@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0438-20260904/step-05-issue-fixer-close.json",
   "created_at": "2026-09-04T15:55:22Z",
   "started_at": "2026-09-04T15:55:22Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T15:56:33Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -35,10 +35,13 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "ISS-0438 closed as resolved (not instrumented/no_defect): a root cause was actually removed. The coverage gap the issue alleged -- the entity/data-model subsystem tracked only as a 'S5/S6' comment in lib/letflow/router.ex's deferred-routes table, invisible to get_next_task and expanded into zero requirements -- is closed. Resolution took the form of a scoping decision (lib/letflow/design/iss0438-entity-subsystem-scoping.md: IN SCOPE, port the generic subsystem into Stage 6, grounded in 4,158 lines of R-Co source read directly) plus registration as 7 real, gated, queue-registered requirements (REQ-225 through REQ-231 in docs/requirements.yaml, letflow-queue task ids 460-466, GH issues 888-894), each independently claimable via get_next_task. Per ISS-0438's own AC7, implementation was explicitly out of scope for this issue, so 'resolved' means the coverage/tracking gap is closed, not that Letflow.Routers.Entities/EntityQuery now exist in lib/letflow/ -- confirmed no ambiguity here since Step 3 (CODE-DESIGN-VALIDATOR, REQ-VALIDATOR, REVIEWER) all independently PASSed the actual deliverables per handoffs/WF03-ISS0438-20260904/step-03-reviewer.json. docs/issues/ISS-0438.yaml updated: status: resolved, resolved_in_run: WF03-ISS0438-20260904, resolved_at: 2026-09-04T15:56:10Z (real UTC clock read), plus a resolution: field spelling out the above. GH#845 closed via `gh issue close 845 --comment ...` with the exact evidence-citing comment text specified in this handoff's task.description (run-id, design artefact path, all 7 REQ ids and their queue task ids/GH issue numbers). Verified post-close: `gh issue view 845 --json state,closedByPullRequestsReferences` returned state CLOSED (closedByPullRequestsReferences empty, which is expected and fine -- this step's own --comment is the evidence form used, not a linked PR, per WF-03 Step 5's 'EITHER (i) OR (ii)' evidence rule).",
+    "artifacts_out": [
+      "docs/issues/ISS-0438.yaml",
+      "handoffs/WF03-ISS0438-20260904/step-05-issue-fixer-close.json"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to Step Final (git merge)."
   },
   "rework_count": 0,
   "max_rework": 3

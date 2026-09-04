@@ -4547,7 +4547,7 @@
         "ISS-0459"
       ],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/agents/protocols/TASK_QUEUE.md",
         "docs/agents/protocols/ISSUE_QUEUE.md"
@@ -4556,10 +4556,11 @@
       "queue_agent_id": "tvolodi-orch",
       "queue_task_id": 459,
       "github_issue": 884,
-      "released_lock": false,
+      "released_lock": true,
       "started_at": "2026-09-04T13:34:09Z",
-      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF03-ISS0459-20260904 pushed (commit 0a2699a2)",
-      "note": "WF-03 issue-resolving run for ISS-0459: letflow-queue has no release_lock status for an instrumented/no_defect terminal verdict, causing LIFO re-selection loops. Cross-repo scope: this repo (docs/agents/protocols/TASK_QUEUE.md, ISSUE_QUEUE.md) under this normal WF-03 git flow, PLUS letflow-queue (separate repo, c:/Users/tvolo/dev/ai-dala/letflow-queue) under its own git/CI/CD workflow for the service-side change. Filed after ISS-0458 (queue task 458) was released with status:done as an ad-hoc workaround for an instrumented outcome -- flagged in that run as not-a-real-fix."
+      "last_known_step": "Step Final COMPLETED PASS -- PR #886 squash-merged to main (a6902425). docs/issues/ISS-0459.yaml: resolved. GH#884 CLOSED with evidence comment. Queue task 459 released status:done. AC3 executed: queue task 458 re-released status:blocked (was done), GH#882 independently re-verified still CLOSED.",
+      "note": "WF-03 issue-resolving run for ISS-0459: letflow-queue has no release_lock status for an instrumented/no_defect terminal verdict, causing LIFO re-selection loops. Cross-repo scope: this repo (docs/agents/protocols/TASK_QUEUE.md, ISSUE_QUEUE.md) under this normal WF-03 git flow, PLUS letflow-queue (separate repo, c:/Users/tvolo/dev/ai-dala/letflow-queue) under its own git/CI/CD workflow for the service-side change. Filed after ISS-0458 (queue task 458) was released with status:done as an ad-hoc workaround for an instrumented outcome -- flagged in that run as not-a-real-fix.",
+      "lock_released_at": "2026-09-04T15:27:08Z"
     }
   ]
 }

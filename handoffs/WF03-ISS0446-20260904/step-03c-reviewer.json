@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-03c",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-03c-reviewer.json",
+  "created_at": "2026-09-04T00:50:29Z",
+  "started_at": "2026-09-04T00:48:00Z",
+  "completed_at": "2026-09-04T00:50:29Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "docs/issues/ISS-0446.yaml",
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md",
+      "handoffs/WF03-ISS0446-20260904/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0446-20260904/step-02b-code-design-validator-regate.json",
+      "handoffs/WF03-ISS0446-20260904/step-03-elixir-dev.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/letflow/admission_test.exs",
+      "test/letflow/scheduler/poller_test.exs",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit/on_exit_handler.ex"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3c IDIOM/SCOPE GATE for ISS-0446, run as a hard blocking gate before TEST-DESIGNER per the updated pipeline standing. Independently verify (not carry forward): idiom of fetch_test_supervisor/0 + start_supervised!/1 against in-suite precedent, whether the test still proves what it claims under ExUnit's shared test supervisor rather than a bespoke one, scope creep in the diff, accuracy of the rewritten inline comment, and whether any test beyond the modified one is warranted for a race that cannot be reliably reproduced on demand. A green local run is explicitly not accepted as evidence."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. No BLOCKER or MAJOR findings. Reviewed the actual commit (git show HEAD -- test/letflow/engine/service_task_dispatcher_test.exs) directly, and re-verified the ExUnit mechanism claims against real source myself rather than trusting the design doc or ELIXIR-DEV's report.\n\n1. IDIOM. start_supervised!/1 is used bare/unqualified, matching test/letflow/admission_test.exs:19 and test/letflow/scheduler/poller_test.exs:148,400 exactly (confirmed by reading all three call sites directly). fetch_test_supervisor/0 has no other call site in the suite (grep confirmed) but is not unnecessary ceremony: this test's load-bearing assertion is `which_children/1`'s exact {module, pid, :worker, modules} tuple shape, and plain start_supervised!/1 returns only the child pid, not a supervisor handle to enumerate. fetch_test_supervisor/0 is the minimum addition needed to keep that assertion at all -- dropping it would force either weakening the test to 'startable' without the which_children/1 proof, or reverting to a bespoke Supervisor.start_link/2 (reintroducing exactly the ownership shape that produced the race). Justified, not ceremony.\n\n2. SUPERVISION INTEGRITY. Re-read the test's own name and inline comment: its claim is that the child spec is 'independently startable as a real GenServer' under some real, non-application supervisor -- specifically NOT under Letflow.Supervisor (documented zero-delay-first-tick hazard against the sandboxed Repo connection). It does not claim the supervisor must be one this test constructs itself. Both the old ad-hoc Supervisor.start_link/2 and the new ExUnit test supervisor are one-for-one, isolated, non-application-tree processes; which_children/1 against either proves the same fact about the child (it is a genuine, live, uniquely-named process distinct from Letflow.Scheduler.Poller). The new ^pid pin is strictly stronger than the old destructuring bind -- it additionally confirms which_children/1 reports the SAME pid start_supervised!/1 returned, rather than merely establishing some pid via pattern match. Independently verified ExUnit.OnExitHandler's terminate_supervisor/2 (on_exit_handler.ex:61-70, read directly this pass): `ref = Process.monitor(sup)` then a blocking `receive do {:DOWN, ^ref, ...} -> nil after timeout -> ... end` -- no Process.alive? call anywhere in that path, so teardown safety is now a framework-guaranteed property of any start_supervised!/1 caller, not a property of this test's own link-management code that a future edit could quietly break. This is a genuine strengthening of supervision-teardown integrity, not a quiet weakening of what the test proves.\n\n3. SCOPE CREEP. git show HEAD --stat: exactly test/letflow/engine/service_task_dispatcher_test.exs (33 lines changed, 14 insertions/21 deletions net per git diff --stat line-count check) plus this run's own handoffs/WF03-ISS0446-20260904/step-03-elixir-dev.json and handoffs/orchestrator.log -- both expected pipeline artifacts, not application changes. No production code, no migration, no other test file. Diff is strictly the fix plus its own inline comment update; nothing unrelated smuggled in.\n\n4. THE COMMENT. Re-read the new comment against the verified mechanism, not taken on ELIXIR-DEV's word: it states the child is started 'under ExUnit's own per-test supervisor (via start_supervised!/1)' and that 'teardown is entirely ExUnit's own responsibility (monitor-and-wait, no check-then-act) -- no on_exit callback of any kind is needed here.' Both clauses match on_exit_handler.ex's actual terminate_supervisor/2 body verified above -- accurate, not overclaiming (it does not claim the race is impossible in general, only describes this specific mechanism correctly). The comment also preserves, unchanged in substance, the true and still-load-bearing reason for not starting the child under Letflow.Supervisor. No false or stale claim found -- unlike the run this workflow is adjacent to (ISS-0440's prior one-line-diff overclaim), this comment's claim was checked against source and holds.\n\n5. TEST COVERAGE JUDGEMENT. The modified test alone (42/42 passing locally) is necessary but not sufficient evidence -- a quiet local pass was true of the pre-fix code too (3192/3192 the same run CI failed), so it cannot distinguish 'race fixed' from 'race merely didn't fire this time.' A regression test that reproduces the ORIGINAL CI failure shape on demand against real (non-widened) timing is structurally impossible -- the race requires loaded/contended scheduling this suite cannot control or guarantee locally. What IS warranted, and belongs to TEST-DESIGNER next per the design's own section 4.2: a widened-timing analog pair (a supervised child whose terminate/2 does deliberate measurable work, e.g. Process.sleep, to widen the teardown window) run against the OLD on_exit-guarded code to confirm it reproduces the CI failure's exact {:shutdown, ...} exit shape, and against the NEW start_supervised!-based code to confirm clean teardown across multiple runs. This is evidence of mechanism, not of the specific race's timing, and that distinction should be stated plainly in whatever TEST-DESIGNER produces rather than presented as proof the exact CI race can no longer occur. My verdict does not depend on that probe existing yet -- the structural argument (no Process.alive? check anywhere in the new teardown path, independently confirmed at on_exit_handler.ex:61-70) is sufficient on its own to pass this gate; the probe is corroborating evidence TEST-DESIGNER should still produce, not a precondition I am waiving.\n\nOVERALL: clean pass, no findings rise to MINOR. The fix removes the check-then-act by removing the ad-hoc supervisor and its guard entirely rather than tolerating or narrowing the race, it does not weaken what the test proves, it introduces no scope creep, and its rewritten comment is accurate.",
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": "Route to TEST-DESIGNER (Step 4) per design section 4.2 -- construct the widened-timing pre-fix/post-fix probe; do not treat the modified test's own green run as regression evidence"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

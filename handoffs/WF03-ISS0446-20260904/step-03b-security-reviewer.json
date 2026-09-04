@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-03b",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-03b-security-reviewer.json",
+  "created_at": "2026-09-04T00:50:10Z",
+  "started_at": "2026-09-04T00:50:10Z",
+  "completed_at": "2026-09-04T00:50:10Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "docs/issues/ISS-0446.yaml",
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md",
+      "handoffs/WF03-ISS0446-20260904/step-03-elixir-dev.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 3b SECURITY GATE for ISS-0446. Apply the documented scope test to the actual diff (git diff main...HEAD) and, if in scope, run INV-1..INV-9 checks. If out of scope, say so plainly and pass rather than manufacturing findings."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Inspected the actual diff directly: `git diff --name-only main...HEAD` shows only this run's own handoffs/registry/orchestrator-log bookkeeping, the design doc (lib/letflow/design/), and a single production-adjacent file: test/letflow/engine/service_task_dispatcher_test.exs. `git show HEAD -- test/letflow/engine/service_task_dispatcher_test.exs` confirms the change matches the design and ELIXIR-DEV's handoff exactly: one test (line ~1113) has its ad-hoc `Supervisor.start_link/2` + named throwaway supervisor + check-then-act `on_exit(fn -> if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid) end)` replaced with `ExUnit.fetch_test_supervisor/0` + `start_supervised!/1`, the `on_exit` block deleted entirely (no replacement), and one assertion changed from destructuring `pid` to pinning `^pid`. No other lines touched.\n\nSCOPE TEST (per .claude/agents/security-reviewer.md), applied against the real diff, not assumed:\n- API route reading/writing tenant-scoped data: NO. No controller, plug, or router file in the diff.\n- priv/repo/migrations/*.exs migration: NO. Zero migration files in `git diff --name-only main...HEAD`.\n- Anything resolving a secret (config/env var/token): NO. The diff contains only Supervisor/ExUnit/start_supervised! calls and a comment edit; no System.get_env, config key, or token handling anywhere in it.\n- Response-shaping code for a tenant-scoped entity: NO. No serializer, view, or response-building code touched.\n- Lookup-by-ID handler: NO. Supervisor.which_children/1 is a local OTP process-registry call inside a test fixture, not a tenant-resource lookup-by-ID.\n\nNone of the five scope-test conditions match. VERDICT: out of scope -- no tenant-data path touched. This is a test-fixture-only change to how a throwaway child process is started and torn down inside one ExUnit test.\n\nTwo specific concerns from the task brief, checked before concluding rather than skipped:\n\n1. Deleted teardown / cross-test leak risk: the removed on_exit was itself the racy check-then-act being fixed, and the replacement has no on_exit at all. Per the design (secs 0/1.1, independently re-verified there against ex_unit source at on_exit_handler.ex:59-70) and the implementer's handoff, ExUnit's own ExUnit.OnExitHandler.terminate_supervisor/2 unconditionally monitors and blocks on the death of the supervisor returned by fetch_test_supervisor/0 for any test using start_supervised!/1 -- a framework guarantee, not a property of this test's own code. The child process (Letflow.Engine.ServiceTaskDispatcher.Poller) owns no Repo/Ecto sandbox connection or tenant-schema handle itself, so a lingering instance of it could not corrupt another test's tenant-schema or Repo-sandbox isolation even in the old racy code; under the new code the teardown guarantee is structurally stronger (monitor-and-block vs. a racing Process.alive? check), not weaker. No cross-test isolation concern found.\n\n2. Shift to a framework-shared test supervisor vs. Repo sandbox ownership: fetch_test_supervisor/0 returns the same per-TEST-PROCESS supervisor ExUnit already manages for that process's other start_supervised! calls -- it does not span multiple test processes and does not change which process owns anything. Ecto's Sandbox.allow/3 ownership model keys off the test process (pid), not off which OTP supervisor a child happens to run under, so this shift is orthogonal to sandbox allowance. The design's own §6 records that Letflow.DataCase's `use` line was inspected and found not to touch or override fetch_test_supervisor/0's behavior. Nothing in the diff starts, allows, or reassigns a sandbox connection. No sandbox-ownership concern found.\n\nPer-invariant verdicts (all NOT-APPLICABLE, scope test above is the controlling reason): INV-1 NOT-APPLICABLE (no tenant-scoped table/schema/migration touched -- the diff touches zero Ecto schema/query code). INV-2 NOT-APPLICABLE (no API response type; S4 not started). INV-3 NOT-APPLICABLE (no scripting/plugin sandbox; S5 not started). INV-4 NOT-APPLICABLE (no secret-resolving code anywhere in the diff). INV-5 NOT-APPLICABLE (no lookup-by-ID endpoint; S4 not started). INV-6 NOT-APPLICABLE in its literal sense (no new tenant-data-access path introduced) -- its underlying spirit (a change proving its own claimed behaviour before merge) is independently satisfied by the design doc's §0/§2 empirical probes and CHECK-6 analysis, already gated by CODE-DESIGN-VALIDATOR, not something this gate needs to re-litigate. INV-7 NOT-APPLICABLE (zero Repo.query/raw-SQL in the diff). INV-8 NOT-APPLICABLE (no bare pattern match on external I/O introduced -- if anything the change replaces a manual check-then-act with a framework-guaranteed teardown, which is an INV-8-flavored improvement, not a new risk). INV-9 NOT-APPLICABLE (no outbound HTTP anywhere in the diff).\n\nVerdict: PASS. Out of scope for a tenant-data-path security gate; no BLOCKER found; no invariant applies to this diff.",
+    "issues": [],
+    "artifacts_out": [],
+    "next_action": "Route to REVIEWER (idiom/OTP/supervision-integrity gate), per ELIXIR-DEV's step-03 next_action."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

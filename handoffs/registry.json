@@ -4335,6 +4335,23 @@
       "queue_task_id": null,
       "queue_agent_id": "tvolo-win-orch",
       "note": "ADR-0017 (task-queue selection model) plus incidental findings from the same session: ISS-0452 (on_exit check-then-act teardown race, 7 sites fixed) filed and resolved in-branch; ISS-0453 (poller_test.exs REQ-218 AC3 antagonist-contention flake) filed open for a future pickup. Also swept two stale IN_PROGRESS registry locks left by finished runs (WF02-REQ189-20260830, WF03-ISS0377-20260830) whose owning requirement/issue were already done/resolved on main; left WF03-ISS0425-20260903 locked since a sibling session is live on feature/WF02-REQ219-20260903 against the same owned module. mix letflow.lint_handoffs: OK, 0 new violations, before that commit."
+    },
+    {
+      "run_id": "WF03-ISS0454-20260904",
+      "requirement_id": null,
+      "issue_id": "ISS-0454",
+      "queue_task_id": 454,
+      "github_issue_number": 870,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/support/tenant_fixture_test.exs",
+        "test/letflow/sandbox_pool_test.exs"
+      ],
+      "started_at": "2026-09-04T02:35:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- created local docs/issues/ISS-0454.yaml (queue task 454/GH#870 had no committed local record; registering session's own description misattributed the fix to ISS-0446, actually ISS-0452), branch feature/WF03-ISS0454-20260904 created from main. Dispatching Step 1 to ISSUE-FIXER.",
+      "note": "WF-03 issue-resolving run for ISS-0454: re-grepped the current tree for the check-then-act on_exit teardown race ISS-0452 fixed at 7 sites -- 4 live call sites remain (tenant_fixture_test.exs:503, sandbox_pool_test.exs:671/1467/1495), a 5th grep hit is a comment only. Each site needs classification (linked target = genuinely racy, unlinked = harmless) before fixing, per ISS-0452's own diagnosis -- no blanket find-and-replace."
     }
   ]
 }

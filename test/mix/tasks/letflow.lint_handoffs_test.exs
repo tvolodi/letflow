@@ -719,26 +719,18 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
   # to kill that mutant; see this test-designer's handoff result.summary for
   # the measured before/after test-run numbers proving it does.
   #
-  # NOT covered here, deliberately: a document with a DUPLICATE top-level
-  # "status" key. Investigated while designing this suite and found to
-  # expose a real, separate discrepancy between this design's §2.2 step 2
-  # claim ("mirroring Jason.decode/1's own last-key-wins semantics") and
-  # Jason.decode!/1's ACTUAL observed behavior on this exact pinned version
-  # (`Jason.decode!(~s({"status":"a","status":"b"}))` => `%{"status" => "a"}`
-  # -- FIRST-key-wins, not last), while `scan_for_status/4`'s `best`
-  # accumulator is unconditionally overwritten on every depth-1 match, i.e.
-  # genuinely last-match-wins. For a duplicate-key document these two
-  # disagree on which occurrence is "the" status, so `--autofix` edits a
-  # DIFFERENT span than the one `autofix_file/1` actually decided to fix,
-  # and the very next lint pass then reports a fresh H1 violation on the
-  # (unedited) first occurrence -- reproduced directly, not asserted: see
-  # this test-designer's handoff result.summary for the full transcript.
-  # This is a real latent defect but is orthogonal to REVIEWER's required
-  # nested-collision criterion above and to every other criterion this run
-  # is scoped to (duplicate top-level keys are themselves malformed JSON no
-  # real handoff file has ever contained) -- flagged for a follow-up issue
-  # rather than worked around with a test that would have to assert the
-  # buggy behavior as correct to pass.
+  # A document with a DUPLICATE top-level "status" key was investigated
+  # while designing this suite and found to expose a real discrepancy
+  # between this design's §2.2 step 2 claim ("mirroring Jason.decode/1's
+  # own last-key-wins semantics") and Jason.decode!/1's ACTUAL observed
+  # behavior (first-key-wins, not last) -- filed and fixed as ISS-0457. Now
+  # covered by T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS below (describe
+  # block "ISS-0457 -- duplicate top-level status key, first-match-wins");
+  # see test/specs/ISS-0457.md and
+  # lib/letflow/design/iss0457-splice-first-wins.md for the full analysis
+  # and fail-then-pass evidence. This comment previously described the case
+  # as "deliberately left uncovered" -- it is fixed and covered now, so that
+  # description no longer applies.
   # ==================================================================
 
   describe "ISS-0442 -- minimal-diff splice" do
@@ -873,6 +865,112 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       assert File.read!(path) == before
       assert io =~ "AUTOFIX -- REFUSED"
       assert io =~ "missing/non-string"
+    end
+  end
+
+  # ==================================================================
+  # ISS-0457 -- duplicate top-level status key, first-match-wins
+  # (regression, WF03-ISS0457-20260904)
+  #
+  # Spec: test/specs/ISS-0457.md. Design:
+  # lib/letflow/design/iss0457-splice-first-wins.md section 2.
+  # Run: WF03-ISS0457-20260904, WF-03 Step 4.
+  #
+  # `scan_for_status/4` already existed pre-fix (last-match-wins, shipped
+  # with ISS-0442, commit 373f5363) -- this is a change to EXISTING
+  # behavior, not a from-scratch module, so per WF-03's ordinary rule
+  # (not the "code under test does not exist" clause) fail-first evidence
+  # is the pre-fix commit itself, checked out in a disposable worktree, not
+  # a mutant. See this test-designer's handoff result.summary for the
+  # quoted FAIL (at 373f5363) and PASS (this branch) output.
+  # ==================================================================
+
+  describe "ISS-0457 -- duplicate top-level status key, first-match-wins" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0457-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS -- FIRST depth-1 status occurrence corrected, LATER occurrence(s) byte-identical",
+         %{dir: dir} do
+      # Same shape as ISSUE-FIXER's originally-demonstrated fixture
+      # (handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json),
+      # adapted to use only @schema_top_keys members (context/task/result)
+      # so this fixture doesn't also trip the unrelated H3 "non-schema
+      # top-level key" check: two depth-1 "status" keys, mapping to
+      # DIFFERENT @autofix_map source values ("DONE" first, "COMPLETE"
+      # second) so the divergence is visible in WHICH SPAN gets edited, not
+      # just in the resulting value. A nested result.status carrying yet
+      # another legal value confirms the depth==1 guard from ISS-0442 still
+      # applies unmodified. Under the pre-fix last-match-wins scanner, the
+      # SECOND ("COMPLETE") occurrence gets rewritten and the FIRST
+      # ("DONE") is left as an illegal, non-@legal_statuses value while the
+      # tool still reports {:fixed, "DONE", "COMPLETED"} -- the exact
+      # divergence this test exists to close.
+      path = Path.join(dir, "step-01-agent.json")
+
+      raw =
+        "{\n" <>
+          "  \"status\": \"DONE\",\n" <>
+          "  \"context\": {},\n" <>
+          "  \"task\": {},\n" <>
+          "  \"result\": {\n" <>
+          "    \"status\": \"PASS\"\n" <>
+          "  },\n" <>
+          "  \"status\": \"COMPLETE\"\n" <>
+          "}\n"
+
+      expected =
+        "{\n" <>
+          "  \"status\": \"COMPLETED\",\n" <>
+          "  \"context\": {},\n" <>
+          "  \"task\": {},\n" <>
+          "  \"result\": {\n" <>
+          "    \"status\": \"PASS\"\n" <>
+          "  },\n" <>
+          "  \"status\": \"COMPLETE\"\n" <>
+          "}\n"
+
+      File.write!(path, raw)
+
+      capture_io(fn ->
+        assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+      end)
+
+      rewritten = File.read!(path)
+
+      # (1) Decode-based check: only ever sees the FIRST occurrence after a
+      # rewrite (Jason.decode/1 is itself first-key-wins) -- necessary but
+      # not sufficient on its own to discriminate first-wins from
+      # last-wins, since both selection rules leave the file decoding to
+      # SOME single "status" value. Checks (2)-(4) below inspect the raw
+      # bytes at both occurrence sites, which is what actually
+      # distinguishes the two behaviors.
+      assert Jason.decode!(rewritten)["status"] == "COMPLETED"
+
+      # (2) The FIRST occurrence's raw span was rewritten to the mapped
+      # value.
+      assert rewritten =~ "\"status\": \"COMPLETED\",\n  \"context\""
+
+      # (3) The SECOND occurrence's raw span is untouched -- still reads
+      # "COMPLETE", not "COMPLETED" and not silently dropped.
+      assert rewritten =~ "\n  \"status\": \"COMPLETE\"\n}\n"
+
+      # (4) Strongest check: the whole file is byte-identical to the
+      # hand-computed expectation, proving the ONLY changed span anywhere
+      # in the file is the FIRST occurrence's value token. This is what
+      # the pre-fix last-match-wins scanner fails: under that code, `best`
+      # ends up bound to the SECOND-scanned candidate (unconditionally
+      # overwritten on every depth-1 match), so the produced text has the
+      # first "DONE" UNCHANGED and the second "COMPLETE" rewritten to
+      # "COMPLETED" instead -- the exact reverse of `expected`.
+      assert rewritten == expected
     end
   end
 

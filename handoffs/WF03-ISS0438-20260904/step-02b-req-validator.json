@@ -1,0 +1,49 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000005",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-VALIDATOR",
+  "file": "handoffs/WF03-ISS0438-20260904/step-02b-req-validator.json",
+  "created_at": "2026-09-04T15:45:36Z",
+  "started_at": "2026-09-04T15:45:36Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226", "REQ-227", "REQ-228", "REQ-229", "REQ-230", "REQ-231"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "docs/issues/ISS-0438.yaml",
+      "docs/migration/decisions/",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "handoffs/WF03-ISS0438-20260904/step-02-req-analyst.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "HARD GATE (WF-01 Step 2) on REQ-ANALYST's seven new requirements, REQ-225 through REQ-231, drafted into docs/requirements.yaml for ISS-0438 (the entity/data-model subsystem port). Read docs/requirements.yaml in full for context (existing schema, and read all seven new entries plus their neighbors). For EACH of the seven, independently check: (a) TESTABILITY -- vague words ('appropriately', 'as needed', 'reasonably') fail; (b) CONSISTENCY -- no conflict with any done requirement (specifically REQ-202, REQ-203, REQ-024, all cited as dependencies) or any docs/migration/decisions/ record; (c) DEPENDS_ON CORRECTNESS -- not just non-orphaned, genuinely required before that slice can start, in the right order; (d) STAGE FIT -- S6 is the correct stage per the design artefact's own reasoning (read lib/letflow/design/iss0438-entity-subsystem-scoping.md section 1's 'Target stage' subsection for the argument -- verify it, don't just trust it); (e) SIZE -- one agent turn each, not multiple unrelated deliverables bundled. Also verify REQ-230 (the query-DSL compiler slice) correctly reads as touching a tenant-data path (SQL compilation over tenant-scoped entity records) so it will correctly route through SECURITY-REVIEWER at WF-02 implementation time -- if its description doesn't make that scope clear, that is a real gap to FAIL on, not a nice-to-have.\n\nAlso independently verify the three open design questions the handoff instructions required REQ-ANALYST to name explicitly (JsonSchema cross-namespace reuse in REQ-227, entity ownership model in REQ-225, synthetic-instance-per-type in REQ-228) are actually present in those requirements' text, not silently resolved and not omitted -- spot check by reading each cited requirement's actual description text yourself.\n\nAlso verify docs/migration/stage-6-operational-cross-cutting.md's addendum paragraph was actually added (read the file's tail) and that it appends rather than rewrites the existing 'S6 is now complete' line.\n\nIf ANY check fails: FAIL, listing issues by requirement id and check letter, per WF-01 Step 2's own acceptance criteria. If all pass: PASS.",
+    "acceptance_criteria": [
+      "Every check (a-e) actually run against each of the seven new requirements individually, not assumed or impressionistic",
+      "Any FAIL cites the specific requirement id and which check failed",
+      "The tenant-data-path scope of REQ-230 (SQL compiler) is explicitly confirmed or flagged as missing",
+      "The three named open design questions' presence in their respective requirement descriptions is independently spot-checked, not trusted from REQ-ANALYST's own report",
+      "The stage-6-operational-cross-cutting.md addendum is confirmed present and additive (not a rewrite)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

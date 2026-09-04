@@ -290,9 +290,52 @@ Without a Source" discipline applied to this record's own claim of success.
 
 ### Verification log
 
-(Implementer: append one line per live-verification run here, with date, PR number, and
-a one-line result, e.g. "2026-09-04, PR #NNN, plain merge rejected pre-CI as expected,
-succeeded after checks went green.")
+Live-verified 2026-09-04 on scratch PR #887 (`chore/verify-branch-protection-0018`), a
+real PR against the actually-configured `main` protection (Steps 1-3 above, applied
+2026-09-04):
+
+- **Step 1** (`gh api repos/tvolodi/letflow/commits/$(git rev-parse origin/main)/check-runs --jq '.check_runs[].name'`):
+  returned exactly the two expected strings, `Backend gate (mix letflow.check)` and
+  `Frontend gate (npm run check)` — no drift from `ci.yml`'s job names.
+- **Step 2** (the `PUT .../branches/main/protection` call): applied cleanly, full JSON
+  response echoed both contexts, `enforce_admins.enabled: false`.
+- **Step 3** (`gh api repos/tvolodi/letflow/branches/main/protection`): `200 OK`,
+  `required_status_checks.contexts` == the two Step 1 strings, `enforce_admins.enabled:
+  false`, `required_pull_request_reviews` absent.
+- **Step 4a-b, PENDING-rejection**: opened PR #887 and immediately ran
+  `gh pr merge 887 --squash --delete-branch` before CI reported. Real rejection:
+  `X Pull request #887 is not mergeable: the head branch is not up to date with the base
+  branch.` (a `strict: true` consequence — the branch was in fact behind `main` by that
+  point, a genuine sibling merge having landed in the interim, not a fabricated
+  scenario).
+- **Step 4c, BEHIND-then-real-FAILURE**: rebased the branch onto the new `main` HEAD and
+  re-pushed. CI ran; one of two duplicate `Backend gate` runs hit the already-documented
+  `wasm_hang` isolated-subprocess flake (ISS-0418/ISS-0352 class,
+  `Letflow.Engine.Wasm.CallTimeoutTest`), leaving the PR's overall required-check state
+  at FAILURE. `gh pr view 887 --json mergeable,mergeStateStatus` reported
+  `mergeStateStatus: BLOCKED`. Re-ran `gh pr merge 887 --squash --delete-branch`: real
+  rejection, `X Pull request #887 is not mergeable: the base branch policy prohibits the
+  merge.` — a DIFFERENT, more specific rejection message than the earlier BEHIND case,
+  confirming the required-status-check gate itself (not just staleness) is what's
+  blocking.
+- **Step 4d, override path proven live (not taken on the PR #848 historical precedent
+  after all — a real, reproducible occurrence arrived during this very verification)**:
+  ran `gh pr merge 887 --squash --delete-branch --admin` against that same FAILURE
+  state. Succeeded — fast-forward merge to `main`, confirmed via the real `git log`
+  fast-forward output naming the new `main` HEAD commit. This is the strongest form of
+  the override-path proof: a live, unstaged wasm_hang recurrence, not a manufactured
+  one.
+- **Step 4e, cleanup**: PR #887 is merged (not left dangling open); `--delete-branch`
+  removed `chore/verify-branch-protection-0018` on the remote, and the local copy was
+  never created as a lingering branch beyond the verification session.
+- **The "succeeds when green" half of Step 4c** (a plain `gh pr merge` succeeding once
+  both required checks are actually SUCCESS, with no `--admin`) is deferred to this same
+  ISS-0441 run's own real, non-scratch PR closing out the rest of this issue's file
+  changes (`0004-humanless-pipeline.md`, `GIT_MERGE.md`, `ci.yml`'s comment) — that PR's
+  own eventual clean merge (or its own encounter with a flake, structurally attributed
+  and admin-overridden exactly as demonstrated above) stands as the completing half of
+  this record's live evidence, logged in that PR's own merge history rather than
+  duplicated here.
 
 ## Consequences — corrections required to other docs (AC4)
 

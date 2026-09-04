@@ -1701,8 +1701,17 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 9
+    entries: 10
     note: >
+      Recounted to 10 by WF03-ISS0430-20260905's Step Final rebase, which
+      conflicted at this volume's tail against WF03-ISS0469-20260904's own
+      done-event append (landed on main after this branch's own commit was
+      written). Composed in chronological `at:` order -- ISS-0469 done
+      (22:22:00Z) before ISS-0430 done (23:11:29Z) -- ISS-0430's entry was
+      appended after ISS-0469's rather than the reverse. Recounted directly
+      from `grep -c "^  - req:" docs/status/requirement_status.v9.yaml` = 10
+      on-disk entries, rather than carrying forward either side's
+      independently-computed 9, per this note's own recount-every-time rule.
       Incremented to 1 by ORCH's own ISS-0451 done-event append
       (WF03-ISS0451-20260904) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 1 on-disk entry, no rebase

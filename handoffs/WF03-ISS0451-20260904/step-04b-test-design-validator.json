@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-04b",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0451-20260904/step-04b-test-design-validator.json",
+  "created_at": "2026-09-04T03:56:30Z",
+  "started_at": "2026-09-04T03:56:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "test/letflow/supervisor/pollers_breaker_test.exs",
+      "test/specs/ISS-0451.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "docs/issues/ISS-0451.yaml"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage. Read test/letflow/supervisor/pollers_breaker_test.exs and test/specs/ISS-0451.md directly. Check: every one of ISS-0451's 3 acceptance criteria has a runnable test covering it; no skipped/deferred coverage; fixtures are isolated (this test shares Pollers/PollersBreaker singletons with pollers_test.exs -- confirm no ordering/isolation hazard, e.g. via async: false and clean teardown). Then, per docs/agents/workflows/WF-03_issue_resolving.md's mutation-testing section: TEST-DESIGNER reported applying 2 mutants (trip-threshold removal in pollers_breaker.ex; reverting application.ex's :temporary child-spec change) and recorded both failing the new test as expected. You must INDEPENDENTLY APPLY AT LEAST ONE of these two mutants yourself and re-run the test, per that workflow section's explicit rule ('accepting the reported pass counts is copying a claim, not validating one') -- do not simply trust TEST-DESIGNER's own report of the mutation results. Use the same revert-and-verify discipline (git checkout -- after, git status --porcelain empty, clean re-run confirmed) -- a mutant left in the tree is a step failure in itself.",
+    "acceptance_criteria": [
+      "Verdict confirms all 3 of ISS-0451's ACs are covered by a runnable test, citing specific test functions",
+      "Verdict confirms fixture isolation (async: false, singleton-sharing hazard addressed)",
+      "At least 1 of TEST-DESIGNER's 2 reported mutants independently re-applied and re-run by this validator, with the result quoted",
+      "Confirmation the mutant was reverted and the tree verified clean (git status --porcelain empty) before this handoff completes",
+      "A FAIL verdict lists every gap; a PASS verdict states exactly what was independently re-derived"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

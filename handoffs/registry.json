@@ -4339,15 +4339,15 @@
       "issue_id": "ISS-0454",
       "queue_task_id": 454,
       "github_issue_number": 870,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/support/tenant_fixture_test.exs",
         "test/letflow/sandbox_pool_test.exs"
       ],
       "started_at": "2026-09-04T02:35:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step Final in progress -- ORCH applied the fix directly (ISSUE-FIXER's sizing verdict passed all 6 ORCHESTRATOR.md S10 checks). 2 racy sites in test/letflow/sandbox_pool_test.exs fixed with ISS-0452's established try/catch form; 2 other grep hits classified benign (unlinked targets). Full suite locally 3200/3202, 2 pre-existing rustc-gap failures. Opening a PR for CI per this pipeline's real-code-change convention (direct ORCH action skips the agent role chain, not CI).",
+      "lock_released_at": "2026-09-04T04:15:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #871 squash-merged to main (b7a6dbe7) after 5 CI reruns on the same pre-existing wasm_hang flake class (main suite 3202/3202 clean every single run; only the isolated wasm_hang subprocess check flaked, each time on a different test within that group). Merged on structural attribution once a duplicate parallel run passed clean. Queue task 454 released done, GH#870 best-effort closed. Fast-forward merge absorbed a sibling's separate, full WF-03 fix for ISS-0446 that landed in between (no conflict -- disjoint files).",
       "note": "WF-03 issue-resolving run for ISS-0454: re-grepped the current tree for the check-then-act on_exit teardown race ISS-0452 fixed at 7 sites -- 4 live call sites remain (tenant_fixture_test.exs:503, sandbox_pool_test.exs:671/1467/1495), a 5th grep hit is a comment only. Each site needs classification (linked target = genuinely racy, unlinked = harmless) before fixing, per ISS-0452's own diagnosis -- no blanket find-and-replace."
     },
     {

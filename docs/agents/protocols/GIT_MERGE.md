@@ -22,7 +22,11 @@ with a `backend` job (runs `mix letflow.check` against a `postgres:16` service) 
 `push` and `pull_request`. Insert "wait for the GitHub Actions `backend` and
 `frontend` jobs to report success on the PR" between steps 7 and 8, mirroring R-Co's
 pattern — use `gh pr checks <PR>` or `gh run view <run-id> --json jobs` to confirm
-both jobs' conclusions before proceeding to step 8's merge.
+both jobs' conclusions before proceeding to step 8's merge. **As of
+`docs/migration/decisions/0018-branch-protection-posture.md`, these two jobs' names are
+also required status checks on `main`'s branch protection — they gate the actual merge
+call itself, not only the meaning of "green" the agent chooses to trust. A plain merge
+attempt while either is red or pending is rejected by GitHub, not merely inadvisable.**
 
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero
@@ -262,10 +266,30 @@ handoffs/<run-id>/" \
    unmerged, and set result.status = PARTIAL — ORCH must not treat this as
    silent success. Note it explicitly for the next session to pick up.
 
-8. Merge PR immediately (all gates already passed; see Precondition above for what
-   "all gates" means now that REQ-013's local gate and REQ-136/REQ-138's CI have
-   landed):
-   gh pr merge --squash --delete-branch
+8. Merge PR (all gates already passed; see Precondition above for what "all gates"
+   means now that REQ-013's local gate and REQ-136/REQ-138's CI have landed). As of
+   `docs/migration/decisions/0018-branch-protection-posture.md`, `main` has
+   required-status-checks branch protection, so the merge is no longer unconditional —
+   follow this three-path procedure:
+
+   a. Attempt the plain merge first:
+      gh pr merge --squash --delete-branch
+      If it succeeds, proceed to step 9.
+
+   b. If it is rejected, check both required checks' state:
+      gh pr checks <PR>
+      - If `PENDING` (or the rejection cites the branch being behind `main`, resolved
+        by re-running steps 4-6's rebase), wait and retry the plain command from (a) —
+        never `--admin` for a merely-pending or stale check.
+      - If `FAILURE` **and** the branch's PR body already carries a structural failure
+        attribution (per step 7's requirement above — the exact class, why it is
+        unrelated to this branch, and the evidence), use:
+          gh pr merge --squash --delete-branch --admin
+        and record the override explicitly in `result.git_evidence` (which check
+        failed, the attribution, and that `--admin` was used).
+      - If `FAILURE` with no attribution yet established, do NOT override merge past
+        it — route to ISSUE-FIXER per step 5d's existing path instead, get the
+        attribution done first, then return to this step.
 
    ⚠️ The rebase in step 5 and the squash in step 8 both invalidate every commit sha
    this run already recorded in `result.git_evidence.commit_sha_list`. That is

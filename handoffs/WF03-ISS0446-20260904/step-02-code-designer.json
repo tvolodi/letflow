@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-02",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T00:29:32Z",
+  "started_at": "2026-09-04T00:29:32Z",
+  "completed_at": "2026-09-04T00:29:32Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0446-20260904/step-00-git-setup.json",
+      "handoffs/WF03-ISS0446-20260904/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0446.yaml",
+      "test/letflow/engine/service_task_dispatcher_test.exs"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 (fix design) for ISS-0446: design the fix for the check-then-act on_exit teardown race at test/letflow/engine/service_task_dispatcher_test.exs:1131-1133. Decide between ISSUE-FIXER's option (a) (drop on_exit) and option (d) (start_supervised!/1), justify the choice against the (a)-vs-(d) tradeoff, answer ORCHESTRATOR.md section 10 CHECK 6 against the real file, and specify how a non-reproducible race can be meaningfully verified. Design only, no implementation code, no edits to the test file itself."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md. DECISION: adopt option (a) -- delete the on_exit block at lines 1131-1133 entirely; no other line in the test changes.\n\n(a)-VS-(d) TRADEOFF, answered explicitly: (d) (start_supervised!/1) is structurally immune by a different mechanism (ExUnit's own Process.monitor + blocking {:DOWN,...} receive, no Process.alive? check at all), but it starts the child under ExUnit's own framework-owned test supervisor and returns only the child pid -- there is no sup_pid to call Supervisor.which_children/1 on. This test's entire purpose (per its own name and inline comment) is to prove the child spec is independently startable UNDER A THROWAWAY SUPERVISOR THIS TEST OWNS, discharged via which_children/1 asserting the exact {Poller, pid, :worker, _modules} tuple. Adopting (d) verbatim forces either dropping that assertion (weakening the test to merely 'startable') or inventing an unprecedented second construction. (a) achieves full structural safety with zero coverage loss and the smaller diff: ISSUE-FIXER's Step 1 diagnosis already empirically verified that with no on_exit callback, link-propagated teardown alone cleanly tears down both the named supervisor and its named child (100% clean across its probe), and the registered name does not leak into the next sequential test (ExUnit's own runner serialization). Removing the on_exit callback removes the SECOND ACTOR the race required (the callback process performing an unsynchronized check-then-act) -- once that actor doesn't exist, there is no check-then-act left anywhere, not a narrower window on one. What is given up, stated plainly: no explicit fixture-level teardown of sup_pid remains (cleanup becomes fully implicit via the test process's own link + ExUnit lifecycle), and no assertion that teardown succeeded (the removed on_exit never asserted this either -- not a loss of existing coverage, but forecloses adding one at this exact point without risking reintroducing a check-then-act shape). Options (b) (race-tolerant explicit stop) and (c) (unlinked/test-owned supervisor) independently re-examined and re-rejected: (b) silences the crash on 2 of 3 unordered orderings without removing the race, and has zero in-suite precedent (Supervisor.stop/1 appears nowhere else in test/, re-confirmed by grep); (c) makes an explicit stop MANDATORY (no more free link-driven cleanup), which reintroduces the same failure mode unless that stop is itself race-tolerant, collapsing into (b)'s ceremony with a new manual-unlink idiom on top for no added safety over (a).\n\nCHECK 6 (ORCHESTRATOR.md section 10) SETTLED AGAINST THE REAL FILE, not a throwaway analog, per the task's explicit instruction: (1) this test's own four assertions (which_children/1 tuple match, is_pid, Process.alive?(pid), pid != Process.whereis(Letflow.Scheduler.Poller)) all execute and complete before on_exit ever runs -- removing the block cannot change any of their outcomes. (2) grep -n \"ThrowawaySupervisor\" against the real file returns exactly one line (1128, the name: option itself) -- no other line in the file references it. (3) This test is confirmed the LAST test in its describe block and the LAST test in the file (module closes immediately after, verified by reading to line 1143) -- no subsequent test in this file can observe leftover state. (4) grep -rn \"ThrowawaySupervisor\" across the WHOLE test/ tree returns only that same single line -- no other file in the suite references this name, this teardown, or depends on ordering relative to this test. Verdict: dropping the on_exit block alters no behaviour any test in this file or the wider suite asserts.\n\nEVIDENCE CAVEAT ADDRESSED: the design states plainly that neither an ordinary green local run nor a single green post-merge CI run is evidence the race is fixed (the race did not reliably reproduce locally even pre-fix -- that's why it shipped -- and CI triggers it more often, not deterministically). The load-bearing safety argument is structural (removing an actor, not narrowing a window), stated in the design without relying on any test-run outcome. For meaningful verification despite non-reproducibility on demand, the design directs TEST-DESIGNER (Step 4) to reuse ISSUE-FIXER's own already-validated technique: a scratch, non-committed widened-timing analog (a supervised child whose terminate/2 does measurable work, e.g. Process.sleep(5), which ISSUE-FIXER already showed reproduces the CI failure's exact shape 5/5 pre-fix) run against both pre-fix and post-fix code -- pre-fix reproduces the crash on demand, post-fix must pass cleanly across multiple runs. This is specified as the actual regression proof; ordinary runs of the real (narrow-window) test are necessary sanity checks (same ~42 tests in the file should still pass) but explicitly stated as NOT sufficient evidence on their own.\n\nSpecification for ELIXIR-DEV given in design section 3: delete only the on_exit block (lines 1131-1133), keep the sup_pid binding (still used at line 1135) and all three retained assertions verbatim, no lib/ or migration changes, add a one-line comment explaining why no explicit teardown exists so it isn't reintroduced later.\n\nOpen questions listed explicitly, not silently resolved (design section 6): (1) whether a permanent widened-timing regression test should be added to the suite going forward -- left to TEST-DESIGNER's Step 4 judgement; (2) no automated guard exists against a future edit silently reintroducing the same hazard (e.g. re-adding an explicit teardown) -- accepted as residual risk rather than engineered around, flagged for REVIEWER to contest if they disagree.\n\nNo implementation code present in the design file -- verified by inspection, no elixir/ex fenced code blocks anywhere in the document, only prose, an @spec-style narrative, and a markdown table.",
+    "issues": [],
+    "artifacts_out": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 gate equivalent to WF-02 Step 1b)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

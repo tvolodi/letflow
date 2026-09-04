@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0421-20260904-step-03b",
+  "run_id": "WF03-ISS0421-20260904",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0421-20260904/step-03b-elixir-dev-rework.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219", "REQ-218"],
+    "issue_ids": ["ISS-0421", "ISS-0451"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0421-20260904/step-04-reviewer.json",
+      "handoffs/WF03-ISS0421-20260904/step-04b-code-designer-rework.json",
+      "handoffs/WF03-ISS0421-20260904/step-04c-code-design-validator.json",
+      "lib/letflow/design/iss0421-poller-bounded-concurrency.md",
+      "lib/letflow/admission.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/admission.ex",
+      "lib/letflow/scheduler/poller.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0421-20260904"
+  },
+  "task": {
+    "description": "Implement CODE-DESIGN-VALIDATOR's 4th-pass PASS (step-04c) exactly: add Letflow.Admission.global_cap/1 (mirroring reserved_headroom/1's idiom byte-for-byte, no state-shape change since global_cap is already a state field), and in poller.ex replace the 6 Admission-gated sweeps' hardcoded @admission_gated_max_concurrency 8 with a live, per-tick, per-sweep Letflow.Admission.global_cap() call, never cached or hoisted -- mirroring exactly how reserved_headroom() is already called fresh for the unwrapped sweep. No changes to test/letflow/scheduler/poller_test.exs, per REVIEWER's explicit constraint."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the corrected design exactly as specified in step-04c, a small and mechanical change confined to the two files REVIEWER named.\n\n1) lib/letflow/admission.ex: added `global_cap/1` (default `server \\\\ __MODULE__`), a `GenServer.call/2` delegate byte-for-byte mirroring `reserved_headroom/1`'s idiom (same doc-comment structure, same default-arg convention), plus a new `handle_call(:global_cap, _from, state)` clause replying `state.global_cap` unchanged. Purely additive: `global_cap` was already a state field (populated once at `init/1`, admission.ex, never mutated by any other clause) so no state-shape edit was needed, exactly as step-04c predicted. All other handle_call clauses (`{:try_acquire, :global}`, `{:try_acquire, {:tenant, _}}`, `:reserved_headroom`, `{:release, _}`) are byte-for-byte unchanged.\n\n2) lib/letflow/scheduler/poller.ex: removed the `@admission_gated_max_concurrency 8` module attribute entirely (no literal `8` remains anywhere in this file for this bound). All 6 Admission-gated `run_sweep/4` call sites (poll_and_fire, retention_sweep, alert_detection, ordering_cycle, ordering_sweeper, ordering_metrics) now pass `Admission.global_cap()` directly as the `max_concurrency` argument, evaluated fresh at each call site's own invocation every tick -- never cached or hoisted into a module attribute or local binding -- mirroring exactly `maybe_refresh_active_instances/1`'s existing `Admission.reserved_headroom()` convention. Updated the moduledoc's 'ISS-0421 addition' section to describe the live-derivation convention (both concurrency-bound classes now read a real GenServer-state accessor fresh, per design §3a/§3b) instead of the old 'literal that happens to match global_cap at default config' framing, and cited the REVIEWER finding this rework closes.\n\nVERIFICATION (run for real, in the foreground, output read and confirmed -- not claimed):\n- `mix compile --warnings-as-errors`: clean, no warnings, both after the admission.ex/poller.ex edits and again on the final diff.\n- `mix test test/letflow/admission_test.exs test/letflow/scheduler/poller_test.exs`: 31/31 passed, 0 failed, run to completion in the foreground (43.8s). Explicitly confirmed the 4 previously-failing REQ-218 tests now pass, WITH ZERO test-file changes, exactly as the corrected design predicted: 'REQ-218 AC1: forced-zero admission cap skips every schema; capacity restored resumes normally', 'REQ-218 AC2: a cap of exactly 1 still drains all schemas sequentially within a single tick', 'REQ-218 AC3 (per-schema clause): a rejected schema's other ops still proceed', and 'REQ-218 AC5: an existing per-operation rescue still catches its own raise, with the admission slot released' -- all present in the passing output, none skipped. `git diff --stat test/` is empty (verified before and after this rework): no test file was touched.\n- MUTATION-TEST RE-CHECK (the exact check REVIEWER's routing implicitly demands be re-run against the fix): temporarily hardcoded all 6 gated sweeps' max_concurrency back to a literal `8` (matching today's default `Admission.global_cap` value, `sed`-substituted then verified by grep), re-ran `mix test test/letflow/scheduler/poller_test.exs`. Result: 12/16 passed, 4 failed -- the SAME 4 REQ-218 tests (AC1, AC2, AC3 per-schema, AC5) that were failing before this rework failed again under the reintroduced literal, confirming the existing test suite (at its `pool_size: 3, reserved_headroom: 2 -> global_cap: 1` config) DOES catch a regression back to a hardcoded literal -- this closes the mutation-coverage question cleanly; no remaining gap to flag here. Reverted the mutation immediately after (re-substituted `Admission.global_cap()` at all 6 call sites, confirmed via grep and a clean `mix compile --warnings-as-errors`) before finishing.\n- Full `mix test test/`: attempted twice in the foreground, both exceeded the tool's maximum foreground execution window (600s) without completing and were explicitly stopped (`TaskStop`) rather than left running for a cross-turn background notification, per this project's 'no background wait for a cross-turn notification' rule. `mix test test/letflow/` (a narrower but still broad scope) was also attempted and likewise did not complete within 600s foreground and was stopped. Per the task's own fallback instruction, the two directly-relevant suites (`test/letflow/admission_test.exs`, `test/letflow/scheduler/poller_test.exs`) were run to completion in the foreground instead and are the load-bearing evidence above; the full-suite run remains unverified in this turn and is recommended for TEST-RUNNER/REVIEWER's own gate, same recommendation as step-03's original handoff.\n\nSELF-REVIEW: no state-transition SHAPE changed in `Letflow.ProcessInstance` (untouched by this diff) -- README.md's ASCII diagram is unaffected. No migration added or needed (`global_cap` is not a new field, only a new read-only accessor over an existing one). `mix format` was not run as a separate check in this environment (no evidence it differs from the compile check here); noting this explicitly rather than silently claiming it. `git diff --stat` for this rework touches exactly `lib/letflow/admission.ex` (+21/-0) and `lib/letflow/scheduler/poller.ex` (+22/-19, net line-count change from moduledoc prose plus the 6 call-site substitutions and 1 module-attribute removal) -- no other file changed, matching REVIEWER's exact scoping.",
+    "routing": "Route to REVIEWER for re-check per REVIEWER's own step-04 verdict ('After ELIXIR-DEV implements, per REVIEWER's step-04 routing this goes to REVIEWER for re-check before TEST-DESIGNER touches anything'). No changes to test/letflow/scheduler/poller_test.exs were made, as required. One informational, non-blocking item carried forward unchanged from step-04's own findings (not mine to resolve): the already-flagged, separate coverage gap -- no existing test asserts either live-derivation call site (`reserved_headroom/1` for the unwrapped sweep, `global_cap/1` for the 6 gated sweeps) actually tracks a NON-default configured value -- remains open for TEST-DESIGNER once REVIEWER re-checks this rework, per step-04's own routing note to close both gaps in the same pass rather than two separate follow-ups. Full-suite `mix test` was not completed in this environment within the foreground time available; flagging for TEST-RUNNER/REVIEWER to run as part of their own gate, consistent with step-03's original note."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-04T00:00:00Z",
+      "notes": "4th pass on this design (Step-4-triggered, new step number). Verified global_cap/1's accessor spec against the real lib/letflow/admission.ex, independently re-traced pool_size:3/reserved_headroom:2 -> global_cap:1 and pool_size:10/reserved_headroom:2 -> global_cap:8, confirmed only §3a/§3c/§7 changed and no test files touched. PASS -- routed to ELIXIR-DEV."
+    }
+  ]
+}

@@ -76,14 +76,22 @@ defmodule Letflow.Scheduler.Poller do
   Two concurrency-bound classes (design §3):
 
     * The six Admission-gated sweeps (poll-and-fire, retention, alert
-      detection, ordering cycle/sweeper/metrics) use `max_concurrency: 8`,
-      i.e. exactly `Admission.global_cap` at default config (`pool_size(10) -
-      reserved_headroom(2)`). This is a literal, not derived live, because
-      `Admission.try_acquire(:global)`'s own non-blocking gate is already the
-      true ceiling on concurrent `DBConnection` checkouts for these six
-      sweeps regardless of this value (design §3a) -- raising it above 8
-      cannot push checkouts past 8, it would only spawn extra BEAM processes
-      that immediately lose the admission race.
+      detection, ordering cycle/sweeper/metrics) use
+      `Letflow.Admission.global_cap/0`'s LIVE return value, read fresh inside
+      `run_sweep/4` every tick, never cached or hoisted -- exactly the same
+      "read the real accessor live" convention `maybe_refresh_active_instances/1`
+      already uses for `reserved_headroom/0` below (design §3a/§3c, corrected
+      per `handoffs/WF03-ISS0421-20260904/step-04-reviewer.json`: a hardcoded
+      literal that only happened to match `Admission.global_cap` at default
+      config would silently reintroduce Poller-as-its-own-contender self-
+      collision at any smaller configured `POOL_SIZE`). `Admission.
+      try_acquire(:global)`'s own non-blocking gate is still the true ceiling
+      on concurrent `DBConnection` checkouts for these six sweeps regardless
+      of this bound -- raising it above the live `global_cap` cannot push
+      checkouts past `global_cap`, it would only spawn extra BEAM processes
+      that immediately lose the admission race -- but deriving it live keeps
+      Poller from ever becoming a *concurrent* contender against itself for
+      that same cap when `global_cap` is small.
     * `maybe_refresh_active_instances/1` (the one sweep with NO Admission
       backstop) instead uses `Letflow.Admission.reserved_headroom/0`'s LIVE
       return value, read fresh inside that sweep's own function body every
@@ -179,11 +187,6 @@ defmodule Letflow.Scheduler.Poller do
           last_tick_started_at: DateTime.t() | nil
         }
 
-  # ISS-0421 design §3a/§7 -- exactly Admission.global_cap at default config
-  # (pool_size(10) - reserved_headroom(2)). A literal, not derived live: see
-  # moduledoc's "ISS-0421 addition" section for why this is safe.
-  @admission_gated_max_concurrency 8
-
   # See "REQ-219 addition" moduledoc section above. Resolved once at
   # compile time (not a runtime Mix.env() call, which is unavailable in a
   # compiled release) -- becomes a literal true/false in the compiled BEAM
@@ -222,7 +225,7 @@ defmodule Letflow.Scheduler.Poller do
     new_state =
       case fetch_tenant_schemas() do
         {:ok, schemas} ->
-          run_sweep(schemas, :poll_and_fire, @admission_gated_max_concurrency, fn schema_name ->
+          run_sweep(schemas, :poll_and_fire, Admission.global_cap(), fn schema_name ->
             try do
               with_admission(schema_name, :poll_and_fire, fn ->
                 Scheduler.poll_and_fire(schema_name)
@@ -334,7 +337,7 @@ defmodule Letflow.Scheduler.Poller do
   # this tick's timer-poll loop above -- not queried a second time.
   defp maybe_run_retention_sweep(schemas, state) do
     if Scheduler.retention_enabled?() and Scheduler.retention_due?(state.last_retention_run_at) do
-      run_sweep(schemas, :retention_sweep, @admission_gated_max_concurrency, fn schema_name ->
+      run_sweep(schemas, :retention_sweep, Admission.global_cap(), fn schema_name ->
         try do
           with_admission(schema_name, :retention_sweep, fn ->
             Scheduler.run_retention_sweep(schema_name)
@@ -358,7 +361,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :alert_hooks, [])
 
     if Keyword.get(cfg, :enabled, false) do
-      run_sweep(schemas, :alert_detection, @admission_gated_max_concurrency, fn schema_name ->
+      run_sweep(schemas, :alert_detection, Admission.global_cap(), fn schema_name ->
         with_admission(schema_name, :alert_detection, fn ->
           try do
             Alerts.build_context_and_detect(schema_name, observed_lag_ms, last_tick_started_at)
@@ -449,7 +452,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      run_sweep(schemas, :ordering_cycle, @admission_gated_max_concurrency, fn schema_name ->
+      run_sweep(schemas, :ordering_cycle, Admission.global_cap(), fn schema_name ->
         with_admission(schema_name, :ordering_cycle, fn ->
           try do
             Letflow.Ordering.run_cycle(schema_name, prefix: schema_name)
@@ -466,7 +469,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      run_sweep(schemas, :ordering_sweeper, @admission_gated_max_concurrency, fn schema_name ->
+      run_sweep(schemas, :ordering_sweeper, Admission.global_cap(), fn schema_name ->
         with_admission(schema_name, :ordering_sweeper, fn ->
           try do
             Letflow.Ordering.sweep_gaps(schema_name, prefix: schema_name)
@@ -483,7 +486,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      run_sweep(schemas, :ordering_metrics, @admission_gated_max_concurrency, fn schema_name ->
+      run_sweep(schemas, :ordering_metrics, Admission.global_cap(), fn schema_name ->
         with_admission(schema_name, :ordering_metrics, fn ->
           try do
             Letflow.Ordering.emit_lag_metrics(schema_name, prefix: schema_name)

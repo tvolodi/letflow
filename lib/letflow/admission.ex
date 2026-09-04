@@ -224,6 +224,23 @@ defmodule Letflow.Admission do
     GenServer.call(server, :reserved_headroom)
   end
 
+  @doc """
+  Returns this instance's own `global_cap`, live from GenServer state — the
+  same value the six Admission-gated `Letflow.Scheduler.Poller` sweeps use as
+  their `Task.async_stream/3` `max_concurrency:` bound, whether this instance
+  was started from config defaults or a `start_link/1` `opts` override. Added
+  per `lib/letflow/design/iss0421-poller-bounded-concurrency.md` §3a/§3c/§7 so
+  callers derive a concurrency bound that always stays in lockstep with this
+  instance's actual global cap, rather than duplicating it as an independent
+  literal.
+
+  `server` defaults to `__MODULE__`, mirroring `reserved_headroom/1`.
+  """
+  @spec global_cap(server :: GenServer.server()) :: pos_integer()
+  def global_cap(server \\ __MODULE__) do
+    GenServer.call(server, :global_cap)
+  end
+
   # GenServer callbacks
 
   # State shape (design doc §2.2; reserved_headroom added per
@@ -297,6 +314,10 @@ defmodule Letflow.Admission do
 
   def handle_call(:reserved_headroom, _from, state) do
     {:reply, state.reserved_headroom, state}
+  end
+
+  def handle_call(:global_cap, _from, state) do
+    {:reply, state.global_cap, state}
   end
 
   def handle_call({:release, %Ref{id: id}}, _from, state) do

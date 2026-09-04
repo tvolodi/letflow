@@ -118,20 +118,47 @@ determine which of the three paths in (b) applies before choosing a command, rat
 running `gh pr merge --squash --delete-branch` and having it work regardless of CI state.
 That determination is strictly more than the pipeline does today, not less.
 
-**(d) No, `enforce_admins: true` is not appropriate — reject it.** With
-`enforce_admins: true`, a persistently red required check with no valid attribution (a
-real, sustained CI/infra break — e.g. `postgres:16`'s image becoming unavailable, or a
-GitHub Actions outage, not a flake) would block **every** merge to `main`, from every
-run, on every host, with **no override path at all**, because there is no human to flip
-`enforce_admins` off or click "merge anyway." That is strictly worse than today's status
-quo of zero enforcement for the one case that matters most in an unattended pipeline:
-recovering when the gate itself, not the code, is broken. `enforce_admins: false` keeps
-exactly one escape hatch — the admin merge — reserved for exactly two situations: the
-known-flake override in (b), and this genuine-CI-outage case, both requiring the same
-attribution discipline. `enforce_admins: true` would remove that hatch entirely and turn
-an infra outage into a permanent pipeline stall, which nothing in this project's
-humanless-operation principle (0004, "no human checkpoint... errors are correctable via a
-later run") is set up to recover from.
+**(d) No, `enforce_admins: true` is not appropriate — reject it.** This is not because
+`enforce_admins: true` leaves no override path in any form — it does not. The same admin
+credentials Step 2 uses to `PUT` this branch's protection with `enforce_admins: false`
+remain valid under `enforce_admins: true` too: nothing about that setting revokes the
+identity's API access, so a real override path always exists — call the branch-protection
+API again (`gh api --method PUT .../branches/main/protection` with `enforce_admins:
+false`, or delete the protection rule outright), merge, and optionally restore protection
+afterward. The rejection rests on that path being a **meaningfully worse override
+mechanism for an unattended pipeline**, not on no mechanism existing:
+
+- **It is multi-step, not atomic.** `enforce_admins: false` + `--admin` is one command
+  that either succeeds or fails, run in the same breath as the merge itself. The
+  reconfigure-merge-reconfigure path is a *sequence* — disable protection, merge,
+  optionally re-enable — any one of which can be skipped, run out of order, or interrupted
+  by a crash between steps. A run that dies after "disable" but before "re-enable" leaves
+  `main` completely unprotected for every subsequent run on every host until something
+  notices, silently reintroducing the exact zero-enforcement state ISS-0441 reports.
+  `--admin` has no equivalent partial-completion state: either the merge happened with the
+  override flag or it didn't.
+- **It changes a repo-wide setting to make what is really a per-merge judgement call.**
+  Flipping `enforce_admins` off is not a decision about *this* merge; it is a decision
+  about every merge attempted by any agent on any host until it is flipped back. Using a
+  repo-wide toggle to pass one PR conflates "this specific red check is attributable
+  elsewhere" (a real, scoped judgement `core-directives.md` requires) with "no required
+  check should block anyone until further notice" (a much bigger claim nothing in this
+  record licenses).
+- **It is not naturally audited per merge.** `--admin` shows up in
+  `gh pr view <n> --json mergedBy,mergeCommit` as a property of the merge that happened,
+  cheap to check after the fact. A protection-toggle-and-restore leaves no equivalent
+  record tying the toggle to the one PR it was for — reconstructing "was protection off
+  for a legitimate override, or because someone forgot to restore it" requires correlating
+  separate `PUT`/`DELETE` calls against the settings API with merge timestamps, which nothing
+  in this pipeline currently logs or checks.
+
+So `enforce_admins: true` does not create a genuinely stuck, unrecoverable pipeline — the
+admin credentials can always reconfigure their way out. What it does is force every
+override, including the routine known-flake case in (b), through a heavier, state-mutating,
+multi-step, harder-to-audit path instead of a single flagged merge command. `enforce_admins:
+false` is preferred because it keeps the override at the granularity (one merge) and
+auditability (one logged flag) this record is actually trying to achieve, not because
+`enforce_admins: true` would leave the pipeline with literally no way forward.
 
 ## Configuration to apply (exact commands)
 
@@ -269,17 +296,43 @@ succeeded after checks went green.")
 
 ## Consequences — corrections required to other docs (AC4)
 
-Grepped `docs/` for every place a CI or merge gate is asserted to be enforced beyond
-agent discretion (`docs/migration/decisions/0004-humanless-pipeline.md`,
-`.github/workflows/ci.yml`, `docs/agents/protocols/GIT_MERGE.md` — ISS-0441's own
-`affected_files`, confirmed as the complete set by grepping `docs/` for "hard gate",
-"structurally impossible", "Backend gate", and "Frontend gate": every other hit
-(`AGENT_SYSTEM.md`, `WF-02_requirement_implementation.md`, `HANDOFF_PROTOCOL.md`,
-`0014-scripting-plugin-runtime-strategy.md`) calls an *agent workflow step*
-(CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, TEST-DESIGN-VALIDATOR) a hard gate, meaning an
-agent cannot proceed to the next workflow step without it — that claim is true today and
-this record does not touch it; it is a different kind of "hard" than "structurally blocks
-a git merge," which is the only kind ISS-0441 is about):
+ISS-0441's own `affected_files` name three docs needing correction:
+`docs/migration/decisions/0004-humanless-pipeline.md`, `.github/workflows/ci.yml`, and
+`docs/agents/protocols/GIT_MERGE.md`.
+
+Beyond those three, `grep -rniE --include="*.md" "hard gate|structurally impossible|Backend
+gate|Frontend gate" docs/` was run to find every other place a CI or merge gate is
+asserted, and the full real result is nine other files (re-run and re-checked for this
+correction — the earlier version of this record claimed a four-file "complete set" that
+omitted five real hits; every one of the nine below has actually been opened and read, not
+assumed from the grep line alone). All nine need no change, but for different, specific
+reasons rather than one blanket rationale:
+
+- **`AGENT_SYSTEM.md`, `WF-02_requirement_implementation.md`,
+  `WF-01_requirement_development.md`, `HANDOFF_PROTOCOL.md`,
+  `0014-scripting-plugin-runtime-strategy.md`.** Each calls an *agent workflow step*
+  (REQ-VALIDATOR, CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, TEST-DESIGN-VALIDATOR) a hard
+  gate, meaning an agent cannot proceed to the next workflow step without it passing —
+  that claim is true today and this record does not touch it. It is a different kind of
+  "hard" than "structurally blocks a `git merge` to `main`," which is the only kind
+  ISS-0441 is about.
+- **`docs/agents/protocols/GIT_SETUP.md` (line 64).** "Structurally impossible" here
+  describes `git checkout main` failing from a secondary worktree because git itself
+  refuses to check out a branch already checked out elsewhere — a worktree-checkout
+  limitation, unrelated to CI or merge enforcement.
+- **`docs/anti-patterns.md` (three hits).** All are descriptive incident narration about
+  past events — a specific `Backend gate` run failing during an earlier mistake, a
+  proposed future ORCH-side check described as making a recurrence "structurally
+  impossible," and a past incident that got past "five separate hard gates." None asserts
+  a current, general claim about `main`'s merge protection; they recount what happened or
+  propose unrelated future tooling.
+- **`docs/migration/decisions/0011-frontend-ownership.md` (line 118).** "A frontend gate
+  equivalent to `mix letflow.check`" refers to a not-yet-built CI job scoped as future S8
+  requirement work, not a claim about `main`'s current branch-protection enforcement.
+- **`docs/migration/decisions/0017-task-queue-selection-model.md` (line 201).**
+  "Structurally impossible" here describes a task-queue locking mistake this record's own
+  API redesign prevents — a claim about task-queue semantics, unrelated to CI or git-merge
+  enforcement.
 
 - **`docs/migration/decisions/0004-humanless-pipeline.md`, principle 2 ("Fully humanless
   operation").** Currently reads: "...commit → push → merge → CI → local-repo-update,
@@ -328,11 +381,11 @@ a git merge," which is the only kind ISS-0441 is about):
   which behaves as a permanent block, not a silent pass-through — worth naming as the
   failure mode this comment prevents).
 
-No change is needed to `AGENT_SYSTEM.md`, `WF-02_requirement_implementation.md`, or
-`HANDOFF_PROTOCOL.md`'s existing "hard gate" language — those describe agent-workflow
-sequencing gates (a later step cannot start until an earlier one passes), which remains
-true and unaffected by this record. Conflating that with "structurally blocks a git
-merge to `main`" was ISS-0441's own point of confusion to resolve, not a defect in those
+No change is needed to any of the nine other files listed above under "Consequences" —
+each was checked individually and none asserts "structurally blocks a git merge to
+`main`" in the sense this record is about. Conflating agent-workflow-sequencing gates (or
+unrelated uses of "structurally impossible"/"hard gate"/historical narration) with that
+specific claim was ISS-0441's own point of confusion to resolve, not a defect in those
 other docs' wording.
 
 ## What this record does not decide

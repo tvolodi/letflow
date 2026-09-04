@@ -1,0 +1,51 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000004",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF03-ISS0438-20260904/step-02-req-analyst.json",
+  "created_at": "2026-09-04T15:39:52Z",
+  "started_at": "2026-09-04T15:39:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "docs/issues/ISS-0438.yaml",
+      "docs/issues/ISS-0439.yaml",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/anti-patterns.md"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml"
+    ]
+  },
+  "task": {
+    "description": "CODE-DESIGN-VALIDATOR has PASSed a scoping-decision recommendation for ISS-0438 (queue task 438, GH#845): port R-Co's dynamic entity/data-model subsystem into Letflow, as new S6 requirements, additive to S6's already-closed batches (does NOT reopen the 'S6 is now complete' line in stage-6-operational-cross-cutting.md -- append a new addendum paragraph, same shape as the existing 2026-09-01 REQ-211/212 addendum note already there). Read lib/letflow/design/iss0438-entity-subsystem-scoping.md IN FULL -- it is your primary source, with a concrete 5-6 slice breakdown in its section 1, each slice naming the R-Co files/functions it covers, its dependencies, and open questions to state explicitly rather than silently resolve (section 6).\n\nDraft real REQ-xxx entries into docs/requirements.yaml, following WF-01 Step 1's normal procedure: read docs/requirements.yaml's existing schema and REQ-211/REQ-212's entries specifically as the precedent for how this project splits a subsystem into core-then-persistence-then-behavior slices. Assign the next REQ-NNN ids (check the highest existing REQ number across the WHOLE file, not just grep's last hits -- REQ-221 may or may not exist, verify directly). Size each to one agent turn -- the design artefact's own slice breakdown already reflects this judgment, but you have final say: if a slice still looks oversized (the artefact itself flags slice 1 at ~900 combined lines of R-Co source and slice 6's query DSL at 1,064 lines as candidates worth splitting further), split it further rather than writing an oversized entry.\n\nFor EACH new requirement: title, owner (ELIXIR-DEV -- this is all lib/letflow/ + priv/repo/migrations/ work, no route/controller layer per the design artefact's explicit deferral), status: pending, stage: S6, description (specific, cites real R-Co file paths and function names, same style as existing REQ-2xx entries), at least 2 concrete/verifiable acceptance_criteria, depends_on (chain the slices in the artefact's stated dependency order -- slice 1 depends on nothing new [REQ-202/REQ-203/REQ-024 are already done], slice 2 depends on slice 1, etc; use the actual REQ-NNN ids you assign, not placeholder slice numbers).\n\nThe design artefact's three open questions that are genuine design-time decisions (JsonSchema cross-namespace reuse, entity type ownership model, synthetic-instance-per-type) must be named EXPLICITLY inside the relevant slice's requirement description as something that slice's own CODE-DESIGNER pass must decide -- do not silently pick an answer yourself, and do not leave them unstated either (both are failure modes named in the design artefact and in this project's own REQ-VALIDATOR checklist).\n\nAfter drafting: append docs/agents/instructions/core-directives.md's usual append-only discipline applies (append to docs/requirements.yaml, do not reorder/rewrite existing entries). Also append a short addendum paragraph to docs/migration/stage-6-operational-cross-cutting.md's end, in the SAME append-not-rewrite style as the existing 2026-09-01 REQ-211/212 addendum note, naming the new REQ ids and pointing at ISS-0438 and the design artefact -- this is a doc this project's convention has REVIEWER sign off on later in this run, but the addendum paragraph itself is your drafting job now, same as how the REQ-211/212 note was added at drafting time, not held back for a later step.\n\nDo NOT call register_task yourself -- that is ORCH's job (Step 3 of this run, after REQ-VALIDATOR gates your draft).",
+    "acceptance_criteria": [
+      "Every new requirement has id, title, owner, status: pending, stage: S6, description, >=2 acceptance criteria, depends_on",
+      "No orphaned depends_on references (every cited REQ id exists, including cross-references to REQ-202/REQ-203/REQ-024)",
+      "Requirements cover the design artefact's slices 1-5 at minimum (definition schema+validator, persistence+CRUD+ArtifactKind extension, record payload validation, event registration+commands, projection+replay); slice 6 (query DSL) may be its own requirement(s) or explicitly deferred with a named blocker if REQ-ANALYST judges it out of this batch's size -- either is acceptable, but it must be a stated decision, not an omission",
+      "The three genuine open design questions (JsonSchema reuse namespace, entity ownership model, synthetic-instance-per-type) are named explicitly inside the relevant requirement's description as a design-time decision for that slice's own CODE-DESIGNER pass, not silently resolved and not left unstated",
+      "No contradiction with any done requirement (REQ-202, REQ-203, REQ-024) or existing docs/migration/decisions/ record",
+      "docs/migration/stage-6-operational-cross-cutting.md gets an appended addendum paragraph (not a rewrite of the existing 'S6 is now complete' line) naming the new REQ ids and citing ISS-0438"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

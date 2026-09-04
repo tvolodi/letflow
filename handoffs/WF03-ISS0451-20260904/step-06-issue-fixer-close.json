@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-06-issue-fixer-close.json",
   "created_at": "2026-09-04T04:32:00Z",
   "started_at": "2026-09-04T04:32:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T04:35:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -35,10 +35,12 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Step 5 (Close Issue) complete. (1) docs/issues/ISS-0451.yaml updated: status: resolved, resolved_in_run: WF03-ISS0451-20260904, resolved_at: 2026-09-04T04:32:00Z -- github_issue: 865 and queue_task_id: 451 left intact. This is the 'resolved' terminal status per ISSUE_QUEUE.md's vocabulary (root cause actually removed, proven by a fail-then-pass regression test), not 'instrumented' or 'no_defect'. (2) GitHub mirror closed: `gh --version` confirmed gh 2.83.1 reachable; ran `gh issue close 865 --comment \"Fixed in WF03-ISS0451-20260904. See docs/issues/ISS-0451.yaml and the regression test at test/letflow/supervisor/pollers_breaker_test.exs.\"` -- command succeeded (`Closed issue tvolodi/letflow#865`). Verified post-close via `gh issue view 865 --json state,comments --jq '.state, (.comments[-1].body)'`: state CLOSED, last comment body matches the mandated text exactly. This satisfies ISSUE_QUEUE.md's 'Closing an issue's GitHub mirror' evidence requirement (form (i): --comment citing run-id, yaml record, and regression test path).",
+    "artifacts_out": [
+      "docs/issues/ISS-0451.yaml"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to Step Final (git-merge), same agent as Step 00 (ELIXIR-DEV) on branch fix/ISS-0451-persistent-poller-crash-budget-20260904."
   },
   "rework_count": 0,
   "max_rework": 3

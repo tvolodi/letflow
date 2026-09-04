@@ -1743,3 +1743,5 @@
 2026-09-04T19:09:18Z | DISPATCH | WF-03 | WF03-ISS0467-20260904/step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PENDING
 2026-09-04T19:11:25Z | STEP_FAIL | WF-03 | WF03-ISS0467-20260904/step-02b-code-design-validator | CODE-DESIGN-VALIDATOR -> ORCH | FAIL -- 1 BLOCKER: design sec.7 misattributes 3 acceptance criteria to ISS-0467.yaml (no such field exists there); criteria actually come from GH#896/ORCH's own task framing. All other 7 checks independently re-derived and PASS. Rework iteration 1 dispatched to CODE-DESIGNER.
 2026-09-04T19:12:14Z | DISPATCH | WF-03 | WF03-ISS0467-20260904/step-02-code-designer | ORCH -> CODE-DESIGNER | REWORK-1
+2026-09-04T19:14:26Z | STEP_PASS | WF-03 | WF03-ISS0467-20260904/step-02-code-designer | CODE-DESIGNER -> ORCH | REWORK-1 PASS -- sec.7 citation corrected, no other change
+2026-09-04T19:14:52Z | DISPATCH | WF-03 | WF03-ISS0467-20260904/step-02b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | REGATE-1

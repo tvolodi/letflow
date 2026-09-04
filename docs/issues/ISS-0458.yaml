@@ -38,7 +38,89 @@ affected_files:
   - test/support/service_catalog_reaper_test.exs
   - test/letflow/service_catalog_test.exs
   - test/support/tenant_schema_reaper_test.exs
-related: []
+related:
+  - ISS-0219
+  - ISS-0217
+  - ISS-0110
+  - ISS-0113
 queue_task_id: 458
 github_issue: 882
-status: open
+status: instrumented
+superseded_by: ISS-0219
+resolved_in_run: WF03-ISS0458-20260904
+resolved_at: "2026-09-04T13:05:00Z"
+resolution_note: >
+  NOT resolved, NOT no_defect -- instrumented. ISSUE-FIXER
+  (handoffs/WF03-ISS0458-20260904/step-01-issue-fixer-diagnosis.json)
+  independently investigated rather than accepting the filing's own
+  ISS-0219 suggestion on trust.
+
+  REGISTRY LOOKUP. Read ISS-0219 (host TEST_PARALLEL_N connection-budget
+  sizing) and grepped docs/issues/ for other DB-provisioning/teardown-race
+  records. Found three that match this failure family more tightly than
+  ISS-0219 itself: ISS-0110 (resolved) -- the underlying liveness-guard
+  fix for TenantSchemaReaper reclaiming a still-live schema under a
+  nested/concurrent mix test invocation; its own corroborating_evidence
+  field already documents an independent, targeted reproduction of the
+  BYTE-FOR-BYTE identical error signature this issue reports (Postgrex
+  42P01 undefined_table on a tenant table, there instance_projections,
+  here process_definitions), reproduced by simulating a boundary sweep
+  reclaiming a live row mid-test. ISS-0217 (resolved) -- the sibling fix
+  covering scripts/test_parallel.sh partitions triggering that same
+  guard and deferring the reaper sweep, same TenantSchemaReaperTest
+  module this issue reports 3 failures in. ISS-0224 (resolved) --
+  incidentally corroborates the same TenantSchemaReaperTest failure
+  family recurring under concurrent-invocation conditions in a third,
+  unrelated run. ISS-0113 (open, investigated not resolved) -- a
+  plausible but not byte-for-byte-matching secondary mechanism specific
+  to PromotionAssertionRerunTest's sandbox-mode timing, noted as a
+  secondary candidate for that one file's single failure.
+
+  REPRODUCTION. Two isolated runs of the four affected files: 56/56
+  passed both times. One full-suite run under TEST_PARALLEL_N=4 (this
+  host's own documented known-good value per ISS-0219, and the same
+  mechanism ISS-0217/ISS-0110's own reproductions used): 3214/3214
+  passed across all 4 partitions, 0 failures, confirmed via raw
+  partition-log inspection that the affected modules actually executed.
+  Zero reproductions of any of the 10 originally-reported failures --
+  consistent with this already-tracked class's documented intermittency,
+  not proof the class doesn't apply.
+
+  ISS-0427/PR#881 CONTEXT (a sibling session's tenant test-schema
+  provisioning rewrite, template-clone instead of migration-replay,
+  merged to main between this issue's filing and this run starting).
+  Explicitly checked and reasoned orthogonal, not credited for the
+  non-reproduction: ISS-0219/ISS-0217/ISS-0110's mechanism is host
+  connection-budget and concurrent-invocation TIMING, not how a
+  schema's tables are materialized once a connection is available --
+  there is no causal path from PR #881's change to this race's
+  proximate cause.
+
+  WHY `instrumented` AND NOT `resolved`/`no_defect`. `resolved` is false
+  -- this run shipped no fix and removed no root cause; the diagnosis
+  was deliberately diagnosis-only per ISSUE-FIXER's role. `no_defect` is
+  also false -- ISSUE_QUEUE.md's no_defect bar requires establishing
+  there was no root cause to find, and the opposite is true here: a real,
+  already-documented root cause (TenantSchemaReaper's liveness-guard
+  race under concurrent/nested invocation) demonstrably exists and
+  explains this exact error signature, per ISS-0110's own targeted
+  reproduction. `superseded_by: ISS-0219` follows this filing's own
+  named candidate rather than ISS-0217/ISS-0110 directly, because
+  ISS-0219 is this project's standing pointer for "this suite's
+  documented connection-budget/contention-sensitivity class" and the
+  natural landing point for a FUTURE recurrence report, even though
+  ISS-0219/ISS-0217/ISS-0110 are themselves already resolved -- same
+  shape as ISS-0114's own precedent (superseded_by: ISS-0110, written
+  while ISS-0110 was still open; ISS-0110 has since resolved, and the
+  pointer's validity is judged at the moment it was written, not by
+  whether the target later closes). ISS-0217 and ISS-0110 are recorded
+  under `related:` above as the tighter mechanism-specific matches for
+  the TenantSchemaReaperTest failures specifically, and ISS-0113 as the
+  plausible secondary mechanism for the single PromotionAssertionRerunTest
+  failure. What this record does NOT close: nothing new is owed --
+  ISS-0219/ISS-0217/ISS-0110's fixes already ship on main; a further
+  recurrence of this exact signature should be folded into this record
+  or ISS-0219 rather than treated as a new root cause, unless a future
+  investigation constructs a targeted reproduction (an ISS-0110-style
+  simulated mid-test reclaim) against these specific four files and
+  finds something genuinely new.

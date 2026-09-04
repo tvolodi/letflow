@@ -234,6 +234,46 @@ defmodule Letflow.AdmissionTest do
     end
   end
 
+  # ISS-0421 §3a/§7: `global_cap/1` is a new read-only accessor added so
+  # `Letflow.Scheduler.Poller`'s six Admission-gated sweeps can derive their
+  # `Task.async_stream/3` `max_concurrency:` bound live, instead of a
+  # hardcoded literal (`handoffs/WF03-ISS0421-20260904/step-04-reviewer.json`
+  # FAILed the earlier draft precisely because a hardcoded `8` only happened
+  # to equal `Admission.global_cap` at DEFAULT config). This describe block
+  # proves the accessor genuinely reads LIVE per-instance state -- not a
+  # hardcoded/cached default -- by starting an instance at a NON-default
+  # `pool_size`/`reserved_headroom` pair (the same `pool_size: 3,
+  # reserved_headroom: 2` config REQ-218's own poller tests already use) and
+  # asserting the derived value, not the default-config value of 8.
+  describe "ISS-0421: global_cap/1 reads this instance's own live global_cap, not a default" do
+    test "pool_size: 3, reserved_headroom: 2 -> global_cap/1 returns 1, not the default-config 8" do
+      {_pid, name} = start_admission(pool_size: 3, reserved_headroom: 2)
+
+      assert Admission.global_cap(name) == 1
+    end
+
+    test "global_cap/1 tracks a pool_size override with no other code edit, mirroring try_acquire/2's own admitted count" do
+      {_pid, name} = start_admission(pool_size: 12, reserved_headroom: 2)
+      # cap == 10 -- a different non-default value from the test above,
+      # proving the accessor is not merely returning a second hardcoded
+      # constant that happens to match one particular config.
+      assert Admission.global_cap(name) == 10
+
+      # Cross-check against try_acquire/2's own independently-implemented
+      # admission count, so this test does not merely duplicate the same
+      # arithmetic the accessor itself performs -- it proves the accessor's
+      # return value is the SAME number the real admission gate enforces.
+      refs = for _ <- 1..10, do: Admission.try_acquire(:global, name) |> elem(1)
+      assert length(refs) == 10
+      assert {:error, :capacity} = Admission.try_acquire(:global, name)
+    end
+
+    test "global_cap/1 with no override still returns the documented default-config derivation (8)" do
+      {_pid, name} = start_admission(pool_size: 10, reserved_headroom: 2)
+      assert Admission.global_cap(name) == 8
+    end
+  end
+
   # AC6: Letflow.Admission is present in Letflow.Application's supervision
   # tree, with its moduledoc stating explicitly whether it has an ordering
   # dependency.

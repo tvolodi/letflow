@@ -775,6 +775,142 @@ defmodule Letflow.Scheduler.PollerTest do
     end
   end
 
+  # ===================================================================================
+  # ISS-0421 -- bounded per-tenant concurrency within each sweep. See
+  # lib/letflow/design/iss0421-poller-bounded-concurrency.md. The REQ-218 tests
+  # above (AC1/AC2/AC3/AC3-per-schema/AC5) all pre-date this fix and were left
+  # byte-for-byte untouched by it (confirmed by REVIEWER's own diff check,
+  # handoffs/WF03-ISS0421-20260904/step-04d-reviewer-recheck.json) -- they
+  # exercise Admission's own capacity gate, not the Task.async_stream
+  # concurrency mechanism this fix adds. The describes below are this fix's
+  # OWN dedicated coverage.
+  # ===================================================================================
+
+  describe "ISS-0421 regression: the 6 gated sweeps' max_concurrency derives live from Admission.global_cap/0, not a hardcoded literal" do
+    test "with global_cap forced to 1 (pool_size: 3, reserved_headroom: 2), all 5 schemas' due timers fire within a single tick" do
+      # This is the same class of proof REVIEWER and ELIXIR-DEV both
+      # independently confirmed by hand (sed-substituting the old hardcoded
+      # `8` back into poller.ex and re-running REQ-218's AC1/AC2/AC3/AC5
+      # tests, all 4 of which failed) -- committed here as its own,
+      # explicitly-labeled, permanent test rather than relying only on that
+      # REQ-218 side effect.
+      #
+      # With max_concurrency correctly derived LIVE as Admission.global_cap()
+      # (== 1 for this config), Task.async_stream admits schemas strictly one
+      # at a time -- Poller never holds more than one admission unit at a
+      # time (no concurrent self-contention), so every schema's poll_and_fire
+      # attempt is uncontested and succeeds, exactly like Enum.each did
+      # before this fix.
+      #
+      # If a future edit reintroduced a hardcoded max_concurrency literal
+      # (e.g. the old `8`) instead of this live call, Task.async_stream would
+      # launch all 5 of these schemas' tasks concurrently at once, all racing
+      # for the SAME sole global admission unit at (very nearly) the same
+      # instant -- Admission grants exactly one of them and permanently
+      # rejects the rest (try_acquire is a single synchronous decision, never
+      # retried), so strictly fewer than all 5 timers would fire. This makes
+      # the assertion below deterministically distinguish the two cases
+      # rather than merely being probabilistically likely to catch a
+      # regression.
+      AdmissionTestHelpers.restart_admission!(pool_size: 3, reserved_headroom: 2)
+
+      schemas =
+        for i <- 1..5 do
+          %{schema_name: schema_name} = provisioned_tenant("iss0421-hardcode-#{i}")
+          timer_id = due_timer_for!(schema_name, "iss0421-hardcode")
+          {schema_name, timer_id}
+        end
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+      assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+
+      for {schema_name, timer_id} <- schemas do
+        assert timer_status!(schema_name, timer_id) == "fired"
+      end
+    end
+  end
+
+  # AC1 (fault isolation): `Scheduler.poll_and_fire/1` and
+  # `Scheduler.run_retention_sweep/1` each already have their OWN internal
+  # rescue (lib/letflow/scheduler.ex), but it catches ONLY a `Postgrex.Error`
+  # whose code is `:undefined_table`/`:undefined_schema` (ISS-0444) --
+  # anything else re-raises. Before this fix, that re-raise had no poller-side
+  # backstop at all for these two specific call sites (design §4b: "the two
+  # that do NOT currently have one... need one added at their
+  # Task.async_stream/3 call site"). This describe proves the NEW top-level
+  # per-task rescue this fix adds actually catches a raise that Scheduler's
+  # own narrower rescue does NOT, without crashing the tick and without
+  # blocking any other schema's own poll_and_fire in the same sweep.
+  # A Postgrex `:undefined_column` error -- NOT one of the two codes
+  # (:undefined_table, :undefined_schema) Scheduler.poll_and_fire/1's own
+  # rescue matches -- so it re-raises out of claim_due_timer_ids/2, reaching
+  # poller.ex's Task.async_stream call site as a genuine, uncaught exception
+  # for this fix's new rescue to catch.
+  defp drop_timers_fire_at_column!(schema_name) do
+    Repo.query!(~s(ALTER TABLE "#{schema_name}"."timers" DROP COLUMN fire_at))
+  end
+
+  describe "ISS-0421 AC1: new top-level per-task rescue" do
+    test "a schema's raise past Scheduler's own rescue is caught+logged, and does not block another schema's poll_and_fire" do
+      %{schema_name: broken_schema_name} = provisioned_tenant("iss0421-ac1-broken")
+      drop_timers_fire_at_column!(broken_schema_name)
+
+      %{schema_name: real_schema_name} = provisioned_tenant("iss0421-ac1-real")
+      timer_id = due_timer_for!(real_schema_name, "iss0421-ac1")
+
+      state = %{last_retention_run_at: nil, last_tick_started_at: nil}
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # Must not crash the calling (test) process -- this is exactly
+          # AC1's "a slow/erroring tenant doesn't block others" property,
+          # for the crash sub-case specifically.
+          assert {:noreply, _new_state} = Poller.handle_info(:tick, state)
+        end)
+
+      # The unrelated, healthy schema's own poll_and_fire was unaffected by
+      # the broken schema's raise -- proves the fault's blast radius is
+      # exactly one task, not the whole Task.async_stream batch.
+      assert timer_status!(real_schema_name, timer_id) == "fired"
+
+      # The new rescue's own log line (poller.ex's log_task_raise/4), not
+      # Scheduler's "tenant schema unavailable" line -- proving this was
+      # caught by the NEW poller-level rescue, not the pre-existing
+      # Scheduler-level one.
+      assert log =~ "poller sweep task raised"
+      assert log =~ broken_schema_name
+    end
+  end
+
+  # AC4 (preserved, unchanged by this fix -- design §5): `fetch_tenant_schemas/0`
+  # is still called exactly once per `handle_info(:tick, state)` invocation, and
+  # the resulting list is threaded, unqueried again, into all seven sweeps.
+  describe "ISS-0421 AC4: tenant_schemas/0 is still queried exactly once per tick" do
+    test "handle_info(:tick, state)'s source calls fetch_tenant_schemas() exactly once" do
+      source = File.read!(Path.join(File.cwd!(), "lib/letflow/scheduler/poller.ex"))
+
+      [handle_info_body | _] =
+        source
+        |> String.split("def handle_info(:tick, state) do", parts: 2)
+        |> Enum.reverse()
+
+      # Cut off at the next top-level function definition so we don't also
+      # count fetch_tenant_schemas/0's own (different) definition further
+      # down the file.
+      [handle_info_body | _] = String.split(handle_info_body, "\n  defp with_admission", parts: 2)
+
+      occurrences =
+        handle_info_body
+        |> String.split("fetch_tenant_schemas()")
+        |> length()
+        |> Kernel.-(1)
+
+      assert occurrences == 1,
+             "expected handle_info(:tick, state) to call fetch_tenant_schemas() exactly once, " <>
+               "found #{occurrences}"
+    end
+  end
+
   describe "no second ticker -- lib/letflow/scheduler/ has exactly one GenServer module" do
     test "lib/letflow/scheduler/ contains exactly one GenServer module (Poller) -- no second ticker" do
       root = File.cwd!()

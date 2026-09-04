@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0421-20260904-step-04c",
+  "run_id": "WF03-ISS0421-20260904",
+  "workflow_id": "WF-03",
+  "step": "04c",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0421-20260904/step-04c-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219", "REQ-218"],
+    "issue_ids": ["ISS-0421", "ISS-0451"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0421-20260904/step-04-reviewer.json",
+      "handoffs/WF03-ISS0421-20260904/step-04b-code-designer-rework.json",
+      "lib/letflow/design/iss0421-poller-bounded-concurrency.md",
+      "lib/letflow/admission.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0421-poller-bounded-concurrency.md"
+    ],
+    "branch_name": "feature/WF03-ISS0421-20260904"
+  },
+  "task": {
+    "description": "Step-4-triggered hard-gate check (4th pass on this design, new step number since the Step-2b rework counter is exhausted/separate): verify CODE-DESIGNER's correction of §3a/§3c/§7 -- deriving the 6 Admission-gated sweeps' max_concurrency live from a new Admission.global_cap/1 accessor instead of the hardcoded literal 8 -- is complete, unambiguous, buildable, contains no implementation code, and genuinely restores the invariant REQ-218 AC1/AC2/AC3/AC5 depend on."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified by direct inspection of the real code and an independent re-trace, not taken on CODE-DESIGNER's word.\n\n1. ACCESSOR SPEC CORRECTNESS: Read lib/letflow/admission.ex directly. `state.global_cap` is confirmed already a state field, set once at init/1 (admission.ex:241-245: `global_cap = max(pool_size - reserved_headroom, 1)`, stored as key `global_cap` in the returned state map) and never mutated by any other `handle_call` clause (checked all clauses: {:try_acquire, :global}, {:try_acquire, {:tenant, _}}, :reserved_headroom, {:release, _} -- none touch `global_cap`). The design's claim that this is a strictly smaller change than `reserved_headroom/1` (which needed a genuine new state field, admission.ex:249) is correct: `global_cap/1` needs only a new `handle_call(:global_cap, _from, state)` clause replying `state.global_cap` unchanged, no state-shape edit. The prescribed accessor (`@spec global_cap(server :: GenServer.server()) :: pos_integer()` / `def global_cap(server \\\\ __MODULE__), do: GenServer.call(server, :global_cap)`) is byte-for-byte the same idiom as the already-approved `reserved_headroom/1` (admission.ex:222-225) and its backing `handle_call` clause (admission.ex:298-300). No ambiguity in signature, no TBD/deferral language anywhere in §3a/§3c/§7.\n\n2. INDEPENDENT TRACE, test config (pool_size: 3, reserved_headroom: 2): re-derived directly from admission.ex:241 (not from the design doc's or CODE-DESIGNER's arithmetic): global_cap = max(pool_size - reserved_headroom, 1) = max(3 - 2, 1) = max(1, 1) = 1. Confirmed. With the corrected design, all 6 gated sweeps call `Admission.global_cap/0` fresh per tick and pass 1 as `max_concurrency:` to `Task.async_stream/3` for this instance. That makes each sweep process schemas strictly one at a time: `with_admission/3` acquires the global unit before Repo work and releases in an `after` clause; with only 1 concurrent task ever in flight, `global_in_use (0) < global_cap (1)` holds for every attempt with no external contender, so every acquire succeeds and Task.async_stream advances to the next schema only after the current one both acquired and released -- reproducing exactly the old `Enum.each`-era 'Poller never holds more than one admission unit at a time' property. This genuinely restores what REQ-218 AC1/AC2 (whose own code comment states this invariant), AC3's per-schema clause, and AC5 depend on -- verified against the real `init/1` arithmetic, not accepted from the design doc's restatement.\n\n3. PRODUCTION-DEFAULT RE-CHECK: pool_size: 10, reserved_headroom: 2 -> global_cap = max(10 - 2, 1) = 8, matching the original approved numeric example unchanged. §3c's `max(global_cap, reserved_headroom) = max(8, 2) = 8` sanity check is unaffected -- only the SOURCE of the two numbers changed (live accessor calls instead of a literal/comment-justified constant), not the arithmetic identity, so no other part of the design's safety argument needs re-deriving.\n\n4. DIFF-SCOPE CHECK: `git diff HEAD~1 HEAD -- lib/letflow/design/iss0421-poller-bounded-concurrency.md` shows exactly 3 hunks, all inside §3a, §3c, and §7 as claimed -- no other section touched. `git diff HEAD~1 HEAD -- test/` is empty: no test file changes, matching REVIEWER's explicit constraint that no test/letflow/scheduler/poller_test.exs edits are authorized or needed. One informational note, non-blocking: §4a's options list (line ~424) still reads 'max_concurrency: ... per §3a/§3b above (8 or 2 depending on the sweep)' -- a pre-existing parenthetical from before this rework that is now slightly imprecise phrasing (it could be misread as still meaning a hardcoded literal) but is not itself wrong (8 and 2 ARE the correct live-derived values at default config) and §4a was out of scope for this rework per REVIEWER's routing. Not gating; flagging so a future pass can tighten the wording if convenient.\n\n5. NO IMPLEMENTATION CODE: the one-line `GenServer.call/2` delegation shown for `global_cap/1` is signature-level idiom only (identical in form to the already-approved `reserved_headroom/1` shown the same way in this same doc and previously passed at step-02b) -- no real `.ex` function body, no `handle_call` clause body beyond 'replies with `state.global_cap` unchanged,' no control flow. Consistent with this doc's established convention for trivial accessors; not a violation.\n\nVERDICT: PASS. The design is complete, unambiguous, internally consistent (§3a/§3c/§7 agree with each other and with the pre-existing §3b), matches the real current admission.ex exactly at the two cited line numbers, and the restored invariant is independently confirmed against the real `init/1` arithmetic rather than accepted on CODE-DESIGNER's trace. No further design rework needed.\n\nROUTING: to ELIXIR-DEV for the small, mechanical implementation -- one new `Letflow.Admission.global_cap/1` accessor + backing `handle_call(:global_cap, ...)` clause (admission.ex), and in poller.ex, replace `@admission_gated_max_concurrency 8` and its 6 call sites with a live `Letflow.Admission.global_cap/0` call inside `run_sweep/4`, read fresh every tick, mirroring the existing `Admission.reserved_headroom/0` consumption for the 7th sweep. No test file changes authorized or needed by this pass. After ELIXIR-DEV implements, per REVIEWER's step-04 routing this goes to REVIEWER for re-check before TEST-DESIGNER touches the flagged (separate, non-blocking) reserved_headroom/global_cap regression-test coverage gap."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-04T00:00:00Z",
+      "notes": "4th pass on this design (Step-4-triggered, new step number, distinct from the exhausted Step-2b rework counter). Verified global_cap/1's accessor spec against the real lib/letflow/admission.ex (global_cap confirmed already a state field at init/1, no state-shape change needed), independently re-traced pool_size:3/reserved_headroom:2 -> global_cap:1 and pool_size:10/reserved_headroom:2 -> global_cap:8 directly from init/1's arithmetic, confirmed via diff that only §3a/§3c/§7 changed and no test files were touched. PASS -- routed to ELIXIR-DEV."
+    }
+  ]
+}

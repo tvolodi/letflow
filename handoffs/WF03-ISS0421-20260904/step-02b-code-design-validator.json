@@ -1,0 +1,56 @@
+{
+  "handoff_id": "WF03-ISS0421-20260904-step-02b-rework2",
+  "run_id": "WF03-ISS0421-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0421-20260904/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-04T14:20:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219"],
+    "issue_ids": ["ISS-0421", "ISS-0451"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0421-poller-bounded-concurrency.md",
+      "handoffs/WF03-ISS0421-20260904/step-02-code-designer.json",
+      "handoffs/WF03-ISS0421-20260904/step-02b-code-design-validator.json",
+      "lib/letflow/admission.ex"
+    ],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0421-20260904"
+  },
+  "task": {
+    "description": "Re-check (rework iteration 2, final allowed rework) of Step 2b for ISS-0421: verify the reworked §3b/§7 sections of lib/letflow/design/iss0421-poller-bounded-concurrency.md genuinely specify reserved_headroom as a real, new Letflow.Admission state field captured in init/1 from the same binding used to compute global_cap, that the accessor now reads a field the corrected init/1 spec actually populates, and that the per-instance algebraic-identity argument (including a start_link/1 opts-overridden test instance) is airtight."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-read lib/letflow/admission.ex directly (not the design's paraphrase) to reconfirm the real init/1 clause (admission.ex:220-231) and the real four-key state map (global_cap, global_in_use, tenants, refs) that rework-1's FAIL was based on. Confirmed the design's §3b now matches this real code exactly and no longer asserts a phantom field.\n\nWhat changed and why it closes the gap:\n\n1. State-shape addition (§3b, lines ~173-224): the design now explicitly withdraws rework-1's false 'no new state field' / 'state.reserved_headroom already exists' claim and instead requires Letflow.Admission.init/1's returned state map to gain a genuinely NEW, fifth key, `reserved_headroom`, set from the SAME `reserved_headroom` binding already destructured in that same init/1 clause -- the identical binding used, in the identical function call, to compute `global_cap`. This is stated as purely additive to the existing four keys (global_cap, global_in_use, tenants, refs): none of their types or any handle_call clause's reads/writes of them changes. The updated state-shape comment is given as a 5-key doc/type-shape block (not executable code), mirroring the existing admission.ex:212-219 comment's own format -- consistent with this doc's no-implementation-code constraint.\n\n2. Accessor now reads a real field: `reserved_headroom/1`'s new `handle_call(:reserved_headroom, _from, state)` clause is specified to reply with the NEW `state.reserved_headroom` field described immediately above -- not the non-existent one rework-1 assumed. A GenServer built to this spec cannot KeyError, because the field it reads is the same field init/1 is now specified to populate.\n\n3. Per-instance algebraic-identity argument, explicitly re-stated and airtight: because reserved_headroom is captured in the SAME init/1 clause, from the SAME binding, at the SAME moment as global_cap, the design states this holds 'for any given running Admission instance, whether started from config defaults or from a start_link/1 opts override (e.g. a test starting a distinct, differently-configured instance under its own name per admission.ex:180-182's server convention)' -- i.e. the opts-overridden test-instance case iteration 1 left unaddressed is now explicitly covered by name. No re-derivation from Application.get_env or any other independent source is introduced; the field is a verbatim carry-forward of an argument that already existed in that exact call. This makes global_cap + max_concurrency = pool_size (§3b/§3c) hold per-instance, closing exactly the class of gap iteration 1's FAIL identified (two independently-sourced numbers that could drift) -- there is now exactly one number per instance, sourced once.\n\n4. §7's Admission bullet correctly mirrors the §3b fix (new state field, updated 5-key comment, new accessor + handle_call clause, purely additive to public contract and to global_in_use/tenants/refs/global_cap's own reads/writes).\n\n5. Scope check: only §3b and §7's Admission bullet carry the fix; §0, §1, §2, §3a, §3c's own formula, §4, §5, §6, §8 read unchanged from the version already passed on all six other checks (Admission arithmetic baseline, Task.async_stream fault isolation/AC1, AC4 preservation, sequential-sweep architecture, no-literal-code, accessor calling-convention mirroring try_acquire/2 and release/2). §3c's 'max(8, 2) = 8' and the pool_size identity are consistent with the corrected §3b and were not disturbed.\n\nNo remaining ambiguity: the design is now buildable against the real, current Letflow.Admission code as it exists today, with no phantom state reads and no unstated state-shape assumption. This is not a partial-credit pass -- every element of this re-check's scope (real-field capture in init/1, accessor reading a populated field, per-instance including opts-override coverage) is satisfied without qualification.",
+    "routing": "Route to ELIXIR-DEV to implement lib/letflow/design/iss0421-poller-bounded-concurrency.md in full: the reserved_headroom state-field addition and reserved_headroom/1 accessor in lib/letflow/admission.ex (§3b/§7), sweep_task_timeout_ms/0 in lib/letflow/scheduler.ex, and the seven Task.async_stream/3 conversions plus per-task rescues in lib/letflow/scheduler/poller.ex, per §3-§7 of the design doc in full.",
+    "next_action": "Route to ELIXIR-DEV for implementation per the now-passed design doc."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "FAIL",
+      "timestamp": "2026-09-04T11:40:00Z",
+      "notes": "Admission.global_cap arithmetic (pool_size 10 - reserved_headroom 2 = 8) independently verified correct against admission.ex/api_pipeline.ex/config. Peak-concurrency safety argument in section 3b fails: max_concurrency:2 for maybe_refresh_active_instances/1 is a hardcoded literal that must stay equal to Admission's reserved_headroom for the 8+2=10 proof to hold, but nothing derives or enforces that equality -- a future independent change to reserved_headroom would silently break the pool-exhaustion safety bound. All other checks (fault isolation, AC4, sequential-sweep decision, no literal code, 2 of 3 open questions) passed."
+    },
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "FAIL",
+      "timestamp": "2026-09-04T13:05:00Z",
+      "notes": "Rework 1's live-accessor fix (Letflow.Admission.reserved_headroom/1) is specified to read `state.reserved_headroom`, but admission.ex's actual init/1 never stores reserved_headroom in state -- it is a bare init/1 argument consumed only to compute global_cap, then discarded; the state map holds only global_cap, global_in_use, tenants, refs. The accessor as specified would crash or require silently inventing behavior. Fixing this needs a real, undocumented state-shape change (adding reserved_headroom as a new field, captured at the same init/1 moment as global_cap) that the design explicitly denies making ('no new state field'). Diff confirmed only sections 0/3b/3c/7/8 changed; all iteration-0-passed sections (1,2,3a,4,5,6) untouched and remain passed. Accessor's calling-convention shape (defaulted server arg, GenServer.call delegate) does correctly mirror try_acquire/2 and release/2."
+    },
+    {
+      "gate": "CODE-DESIGN-VALIDATOR",
+      "result": "PASS",
+      "timestamp": "2026-09-04T14:20:00Z",
+      "notes": "reserved_headroom is now specified as a genuinely new, fifth Letflow.Admission state field, captured in init/1 from the same binding used to compute global_cap; the reserved_headroom/1 accessor's handle_call clause reads this newly-populated field, not a phantom one. Per-instance algebraic identity explicitly covers a start_link/1 opts-overridden test instance. Confirmed against the real admission.ex init/1 and state shape. Only §3b/§7 changed; all previously-passed checks remain untouched. Design is buildable as specified; routed to ELIXIR-DEV."
+    }
+  ]
+}

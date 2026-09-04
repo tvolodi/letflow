@@ -96,6 +96,9 @@ defmodule Letflow.Scheduler do
   @default_retention_enabled false
   @default_retention_interval_ms 86_400_000
   @default_retention_days 90
+  # Per lib/letflow/design/iss0421-poller-bounded-concurrency.md §4a/§7 -- the
+  # per-task budget for Letflow.Scheduler.Poller's Task.async_stream/3 calls.
+  @default_sweep_task_timeout_ms 10_000
 
   # ===========================================================================
   # create/2 -- SCH-01 arming (design §2.1)
@@ -561,6 +564,16 @@ defmodule Letflow.Scheduler do
   @spec retention_days() :: non_neg_integer()
   def retention_days do
     scheduler_config()[:retention_days] || @default_retention_days
+  end
+
+  @doc """
+  Per-task timeout (ms) for `Letflow.Scheduler.Poller`'s `Task.async_stream/3`
+  calls (design `iss0421-poller-bounded-concurrency.md` §4a). Read fresh on
+  every call, matching every other accessor in this module -- no caching.
+  """
+  @spec sweep_task_timeout_ms() :: pos_integer()
+  def sweep_task_timeout_ms do
+    scheduler_config()[:sweep_task_timeout_ms] || @default_sweep_task_timeout_ms
   end
 
   defp scheduler_config, do: Application.get_env(:letflow, :scheduler, [])

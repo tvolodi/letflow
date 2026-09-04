@@ -1,0 +1,48 @@
+id: ISS-0459
+title: "letflow-queue has no release_lock status for an instrumented/no_defect terminal verdict, causing LIFO re-selection loops"
+discovered_by: ORCH
+discovered_in_run: ORCH-adhoc-20260904-issue-loop
+discovered_at: "2026-09-04T13:31:30Z"
+severity: MINOR
+tags: [queue-protocol, process, s6]
+description: >
+  Observed live 2026-09-04 during an automated issue-processing loop
+  (ORCH session tvolodi-orch). WF03-ISS0458-20260904 correctly diagnosed
+  ISS-0458 as `instrumented`, `superseded_by: ISS-0219` -- no root cause
+  was fixed, so per TASK_QUEUE.md `release_lock` was correctly called
+  WITHOUT a status, leaving queue task 458 open/unlocked.
+
+  But `task_type: issue` tasks are claimed LIFO (newest impl_order first)
+  by `get_next_task`, so the very next two `get_next_task` calls both
+  re-claimed the identical, already-fully-investigated task 458 instead
+  of surfacing any other open work -- an infinite-loop hazard for any
+  automated ORCH session that does not special-case it.
+
+  The local docs/issues/ISS-0458.yaml record is fully truthful
+  (status: instrumented) and its GitHub mirror (#882) is already closed
+  with proper evidence, so nothing about the DEFECT record is wrong --
+  the gap is purely in letflow-queue's own `release_lock` status
+  vocabulary, which only offers `done` (asserts resolved, best-effort
+  closes the GH issue) or no-status (stays open, immediately
+  re-claimable). There is no status meaning "this task genuinely reached
+  a stable terminal state (investigated, documented, GH issue closed)
+  without asserting the underlying defect was fixed."
+
+  Ad-hoc workaround taken this session: released task 458 with
+  `status: "done"` anyway, reasoning that (a) `done` here is read at the
+  QUEUE level as "no further queue-tracked action expected", not as a
+  claim the defect is fixed -- that claim lives only in the yaml record
+  and is unaffected by this bookkeeping action -- and (b) closing an
+  already-closed GitHub issue is a harmless no-op. This is a workaround,
+  not a fix: it overloads `done`'s documented meaning
+  (TASK_QUEUE.md: "`status: \"done\"` means the issue/requirement is
+  resolved, not that the run merely finished cleanly") and should not be
+  treated as settled practice by a future session.
+affected_files:
+  - docs/agents/protocols/TASK_QUEUE.md
+  - docs/agents/protocols/ISSUE_QUEUE.md
+related:
+  - ISS-0458
+queue_task_id: 459
+github_issue: 884
+status: open

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0427-20260904-step-02b",
+  "run_id": "WF03-ISS0427-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0427-20260904/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T07:15:00Z",
+  "started_at": "2026-09-04T07:00:00Z",
+  "completed_at": "2026-09-04T07:15:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0427"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0427-tenant-test-schema-template-clone.md",
+      "handoffs/WF03-ISS0427-20260904/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0427-20260904/step-02-code-designer.json"
+    ],
+    "branch_name": "fix/ISS-0427-tenant-schema-template-clone-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "RECONSTRUCTED BY ORCH, 2026-09-04, and labelled as such rather than presented as agent-written. CODE-DESIGN-VALIDATOR executed this gate and reported its verdict in full, but did NOT write this handoff file to disk. CODE-DESIGNER discovered the absence at the start of rework 1 and reported it rather than silently working around it -- correct behaviour, and the reason this gap was caught at all. ORCH's own step-02b GATE_FAIL log entry and commit had cited this file as though it existed, which was wrong; this reconstruction closes that audit hole. Content below is taken from the validator's reported verdict, plus ORCH's own independent empirical re-verification of both findings. It is NOT a verbatim agent artifact and must not be read as one.\n\nHARD GATE on CODE-DESIGNER's template-clone design for ISS-0427. The failure mode under gate is SILENT: a cloned tenant schema subtly non-equivalent to a migration-built one would weaken every tenant-dependent test in the suite without failing anything visibly."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL -- 1 BLOCKER, 1 MAJOR.\n\nBLOCKER: design section 3.2 dimension 3 groups pg_constraint by contype over {c,f,p,u} and asserts in bold that this is 'the full set Postgres defines'. It is not -- Postgres also defines x (exclusion constraints) and t (constraint triggers). A clone missing an exclusion constraint would pass the parity check untouched, since the grouping never inspects contype='x' and none of the other 7 dimensions covers it. ORCH INDEPENDENTLY VERIFIED: created an EXCLUDE constraint and confirmed pg_constraint.contype='x' is real and outside the asserted-exhaustive four.\n\nMAJOR: table-level storage parameters (pg_class.reloptions -- fillfactor, autovacuum_* overrides) are silently uncovered. INCLUDING ALL's INCLUDING STORAGE copies only per-column attstorage, a different concept. Unlike triggers/comments/collations/privileges -- which the design explicitly enumerated and ruled out with stated reasons -- reloptions is simply absent, neither covered nor consciously excluded. ORCH INDEPENDENTLY VERIFIED: a template table WITH (fillfactor=70) clones to a table whose pg_class.reloptions is EMPTY.\n\nVERIFIED CORRECT AND NOT TO BE RE-LITIGATED IN REWORK: the FK textual rewrite is correct on every adversarial shape tried (self-referencing, composite, DEFERRABLE INITIALLY DEFERRED, ON DELETE/ON UPDATE CASCADE -- pg_get_constraintdef embeds deferrability and referential actions natively); sequence recreation is correct end-to-end (clone-local sequence, default repointed, OWNED BY set, starts at 1 rather than inheriting the template's counter); the index-rename finding reproduces exactly and the structural-not-name-based comparison is the right call; template-name collision safety verified live (tenant_id_for_schema_name('tenant_template') returns {:error, :invalid_schema_name}); the reaper structurally cannot drop the template because INV-4 guarantees no tenant_schemas row exists for it, though the design never states this and should; scope is clean with zero lib/ diff; OQ-1 is an acceptable open question with two fully-specified options; and the speedup claim is honest as written (an order-of-magnitude check suggests ~2.3x for the full mechanism rather than 2.5x, consistent with the design's own hedging).\n\nAll validator probe schemas were dropped and confirmed gone.",
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "title": "Parity check's pg_constraint contype enumeration {c,f,p,u} is asserted exhaustive but omits x (exclusion) and t (constraint trigger)",
+        "description": "A degraded clone missing an exclusion constraint passes the check unseen. Independently confirmed by ORCH against a live Postgres catalog."
+      },
+      {
+        "severity": "MAJOR",
+        "title": "Table-level storage parameters (pg_class.reloptions) are uncovered by the parity check and not copied by LIKE INCLUDING ALL",
+        "description": "Verified by ORCH: fillfactor=70 on the template yields empty reloptions on the clone. Neither covered nor explicitly ruled out, unlike the design's treatment of triggers/comments/collations/privileges."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

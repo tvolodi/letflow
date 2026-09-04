@@ -485,10 +485,16 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # candidate, by construction, regardless of where it appears in the file
   # -- this is what structurally rules out the PASS/PASS collision
   # ISSUE-FIXER demonstrated on a real fixture. If more than one depth-1
-  # `status` key exists (a malformed/duplicate-key document), the LAST one
-  # found wins, mirroring `Jason.decode/1`'s own last-key-wins semantics --
-  # so the span this scan edits is guaranteed to be the same member
-  # `autofix_file/1`'s `Map.get(data, "status")` actually acted on.
+  # `status` key exists (a malformed/duplicate-key document), the FIRST one
+  # found wins and every later depth-1 `status` match is ignored -- this
+  # matches `Jason.decode/1`'s own confirmed FIRST-key-wins duplicate-key
+  # semantics (verified directly against the pinned `jason 1.4.5`:
+  # `Jason.decode!(~s({"status":"a","status":"b"}))` returns
+  # `%{"status" => "a"}`, not `"b"`), so the span this scan edits is
+  # guaranteed to be the same member `autofix_file/1`'s `Map.get(data,
+  # "status")` actually acted on. (An earlier version of this comment
+  # claimed the opposite -- last-key-wins -- which was false; see ISS-0457
+  # for the correction.)
   #
   # Raises if no depth-1 "status" key is found -- an internal invariant
   # violation, not a normal refusal path: it can only happen if `raw`'s
@@ -556,8 +562,21 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
         # text's corresponding value token here is necessarily a JSON
         # string literal -- never a number/bool/null/object/array.
         {old_value_raw, after_value} = consume_json_string(after_colon_ws)
-        new_best = {prefix_before_value, old_value_raw, after_value}
-        scan_for_status(after_value, depth, prefix_before_value <> old_value_raw, new_best)
+
+        # ISS-0457 -- first-match-wins: `best` is set exactly once, on the
+        # FIRST depth-1 "status" match. A later depth-1 "status" match (a
+        # malformed/duplicate-key document) still gets scanned and consumed
+        # here (so `acc`/the forward pass stays correct), but its candidate
+        # tuple is discarded when `best` is already non-nil -- the earlier
+        # match is carried forward unchanged instead of being overwritten.
+        winner =
+          if is_nil(best) do
+            {prefix_before_value, old_value_raw, after_value}
+          else
+            best
+          end
+
+        scan_for_status(after_value, depth, prefix_before_value <> old_value_raw, winner)
       else
         scan_for_status(after_colon_ws, depth, prefix_before_value, best)
       end

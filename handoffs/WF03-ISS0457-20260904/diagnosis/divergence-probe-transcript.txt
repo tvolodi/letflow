@@ -1,0 +1,135 @@
+ISS-0457 diagnosis -- independent reproduction transcript (ISSUE-FIXER, WF03-ISS0457-20260904)
+
+Method: disposable `git worktree add --detach ../letflow-wt-iss0457-diag
+origin/feature/WF03-ISS0442-20260904` at that branch's real current tip (this
+run's own branch, feature/WF03-ISS0457-20260904, was never checked out to
+that branch and stayed clean of lib/ changes throughout). Worktree removed
+after the probes below were run; nothing outside handoffs/ and
+docs/issues/ was left modified by this step.
+
+=== 0. Re-derived the sibling branch's actual current state (not trusted from
+     the dispatch's framing) ===
+
+$ git fetch origin feature/WF03-ISS0442-20260904
+$ git log -1 origin/feature/WF03-ISS0442-20260904
+
+commit 73381fff3e09cf56926d97477dbeb3a5d4f9034c
+    chore(ORCH): WF03-ISS0442-20260904 Step 5 TEST-RUNNER -- PASS
+
+This is FURTHER ALONG than the dispatching handoff's task.description
+stated ("Step 3 REVIEWER PASS ... next_action already routes to
+TEST-DESIGNER"). Re-fetching found the branch has since advanced through
+Step 4 (TEST-DESIGNER/TEST-DESIGN-VALIDATOR) and Step 5 (TEST-RUNNER PASS)
+while this run was in flight. `git merge-base --is-ancestor
+origin/feature/WF03-ISS0442-20260904 origin/main` => NOT AN ANCESTOR, i.e.
+still genuinely unmerged. Per WF-03, the only steps left before that branch
+merges are Step 5's ISSUE-FIXER issue-close and Step Final (git merge) --
+i.e. it is now very close to landing, not mid-implementation.
+
+=== 1. Jason.decode!/1 duplicate-key semantics, independently re-measured
+       against the branch's own pinned version ===
+
+mix.lock (on the worktree, i.e. this branch's own lockfile):
+  "jason": {:hex, :jason, "1.4.5", ...}
+
+Probe (Mix.install([{:jason, "1.4.5"}]), fresh resolve, not reusing any
+cached assumption):
+
+  Jason.decode!(~s({"status":"PASS","other":1,"status":"DONE"}))
+  => %{"other" => 1, "status" => "PASS"}
+  first-wins? true
+  last-wins?  false
+
+CONFIRMED independently: Jason.decode!/1 (1.4.5) is FIRST-key-wins on a
+duplicate top-level key. Matches ORCH's figure in ISS-0457.yaml, but
+re-derived here from a fresh Mix.install probe against this branch's own
+mix.lock pin, not inherited from ORCH's number.
+
+=== 2. The false claim, located in the branch's actual files ===
+
+lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md (design
+doc) and lib/mix/tasks/letflow.lint_handoffs.ex both assert the last-wins
+splice "mirrors" Jason.decode's semantics. The code comment (not just the
+design doc) is at letflow.lint_handoffs.ex:487-491 on this branch's tip
+(73381fff):
+
+  "If more than one depth-1 `status` key exists (a malformed/duplicate-key
+  document), the LAST one found wins, mirroring `Jason.decode/1`'s own
+  last-key-wins semantics -- so the span this scan edits is guaranteed to
+  be the same member `autofix_file/1`'s `Map.get(data, "status")` actually
+  acted on."
+
+This claim is FALSE per the independent measurement in section 1: decode is
+first-wins, the scanner (scan_for_status/4, whose `best` accumulator is
+unconditionally overwritten on every depth-1 match -- letflow.lint_handoffs.ex:538-540)
+is genuinely last-wins. The two mechanisms disagree by construction on a
+duplicate-key document; they are not "guaranteed to be the same member."
+
+=== 3. Concrete duplicate-top-level-status fixture and demonstrated
+       divergence, run against the branch's real autofix_file/1 decision
+       logic and its real splice_top_level_status/2 ===
+
+Fixture (handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json):
+
+  {
+    "handoff_id": "TEST-DUP-STATUS",
+    "status": "DONE",
+    "other_field": "irrelevant filler so the two status keys are not adjacent",
+    "nested": {
+      "result": {
+        "status": "PASS"
+      }
+    },
+    "status": "COMPLETE"
+  }
+
+Both "DONE" and "COMPLETE" are distinct @autofix_map keys (both -> "COMPLETED"),
+chosen deliberately so the divergence is visible in which SPAN gets edited,
+not just in the resulting value.
+
+Ran the branch's real functions directly (Code.require_file on
+lib/mix/tasks/letflow.lint_handoffs.ex from the worktree, decode via the
+same pinned Jason):
+
+  === Jason.decode!/1-based selection (what autofix_file/1's Map.get(data, "status") sees) ===
+  decode_selected = "DONE"  (FIRST occurrence, per Jason's first-key-wins)
+  autofix_file/1 would decide: fix needed, from "DONE" to "COMPLETED"
+
+  === splice_top_level_status/2 output ===
+  {
+    "handoff_id": "TEST-DUP-STATUS",
+    "status": "DONE",
+    "other_field": "irrelevant filler so the two status keys are not adjacent",
+    "nested": {
+      "result": {
+        "status": "PASS"
+      }
+    },
+    "status": "COMPLETED"
+  }
+
+  First occurrence (originally DONE) unchanged in output? true
+  Last occurrence (originally COMPLETE) unchanged in output? false
+
+VERDICT: CONFIRMED DIVERGENCE. autofix_file/1's decode-based decision acts
+on the FIRST occurrence ("DONE" -> target "COMPLETED"), but
+splice_top_level_status/2 edits the LAST occurrence ("COMPLETE" ->
+"COMPLETED") instead. The FIRST occurrence -- the one the tool's own
+decision logic actually reasoned about -- is left as "DONE" in the output
+file: an illegal, non-@legal_statuses value, silently left in place, while
+the tool reports {:fixed, "DONE", "COMPLETED"} to its caller and stdout.
+The very next lint_handoffs run then reports a fresh H1 violation on that
+same (unedited) first occurrence. No crash, no raise -- this is silent
+mis-repair, not the documented "internal invariant violation" raise path
+(that raise only fires when the scanner finds NO depth-1 status key at
+all, which is not this case).
+
+This independent reproduction matches, occurrence-for-occurrence, both (a)
+ORCH's account in ISS-0457.yaml and (b) TEST-DESIGNER's own account, found
+already written into this branch's test file at
+test/mix/tasks/letflow.lint_handoffs_test.exs:722-742, where TEST-DESIGNER
+documents having investigated this exact discrepancy while building the
+ISS-0442 test suite, reproduced it directly, and deliberately left it
+uncovered rather than asserting the buggy behavior as correct -- which is
+the actual origin of ISS-0457's filing (discovered_by: TEST-DESIGNER,
+discovered_in_run: WF03-ISS0442-20260904).

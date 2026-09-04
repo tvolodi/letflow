@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0438-20260904/step-01-code-designer.json",
   "created_at": "2026-09-04T15:32:44Z",
   "started_at": "2026-09-04T15:32:44Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T15:36:57Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -61,10 +61,10 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Recommendation: IN SCOPE -- port R-Co's generic (untyped) dynamic entity subsystem as a new S6 addendum batch (5-6 requirement-sized slices), not a router.ex removal. Read in full: all 6 src/entities/ files (2,357 lines) plus the 5-file query/ subdirectory (1,064 lines, QRY-01..05 -- a materially sized subsystem ISS-0438's own filed description omitted entirely and did not size) plus the 737-line src/design/entities.md, against Letflow's real, already-shipped lib/letflow/event_store/registry.ex and lib/letflow/repository.ex. AC4: entity events register through the EXISTING Letflow.EventStore.Registry (register_type/2 for the envelope schema) with no schema/keyword mismatch found; record-level field_values validation (slice 3) should reuse the existing Letflow.EventStore.Registry.JsonSchema engine (R-Co's own keyword usage is a strict subset of what it already supports) -- flagged as an open cross-namespace-reuse question for REVIEWER, not silently resolved. AC5: kind = :entity does NOT fit Letflow.Repository.ArtifactKind's current closed 7-atom list as-is -- needs a one-line addition, matching R-Co's own identical one-line ALLOWED_KINDS extension; Letflow.Repository.create/2's existing canonicalise/hash/dedup/version pipeline and REQ-203's existing activation machinery cover the rest with no structural change needed. AC6: this is the exact trigger ISS-0439's own recorded decision (port ISS-0438 first, then watch real tenant usage) was waiting on -- ISS-0439 stays open/deferred as filed, not resolved or reopened by this artefact. 5 open questions listed explicitly (JsonSchema cross-namespace reuse, tenant-vs-platform entity ownership, per-type vs per-record instance scoping -- both left open by R-Co's own design doc --, query/'s field-grant-to-Letflow-authorization mapping, bulk ops deferred). No implementation code in the artefact.",
+    "artifacts_out": ["lib/letflow/design/iss0438-entity-subsystem-scoping.md"],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-02 Step 1b analog) to gate this scoping recommendation before REQ-ANALYST drafts the S6 addendum slices."
   },
   "rework_count": 0,
   "max_rework": 3

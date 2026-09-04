@@ -1,0 +1,162 @@
+# Test run report -- WF-03 Step 4 (full-suite pre-merge verification)
+# ISS-0469 -- remove the redundant, flaky wall-clock (:timer.tc/small_elapsed_ms <
+# large_elapsed_ms) assertion from the AC-1 heap-limit test in
+# test/letflow/engine/lua/executor_test.exs (a repeat of ISS-0446's identical
+# file:line flake).
+
+workflow: WF-03
+step: "04 (TEST-RUNNER)"
+agent: TEST-RUNNER
+run_id: WF03-ISS0469-20260904
+date_utc_start: 2026-09-04T21:16:00Z
+date_utc_end: 2026-09-04T21:56:00Z
+wall_clock_duration: "~21.8 min full suite (mix letflow.check.test's main mix test
+  subprocess) + ~9s isolated :lua_wallclock_race confirmation re-run"
+
+verdict: PASS
+
+git:
+  branch: feature/WF03-ISS0469-20260904
+  branch_confirmed: true
+  working_tree: clean at start (git status --porcelain empty), pulled up to date with
+    origin before running
+  diff_vs_main: >
+    git diff --name-only main...HEAD shows this branch touches ONLY
+    test/letflow/engine/lua/executor_test.exs (the AC-1 test's assertion deletion +
+    rename/comment, already scoped and verified by REVIEWER at step-03) plus
+    docs/issues/ISS-0469.yaml, handoffs/registry.json, and this run's own
+    handoffs/WF03-ISS0469-20260904/*.json bookkeeping. No lib/ or other test/ file
+    touched.
+
+environment:
+  toolchain: local (Elixir 1.20.3 / OTP 29 via asdf shims), not Docker fallback --
+    mix/elixir reachable once $HOME/.asdf/shims was added to PATH
+  containers: letflow-1-postgres-1 and letflow-1-keycloak-1 already running (docker
+    compose ps via sudo, since this session's own user lacked docker-group
+    membership) -- no docker compose up needed
+  rustc: NOT PRESENT in this environment (`which rustc` -> exit 127, no asdf rust
+    plugin install found under ~/.asdf/installs). This is the known, documented
+    rustc-toolchain-gap referenced in the dispatching instructions.
+  run_mode: >
+    Foreground, blocking. `mix letflow.check.test` was launched via the Bash tool;
+    it exceeded the tool's single-call timeout and was moved to the harness's
+    managed background slot automatically (not by my own request). I then blocked
+    synchronously on it myself with a foreground `while ps -p <pid> ...; sleep 15;
+    done` wait loop across two further 600s Bash calls until the process's own
+    completion notification arrived in this same turn -- at no point did I end my
+    turn to wait for a cross-turn notification.
+
+full_suite_result:
+  command: "mix letflow.check.test"
+  step_1_compile: "mix compile --warnings-as-errors: clean, zero output, exit 0"
+  step_2_main_test_run:
+    command: "mix test (via the project's `test` alias: ecto.create --quiet,
+      ecto.migrate --quiet, test)"
+    combined_tally: "Result: 3222/3224 passed (6/6 properties, 3216/3218 tests), 21
+      excluded"
+    exit_code: 2
+    duration: "Finished in 1310.3 seconds (19.3s async, 1291.0s sync)"
+  step_2_failures:
+    count: 2
+    tests:
+      - name: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row
+          naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        raw_error: "System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])
+          raised (no such executable) inside
+          Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0"
+      - name: "test rust pin (REQ-165) a matching rust pin reports OK with no
+          mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        raw_error: "Same System.cmd(\"rustc\", ...) failure, same
+          running_rust_raw/0 helper"
+    root_cause: >
+      Both tests call a helper (running_rust_raw/0 at
+      test/mix/tasks/letflow_check_toolchain_test.exs:69) that shells out to
+      `rustc --version` to determine the actually-running Rust version for the
+      REQ-165 toolchain-pin check. This CI/dev-container environment has no Rust
+      toolchain installed at all (confirmed directly: `which rustc` -> not found,
+      no rust entries under `~/.asdf/installs`) -- this is an environment gap, not
+      a code defect. README.md's Notes section documents Rust as a toolchain
+      dependency for the WASM engine build; this particular workspace was never
+      provisioned with it.
+    attribution: >
+      NOT IN THIS BRANCH'S DIFF. test/mix/tasks/letflow_check_toolchain_test.exs
+      does not appear in `git diff --name-only main...HEAD` at all -- untouched by
+      this branch. This branch's only test-file change is
+      test/letflow/engine/lua/executor_test.exs's AC-1 assertion deletion, which
+      is unrelated in file, module, and mechanism to the Rust-pin toolchain check.
+      Per the dispatching instructions, this matches the expected "2 pre-existing
+      rustc-toolchain-gap failures" baseline exactly -- no wider explanation
+      needed, and none found.
+  step_3_wasm_hang_subprocess: >
+    NOT REACHED. `mix letflow.check.test` raises (Mix.raise) as soon as the main
+    `mix test` subprocess exits nonzero (exit 2, from the 2 rustc-gap failures
+    above), before it gets to its own `run_wasm_hang_tests/0` /
+    `run_lua_wallclock_race_tests/0` steps (see
+    lib/mix/tasks/letflow.check.test.ex's `cond` in `run/1` -- the
+    `exit_code != 0` branch calls `Mix.raise/1` unconditionally, never falling
+    through to those isolated subprocess runs). This is a pre-existing property of
+    this environment's missing Rust toolchain, not something this branch changed;
+    it also affects every other branch run in this same environment. Per this
+    role's instructions, the isolated :lua_wallclock_race group is run directly
+    below to independently confirm no regression there despite the umbrella task
+    not reaching it.
+
+isolated_lua_wallclock_race_confirmation:
+  command: "mix test --only lua_wallclock_race"
+  result: "Result: 11 passed, 3234 excluded"
+  failures: 0
+  duration: "Finished in 8.6 seconds (8.6s async, 0.03s sync)"
+  note: >
+    Matches the count REVIEWER independently observed at step-03 for this same
+    tag group (they ran the whole executor_test.exs file directly: "45 passed, 11
+    excluded" -- the same 11 lua_wallclock_race-tagged tests, counted differently
+    only because that run scoped to one file vs. this run's `--only` filter over
+    the full suite). One pre-existing, unrelated Elixir type-checker warning
+    surfaced again at executor_test.exs:466 (the AC-4 regression-guard test,
+    `refute match?({:error, {:wallclock_timeout, _}}, result)`) -- outside the
+    modified line range (611-658), identical across every run this session
+    (ELIXIR-DEV's, REVIEWER's, and this one), and not raised by
+    `mix compile --warnings-as-errors` on the application build. Confirmed
+    pre-existing, not this branch's doing.
+
+stray_reference_check:
+  command: "grep -rn \"small_elapsed_ms\\|large_elapsed_ms\\|elapsed_ms\\|elapsed_us\"
+    test/letflow/engine/lua/executor_test.exs"
+  result: >
+    Zero remaining `small_elapsed_ms`/`large_elapsed_ms` references anywhere in the
+    file (the deleted names). The other `elapsed_ms`/`elapsed_us` hits (lines
+    332-365, 1125-1145) belong to two entirely separate, untouched wall-clock
+    timeout tests (`short_elapsed_ms`/`long_elapsed_ms`, `short_elapsed_us`/
+    `long_elapsed_us`) that were never part of this branch's change. Line 626 is a
+    comment (part of the new AC-1 doc-comment block) narrating, in prose, that the
+    old timing wrap used to exist and was removed -- not a code reference. No
+    stray reference left behind by the deletion.
+
+flake_discipline: >
+  The 2 observed failures were checked against this suite's documented flake/gap
+  sources: ISS-0352 (:wasm_hang, isolation-subprocess) and ISS-0426
+  (:lua_wallclock_race, wall-clock family) -- match neither by name, tag, file, or
+  mechanism. They match the dispatching instructions' explicitly named baseline
+  ("the 2 pre-existing rustc-toolchain-gap failures") exactly, root-caused
+  independently above (no rustc binary in this environment) rather than assumed
+  on the instructions' say-so. No failure beyond that baseline was found anywhere
+  in the 3224-test run.
+
+overall_verdict: >
+  PASS. `mix compile --warnings-as-errors` is clean. The full suite collected
+  3224 items (6 properties + 3218 tests), 3222 passed, 2 failed -- both are the
+  pre-existing, environment-caused (missing rustc) Mix.Tasks.Letflow.
+  CheckToolchainTest failures, confirmed unrelated to this branch's diff (which
+  touches only test/letflow/engine/lua/executor_test.exs). The isolated
+  :lua_wallclock_race subprocess group (11 tests, the tag this branch's file
+  contributes tests to) passed cleanly with 0 failures, confirming no regression
+  in that isolation group and no stray reference left by the deletion. This
+  branch's change (removing the redundant :timer.tc wall-clock assertion from the
+  AC-1 heap-limit test) introduces no new failures anywhere in the suite.
+
+next_action: >
+  Route to ORCH (final step in this session's established WF-03 precedent for a
+  clean pass) to close out ISS-0469 (status open -> resolved) via DOC-UPDATER and
+  merge.

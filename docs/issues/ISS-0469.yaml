@@ -1,48 +1,65 @@
 id: ISS-0469
 title: "executor_test.exs:625 (REQ-156 AC-1) retains a raw wall-clock elapsed-time comparison outside lua_wallclock_race isolation -- flaked on CI under contention"
-discovered_by: ELIXIR-DEV
+discovered_by: ORCH
 discovered_in_run: WF03-ISS0467-20260904
-discovered_at: "2026-09-04T20:13:15Z"
+discovered_at: "2026-09-04T20:51:30Z"
 severity: MINOR
-tags: [test, flake, lua, ci]
+tags: [testing, flake, lua, ci, s6]
 description: >
   test/letflow/engine/lua/executor_test.exs line 654 asserts
-  `small_elapsed_ms < large_elapsed_ms` -- a raw `:timer.tc/1`-measured
+  small_elapsed_ms < large_elapsed_ms -- a raw :timer.tc/1-measured
   wall-clock comparison -- unguarded by any tag/isolation, even though the
   test's deterministic outcome assertions (:memory_limit_exceeded / :ok)
   were already routed off the racy caller-timeout seam by ISS-0426.
 
-  Failed live on PR #902's CI (GH Actions run 33915056916, Backend gate,
+  Failed live on PR #902 CI (GH Actions run 33915056916, Backend gate,
   2026-09-04T20:13:15Z): 440.152ms vs 398.195ms. A second CI run on the
-  identical commit (run 33915018100) and a local run both passed the same
-  test cleanly -- confirmed nondeterministic, not a regression (the merging
-  branch, WF03-ISS0467-20260904, touched no test files:
-  git diff --name-only bf593f8a...HEAD is 7 non-test files: 3 docs, 1
-  design artefact, 3 handoff/registry bookkeeping paths).
+  identical commit (33915018100) and a local run both passed the same test
+  cleanly -- confirmed nondeterministic, not a regression (the merging
+  branch touched no test files). docs/issues/ISS-0446.yaml independently
+  corroborates this same file:line failing on a prior, unrelated PR (#866).
 
-  docs/issues/ISS-0446.yaml independently corroborates this same file:line
-  failing on a prior, unrelated PR (#866).
-
-  Suggested scope options: (a) tag :lua_wallclock_race and ride ISS-0426's
-  existing isolated subprocess; (b) replace the wall-clock comparison with
-  a deterministic proxy; (c) add a tolerance margin.
+  SCOPE, options none prescribed: (a) tag :lua_wallclock_race and ride
+  ISS-0426's existing isolated subprocess; (b) replace the wall-clock
+  comparison with a deterministic proxy; (c) add a tolerance margin.
 affected_files:
   - test/letflow/engine/lua/executor_test.exs
 related:
   - ISS-0426
   - ISS-0446
-  - ISS-0352
-source: >
-  Discovered by ELIXIR-DEV during WF03-ISS0467-20260904 Step Final's
-  post-rebase CI wait, as an incidental finding (real, structurally-cleared
-  CI failure unrelated to that run's own docs-only diff). ELIXIR-DEV
-  initially self-derived an id "ISS-0468" for this finding by scan-and-
-  increment, which is prohibited by ISSUE_QUEUE.md's 2026-08-21 update and
-  collided live with an unrelated in-flight fix already using that number
-  (feature/WF03-ISS0468-20260904). The incorrectly-numbered local file was
-  deleted before any commit; this record is the correctly-allocated
-  replacement, registered by ORCH via register_task per the normal
-  procedure.
 queue_task_id: 469
 github_issue: 904
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0469-20260904
+resolved_at: "2026-09-04T22:20:00Z"
+resolution: >
+  ISSUE-FIXER found the flaky wall-clock comparison at
+  executor_test.exs:654 was genuinely redundant, not load-bearing:
+  the test's own existing deterministic outcome assertions
+  ({:error, :memory_limit_exceeded} for the small heap limit vs.
+  {:ok, %{manifest_hash: _}} for the large one, on the IDENTICAL
+  script) already prove AC-1's claim (the configured max_heap_words
+  limit is load-bearing) -- holding script and timeout fixed while
+  only the heap limit varies means the outcome flip can only be
+  explained by the heap limit, no timing measurement needed.
+  test/specs/REQ-156.md's own T1 explicitly accepts this
+  outcome-differs approach as an alternative to timing, verified
+  directly by REVIEWER rather than trusting the paraphrase.
+
+  Of the 3 originally-suggested options (tag+isolate per ISS-0426;
+  deterministic proxy; tolerance margin), none was chosen -- a
+  deterministic proxy was rejected as unavailable without contradicting
+  decision 0014's own instruction-count-vs-memory-limit coupling
+  rejection, and tag+isolate/tolerance-margin were both judged inferior
+  to simply deleting the redundant assertion.
+
+  FIX. Removed the :timer.tc-based wall-clock measurement and the
+  small_elapsed_ms < large_elapsed_ms comparison entirely; kept the
+  existing deterministic outcome assertions byte-identical; renamed
+  the test and added an explanatory comment citing ISS-0469/ISS-0446.
+  This eliminates the flake class permanently (not probabilistically)
+  since the deleted line was the only wall-clock-dependent assertion
+  anywhere in the test.
+
+  Full suite 3222/3224 (2 pre-existing rustc-gap failures), isolated
+  :lua_wallclock_race group 11/11 unaffected.

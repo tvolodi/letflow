@@ -4652,6 +4652,22 @@
       "lock_released_at": "2026-09-04T20:51:31Z"
     },
     {
+      "run_id": "WF03-ISS0469-20260904",
+      "requirement_id": null,
+      "issue_id": "ISS-0469",
+      "queue_task_id": 469,
+      "github_issue_number": 904,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/engine/lua/executor_test.exs"
+      ],
+      "started_at": "2026-09-04T21:15:00Z",
+      "lock_released_at": "2026-09-04T22:25:00Z",
+      "released_lock": true,
+      "last_known_step": "Step 04 (TEST-RUNNER) COMPLETED PASS -- mix compile --warnings-as-errors clean; full suite (mix letflow.check.test's mix test subprocess) 3222/3224 passed (6/6 properties, 3216/3218 tests), 21 excluded, exactly the 2 pre-existing rustc-toolchain-gap failures (Mix.Tasks.Letflow.CheckToolchainTest, unrelated file, confirmed absent from this branch's diff); isolated `mix test --only lua_wallclock_race` re-run: 11 passed, 0 failures, no regression, no stray reference from the deletion. Report: test/reports/report-20260904-WF03-ISS0469-20260904.yaml. Routed to ORCH for DOC-UPDATER close-out and merge.",
+      "note": "WF-03 issue-resolving run for ISS-0469: executor_test.exs:654's raw wall-clock elapsed-time comparison flaked on CI under contention, confirmed nondeterministic via 2 CI runs on the identical commit. Related to ISS-0426's precedent :lua_wallclock_race isolation fix."
+    },
+    {
       "run_id": "WF03-ISS0428-20260904",
       "workflow_id": "WF-03",
       "requirement_id": null,

@@ -1701,8 +1701,12 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by ORCH's own ISS-0451 done-event append
+      (WF03-ISS0451-20260904) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 1 on-disk entry, no rebase
+      conflict on this file.
       Opened by ORCH at feature/WF02-REQ219-20260903's Step Final rebase,
       successor to volume 8. Created with volume 8's header text verbatim
       (volume number, opening date and predecessor path updated) and an

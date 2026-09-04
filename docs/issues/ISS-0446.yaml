@@ -85,3 +85,14 @@ source: >
   tree passed 3192/3192 locally and 42/42 for that file in isolation.
 github_issue: 868
 status: open
+later_evidence: >
+  ORCH (2026-09-04), PR #869 (REQ-219): GitHub Actions run 33821803493
+  (Backend gate) failed with the identical single-test signature --
+  test/letflow/engine/service_task_dispatcher_test.exs:1119 (line drift only),
+  `** (exit) exited in: GenServer.stop(...)` / `** (EXIT) shutdown` inside
+  ExUnit.OnExitHandler, 3201/3202 passed. The DUPLICATE parallel run on the
+  same commit (33821805791) passed clean. Two runs of an identical tree,
+  one red on this exact test / one green, is the same nondeterminism
+  signature as the original filing -- merged past on structural attribution
+  (neither this branch's diff nor any REQ-219 file touches
+  service_task_dispatcher_test.exs or its on_exit teardown).

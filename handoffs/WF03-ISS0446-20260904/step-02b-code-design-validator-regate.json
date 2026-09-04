@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-02b-regate",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-02b-code-design-validator-regate.json",
+  "created_at": "2026-09-04T00:42:09Z",
+  "started_at": "2026-09-04T00:36:00Z",
+  "completed_at": "2026-09-04T00:42:09Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md",
+      "handoffs/WF03-ISS0446-20260904/step-02-code-designer-rework1.json",
+      "handoffs/WF03-ISS0446-20260904/step-02b-code-design-validator.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/support/data_case.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit/callbacks.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit/on_exit_handler.ex"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 2b RE-GATE (rework 1 of 3) for ISS-0446: CODE-DESIGNER reversed its decision from option (a) to option (d) (ExUnit.fetch_test_supervisor/0 + start_supervised!/1, on_exit block deleted with no replacement) in response to this validator's prior BLOCKER. Re-gate as a new design, not a diff review: re-derive CHECK 6/coverage against the new diff shape, verify the shared-test-supervisor semantics against this file's and Letflow.DataCase's actual setup chain, confirm no check-then-act is reintroduced, and check the revised document for internal consistency with the reversed decision."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Applied the same adversarial standard as the first pass; found no defect after independent re-derivation of all four requested items plus a fresh empirical probe. The prior BLOCKER is resolved on its own terms, not merely reworded.\n\nITEM 1 (CHECK 6, coverage, re-derived for the new diff shape) -- CONFIRMED, no weakening. Re-read the real test (lines 1113-1141) directly: the test's actual load-bearing property, per its own name and inline comment (lines 1113-1123), is narrower than 'this test must construct its own supervisor' -- it is 'the child spec is valid and independently startable as a real, live, distinct child under SOME real supervisor, without touching Letflow.Supervisor (the shared application tree, avoiding the documented zero-delay-first-tick hazard)'. Both the old ad-hoc Supervisor.start_link/2 and ExUnit's fetch_test_supervisor/0 are equally 'not Letflow.Supervisor' -- both are one-for-one, isolated supervisor processes distinct from the application tree. which_children/1 on either proves the same fact: the child spec is genuine and startable under a real Supervisor-behavior process. The `^pid` pin (replacing pid's prior destructuring out of the which_children/1 match) does not weaken anything -- it strengthens the assertion by confirming which_children/1's reported pid is the SAME pid start_supervised!/1 returned, rather than merely establishing some pid via pattern match. None of the four assertions reference the supervisor's name or construction mechanism (re-confirmed by direct re-read); all reference only the child's pid and which_children/1's shape. No coverage is lost; the property the test exists to prove is unaffected by which supervisor its child was registered under.\n\nITEM 2 (shared-test-supervisor semantics -- the item most likely to hide a real defect) -- CONFIRMED SAFE, checked directly rather than accepting the design's 'inert here' claim. Read test/support/data_case.ex in full: its only setup block does Ecto.Adapters.SQL.Sandbox.checkout/mode -- no start_supervised call anywhere, confirmed by full-file read. Grepped the ENTIRE service_task_dispatcher_test.exs file for start_supervised/fetch_test_supervisor/on_exit: zero start_supervised or fetch_test_supervisor calls anywhere else in the file (this would-be test is the only one); the file's four on_exit calls (lines 234, 310, 998, 1016) are all Application.delete_env callbacks, unrelated to supervised processes. The file has no setup/setup_all block of its own (only describe blocks, confirmed by grep for '^  setup'). Additionally verified from on_exit_handler.ex's own source (re-read this pass) that fetch_test_supervisor/0's backing store is an ETS table keyed by the CALLING TEST PROCESS's own pid (get_supervisor(pid) / put_supervisor(pid, sup)) -- i.e. scoped per test process, fresh for every test, not shared across tests in the same file even in principle. Ran an independent empirical probe (own script, not reused from either prior probe, deleted after use, scratch/ confirmed clean): the exact adopted call sequence (fetch_test_supervisor/0, start_supervised!/1, which_children with ^pid pin) against a GenServer with a deliberately slow (30ms) terminate/2, run 5/5 -- passed every time with the exact single-element tuple shape. No setup-chain interaction found or possible under this test's actual code.\n\nITEM 3 (does (d) actually remove the race, on its own terms) -- CONFIRMED, re-verified independently this pass, not carried forward from the prior gate. Re-read on_exit_handler.ex:52-70 directly: run/2's terminate_supervisor/2 is `ref = Process.monitor(sup)` followed by a blocking `receive do {:DOWN, ^ref, ...} -> nil after timeout -> ... end` -- no Process.alive? call, no conditional check of any kind, anywhere in that path. Re-read start_supervised/2 and start_supervised!/2's own bodies (callbacks.ex:568-580, 589-599): no Process.alive? or check-then-act on startup either. The design's §3 instructions leave no on_exit call of any kind in the reworked test, and the new `^pid` assertion is a same-process, same-instant comparison inside the test body (both operands already resolved locally) -- not a cross-process or cross-time check, so it introduces no new boundary-crossing race. Nothing in the adopted design reintroduces a check-then-act anywhere.\n\nITEM 4 (internal consistency with the reversed decision) -- CONFIRMED consistent. Grepped the full revised document for ThrowawaySupervisor/Supervisor.start_link/Process.alive?/Supervisor.stop/sup_pid: every remaining occurrence is correctly framed as describing what is being REMOVED (the pre-fix code, quoted for ELIXIR-DEV's benefit in the same style the pre-rework design used) or as a comparison premise for why (a) is rejected -- none of them assert or imply the new design still uses these constructs. Grepped for 'option (a)'/'adopt (a)'/'adopted (a)': only appears in framing prior findings and the explicit rejection, never as the current decision. Section 6's retirement of rework-0's Open Question 2 is stated explicitly as retired-not-reworded, with reasoning. No stale reference found.\n\nOTHER GATE CHECKS: no implementation code present (the two indented snippets in sections 0 and 3 are specification/quotation text describing exact call shapes and the exact block being removed, matching the same quotation style already accepted in the pre-rework design -- no function bodies, no standalone modules). Section 3's instructions remain concrete and mechanical for ELIXIR-DEV (exact replacement calls, the one assertion-wording change spelled out with before/after, note on start_supervised!/1 being auto-imported so the unqualified form matches in-suite style at admission_test.exs:19 and poller_test.exs:148,400 -- both spot-checked present via this and the prior gate's reads). Section 4's verification plan is properly restated for the new fixture shape as this validator's prior Item 5 requested, and is methodologically sound (independently confirmed by this pass's own probe using the same widened-timing technique).\n\nVERDICT: PASS. No BLOCKER, MAJOR, or MINOR findings. The reversal is genuinely sound, not merely confidently argued -- every claim underlying it was independently re-derived against real source and a fresh empirical probe this pass, not inherited from CODE-DESIGNER's or the prior gate's report. Route to ELIXIR-DEV.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+      "commit_sha_list": [],
+      "remote_branch": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV for implementation per design section 3"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

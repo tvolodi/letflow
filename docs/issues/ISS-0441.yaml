@@ -97,4 +97,47 @@ source: >
   counterexample.
 queue_task_id: 441
 github_issue: 851
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0441-20260904
+resolved_at: "2026-09-04T16:35:00Z"
+resolution: >
+  Decided and implemented per docs/migration/decisions/0018-branch-protection-posture.md
+  (3 rework cycles, each catching a real correctness gap: a claimed "complete" docs
+  grep that was actually missing 5 real hits across two rounds, and an "enforce_admins:
+  true leaves no override path" claim that was false). Real GitHub branch protection
+  is now live on main: required status checks (Backend gate, Frontend gate),
+  enforce_admins: false, no required reviews, no force-push/deletion.
+
+  ANSWERS TO THE 4 QUESTIONS: (a) yes, main requires both CI status checks. (b) the
+  hard part -- enforce_admins: false paired with a second, distinct --admin flag
+  required to bypass a red/pending check, tied to the pre-existing failure-attribution
+  discipline (core-directives.md/GIT_MERGE.md), converting invisible ambient
+  discretion into a visible, individually-logged act. (c) self-merge is not broken --
+  the merging identity is a repo admin and --admin always works for it; what changes
+  is the DEFAULT command is no longer unconditional. (d) enforce_admins: true rejected
+  -- a genuine sustained CI/infra outage could permanently block all merges with no
+  per-merge override path (only a slower, non-atomic reconfigure-then-merge-then-
+  restore sequence), worse for an unattended pipeline than the chosen design.
+
+  LIVE-VERIFIED (AC3), not merely configured: a real scratch PR (#887) demonstrated a
+  PENDING-rejection, a real organic BEHIND rejection (a sibling merge landed mid-
+  verification), a real FAILURE/BLOCKED rejection (caused by an actual live wasm_hang
+  recurrence during the verification itself, not manufactured), and a successful
+  --admin override past that FAILURE. Full quoted command output recorded in 0018's
+  own Verification log section. The "succeeds when green, no --admin" half of AC3 is
+  closed by this same run's own real PR merge (see its own merge history).
+
+  DOC CORRECTIONS (AC4/AC5): docs/migration/decisions/0004-humanless-pipeline.md
+  principle 2 gained a qualifying clause plus a Consequences forward-reference;
+  docs/agents/protocols/GIT_MERGE.md's Step 8 replaced with a three-path merge
+  procedure (plain / wait-and-retry-on-pending / attributed-admin-override-on-failure
+  / route-to-ISSUE-FIXER-if-unattributed), and its Precondition section updated;
+  .github/workflows/ci.yml gained a comment marking both job name: strings as the
+  required-status-check contract this record depends on. A full re-grep found the
+  real complete set of 9 other "hard gate"/"structurally impossible" doc hits beyond
+  ISS-0441's own 3 affected_files, each individually read and confirmed to need no
+  change (agent-workflow-sequencing gates, historical narration, or out-of-scope
+  future tooling -- a different, still-accurate kind of "hard" than this record is
+  about). REVIEWER independently re-verified the live configuration via a fresh
+  `gh api` call and spot-checked PR #887's real merge evidence rather than trusting
+  the implementation handoff's paraphrase.

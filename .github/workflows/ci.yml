@@ -67,6 +67,12 @@ on:
   pull_request:
 
 jobs:
+  # This job's `name:` string is a required-status-check `context` on main's branch
+  # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
+  # rename it without updating that record's `contexts` list and re-running its
+  # Step 1/2 -- a silent rename makes GitHub report the required check as
+  # perpetually missing, which behaves as a permanent block on main, not a
+  # silent pass-through.
   backend:
     name: Backend gate (mix letflow.check)
     runs-on: ubuntu-latest
@@ -128,6 +134,13 @@ jobs:
           WASMEX_BUILD: true
 
   frontend:
+    # This job's `name:` string is a required-status-check `context` on main's branch
+    # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
+    # rename it without updating that record's `contexts` list and re-running its
+    # Step 1/2 -- a silent rename makes GitHub report the required check as
+    # perpetually missing, which behaves as a permanent block on main, not a
+    # silent pass-through.
+    #
     # REQ-138: frontend gate job, appended alongside `backend` per that
     # job's own design-note item 3 -- a pure sibling addition under the
     # same `on:` triggers, touching none of `backend`'s keys.

@@ -32,6 +32,13 @@ non-negotiable principles carried forward exactly as stated by the user, not sof
 2. **Fully humanless operation.** Requirement → design → implementation → test →
    validation → UAT → commit → push → merge → CI → local-repo-update, all performed by
    agents at their own discretion, with no human approval gate anywhere in the chain.
+   Merge itself is bounded, not unconditional, by `main`'s required-status-checks branch
+   protection (0018): the ordinary merge command succeeds only when both CI gates are
+   green, and bypassing a red or pending gate requires the same agent to take a second,
+   distinct, individually-logged action (`--admin`) rather than being available by
+   default — see 0018 for the full mechanism. This does not reintroduce a human
+   checkpoint; it makes the agent's own judgement call visible in the merge history
+   instead of invisible in an unprotected one.
    There is no production deployment and no real user data at stake at this stage of the
    project — errors are correctable via a later WF-03 (Issue Resolving) run, not
    prevented by adding a human checkpoint. This explicitly rejects R-Co's own §11
@@ -89,7 +96,9 @@ without a human catching drift.
   in `docs/agents/AGENT_SYSTEM.md`.
 - Every workflow that touches `lib/`, `priv/repo/migrations/`, or `test/` is wrapped in
   a git-setup/git-merge pair per `docs/agents/protocols/GIT_SETUP.md` and `GIT_MERGE.md`,
-  and merges to `main` without waiting for human review.
+  and merges to `main` without waiting for human review. As of 0018, that merge is also
+  gated by GitHub branch protection on `main`, not left to the wrapper's own discipline
+  alone.
 - `docs/requirements.yaml`'s existing schema (id/owner/status/description/
   acceptance_criteria/depends_on) is preserved — the new pipeline routes work through it,
   it does not replace it with R-Co's separate functional-requirements document.

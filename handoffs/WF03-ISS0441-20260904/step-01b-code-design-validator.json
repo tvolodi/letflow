@@ -1,0 +1,42 @@
+{
+  "handoff_id": "step01b-WF03-ISS0441-20260904-rework2",
+  "run_id": "WF03-ISS0441-20260904",
+  "workflow_id": "WF-03",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0441-20260904/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0441", "ISS-0440", "ISS-0426", "ISS-0352", "ISS-0418"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0441-20260904/step-01-code-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/issues/ISS-0441.yaml",
+      "docs/migration/decisions/0004-humanless-pipeline.md",
+      ".github/workflows/ci.yml",
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "branch_name": "feature/WF03-ISS0441-20260904",
+    "note_for_next_agent": "For this run, ELIXIR-DEV's role is executing the specified `gh api`/`gh` CLI commands and doc updates from 0018-branch-protection-posture.md's Step 1-4 sequence (configuring branch protection on `main`, performing the AC3 live-verification PR test, updating any resulting state) -- not writing Elixir application code. There is no lib/ or priv/repo/migrations/ change in scope for this handoff."
+  },
+  "task": {
+    "description": "WF-03 Step 1b re-check, rework iteration 2 (FINAL allowed rework, max_rework 3): independently re-verify docs/migration/decisions/0018-branch-protection-posture.md's rework 2 against the single BLOCKER finding from the prior FAIL (the docs/anti-patterns.md bullet's hit count, claimed as three, independently found to be five)."
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ],
+    "next_action": "Route to ELIXIR-DEV to execute the Step 1-4 gh api/gh CLI command sequence and AC3 live-verification plan",
+    "summary": "Independently re-ran `grep -rniE --include=\"*.md\" \"hard gate|structurally impossible|Backend gate|Frontend gate\" docs/anti-patterns.md` myself. Result: exactly FIVE real line-matches -- 1578, 1611, 1689, 1910, 1920 -- matching both the prior FAIL's finding and CODE-DESIGNER's rework-2 recount exactly. The corrected bullet in docs/migration/decisions/0018-branch-protection-posture.md now reads 'docs/anti-patterns.md (five hits, across three distinct anti-pattern sections)' and itemizes each of the five lines individually.\n\nSpot-checked the bullet's claims against the actual file content at each line:\n- Line 1578: bullet quotes 'This was caught only at CI (PR #681's first `Backend gate` run failed on it)', attributed to the 'top-level `status` field' anti-pattern section. Confirmed verbatim in docs/anti-patterns.md at that line, inside that section (the PR #681/lint_handoffs status-enum incident).\n- Line 1611: bullet quotes '...instead make it structurally impossible (e.g. ORCH greps every handoff...)', same section, described as a proposed future ORCH-side check. Confirmed verbatim -- this is forward-looking tooling language, not a description of existing enforcement.\n- Line 1689: bullet quotes 'REQ-167's PR #688 failed CI's backend gate on the very first run', attributed to a separate 'mix format --check-formatted' section. Confirmed verbatim, and confirmed as a distinct incident (formatter line-length rejection) from line 1578's status-enum mistake -- different section header, different root cause.\n- Line 1910: bullet quotes '...the same narrow ISS-0069-focused task CI's backend gate runs', attributed to the 'dead default argument' section's REQ-195 recurrence. Confirmed verbatim and confirmed as a third distinct incident (compiler warning surfacing only under a specific mix task).\n- Line 1920: bullet quotes '...past FIVE separate hard gates that each ran a real `mix compile`/`mix test` pass on this exact file', attributed to the same section's later REQ-203 recurrence. Confirmed verbatim -- a different occurrence of the same dead-default-argument anti-pattern, not a restatement of 1910.\n\nAll five section attributions and all five quoted excerpts check out against the real file. The bullet's closing conclusion -- 'None of the five lines asserts a current, general claim about main's merge protection; they recount what happened in past CI/review runs or propose unrelated future tooling' -- holds on inspection for all five: 1578/1689/1910/1920 are all past-tense incident narration about CI/review gates catching mistakes, and 1611 is explicitly proposed future tooling ('instead make it structurally impossible'), not a description of anything currently enforced. No line in this set makes any claim, past or present, about git branch-protection / merge-blocking on `main` specifically -- they are all about review/CI gates catching bugs in PRs, a different mechanism from what this ADR is about. Conclusion (no correction needed to anti-patterns.md) stands.\n\nVerified via `git diff be93708c..f56ecb1d` that the only content change is this one bullet in the Consequences section of 0018-branch-protection-posture.md (plus the two handoff JSON files' own bookkeeping fields -- handoff_id, task.description, summary, rework_count -- which is expected process metadata, not design content). Decisions (a)/(b)/(c)/(d), the Step 1-4 gh api/gh CLI command sequences, the AC3 live-verification plan, and the other eight already-passed file characterizations (AGENT_SYSTEM.md, WF-02_requirement_implementation.md, WF-01_requirement_development.md, HANDOFF_PROTOCOL.md, 0014-scripting-plugin-runtime-strategy.md, GIT_SETUP.md, 0011-frontend-ownership.md, 0017-task-queue-selection-model.md) are byte-for-byte untouched.\n\nAll three dispatch items now pass. This is the final allowed rework iteration (rework_count 2 of max_rework 3) and the design is now accurate on every previously-flagged point across both rework rounds. PASS.",
+    "issues": []
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

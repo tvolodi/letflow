@@ -345,3 +345,23 @@ history:
       confirmed GitHub-visible: GH#882's own state is unaffected by a
       transition to "blocked". No letflow-queue repo commit, no deploy
       -- this fix needed neither.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T16:40:00Z"
+    note: >
+      WF03-ISS0441-20260904 done (queue task 441, GH#851, stage S6).
+      Real GitHub branch protection now live on main (required checks:
+      Backend gate, Frontend gate; enforce_admins: false), per decision
+      record docs/migration/decisions/0018-branch-protection-posture.md
+      (3 rework cycles, each a real correctness catch). Live-verified via
+      a real scratch PR (#887): PENDING-rejection, a real organic BEHIND
+      rejection, a real FAILURE/BLOCKED rejection caused by an actual
+      live wasm_hang recurrence during the verification itself, and a
+      successful --admin override past that FAILURE -- full quoted
+      command output in 0018's own Verification log. Corrected
+      0004-humanless-pipeline.md, GIT_MERGE.md (new 3-path Step 8), and
+      ci.yml (required-status-check-contract comment). See
+      docs/issues/ISS-0441.yaml for full resolution detail. First
+      real-world test of the new protection is this same run's own
+      Step Final merge.

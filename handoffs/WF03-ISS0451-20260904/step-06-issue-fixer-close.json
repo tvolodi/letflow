@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-06",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-06-issue-fixer-close.json",
+  "created_at": "2026-09-04T04:32:00Z",
+  "started_at": "2026-09-04T04:32:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0451.yaml",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "test/letflow/supervisor/pollers_breaker_test.exs",
+      "test/reports/report-20260904-WF03-ISS0451-20260904.yaml"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "This is WF-03 Step 5 (Close Issue). The root cause IS removed: Letflow.Supervisor.Pollers' child spec is now restart: :temporary, so the top-level Letflow.Supervisor structurally can never auto-restart it under any fault duration (proven, not merely bounded, per lib/letflow/design/iss0451-poller-crash-budget-isolation.md section 4 -- 0 restarts consumed from the top-level's own budget, unconditionally); a new Letflow.Supervisor.PollersBreaker becomes sole restart authority and trips to a stopped :open state after 2 consecutive exits, backing off exponentially rather than crash-looping forever. This was proven correct via a new fail-then-pass mutation-tested regression test (test/letflow/supervisor/pollers_breaker_test.exs), independently re-verified by TEST-DESIGN-VALIDATOR (one mutant independently reproduced), and the full suite (mix letflow.check.test) is green at 3203+7+11 passed, 0 failures. All prior gates (CODE-DESIGN-VALIDATOR x3 rework cycles, SECURITY-REVIEWER, REVIEWER) PASSED. This is the normal terminal state -- status: resolved.\n\nUpdate docs/issues/ISS-0451.yaml per ISSUE_QUEUE.md's status vocabulary for 'resolved': set status: resolved, add resolved_in_run: WF03-ISS0451-20260904, resolved_at: <real UTC timestamp>. Then close the GitHub issue (github_issue: 865 per the yaml's existing field) with `gh issue close 865 --comment \"Fixed in WF03-ISS0451-20260904. See docs/issues/ISS-0451.yaml and the regression test at test/letflow/supervisor/pollers_breaker_test.exs.\"` -- this comment text is mandatory per ISSUE_QUEUE.md's 'resolved' branch, do not omit it or close without it.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0451.yaml status: resolved, with resolved_in_run:/resolved_at: keys (not verdict_in_run:/verdict_at:, which are for no_defect only)",
+      "gh issue close 865 run with the exact --comment text specified (or the ISSUE_QUEUE.md-equivalent wording), citing the run-id, the issue yaml, and the regression test path",
+      "Handoff result confirms both the local yaml write and the GitHub close succeeded, or explains explicitly if gh was unavailable"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

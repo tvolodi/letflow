@@ -237,3 +237,26 @@ history:
       with mandated evidence comment (never claims a fix). Queue task 456
       released WITHOUT status (stays open, unlocked) per TASK_QUEUE.md's rule
       that status:"done" would falsely assert the underlying defect is fixed.
+  - req: REQ-220
+    event: done
+    agent: ORCH
+    at: "2026-09-04T08:22:00Z"
+    note: >
+      Direct ORCH action (ORCHESTRATOR.md S10: single file, no new
+      function/module, no migration, no supervision-tree structural
+      change -- keeps all 7 Task.Supervisors -- no tenant-data path, no
+      test-asserted-behavior change; all six checks passed). Closes
+      ISS-0425 part 3. Added a consolidated "Task.Supervisor sprawl
+      review" section to lib/letflow/supervisor/infrastructure.ex's
+      moduledoc, naming all 7 Task.Supervisors with their originating
+      requirement/issue and distinct justification (already fully
+      elaborated in REQ-220's own requirement text -- this step
+      transcribed it into the module, not re-derived it), and explicitly
+      considering and rejecting the two consolidation candidates named in
+      the requirement's own ACs (three Wasm supervisors; Plugin+Lua).
+      Real recommendation: KEEP ALL 7 SEPARATE, no Task.Supervisor
+      removed/renamed/merged. mix compile --warnings-as-errors clean;
+      mix format --check-formatted clean; test/letflow/supervisor/ 11/11
+      passed; full suite (mix letflow.check.test) 3206/3208 passed, 2
+      pre-existing rustc-toolchain-gap failures (Mix.Tasks.Letflow.
+      CheckToolchainTest, rustc absent from this environment).

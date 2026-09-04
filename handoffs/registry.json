@@ -4669,6 +4669,23 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED -- PR #899 squash-merged to main (08c89520). Queue task 428 released done, ISS-0428 resolved.",
       "note": "WF-03 run for ISS-0428: scripts/test_parallel.sh is wired into the agent workflow docs but NOT into mix letflow.check, which is what CI runs every commit. ORCH re-measured before dispatching because the issue's own baseline predates ISS-0427's merge: SERIAL 1466s (3211/3217) vs N=2 774s (3214/3214 clean) = 1.89x at CI's actual 2-vCPU parallelism, CONTRADICTING the issue's assumption that the N=16 gain would not transfer. Two real traps: the ISS-0069 warning gate greps captured stdout and would silently stop gating against the parallel script's aggregated output, and failure-mode parity (per-partition logs live in a mktemp dir a CI runner discards). | OUTCOME: shipped. CI measured N=4 (not the N=2 both the issue and ORCH assumed), 3223/3223 across four partitions, backend gate 6m51s-7m28s against a 10-14 min baseline. The re-pointed ISS-0069 gate reported correctly on every CI run. MERGED WITH --admin AFTER SIX REBASES: see the orchestrator.log entry for the full disclosure and reasoning."
+    },
+    {
+      "run_id": "WF03-ISS0439-20260904",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0439",
+      "queue_task_id": 439,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 846,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "started_at": "2026-09-04T21:30:18Z",
+      "lock_released_at": "2026-09-04T22:35:38Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final COMPLETED -- PR #908 (main work, merged with --admin after structural CI-failure attribution) and PR #909 (self-caught handoff-finalization correction, merged clean) both squash-merged to main, final HEAD 1e4bffed. Queue task 439 released done, ISS-0439 resolved.",
+      "note": "DESIGN-EXPLORATION-ONLY WF-03 run for ISS-0439 (should Letflow adopt 1C-style typed business-object templates -- deliberately DEFERRED by the user 2026-09-02, this run's job is only to durably RECORD that deferral, per the issue's own 6 ACs which are entirely about recording, not about the taxonomy question itself). Ad-hoc-shaped WF-03 skipping Steps 0.5/1/3/4 (no diagnosis/implement/regression-test phase applies -- no code is produced, per AC5) and routing Step 2 (CODE-DESIGNER -> CODE-DESIGN-VALIDATOR) + REVIEWER directly to Step 5 (close) and Step Final. Two artefacts produced and independently gated PASS: lib/letflow/design/iss0439-1c-taxonomy-mapping.md (maps Directory/Document/Register/Report onto actually-read Letflow modules -- event log + EventStore.Registry for Document, InstanceProjection for Register, nothing yet for Directory/Report; corrects the 2026-09-02 filing's 'untracked substrate' framing to 'tracked (ISS-0438 resolved) but unbuilt (REQ-225..231 all pending)') and docs/migration/decisions/0019-defer-1c-typed-templates.md (the formal decision record: 3 reasons quoted verbatim, 3 review triggers, ISS-0438/REQ-225..231 dependency). CODE-DESIGN-VALIDATOR independently re-verified 4 factual claims against real source; REVIEWER independently confirmed no scope creep and decision-record consistency against 0004/0017/0018. ISSUE-FIXER closed as status: resolved (the recording gap, not the taxonomy question, is what resolved) after reading ISSUE_QUEUE.md's status vocabulary rather than assuming. Step Final needed 2 PRs after ELIXIR-DEV self-caught an accidental commit onto local main mid-step and corrected it via a second branch+PR rather than force-pushing past it. PR #908 merged --admin after two CI red runs, both structurally attributed (route 1: neither failing module in this docs-only branch's diff; route 3 additionally for a live OIDC econnrefused retry storm) -- both flakes cross-checked against docs/issues/ and found to be recurrences of already-open records (ISS-0469 for the Lua timing flake; ISS-0426/ISS-0352/ISS-0406/ISS-0413/ISS-0418/ISS-0456 for the WASM/OIDC class), so no new issue was registered. ORCH independently verified the final state against origin/main (fetched, matched) before writing RUN_DONE, not merely trusting ELIXIR-DEV's result.summary."
     }
   ]
 }

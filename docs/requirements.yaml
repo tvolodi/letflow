@@ -13477,7 +13477,7 @@ requirements:
       - "the design artefact for this requirement explicitly states the entity-type ownership model decision (tenant-scoped vs. platform-scoped) and its rationale, rather than the choice being inferred only from code"
       - "no `entity_definitions` migration, no persistence code, and no route/controller file is added, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
-    depends_on: [REQ-202, REQ-203]
+    depends_on: [REQ-202]
 
   - id: REQ-226
     title: entity_definitions persistence, definition CRUD context module, and the ArtifactKind :entity extension

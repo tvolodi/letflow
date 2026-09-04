@@ -13478,6 +13478,7 @@ requirements:
       - "no `entity_definitions` migration, no persistence code, and no route/controller file is added, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-202]
+    impl_order: 460  # letflow-queue task id
 
   - id: REQ-226
     title: entity_definitions persistence, definition CRUD context module, and the ArtifactKind :entity extension
@@ -13542,6 +13543,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-225, REQ-202, REQ-203, REQ-067]
+    impl_order: 461  # letflow-queue task id
 
   - id: REQ-227
     title: Entity record payload validation against a definition's derived schema (validator.zig's record-payload half, ISS-0160/GH#481 parity)
@@ -13610,6 +13612,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-225, REQ-024]
+    impl_order: 462  # letflow-queue task id
 
   - id: REQ-228
     title: Entity event registration and record commands (events.zig + commands.zig -- create/update/delete, idempotent replay, synthetic-instance-per-type)
@@ -13682,6 +13685,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-225, REQ-226, REQ-227, REQ-024]
+    impl_order: 463  # letflow-queue task id
 
   - id: REQ-229
     title: Entity record projection and replay (projector.zig -- entity_record_latest, replay-to-snapshot, full re-projection)
@@ -13724,6 +13728,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-228]
+    impl_order: 464  # letflow-queue task id
 
   - id: REQ-230
     title: Entity query DSL -- closed-enum operators, per-tenant field allowlist, and the parameterised SQL compiler (query/types.zig + allowlist.zig + compiler.zig)
@@ -13785,6 +13790,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-226]
+    impl_order: 465  # letflow-queue task id
 
   - id: REQ-231
     title: Entity query DSL -- keyset pagination cursor codec and field-grant row-level redaction (query/cursor.zig + field_grants.zig)
@@ -13832,3 +13838,4 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-230]
+    impl_order: 466  # letflow-queue task id

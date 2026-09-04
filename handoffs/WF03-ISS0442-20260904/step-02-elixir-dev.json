@@ -55,7 +55,7 @@
       "branch_name": "feature/WF03-ISS0442-20260904",
       "commit_sha_list": ["447a07290b2ee73583274b22c7f59d4631bb1eee"],
       "remote_branch": "origin/feature/WF03-ISS0442-20260904",
-      "push_status": "pending",
+      "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },

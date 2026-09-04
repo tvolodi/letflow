@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0469-20260904-step-03",
+  "run_id": "WF03-ISS0469-20260904",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0469-20260904/step-03-reviewer.json",
+  "created_at": "2026-09-04T21:25:00Z",
+  "started_at": "2026-09-04T21:16:00Z",
+  "completed_at": "2026-09-04T21:25:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": ["ISS-0469", "ISS-0426", "ISS-0446"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0469-20260904/step-02-elixir-dev.json",
+      "handoffs/WF03-ISS0469-20260904/step-01-issue-fixer-diagnosis.json",
+      "test/specs/REQ-156.md",
+      "test/letflow/engine/lua/executor_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0469-20260904"
+  },
+  "task": {
+    "description": "Idiom/scope gate on ELIXIR-DEV's mechanical deletion of the flaky wall-clock comparison in the AC-1 test for ISS-0469, per REVIEWER's WF-02/WF-03 role.",
+    "acceptance_criteria": [
+      "Removed assertion confirmed genuinely redundant, not a coverage loss",
+      "Spec citation (REQ-156.md T1) verified first-hand, not taken on ISSUE-FIXER's paraphrase",
+      "Diff confirmed confined to the one test (deletion + rename/comment), no other file/behavior touched",
+      "Test independently re-run with multiple seeds",
+      "Judgment on whether this permanently eliminates the flake class for this test"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "VERDICT: PASS. Verified independently, not on ISSUE-FIXER's/ELIXIR-DEV's say-so.\n\n1. Redundancy confirmed by tracing the outcome pair myself: `Executor.run_with_heap_limit_sync/4` is called twice with the byte-identical `@moderate_allocating_script` and identical `timeout_ms` (1_000_000_000, effectively disabling the wall-clock-kill branch for this test), differing only in `max_heap_words` (small vs. a materially larger ~200MB-in-words value). `{:error, :memory_limit_exceeded} = small_result` means the BEAM's own `max_heap_size` kill fired under the small limit; `{:ok, %{manifest_hash: _}} = large_result` means the identical script ran to completion under the large limit. Since script and timeout are held constant and only the heap limit varies, the only variable that can explain 'killed' vs. 'completed' is the configured `max_heap_words` value itself -- which is exactly AC-1's claim (the configured limit is load-bearing, not a no-op). No timing measurement is needed to establish this: a wall-clock margin could only ever have shown a magnitude of difference, never causation, and causation is already nailed down by holding every other variable fixed while only the outcome flips. The deleted `small_elapsed_ms < large_elapsed_ms` assertion was strictly weaker corroboration riding on the same two calls, not an independent proof of anything the outcome pair didn't already establish. Genuinely redundant, not a coverage loss.\n\n2. Spec citation verified directly against test/specs/REQ-156.md T1 (lines 11-25), not ISSUE-FIXER's paraphrase: T1's own text reads '... or the larger-limit call's outcome differing from the smaller-limit call's, e.g. completing successfully where the smaller limit failed, if that is the more reliable way to demonstrate the limit is load-bearing rather than a no-op.' This is precisely the shape of the two remaining assertions. The spec explicitly names the outcome-differs approach as an accepted -- and conditionally preferred ('more reliable') -- alternative to a timing comparison. ISSUE-FIXER's characterization is accurate, confirmed by first-hand reading.\n\n3. Diff scope confirmed via `git diff main...feature/WF03-ISS0469-20260904 -- test/letflow/engine/lua/executor_test.exs`: touches only lines 611-658 (the AC-1 test's preceding comment and body). Changes are: (a) two `:timer.tc/1` wrappers removed, calls now direct (still identical args/order); (b) the `small_elapsed_ms`/`large_elapsed_ms` derivation and `assert small_elapsed_ms < large_elapsed_ms` block deleted entirely; (c) the two outcome assertions (`{:error, :memory_limit_exceeded}`, `{:ok, %{manifest_hash: _}}`) are byte-identical, same position; (d) test name and preceding comment updated to describe the outcome-differs property and cite ISS-0469/ISS-0446. `git diff --stat` for the full branch shows only this one code file plus docs/issues/ISS-0469.yaml and handoff/registry bookkeeping (process artefacts, not application or test logic) -- no other file's behavior changed. This is pure subtraction plus a rename/comment; no new complexity, no new abstraction, nothing that reads as scope creep in either direction (nothing added ahead of the requirement, and nothing improperly cut from AC-1's actual coverage).\n\n4. Independently re-ran (not reusing ELIXIR-DEV's numbers): `mix test test/letflow/engine/lua/executor_test.exs --seed 101`, `--seed 202`, `--seed 303` -- all three: 'Result: 45 passed, 11 excluded', 0 failures, ~7.3-7.5s each. The 11 excluded are the pre-existing :lua_wallclock_race-isolated subprocess partition (ISS-0426), untouched by this change. `mix compile --warnings-as-errors` is clean (no output). One pre-existing Dialyzer-style type-check warning at line 466 (an unrelated 'AC-4 regression guard' test, `refute match?({:error, {:wallclock_timeout, _}}, result)`) appears identically across all three runs -- confirmed pre-existing and unrelated to this change (not in the modified line range, not raised by `--warnings-as-errors` on the application build, matches ELIXIR-DEV's own note).\n\n5. Permanence judgment: yes, this permanently eliminates this specific flake class for this test, not merely reduces its probability. The deleted assertion was the *only* wall-clock-dependent line anywhere in the AC-1 test -- grep confirms zero remaining `:timer.tc`, `elapsed_us`, or `elapsed_ms` references in the test body. A test with no wall-clock assertion cannot flake on wall-clock contention, full stop -- there is no probability tail left to reduce. This is categorically different from (and better than) options (a) tag+isolate (still measures time, just hides variance in an isolated process -- reduces but does not eliminate) or (c) tolerance margin (still timing-dependent, just with more slack -- ISS-0446 already showed one such margin eventually gets crossed). Deletion of a provably-redundant assertion is the only one of the three original options that is a permanent fix rather than a mitigation, and ISSUE-FIXER was right to reject (a)/(b)/(c) as originally framed in favor of it.\n\nIdiom/OTP-scope checks (this repo's REVIEWER charter items 1-4): not applicable in the usual sense -- this is a test-only deletion with no gen_statem/supervision/type-safety surface. No new abstraction introduced, so no scope-creep concern either. No SECURITY-REVIEWER gate was needed (test-only, no tenant-data path, no migration) -- correctly skipped by ELIXIR-DEV/ORCH per that gate's own scope.\n\nOn the TEST-DESIGNER/TEST-DESIGN-VALIDATOR skip: I agree it is appropriate here, with the same reasoning this session has applied to prior small mechanical WF-03 fixes -- no test-design decision was made (no new case, no new fixture, no new coverage claim); the change is a pure subtraction of a redundant assertion plus a rename, and the surviving assertions were already validated as sufficient for AC-1 by the original WF-02 TEST-DESIGN-VALIDATOR pass on REQ-156. Routing test-only deletions with zero new coverage decisions through a fresh TEST-DESIGNER/TEST-DESIGN-VALIDATOR cycle would be process overhead without a corresponding risk it catches. Skip is appropriate.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0469-20260904/step-03-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "TEST-RUNNER: run the full suite (not just this file) to confirm no wider regression, then hand to DOC-UPDATER to close ISS-0469 (status open -> resolved) once green."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -698,6 +698,183 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
     end
   end
 
+  # ==================================================================
+  # ISS-0442 -- minimal-diff `--autofix` rewrite (regression, WF03-ISS0442-20260904)
+  #
+  # Spec: test/specs/ISS-0442.md. Design:
+  # lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md section 2.
+  # Run: WF03-ISS0442-20260904, WF-03 Step 4.
+  #
+  # `rewrite_top_level_status!/3` and `splice_top_level_status/2` are ALL-NEW
+  # functions (they replace `write_json!/2`, which no call site invokes any
+  # more) -- there is no pre-fix version of either to check out and prove red
+  # against, so per WF-03's "code under test does not exist" clause, fail-first
+  # is satisfied by MUTATING the shipped logic instead. REVIEWER's Step 3
+  # handoff (handoffs/WF03-ISS0442-20260904/step-03-reviewer.json) already
+  # independently reproduced one such mutant -- removing the `depth == 1`
+  # guard from `handle_string_token/5` -- and found it survives all 43
+  # pre-existing tests while silently corrupting the WRONG field (leaves
+  # top-level status unfixed, overwrites nested `result.status` instead).
+  # T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS below is written specifically
+  # to kill that mutant; see this test-designer's handoff result.summary for
+  # the measured before/after test-run numbers proving it does.
+  #
+  # NOT covered here, deliberately: a document with a DUPLICATE top-level
+  # "status" key. Investigated while designing this suite and found to
+  # expose a real, separate discrepancy between this design's §2.2 step 2
+  # claim ("mirroring Jason.decode/1's own last-key-wins semantics") and
+  # Jason.decode!/1's ACTUAL observed behavior on this exact pinned version
+  # (`Jason.decode!(~s({"status":"a","status":"b"}))` => `%{"status" => "a"}`
+  # -- FIRST-key-wins, not last), while `scan_for_status/4`'s `best`
+  # accumulator is unconditionally overwritten on every depth-1 match, i.e.
+  # genuinely last-match-wins. For a duplicate-key document these two
+  # disagree on which occurrence is "the" status, so `--autofix` edits a
+  # DIFFERENT span than the one `autofix_file/1` actually decided to fix,
+  # and the very next lint pass then reports a fresh H1 violation on the
+  # (unedited) first occurrence -- reproduced directly, not asserted: see
+  # this test-designer's handoff result.summary for the full transcript.
+  # This is a real latent defect but is orthogonal to REVIEWER's required
+  # nested-collision criterion above and to every other criterion this run
+  # is scoped to (duplicate top-level keys are themselves malformed JSON no
+  # real handoff file has ever contained) -- flagged for a follow-up issue
+  # rather than worked around with a test that would have to assert the
+  # buggy behavior as correct to pass.
+  # ==================================================================
+
+  describe "ISS-0442 -- minimal-diff splice" do
+    setup do
+      dir =
+        System.tmp_dir!()
+        |> Path.join("letflow-iss0442-#{System.unique_integer([:positive])}")
+        |> Path.expand()
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+      %{dir: dir}
+    end
+
+    test "T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS -- top-level PASS corrected, nested result.status PASS untouched (kills depth==1-guard mutant)",
+         %{dir: dir} do
+      # Deliberately mirrors ISSUE-FIXER's originally demonstrated collision
+      # shape exactly: a FIXABLE top-level status (PASS, which reaches the
+      # splice branch, not an already-legal status that hits :skip) sitting
+      # alongside a nested result.status carrying the SAME value. The nested
+      # "status" key physically appears AFTER the top-level one in the raw
+      # text, which is exactly the layout under which the depth==1-guard
+      # mutant picks the WRONG (later-scanned, higher-depth) candidate as
+      # `best` -- see the describe block's header comment.
+      path = Path.join(dir, "step-01-agent.json")
+
+      raw =
+        "{\n" <>
+          "  \"status\": \"PASS\",\n" <>
+          "  \"context\": {},\n" <>
+          "  \"task\": {},\n" <>
+          "  \"result\": {\n" <>
+          "    \"status\": \"PASS\",\n" <>
+          "    \"summary\": \"ok\"\n" <>
+          "  }\n" <>
+          "}\n"
+
+      expected =
+        "{\n" <>
+          "  \"status\": \"COMPLETED\",\n" <>
+          "  \"context\": {},\n" <>
+          "  \"task\": {},\n" <>
+          "  \"result\": {\n" <>
+          "    \"status\": \"PASS\",\n" <>
+          "    \"summary\": \"ok\"\n" <>
+          "  }\n" <>
+          "}\n"
+
+      File.write!(path, raw)
+
+      capture_io(fn ->
+        assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+      end)
+
+      rewritten = File.read!(path)
+
+      # (a) top-level status corrected to the mapped value.
+      assert Jason.decode!(rewritten)["status"] == "COMPLETED"
+      # (b) nested result.status is byte-identical to its pre-fix value.
+      assert Jason.decode!(rewritten)["result"]["status"] == "PASS"
+
+      # Stronger than the two decode-based assertions above: the WHOLE file
+      # is byte-identical to the hand-computed expectation, i.e. the ONLY
+      # changed span anywhere in the file is the top-level value token. This
+      # is what the depth==1-guard mutant fails: under that mutant, `best`
+      # ends up bound to the LATER-scanned nested candidate instead (since
+      # `best` is unconditionally overwritten by every depth-1-or-not match
+      # found, and the nested "status" key is scanned after the top-level
+      # one here), so the produced text has the top-level "PASS" UNCHANGED
+      # and the nested "PASS" rewritten to "COMPLETED" -- the exact reverse
+      # of `expected`, which fails this exact equality assertion.
+      assert rewritten == expected
+    end
+
+    test "T-SPLICE-PRESERVES-ESCAPES-BRACES-ARRAY-NO-NEWLINE -- escapes, embedded brace, inline array, nested status untouched; no newline added",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+
+      # "note"/"arr" are nested INSIDE "context" (an @schema_top_keys member),
+      # not top-level, so this fixture exercises the escape/brace/array/nested
+      # -status preservation properties without also tripping the unrelated
+      # H3 "non-schema top-level key" check.
+      raw =
+        ~s({"status": "PASS", "context": {"note": "a \\"quoted\\" word and a { brace } here", ) <>
+          ~s("arr": ["a", "b"]}, "result": {"status": "PASS"}})
+
+      expected =
+        ~s({"status": "COMPLETED", "context": {"note": "a \\"quoted\\" word and a { brace } here", ) <>
+          ~s("arr": ["a", "b"]}, "result": {"status": "PASS"}})
+
+      File.write!(path, raw)
+
+      capture_io(fn ->
+        assert LintHandoffs.run(["--dir", dir, "--autofix"]) == :ok
+      end)
+
+      rewritten = File.read!(path)
+
+      assert rewritten == expected
+      refute String.ends_with?(rewritten, "\n"),
+             "expected no trailing newline to be force-appended (the original had none)"
+    end
+
+    test "T-AUTOFIX-REFUSES-MISSING-STATUS -- a file with no top-level status key is byte-identical and reported refused",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      File.write!(path, ~s({"context": {}, "task": {}, "result": {}}))
+      before = File.read!(path)
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, fn -> LintHandoffs.run(["--dir", dir, "--autofix"]) end
+        end)
+
+      assert File.read!(path) == before
+      assert io =~ "AUTOFIX -- REFUSED"
+      assert io =~ "missing/non-string"
+    end
+
+    test "T-AUTOFIX-REFUSES-NULL-STATUS -- a null top-level status is byte-identical and reported refused",
+         %{dir: dir} do
+      path = Path.join(dir, "step-01-agent.json")
+      File.write!(path, ~s({"status": null, "context": {}, "task": {}, "result": {}}))
+      before = File.read!(path)
+
+      io =
+        capture_io(fn ->
+          assert_raise Mix.Error, fn -> LintHandoffs.run(["--dir", dir, "--autofix"]) end
+        end)
+
+      assert File.read!(path) == before
+      assert io =~ "AUTOFIX -- REFUSED"
+      assert io =~ "missing/non-string"
+    end
+  end
+
   describe "ISS-0440 -- run_autofix/1 (structured return shape, direct unit test)" do
     setup do
       dir =

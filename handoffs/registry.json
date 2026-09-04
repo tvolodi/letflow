@@ -3322,31 +3322,35 @@
       "requirement_id": "REQ-189",
       "queue_task_id": 362,
       "github_issue_number": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/migration/decisions/0016-secrets-storage-backend.md"
       ],
       "started_at": "2026-08-30T04:35:43Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T00:00:09Z",
+      "released_lock": true,
       "last_known_step": "Step 1b (CODE-DESIGN-VALIDATOR) COMPLETED PASS -- all 8 acceptance criteria met, no implementation code, scope confirmed docs-only. Ad-hoc REVIEWER gate COMPLETED PASS (387a7610) -- SS B/SS F divergences from decision 0003 Decision B and REQ-181 both GRANTED. Requirement has no application-executable surface (decision-record only) -- Step 3 scope test routes directly to Step 5 (RELEASE-VALIDATOR), skipping 2a/2b/2c/2d/3b/4 per WF-02 Step 3's documented scope test.",
-      "note": "Design-only requirement, no lib/ or priv/repo/migrations/ code -- decision + design artefact, mirroring REQ-148/149/150/185's shape, except this one DOES produce a docs/migration/decisions/*.md record per its own title. CODE-DESIGNER's artefact settles 7 sub-questions (storage backend, master key, table placement, reference syntax, crypto, rotation, webhook HMAC key ownership) but explicitly flagged, in its own 'Open questions / gating' section, TWO divergences needing REVIEWER sign-off before the record is settled: (SS B) global secrets table vs. decision 0003 Decision B's per-tenant-schema general rule, and (SS F) superseding REQ-181's hashed-secret-only webhook_subscriptions.secret column with secret_ref/secret_key_id. CODE-DESIGNER did not fabricate a sign-off, per CLAUDE.md's don't-silently-re-decide rule. ORCHESTRATOR.md has no named step for 'design-decision divergence from a prior decision record' -- applying the closest matching rule: REVIEWER's own charter (.claude/agents/reviewer.md) already names 'internal consistency with docs/migration/decisions/ records' as in scope, so REVIEWER is dispatched for this specific adjudication, running in parallel with (not gated by) the normal Step 1b CODE-DESIGN-VALIDATOR gate since the two checks are disjoint (completeness/no-code/unambiguous vs. decision-consistency/divergence sign-off). REQ-190 and REQ-183 remain blocked until BOTH return PASS and, if REVIEWER requires changes, until the sign-off (or a revised decision) is recorded in 0016 itself."
+      "note": "Design-only requirement, no lib/ or priv/repo/migrations/ code -- decision + design artefact, mirroring REQ-148/149/150/185's shape, except this one DOES produce a docs/migration/decisions/*.md record per its own title. CODE-DESIGNER's artefact settles 7 sub-questions (storage backend, master key, table placement, reference syntax, crypto, rotation, webhook HMAC key ownership) but explicitly flagged, in its own 'Open questions / gating' section, TWO divergences needing REVIEWER sign-off before the record is settled: (SS B) global secrets table vs. decision 0003 Decision B's per-tenant-schema general rule, and (SS F) superseding REQ-181's hashed-secret-only webhook_subscriptions.secret column with secret_ref/secret_key_id. CODE-DESIGNER did not fabricate a sign-off, per CLAUDE.md's don't-silently-re-decide rule. ORCHESTRATOR.md has no named step for 'design-decision divergence from a prior decision record' -- applying the closest matching rule: REVIEWER's own charter (.claude/agents/reviewer.md) already names 'internal consistency with docs/migration/decisions/ records' as in scope, so REVIEWER is dispatched for this specific adjudication, running in parallel with (not gated by) the normal Step 1b CODE-DESIGN-VALIDATOR gate since the two checks are disjoint (completeness/no-code/unambiguous vs. decision-consistency/divergence sign-off). REQ-190 and REQ-183 remain blocked until BOTH return PASS and, if REVIEWER requires changes, until the sign-off (or a revised decision) is recorded in 0016 itself.",
+      "stale_lock_swept_by": "ADHOC-ADR0017-20260904",
+      "stale_lock_note": "Lock released by ADHOC-ADR0017-20260904 stale-lock sweep. REQ-189 is status: done in docs/requirements.yaml and its owned module docs/migration/decisions/0016-secrets-storage-backend.md exists on main; the run finished but never wrote its release. No work re-dispatched."
     },
     {
       "run_id": "WF03-ISS0377-20260830",
       "requirement_id": "ISS-0377",
       "queue_task_id": 377,
       "github_issue_number": 730,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/engine/wasm/plugin_handler_test.exs",
         "scripts/test_parallel.sh"
       ],
       "started_at": "2026-08-30T01:20:54Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T00:00:09Z",
+      "released_lock": true,
       "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Windows-specific test-environment defect filed by a sibling session's RELEASE-VALIDATOR: a Unix-hardcoded wasmex .so/.rs assertion, plus MIX_OS_CONCURRENCY_LOCK hard-link contention between parallel test partitions. This sandbox is Linux; diagnosis via source reading, not literal Windows repro."
+      "note": "Windows-specific test-environment defect filed by a sibling session's RELEASE-VALIDATOR: a Unix-hardcoded wasmex .so/.rs assertion, plus MIX_OS_CONCURRENCY_LOCK hard-link contention between parallel test partitions. This sandbox is Linux; diagnosis via source reading, not literal Windows repro.",
+      "stale_lock_swept_by": "ADHOC-ADR0017-20260904",
+      "stale_lock_note": "Lock released by ADHOC-ADR0017-20260904 stale-lock sweep. docs/issues/ISS-0377.yaml is status: resolved and its fix merged as 14584ea3 (PR #732); the run finished but never wrote its release. No work re-dispatched."
     },
     {
       "run_id": "WF02-REQ191-20260830",
@@ -4309,6 +4313,28 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #866 squash-merged to main (768b58b8). ISS-0440 closed as INSTRUMENTED (not resolved), superseded_by ISS-0441; GH#849 closed with an evidence comment. Queue task 440 force-released WITHOUT status (stays open) -- a \"done\" release would best-effort close GH#849, which would falsely assert the root cause was removed (ISS-0277 class defect). Lock was held by the Step 00 session id; force used after confirming that run is this one and its work is merged.",
       "note": "WF-03 run for ISS-0440: make the handoff top-level-status enum violation structurally impossible. 7th occurrence of a class docs/anti-patterns.md explicitly declares re-documenting EXHAUSTED. Filed by ORCH at the end of WF03-ISS0426-20260902, whose own first CI run surfaced occurrence 7. SELF-REFERENTIAL: the fix targets the linting machinery this run's own handoffs are checked against, so this run's handoffs double as live test data. Key facts measured at Step 00: linter takes 8.4s over 1915 files; run(_args) ignores args and always lints the whole corpus (no subset capability exists); H1 check itself is already correct -- the gap is WHEN it runs, not WHAT it checks; no hook infrastructure exists at all (git 2.50.1 supports core.hooksPath). | Spun off ISS-0441 (task 441, GH#851): main has NO branch protection, so every gate this project calls HARD -- SECURITY-REVIEWER, REVIEWER, the CI backend gate -- is enforced by the merging agent honoring it, not structurally. Discovered while validating whether ISS-0440's fix could honestly claim 'structurally impossible'; it cannot, and neither can anything else here. Filed as needing a decision record, with the hard part named: a protection rule agents must routinely bypass (the 7x-recurring ISS-0352 flake class) is worse than none. STEP FINAL OUTCOME: rebased onto main across 37 sibling commits; two conflicts resolved by composition (registry.json set-union rebuilt from git stages; ISS-0442 add/add resolved to main's richer independently-filed version). Found and fixed OCCURRENCE 8 of this very defect class live on main (WF01-REQ219-220 step-validator-recheck.json, top-level status \"PASSED\") which had reddened main's gate for 4 consecutive CI runs -- recorded as later_evidence on ISS-0441. Backend gate failed 3x on 3 DIFFERENT tests in 3 documented flake classes (ISS-0426 lua_wallclock_race; a new on_exit teardown race filed as ISS-0446/GH#868; ISS-0418 wasm_hang) while the identical tree passed 3192/3192 locally on an exclusive DB -- merged with --admin on structural attribution, reasoning posted to PR #866. Also filed ISS-0445/GH#860 (corpus-coupled test)."
+    },
+    {
+      "run_id": "ADHOC-ADR0017-20260903",
+      "workflow_id": "ADHOC-ADR0017-20260903",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions/0017-task-queue-selection-model.md",
+        "docs/requirements.yaml",
+        "docs/anti-patterns.md",
+        "docs/issues/ISS-0452.yaml",
+        "docs/issues/ISS-0453.yaml"
+      ],
+      "lock_acquired_at": "2026-09-03T19:26:22Z",
+      "lock_released_at": "2026-09-04T00:32:51Z",
+      "released_lock": true,
+      "last_known_step": "COMPLETE. PR #864 merged to main as 56c87886 via `gh pr merge 864 --admin --squash` after the Backend gate failed on the isolated `wasm_hang` stage (ISS-0418 recurrence, HostApiWriteTest) in one of two concurrent CI runs while the other passed clean; the diff touches no lib/ file and no wasm test, so the failure could not be causal. Documented as evidence on ISS-0418 before merging. A second, distinct flake surfaced mid-run on the main suite (poller_test.exs REQ-218 AC3's antagonist-contention race, not the wasm_hang stage) and was filed separately as ISS-0453 rather than folded into ISS-0418, since it is a different file/subsystem/check.test stage.",
+      "backfilled": false,
+      "queue_task_id": null,
+      "queue_agent_id": "tvolo-win-orch",
+      "note": "ADR-0017 (task-queue selection model) plus incidental findings from the same session: ISS-0452 (on_exit check-then-act teardown race, 7 sites fixed) filed and resolved in-branch; ISS-0453 (poller_test.exs REQ-218 AC3 antagonist-contention flake) filed open for a future pickup. Also swept two stale IN_PROGRESS registry locks left by finished runs (WF02-REQ189-20260830, WF03-ISS0377-20260830) whose owning requirement/issue were already done/resolved on main; left WF03-ISS0425-20260903 locked since a sibling session is live on feature/WF02-REQ219-20260903 against the same owned module. mix letflow.lint_handoffs: OK, 0 new violations, before that commit."
     }
   ]
 }

@@ -2524,3 +2524,43 @@ already-shipped — run the test, read the real error, and re-derive from the ac
 code path rather than from what the design document assumed. Both fixes are captured under
 `fix(ISS-0396)` for the sibling-key-collision issue that prompted their discovery; they are
 each also independently a bugfix in their own right, unrelated to the collision itself.
+## Retrying a `register_task` POST after misreading its success response
+
+On 2026-09-03, registering the requirement now numbered REQ-222 (drafted as REQ-219,
+renumbered on rebase -- see below) produced two queue tasks for one requirement: 449
+(GH#862, the real one) and 450 (GH#863, a duplicate), seconds apart. The first POST
+succeeded and returned the created task. It was piped into a parser that read `id`,
+`impl_order`, `github_issue_number` and `status` from the **top level** of the response
+body — but `letflow-queue` nests the task under a `data` key
+(`{"error": null, "data": {"id": 449, ...}}`). Every field came back `None`, the call was
+read as having failed, and it was re-issued. The second POST also succeeded, because
+`register_task` has no idempotency key and nothing about a repeated title, description or
+`stage` makes it refuse.
+
+**`register_task` is not idempotent and cannot be safely retried on an ambiguous result.**
+Unlike `set_lock` (idempotent for the same `agent_id`) or `release_lock` (converges on an
+already-released task), every `register_task` call unconditionally allocates a new
+autoincrement id, and — because the id doubles as `issue_ref` and as the `/tasks/<id>/...`
+address — also files a new GitHub issue. A retry does not converge; it forks.
+
+The parsing slip is the shallow cause. The real one is treating "my parser printed
+nothing" as equivalent to "the server did nothing," for a call that had in fact fully
+succeeded and had already produced a durable, externally-visible side effect (a GitHub
+issue). A write whose result you cannot read is not a write that did not happen.
+
+**Correct alternative:** on any `register_task` whose response you cannot confidently
+parse, do **not** re-POST. Print the raw body first (`curl -s -w "\nHTTP:%{http_code}\n"`,
+no parser in the pipeline) and read the actual status code and payload. The shape is
+`{"error": ..., "data": {...}}` — read ids from `data`, not the top level. If the raw body
+is genuinely unavailable, the recovery is a **read**, not a retry: once `GET /tasks`
+exists (REQ-222, decision 0017 §B) it answers "did my task land" directly; until then, the
+next `register_task` response's `id` reveals whether the sequence advanced by one or two.
+
+If a duplicate has already been created: it cannot be deleted — the service exposes no
+delete, by design. Retire it with `release_lock(status: "done")`, which also closes its
+linked GitHub issue, and comment on that issue saying it was never real work and naming
+the surviving task. Record the surviving id in `docs/requirements.yaml` with a note that
+the neighbouring id is a retired duplicate, so a later reader finding two near-identical
+issues does not go looking for a second requirement that never existed. This was done for
+449/450 the same minute; total exposure was under two minutes, with neither task ever
+dispatched to a workflow.

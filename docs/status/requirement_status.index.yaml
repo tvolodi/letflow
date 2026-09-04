@@ -1478,8 +1478,21 @@ volumes:
     path: docs/status/requirement_status.v8.yaml
     status: current
     opened: 2026-09-01
-    entries: 28
+    entries: 30
     note: >
+      Composed to 30 at feature/WF02-REQ219-20260903's Step Final rebase
+      (this branch's own REQ-219 done-event append merged against a
+      concurrent sibling's two SCOPE-CHANGE entries for decision 0017,
+      2026-09-03T19:11:25Z and T19:24:26Z). Both sides independently
+      computed 28 from a shared base of 26 (WF02-REQ219-20260903 appended
+      one REQ-219-started + one REQ-219-done event; the sibling appended
+      two SCOPE-CHANGE events) -- each count was correct pre-merge but
+      referred to a different tree. Composed by chronological interleaving
+      (started 17:00:00Z, both SCOPE-CHANGE entries 19:11:25Z/19:24:26Z,
+      done 22:51:35Z), no content lost, no edit to either side's entries.
+      `grep -c "^  - req:" docs/status/requirement_status.v8.yaml` = 30
+      on-disk entries after composition, recounted directly rather than
+      carrying forward either side's independently-computed 28.
       Incremented to 28 by WF02-REQ219-20260903 (DOC-UPDATER)'s own
       REQ-219 done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v8.yaml` = 28 on-disk entries, no

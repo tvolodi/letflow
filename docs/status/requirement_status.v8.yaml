@@ -1085,6 +1085,81 @@ history:
       feature/WF02-REQ219-20260903 created from main. Dispatching Step 1
       (CODE-DESIGNER).
 
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: ORCH
+    at: "2026-09-03T19:11:25Z"
+    note: >
+      Decision record 0017 (task-queue selection model) written, and REQ-219,
+      REQ-220, REQ-221 drafted against it. Originated from a user question --
+      whether agents could be given more freedom over which task to work,
+      e.g. a queue function returning all tasks with their dependencies.
+      Investigation found `letflow-queue` is the only load-bearing pipeline
+      component with no decision record, and that the two places justifying
+      its four-operation shape (TASK_QUEUE.md:117-118 and :386) both cite
+      letflow-queue's own README, which asserts the count as a value rather
+      than deriving it. Read against the real source
+      (letflow-queue/lib/letflow_queue/tasks.ex): the atomic-claim guarantee
+      lives entirely in get_next_task/1's single UPDATE ... WHERE id =
+      COALESCE(...) RETURNING statement, so the one-task return cardinality
+      is incidental, not load-bearing. Both queue incidents in
+      docs/anti-patterns.md re-read as LOCKING failures, not selection
+      failures: REQ-048's 2026-08-19 double-run happened with no lock at all
+      (fallback file-read), and ISS-0086's run used get_next_task as a probe
+      precisely because no side-effect-free read exists. 0017 decides the
+      queue arbitrates claims but does not choose the work: adds read-only
+      GET /tasks (REQ-219), gates set_lock on the same eligibility predicate
+      so free selection cannot start dependency-blocked work (REQ-220), and
+      restates TASK_QUEUE.md's Hard Rule around one invariant -- no agent
+      works a task it does not hold a lock on, and no lock is obtained
+      anywhere but from the queue (REQ-221). REQ-219/REQ-220 target
+      tvolodi/letflow-queue, the first cross-repo requirements in this file;
+      stage S6 per decision 0008 pick 1 (active stage at draft time, no
+      subsystem-lineage claim). REQ-219 registered as queue task 449
+      (GH#862), title carrying a "[REPO: tvolodi/letflow-queue]" marker.
+      Task 450/GH#863 is a duplicate of that registration, created when a
+      successful POST's response was misparsed as empty and re-issued;
+      retired via release_lock(status: done) and annotated on its GitHub
+      issue within two minutes, never dispatched -- recorded as a new
+      docs/anti-patterns.md entry ("Retrying a register_task POST after
+      misreading its success response"), since register_task is not
+      idempotent and forks rather than converging on retry. REQ-220/REQ-221
+      left UNREGISTERED with live blocked-by: REQ-219 rationales. Both
+      mix letflow.check_requirements_registration and
+      mix letflow.check_deferral_staleness pass (193 registered + 2
+      deferred, 0 stale); the staleness gate caught a blocked-by cycle in an
+      earlier draft of these deferrals and it was corrected rather than
+      worked around. No application code touched.
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: ORCH
+    at: "2026-09-03T19:24:26Z"
+    note: >
+      Correction to the 19:11:25Z entry above, which is left unedited per the
+      append-only rule. The three requirements it names as REQ-219/220/221 are
+      REQ-222/223/224 as actually merged. They were drafted against a stale
+      local base (2b912a0d) while a CONCURRENT session on another host was
+      independently drafting and implementing its own REQ-219/220 for ISS-0425
+      (supervision-tree layering, queue tasks 445/446, branch
+      feature/WF02-REQ219-20260903, already at Step 2a ELIXIR-DEV). That
+      session's claim landed first and was far advanced, so this run renumbered
+      rather than contesting the ids -- upstream's REQ-219/220 entries were
+      preserved byte-for-byte through the requirements.yaml stash conflict and
+      this run's three were re-emitted as 222/223/224 with depends_on rewired.
+      The collision was found by fetching before branching, per the
+      concurrent-sessions rule; nothing of the sibling session's was
+      overwritten, and its in-flight queue task 445 correctly REFUSED this
+      host's lock attempt with "task is locked by a different agent" -- the
+      arbitration mechanism decision 0017 rests on, observed working. Two
+      unrelated open tasks (446, 449) were locked as a side effect of that same
+      state check and released back to open untouched within the minute: that
+      check is itself the anti-pattern 0017 fixes, since the service offers no
+      way to read a task's state without claiming it. Queue task 449's title
+      re-stamped REQ-222. No REQ-221 exists in this file and none was lost --
+      that id was never allocated on main. Requirement ids only; no change to
+      any acceptance criterion, decision 0017's content, or the anti-patterns
+      entry's substance.
+
   - req: REQ-219
     event: done
     agent: DOC-UPDATER

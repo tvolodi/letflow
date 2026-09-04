@@ -1,0 +1,101 @@
+id: ISS-0453
+title: >
+  Flaky test: poller_test.exs REQ-218 AC3's own 5-attempt retry loop can
+  still land zero genuine partial skips under CI runner contention -- the
+  race it needs to observe becomes harder to hit, not easier, when the
+  runner is loaded
+discovered_by: ORCH
+discovered_in_run: ADHOC-ADR0017-20260903
+discovered_at: "2026-09-04T00:12:00Z"
+severity: MINOR
+tags:
+  - flaky-test
+  - race-condition
+  - scheduler
+  - admission-control
+  - req-218
+  - ci
+
+description: >
+  FLAKE OBSERVED LIVE, NOT THEORISED. PR #864's (ADHOC-ADR0017-20260903)
+  backend-gate CI run 33819989575 on commit 92b5ce92 failed the MAIN suite
+  (not the isolated wasm_hang stage): "Result: 3191/3192 passed (6/6
+  properties, 3185/3186 tests), 21 excluded", one failure:
+
+    test/letflow/scheduler/poller_test.exs:575, "REQ-218 AC3: a capacity
+    rejection for one schema/operation does not block the rest of the same
+    tick > an antagonist contending for the sole global unit produces a
+    genuine partial skip" (Letflow.Scheduler.PollerTest):
+
+      expected at least one of 5 attempts to show a genuine partial skip
+      (some of the 10 schemas' poll_and_fire admitted, some rejected)
+      within a single tick while an antagonist contended for the sole
+      global unit -- got either total success or total skip on every
+      attempt
+
+  PR #864's diff touches zero files under lib/letflow/scheduler or
+  test/letflow/scheduler (`git diff origin/main HEAD --stat` over both
+  paths returns 0 files), so that branch cannot be the cause.
+
+  ROOT CAUSE, read directly from the test source
+  (test/letflow/scheduler/poller_test.exs:574-604). The test spins up an
+  antagonist process hammering `Admission.try_acquire(:global)` in a tight
+  loop while 10 schemas' `poll_and_fire` runs against a pool of 3 with 2
+  reserved headroom, and retries the whole attempt up to 5 times because,
+  per the test's own comment, "which specific attempts collide with the
+  antagonist is inherently nondeterministic." The assertion requires a
+  GENUINE PARTIAL skip (fired_count strictly between 0 and 10) to appear on
+  at least one of the 5 attempts.
+
+  This is exactly the kind of test that gets WORSE under CI runner
+  contention rather than better: the whole mechanism depends on the
+  antagonist's tight loop and the 10 schemas' concurrent poll_and_fire
+  calls interleaving at a fine enough grain to produce a partial split.
+  Under a loaded runner (scheduler jitter, GC pauses, cgroup throttling),
+  interleaving tends to collapse toward the two boundary outcomes the
+  assertion excludes -- either the antagonist starves everything (total
+  skip) or gets descheduled long enough that nothing collides (total
+  success) -- across all 5 attempts. Same family as ISS-0418/ISS-0352
+  (wasm_hang): a test built to observe a race gets less likely to observe
+  it, not more, exactly when the environment is noisiest -- which is also
+  when CI happens to be running it.
+
+  WHY THIS IS A SEPARATE ISSUE FROM ISS-0418: different file
+  (poller_test.exs vs the wasm/ test suite), different subsystem
+  (Letflow.Scheduler.Admission vs Wasmex), different check.test stage (this
+  ran in the MAIN suite, not the isolated `--only wasm_hang` stage) -- so
+  fixing one will not fix the other, and they should not be conflated in
+  one resolution.
+
+fix_direction: >
+  For CODE-DESIGNER/TEST-DESIGNER, not applied at discovery. Any of:
+  (a) raise the retry count above 5, trading CI time for a lower flake
+  rate without changing what's being proven;
+  (b) make the antagonist's contention window deterministic instead of
+  wall-clock/scheduling dependent -- e.g. synchronize the antagonist and
+  the 10 poll_and_fire calls on an explicit barrier or count of acquisitions
+  rather than relying on tight-loop scheduling luck to produce interleaving;
+  (c) shrink pool_size/reserved_headroom further or increase schema count
+  to widen the partial-skip window so contention needs less precise timing
+  to land inside it;
+  (d) tag it (along with the wasm_hang family) so `mix letflow.check` can
+  retry the whole test process N times before failing the gate, treating
+  "inherently probabilistic race test" as a first-class CI category rather
+  than papering over each instance individually -- this option should be
+  weighed together with ISS-0418's fix, not decided twice.
+  Whoever picks this up should read ISS-0418's resolution notes first: it
+  already surveyed the general "probabilistic race test flakes under CI
+  load" shape once for the wasm_hang family, and (d) here would duplicate
+  that decision if made independently.
+
+affected_files:
+  - test/letflow/scheduler/poller_test.exs
+related:
+  - REQ-218
+  - ISS-0418
+  - ISS-0441
+source: >
+  PR #864 (ADHOC-ADR0017-20260903), CI run 33819989575 job on commit
+  92b5ce92, observed live during this run's merge-gate check.
+queue_task_id: 453
+status: open

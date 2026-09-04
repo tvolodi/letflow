@@ -108,33 +108,120 @@ call, not uniform treatment:
 ### 3a. The six Admission-gated sweeps (poll-and-fire, retention, alert detection,
 ordering cycle/sweeper/metrics)
 
-`max_concurrency: 8`, i.e. exactly `Admission.global_cap` (`pool_size(10) -
-reserved_headroom(2)`).
+`max_concurrency:` is **derived live from `Admission`'s own current `global_cap` at call
+time**, not a hardcoded literal. This replaces the prior draft of this section, which set
+`max_concurrency: 8` via a module attribute (`@admission_gated_max_concurrency 8`),
+justified as "exactly `Admission.global_cap` at default config." REVIEWER correctly
+FAILed that draft (`handoffs/WF03-ISS0421-20260904/step-04-reviewer.json`): `global_cap`
+is independently derived per-instance as `max(pool_size - reserved_headroom, 1)`, and
+both `pool_size` (an operator-configurable `POOL_SIZE` env var, §1) and
+`reserved_headroom` (config default or `start_link/1` opts override, §3b) can vary
+per-deployment or per-test-instance — nothing tied a hardcoded Poller-side `8` to
+whatever the live instance's `global_cap` actually is, so at any `global_cap < 8`
+(confirmed concretely at the test config `pool_size: 3, reserved_headroom: 2` ->
+`global_cap: 1`), Poller's own concurrently-dispatched tasks for ONE sweep become
+concurrent contenders for the SAME scarce slot(s), which `Task.async_stream` does not
+retry on rejection — a self-collision hazard that structurally could not occur under the
+old `Enum.each` (Poller only ever held one admission unit at a time by construction).
+This is the identical "literal number that happens to match another instance's derived
+value today, with nothing tying the two together" mistake §3b already reasoned its way
+out of for `reserved_headroom`, one section earlier in this same document — §3a must use
+the same live-accessor idiom, not merely a comment claiming the two numbers are equal.
 
-Arithmetic: every per-tenant task in these six sweeps calls `with_admission/3`, which
-calls `Admission.try_acquire(:global)` before doing any `Repo` work and releases it in
-an `after` clause regardless of outcome. Admission's own `handle_call` enforces
-`global_in_use < global_cap` as a hard, non-blocking gate — a 9th concurrent attempt
-(from Poller or from HTTP) gets `{:error, :capacity}` and is skipped-and-logged, never
-queued, never granted. This means **`Admission.global_cap` (8) is already the true
-ceiling on concurrent `DBConnection` checkouts attributable to these six sweeps,
-platform-wide, regardless of what `max_concurrency` this design chooses** — setting
-`max_concurrency` above 8 cannot push checkouts past 8, it would only spawn extra BEAM
-processes that immediately lose the admission race and log a skip. Setting
-`max_concurrency` to exactly 8 is therefore the number that lets every task that *can*
-be admitted get spawned, with zero tasks spawned that are certain to be rejected purely
-by construction (there are never more than 8 grantable slots to compete for at once from
-Poller's own side). Worst case, if HTTP traffic is also drawing on the same budget at
-that instant, some of the 8 spawned tasks lose to HTTP and skip-and-log exactly as they
-do today under `Enum.each` (this is pre-existing, unchanged behavior — `with_admission/3`
-already handles it) — the only thing this design changes is that up to 8 tenants' calls
-for the *same* sweep can be admitted and in flight together, instead of 1.
+**Decision: use a live accessor, mirroring §3b's `reserved_headroom/1` exactly.** Unlike
+`reserved_headroom`, `global_cap` is ALREADY a `Letflow.Admission` state field today
+(`state.global_cap`, admission.ex:245, populated at `init/1` and never mutated
+thereafter — the same "fixed at init, read-only forever" treatment `reserved_headroom`
+now also has per §3b). This is therefore a **strictly smaller change than §3b's**: no
+state-shape addition is needed here, only a new accessor function and its backing
+`handle_call` clause, reading a field that already exists.
+
+**New public accessor on `Letflow.Admission`**: `global_cap/1`, arity 1, byte-for-byte
+the same idiom as `reserved_headroom/1` (admission.ex:222-225) and `try_acquire/2`/
+`release/2` before it — a defaulted `server \\ __MODULE__` argument and a synchronous
+`GenServer.call/2`:
+
+- `@spec global_cap(server :: GenServer.server()) :: pos_integer()`
+- `def global_cap(server \\ __MODULE__), do: GenServer.call(server, :global_cap)`
+  (signature and shape only — no function body beyond this one-line delegation is
+  prescribed, matching this design doc's no-implementation-code constraint; ELIXIR-DEV
+  writes the actual clause)
+- One new `handle_call(:global_cap, _from, state)` clause, placed alongside the existing
+  `handle_call({:try_acquire, ...}, ...)` / `handle_call({:release, ...}, ...)` /
+  `handle_call(:reserved_headroom, ...)` clauses, replying with the plain integer already
+  held in `state.global_cap`, unchanged — a pure read, no side effect, no state mutation.
+- Purely additive to `Admission`'s public contract: no existing function's name, arity,
+  spec, or behavior changes; no existing `handle_call` clause's reads/writes of
+  `global_in_use`/`tenants`/`refs`/`reserved_headroom`/`global_cap` itself change. No
+  state-shape comment update is needed (the five-key shape §3b already established,
+  including `global_cap` as key 1, is unchanged — only a new read path onto an existing
+  key is added).
+
+**Poller's consumption**: each of the six Admission-gated sweeps' `Task.async_stream/3`
+call (via the shared `run_sweep/4` helper) calls `Letflow.Admission.global_cap/0`
+(default server) fresh, inside the sweep's own invocation, every tick — never cached or
+hoisted into a module attribute or computed once at compile time — and passes the
+returned integer directly as that call's `max_concurrency:` value. This is the identical
+"read live, every tick, no caching" convention §3b's `reserved_headroom/1` consumption
+already established for the one unwrapped sweep, and matches `Letflow.Scheduler`'s own
+"read config/state fresh, never cache" pattern (§4a's `sweep_task_timeout_ms/0`). No
+module attribute, no config read, no literal `8` anywhere in `poller.ex`.
+
+Arithmetic, restated as a live invariant rather than a default-config coincidence: every
+per-tenant task in these six sweeps calls `with_admission/3`, which calls
+`Admission.try_acquire(:global)` before doing any `Repo` work and releases it in an
+`after` clause regardless of outcome. Admission's own `handle_call` enforces
+`global_in_use < global_cap` as a hard, non-blocking gate — an attempt beyond the live
+`global_cap` (from Poller or from HTTP) gets `{:error, :capacity}` and is
+skipped-and-logged, never queued, never granted. This means **the live `Admission.global_cap`
+value, for whichever `Admission` instance a given `Letflow.Scheduler.Poller` process
+actually targets, is already the true ceiling on concurrent `DBConnection` checkouts
+attributable to these six sweeps, platform-wide, regardless of what `max_concurrency`
+this design chooses** — setting `max_concurrency` above the live `global_cap` cannot push
+checkouts past it, it would only spawn extra BEAM processes that immediately lose the
+admission race and log a skip; setting it BELOW the live `global_cap` would under-utilize
+real admittable capacity. Setting `max_concurrency` to exactly the live `global_cap` is
+therefore, for any configured `pool_size`/`reserved_headroom` and at any point in time,
+the number that lets every task that *can* be admitted get spawned, with zero tasks
+spawned that are certain to be rejected purely by construction — because it is now read
+from the SAME `state.global_cap` field `try_acquire(:global)`'s own gate checks against,
+there is exactly one number per instance, never two independently-maintained figures that
+could drift. Worst case, if HTTP traffic is also drawing on the same budget at that
+instant, some of the spawned tasks lose to HTTP and skip-and-log exactly as they do today
+under `Enum.each` (pre-existing, unchanged behavior — `with_admission/3` already handles
+it) — the only thing this design changes is that up to `global_cap` tenants' calls for
+the *same* sweep can be admitted and in flight together, instead of 1.
 
 Net: peak DBConnection checkouts attributable to these six sweeps, at any instant, is
-bounded by `Admission.global_cap = 8`, unchanged from the ceiling that already exists
-today at the platform level (Admission was sized for that ceiling before this fix
-existed) — this design does not raise that ceiling, it only lets Poller actually reach
-it instead of using 1 of the available 8 at a time.
+bounded by the live `Admission.global_cap`, unchanged from the ceiling that already
+exists today at the platform level for whatever that instance's live value is — this
+design does not raise that ceiling, it only lets Poller actually reach it (up to that
+live value) instead of using 1 slot at a time, and it now does so correctly for ANY
+configured `pool_size`/`reserved_headroom`, not only the default config where `8`
+happened to be the right number.
+
+**Restored property (traces REQ-218's own test scenario):** at the test config
+`pool_size: 3, reserved_headroom: 2` (`AdmissionTestHelpers.restart_admission!(pool_size:
+3, reserved_headroom: 2)`, used by REQ-218 AC1/AC2/AC3-per-schema/AC5), `global_cap =
+max(3 - 2, 1) = 1`. With `max_concurrency:` now derived live as `Admission.global_cap()`,
+that call returns `1` for this instance, so `Task.async_stream(schemas, fun,
+max_concurrency: 1, ...)` admits and runs at most one task at a time for each of these
+six sweeps — Poller processes tenants strictly one at a time under this config, exactly
+as `Enum.each` did before this fix. Poller therefore never holds more than one admission
+unit at a time when it is the only caller, restoring the exact invariant REQ-218 AC2's
+own code comment states ("A single, sequential caller (Poller) never holds more than one
+admission unit at a time... so with global_cap == 1 and NO concurrent contender, Poller's
+own acquire/release round trips never collide with each other — every attempt succeeds"):
+with no external contender, the single in-flight task always finds `global_in_use (0) <
+global_cap (1)`, is admitted, releases, and `Task.async_stream` advances to the next
+schema, which faces the identical uncontended state — every schema gets a real,
+uncontested attempt, matching AC1/AC2/AC5's "every attempt succeeds" expectation and
+AC3's per-schema clause (a schema rejected only by genuine EXTERNAL contention still has
+its other ops proceed independently). At the real deployed default (`pool_size: 10,
+reserved_headroom: 2` -> `global_cap: 8`), the same live call returns `8`, reproducing
+today's already-approved §3a numeric example unchanged. One accessor, one call site
+convention, correct at every configured value — no special-casing of the test config or
+of the default.
 
 ### 3b. `maybe_refresh_active_instances/1` (no Admission backstop)
 
@@ -311,12 +398,14 @@ fix (deriving `max_concurrency` live) means that revisit only requires changing
 Because sweeps are strictly sequential (§2), the platform-wide peak attributable to
 Poller at any single instant during a tick is `max(global_cap, reserved_headroom)`
 (whichever of the six Admission-gated sweeps or the one unwrapped sweep happens to be
-running), never their sum — the six-sweep peak (`global_cap`) and the one-sweep peak
-(`reserved_headroom`, now derived live per §3b) are never concurrent with each other. At
-current config this is `max(8, 2) = 8`. Combined with the worst-case external (HTTP) draw
-already accounted for in §3b, the design's stated worst-case total never exceeds
-`pool_size` — and, per §3b, this holds as an algebraic identity for any configured
-`reserved_headroom`, not only the current default.
+running), never their sum — the six-sweep peak (`global_cap`, now derived live per §3a)
+and the one-sweep peak (`reserved_headroom`, now derived live per §3b) are never
+concurrent with each other. At current config this is `max(8, 2) = 8`. Combined with the
+worst-case external (HTTP) draw already accounted for in §3b, the design's stated
+worst-case total never exceeds `pool_size` — and, per §3a/§3b, this holds as an algebraic
+identity for any configured `pool_size`/`reserved_headroom`, not only the current
+default: only the SOURCE of each number in code changed (a live accessor instead of a
+literal or a comment-justified constant), not the arithmetic identity itself.
 
 ## 4. Fault isolation (AC1: one slow/erroring tenant must not block others)
 
@@ -473,29 +562,41 @@ Orthogonal, no changes needed to `lib/letflow/supervisor/pollers.ex`,
   the same `reserved_headroom` argument binding already used in that same clause to
   compute `global_cap` — purely additive to the existing four-key state map
   (`global_cap`, `global_in_use`, `tenants`, `refs`), which becomes five keys; the
-  state-shape comment at admission.ex:212-219 must be updated accordingly. Add one new
-  public accessor, `reserved_headroom/1` (default `server \\ __MODULE__`), delegating via
-  `GenServer.call/2` to a new `handle_call(:reserved_headroom, _from, state)` clause that
-  replies with the new `state.reserved_headroom` field, unchanged, alongside the existing
-  `handle_call` clauses — see §3b. Purely additive to the public contract: no existing
-  function's name, arity, spec, or behavior changes, and no existing `handle_call`
-  clause's reads/writes of `global_in_use`/`tenants`/`refs`/`global_cap` change.
+  state-shape comment at admission.ex:212-219 must be updated accordingly. Add two new
+  public accessors:
+  - `reserved_headroom/1` (default `server \\ __MODULE__`), delegating via
+    `GenServer.call/2` to a new `handle_call(:reserved_headroom, _from, state)` clause
+    that replies with the new `state.reserved_headroom` field, unchanged — see §3b.
+  - `global_cap/1` (default `server \\ __MODULE__`), delegating via `GenServer.call/2` to
+    a new `handle_call(:global_cap, _from, state)` clause that replies with the EXISTING
+    `state.global_cap` field, unchanged — see §3a. Unlike `reserved_headroom/1`, this
+    needs no state-shape change: `global_cap` is already a state field
+    (admission.ex:245).
+
+  Both are placed alongside the existing `handle_call({:try_acquire, ...}, ...)` /
+  `handle_call({:release, ...}, ...)` clauses. Purely additive to the public contract: no
+  existing function's name, arity, spec, or behavior changes, and no existing
+  `handle_call` clause's reads/writes of `global_in_use`/`tenants`/`refs`/`global_cap`/
+  `reserved_headroom` change.
 - `Letflow.Scheduler`: add one new config accessor, `sweep_task_timeout_ms/0`, following
   the exact existing pattern of `poll_interval_ms/0`/`jitter_ms/0` (reads `config
   :letflow, :scheduler, sweep_task_timeout_ms:`, falls back to a `@default_...` module
   attribute of `10_000`, read fresh on every call — no caching).
 - `Letflow.Scheduler.Poller`: at each of the seven per-schema iteration sites currently
   written as `Enum.each(schemas, fn schema_name -> ... end)`, replace the traversal with
-  `Task.async_stream/3` over `schemas`, options `max_concurrency:` (8, i.e.
-  `Admission.global_cap`, for the six Admission-gated sweeps; for
-  `maybe_refresh_active_instances/1`, the live return value of
+  `Task.async_stream/3` over `schemas`, options `max_concurrency:` (the live return value
+  of `Letflow.Admission.global_cap/0` — called fresh inside each of the six
+  Admission-gated sweeps' own invocation, never cached or hoisted into a module attribute
+  — per §3a; for `maybe_refresh_active_instances/1`, the live return value of
   `Letflow.Admission.reserved_headroom/0` — called fresh inside that sweep's own function
   body, never cached or hoisted — per §3b), `timeout: Scheduler.sweep_task_timeout_ms()`,
   `on_timeout: :kill_task`, `zip_input_on_exit: true`; fully consume the resulting stream;
   wrap the two call sites lacking an existing inline rescue (the poll-and-fire loop,
   `maybe_run_retention_sweep/2`) in a top-level per-task rescue per §4b; log `{:exit, _}`
   yields (both timeout and crash) at `Logger.warning/2` tagged with `schema:` and `op:`,
-  mirroring the existing `with_admission/3` capacity-skip log.
+  mirroring the existing `with_admission/3` capacity-skip log. No module attribute
+  (`@admission_gated_max_concurrency` or similar) and no literal `8` remain anywhere in
+  `poller.ex` for this bound.
 - No change to `with_admission/3`, to `Admission`'s existing `try_acquire/2`/`release/2`
   functions or `handle_call` clauses, to any `lib/letflow/supervisor/*` file, or to
   `application.ex`.

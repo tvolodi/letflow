@@ -4267,16 +4267,13 @@
       "issue_id": "ISS-0425",
       "queue_task_id": 425,
       "github_issue_number": 829,
-      "status": "IN_PROGRESS",
-      "owned_modules": [
-        "lib/letflow/application.ex",
-        "lib/letflow/instance_supervisor.ex"
-      ],
+      "status": "COMPLETED",
+      "owned_modules": [],
       "started_at": "2026-09-03T16:55:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
-      "note": "WF-03 issue-resolving run for ISS-0425: flat supervision tree, 15 peers of Repo under one :one_for_one with default restart intensity, no dependency layering, no domain-owning supervisor, Task.Supervisor sprawl (6 separate ones). Issue predicted a 7th ad-hoc supervisor if not settled before REQ-214 -- now 4+ new supervision entries have landed since filing (REQ-214, REQ-216 Admission, ISS-0429 Alerts.TaskSupervisor, REQ-215 dispatcher poller)."
+      "lock_released_at": "2026-09-04T02:42:22Z",
+      "released_lock": true,
+      "last_known_step": "Step 1 ISSUE-FIXER diagnosis COMPLETED (handoffs/WF03-ISS0425-20260903/step-01-issue-fixer-diagnosis.json) -- sizing verdict was NOT-A-SCOPED-WF03-FIX, routed to REQ-ANALYST. No branch was ever created for this run (git branch -a shows no feature/WF03-ISS0425-20260903, local or remote) and no further steps ran under this run_id.",
+      "note": "WF-03 issue-resolving run for ISS-0425, closed out here by ORCH (2026-09-04, opening WF03-ISS0451-20260904) after finding this entry still IN_PROGRESS with an owned_modules lock on lib/letflow/application.ex and lib/letflow/instance_supervisor.ex that had gone stale. Diagnosis: ISSUE-FIXER's Step 1 (step-01-issue-fixer-diagnosis.json) sized this as too large for a same-run WF-03 fix and recommended routing to REQ-ANALYST -- that recommendation was executed: REQ-219 (supervision layering, queue task 445) and REQ-220 (Task.Supervisor sprawl review, queue task 446) were drafted, validated, and REQ-219 has since landed on main (PR #869, WF02-REQ219-20260903, RUN_DONE). This WF-03 run itself never proceeded past Step 1 -- no branch was ever cut for it (confirmed: no feature/WF03-ISS0425-20260903 branch, local or remote) -- so there was no in-flight file edit for the owned_modules lock to actually be protecting; the lock was simply never released when the run's work was superseded by the REQ-219/220 hand-off. ISS-0425 the ISSUE record itself correctly stays status: open (per its own orch_routing_note) pending REQ-220, which is unrelated to this registry entry's own COMPLETED/released state -- an issue can stay open while the run that diagnosed it is done. Releasing this lock now because it was blocking WF03-ISS0451-20260904's legitimate owned_modules claim on lib/letflow/application.ex for an unrelated, newly-discovered issue, and nothing is actually still using it."
     },
     {
       "run_id": "WF02-REQ219-20260903",

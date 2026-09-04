@@ -84,7 +84,8 @@ source: >
   test/letflow/engine/service_task_dispatcher_test.exs:1113, while the same
   tree passed 3192/3192 locally and 42/42 for that file in isolation.
 github_issue: 868
-status: open
+queue_task_id: 453
+status: resolved
 later_evidence: >
   ORCH (2026-09-04), PR #869 (REQ-219): GitHub Actions run 33821803493
   (Backend gate) failed with the identical single-test signature --
@@ -96,3 +97,50 @@ later_evidence: >
   signature as the original filing -- merged past on structural attribution
   (neither this branch's diff nor any REQ-219 file touches
   service_task_dispatcher_test.exs or its on_exit teardown).
+
+resolution: >
+  RESOLVED by WF03-ISS0446-20260904, PR #873, squash-merged as 8ee7cdb3.
+
+  FIX: the ad-hoc Supervisor.start_link/2 + name: __MODULE__.ThrowawaySupervisor
+  construction and its check-then-act on_exit guard were both removed and
+  replaced with ExUnit.fetch_test_supervisor/0 + start_supervised!/1. This
+  REMOVES the race rather than tolerating it: ExUnit's own teardown
+  (OnExitHandler.terminate_supervisor/2) is Process.monitor/1 plus a blocking
+  receive of {:DOWN,...} with no Process.alive? check anywhere, so there is no
+  check-then-act left to race. No coverage was lost -- the
+  Supervisor.which_children/1 assertion is retained against the fetched
+  supervisor, and pinning ^pid strengthened it.
+
+  OPTION CHOSEN AND WHY: the design initially picked option (a) from this
+  issue's own scope list (drop the on_exit), but CODE-DESIGN-VALIDATOR FAILED
+  that design on a BLOCKER -- it had rejected the start_supervised! route on
+  the false premise that ExUnit gives no enumerable supervisor handle.
+  ExUnit.fetch_test_supervisor/0 is public and documented since 1.11.0.
+  CODE-DESIGNER re-verified independently and reversed to option (d), which
+  dominates (a): equal diff, identical coverage, in-suite precedent, and it
+  retires the residual risk (a) had to accept (that a future edit could
+  silently break link-based cleanup).
+
+  REGRESSION GUARD, and its honest limits: one test was added guarding that
+  this suite's fixture idiom tears down cleanly under a deliberately widened
+  shutdown window (a trap_exit child sleeping 5ms in terminate/2). It is
+  deterministic -- the old shape fails on every run under that harness, the
+  new shape passes on every run, ~0.4s. It does NOT guard against someone
+  reintroducing check-then-act at this fix site itself: measured detection for
+  that scenario was 2/15, and that residual gap is recorded in
+  test/specs/ISS-0446.md and in the test's own comment rather than papered
+  over. Protection there rests on review, not automated coverage.
+
+  CONCURRENT DUPLICATE: a sibling session independently found the same defect
+  as ISS-0452 (from PR #864's CI) and fixed it with a race-tolerant
+  try/catch :exit. The two fixes collided at rebase; ORCH resolved in favour
+  of this one, since try/catch tolerates the race while this removes it. See
+  ISS-0452.yaml's superseded_by section for the full decision record.
+
+  VERIFICATION: full suite on the rebased tree 3200/3200 passed, 16/16
+  partitions clean; compile --warnings-as-errors and format both clean; all
+  four CI checks green with no flake on the first attempt.
+
+  FOLLOW-UPS FILED: ISS-0447 (the same check-then-act shape in 8 other test
+  files, queue task 454 / GH#870) and ISS-0448 (postgres healthcheck logging a
+  FATAL every 2s, queue task 455 / GH#872, reported by the project owner).

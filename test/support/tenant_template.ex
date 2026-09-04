@@ -219,6 +219,15 @@ defmodule Letflow.Test.TenantTemplate do
   # Template build (design §2.3, ensure_template!/0's build sequence)
   # ---------------------------------------------------------------------------
 
+  # design §0.7/INV-8: because build_template!/0 now builds the WHOLE
+  # sequence under a randomized staging schema and only renames it to
+  # "tenant_template" as the LAST step (after the self-check has already
+  # passed against the staging name), the literal name "tenant_template"
+  # can never be observed half-built -- its existence under that exact name
+  # IS the completeness proof. So this check no longer needs to re-run the
+  # self-check defensively "just in case" the schema exists but is broken:
+  # that state is now structurally impossible to produce. A bare existence
+  # check is therefore correct, not merely convenient.
   defp template_built_in_db? do
     %{rows: rows} =
       Repo.query!(
@@ -226,71 +235,53 @@ defmodule Letflow.Test.TenantTemplate do
         [@template_schema]
       )
 
-    case rows do
-      [] ->
-        false
-
-      _ ->
-        # A schema row existing is not proof the LAST build finished cleanly
-        # (e.g. a prior VM crashed mid-build). Re-run the self-check (§2.3
-        # step 3) rather than trusting bare existence.
-        template_self_check!()
-        true
-    end
+    rows != []
   end
 
-  # design §2.3 steps 1-4, and §2.2's "OQ-1 option (b)" resolution: build the
-  # template via the REAL, unmodified replay_migrations/2 (which already does
-  # the event-type seeding, design §2.2's "Event-type seeding for the
-  # template" paragraph) by sequencing it against a genuine, throwaway
-  # Tenant/Registration row -- then repointing the template schema name and
-  # discarding those rows, per design OQ-1 option (b): "have the test module
-  # build its OWN synthetic tenant ... and call the real, unmodified
-  # replay_migrations/2 ... discarding the Tenant/Registration rows
-  # afterward but keeping the schema". This keeps §7's "zero lib/ diff" claim
-  # literally true -- no new public function is added to
-  # lib/letflow/tenant_provisioning.ex.
+  # design §0.7/§2.3 steps 0-6 (rework 4): ATOMIC BUILD-THEN-RENAME-INTO-PLACE.
+  # The entire build (schema, migrations, self-check) runs under a fresh,
+  # RANDOMIZED STAGING schema name -- never the literal "tenant_template" --
+  # and only the LAST statement, `ALTER SCHEMA ... RENAME TO "tenant_template"`,
+  # makes the well-known name exist at all. This is what makes INV-8 true: a
+  # crash, exception, or interruption at any point before the rename leaves
+  # behind only inert, randomly-named debris, never a half-built schema
+  # sitting under the name every other function in this module looks up. No
+  # detect-and-repair path is needed for this failure mode, because the
+  # failure mode (a same-named, incomplete "tenant_template") is now
+  # structurally impossible to produce -- see design §0.7 for the full
+  # comparison against the rejected detect-and-repair alternative.
   #
-  # Concretely: replay_migrations/2 requires an EXISTING Registration row
-  # naming the schema it will migrate into (it looks the row up by
-  # tenant_id, then uses ITS OWN schema_name field -- it never derives the
-  # schema name itself). So this builds a real Tenant row (a throwaway
-  # UUID), inserts a Registration row whose schema_name is the LITERAL
-  # "tenant_template" (bypassing provision_tenant_schema/1, which would also
-  # issue its own CREATE SCHEMA IF NOT EXISTS -- redundant with step 1
-  # below, and this module already owns the CREATE SCHEMA step), lets
-  # replay_migrations/2 do the real migration run + event-type seed against
-  # that schema_name, then deletes BOTH throwaway rows -- keeping the schema
-  # itself, which is what "tenant_template" ends up naming. No Registration
-  # row for "tenant_template" survives this function, satisfying INV-4.
+  # This also subsumes ISSUE-FIXER's MINOR finding (step-05 handoff): the
+  # throwaway Registration row's schema_name is now the FRESH staging name
+  # on every attempt (never a reused literal), so a stale row surviving a
+  # prior crashed attempt can never collide with a new attempt's insert --
+  # no upsert is needed, not because upserts are unnecessary in general, but
+  # because collision is structurally impossible once each attempt's own
+  # schema_name value is unique by construction.
+  #
+  # Reuses design OQ-1 option (b) exactly as before (build via the REAL,
+  # unmodified replay_migrations/2 against a throwaway Tenant/Registration
+  # row targeting the staging schema, not tenant_template.ex's own
+  # provision_tenant_schema/1 call, which would issue a redundant CREATE
+  # SCHEMA IF NOT EXISTS) -- only the schema name each step targets has
+  # changed, not the underlying mechanism.
   defp build_template! do
-    Repo.query!(~s(CREATE SCHEMA IF NOT EXISTS "#{@template_schema}"))
+    staging_schema = generate_staging_schema_name()
 
-    throwaway_tenant_id = insert_throwaway_tenant_and_registration!()
+    # Step 1: no IF NOT EXISTS -- a freshly-randomized name colliding with an
+    # existing schema would itself indicate a random-name-generation bug, not
+    # a legitimate re-attempt case (design §2.3 step 1).
+    Repo.query!(~s(CREATE SCHEMA "#{staging_schema}"))
 
-    # CONNECTION-BOUNDARY FIX (ORCH). replay_migrations/2 delegates to
-    # Ecto.Migrator.run/4, which CHECKS OUT ITS OWN CONNECTION rather than
-    # using this one. Under a partitioned run (MIX_TEST_PARTITION set, i.e.
-    # scripts/test_parallel.sh) that connection is still sandbox-owned, so
-    # Sandbox.mode(:auto) set on THIS connection never reaches it and every
-    # migration is rolled back the moment the checkout ends -- while
-    # replay_migrations/2 still returns {:ok, versions}, because from its own
-    # point of view the migrations really did run.
-    #
-    # Measured symptom before this fix: the template schema EXISTED (CREATE
-    # SCHEMA above runs on this connection and commits) but held ZERO tables,
-    # not even schema_migrations, and 354 suite failures followed from
-    # TENANT_TEMPLATE_SELF_CHECK_FAILED. The same test file passed 6/6
-    # against the default letflow_test database, which is why this hid until
-    # a real partitioned run.
-    #
-    # The fix cannot be applied to the migration call alone: replay_migrations/2
-    # begins with Repo.get_by(Registration, tenant_id: ...), and the throwaway
-    # Registration row is inserted on the sandbox connection. Running only the
-    # migration unboxed puts the lookup on a DIFFERENT connection that cannot
-    # see that row, so it returns {:error, :tenant_not_provisioned} instead.
-    # The whole build -- row insert, migration, cleanup -- has to run on one
-    # unboxed connection together. See ensure_template!/0's caller-side wrap.
+    throwaway_tenant_id = insert_throwaway_tenant_and_registration!(staging_schema)
+
+    # CONNECTION-BOUNDARY FIX (ORCH, preserved from the pre-rework-4
+    # implementation). replay_migrations/2 delegates to Ecto.Migrator.run/4,
+    # which CHECKS OUT ITS OWN CONNECTION rather than using this one. Under a
+    # partitioned run (MIX_TEST_PARTITION set, i.e. scripts/test_parallel.sh)
+    # that connection is still sandbox-owned unless the whole build runs
+    # unboxed together (see ensure_template!/0's caller-side wrap) -- see
+    # that function's own comment for the full symptom/fix history. Step 2.
     case TenantProvisioning.replay_migrations(throwaway_tenant_id) do
       {:ok, _applied_versions} ->
         :ok
@@ -300,13 +291,32 @@ defmodule Letflow.Test.TenantTemplate do
           message: "TENANT_TEMPLATE_BUILD_FAILED replay_migrations/2 returned #{inspect(reason)}"
     end
 
+    # Step 3: self-check runs against the STAGING schema -- if it raises,
+    # execution never reaches step 5's rename, and "tenant_template" is never
+    # observed to exist at all (design §0.7, INV-8).
+    template_self_check!(staging_schema)
+
+    # Step 4: bookkeeping-row cleanup, targeting the staging schema's own
+    # throwaway row (mirrors the pre-rework-4 delete_throwaway_tenant_and_registration!/1
+    # call, unchanged in substance).
     delete_throwaway_tenant_and_registration!(throwaway_tenant_id)
 
-    template_self_check!()
+    # Step 5: THE ATOMIC COMMIT POINT. A single catalog-level statement, no
+    # table/index rebuild -- only after this succeeds does "tenant_template"
+    # exist under its well-known name.
+    Repo.query!(~s(ALTER SCHEMA "#{staging_schema}" RENAME TO "#{@template_schema}"))
+
     :ok
   end
 
-  defp insert_throwaway_tenant_and_registration!(schema_name \\ @template_schema) do
+  # design §2.3 step 0: any collision-resistant per-attempt token: uniqueness
+  # per attempt is the requirement, not cryptographic strength.
+  defp generate_staging_schema_name do
+    suffix = :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+    "tenant_template_build_" <> suffix
+  end
+
+  defp insert_throwaway_tenant_and_registration!(schema_name) do
     tenant =
       %Tenant{}
       |> Tenant.create_changeset(
@@ -318,21 +328,25 @@ defmodule Letflow.Test.TenantTemplate do
       )
       |> Repo.insert!()
 
-    # Registration.changeset/2's validate_format/3 deliberately REJECTS both
-    # "tenant_template" and "tenant_template_refcheck" (it only accepts the
-    # "tenant_" <> 32-hex shape schema_name_for_tenant/1 produces) -- that
-    # rejection is INV-1 working exactly as designed (design §2.2): no code
-    # path that goes through the normal changeset can ever register either
-    # synthetic schema as if it were a real tenant schema. This insert
-    # deliberately bypasses that changeset via Repo.insert_all/3 with a
-    # literal map (not Registration.changeset/2), because this row is
+    # Registration.changeset/2's validate_format/3 deliberately REJECTS every
+    # schema_name this function is ever called with -- the randomized staging
+    # name (design §0.7) and "tenant_template_refcheck" alike -- it only
+    # accepts the "tenant_" <> 32-hex shape schema_name_for_tenant/1 produces.
+    # That rejection is INV-1 working exactly as designed (design §2.2): no
+    # code path that goes through the normal changeset can ever register a
+    # synthetic build/refcheck schema as if it were a real tenant schema.
+    # This insert deliberately bypasses that changeset via Repo.insert_all/3
+    # with a literal map (not Registration.changeset/2), because this row is
     # required only transiently, to satisfy replay_migrations/2's own
     # Registration-row lookup precondition, and is deleted again by
     # delete_throwaway_tenant_and_registration!/1 before the caller returns
     # -- see design §2.2's OQ-1 option (b), reused here (§3.4 use site 1) for
     # the independent reference-schema build too. No Registration row naming
-    # either synthetic schema ever survives outside this one function's own
-    # caller.
+    # any synthetic schema ever survives outside this one function's own
+    # caller. §0.7's MINOR fix: since schema_name is now the FRESH,
+    # per-attempt staging name rather than a reused literal, this insert can
+    # never collide with a stale row from a prior crashed attempt -- no
+    # upsert needed, by construction.
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     Repo.insert_all(Registration, [
@@ -352,22 +366,28 @@ defmodule Letflow.Test.TenantTemplate do
     Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
   end
 
-  # design §2.3 step 3: assert the template's own table set and migration
-  # version set are complete, THEN run the full parity self-check (design
-  # §3.4 use site 1) against a genuinely independent replay_migrations/2
-  # build. Raise immediately rather than serving clones from a broken
-  # template (design §5).
+  # design §2.3 step 3: assert the STAGING schema's own table set and
+  # migration version set are complete, THEN (opt-in) run the full parity
+  # self-check (design §3.4 use site 1) against a genuinely independent
+  # replay_migrations/2 build. Raise immediately rather than renaming an
+  # incomplete build into place (design §5, §0.7 -- this is what makes
+  # INV-8 true: the rename in build_template!/0 only ever runs AFTER this
+  # function returns :ok).
+  #
+  # `schema_name` is the schema to check -- the STAGING schema during a
+  # normal build (design §0.7's "Naming detail": every §2.3 step before the
+  # rename targets the staging name, never the literal "tenant_template").
   #
   # The two cheap MapSet diffs below (table-set, migration-version-set) are
   # NOT the parity self-check -- they are a fast pre-check that fails loudly
-  # before paying for a whole second migration replay if the template is
+  # before paying for a whole second migration replay if the build is
   # obviously broken. The actual design §3.4 use-site-1 check is the
   # assert_clone_parity!/2 call at the end of this function, against a
   # SECOND schema built independently via the real, unmodified
   # replay_migrations/2 (not derived from or compared against itself).
-  defp template_self_check!() do
+  defp template_self_check!(schema_name) do
     expected = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
-    actual = MapSet.new(tables_in(@template_schema))
+    actual = MapSet.new(tables_in(schema_name))
 
     missing = MapSet.difference(expected, actual)
     extra = MapSet.difference(actual, expected)
@@ -384,7 +404,7 @@ defmodule Letflow.Test.TenantTemplate do
       |> Enum.map(fn {version, _module} -> version end)
       |> MapSet.new()
 
-    applied_versions = MapSet.new(applied_versions_in(@template_schema))
+    applied_versions = MapSet.new(applied_versions_in(schema_name))
 
     versions_missing = MapSet.difference(manifest_versions, applied_versions)
 
@@ -413,7 +433,7 @@ defmodule Letflow.Test.TenantTemplate do
     # and can be turned on suite-wide with LETFLOW_TEMPLATE_REFCHECK=1 when
     # someone wants the stronger guarantee and can afford the connections.
     if System.get_env("LETFLOW_TEMPLATE_REFCHECK") == "1" do
-      assert_template_parity_against_independent_reference!()
+      assert_template_parity_against_independent_reference!(schema_name)
     end
 
     :ok
@@ -443,6 +463,16 @@ defmodule Letflow.Test.TenantTemplate do
   """
   @spec assert_template_parity_against_independent_reference!() :: :ok
   def assert_template_parity_against_independent_reference!() do
+    assert_template_parity_against_independent_reference!(@template_schema)
+  end
+
+  # `candidate_schema` is the schema under test -- @template_schema for the
+  # public 0-arity API's own use (comparing the REAL, already-renamed
+  # template), or the STAGING schema when called from template_self_check!/1
+  # during a build (§0.7 -- the rename to "tenant_template" has not
+  # happened yet at that point, so the candidate is still under its
+  # randomized staging name).
+  defp assert_template_parity_against_independent_reference!(candidate_schema) do
     reference_schema = "tenant_template_refcheck"
 
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{reference_schema}" CASCADE))
@@ -462,7 +492,7 @@ defmodule Letflow.Test.TenantTemplate do
                 "returned #{inspect(reason)}"
       end
 
-      assert_clone_parity!(reference_schema, @template_schema,
+      assert_clone_parity!(reference_schema, candidate_schema,
         dimensions: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]
       )
     after
@@ -493,6 +523,20 @@ defmodule Letflow.Test.TenantTemplate do
           ~s|CREATE TABLE "#{clone_schema}"."#{table}" (LIKE "#{@template_schema}"."#{table}" INCLUDING ALL)|
         )
       end)
+
+      # Step 3.5: index/constraint rename to template names -- REWORK 4
+      # ADDITION, mandatory (design §0.6/§2.3 step 3.5, INV-7). LIKE ...
+      # INCLUDING ALL auto-renames every non-primary-key index, and
+      # Ecto.Changeset.unique_constraint/3 (and foreign_key_constraint/3,
+      # check_constraint/3) match a Postgres constraint violation back to a
+      # changeset field by NAME -- a structurally-correct but differently-
+      # named index is invisible to that error-mapping layer, so
+      # Repo.insert/1 lets a raw Ecto.ConstraintError propagate instead of
+      # returning {:error, changeset}. Must run BEFORE step 4 (FK re-add):
+      # no ordering dependency between them (they touch different catalog
+      # objects), but the design places renaming first since it has no
+      # dependency on anything after it either.
+      rename_indexes_to_template_names!(clone_schema, tables)
 
       # Step 4: foreign-key re-add, with the TEMPLATE schema's own qualifier
       # textually rewritten to the CLONE schema's qualifier throughout the
@@ -551,6 +595,106 @@ defmodule Letflow.Test.TenantTemplate do
     end
   rescue
     exception -> {:error, {:clone_failed, exception}}
+  end
+
+  # design §0.6/§2.3 step 3.5, INV-7. Pairs each clone index to its template
+  # counterpart STRUCTURALLY (name-blind -- reuses structural_indexdef/1 and
+  # the single-schema normalize/2 already established for dimension #4, per
+  # the design's own instruction not to reinvent the pairing technique), then
+  # ALTER INDEX ... RENAME TO for every pair whose auto-generated clone name
+  # differs from the template's own name. A coincidentally-already-matching
+  # pair (in practice, at most one per table: the primary key, whose clone
+  # name regenerates identically to the template's per §0.6.1) is left alone
+  # -- renaming a name to itself is wasteful and, per the coordinator's own
+  # note, may be an error on some Postgres versions for a no-op rename.
+  #
+  # Per §0.6.2, a single ALTER INDEX ... RENAME on a constraint-backed index
+  # atomically renames the owning pg_constraint row too -- no separate
+  # ALTER TABLE ... RENAME CONSTRAINT is issued or needed.
+  #
+  # Discovery is batched into TWO round trips total (one per schema), not one
+  # per table -- the same round-trip-count lever ISS-0427 itself exists to
+  # pull, applied here for the same reason recreate_sequences!/1's own
+  # per-column discovery was batched: a per-table query for ~39 tables would
+  # add ~78 extra round trips (plus the ~60-100 rename statements themselves)
+  # on top of everything else, materially eating the clone/replay speedup on
+  # a host with real per-round-trip latency -- measured directly: the
+  # per-table form cost this mechanism an extra ~100-150ms per clone,
+  # dropping the ratio from ~2.0x to ~1.4x median before this fix.
+  defp rename_indexes_to_template_names!(clone_schema, tables) do
+    template_by_table = index_name_defs_by_table(@template_schema)
+    clone_by_table = index_name_defs_by_table(clone_schema)
+
+    Enum.each(tables, fn table ->
+      template_indexes = Map.get(template_by_table, table, [])
+      clone_indexes = Map.get(clone_by_table, table, [])
+
+      # Structural pairing: group each side by its name-stripped, own-schema-
+      # normalized indexdef. §0.6.3's probe confirmed this yields an
+      # unambiguous 1:1 correspondence on the real schema -- every normalized
+      # definition value appears exactly once per side.
+      template_by_def = Map.new(template_indexes, fn {name, def} -> {def, name} end)
+
+      Enum.each(clone_indexes, fn {clone_name, def} ->
+        case Map.fetch(template_by_def, def) do
+          {:ok, ^clone_name} ->
+            # Names already match (the primary-key coincidence, §0.6.1) --
+            # no-op, do not issue a rename-to-self.
+            :ok
+
+          {:ok, template_name} ->
+            Repo.query!(
+              ~s(ALTER INDEX "#{clone_schema}"."#{clone_name}" RENAME TO "#{template_name}")
+            )
+
+          :error ->
+            # No structural counterpart found on the template side for this
+            # table -- cannot happen for a genuine LIKE-produced clone (every
+            # clone index is a copy of a template index by construction), so
+            # this would indicate a real bug rather than an expected case;
+            # left unhandled deliberately so it surfaces as a raised
+            # KeyError-shaped failure rather than being silently skipped.
+            raise ExUnit.AssertionError,
+              message:
+                "TENANT_TEMPLATE_CLONE_FAILED no template index found matching clone index " <>
+                  "#{clone_name} on table=#{table} (normalized def=#{inspect(def)})"
+        end
+      end)
+    end)
+  end
+
+  # design §3.2 dimension #4(b)'s own pairing helper (check_index_names/2)
+  # still calls the per-table index_name_defs/2 below -- kept separate from
+  # this batched form because the parity check runs across common_tables
+  # derived independently and is not on the hot provisioning path this
+  # optimization targets (it runs once per template build / once per
+  # dedicated parity test, not once per clone).
+  defp index_name_defs_by_table(schema_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = $1",
+        [schema_name]
+      )
+
+    Enum.group_by(
+      rows,
+      fn [table, _name, _def] -> table end,
+      fn [_table, name, def_sql] ->
+        {name, structural_indexdef(normalize(def_sql, schema_name))}
+      end
+    )
+  end
+
+  defp index_name_defs(schema_name, table_name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2",
+        [schema_name, table_name]
+      )
+
+    Enum.map(rows, fn [name, def_sql] ->
+      {name, structural_indexdef(normalize(def_sql, schema_name))}
+    end)
   end
 
   # design §0.1 finding 1: pg_get_constraintdef emits TEMPLATE-qualified
@@ -902,10 +1046,25 @@ defmodule Letflow.Test.TenantTemplate do
     rows
   end
 
-  # dimension #4: indexes -- pg_indexes.indexdef, schema-qualifier-normalized,
+  # dimension #4: indexes -- TWO separate assertions, both mandatory
+  # (design §3.2 dimension #4, rework 4 / §0.6). (a) STRUCTURE:
+  # pg_indexes.indexdef, schema-qualifier-normalized, own-name-stripped,
   # compared as a multiset per table, explicitly NOT by indexname (design
-  # §0.1 finding 2).
+  # §0.1 finding 2, rework-3 gate correction). (b) NAME (NEW, rework 4,
+  # INV-7): after pairing each candidate index to its reference counterpart
+  # via (a)'s structural, name-blind comparison, assert `indexname` is
+  # IDENTICAL between the paired reference and candidate indexes. Ordering
+  # matters and is why this is not one combined check: (a) pairs first
+  # (structure, name-blind), THEN (b) asserts on the now-paired objects
+  # (name, structure-blind) -- never the reverse, per the design's own
+  # explicit instruction not to collapse the two steps.
   defp check_indexes(reference_schema, candidate_schema) do
+    structure_diffs = check_index_structure(reference_schema, candidate_schema)
+    name_diffs = check_index_names(reference_schema, candidate_schema)
+    structure_diffs ++ name_diffs
+  end
+
+  defp check_index_structure(reference_schema, candidate_schema) do
     ref = index_defs(reference_schema)
     cand = index_defs(candidate_schema)
 
@@ -917,6 +1076,46 @@ defmodule Letflow.Test.TenantTemplate do
     else
       ["indexes: reference=#{inspect(ref_freq)} candidate=#{inspect(cand_freq)}"]
     end
+  end
+
+  # design §3.2 dimension #4(b), INV-7. For each table common to both
+  # schemas, pair reference/candidate indexes STRUCTURALLY (same technique
+  # §2.3 step 3.5's own mechanism uses, reused rather than reinvented), then
+  # assert the paired indexes' own catalog names are identical. This is what
+  # would have caught ISS-0427's post-merge defect (a structurally-correct
+  # but differently-named clone) at parity-check time rather than as a raw
+  # Ecto.ConstraintError seven application tests away.
+  defp check_index_names(reference_schema, candidate_schema) do
+    common_tables =
+      MapSet.intersection(
+        MapSet.new(tables_in(reference_schema)),
+        MapSet.new(tables_in(candidate_schema))
+      )
+
+    Enum.flat_map(common_tables, fn table ->
+      ref_by_def =
+        Map.new(index_name_defs(reference_schema, table), fn {name, def} -> {def, name} end)
+
+      cand_indexes = index_name_defs(candidate_schema, table)
+
+      Enum.flat_map(cand_indexes, fn {cand_name, def} ->
+        case Map.fetch(ref_by_def, def) do
+          {:ok, ^cand_name} ->
+            []
+
+          {:ok, ref_name} ->
+            [
+              "index name mismatch table=#{table} reference_name=#{ref_name} candidate_name=#{cand_name} (structurally paired, def=#{inspect(def)})"
+            ]
+
+          :error ->
+            # No structural counterpart on the reference side -- already
+            # reported as a structure diff by check_index_structure/2 above;
+            # not duplicated here.
+            []
+        end
+      end)
+    end)
   end
 
   defp index_defs(schema_name) do

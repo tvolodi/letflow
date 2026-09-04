@@ -9,12 +9,14 @@
   "created_at": "2026-09-04T06:16:05Z",
   "started_at": "2026-09-04T05:40:00Z",
   "completed_at": "2026-09-04T06:16:05Z",
-  "status": "BLOCKED",
+  "status": "FAILED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0427"],
+    "issue_ids": [
+      "ISS-0427"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0427-tenant-test-schema-template-clone.md",
       "handoffs/WF03-ISS0427-20260904/step-01-issue-fixer-diagnosis.json",
@@ -30,7 +32,7 @@
     ]
   },
   "task": {
-    "description": "WF-03 Step 3 for ISS-0427: implement the gate-approved design (lib/letflow/design/iss0427-tenant-test-schema-template-clone.md) -- Letflow.Test.TenantTemplate (test/support/tenant_template.ex), its 13-dimension assert_clone_parity!/2, and wiring TenantFixture.provisioned_tenant!/1 to use it with the design's explicit opt-out. Verify with real output: compile, format, a real parity-check pass against a real clone, a deliberately broken clone proving the check is non-vacuous, a before/after timing measurement, and a real test-file run."
+    "description": "STATUS VOCABULARY NOTE: this step's top-level status was originally written as \"BLOCKED\", which is not one of HANDOFF_PROTOCOL.md's six legal values and failed mix letflow.lint_handoffs's H1 check. Corrected to FAILED, the legal value for a step that could not complete. The substance is unchanged and was correct: ELIXIR-DEV stopped rather than improvising a trigger-copy mechanism the design never specified, which was the right call and led to the design's false trigger-dormancy premise being found.\n\nWF-03 Step 3 for ISS-0427: implement the gate-approved design (lib/letflow/design/iss0427-tenant-test-schema-template-clone.md) -- Letflow.Test.TenantTemplate (test/support/tenant_template.ex), its 13-dimension assert_clone_parity!/2, and wiring TenantFixture.provisioned_tenant!/1 to use it with the design's explicit opt-out. Verify with real output: compile, format, a real parity-check pass against a real clone, a deliberately broken clone proving the check is non-vacuous, a before/after timing measurement, and a real test-file run."
   },
   "result": {
     "status": "BLOCKED",

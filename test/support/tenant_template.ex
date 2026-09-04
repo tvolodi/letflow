@@ -358,7 +358,8 @@ defmodule Letflow.Test.TenantTemplate do
 
     # Registration.changeset/2's validate_format/3 deliberately REJECTS every
     # schema_name this function is ever called with -- the randomized staging
-    # name (design §0.7) and "tenant_template_refcheck" alike -- it only
+    # name (design §0.7) and the refcheck's own randomized reference name
+    # (ISS-0468, same generate_staging_schema_name/0 helper) alike -- it only
     # accepts the "tenant_" <> 32-hex shape schema_name_for_tenant/1 produces.
     # That rejection is INV-1 working exactly as designed (design §2.2): no
     # code path that goes through the normal changeset can ever register a
@@ -501,7 +502,7 @@ defmodule Letflow.Test.TenantTemplate do
   # happened yet at that point, so the candidate is still under its
   # randomized staging name).
   defp assert_template_parity_against_independent_reference!(candidate_schema) do
-    reference_schema = "tenant_template_refcheck"
+    reference_schema = generate_staging_schema_name()
 
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{reference_schema}" CASCADE))
     Repo.query!(~s(CREATE SCHEMA "#{reference_schema}"))

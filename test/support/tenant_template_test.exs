@@ -95,6 +95,28 @@ defmodule Letflow.Test.TenantTemplateTest do
 
       assert :ok = TenantTemplate.assert_template_parity_against_independent_reference!()
     end
+
+    # ISS-0468 regression: before this fix, the reference schema's name was
+    # the fixed literal "tenant_template_refcheck" -- two concurrent
+    # invocations both racing CREATE SCHEMA against tenant_schemas'
+    # UNIQUE(schema_name) index would collide. Reproduced against the
+    # pre-fix code (git stash the fix, run this test) as an Ecto/Postgrex
+    # unique-violation exception; passes cleanly post-fix because
+    # generate_staging_schema_name/0 mints a fresh, collision-resistant
+    # name per invocation, matching ISS-0427's own fix for the staging
+    # build name.
+    test "two concurrent reference-schema builds do not collide" do
+      :ok = TenantTemplate.ensure_template!()
+
+      results =
+        [
+          Task.async(&TenantTemplate.assert_template_parity_against_independent_reference!/0),
+          Task.async(&TenantTemplate.assert_template_parity_against_independent_reference!/0)
+        ]
+        |> Task.await_many(30_000)
+
+      assert results == [:ok, :ok]
+    end
   end
 
   describe "non-vacuity — a genuinely divergent clone must fail this same check" do

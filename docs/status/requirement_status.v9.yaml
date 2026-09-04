@@ -365,3 +365,22 @@ history:
       docs/issues/ISS-0441.yaml for full resolution detail. First
       real-world test of the new protection is this same run's own
       Step Final merge.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T19:02:00Z"
+    note: >
+      ORCH-direct-20260904-ISS0468 done (queue task 468, GH#898, stage
+      S6). Fixed test/support/tenant_template.ex's
+      assert_template_parity_against_independent_reference!/1, which
+      hardcoded a fixed reference-schema name ("tenant_template_refcheck")
+      colliding under concurrent invocation -- same class ISS-0427 already
+      fixed for the template build itself. Replaced with
+      generate_staging_schema_name(), reusing ISS-0427's own generator.
+      Added a real concurrency regression test, mutation-tested (fails
+      against the old literal, passes against the fix). Direct ORCH
+      action (single file, test-support code, no test-asserted-behavior
+      change). Full suite 3222/3224, 2 pre-existing rustc-gap failures.
+      One self-inflicted false alarm along the way (a stale DB row from
+      a force-killed foreground test run) diagnosed and cleaned up, not
+      a regression. See docs/issues/ISS-0468.yaml for full detail.

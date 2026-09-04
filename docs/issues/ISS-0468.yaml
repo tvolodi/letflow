@@ -1,0 +1,75 @@
+id: ISS-0468
+title: "template refcheck uses a FIXED reference schema name, colliding under parallel partitions"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0428-20260904
+discovered_at: "2026-09-04T17:59:38Z"
+severity: MINOR
+tags: [testing, tenant-template, race-condition, s6]
+description: >
+  test/support/tenant_template.ex's
+  assert_template_parity_against_independent_reference!/1 hardcoded
+  reference_schema = "tenant_template_refcheck". The name is fixed and
+  tenant_schemas.schema_name is UNIQUE-indexed, so two partitions (or two
+  concurrent calls within one partition) reaching it at the same time
+  collide on tenant_schemas_schema_name_index. SAME CLASS as a bug ISS-0427
+  already fixed one step earlier for the TEMPLATE itself (randomized
+  staging schema + build-then-rename), which was not applied to the
+  verification counterpart in the same module.
+
+  MITIGATING at filing time: not on the default path -- opt-in behind
+  LETFLOW_TEMPLATE_REFCHECK=1 per ISS-0427's cost-placement decision -- so
+  the surface was narrow, but would bite whoever enables the refcheck
+  suite-wide.
+affected_files:
+  - test/support/tenant_template.ex
+  - test/support/tenant_template_test.exs
+related:
+  - ISS-0427
+queue_task_id: 468
+github_issue: 898
+status: resolved
+resolved_in_run: ORCH-direct-20260904-ISS0468
+resolved_at: "2026-09-04T19:00:00Z"
+resolution: >
+  Direct ORCH action (ORCHESTRATOR.md S10: single file for the production
+  fix, test-support code not a production tenant-data path, no migration,
+  no supervision-tree touch, no test-asserted-behavior change -- confirmed
+  via grep that no test hardcodes the literal reference-schema name).
+
+  FIX. `reference_schema = "tenant_template_refcheck"` replaced with
+  `reference_schema = generate_staging_schema_name()`, reusing ISS-0427's
+  own established collision-resistant name generator verbatim rather than
+  inventing a second one. The module was re-grepped for other fixed-name
+  schema-literal patterns (AC4) -- the only other fixed name,
+  `"tenant_template"` itself, is deliberately stable by design (the
+  template's own well-known final name after build-then-rename; ISS-0427's
+  own fix already made the build path leading up to it collision-safe).
+
+  AC2 (a failed refcheck does not leak the reference schema) was already
+  structurally satisfied by the pre-existing `try/after` wrapping both the
+  migration-replay and the parity assertion -- unchanged by this fix, since
+  the leak-prevention mechanism doesn't depend on which name is used.
+
+  TEST. Added a real regression test,
+  "two concurrent reference-schema builds do not collide", spawning two
+  concurrent `Task`s calling the public 0-arity API and asserting both
+  return `:ok`. Mutation-tested: reverted to the old hardcoded literal in a
+  throwaway copy, reran -- the new test failed with a real Postgrex unique-
+  violation exception (6/7 passed), confirming non-vacuous coverage;
+  reverted and reconfirmed 7/7 clean.
+
+  Full suite: 3222/3224 passed, 2 pre-existing rustc-toolchain-gap
+  failures. One self-inflicted false alarm along the way, corrected before
+  finishing: an earlier foreground test run during this same fix was
+  force-killed (`kill -9`) after a malformed command hung, which left a
+  real stale `tenant_schemas` row (and no matching complete schema)
+  referencing the OLD literal name "tenant_template_refcheck" in the
+  shared, non-sandboxed test database -- an unrelated ServiceCatalogTest
+  suite subsequently picked up that stale row and failed with a genuine
+  `undefined_table` error on `tenant_template_refcheck.process_definitions`.
+  Diagnosed structurally (queried `tenant_schemas` directly, found the
+  exact stale row, confirmed it referenced the pre-fix literal name),
+  cleaned up (dropped the schema, deleted the stale `tenant_schemas`/
+  `tenants` rows), and re-ran the full suite clean -- not a regression in
+  the fix itself, a testing-hygiene artifact of an interrupted foreground
+  run against the shared test database.

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000002",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0459-20260904/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-04T13:37:00Z",
+  "started_at": "2026-09-04T13:37:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0459.yaml",
+      "docs/issues/ISS-0458.yaml",
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/README.md",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks.ex",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks/task.ex",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue_web/controllers/task_controller.ex",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/test/letflow_queue/tasks_test.exs"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ]
+  },
+  "task": {
+    "description": "Step 0.5 + Step 1 combined (WF-03_issue_resolving.md). This is Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0459. Do NOT trust ISS-0459.yaml's filing prose as settled fact -- re-derive independently per HANDOFF_PROTOCOL.md section 1.1: a handoff/record's factual claims are checkable and may be wrong.\n\nSTEP 0.5: search docs/issues/ for a prior resolved entry covering this exact gap (a release_lock status for a terminal-but-not-resolved WF-03 outcome). Report whether a match exists.\n\nSTEP 1 -- re-derive the diagnosis from the actual source, not from the filing:\n1. Open letflow-queue's OWN source (paths in artifacts_in above, in the sibling checkout c:/Users/tvolo/dev/ai-dala/letflow-queue) and confirm, first-hand, what release_lock's actual legal status values are and what get_next_task's actual SQL eligibility predicate is. Quote the exact code.\n2. Specifically verify or refute this candidate finding, stated here as a claim to check, not as settled: letflow_queue/tasks/task.ex line 18 defines @statuses ~w(open done blocked) -- i.e. 'blocked' is ALREADY a legal release_lock status today, and tasks.ex's get_next_task/1 SQL eligibility predicate filters on t.status = 'open' only, meaning a task released with status:blocked is ALREADY excluded from future get_next_task claims. Also verify: tap_maybe_close_github_issue/2 only fires on status == \"done\" (see tasks.ex ~line 382-399), so releasing with status:blocked does NOT best-effort-close the GitHub issue. If both of these check out, the LIFO re-selection HAZARD described in ISS-0459 may already be preventable today by releasing with status:\"blocked\" instead of status:\"done\" or no-status -- state plainly whether this is true, and if so, why TASK_QUEUE.md's own text (as quoted in ISS-0459's own description, and as you should re-read directly) does not already document this as the answer. Consider: does 'blocked' as an English word semantically mismatched the instrumented/no_defect meaning badly enough that documenting it under that name would misinform a future reader, even if it is mechanically sufficient? Give your own reasoned judgment, do not just report symptom.\n3. State plainly: does ANY existing letflow-queue status value, or ANY existing TASK_QUEUE.md-documented mechanism, already fully satisfy ISS-0459's Acceptance Criterion 1 (a release_lock status/mechanism that marks a task terminally closed for LIFO-selection purposes without asserting resolved and without best-effort-closing an already-closed GitHub issue)? Your answer drives whether CODE-DESIGNER's next step is 'add a new status value + migration' or 'document existing blocked semantics correctly, no code change' or something else.\n4. Do NOT implement anything. Do NOT edit letflow-queue's source. Do NOT edit TASK_QUEUE.md or ISSUE_QUEUE.md yet -- that is CODE-DESIGNER's and then ELIXIR-DEV's job, after a design gate.\n5. Write your diagnosis into result.summary: root cause (confirmed or refuted against source), the 'blocked' finding's verdict, and what a fix needs to change (or confirm needs no code change, only docs).",
+    "acceptance_criteria": [
+      "Step 0.5: docs/issues/ searched for a prior resolved match; result stated explicitly (found/not found)",
+      "letflow-queue source code quoted first-hand (not inferred from README prose alone) for: @statuses, get_next_task's SQL WHERE clause, and tap_maybe_close_github_issue's guard clause",
+      "The 'blocked already solves this' candidate finding is explicitly confirmed or refuted with the quoted evidence",
+      "A clear statement of what CODE-DESIGNER needs to design: new status value vs. documentation-only vs. other",
+      "No implementation, no file edits outside this handoff"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -242,9 +242,17 @@ configuration call is being added, so there is nothing to live-verify by attempt
 rejected push — a documentation prohibition is not a mechanically-enforced gate; its
 "verification" is textual review (CODE-DESIGN-VALIDATOR, then REVIEWER, confirming the
 new paragraphs are unambiguous and correctly placed), not a `gh api`/`git push` call.
-This is stated explicitly per the acceptance-criteria mapping in §7, not left silent.
+This is stated explicitly per the acceptance-criteria mapping in §7 (sourced from
+GitHub issue #896 / this run's task framing, not the yaml file), not left silent.
 
-## 7. Acceptance criteria mapping (ISS-0467.yaml, verbatim criteria)
+## 7. Acceptance criteria mapping (as filed in GitHub issue #896 / this run's task framing)
+
+Note on sourcing: the three criteria below are copied from ISS-0467's filing on GitHub
+(issue #896) and from this run's own `task.description`/`task.acceptance_criteria`
+framing — **not** from a `docs/issues/ISS-0467.yaml` field. `docs/issues/ISS-0467.yaml`
+carries no `acceptance_criteria` field at all (confirmed by re-reading it); the earlier
+revision of this document mislabeled these as verbatim from that file, which was
+incorrect.
 
 1. *"Either configure `restrictions`... or add an explicit line to GIT_MERGE.md...
    decide and record which, and why"* → §1 (decision: Option 2) + §2 (exact text) + §4

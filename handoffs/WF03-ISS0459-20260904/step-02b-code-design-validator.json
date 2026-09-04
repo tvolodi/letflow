@@ -1,0 +1,54 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000004",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0459-20260904/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T13:43:09Z",
+  "started_at": "2026-09-04T13:43:09Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0459-20260904/step-01-issue-fixer-diagnose.json",
+      "handoffs/WF03-ISS0459-20260904/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0459-20260904/step-02-code-designer.json",
+      "handoffs/WF03-ISS0459-20260904/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0459.yaml",
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks.ex",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks/task.ex"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's Step 2 design (handoffs/WF03-ISS0459-20260904/step-02-code-designer.json's result.summary). Do NOT rubber-stamp -- independently re-derive per core-directives.md's Humanless Operation section ('validators must re-derive their verdict from the artefact itself, never from the producer's self-report').\n\nRe-check, yourself, against the actual letflow-queue source (not the design's own claims about it):\n1. Is it actually true that letflow-queue's get_next_task SQL excludes status='blocked' rows from ever being claimed? Read tasks.ex yourself and confirm.\n2. Is it actually true that release_lock(status:'blocked') does NOT trigger a GitHub-issue close? Read tasks.ex's tap_maybe_close_github_issue yourself and confirm.\n3. Does the drafted TASK_QUEUE.md prose (in step-02's result.summary) meet ISS-0459 Acceptance Criterion 2's bar -- 'documents the new status/mechanism with the same rigor as the existing done/no-status distinction'? Compare it side by side against TASK_QUEUE.md's EXISTING release_lock section's treatment of done/no-status (read that section yourself) -- does the new prose name the convention, state when to use it, state what it does NOT do, and give a worked example, matching that existing section's depth?\n4. Is the AC3 (task 458) recommendation concrete and safe -- does the design correctly establish that re-releasing task 458 with status:'blocked' will NOT re-trigger a GitHub close or reopen (since only a transition INTO 'done' triggers the close call, confirmed in your own check 2 above)?\n5. Is the documentation-only decision (no letflow-queue code change) actually justified, or does it leave a real gap ISS-0459's acceptance criteria require code to close? Form your own view -- do not simply agree because the design says so.\n6. Does the design avoid contradicting any docs/migration/decisions/ record? (Check whether any decision record governs letflow-queue's status vocabulary or the queue's minimal-four-operations design philosophy -- if the design proposes even the deferred/optional code change, that must not silently expand the four-operation surface without a decision-record flag.)\n\nGate verdict PASS only if all six hold with independently-verified evidence quoted in your result.summary. FAIL with specific, named gaps otherwise (per WF-02 Step 1b's gate-shape convention this project already follows for CODE-DESIGN-VALIDATOR).",
+    "acceptance_criteria": [
+      "get_next_task's exclusion of status='blocked' independently re-derived from tasks.ex source, not copied from step-02's claim",
+      "tap_maybe_close_github_issue's done-only guard independently re-derived from tasks.ex source",
+      "Drafted TASK_QUEUE.md prose compared side-by-side against the existing done/no-status section's rigor and explicitly judged sufficient or insufficient",
+      "AC3/task-458 safety claim independently verified",
+      "Documentation-only decision independently assessed as justified or not",
+      "No docs/migration/decisions/ conflict, or a conflict is flagged"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

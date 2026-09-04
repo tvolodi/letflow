@@ -4284,15 +4284,15 @@
       "issue_id": null,
       "queue_task_id": 445,
       "github_issue_number": 858,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/application.ex",
         "lib/letflow/supervisor/"
       ],
       "started_at": "2026-09-03T17:00:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 5 RELEASE-VALIDATOR COMPLETED -- PASS, dispatching Step 6 to DOC-UPDATER",
+      "lock_released_at": "2026-09-04T02:30:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #869 squash-merged to main (442aca78). Queue task 445 released done, GH#858 best-effort closed.",
       "note": "WF-02 requirement-implementation run for REQ-219: layer the flat 20-child Letflow.Application supervision tree into Infrastructure/Pollers/Http sibling supervisors, with Pollers getting an explicit restart-intensity override to structurally isolate a poller crash-loop from Repo/HTTP. Closes ISS-0425 parts 1+2. HIGH RISK -- touches app-wide boot sequence, must preserve two hand-maintained ordering constraints (ISS-0224, ISS-0429). TEST-DESIGN-VALIDATOR (step-03b) PASSED with a caveat: one earlier unlogged run of test/letflow/supervisor/ showed 71/72, not reproduced across 3 full re-runs or 5 isolated pollers_test.exs runs, failing test never captured. TEST-RUNNER (step-04) ran test/letflow/supervisor/ 10 more times in the foreground specifically hunting that anomaly -- 10/10 clean ('Result: 10 passed' each), not reproduced (18 total clean runs across both steps now). mix compile --warnings-as-errors clean. mix letflow.check.test's main mix test step failed 2/3181 -- both test/mix/tasks/letflow_check_toolchain_test.exs rust-pin tests, :enoent from System.cmd(\"rustc\",...), structurally pre-existing (git diff main...HEAD excludes that file and rustc is confirmed genuinely unreachable in this environment); its isolated :wasm_hang (7 passed) and :lua_wallclock_race (11 passed) subprocess runs, run separately since the task raised before reaching them, were both clean. Cross-checked with scripts/test_parallel.sh twice: run 1 had 3 failures (2 rustc-gap + 1 one-off Letflow.SandboxPoolTest RT-6 'ISS-0224 regression' timing flake co-occurring with an unrelated concurrent DBConnection.ConnectionError/statement_timeout in the same partition log); run 2 had only the 2 rustc-gap failures, and 3 isolated reruns of sandbox_pool_test.exs were clean -- RT-6 attributed to the already-documented ISS-0220/ISS-0222/ISS-0287 SandboxPool-under-DB-load-contention flake class (file untouched by this branch's diff; only diff-adjacent fact is SandboxPool's supervisor host module relocating into infrastructure.ex with its relative start order explicitly preserved). No REQ-219-specific failure found. Full report: test/reports/report-20260903-WF02-REQ219-20260903.yaml. RELEASE-VALIDATOR (step-05) independently re-derived all 10 ACs directly against current code/tests and independently re-ran the full suite twice (scripts/test_parallel.sh: 3176/3178, 2 pre-existing rustc-gap failures; mix letflow.check.test: first run surfaced 9 unexpected failures in TenantSchemaReaperTest/ServiceCatalogTest -- neither file touched by this branch's diff -- structurally attributed to real external DB-connection contention from a concurrent mix test process via this codebase's own ISS-0110 deferral-log mechanism firing mid-run, not reproduced on immediate re-run, which came back clean at 3179/3181 with only the 2 rustc-gap failures). ISS-0451 (persistent-crash-cascade follow-up) confirmed correctly filed and explicitly out of REQ-219's own AC4/decision-3 scope. docs/requirements.yaml correctly still shows REQ-219 in_progress. PASS, routed to DOC-UPDATER at step-06."
     },
     {

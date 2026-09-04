@@ -4627,7 +4627,7 @@
         "ISS-0467"
       ],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/agents/protocols/GIT_MERGE.md",
         "docs/agents/ORCHESTRATOR.md",
@@ -4639,8 +4639,9 @@
       "github_issue": 896,
       "released_lock": true,
       "started_at": "2026-09-04T19:02:24Z",
-      "last_known_step": "Step 5 COMPLETED PASS -- docs/issues/ISS-0467.yaml: resolved. GH#896 CLOSED with evidence comment. Queue task 467 released status:done. One rework cycle on Step 2 (CODE-DESIGN-VALIDATOR FAILed the design's acceptance-criteria source attribution; CODE-DESIGNER's narrow rework re-passed on regate). Step Final (git-merge) next.",
-      "note": "WF-03 issue-resolving run for ISS-0467 (found live during WF03-ISS0441-20260904, immediately after that run's own PR #895 configured branch protection): a bare git push origin main silently bypassed required-status-checks with no distinct flag/confirmation. ISSUE-FIXER's live diagnosis established GitHub's restrictions push-allowlist would be a structural no-op given this project's single admin identity (tvolodi) authenticates every push and merge. CODE-DESIGNER chose Option 2 (documented prohibition in GIT_MERGE.md, plus a clarifying paragraph in ORCHESTRATOR.md sec.10) over Option 1 (GitHub restrictions). Fix amends decision 0018 in place with a new dated subsection rather than opening a new decisions/ record."
+      "last_known_step": "Step Final COMPLETED PASS -- PR #902 squash-merged to main (daba0d73) via --admin override (structural attribution: two Backend gate CI failures, executor_test.exs and call_timeout_test.exs/host_api_write_test.exs, neither in this branch's docs-only diff, both previously-diagnosed mechanisms), independently reconfirmed via gh pr view 902/903 (both state MERGED) and gh issue view 896 (state CLOSED). Local mix test fully green: 3223+7+11 passed, 0 failed. docs/issues/ISS-0467.yaml: resolved. GH#896 CLOSED with evidence comment. Queue task 467 released status:done. One rework cycle on Step 2 (CODE-DESIGN-VALIDATOR FAILed the design's acceptance-criteria source attribution -- an ORCH dispatch-authoring error, not a CODE-DESIGNER defect; CODE-DESIGNER's narrow rework re-passed on regate). Incidental finding (executor_test.exs:625 wall-clock flake, hit live on this run's own Step Final CI, then recurred live a second time on the follow-up registration PR's own CI) properly registered as ISS-0469/queue task 469/GH#904 via register_task, after ELIXIR-DEV's own prohibited self-numbered 'ISS-0468' attempt was caught (collided with an unrelated concurrent fix) and corrected before merge. Local checkout synced to main at 166bcc0e.",
+      "note": "WF-03 issue-resolving run for ISS-0467 (found live during WF03-ISS0441-20260904, immediately after that run's own PR #895 configured branch protection): a bare git push origin main silently bypassed required-status-checks with no distinct flag/confirmation. ISSUE-FIXER's live diagnosis established GitHub's restrictions push-allowlist would be a structural no-op given this project's single admin identity (tvolodi) authenticates every push and merge. CODE-DESIGNER chose Option 2 (documented prohibition in GIT_MERGE.md, plus a clarifying paragraph in ORCHESTRATOR.md sec.10) over Option 1 (GitHub restrictions). Fix amends decision 0018 in place with a new dated subsection rather than opening a new decisions/ record. This run's own fix was itself dogfooded twice: its main-fix PR (#902), its handoff-finalization PR (#903), and its own incidental-finding registration PR (#905) all went through the normal branch+PR+gh-pr-merge path, never a direct push.",
+      "lock_released_at": "2026-09-04T20:51:31Z"
     }
   ]
 }

@@ -419,6 +419,51 @@ for the full account. Before calling `release_lock(status: "done")`, confirm the
 run's own final report describes a shipped fix or delivered requirement, not an
 investigation, partial finding, or reverted attempt.
 
+**`status: "blocked"` means the run reached a genuine, stable terminal stop that is NOT
+a resolution — use it for a WF-03 Step 5 outcome recorded as `instrumented` or
+`no_defect` (see `docs/agents/protocols/ISSUE_QUEUE.md`'s "Issue status vocabulary").**
+Both of those statuses assert the run investigated the issue to completion and reached a
+real, evidence-backed verdict, but neither asserts the underlying defect was fixed —
+`instrumented` ships verified diagnostic work with the root cause still open (and a
+required `superseded_by:` pointer); `no_defect` establishes there was no root cause to
+remove. Releasing either outcome with `status: "done"` is wrong for the same reason bare
+no-status release is wrong for a hand-back: it either falsely claims resolution
+(`"done"`'s documented meaning, above) or leaves the task `open` and immediately
+re-claimable by the very next `get_next_task` call — for `task_type: "issue"` tasks
+specifically, `get_next_task`'s LIFO issue-priority claim order (see function 2, above)
+means an `open`, already-fully-investigated issue-type task is re-claimed ahead of every
+other open task, producing a re-selection loop for any automated session that doesn't
+special-case it (this is exactly what happened live, 2026-09-04, to queue task
+458/ISS-0458 — see that record's own account).
+
+`status: "blocked"` avoids both failure modes: it excludes the task from every future
+`get_next_task` eligibility check (the claim query filters `WHERE t.status = 'open'`
+only — a `blocked` row can never match), so there is no re-selection loop, and it does
+NOT best-effort-close the task's linked GitHub Issue (only a release whose resulting
+status is literally `"done"` triggers that; `"blocked"` is a pure passthrough) —
+appropriate, since an `instrumented`/`no_defect` outcome typically still wants the
+GitHub issue's own Step 5 close-with-comment procedure to run on its own terms (see
+`WF-03_issue_resolving.md` Step 5), not the queue's best-effort side-closure.
+
+**What `status: "blocked"` does NOT assert:** despite the English word's ordinary sense
+("stuck, waiting on something, needs action" — the same sense this doc itself uses at
+"report blocked, do not select," above), a queue task released with `status: "blocked"`
+under this convention is NOT necessarily stuck or actionable. It means "terminally
+stopped, not resolved" — a deliberately reused existing enum value, not a new state
+invented for this meaning. Do not read `status: "blocked"` in queue task listings as
+"this needs attention" without also checking the linked `docs/issues/ISS-NNNN.yaml`
+record's own `status:` field (`instrumented` or `no_defect`) for what it actually means;
+the queue's bare three-value status field cannot distinguish a genuinely-stuck-and-
+actionable task from a genuinely-terminal one on its own today.
+
+```bash
+# Releasing an instrumented/no_defect WF-03 outcome:
+curl -X POST https://queue-test.ai-dala.com/tasks/42/release \
+  -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "'"$HOSTNAME"'-orch", "status": "blocked"}'
+```
+
 ```bash
 curl -X POST https://queue-test.ai-dala.com/tasks/42/release \
   -H "Authorization: Bearer $QUEUE_AUTH_TOKEN" \

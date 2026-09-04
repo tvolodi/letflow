@@ -1,14 +1,22 @@
-# docs/migration/ — R-Co → Elixir staged migration
+# docs/migration/ — historical build record of Letflow's R-Co → Elixir migration
 
-This directory holds the design rationale behind each migration
-stage (S0–S8, defined in `docs/requirements.yaml`'s `stages:` list) —
-the detail that doesn't fit that file's terse requirement schema, plus
-cross-links to the specific R-Co source paths each stage ports.
+Letflow is a multi-tenant BPM platform in its own right (see the
+top-level `README.md`); this directory is the historical record of how
+it got built, not live instructions for how it should be shaped going
+forward. It holds the design rationale behind each migration stage
+(S0–S8, defined in `docs/requirements.yaml`'s `stages:` list) — the
+detail that doesn't fit that file's terse requirement schema, plus
+cross-links to the specific R-Co source paths each stage ported from.
+The migration itself is effectively complete; what remains here is
+provenance for why Letflow's design looks the way it does, useful when
+a change touches code whose rationale traces back to a ported
+decision.
 
-R-Co lives at `c:\Users\tvolo\dev\ai-dala\R-Co\`. Every stage file
-below cites real paths confirmed to exist there as of 2026-08-14 —
-if a cited path is gone or renamed by the time you read this, that's
-drift to reconcile, not a typo to silently work around.
+R-Co, the predecessor system this project migrated from, lives at
+`c:\Users\tvolo\dev\ai-dala\R-Co\`. Every stage file below cites real
+paths confirmed to exist there as of 2026-08-14 — if a cited path is
+gone or renamed by the time you read this, that's drift to reconcile
+in the historical citation, not a typo to silently work around.
 
 ## Stage index
 
@@ -70,7 +78,8 @@ first requirement runs is expected.
 ## Milestones vs. stages
 
 Stages (S0-S8 above) are subsystem-scoped ports of specific R-Co
-source directories — the full migration target. A **milestone** is a
+source directories — together, the full scope of the original
+migration. A **milestone** is a
 different kind of thing: a thin, deliberately narrow slice cutting
 across several stages at reduced depth, aimed at a concrete visible
 outcome sooner than waiting for those stages to fully land would

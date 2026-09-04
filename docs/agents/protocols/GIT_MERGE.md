@@ -28,6 +28,26 @@ also required status checks on `main`'s branch protection — they gate the actu
 call itself, not only the meaning of "green" the agent chooses to trust. A plain merge
 attempt while either is red or pending is rejected by GitHub, not merely inadvisable.**
 
+> **No direct push to `main`, ever — not even a one-line doc fix (added
+> 2026-09-05, ISS-0467/0018 follow-up).** `main`'s required-status-checks branch
+> protection (0018) genuinely gates every merge made through this protocol's own
+> step 8 — but it does **not** gate a bare `git push origin main`. GitHub's
+> `restrictions` setting (branch protection's separate "restrict who can push"
+> control) cannot close that gap on this project: every push and every merge this
+> pipeline makes authenticates as the same single admin identity, so an allowlist
+> naming that identity would accept the exact bypass it would need to reject
+> (live-confirmed, ISS-0467). The only closure available is removing the
+> alternate path itself: **every change to `main`, with no exception for size,
+> triviality, or file count — including a single-line correction to this very
+> file — goes through this protocol's full branch-and-PR procedure (steps 1-9
+> below), never a direct `git push origin main`.** This applies even when
+> `ORCHESTRATOR.md` §10's sizing rule licenses skipping the producer/validator
+> agent chain for a qualifying edit — §10 licenses skipping *review*, not
+> skipping *this protocol*; see `ORCHESTRATOR.md` §10's own clarifying sentence
+> (added by this same fix) for the canonical statement of that boundary. An
+> agent that finds itself about to run `git push origin main` for any reason has
+> misread this protocol; stop, create a branch, and proceed from step 1 instead.
+
 **What "reported green" means here.** This suite carries a standing set of pre-existing
 failures (13-15 at the time of writing) and has for days, so "green" read as "zero
 failures" would make this precondition unsatisfiable and is *not* what it means. **Green

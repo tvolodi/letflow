@@ -1,0 +1,74 @@
+{
+  "handoff_id": "WF03-ISS0421-20260904-step-06",
+  "run_id": "WF03-ISS0421-20260904",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0421-20260904/step-06-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-04T13:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-219", "REQ-218"],
+    "issue_ids": ["ISS-0421", "ISS-0451"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0421-20260904/step-05b-test-design-validator.json",
+      "lib/letflow/admission.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "test/letflow/admission_test.exs",
+      "test/letflow/scheduler/poller_test.exs"
+    ],
+    "artifacts_out": [
+      "handoffs/WF03-ISS0421-20260904/step-06-test-runner.json",
+      "test/reports/report-20260904-WF03-ISS0421-20260904.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0421-20260904"
+  },
+  "task": {
+    "description": "Execute what TEST-DESIGNER wrote and TEST-DESIGN-VALIDATOR already approved (PASS, step-05b): confirm clean --warnings-as-errors compile, re-run admission_test.exs + poller_test.exs at 5 different seeds foreground for flakiness (extra scrutiny beyond the 7 runs already done by prior steps, since this touches real concurrency/timing code), run the full suite to completion foreground via `mix letflow.check.test`, and specifically verify no HTTP-path (Letflow.Admission is on the API pipeline as well as the Poller tick path) regression."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All checks clean. No regressions in Letflow.Admission, Letflow.Scheduler, or Letflow.Scheduler.Poller, and no regression on the HTTP admission-plug path either.\n\n1. COMPILE: `mix compile --warnings-as-errors` -- clean, 190 files, zero warnings, exit 0.\n\n2. FLAKINESS CHECK, 5 foreground runs of the exact pair `test/letflow/admission_test.exs test/letflow/scheduler/poller_test.exs` at 5 different --seed values (1001, 2002, 3003, 4004, 9999): all 5 report `Result: 37 passed`, 0 failed. Combined with the 7 runs already done by TEST-DESIGNER/TEST-DESIGN-VALIDATOR (step-05b), this is 12 consecutive clean runs of this file pair across varied seeds -- no flakiness observed in the bounded-concurrency/timing-adjacent code.\n\n3. HTTP-PATH CHECK (this step's own extra scrutiny item, since Letflow.Admission is mounted on api_pipeline.ex as well as being called from Poller's tick path): ran `test/letflow/plugs/admission_test.exs`, `test/letflow/plugs/admission_pipeline_test.exs`, and `test/letflow/supervisor/infrastructure_test.exs` (the other files referencing Letflow.Admission besides the two already covered above) together: `Result: 24 passed`, 0 failed. Confirms the new `reserved_headroom` state field and its accessor did not regress the HTTP admission-plug path, verified directly rather than taken on the design doc's additive-only claim.\n\n4. FULL SUITE: ran `mix letflow.check.test` to completion in the foreground (as a detached background OS process polled to completion via repeated blocking `kill -0`/wait loops within this same turn, per the 'block on it directly, however long it takes' instruction and ISS-0213/ISS-0223's no-cross-turn-notification rule -- never ended the turn waiting on it). Total wall time: 1591.6 seconds (~26.5 min).\n   Result: 3212/3214 passed (6/6 properties, 3206/3208 tests), 21 excluded.\n   Failed: 2 tests -- both, by name and file, the SAME pre-existing rustc-toolchain-gap failures every prior step in this run has reported:\n     - `test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)` -- test/mix/tasks/letflow_check_toolchain_test.exs:274\n     - `test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)` -- test/mix/tasks/letflow_check_toolchain_test.exs:289\n   Both fail identically with `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` at lib/system.ex:1141 -- no `rustc` binary present in this environment/toolchain. Grepped the full failure section of the run log for any mention of Admission/Scheduler/Poller/admission/scheduler/poller -- zero matches beyond these 2 unrelated toolchain tests. No new failures, no flakes, nothing in a file this branch touches (admission.ex, scheduler.ex, poller.ex, or their tests).\n\nCONCLUSION: clean pass. Same 2 known pre-existing, environmental (missing rustc) failures as every prior run in this workflow, nothing else. Routing to ORCH per this session's established precedent (ISS-0442, ISS-0454, ISS-0446) for WF-03 issue-resolving runs going TEST-RUNNER -> ORCH's Step Final.",
+    "compile_check": "mix compile --warnings-as-errors: clean, 0 warnings",
+    "flakiness_runs": {
+      "file_pair": "test/letflow/admission_test.exs test/letflow/scheduler/poller_test.exs",
+      "seeds_this_step": [1001, 2002, 3003, 4004, 9999],
+      "result_each": "37 passed, 0 failed",
+      "cumulative_clean_runs_this_run_id": 12
+    },
+    "http_path_check": {
+      "files": [
+        "test/letflow/plugs/admission_test.exs",
+        "test/letflow/plugs/admission_pipeline_test.exs",
+        "test/letflow/supervisor/infrastructure_test.exs"
+      ],
+      "result": "24 passed, 0 failed"
+    },
+    "full_suite": {
+      "command": "mix letflow.check.test",
+      "duration_seconds": 1591.6,
+      "result_line": "3212/3214 passed (6/6 properties, 3206/3208 tests), 21 excluded",
+      "failed_count": 2,
+      "failed_tests": [
+        "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest) -- test/mix/tasks/letflow_check_toolchain_test.exs:274",
+        "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest) -- test/mix/tasks/letflow_check_toolchain_test.exs:289"
+      ],
+      "failure_cause": "Erlang :enoent from System.cmd(\"rustc\", [\"--version\"]) -- no rustc binary in this environment. Pre-existing, environmental, unrelated to ISS-0421/REQ-219/REQ-218.",
+      "regression_in_branch_files": false
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "gate": "TEST-RUNNER",
+      "result": "PASS",
+      "timestamp": "2026-09-04T13:45:00Z",
+      "notes": "Ran mix compile --warnings-as-errors (clean), 5 additional seeded foreground runs of admission_test.exs+poller_test.exs (all 37/37, no flakiness across 12 cumulative runs this run_id), the HTTP admission-plug path test files (24/24, confirming no regression on the API-pipeline side of Letflow.Admission), and the full suite via mix letflow.check.test run to completion in the foreground (1591.6s, 3212/3214 passed, 21 excluded, 2 failed -- both the same pre-existing rustc-toolchain-gap failures every prior step reported, verified by name/file/stacktrace, nothing new and nothing in admission.ex/scheduler.ex/poller.ex or their tests). Routed to ORCH."
+    }
+  ]
+}

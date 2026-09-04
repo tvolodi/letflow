@@ -1,0 +1,72 @@
+run_id: WF03-ISS0421-20260904
+requirement_ids: [REQ-219, REQ-218]
+issue_ids: [ISS-0421, ISS-0451]
+generated_by: TEST-RUNNER
+generated_at: "2026-09-04T13:45:00Z"
+branch: feature/WF03-ISS0421-20260904
+
+pre_run_checks:
+  docker_compose: "postgres + keycloak already Running (brought up via `sudo docker compose up -d`; docker group membership on this host requires sudo)"
+  compile: "mix compile --warnings-as-errors -- clean, 190 files, 0 warnings"
+
+runs_performed:
+  - method: "test/letflow/admission_test.exs test/letflow/scheduler/poller_test.exs, 5 seeds"
+    note: >
+      Extra scrutiny on the two files this ISS-0421 fix touches directly, since
+      it is real concurrency/timing code. Beyond the 7 runs already done by
+      TEST-DESIGNER/TEST-DESIGN-VALIDATOR in step-05/step-05b.
+    seeds: [1001, 2002, 3003, 4004, 9999]
+    result_each: "37 passed, 0 failed"
+    flakiness: "none observed -- 12 consecutive clean runs of this pair across this run_id"
+
+  - method: "test/letflow/plugs/admission_test.exs test/letflow/plugs/admission_pipeline_test.exs test/letflow/supervisor/infrastructure_test.exs"
+    note: >
+      HTTP-path check: Letflow.Admission is mounted on api_pipeline.ex as well
+      as called from Poller's tick path. Verifying the new reserved_headroom
+      field/accessor is genuinely additive rather than taking the design doc's
+      claim on faith.
+    result: "24 passed, 0 failed"
+
+  - method: "mix letflow.check.test"
+    note: >
+      Full suite, run to completion in the foreground (as a detached OS
+      process polled to completion via blocking kill-0/wait loops within
+      this same turn -- never backgrounded across a turn boundary).
+    duration: "1591.6 seconds (16.0s async, 1575.5s sync)"
+    result_line: "Result: 3212/3214 passed (6/6 properties, 3206/3208 tests), 21 excluded"
+    failed: 2
+    exit: "mix letflow.check.test: FAILED -- underlying `mix test` run exited 2"
+
+combined_totals:
+  passed: 3212
+  total: 3214
+  excluded: 21
+  failed: 2
+  properties_passed: "6/6"
+  status: "PASS (2 failures, both pre-existing/environmental, unrelated to ISS-0421/REQ-219/REQ-218 -- no regression in Letflow.Admission, Letflow.Scheduler, or Letflow.Scheduler.Poller, and no regression on the HTTP admission-plug path)"
+
+failures:
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    category: "pre-existing, environmental"
+    root_cause: >
+      `System.cmd("rustc", ["--version"], ...)` raises Erlang :enoent -- no
+      rustc binary installed in this environment/toolchain. Not connected to
+      this branch's changes.
+    ownership: "Out of TEST-RUNNER's ownership for this run -- known toolchain gap, same failure every prior step in this run_id reported."
+
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    file: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    category: "pre-existing, environmental"
+    root_cause: "Same :enoent / missing rustc binary as above."
+    ownership: "Same as above."
+
+conclusion: >
+  Clean pass. Compile clean with --warnings-as-errors. No flakiness across 5
+  additional seeded runs (12 cumulative this run_id) of admission_test.exs +
+  poller_test.exs. HTTP admission-plug path (test/letflow/plugs/) unaffected.
+  Full suite shows only the 2 known pre-existing rustc-toolchain-gap failures,
+  identical by name/file/stacktrace to every prior run in this workflow.
+  Nothing new, nothing in admission.ex/scheduler.ex/poller.ex or their tests.
+  Routed to ORCH (WF-03 issue-resolving run, TEST-RUNNER -> ORCH Step Final
+  per this session's precedent: ISS-0442, ISS-0454, ISS-0446).

@@ -1,81 +1,131 @@
 id: ISS-0430
-title: "Adopt Postgres LISTEN/NOTIFY as the BEAM<->Postgres push channel -- decide the pattern BEFORE REQ-214 adds a second polling loop"
+title: "Adopt Postgres LISTEN/NOTIFY as the BEAM<->Postgres push channel -- decide the pattern (design-first; REQ-214 already shipped as a polling loop, ISS-0425's tree layering also already landed)"
 discovered_by: ORCH
-discovered_in_run: ORCH-adhoc-20260902-arch-review
-discovered_at: "2026-09-02T19:17:07Z"
+discovered_in_run: ORCH-adhoc-20260903-arch-review
+discovered_at: "2026-09-02T19:15:50Z"
 severity: MAJOR
-tags: [otp, postgres, architecture, design-first, scheduler, s6]
+tags: [postgres, notify, listen, pubsub, architecture, s6, design-only]
 description: >
-  DESIGN-FIRST issue. Letflow has ZERO LISTEN/NOTIFY, zero
-  Postgrex.Notifications, and no PubSub of any kind (verified by grep
-  across lib/ 2026-09-02). Every cross-component signal today is a poll
-  or nothing. This is the largest unused Postgres<->BEAM integration and
-  the one capability letting Postgres PUSH rather than be polled --
-  keeping Postgres fully authoritative while removing polling that
-  stands in for notification.
+  Letflow has ZERO LISTEN/NOTIFY, zero Postgrex.Notifications, and no
+  PubSub of any kind -- reverified by ORCH 2026-09-05 via
+  `grep -rniE "Postgrex\.Notifications|LISTEN |NOTIFY |Phoenix\.PubSub"
+  lib/` (zero hits; the only unrelated match on a looser pattern was
+  lib/letflow/supervisor/http.ex, a false positive on the word "listen"
+  used generically). This is the single largest unused Postgres<->BEAM
+  integration, and it is the one capability that lets Postgres PUSH
+  rather than be polled -- keeping Postgres fully authoritative for
+  state while removing the polling that currently stands in for
+  notification.
 
-  WHY NOW: REQ-214 (pending, queue task 415) specifies "a supervised
-  polling process advancing parked tokens" for SERVICE_TASK dispatch --
-  a SECOND polling loop about to be built alongside Scheduler.Poller's.
-  Settling the notification pattern first means REQ-214 adopts it.
-  Related to ISS-0425: whatever process owns a LISTEN connection needs a
-  place in that supervision tree.
+  SEQUENCING NOTE, added at filing (ORCH re-verification, 2026-09-05):
+  this issue's original filing text argued the design must land BEFORE
+  REQ-214 (then pending, queue task 415) so REQ-214 could adopt the
+  pattern rather than needing a retrofit. **REQ-214 has since shipped**
+  (PR #847, merged; status: done in docs/requirements.yaml) as
+  Letflow.Engine.ServiceTaskDispatcher.Poller, a second fixed-interval
+  GenServer ticker alongside Letflow.Scheduler.Poller, both now owned by
+  Letflow.Supervisor.Pollers (lib/letflow/supervisor/pollers.ex). ISS-0425
+  (the supervision-tree layering issue this design must also reconcile
+  with) has likewise had both of its own follow-on requirements land --
+  REQ-219 (tree layering: Infrastructure / Pollers / PollersBreaker /
+  Http, closes ISS-0425 parts 1+partial-2) and REQ-220 (Task.Supervisor
+  sprawl review, closes ISS-0425 part 3) are both status: done. ISS-0425's
+  own yaml is still status: open (a separate, pre-existing bookkeeping gap
+  in that record, not something this issue resolves).
 
-  WHAT IT BUYS:
-    (a) Poller stops being a fixed-interval sweeper for the common case
-        (today: seven per-tenant sweeps per tick regardless of whether
-        anything happened -- ISS-0421). Polling demotes to a safety net,
-        never removed.
-    (b) REQ-214 dispatch completion becomes event-driven.
-    (c) A real-time push path to web/ becomes possible. NOT in scope --
-        listed so the design does not foreclose it.
+  So the "settle before REQ-214 lands" framing is moot as literally
+  written -- there is no longer a live sequencing choice to make for
+  REQ-214 specifically. What remains live, and is unchanged by REQ-214
+  shipping: (a) Letflow now has TWO fixed-interval polling loops
+  (Letflow.Scheduler.Poller, ISS-0421's SPOF/sweep-inefficiency subject,
+  and Letflow.Engine.ServiceTaskDispatcher.Poller) instead of one, which
+  sharpens rather than removes the case for a push-based alternative;
+  (b) the design questions below (connection ownership, tenant isolation,
+  payload discipline, delivery semantics, test story) are unaffected by
+  which requirement lands first, and are exactly as unsettled today as
+  when this issue was filed; (c) the design must now state explicitly
+  whether a FUTURE retrofit of the already-shipped pollers is worth doing,
+  rather than a greenfield adoption -- this is a materially different
+  question from the original framing and the design artefact must answer
+  it as such, not silently keep the original "adopt before it's built"
+  framing.
 
-  EVIDENCE (profiled 2026-09-02): Repo.query!("SELECT 1") costs
-  1186-1436 us from the BEAM vs 0.110 ms inside the container -- ~92% of
-  the dev-host figure is Docker Desktop network overhead. A 3-query
-  transaction costs 6476 us over five round trips. THE LEVER IS
-  ROUND-TRIP COUNT. A poll finding nothing still pays a full round trip
-  per tenant per sweep; a NOTIFY-driven wake pays zero when idle. The
-  design must justify itself by ELIMINATED POLLS, not by this host's
-  inflated per-call number.
+  WHAT THIS BUYS, IF ADOPTED (unchanged from original filing): (a) both
+  existing Pollers stop being fixed-interval sweepers for the common
+  case -- each currently wakes on a timer and queries whether or not
+  anything happened. With NOTIFY on the relevant row insert (a timer row
+  for Scheduler.Poller, a service_task_dispatches row for
+  ServiceTaskDispatcher.Poller), work arrives as a message and polling is
+  demoted to a safety net for missed wakeups. (b) a real-time push path to
+  web/ becomes possible for the first time -- NOT in scope, listed so the
+  design does not foreclose it.
 
-  FIVE QUESTIONS THE ARTEFACT MUST SETTLE:
-    1. CONNECTION OWNERSHIP -- Postgrex.Notifications needs its own
-       long-lived connection OUTSIDE the Ecto pool. Where in the
-       supervision tree, how many, counted against pool_size or
-       max_connections? (ISS-0224 and decision 0009 are precedent.)
-    2. MULTI-TENANCY -- channel names are database-global, NOT
-       schema-scoped. Tenant isolation (INV-1) must be stated as a
-       mechanism, and payloads treated as untrusted routing hints.
-    3. PAYLOAD LIMIT -- 8000 bytes. Design must specify notify-then-fetch
-       (send an id, read the row), never shipping state through the
-       channel.
-    4. DELIVERY SEMANTICS -- NOTIFY is fire-and-forget, LOST if nobody is
-       listening, delivered only on COMMIT. Polling CANNOT be deleted;
-       it stays as the reconciliation backstop.
-    5. TEST STORY -- Ecto's SQL sandbox rolls back, so a NOTIFY in a
-       sandboxed test never commits and never fires. A real blocker that
-       has bitten other projects, not hypothetical.
+  EVIDENCE (profiled on the dev host 2026-09-03, unchanged by REQ-214
+  landing): a Repo.query!("SELECT 1") round trip from the BEAM costs
+  1186-1436 us, while the same query inside the Postgres container costs
+  0.110 ms -- ~92% of a DB call on this host is host<->container network
+  overhead (Docker Desktop). A 3-query Repo.transaction costs 6476 us
+  (five round trips). THE LEVER IS ROUND-TRIP COUNT. A poll that finds
+  nothing still pays a full round trip per tenant per sweep; a
+  NOTIFY-driven wake pays zero when idle. On a co-located production
+  deployment the ratio narrows -- the design must be justified by
+  ELIMINATED POLLS, not this host's inflated numbers.
 
-  SCOPE: produce the design and decide 1-5. Implementing any consumer
-  (scheduler wake, REQ-214 dispatch, SPA push) is separate follow-on. A
-  decided "not worth it, keep polling" is legitimate IF argued against
-  the round-trip evidence rather than by default.
+  DESIGN QUESTIONS THE ARTEFACT MUST SETTLE:
+  1. CONNECTION OWNERSHIP. Postgrex.Notifications needs its own
+     connection OUTSIDE the Ecto pool (long-lived, cannot be checked back
+     in). Where in the NOW-LAYERED supervision tree (Infrastructure /
+     Pollers / PollersBreaker / Http, per REQ-219 -- see
+     lib/letflow/application.ex and lib/letflow/supervisor/*.ex), how
+     many connections, does it count against Repo pool_size or Postgres
+     max_connections separately? ISS-0224's at-most-one-in-flight
+     reasoning and decision 0009-test-parallel-pool-sizing.md are
+     precedent.
+  2. MULTI-TENANCY. Channel names are database-global, NOT
+     schema-scoped. A NOTIFY in tenant A's schema is visible to any
+     listener on the same database. Since tenant isolation is THE
+     load-bearing invariant (INV-1, schema-per-tenant), the design must
+     state how a tenant's notifications cannot leak to another tenant's
+     listener, and payloads must be treated as untrusted routing hints,
+     never data.
+  3. PAYLOAD LIMIT. NOTIFY payloads capped at 8000 bytes. Design must
+     specify notify-then-fetch (send an id, read the row), not shipping
+     state through the channel.
+  4. DELIVERY SEMANTICS. NOTIFY is fire-and-forget, LOST if no session
+     listening, only delivered on COMMIT. Polling CANNOT be deleted --
+     must remain as reconciliation backstop for BOTH existing pollers if
+     adopted. Design must state retained poll interval and why it's safe
+     to lengthen (if it is).
+  5. TEST STORY. Ecto's SQL sandbox rolls back, so a NOTIFY issued in a
+     sandboxed test never commits and never fires. Design must say how
+     this is tested at all.
+
+  SCOPE: produce the design artefact and decide 1-5, PLUS the
+  re-framed sequencing question (retrofit-worth-it vs. not, now that
+  both consumers already exist as pollers). Implementation is separate
+  follow-on work. A decided "not worth it, keep polling" is a legitimate
+  outcome IF argued against the round-trip evidence, not by default.
 affected_files:
-  - lib/letflow/scheduler/poller.ex
-  - lib/letflow/application.ex
-  - mix.exs
-related:
-  - REQ-214
-  - ISS-0421
-  - ISS-0425
-  - ISS-0224
-source: >
-  User asked what more could be squeezed from the BEAM while keeping
-  Postgres for persistence. Absence of LISTEN/NOTIFY verified by grep;
-  round-trip figures profiled in the same session (see ISS-0432 for the
-  full measurement table and the Docker-Desktop artifact caveat).
+  - lib/letflow/design/ (new artefact)
+  - lib/letflow/application.ex (referenced for supervision-tree placement)
+  - lib/letflow/supervisor/pollers.ex (referenced -- current owner of both existing poller GenServers)
+  - lib/letflow/supervisor/infrastructure.ex (referenced -- current owner of Letflow.Repo and every other long-lived infra process)
+acceptance_criteria:
+  - "A design artefact under lib/letflow/design/ answers all five named design questions explicitly"
+  - "The design states Postgres remains the source of truth and no state is transported in a NOTIFY payload -- payloads carry identifiers/routing hints only, treated as untrusted"
+  - "The design states explicitly that polling is RETAINED as a reconciliation backstop and is not deleted, naming the retained interval(s) for both Letflow.Scheduler.Poller and Letflow.Engine.ServiceTaskDispatcher.Poller if adoption is recommended"
+  - "Tenant isolation is addressed as a security property, not a naming convention -- the design names the mechanism preventing tenant A's notification reaching tenant B's listener, and SECURITY-REVIEWER signs off on it as a tenant-data-path change"
+  - "The design is reconciled with the CURRENT, ALREADY-LANDED supervision tree (Letflow.Supervisor.Infrastructure / Pollers / PollersBreaker / Http, REQ-219) -- the LISTEN connection's owner has a stated place in that tree, not added as an unplaced peer"
+  - "The design states its relationship to the two ALREADY-SHIPPED pollers (Letflow.Scheduler.Poller, Letflow.Engine.ServiceTaskDispatcher.Poller) explicitly: either a future retrofit is recommended (with the reason and rough scope), or it is not (with the reason) -- REQ-214 having already shipped as a polling loop, this is a retrofit question, not a greenfield sequencing question"
+  - "Any performance claim is justified by ELIMINATED ROUND TRIPS, not this dev host's inflated 1.3ms figure -- must note ~92% is Docker Desktop network overhead and co-located deployment measures ~0.11ms"
+  - "No implementation of a specific consumer is included"
 queue_task_id: 430
 github_issue: 834
-
+related:
+  - ISS-0425
+  - ISS-0421
+  - ISS-0224
+  - REQ-214
+  - REQ-219
+  - REQ-220
 status: open

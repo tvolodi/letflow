@@ -1,0 +1,51 @@
+{
+  "handoff_id": "9f3d2c1a-4b6e-4a2f-9c1d-1e2f3a4b5c6d",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0430-20260905/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-04T22:49:57Z",
+  "started_at": "2026-09-04T22:49:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "docs/issues/ISS-0425.yaml",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "This is a DESIGN-FIRST issue (ISS-0430) -- no fix, no implementation. Your job at Step 0.5/1 is narrower than a normal diagnosis: the issue filing's own evidence is already first-hand (a grep run 2026-09-03, re-verified by ORCH 2026-09-05 with zero hits for Postgrex.Notifications/LISTEN/NOTIFY/Phoenix.PubSub across lib/, and specific dev-host profiling numbers already in the issue text) and ORCH has already corrected the filing's stale premise (REQ-214 and ISS-0425's own follow-on requirements REQ-219/REQ-220 have all shipped as 'done', changing the sequencing question from greenfield to retrofit -- see ISS-0430.yaml's own 'SEQUENCING NOTE' paragraph for the full correction). Read that file in full before starting; it is the task, not merely background. Do these three things: (1) Step 0.5 registry lookup -- grep docs/issues/*.yaml for any PRIOR resolved/instrumented/no_defect entry whose description mentions NOTIFY, LISTEN, PubSub, or polling-vs-push tradeoffs, and state in your result whether a match exists (expected: none, since the grep in the issue text found zero usage anywhere in lib/, but check the ISSUE REGISTRY specifically -- a design discussion could have happened without any code existing yet). (2) Pull the EXACT current poll-interval/config-key mechanics for both already-shipped pollers CODE-DESIGNER will need to reconcile the design against: read lib/letflow/scheduler.ex (or wherever Letflow.Scheduler.Poller's poll_interval_ms/0-equivalent lives) and lib/letflow/engine/service_task_dispatcher.ex's Poller submodule, and report each one's current poll interval (the actual configured/default value, quoting the code), its config key name, and its claim query shape (FOR UPDATE SKIP LOCKED, per-tenant schema iteration) in enough detail that CODE-DESIGNER does not need to re-read those files from scratch. (3) Confirm INV-1's exact schema-per-tenant mechanism one more time by reading docs/migration/decisions/0003-ecto-schema-strategy.md's Dimension B section (already cited in security-invariants.md) and quote its own text on how a query is scoped by :prefix -- this is the mechanism the design's tenant-isolation answer (design question 2) has to reconcile a database-global NOTIFY channel against, so CODE-DESIGNER needs the precise mechanism in hand, not a paraphrase. Do NOT design the fix yourself and do NOT write to lib/letflow/design/ -- that is CODE-DESIGNER's job at the next step. Complete this handoff with your findings in result.summary and route to CODE-DESIGNER.",
+    "acceptance_criteria": [
+      "Step 0.5 registry lookup performed and result stated explicitly (match found, or none found, with the grep command used)",
+      "Letflow.Scheduler.Poller's exact current poll interval, config key, and claim-query shape quoted from source",
+      "Letflow.Engine.ServiceTaskDispatcher.Poller's exact current poll interval, config key, and claim-query shape quoted from source",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md Dimension B's :prefix-scoping mechanism quoted verbatim",
+      "No file under lib/letflow/design/ written by this step; no implementation code written or changed",
+      "next_action names CODE-DESIGNER as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -4358,19 +4358,16 @@
       "queue_task_id": 451,
       "github_issue_number": 865,
       "stage": "S6",
-      "status": "IN_PROGRESS",
-      "owned_modules": [
-        "lib/letflow/application.ex",
-        "lib/letflow/supervisor/pollers.ex"
-      ],
+      "status": "COMPLETED",
+      "owned_modules": [],
       "lock_acquired_at": "2026-09-04T02:40:13Z",
       "started_at": "2026-09-04T02:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T05:43:21Z",
+      "released_lock": true,
       "backfilled": false,
       "queue_agent_id": "tvolodi-orch",
-      "last_known_step": "Run opened -- WF03-ISS0425-20260903's stale registry lock on the same owned_modules released first (see that entry's own note). docs/issues/ISS-0451.yaml already existed (filed by REVIEWER during WF02-REQ219-20260903, landed on main via that run's own merge, e5546523) -- Step 1 write skipped, verified content matches task spec, proceeding directly into WF-03 Step 0.5/Step 1.",
-      "note": "WF-03 issue-resolving run for ISS-0451: a PERSISTENT (non-transient) Poller crash-loop can still exhaust the top-level Letflow.Supervisor's own default OTP restart budget (3/5s, never overridden) after Pollers exhausts its own (max_restarts:5, max_seconds:60) budget and exits, cascading past the isolation REQ-219 built. Found by REVIEWER during REQ-219's own AC4 gating -- REQ-219's single-crash-event isolation test doesn't cover a persistent fault. Task queue 451 already claimed/locked to agent_id tvolodi-orch before this run started (per user instruction); this entry records the local workflow run against that existing lock, not a new claim."
+      "last_known_step": "COMPLETE. PR #874 squash-merged to main as 77fe6bf4. Queue task 451 released done, GH#865 closed with mandated evidence comment. docs/issues/ISS-0451.yaml status: resolved.",
+      "note": "WF-03 issue-resolving run for ISS-0451: a PERSISTENT (non-transient) Poller crash-loop could exhaust the top-level Letflow.Supervisor's own default OTP restart budget (3/5s, never overridden) after Pollers exhausted its own (max_restarts:5, max_seconds:60) budget and exited, cascading past the isolation REQ-219 built. Found by REVIEWER during REQ-219's own AC4 gating -- that test's single-crash-event isolation proof doesn't cover a persistent fault. Fix: Pollers' child spec is now restart: :temporary (top-level structurally cannot auto-restart it, proven via 0-restart-consumption arithmetic, not merely bounded); a new Letflow.Supervisor.PollersBreaker GenServer is sole restart authority, tripping to :open after 2 consecutive exits with exponential backoff. Design went through 3 rework cycles at CODE-DESIGN-VALIDATOR/ELIXIR-DEV (2 real Elixir Supervisor-semantics bugs -- an unproven termination-vs-auto-restart race, then a children-list syntax defect that silently failed to apply :temporary -- plus a real race between the breaker and the existing AC4 test's own restart call, resolved by redesigning the test rather than production code). SECURITY-REVIEWER and REVIEWER both PASSED. New mutation-tested fail-then-pass regression test independently re-verified by TEST-DESIGN-VALIDATOR. Full suite green (3203+7+11 passed, 0 failures). PR #874 merged after one structurally-cleared wasm_hang CI flake, filed as ISS-0456 (queue task 456, GH#875) rather than left undocumented. Also released a stale WF03-ISS0425-20260903 registry lock (no live branch/session behind it, its diagnosis already fully routed into and completed by REQ-219/REQ-220) that was blocking this run's owned_modules claim."
     },
     {
       "run_id": "WF03-ISS0446-20260904",

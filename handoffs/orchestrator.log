@@ -1732,3 +1732,5 @@
 2026-09-04T15:53:19Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-03-reviewer | ORCH -> REVIEWER | PASS
 2026-09-04T16:31:00Z | STEP_PASS | WF-03 | WF03-ISS0438-20260904 | REVIEWER -> ORCH | Final-state gate PASS -- design artefact consistent with decisions 0003/0014, router.ex untouched, stage-6 addendum additive, REQ-225/226/230 spot-checked, no scope creep (zero lib/priv changes)
 2026-09-04T15:55:22Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-05-issue-fixer-close | ORCH -> ISSUE-FIXER | PASS
+2026-09-04T15:56:33Z | STEP_PASS | WF-03 | WF03-ISS0438-20260904 | ISSUE-FIXER -> ORCH | Step 05 PASS -- ISS-0438 status: resolved, GH#845 closed with evidence comment citing REQ-225..231/tasks 460-466
+2026-09-04T15:57:05Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-final-git-merge | ORCH -> ELIXIR-DEV | PASS

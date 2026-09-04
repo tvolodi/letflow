@@ -170,6 +170,58 @@ duplicating it. This also directly fixes the class of problem, not just this ins
 it: any future change to `reserved_headroom` (config or `start_link` opts, at any value)
 is automatically reflected, with no second edit required anywhere.
 
+**Required state-shape change (this is genuinely a state addition, not merely a new
+accessor)**: `CODE-DESIGN-VALIDATOR`'s rework-1 FAIL correctly found that rework 1's
+draft asserted `state.reserved_headroom` was already readable — it is not.
+`Letflow.Admission.init/1` (admission.ex:221-222) currently receives `reserved_headroom`
+as a bare `init/1` argument (from the same `%{pool_size: pool_size, reserved_headroom:
+reserved_headroom}` map ELIXIR-DEV already destructures), uses it exactly once to compute
+`global_cap = max(pool_size - reserved_headroom, 1)`, and then discards it — it is never
+stored anywhere in the returned state map, which today holds exactly four keys
+(`global_cap`, `global_in_use`, `tenants`, `refs`). This design now requires:
+
+- `Letflow.Admission.init/1`'s returned state map gains one genuinely NEW field,
+  `reserved_headroom`, set from the identical `reserved_headroom` binding already in
+  scope in that same `init/1` clause — the same value used, in the same function call, to
+  compute `global_cap`. This is purely additive to the existing four-key state shape
+  (`global_cap`, `global_in_use`, `tenants`, `refs`); none of those four keys, their
+  types, or how they're subsequently read/written anywhere else in the module changes.
+  The state-shape comment at admission.ex:212-219 must be updated in code to list five
+  keys, not four:
+
+  ```
+  %{
+    global_cap:        pos_integer(),               # fixed at init/1, from config
+    global_in_use:     non_neg_integer(),
+    tenants:           %{optional(String.t()) => %{in_use: non_neg_integer()}},
+    refs:              %{optional(reference()) => pool_selector()},
+    reserved_headroom: pos_integer()                 # fixed at init/1, same source as global_cap
+  }
+  ```
+
+  (The above is a documentation/comment shape, not implementation code — it mirrors the
+  existing comment's own format, which this design doc already quoted verbatim before
+  this rework; no function bodies are given anywhere in this document.)
+- Because `reserved_headroom` is captured in the SAME `init/1` clause, from the SAME
+  binding, at the SAME moment as `global_cap`, it is guaranteed — for any given running
+  `Admission` instance, whether started from config defaults or from a `start_link/1`
+  `opts` override (e.g. a test starting a distinct, differently-configured instance under
+  its own name per admission.ex:180-182's `server` convention) — to be the exact
+  `reserved_headroom` value THAT instance's own `global_cap` was derived from. No
+  re-derivation from `Application.get_env` or any other source is introduced; the new
+  field is a verbatim carry-forward of an argument that already existed, not a new
+  independent computation. This is what makes the algebraic identity below hold
+  per-instance, not just for the default-config case.
+- This state addition does not touch `global_in_use`, `tenants`, or `refs`, does not
+  change any existing `handle_call` clause's behavior (`try_acquire/2` and `release/2`'s
+  own clauses read/write only `global_in_use`/`tenants`/`refs`, never `global_cap` or
+  `reserved_headroom`, and continue not to), and does not change `global_cap`'s own value
+  or how it is computed — it only makes an already-computed-but-previously-discarded
+  number additionally retrievable. The change is safe by the same reasoning §3b already
+  gives for the accessor itself: one new field nothing else reads, populated once at
+  `init/1` and never mutated again (matching `global_cap`'s own existing "fixed at init,
+  read-only thereafter" treatment), consumed by exactly one new `handle_call` clause.
+
 **New public accessor on `Letflow.Admission`**: `reserved_headroom/1`, arity 1, mirroring
 the exact existing idiom of `try_acquire/2` and `release/2`
 (admission.ex:184-190,205-208) — a defaulted `server \\ __MODULE__` argument and a
@@ -182,13 +234,16 @@ synchronous `GenServer.call/2`:
   writes the actual clause)
 - One new `handle_call(:reserved_headroom, _from, state)` clause, placed alongside the
   existing `handle_call({:try_acquire, ...}, ...)` / `handle_call({:release, ...}, ...)`
-  clauses (admission.ex:234-278), replying with the plain integer already held in
-  `state.reserved_headroom` (visible per the state shape documented at
-  admission.ex:212-219) and leaving `state` unchanged — a pure read, no side effect, no
-  new state field.
-- This is a strictly additive change to `Admission`'s public contract: no existing
-  function's name, arity, spec, or behavior changes. `try_acquire/2` and `release/2` are
-  untouched.
+  clauses (admission.ex:234-278), replying with the plain integer now held in the NEW
+  `state.reserved_headroom` field described immediately above and leaving `state`
+  unchanged — a pure read, no side effect, no further state mutation. (Rework 1 wrongly
+  claimed this field already existed and required "no new state field" — that claim is
+  withdrawn; the field is new, added as specified above, and this accessor clause is what
+  reads it.)
+- This is a strictly additive change to `Admission`'s public contract and, per above, to
+  its internal state shape: no existing function's name, arity, spec, or behavior
+  changes. `try_acquire/2` and `release/2` are untouched, and every key `handle_call`
+  clause reads/writes today it continues to read/write identically.
 
 **Poller's consumption**: `maybe_refresh_active_instances/1` calls
 `Letflow.Admission.reserved_headroom/0` (default server, i.e. the same named
@@ -217,12 +272,24 @@ global_cap + max_concurrency
 ```
 
 Because `max_concurrency` is now `Admission.reserved_headroom/1`'s live return value —
-the exact same number `Admission.init/1` used to compute `global_cap` — this equality
-holds **for any configured `reserved_headroom`, at any point in time**, not merely for
-the current default of `2`. At current config (`pool_size = 10`, `reserved_headroom = 2`)
-this is `8 + 2 = 10 = pool_size`, matching the arithmetic §1/§3a already establish; the
-difference from the rework-1 draft is that this equality can no longer drift, because
-there is exactly one number (`Admission`'s live `reserved_headroom`), not two.
+and, per the state-shape addition above, that value is read from the SAME
+`state.reserved_headroom` field `Admission.init/1` populated, in the same clause, from
+the SAME binding it used to compute `global_cap` — this equality holds **for any
+configured `reserved_headroom`, at any point in time, for any running `Admission`
+instance**, not merely for the current default of `2` and not merely for an instance
+started from config defaults. This explicitly closes the gap the rework-1 FAIL found:
+that FAIL was that the accessor, as previously specified, could not actually be built
+from real state (`state.reserved_headroom` did not exist) and so the identity below was
+merely asserted, not provably tied to any one instance's own `global_cap`. Now that
+`reserved_headroom` is captured verbatim in that instance's own state at that instance's
+own `init/1` call — the exact same call, the exact same moment, the exact same argument
+binding that produced `global_cap` — the accessor is guaranteed to return the identical
+number `global_cap` was derived from, whether `Admission` was started with config
+defaults or with a `start_link/1` `opts` override (e.g. a test starting its own
+differently-configured instance): there is exactly one number per instance, sourced once,
+never two independently-maintained figures that could drift. At current config
+(`pool_size = 10`, `reserved_headroom = 2`) this is `8 + 2 = 10 = pool_size`, matching the
+arithmetic §1/§3a already establish.
 
 **Open question, flagged for REVIEWER / ELIXIR-DEV, not silently resolved** (unchanged
 from rework 1 — this is a capacity-adequacy question, not the lockstep-invariant gap the
@@ -402,11 +469,17 @@ Orthogonal, no changes needed to `lib/letflow/supervisor/pollers.ex`,
 
 ## 7. Summary of required code-shape changes (for ELIXIR-DEV — no code given here)
 
-- `Letflow.Admission`: add one new public accessor, `reserved_headroom/1` (default
-  `server \\ __MODULE__`), delegating via `GenServer.call/2` to a new
-  `handle_call(:reserved_headroom, _from, state)` clause that replies with
-  `state.reserved_headroom` unchanged — see §3b. Purely additive: no existing function's
-  name, arity, spec, or behavior changes.
+- `Letflow.Admission`: `init/1` gains one new state field, `reserved_headroom`, set from
+  the same `reserved_headroom` argument binding already used in that same clause to
+  compute `global_cap` — purely additive to the existing four-key state map
+  (`global_cap`, `global_in_use`, `tenants`, `refs`), which becomes five keys; the
+  state-shape comment at admission.ex:212-219 must be updated accordingly. Add one new
+  public accessor, `reserved_headroom/1` (default `server \\ __MODULE__`), delegating via
+  `GenServer.call/2` to a new `handle_call(:reserved_headroom, _from, state)` clause that
+  replies with the new `state.reserved_headroom` field, unchanged, alongside the existing
+  `handle_call` clauses — see §3b. Purely additive to the public contract: no existing
+  function's name, arity, spec, or behavior changes, and no existing `handle_call`
+  clause's reads/writes of `global_in_use`/`tenants`/`refs`/`global_cap` change.
 - `Letflow.Scheduler`: add one new config accessor, `sweep_task_timeout_ms/0`, following
   the exact existing pattern of `poll_interval_ms/0`/`jitter_ms/0` (reads `config
   :letflow, :scheduler, sweep_task_timeout_ms:`, falls back to a `@default_...` module

@@ -1,0 +1,57 @@
+{
+  "handoff_id": "step01-WF03-ISS0441-20260904",
+  "run_id": "WF03-ISS0441-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0441-20260904/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0441", "ISS-0440", "ISS-0426", "ISS-0352", "ISS-0418"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0441-20260904/step-00-git-setup.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0441.yaml",
+      "docs/migration/decisions/0004-humanless-pipeline.md",
+      ".github/workflows/ci.yml",
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/migration/decisions/0011-frontend-ownership.md",
+      "docs/migration/decisions/0017-task-queue-selection-model.md",
+      "docs/anti-patterns.md",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": [
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ],
+    "branch_name": "feature/WF03-ISS0441-20260904"
+  },
+  "task": {
+    "description": "WF-03 Step 1 for ISS-0441: decide and document the repo's branch-protection posture on `main`. Not application code -- a repo-administration/governance decision record. Must answer all 4 questions in ISS-0441's description with a real decision and reasoning (not an options survey), specify the exact `gh api`/`gh` commands to configure and to live-verify the decision (AC3), and specify exactly what changes in `docs/migration/decisions/0004-humanless-pipeline.md`, `docs/agents/protocols/GIT_MERGE.md`, and `.github/workflows/ci.yml` (AC4) -- ISS-0441's own affected_files list, confirmed complete by grepping docs/ for 'hard gate'/'structurally impossible'/'Backend gate'/'Frontend gate' usage.",
+    "acceptance_criteria": [
+      "(a) answered: yes, require Backend gate and Frontend gate status checks on main, with reasoning",
+      "(b) answered concretely, not waved away: required-but-admin-bypassable (enforce_admins: false) evaluated on its actual merits -- explains why it is not equivalent to no protection (blocks the default unqualified merge command while a required check is red/pending; requires a second, distinct, individually-logged --admin command to override; ties the override to the pre-existing structural failure-attribution requirement in core-directives.md/GIT_MERGE.md rather than inventing a new one) and makes a real call rather than listing the option space",
+      "(c) answered directly given (b): self-merge is not broken, since the merging identity is a repo admin and --admin always works for it; what changes is that the default command is no longer unconditional",
+      "(d) answered with a real call: enforce_admins: true rejected, because a genuine sustained CI/infra break with no valid attribution would then permanently block all merges with zero override path, worse than today's unenforced status quo for exactly the failure mode an unattended pipeline is most exposed to",
+      "Exact gh api/gh CLI commands specified for: (1) confirming the literal check-run context names before configuring anything, (2) applying the branch-protection PUT with required_status_checks/enforce_admins:false/required_pull_request_reviews:null/restrictions:null, (3) static verification (expect 200 not 404, with the exact JSON fields to check), (4) live verification via a real disposable scratch PR -- attempting a plain gh pr merge against a pending/red required check and quoting the actual rejection output, then confirming success once checks go green -- precise enough that the implementer makes no further judgement calls about what 'verified live' means",
+      "Exact corrections specified for docs/migration/decisions/0004-humanless-pipeline.md (principle 2's 'at their own discretion' language, plus a Consequences forward-reference to 0018), docs/agents/protocols/GIT_MERGE.md (Step 8 replaced with the three-path plain/wait/admin-override procedure, Precondition section updated), and .github/workflows/ci.yml (comment noting the job name: strings are now a required-status-check contract, must not be renamed without updating 0018)",
+      "Confirms other 'hard gate' usages elsewhere in docs/ (AGENT_SYSTEM.md, WF-02_requirement_implementation.md, HANDOFF_PROTOCOL.md) describe agent-workflow sequencing gates, a different and still-accurate kind of 'hard', and explicitly states no change is needed there",
+      "Matches this project's existing ADR format/style (Question/Decision/Reasoning-or-inline-reasoning/Consequences/What this record does not decide), numbered 0018 (confirmed next free number -- 0001 through 0017 already exist)",
+      "No implementation code for lib/letflow/ or web/ -- the gh api/gh CLI commands in this record are repo-administration configuration, not application code, and are explicitly authorized to be concrete/executable per this run's dispatch"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "artifacts_out": [
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR",
+    "summary": "Wrote docs/migration/decisions/0018-branch-protection-posture.md, matching the project's existing ADR format (0011, 0017 used as style references). Decision: (a) yes, require the Backend gate and Frontend gate status checks on main. (b) required-but-admin-bypassable (enforce_admins: false, no required PR reviews, no push restrictions) -- reasoned concretely why this is not toothless: it blocks the pipeline's existing default merge command (`gh pr merge --squash --delete-branch`) whenever a required check is red or pending, and passing a red/pending check requires a second, distinct, explicit `--admin` command that does not appear in the normal path; the override is tied to the failure-attribution discipline core-directives.md and GIT_MERGE.md already require (named failure class + evidence the branch doesn't touch it, e.g. the PR #848 pattern), not left as free-standing discretion. (c) self-merge is not broken -- the merging identity is a repo admin and --admin always succeeds for it; what changes is the default command is no longer unconditional. (d) enforce_admins: true rejected -- a genuine sustained CI/infra break with no valid attribution would then permanently block all merges to main with zero override path, which is worse than today's status quo for exactly the failure mode an unattended pipeline is most exposed to (no human to flip the setting or force a merge). Specified exact commands: Step 1 confirms literal check-run context names via `gh api repos/tvolodi/letflow/commits/<sha>/check-runs --jq '.check_runs[].name'` before configuring anything (do not assume ci.yml's job name: strings are the wire-level names without checking); Step 2 applies branch protection via `gh api --method PUT repos/tvolodi/letflow/branches/main/protection` with a JSON body (required_status_checks.contexts = both gate names, strict:true, enforce_admins:false, required_pull_request_reviews:null, restrictions:null, allow_force_pushes:false, allow_deletions:false); Step 3 statically verifies via `gh api repos/tvolodi/letflow/branches/main/protection` returning 200 with the expected fields; Step 4 live-verifies via a real disposable scratch PR -- attempt the plain merge command while a required check is still PENDING and quote gh's actual rejection output verbatim, then retry once checks go green and confirm success, with an optional Step 4d for exercising the FAILURE/--admin override path (or citing PR #848 as existing historical proof of that path instead of re-manufacturing one) -- and a Verification log subsection in the record itself for the implementer to append real run results into, per AC3's 'verified live, not just described' requirement. Consequences section specifies exact edits needed to 0004-humanless-pipeline.md (principle 2's 'at their own discretion' line gets a qualifying clause plus a forward-reference to 0018 in Consequences), GIT_MERGE.md (Step 8 replaced with the plain/wait/admin-override three-path procedure; Precondition section updated to note CI now also gates the merge call itself, not only the meaning of green), and ci.yml (a comment on each gate job noting its name: string is now a required-status-check contract that must not be silently renamed). Explicitly confirmed via grep that AGENT_SYSTEM.md/WF-02_requirement_implementation.md/HANDOFF_PROTOCOL.md's own 'hard gate' language describes agent-workflow sequencing (a different, still-accurate kind of hard) and needs no change -- ISS-0441's affected_files list (0004, ci.yml, GIT_MERGE.md) was confirmed complete, not guessed. No implementation code for lib/letflow/ or web/ was written; the gh api/CLI commands are repo-administration configuration per this run's explicit dispatch authorization, not application code."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-03b",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-03b-security-reviewer.json",
+  "created_at": "2026-09-04T03:46:00Z",
+  "started_at": "2026-09-04T03:46:00Z",
+  "completed_at": "2026-09-04T03:46:41Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Run your scope test against `git diff main...HEAD` for this branch (lib/letflow/supervisor/pollers_breaker.ex new file, lib/letflow/application.ex changed, test/letflow/supervisor/pollers_test.exs changed) per docs/agents/instructions/security-invariants.md. This is a supervision-tree/boot-sequence change, not an API route or tenant-data-shaping change -- state your INV-1..INV-8 verdicts per the worked example in HANDOFF_PROTOCOL.md (APPLIES/NOT-APPLICABLE for each, with reasoning), the same as REQ-219's own SECURITY-REVIEWER pass did (see handoffs/WF02-REQ219-20260903/ for that run's precedent, if you want a reference for scope/format -- do not copy its verdicts, this is a different diff). No tenant data, no secrets, no API surface is touched by this diff; confirm that independently rather than taking this description's word for it.",
+    "acceptance_criteria": [
+      "result.summary states a verdict (APPLIES/NOT-APPLICABLE) for every INV-1..INV-8, with reasoning grounded in the actual diff",
+      "Scope determination (in-scope vs out-of-scope for a hard gate) is stated explicitly and justified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "SCOPE TEST: diff (git diff main...HEAD) touches lib/letflow/supervisor/pollers_breaker.ex (new GenServer circuit breaker), lib/letflow/application.ex (top-level Supervisor children list + intensity opts), test/letflow/supervisor/pollers_test.exs, test/letflow/supervisor/infrastructure_test.exs. Verified independently (grep across the diff's changed files, not taken from the handoff description): no priv/repo/migrations/*.exs touched; no Ecto schema module touched; no API route/controller/plug touched; no response-shaping code for a tenant-scoped entity touched; no lookup-by-ID handler touched; no config/env/secret-resolving code touched (grep for System.get_env|password|secret|client_secret|token in the new file: zero hits). This is purely a supervision-tree/boot-sequence/process-restart-policy change (OTP Supervisor child-spec restart type, a new sibling GenServer observing :DOWN messages, and top-level max_restarts/max_seconds). None of the 5 scope-test triggers in my role file apply -> OUT OF SCOPE for a hard INV-1..INV-8 gate in the sense of 'this diff does not approach tenant data or secrets' -- but I still ran the full INV-1..INV-8 checklist below per INV-6's meta-rule (every new/changed path states which invariants apply and why), rather than skipping the statement merely because scope is negative. INV-1 (tenant data isolation): NOT-APPLICABLE. No Ecto schema, no migration, no query against a business table, no :prefix-scoping decision anywhere in this diff -- PollersBreaker holds only in-process GenServer state (state/consecutive_trips/monitor refs/timer refs), never touches Letflow.Repo or any tenant-scoped table. INV-1's applicability gate (touches a tenant-scoped table/schema/migration) is not met. INV-2 (server-side field authorisation): NOT-APPLICABLE. No API response type, no controller/view, no field serialisation anywhere in this diff; also independently NOT-APPLICABLE per the file's own stage gate (S4 not started). INV-3 (untrusted runtime sandboxing): NOT-APPLICABLE. No Lua/WASM/tenant-authored-script execution path; S5 not started. INV-4 (secrets by reference only): APPLIES (live invariant) but SATISFIED -- ran both required greps scoped to this diff's files: `grep -rniE System.get_env` and the hardcoded-secret heuristic against lib/letflow/supervisor/pollers_breaker.ex and lib/letflow/application.ex's changed hunk -- zero hits for both. Nothing in this diff resolves, logs, or threads a secret; PollersBreaker's state and log lines (Logger.warning on state transitions) carry only breaker-internal bookkeeping (consecutive_trips count, backoff ms, PID/reason of a supervised child's exit) never secret material. PASS. INV-5 (not-found/forbidden indistinguishability): NOT-APPLICABLE. No lookup-by-ID endpoint; S4 not started. INV-6 (new data-access paths prove their scoping): NOT-APPLICABLE as a data-access-path gate -- this diff introduces no new data-access path (no route, no host function touching tenant data, no business-table migration). Its own meta-requirement (an explicit SECURITY-REVIEWER statement of which invariants apply and why) is what this handoff itself satisfies. INV-7 (no SQL string interpolation): APPLIES (live invariant, Ecto already in use) but SATISFIED -- `grep -rn Repo.query lib/letflow/supervisor/pollers_breaker.ex lib/letflow/application.ex` returns zero hits; the diff contains no Ecto.Adapters.SQL.query/Repo.query call of any kind, parameterised or not -- this is an OTP supervision change with no data-layer interaction whatsoever. PASS (vacuously, by absence of any SQL surface). INV-8 (no unhandled crashes on realistic failure paths): APPLIES (live invariant) -- checked manually, since PollersBreaker's whole purpose is failure-path handling around a crash-looping child. `grep -n '^\\s*{:ok, .*} = ' lib/letflow/supervisor/pollers_breaker.ex` returns zero hits. Verified every restart call site manually: restart_pollers/0 (lines 277-288) uses a `case` covering all three of Supervisor.start_child/2's documented return shapes ({:ok, pid}, {:ok, pid, info}, {:error, {:already_started, pid}}) rather than a bare match that would raise on the {:error, {:already_started, pid}} case -- and that specific error IS realistically reachable here (the design doc's own §5/ELIXIR-DEV's diagnosis empirically reproduced a race between the breaker and a test-issued restart producing exactly this tuple), so handling it is not defensive-programming-against-the-impossible, it closes a real observed failure mode. handle_info({:DOWN,...}) clauses are exhaustive pattern matches over GenServer's own well-typed :DOWN message shape (idiomatic OTP dispatch, not an external-I/O parse that can raise on malformed input). The :closed/:open/:half_open state-transition functions (handle_pollers_down/1, trip_to_open/1) are private, only ever called from handle_info with a state map this GenServer itself constructed -- not reachable from tenant-controlled or network input at all. No case here is a shared process whose crash takes down unrelated tenants' work: PollersBreaker crashing is itself an OTP-supervised, restart-under-supervision case (it is a :permanent top-level child of Letflow.Supervisor, same accepted pattern the design doc's own Q3/§4 discusses), the idiomatic 'let it crash, supervised' half of INV-8's own stated distinction, not a violation. PASS. INV-9 (tenant-controlled outbound URL validation): NOT-APPLICABLE. No outbound HTTP request, no URL, no :httpc call anywhere in this diff -- this is unrelated to Letflow.Webhooks entirely. SCOPE DETERMINATION: out-of-scope for a hard gate in the sense that no tenant-data path, secret-resolution path, or new data-access path exists in this diff to block on -- confirmed independently via file-level diff inspection and targeted greps, not assumed from the task description's own claim. Of the 4 live invariants (INV-1, INV-4, INV-7, INV-9 per security-invariants.md's Applicability note, plus INV-6/INV-8 which are evergreen), only INV-4, INV-6, INV-7, INV-8 had anything to check against this diff's actual content, and all four checked clean. Overall verdict: PASS, no BLOCKER found, nothing routed back to ELIXIR-DEV.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Proceed to REVIEWER (idiom/supervision-integrity gate, next step per WF-02 Step 2c's ordering -- SECURITY-REVIEWER then REVIEWER) for OTP idiom and supervision-integrity review of pollers_breaker.ex and the application.ex child-spec/intensity change; no rework required from SECURITY-REVIEWER's own gate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

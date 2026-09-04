@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-03c",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-03c-reviewer.json",
+  "created_at": "2026-09-04T03:48:00Z",
+  "started_at": "2026-09-04T03:48:00Z",
+  "completed_at": "2026-09-04T03:49:26Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "test/letflow/supervisor/pollers_test.exs",
+      "test/letflow/supervisor/infrastructure_test.exs",
+      "docs/migration/decisions/",
+      "docs/issues/ISS-0451.yaml",
+      "handoffs/WF02-REQ219-20260903/step-02d-reviewer.json"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Hard gate on this branch's implementation: idiomatic OTP usage (crutch vs. real behaviour), supervision integrity, scope creep, and consistency with docs/migration/decisions/ records. This branch resolves ISS-0451 (a persistent, non-transient Poller crash-loop could exhaust the top-level Letflow.Supervisor's own restart budget after Pollers exhausts its own, cascading past the isolation REQ-219 built). The fix: Letflow.Supervisor.Pollers' child spec is now Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary) in lib/letflow/application.ex's children list (so the top-level Supervisor structurally can never auto-restart it), and a new sibling GenServer Letflow.Supervisor.PollersBreaker (lib/letflow/supervisor/pollers_breaker.ex) becomes the sole restart authority for Pollers via Supervisor.start_child/2, implementing a :closed/:open/:half_open circuit breaker with exponential backoff. Top-level max_restarts raised 3->5 (max_seconds unchanged at 5) as defense-in-depth for the remaining :permanent children.\n\nThis design went through 2 CODE-DESIGN-VALIDATOR rework cycles (a race-condition arithmetic gap, then a real Elixir Supervisor children-list syntax defect) plus a 3rd rework triggered by an ELIXIR-DEV implementation-stage finding (a race between PollersBreaker and the existing AC4 test's own restart call, resolved by redesigning the test rather than the production code) -- read lib/letflow/design/iss0451-poller-crash-budget-isolation.md in full for the final, validated design, and treat the design's own arithmetic/race-safety claims as independently re-verified (by CODE-DESIGN-VALIDATOR, live, multiple times) rather than re-deriving the OTP semantics from scratch yourself -- your job is idiom/integrity/scope-creep/decision-consistency, not re-litigating what CODE-DESIGN-VALIDATOR already settled.\n\nCheck specifically: (1) is PollersBreaker idiomatic OTP (a real GenServer with a real state machine, not a crutch like a bare Process.sleep retry loop or an ad-hoc flag)? (2) does the supervision tree stay structurally sound -- is :temporary + a sibling-managed restart a recognized, defensible OTP pattern, or does it introduce a supervision-integrity smell (e.g. does anything else in the tree assume Pollers is :permanent)? (3) any scope creep beyond what ISS-0451's 3 acceptance criteria require? (4) does this diff conflict with or silently re-decide anything in docs/migration/decisions/, especially anything REQ-219's own decision record (if one exists under lib/letflow/design/ or docs/migration/decisions/) already settled about the Pollers/Infrastructure/Http layering? (5) is the backoff schedule/trip-threshold reasoning sound engineering, not an arbitrary number picked without justification?",
+    "acceptance_criteria": [
+      "Verdict states explicitly whether PollersBreaker is idiomatic OTP or a crutch, with reasoning",
+      "Verdict states explicitly whether supervision integrity is preserved (no dangling assumption elsewhere in the tree that Pollers is :permanent)",
+      "Verdict states explicitly whether scope creep exists beyond ISS-0451's 3 ACs",
+      "Verdict checks consistency with docs/migration/decisions/ and any REQ-219 decision record",
+      "A FAIL verdict lists every gap with what must change; a PASS verdict states what was independently checked"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS on all 4 gated questions, independently checked against the actual diff and files, not the design doc's narrative alone. (1) IDIOMATIC, not a crutch: PollersBreaker (lib/letflow/supervisor/pollers_breaker.ex) is a real GenServer with genuine per-message-type handle_info clauses implementing a proper :closed/:open/:half_open state machine driven by Process.monitor :DOWN messages and timer messages -- no Process.sleep retry loop, no ad-hoc boolean flag standing in for state. A plain GenServer (not :gen_statem) is the correct choice here: the state machine is small, lives at the supervision layer rather than modeling a business-domain protocol, and needs handle_info interop with monitor/timer messages a GenServer already handles naturally -- reaching for :gen_statem would be over-engineering, not the idiomatic choice. (2) SUPERVISION INTEGRITY PRESERVED, no dangling :permanent assumption found anywhere in the tree: verified lib/letflow/application.ex marks Pollers restart: :temporary via the correct Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary) 2-arg form (not the broken {module, arg} 2-tuple the design's own rework iteration 2 caught and fixed); pollers_breaker.ex's restart_pollers/0 uses Supervisor.start_child/2 exclusively, never restart_child/2 (which cannot work against an already-exited :temporary child's deleted spec); confirmed test/letflow/supervisor/pollers_test.exs's AC4 test and its restart_pollers!/0 teardown helper were both actually updated to the same start_child/2 pattern in the committed test file (not just claimed in the design doc); infrastructure_test.exs's top-level children-count assertion correctly updated to 4 children including PollersBreaker in the right position (after Pollers, before Http) -- boot-order/REQ-219-AC2 unaffected since :restart governs exit behavior only, never start order. :temporary + a sibling-managed restart is a recognized, defensible OTP pattern for when a supervisor's own restart policy isn't expressive enough and an external process must own retry/backoff policy -- not a smell. Each poller instance still gets its own supervised process; instance isolation is untouched. (3) NO SCOPE CREEP: git diff main...HEAD touches exactly the new design doc, the new pollers_breaker.ex, application.ex's children list/intensity opts, and the two existing test files that mechanically had to change because of the :temporary conversion -- no new generic circuit-breaker behaviour/abstraction, no new config surface beyond ISS-0451's 3 ACs. The one new public function, breaker_state/0, is a plain read-only accessor correctly NOT gated behind the double-gate test-hook convention (correctly distinguished in the design doc from pollers_init_probe/force_poller_crash, which inject/force behavior rather than merely read it) -- right call, not scope creep in either direction. The 5-step backoff schedule is a plain module attribute, not a generic configurable-policy abstraction -- right-sized to what this issue needs. (4) DECISION-RECORD CONSISTENT: no docs/migration/decisions/*.md entry governs supervision-tree shape, so nothing is silently re-decided (confirmed by scanning all 17 decision records' filenames -- none concern OTP supervision structure). Consistent with REQ-219's own design (lib/letflow/design/req219-supervision-layering.md): the 3-layer split, Infrastructure-before-Pollers boot order, and Pollers' own 5/60 intensity are all left untouched; new child inserted after Pollers/before Http preserves AC2's ordering guarantee by construction. Top-level intensity raise (3->5, max_seconds unchanged at 5) is consistent with, not a re-decision of, REQ-219 decision 3's explicit goal that a crash-looping infra child should still take the app down -- Pollers-attributable restarts now consume zero of that budget (by construction via :temporary), so the +2 headroom adds margin for unrelated Infrastructure/Http/PollersBreaker transient-restart coincidences without weakening that property. (5) BACKOFF SCHEDULE SOUND, not arbitrary: 1s/5s/30s/2m/5m is justified against the measured ~24-30ms fault cadence (1st interval ~40x the cadence so the first probe never lands in the same top-level intensity window), grows to a bounded 1-probe-per-5-minutes steady-state cost rather than an unbounded retry storm, resets only on genuine recovery. Per the task's own framing, arithmetic/race-safety claims (the :temporary mechanism removing the restart race by construction, the two-:DOWN-events-vs-one-observation-timer distinction, the zero-top-level-budget-consumption proof) were treated as independently re-verified by CODE-DESIGN-VALIDATOR across 3 rework cycles and NOT re-derived here -- this review's own independent verification was scoped to idiom, supervision-tree structural integrity, scope, and decision-record consistency, matching the handoff's explicit instruction. One item flagged as out-of-scope-but-worth-naming: design doc §7 Q3 (PollersBreaker's own crash-recovery behavior while Pollers is :open) is explicitly left open by the design as a documented, non-blocking residual, not a hidden gap -- does not affect this branch's 3 ACs.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Proceed to TEST-DESIGNER for pollers_breaker_test.exs per design doc §6 -- REVIEWER gate is clear, no rework required."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

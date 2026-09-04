@@ -1,0 +1,99 @@
+# Test run report — WF-03 Step 05 (TEST-RUNNER) for ISS-0451
+# "Persistent poller crash-budget isolation" (Letflow.Supervisor.PollersBreaker).
+# Handoff: handoffs/WF03-ISS0451-20260904/step-05-test-runner.json
+
+workflow: WF-03
+step: "05"
+agent: TEST-RUNNER
+run_id: WF03-ISS0451-20260904
+issue_id: ISS-0451
+date_utc_start: "2026-09-04T03:59:30Z"
+date_utc_end: "2026-09-04T09:24:22Z"
+
+git:
+  branch: fix/ISS-0451-persistent-poller-crash-budget-20260904
+  commit: 5fb422c6
+  working_tree_at_start: clean
+
+environment:
+  toolchain: local — mix/elixir reachable directly on PATH
+  elixir_erlang: "Erlang/OTP 29 [erts-17.0.5] [64-bit] [smp:16:16] / Elixir 1.20.3"
+  mix_version: "Mix 1.20.3 (compiled with Erlang/OTP 29)"
+  containers: >
+    letflow-postgres-1 (port 5462, no LETFLOW_DB_PORT override in this
+    workspace's .env) and letflow-keycloak-1 (port 8093), both already
+    Up/healthy before this run started — no `docker compose up -d` issued,
+    matching README.md guidance to skip it when already running.
+  host_cores: 16
+
+execution_note: >
+  Ran `mix letflow.check.test` synchronously per core-directives.md's "No
+  Background Wait For A Cross-Turn Notification": the run was launched as a
+  normal blocking foreground call, took ~24 minutes single-process (no
+  scripts/test_parallel.sh partitioning used for this task — dispatch asked
+  for the project's standard full-suite command, `mix letflow.check.test`),
+  and the tool call itself was polled synchronously from within this same
+  turn (a bounded polling loop reading the live output file) rather than
+  ended early waiting on any cross-turn notification.
+
+results:
+
+  full_suite_letflow_check_test:
+    command: "mix letflow.check.test"
+    result: PASS
+    exit_code: 0
+    phase_1_default_suite:
+      result_line_verbatim: "Result: 3203 passed (6 properties, 3197 tests), 21 excluded"
+      finished_line_verbatim: "Finished in 1429.8 seconds (19.3s async, 1410.5s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings."
+    phase_2_isolated_wasm_hang_subprocess:
+      result_line_verbatim: "Result: 7 passed, 3217 excluded"
+      finished_line_verbatim: "Finished in 16.5 seconds (6.0s async, 10.5s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- isolated :wasm_hang run also passed clean."
+    phase_3_isolated_lua_wallclock_race_subprocess:
+      result_line_verbatim: "Result: 11 passed, 3213 excluded"
+      finished_line_verbatim: "Finished in 7.3 seconds (7.2s async, 0.02s sync)"
+      failures: 0
+      task_message_verbatim: "mix letflow.check.test: OK -- isolated :lua_wallclock_race run also passed clean."
+    total_failures_across_all_three_phases: 0
+
+  supervisor_directory_isolated_run:
+    command: "mix test test/letflow/supervisor/"
+    files_covered:
+      - test/letflow/supervisor/http_test.exs
+      - test/letflow/supervisor/infrastructure_test.exs
+      - test/letflow/supervisor/pollers_breaker_test.exs
+      - test/letflow/supervisor/pollers_test.exs
+    result: PASS
+    result_line_verbatim: "Result: 11 passed"
+    finished_line_verbatim: "Finished in 0.1 seconds (0.04s async, 0.1s sync)"
+    failures: 0
+    note: >
+      All 4 files this branch's diff concerns (application.ex,
+      supervisor/pollers_breaker.ex) plus its own tests confirmed passing,
+      run as an isolated subset separate from the full-suite run above. Log
+      shows the expected crash-loop/circuit-breaker behavior under deliberate
+      test-induced crashes (RuntimeError "forced crash for REQ-219 AC4
+      crash-loop isolation test", PollersBreaker tripping and holding for
+      1000ms before half_open) — this is intentional test behavior, not a
+      failure; ExUnit's own Result line confirms 0 failures.
+
+failure_attribution:
+  failures_observed: 0
+  note: >
+    The full suite (all three mix letflow.check.test phases) and the
+    supervisor/-directory isolated run both report 0 failures. Per
+    core-directives.md's "Failure Attribution Is Structural, Never By
+    Count-Matching," attribution applies only to actual failures; there are
+    none to attribute here, so none of the three routes (diff-membership,
+    merge-base reproduction, demonstrated external mechanism) were invoked.
+    This is a real, not assumed, zero: the full verbatim Result: lines above
+    are quoted from the actual run, not compared against a prior count.
+
+overall_verdict: PASS
+
+issues: []
+
+next_action: "Route to RELEASE-VALIDATOR (Step 06) for independent re-verification per core-directives.md's 'Every producing step has a validating step'"

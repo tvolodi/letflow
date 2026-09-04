@@ -56,4 +56,6 @@ source: >
   cannot and does not claim to cover).
 queue_task_id: 451
 github_issue: 865
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0451-20260904
+resolved_at: "2026-09-04T04:32:00Z"

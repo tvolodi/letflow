@@ -8,6 +8,13 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   order, including the ISS-0224 SandboxPool.TaskSupervisor-before-SandboxPool
   ordering.
 
+  ISS-0451 (design `iss0451-poller-crash-budget-isolation.md` §3.4) added a
+  4th top-level child, `Letflow.Supervisor.PollersBreaker`, listed after
+  `Letflow.Supervisor.Pollers` and before `Letflow.Supervisor.Http` -- the
+  top-level children-count assertion below is updated to match; nothing
+  else in this module changes, since `PollersBreaker` does not touch
+  `Letflow.Supervisor.Infrastructure`'s own 17-child list or ordering.
+
   Read-only against the already-running, application-supervised singletons
   -- no restart, no config mutation, safe to run `async: true`.
 
@@ -20,7 +27,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
 
   use ExUnit.Case, async: true
 
-  test "Letflow.Supervisor has exactly 3 top-level children: Infrastructure, Pollers, Http" do
+  test "Letflow.Supervisor has exactly 4 top-level children: Infrastructure, Pollers, PollersBreaker, Http" do
     children = Supervisor.which_children(Letflow.Supervisor)
 
     ids =
@@ -31,6 +38,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     assert ids == [
              Letflow.Supervisor.Infrastructure,
              Letflow.Supervisor.Pollers,
+             Letflow.Supervisor.PollersBreaker,
              Letflow.Supervisor.Http
            ]
 

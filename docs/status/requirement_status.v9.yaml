@@ -167,3 +167,73 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T05:42:37Z"
+    note: >
+      ISS-0451 resolved (WF03-ISS0451-20260904, queue task 451, GH#865). A
+      persistent (never-clearing) Poller crash-loop could exhaust the
+      top-level Letflow.Supervisor's own default OTP restart budget (3/5s)
+      after Letflow.Supervisor.Pollers exhausted its own (5/60s), cascading
+      past the isolation REQ-219 built -- found by REVIEWER during REQ-219's
+      own AC4 gating. Fix: Pollers' child spec is now
+      Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary)
+      in lib/letflow/application.ex, so the top level structurally can never
+      auto-restart it (proven, not bounded -- 0 restarts consumed from its
+      budget for any fault duration); a new Letflow.Supervisor.PollersBreaker
+      GenServer (lib/letflow/supervisor/pollers_breaker.ex) becomes sole
+      restart authority via Supervisor.start_child/2, tripping to a stopped
+      :open state after 2 consecutive exits with exponential backoff.
+      Top-level max_restarts raised 3->5 as defense-in-depth for the
+      remaining :permanent children. Design went through 3 rework cycles
+      (2 real Elixir Supervisor-semantics bugs caught by CODE-DESIGN-VALIDATOR
+      -- an unproven termination-vs-auto-restart race, then a children-list
+      syntax defect that silently failed to apply :temporary -- plus a real
+      race condition between PollersBreaker and the existing AC4 test's own
+      restart call, found by ELIXIR-DEV during implementation and resolved by
+      redesigning the test as a single breaker-mediated flow rather than
+      touching production code). SECURITY-REVIEWER and REVIEWER both PASSED.
+      New fail-then-pass mutation-tested regression test
+      (test/letflow/supervisor/pollers_breaker_test.exs), independently
+      re-verified by TEST-DESIGN-VALIDATOR (one mutant reproduced exactly).
+      Full suite green: mix letflow.check.test 3203+7+11 passed, 0 failures.
+      PR #874 merged (squash commit 77fe6bf4) after one structurally-cleared
+      CI flake (wasm_hang timing class, zero diff overlap, identical commit
+      passed the concurrent job) -- filed as ISS-0456 (queue task 456, GH#875)
+      rather than left undocumented. docs/issues/ISS-0451.yaml: status:
+      resolved. GitHub issue #865 closed with mandated evidence comment.
+      Also released a stale WF03-ISS0425-20260903 registry lock (no live
+      branch/session behind it, its own diagnosis had already been routed
+      into and completed by REQ-219/REQ-220) that was blocking this run's
+      owned_modules claim on lib/letflow/application.ex.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T06:22:22Z"
+    note: >
+      WF03-ISS0456-20260904: ISS-0456 (wasm_hang timing flake recurrence,
+      PR #874 push-event backend gate, queue task 456, GH#875) diagnosed and
+      folded into ISS-0418 -- NOT independently resolved. ISSUE-FIXER
+      independently verified, by direct CI log inspection (gh run view
+      --log-failed job 100920721979), that this recurrence's failure
+      signature (plugin_handler_test.exs:474, host_api_write_test.exs:460) is
+      byte-for-byte identical in file/line/timeout-bound/stack-shape to
+      ISS-0418's own recurrence_2026_09_03 entry -- not merely accepted from
+      the filing text, per HANDOFF_PROTOCOL.md's "a handoff's factual
+      premises are checkable" rule applied to this issue's own filing.
+      Independently re-checked PR #874's zero-touch claim on wasm/lua paths
+      via gh pr view --json files. Cross-checked ISS-0453 and confirmed no
+      match (different subsystem -- Letflow.Scheduler.Admission, main suite
+      not the isolated wasm_hang stage). No new root cause found; no fix
+      designed or applied for ISS-0456 itself. docs/issues/ISS-0456.yaml ->
+      status: instrumented, superseded_by: ISS-0418. docs/issues/ISS-0418.yaml
+      -> new recurrence_2026_09_04 field, tenth-plus hit; its own OQ-5
+      operator-configurable concurrency cap remains the correct, still
+      undesigned, structural fix for this whole class. Ran through the full
+      git-setup/PR/CI/merge pipeline for the docs-only fold-in (PR #876,
+      merged as fast-forward 023c4e17) -- both backend-gate CI runs passed
+      cleanly, no wasm_hang flake recurred on this PR's own CI. GH#875 closed
+      with mandated evidence comment (never claims a fix). Queue task 456
+      released WITHOUT status (stays open, unlocked) per TASK_QUEUE.md's rule
+      that status:"done" would falsely assert the underlying defect is fixed.

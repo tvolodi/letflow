@@ -19,8 +19,9 @@ exactly what changes; no `.ex` function bodies. That is ELIXIR-DEV's job at Step
 
 Read the live file on `main` directly (not re-quoted from the issue or the diagnosis):
 
-- `autofix_file/1` (`:414-446`) decides via `Map.get(Jason.decode!(raw), "status")` — an
-  ordinary `Map.get/2` on the map `Jason.decode!/1` already produced. Jason's own
+- `autofix_file/1` (`:414-446`) decides via `Map.get(data, "status")`, where `data` comes
+  from `Jason.decode(raw)` (non-bang) inside a `with {:ok, data} <- ...` clause — an
+  ordinary `Map.get/2` on the map `Jason.decode/1` already produced. Jason's own
   duplicate-key resolution therefore already happened by the time this line runs; there
   is no separate "which occurrence" decision made here.
 - `scan_for_status/4` (`:521-567`, clause at `:538-540` plus `handle_string_token/5` at

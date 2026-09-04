@@ -79,4 +79,20 @@ source: >
   handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json.
 queue_task_id: 457
 github_issue: 877
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0457-20260904
+resolved_at: "2026-09-04T09:37:43Z"
+regression_test: test/mix/tasks/letflow.lint_handoffs_test.exs (T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS)
+resolution_summary: >
+  splice_top_level_status/2's occurrence-selection now agrees with
+  Jason.decode!/1's first-key-wins semantics on a duplicate top-level status
+  key. Fail-then-pass proven: the new regression test fails against pre-fix
+  commit 373f5363 (independently re-derived by TEST-DESIGN-VALIDATOR in a
+  disposable worktree, not just TEST-DESIGNER's own report) and passes on
+  this run's branch. TEST-RUNNER's full-suite run (3200 tests, 3206/3206
+  passed across the 8 partitions) and a real-corpus `mix letflow.lint_handoffs`
+  run (0 new violations across 2033 handoff files) both confirm no
+  regression. See handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json
+  for the root-cause diagnosis, step-04b-test-design-validator.json for the
+  independent fail-first re-derivation, and step-05-test-runner.json for the
+  full verification pass.

@@ -328,14 +328,21 @@ real PR against the actually-configured `main` protection (Steps 1-3 above, appl
 - **Step 4e, cleanup**: PR #887 is merged (not left dangling open); `--delete-branch`
   removed `chore/verify-branch-protection-0018` on the remote, and the local copy was
   never created as a lingering branch beyond the verification session.
-- **The "succeeds when green" half of Step 4c** (a plain `gh pr merge` succeeding once
-  both required checks are actually SUCCESS, with no `--admin`) is deferred to this same
-  ISS-0441 run's own real, non-scratch PR closing out the rest of this issue's file
-  changes (`0004-humanless-pipeline.md`, `GIT_MERGE.md`, `ci.yml`'s comment) — that PR's
-  own eventual clean merge (or its own encounter with a flake, structurally attributed
-  and admin-overridden exactly as demonstrated above) stands as the completing half of
-  this record's live evidence, logged in that PR's own merge history rather than
-  duplicated here.
+- **The "succeeds when green" half of Step 4c**, as it actually played out: this same
+  ISS-0441 run's own real, non-scratch PR (#895) hit the `wasm_hang` flake TWICE running
+  (first attempt, then a rerun) — both times main's own full suite passed clean and only
+  the isolated `wasm_hang` subprocess stage flaked, on a PR whose diff touches zero WASM
+  code. Rather than a clean "succeeds when green" demonstration, PR #895 became a SECOND
+  real, unstaged instance of the FAILURE/`--admin`-override path: `gh pr merge --squash
+  --delete-branch` was rejected (`the base branch policy prohibits the merge`) both
+  times, and `gh pr merge --squash --delete-branch --admin` succeeded (fast-forward to
+  `main`, commit `2967c3d9`) after the second occurrence was attributed the same way as
+  PR #887's. This is honestly reported as NOT the originally-planned clean-green proof —
+  the "succeeds when green, no override" path remains undemonstrated by a dedicated live
+  run, though it is the simpler, unexercised branch of the same boolean gate whose
+  PENDING/BLOCKED/override branches are now proven live twice over. The next ordinary PR
+  in this pipeline that merges without hitting a flake stands as that proof in its own
+  right, needing no special ceremony to demonstrate.
 
 ## Consequences — corrections required to other docs (AC4)
 

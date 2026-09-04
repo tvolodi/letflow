@@ -114,6 +114,7 @@ defmodule Letflow.Supervisor.PollersTest do
       # max_restarts: 5, max_seconds: 60 budget -- is the actual AC4
       # property this test asserts.
       :ok = Supervisor.terminate_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
+
       {:ok, pollers_pid_after_manual_restart} =
         Supervisor.restart_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
 

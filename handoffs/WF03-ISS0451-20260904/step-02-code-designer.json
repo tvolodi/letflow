@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-02",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T02:50:00Z",
+  "started_at": "2026-09-04T02:50:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0451.yaml",
+      "handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "lib/letflow/supervisor/http.ex",
+      "lib/letflow/design/req219-supervision-layering.md",
+      "test/letflow/supervisor/pollers_test.exs"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Read ISSUE-FIXER's diagnosis in full at handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json (result.summary) -- it confirmed empirically (real code read plus a live throwaway probe) that a PERSISTENT Poller fault cascades from Letflow.Supervisor.Pollers' own budget exhaustion (max_restarts: 5, max_seconds: 60) into the top-level Letflow.Supervisor's default OTP restart budget (3 restarts / 5 seconds, never overridden in lib/letflow/application.ex) within about 96ms wall-clock, taking down the whole application (Repo, Bandit included) -- the exact incident REQ-219 exists to prevent, just for a persistent rather than single-shot fault.\n\nProduce a design artefact in lib/letflow/design/ (follow this project's existing convention, e.g. lib/letflow/design/req219-supervision-layering.md's shape) choosing and fully specifying a fix. ISS-0451's own description names two candidate options, neither prescribed: (a) raise the top-level Letflow.Supervisor's own restart intensity so it tolerates at least one full Pollers-budget-exhaustion cycle without exiting itself, and/or (b) give Pollers a circuit-breaker/backoff so a persistent fault degrades to a stopped-but-not-crash-looping state rather than repeatedly re-exhausting its own budget and repeatedly costing the top level a restart. You choose the design -- this is a real architectural decision with an availability tradeoff (see the design considerations below), not a default to pick without reasoning.\n\nDesign considerations to work through and document (this is what ISS-0451's AC2 requires -- concrete arithmetic, not just a chosen number):\n- If you raise the top-level's restart intensity alone: what value tolerates at least one full Pollers-exhaustion-and-restart cycle (Pollers' own 5-in-60s budget means Pollers can legitimately exit and be restarted by the top level at most once per 60s under NORMAL bounded-transient-fault operation before Pollers' own budget resets -- but under a PERSISTENT fault, Pollers re-exhausts almost immediately after each restart, so the top level would need to tolerate MANY such Pollers-exits within its own window, not just one, unless something also slows the retry rate). State the exact max_restarts/max_seconds you choose for the top level and show the arithmetic for why it survives a persistent fault indefinitely (or for how long, if not indefinitely) rather than merely surviving one extra restart.\n- If you add a circuit-breaker/backoff to Pollers instead (or in addition): what state machine, what backoff schedule, what makes it degrade to 'stopped, not crash-looping' rather than continuing to consume top-level restart budget at all. Consider that Pollers currently holds TWO independently-gated poller GenServers as peers (Letflow.Scheduler.Poller and Letflow.Engine.ServiceTaskDispatcher.Poller) -- a circuit-breaker design must state whether it applies per-poller or to the whole Pollers supervisor, and why.\n- Whichever you choose (or if you choose both), the design must not weaken REQ-219's own AC2 (boot-order: Infrastructure before Pollers, structural via list order) or AC4 (single-crash isolation: Pollers exhausting its budget once must still leave Infrastructure/Http alone) -- state explicitly how your design preserves both.\n- The design must specify exactly what test(s) TEST-DESIGNER will need to write: a regression test simulating a PERSISTENT Poller fault (never cleared, unlike REQ-219's AC4 test) proving Letflow.Supervisor (top-level), Letflow.Repo, and the Bandit listener all remain alive after Pollers repeatedly exhausts its budget -- name the exact mechanism the test will use to keep the fault persistent (a test-only flag, following the existing force_poller_crash precedent in pollers_test.exs, or something else) and what observable proves the top-level supervisor never exited (e.g. Process.whereis(Letflow.Supervisor) staying the same pid, or a monitor).\n\nThis is a design artefact ONLY -- no implementation code, no .ex file changes outside lib/letflow/design/. Signatures/specs/config-value choices only, per this project's design-vs-implementation convention (see CODE-DESIGN-VALIDATOR's own gate criteria, which will check for implementation code present and fail the gate if found).",
+    "acceptance_criteria": [
+      "Design artefact created under lib/letflow/design/, named appropriately (e.g. iss0451-poller-crash-budget-isolation.md)",
+      "Design states the exact top-level restart-intensity value chosen (if that lever is used) with the arithmetic showing it tolerates at least one full Pollers-budget-exhaustion cycle, per ISS-0451 AC2",
+      "Design states the exact circuit-breaker/backoff mechanism (if that lever is used) with its state machine and thresholds",
+      "Design explicitly confirms REQ-219 AC2 (boot order) and AC4 (single-crash isolation) are preserved and states why",
+      "Design specifies the exact test mechanism and observable(s) for the new persistent-fault regression test",
+      "No implementation code (.ex function bodies) present in the design document -- signatures/specs/config values only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

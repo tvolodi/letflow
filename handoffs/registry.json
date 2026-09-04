@@ -4595,7 +4595,7 @@
       "started_at": "2026-09-04T18:09:46Z",
       "lock_released_at": "2026-09-04T19:05:00Z",
       "released_lock": true,
-      "last_known_step": "Step Final COMPLETED -- direct ORCH fix (all 6 ORCHESTRATOR.md S10 checks passed). Replaced a fixed reference-schema name with ISS-0427's own generate_staging_schema_name() generator, added a mutation-tested concurrency regression test. Full suite 3222/3224 (2 pre-existing rustc-gap failures) after cleaning up a self-inflicted stale tenant_schemas row left by a force-killed foreground test run during this same fix's own mutation testing.",
+      "last_known_step": "Step Final COMPLETED -- PR #901 squash-merged to main (1a00bc89) via a PLAIN gh pr merge, no --admin needed -- the first genuine, real (not admin-overridden) demonstration of the branch-protection 'succeeds when green' path since ISS-0441 configured it (one duplicate wasm_hang-flaked backend-gate run alongside one passing run for the same context; GitHub's per-context semantics accepted the passing run and let the plain merge through). Two registry.json/status-volume merge conflicts with concurrent siblings (ISS-0438, ISS-0467) resolved via the established set-union recipe. Queue task 468 released done, GH#898 best-effort closed.",
       "note": "test/support/tenant_template.ex's assert_template_parity_against_independent_reference!/1 hardcoded a fixed reference-schema name colliding under concurrent invocation -- same class ISS-0427 already fixed for the template build itself, not applied to the verification counterpart in the same module."
     },
     {

@@ -838,6 +838,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       rewritten = File.read!(path)
 
       assert rewritten == expected
+
       refute String.ends_with?(rewritten, "\n"),
              "expected no trailing newline to be force-appended (the original had none)"
     end

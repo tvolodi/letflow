@@ -1464,7 +1464,14 @@ defmodule Letflow.SandboxPoolTest do
   describe "retry_query_once/1 (ISS-0292 regression -- deterministic, non-CI-timing-dependent)" do
     test "retries exactly once after a Postgrex.Error and returns the retry's value" do
       {:ok, counter} = Agent.start_link(fn -> 0 end)
-      on_exit(fn -> if Process.alive?(counter), do: Agent.stop(counter) end)
+
+      on_exit(fn ->
+        try do
+          Agent.stop(counter)
+        catch
+          :exit, _ -> :ok
+        end
+      end)
 
       fun = fn ->
         call_number = Agent.get_and_update(counter, fn n -> {n + 1, n + 1} end)
@@ -1492,7 +1499,14 @@ defmodule Letflow.SandboxPoolTest do
 
     test "propagates (does not swallow) an exception that persists across both attempts" do
       {:ok, counter} = Agent.start_link(fn -> 0 end)
-      on_exit(fn -> if Process.alive?(counter), do: Agent.stop(counter) end)
+
+      on_exit(fn ->
+        try do
+          Agent.stop(counter)
+        catch
+          :exit, _ -> :ok
+        end
+      end)
 
       fun = fn ->
         Agent.update(counter, &(&1 + 1))

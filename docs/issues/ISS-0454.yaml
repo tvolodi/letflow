@@ -1,0 +1,107 @@
+id: ISS-0454
+title: "the check-then-act on_exit teardown pattern fixed in ISS-0452 exists in further test files"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0446-20260904
+discovered_at: "2026-09-04T01:09:41Z"
+severity: MINOR
+tags: [flaky-test, test-teardown, race-condition, otp-supervision, ci, s6]
+description: >
+  Registered as queue task 454 (GH#870). The registering session's own
+  description text says "Filed as docs/issues/ISS-0447.yaml by ORCH during
+  WF03-ISS0446-20260904 Step 4b" and attributes the original fix to
+  ISS-0446 -- both are stale/incorrect: no docs/issues/ISS-0447.yaml or a
+  committed local record for this task ever reached main, and the actual
+  fix for this defect class shipped under ISS-0452 (queue task 452, GH#867,
+  resolved 2026-09-03T20:59:39Z, commit 35582316), not ISS-0446 (which
+  remains open, its own record carrying only later_evidence, no code fix).
+
+  THE UNDERLYING DEFECT (real, ISS-0452's own diagnosis, restated here for
+  this record's own self-sufficiency): on_exit(fn -> if
+  Process.alive?(pid), do: <stop-call>(pid) end) is check-then-act across a
+  process boundary. When the target is LINKED to the test process (started
+  via start_link, e.g. Supervisor.start_link/2 or Agent.start_link/2), it
+  is already dying when the test process exits and on_exit callbacks run
+  afterward -- Process.alive?/1 can still return true while the target
+  dies before the stop call completes, which then exits :shutdown/:noproc
+  instead of returning normally. ISS-0452 fixed 7 such sites (plus the
+  original service_task_dispatcher_test.exs site, its own primary subject)
+  by replacing the check-then-act with a try/catch on the exit.
+
+  RE-GREPPED against the current tree (2026-09-04, this record's own
+  verification, not carried forward from the registering session's
+  possibly-stale "8 other test files" count): `grep -rn "if
+  Process.alive?" test/ lib/` finds 5 remaining occurrences --
+  service_task_dispatcher_test.exs:1143 is a COMMENT (part of ISS-0452's
+  own explanatory note describing the old, now-replaced shape), leaving 4
+  live call sites:
+    - test/letflow/support/tenant_fixture_test.exs:503
+    - test/letflow/sandbox_pool_test.exs:671
+    - test/letflow/sandbox_pool_test.exs:1467
+    - test/letflow/sandbox_pool_test.exs:1495
+  NOT ALL FOUR ARE NECESSARILY DEFECTS -- per ISS-0452's own diagnosis, the
+  race requires the target to be LINKED to the test process. Each site
+  must be classified (is the target started via start_link, making it
+  linked and therefore genuinely racy under this teardown shape, or
+  started unlinked/via Agent.start with no link, making the check
+  harmless) before deciding whether to fix it. No blanket
+  find-and-replace.
+fix_direction: >
+  For each of the 4 sites: read how its target process/agent was started.
+  If linked (start_link, or a supervisor/agent spawned as part of a linked
+  tree), replace the check-then-act with ISS-0452's established try/catch
+  form, or with ExUnit's start_supervised/1 if that fits the test's own
+  ownership intent better (see ISS-0452's own resolution for why it chose
+  try/catch over start_supervised for its case). If unlinked, record why
+  the check-then-act is harmless there and leave it, or delete it if
+  provably redundant (e.g. the process already gets torn down by another
+  mechanism). Full suite must pass after.
+affected_files:
+  - test/letflow/support/tenant_fixture_test.exs
+  - test/letflow/sandbox_pool_test.exs
+related:
+  - ISS-0452
+  - ISS-0446
+queue_task_id: 454
+github_issue: 870
+status: resolved
+resolved_in_run: WF03-ISS0454-20260904
+resolved_at: "2026-09-04T03:10:00Z"
+resolution: >
+  ISSUE-FIXER classified all 4 sites found by the fresh grep:
+  test/letflow/support/tenant_fixture_test.exs:503 (BENIGN -- target
+  started with Agent.start/1, unlinked, and the check-then-act runs
+  synchronously in the test process itself, not in an on_exit callback);
+  test/letflow/sandbox_pool_test.exs:671 (BENIGN -- target is spawn/1,
+  unlinked, and the act half is Process.exit/2 which never raises against
+  an already-dead pid regardless of linkage); test/letflow/sandbox_pool_test.exs:1467
+  and :1495 (RACY -- both Agent.start_link/1, linked, exact match to
+  ISS-0452's diagnosed and fixed shape).
+
+  Sizing (ORCHESTRATOR.md S10): single file (only sandbox_pool_test.exs
+  needed a change), no new public function, no migration, no
+  supervision-tree file, no tenant-data path, no test-asserted-behavior
+  change (try/catch vs. check-then-act alters no assertion) -- passes all
+  six checks, so ORCH applied the fix directly rather than dispatching
+  ELIXIR-DEV, per ISSUE-FIXER's own explicit sizing verdict.
+
+  FIX. Both racy sites' on_exit callbacks replaced check-then-act with
+  ISS-0452's established try/catch form:
+    on_exit(fn ->
+      try do
+        Agent.stop(counter)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+  VERIFICATION. mix compile --warnings-as-errors clean.
+  test/letflow/sandbox_pool_test.exs: 23/23 passed across 6 runs (default
+  seed + seeds 1-5). Full suite (mix letflow.check.test): 3200/3202 passed,
+  2 failures -- both the pre-existing rustc-toolchain-gap
+  (Mix.Tasks.Letflow.CheckToolchainTest), no new or REQ-219-related
+  failure. Same honest limit ISS-0452 itself documented: the race only
+  manifests under CI runner contention, not locally at any repetition
+  count, so this evidence demonstrates the fix does not break anything
+  rather than directly reproducing the race's absence -- the load-bearing
+  argument is the mechanism (no more check-then-act window), identical to
+  ISS-0452's own reasoning.

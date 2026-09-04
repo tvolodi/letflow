@@ -6,7 +6,6 @@
   "from_agent": "TEST-DESIGN-VALIDATOR",
   "to_agent": "ORCH",
   "file": "handoffs/WF03-ISS0446-20260904/step-04b-test-design-validator-regate.json",
-  "note": "This is the re-gate of TEST-DESIGNER's rework 1 (step-04-test-designer-rework1.json), following this validator's own prior FAIL (step-04b-test-design-validator.json).",
   "created_at": "2026-09-04T02:30:29Z",
   "started_at": "2026-09-04T01:10:00Z",
   "completed_at": "2026-09-04T02:30:29Z",
@@ -15,7 +14,9 @@
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0446"],
+    "issue_ids": [
+      "ISS-0446"
+    ],
     "artifacts_in": [
       "handoffs/WF03-ISS0446-20260904/step-04-test-designer-rework1.json",
       "test/specs/ISS-0446.md",
@@ -26,7 +27,7 @@
     "owned_modules": []
   },
   "task": {
-    "description": "WF-03 Step 4b re-gate (rework 1 of 3) for ISS-0446. TEST-DESIGNER accepted the prior FAIL, independently reproduced the counterexample, and committed one new deterministic (trap_exit-based) regression-guard test plus a corrected test/specs/ISS-0446.md. Re-verify adversarially: (1) reliability under real load/contention, not just isolation; (2) soundness of the trap_exit choice; (3) whether the guard actually catches reintroduction of check-then-act AT THE REAL FIX SITE, not merely mutation of itself; (4) honesty of the synthetic-child framing; (5) whether the spec's REVISION NOTE corrects rather than drops the prior false claim; (6) runtime cost."
+    "description": "RE-GATE PROVENANCE: This is the re-gate of TEST-DESIGNER's rework 1 (step-04-test-designer-rework1.json), following this validator's own prior FAIL (step-04b-test-design-validator.json).\n\nWF-03 Step 4b re-gate (rework 1 of 3) for ISS-0446. TEST-DESIGNER accepted the prior FAIL, independently reproduced the counterexample, and committed one new deterministic (trap_exit-based) regression-guard test plus a corrected test/specs/ISS-0446.md. Re-verify adversarially: (1) reliability under real load/contention, not just isolation; (2) soundness of the trap_exit choice; (3) whether the guard actually catches reintroduction of check-then-act AT THE REAL FIX SITE, not merely mutation of itself; (4) honesty of the synthetic-child framing; (5) whether the spec's REVISION NOTE corrects rather than drops the prior false claim; (6) runtime cost."
   },
   "result": {
     "status": "FAIL",

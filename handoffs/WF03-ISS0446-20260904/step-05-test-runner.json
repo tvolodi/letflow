@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-05",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-05-test-runner.json",
+  "created_at": "2026-09-04T02:53:16Z",
+  "started_at": "2026-09-04T02:44:35Z",
+  "completed_at": "2026-09-04T02:53:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0446-20260904/step-03-elixir-dev.json",
+      "handoffs/WF03-ISS0446-20260904/step-04-test-designer-rework2.json",
+      "handoffs/WF03-ISS0446-20260904/step-04b-test-design-validator-regate2.json",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/specs/ISS-0446.md"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 5 for ISS-0446: run the FULL test suite (scripts/test_parallel.sh, this project's documented full-suite entry point per .claude/agents/test-runner.md) as the standard pre-merge verification -- does this branch break anything? Explicitly NOT tasked with proving the ISS-0446 race is fixed (structural argument already settled at design/review gates). Report the real combined pass/fail tally, diagnose any failure against the documented flake classes (ISS-0352, ISS-0426) and this branch's actual diff, and write both this handoff and test/reports/report-20260904-WF03-ISS0446-20260904.yaml."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FULL SUITE RUN, foreground/blocking/synchronous (bash scripts/test_parallel.sh, TEST_PARALLEL_N derived from nproc=16, not overridden). Postgres already running and healthy (letflow-2-postgres-1, port 5472 per this workspace's own .env LETFLOW_DB_PORT=5472) -- no docker compose up needed or run. Started 2026-09-04T02:44:35Z, combined result ready ~7.5 minutes later.\n\nCOMBINED TALLY (real, quoted from the script's own aggregation, not estimated): 'combined: 3184 tests, 6 properties, 1 failures (3189/3190 passed)'. Per-partition: 16 partitions, 15 clean (0 failures each), partition 3 alone reported '188 tests, 0 properties, 1 failures, exit 2'. Script's own real exit code is 1 (test_parallel.sh:372 `exit \"$any_failed\"`) -- note an earlier 'EXIT_CODE:0' I captured during the interactive run reflected the shell pipe's (tee's) exit status, not the script's; corrected explicitly in the written report rather than left standing.\n\nBASELINE COMPARISON: pre-change baseline 3192 tests; branch adds exactly one new test so expected 3193. TEST-DESIGNER and TEST-DESIGN-VALIDATOR both measured 3193 passed on their own full runs during Step 4. This run's total collected (3184 tests + 6 properties = 3190) does not line up 1:1 with the prior 3193 figure -- most plausibly a counting-methodology difference between scripts/test_parallel.sh's per-partition exclusion accounting and mix letflow.check.test's single-process tally (not reconciled line-by-line here, since it is not the actionable finding). THE ACTIONABLE FINDING IS THE 1 REAL FAILURE, confirmed deterministic, not an aggregate-count artifact.\n\nFAILURE: 'test ISS-0440 -- run/1 end-to-end via --dir, isolated tmp fixtures T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS -- default no-flag invocation still scans @handoffs_dir (Mix.Tasks.Letflow.LintHandoffsTest)' at test/mix/tasks/letflow.lint_handoffs_test.exs:686. Raw output: '** (Mix.Error) letflow.lint_handoffs found 2 new violation(s) -- see output above', code `io = capture_io(fn -> assert LintHandoffs.run([]) == :ok end)`, stacktrace through Mix.raise/2 and ExUnit.CaptureIO -- i.e. the test's own capture_io assertion raised because the real-corpus scan under test found violations, not because of any assertion mismatch in the test body itself.\n\nISOLATED REPRODUCTION (confirms deterministic, not flaky): re-ran `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` alone afterward -- 'Result: 42/43 passed, Failed: 1 test', the SAME test, every time. This does not match either of this suite's documented flake classes (ISS-0352 wasm_hang / isolation-subprocess; ISS-0426 :lua_wallclock_race / wall-clock) by name, tag, or mechanism -- it reproduces because the test scans the real, static handoffs/ directory by design (its own name says so), and that directory's content is deterministic within a checkout, not timing-dependent.\n\nROOT CAUSE, read directly from `mix letflow.lint_handoffs`'s own output: exactly 2 new (un-grandfathered) hard violations, both [H3] 'non-schema top-level key(s): [\"note\"]', in handoffs/WF03-ISS0446-20260904/step-04b-test-design-validator-regate.json and .../step-04b-test-design-validator-regate2.json. Confirmed by reading both files directly: each carries a top-level `\"note\": \"...\"` field that is not among lib/mix/tasks/letflow.lint_handoffs.ex's @schema_top_keys (handoff_id, run_id, workflow_id, step, from_agent, to_agent, file, created_at, started_at, completed_at, status, priority, context, task, result, rework_count, max_rework, not_agent_attested, gate_history -- 'note' absent). lib/mix/tasks/letflow.lint_handoffs.ex itself is byte-identical to main (`git diff main...HEAD -- lib/mix/tasks/letflow.lint_handoffs.ex` empty) -- the lint tool did not change; the corpus it scans did, correctly triggering it.\n\nATTRIBUTION: STRUCTURAL and CAUSAL, not merely proximate. Both violating files are on this branch's own diff (`git log --oneline` on each shows exactly one commit each, both on this branch: 5abfc320 and ee2dc2ee, both TEST-DESIGN-VALIDATOR gate commits from this same run). The failing test's entire purpose is to assert a default lint_handoffs run over the REAL corpus returns :ok; the corpus now genuinely contains 2 files this branch added with a genuine, correctly-detected schema violation that did not exist before this branch. This is NOT the ISS-0446 fix itself: test/letflow/engine/service_task_dispatcher_test.exs (the actual scoped change) had no failures reported anywhere in this run's 16 partitions, consistent with every prior step's clean runs (ELIXIR-DEV 42 passed; TEST-DESIGNER/TEST-DESIGN-VALIDATOR rework2/regate2, 43 passed repeatedly). This is a handoff-schema hygiene defect TEST-DESIGN-VALIDATOR introduced into its own gate artefacts at steps 04b and 04b-regate2.\n\nOWNERSHIP: handoffs/ and lib/mix/tasks/letflow.lint_handoffs.ex are outside TEST-RUNNER's owned surface (test/letflow/process_instance_test.exs, other test files, test/support/data_case.ex). Per 'Never Satisfy a Gate by Editing What It Measures' this was reported, not silently patched. No code or handoff files were edited this step; git status --porcelain confirmed empty at start and this step made no changes other than the report/handoff files themselves.\n\nSCOPE REMINDER, as instructed: this run verifies 'does this branch break anything' for pre-merge purposes -- it is NOT and is not being reported as evidence the ISS-0446 race is fixed (structural argument, already settled at design/review gates; a green teardown-race test proves nothing about the race either way, per the issue's own note that the failing CI run also passed 3192/3192 locally).\n\nFull written report: test/reports/report-20260904-WF03-ISS0446-20260904.yaml.",
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "title": "This branch's own handoff files (step-04b-test-design-validator-regate.json, step-04b-test-design-validator-regate2.json) carry a top-level \"note\" key not in letflow.lint_handoffs.ex's @schema_top_keys, breaking test/mix/tasks/letflow.lint_handoffs_test.exs's real-corpus scan test",
+        "description": "mix letflow.lint_handoffs reports exactly 2 new (un-grandfathered) [H3] hard violations, both against files this branch introduced (commits 5abfc320 and ee2dc2ee, both TEST-DESIGN-VALIDATOR gate handoffs from this run). This deterministically fails test/mix/tasks/letflow.lint_handoffs_test.exs:686 (T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS), reproduced both in the full parallel run and in an isolated single-file re-run. lib/mix/tasks/letflow.lint_handoffs.ex is unmodified by this branch -- the schema rule predates this branch and correctly detected a real violation in this branch's own new files. This must be fixed on this branch before merge: either remove/relocate the 'note' field from both handoff files (it looks like free-form provenance text that could move into an existing schema field, e.g. folded into result.summary or context), or add 'note' to @schema_top_keys if a top-level note field should become a permanently schema-blessed addition (that option needs REVIEWER sign-off since it changes a shared, cross-run schema definition, not just these two files). TEST-RUNNER does not own handoffs/ or lib/mix/tasks/letflow.lint_handoffs.ex and made no edit; routing to ORCH to assign the fix.",
+        "suggested_severity": "MAJOR"
+      }
+    ],
+    "artifacts_out": [
+      "test/reports/report-20260904-WF03-ISS0446-20260904.yaml",
+      "handoffs/WF03-ISS0446-20260904/step-05-test-runner.json"
+    ],
+    "next_action": "ORCH to assign a fix for the 2 schema-violating handoff files (step-04b-test-design-validator-regate.json, step-04b-test-design-validator-regate2.json), then re-dispatch TEST-RUNNER for a clean full-suite re-verification before this branch can merge. Do NOT merge on this FAIL."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

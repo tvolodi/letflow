@@ -4580,6 +4580,28 @@
       "last_known_step": "Step Final COMPLETED PASS -- PR #886 squash-merged to main (a6902425). docs/issues/ISS-0459.yaml: resolved. GH#884 CLOSED with evidence comment. Queue task 459 released status:done. AC3 executed: queue task 458 re-released status:blocked (was done), GH#882 independently re-verified still CLOSED.",
       "note": "WF-03 issue-resolving run for ISS-0459: letflow-queue has no release_lock status for an instrumented/no_defect terminal verdict, causing LIFO re-selection loops. Cross-repo scope: this repo (docs/agents/protocols/TASK_QUEUE.md, ISSUE_QUEUE.md) under this normal WF-03 git flow, PLUS letflow-queue (separate repo, c:/Users/tvolo/dev/ai-dala/letflow-queue) under its own git/CI/CD workflow for the service-side change. Filed after ISS-0458 (queue task 458) was released with status:done as an ad-hoc workaround for an instrumented outcome -- flagged in that run as not-a-real-fix.",
       "lock_released_at": "2026-09-04T15:27:08Z"
+    },
+    {
+      "run_id": "WF03-ISS0438-20260904",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/router.ex",
+        "docs/migration/decisions/",
+        "docs/migration/stage-5-scripting-plugins.md",
+        "docs/migration/stage-6-operational-cross-cutting.md",
+        "docs/requirements.yaml"
+      ],
+      "lock_acquired_at": "2026-09-04T15:29:00Z",
+      "queue_agent_id": "tvolodi-orch",
+      "queue_task_id": 438,
+      "github_issue": 845,
+      "released_lock": false,
+      "started_at": "2026-09-04T15:31:00Z",
+      "last_known_step": "Step 00 (ELIXIR-DEV) COMPLETED PASS -- feature/WF03-ISS0438-20260904 created and pushed, commit 0405bfce.",
+      "note": "Ad-hoc-shaped WF-03 run resolving ISS-0438 (already filed by a prior run, ORCH-adhoc-20260902-arch-review, commit cbc91885 -- docs/issues/ISS-0438.yaml pre-existed this run's dispatch instructions, which incorrectly assumed it did not; treated per HANDOFF_PROTOCOL.md sec1.1 as a checkable premise that was wrong, and not overwritten). This is a scoping/architecture-decision task, not a code-fix: whether Letflow ports R-Co's dynamic entity/data-model subsystem (lib/letflow/router.ex's Deferred routes table, S5/S6, zero requirements). Blends WF-01 (requirement-expansion) and WF-03 (issue-resolving) shapes per the dispatching session's explicit instruction -- routes through CODE-DESIGNER (scoping-decision capacity) + CODE-DESIGN-VALIDATOR instead of ISSUE-FIXER's normal code-diagnosis role."
     }
   ]
 }

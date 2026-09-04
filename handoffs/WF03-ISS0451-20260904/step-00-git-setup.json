@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-00",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0451-20260904/step-00-git-setup.json",
+  "created_at": "2026-09-04T02:43:31Z",
+  "started_at": "2026-09-04T02:43:31Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0451.yaml",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/design/req219-supervision-layering.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Run docs/agents/protocols/GIT_SETUP.md's procedure exactly, branching from current origin/main (fast-forwarded, includes REQ-219's merged PR #869) as fix/ISS-0451-persistent-poller-crash-budget-20260904. This is Step 00 of WF-03 for ISS-0451 -- do not implement anything yet, this step only sets up the branch.",
+    "acceptance_criteria": [
+      "git pull --ff-only origin main exits 0",
+      "git branch --show-current outputs fix/ISS-0451-persistent-poller-crash-budget-20260904",
+      "git push -u origin fix/ISS-0451-persistent-poller-crash-budget-20260904 exits 0"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

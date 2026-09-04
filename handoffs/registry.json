@@ -4267,16 +4267,13 @@
       "issue_id": "ISS-0425",
       "queue_task_id": 425,
       "github_issue_number": 829,
-      "status": "IN_PROGRESS",
-      "owned_modules": [
-        "lib/letflow/application.ex",
-        "lib/letflow/instance_supervisor.ex"
-      ],
+      "status": "COMPLETED",
+      "owned_modules": [],
       "started_at": "2026-09-03T16:55:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER for sizing verdict",
-      "note": "WF-03 issue-resolving run for ISS-0425: flat supervision tree, 15 peers of Repo under one :one_for_one with default restart intensity, no dependency layering, no domain-owning supervisor, Task.Supervisor sprawl (6 separate ones). Issue predicted a 7th ad-hoc supervisor if not settled before REQ-214 -- now 4+ new supervision entries have landed since filing (REQ-214, REQ-216 Admission, ISS-0429 Alerts.TaskSupervisor, REQ-215 dispatcher poller)."
+      "lock_released_at": "2026-09-04T02:42:22Z",
+      "released_lock": true,
+      "last_known_step": "Step 1 ISSUE-FIXER diagnosis COMPLETED (handoffs/WF03-ISS0425-20260903/step-01-issue-fixer-diagnosis.json) -- sizing verdict was NOT-A-SCOPED-WF03-FIX, routed to REQ-ANALYST. No branch was ever created for this run (git branch -a shows no feature/WF03-ISS0425-20260903, local or remote) and no further steps ran under this run_id.",
+      "note": "WF-03 issue-resolving run for ISS-0425, closed out here by ORCH (2026-09-04, opening WF03-ISS0451-20260904) after finding this entry still IN_PROGRESS with an owned_modules lock on lib/letflow/application.ex and lib/letflow/instance_supervisor.ex that had gone stale. Diagnosis: ISSUE-FIXER's Step 1 (step-01-issue-fixer-diagnosis.json) sized this as too large for a same-run WF-03 fix and recommended routing to REQ-ANALYST -- that recommendation was executed: REQ-219 (supervision layering, queue task 445) and REQ-220 (Task.Supervisor sprawl review, queue task 446) were drafted, validated, and REQ-219 has since landed on main (PR #869, WF02-REQ219-20260903, RUN_DONE). This WF-03 run itself never proceeded past Step 1 -- no branch was ever cut for it (confirmed: no feature/WF03-ISS0425-20260903 branch, local or remote) -- so there was no in-flight file edit for the owned_modules lock to actually be protecting; the lock was simply never released when the run's work was superseded by the REQ-219/220 hand-off. ISS-0425 the ISSUE record itself correctly stays status: open (per its own orch_routing_note) pending REQ-220, which is unrelated to this registry entry's own COMPLETED/released state -- an issue can stay open while the run that diagnosed it is done. Releasing this lock now because it was blocking WF03-ISS0451-20260904's legitimate owned_modules claim on lib/letflow/application.ex for an unrelated, newly-discovered issue, and nothing is actually still using it."
     },
     {
       "run_id": "WF02-REQ219-20260903",
@@ -4352,6 +4349,28 @@
       "released_lock": false,
       "last_known_step": "Step Final in progress -- ORCH applied the fix directly (ISSUE-FIXER's sizing verdict passed all 6 ORCHESTRATOR.md S10 checks). 2 racy sites in test/letflow/sandbox_pool_test.exs fixed with ISS-0452's established try/catch form; 2 other grep hits classified benign (unlinked targets). Full suite locally 3200/3202, 2 pre-existing rustc-gap failures. Opening a PR for CI per this pipeline's real-code-change convention (direct ORCH action skips the agent role chain, not CI).",
       "note": "WF-03 issue-resolving run for ISS-0454: re-grepped the current tree for the check-then-act on_exit teardown race ISS-0452 fixed at 7 sites -- 4 live call sites remain (tenant_fixture_test.exs:503, sandbox_pool_test.exs:671/1467/1495), a 5th grep hit is a comment only. Each site needs classification (linked target = genuinely racy, unlinked = harmless) before fixing, per ISS-0452's own diagnosis -- no blanket find-and-replace."
+    },
+    {
+      "run_id": "WF03-ISS0451-20260904",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0451",
+      "queue_task_id": 451,
+      "github_issue_number": 865,
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/application.ex",
+        "lib/letflow/supervisor/pollers.ex"
+      ],
+      "lock_acquired_at": "2026-09-04T02:40:13Z",
+      "started_at": "2026-09-04T02:45:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "queue_agent_id": "tvolodi-orch",
+      "last_known_step": "Run opened -- WF03-ISS0425-20260903's stale registry lock on the same owned_modules released first (see that entry's own note). docs/issues/ISS-0451.yaml already existed (filed by REVIEWER during WF02-REQ219-20260903, landed on main via that run's own merge, e5546523) -- Step 1 write skipped, verified content matches task spec, proceeding directly into WF-03 Step 0.5/Step 1.",
+      "note": "WF-03 issue-resolving run for ISS-0451: a PERSISTENT (non-transient) Poller crash-loop can still exhaust the top-level Letflow.Supervisor's own default OTP restart budget (3/5s, never overridden) after Pollers exhausts its own (max_restarts:5, max_seconds:60) budget and exits, cascading past the isolation REQ-219 built. Found by REVIEWER during REQ-219's own AC4 gating -- REQ-219's single-crash-event isolation test doesn't cover a persistent fault. Task queue 451 already claimed/locked to agent_id tvolodi-orch before this run started (per user instruction); this entry records the local workflow run against that existing lock, not a new claim."
     }
   ]
 }

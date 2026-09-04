@@ -76,7 +76,8 @@ defmodule Letflow.TenantFixture do
           display_name: String.t(),
           oidc_mode: :enabled | :disabled,
           expected_tables: [String.t()] | :default,
-          teardown: boolean()
+          teardown: boolean(),
+          template: :clone | :replay
         ]
 
   @typedoc """
@@ -175,9 +176,12 @@ defmodule Letflow.TenantFixture do
      gets the schema default `:active` — exactly as both adopted sites do today.
   3. Registers the `on_exit/1` teardown **before** provisioning, so a failure in any
      later step still cleans up.
-  4. `TenantProvisioning.provision_tenant_schema/1`.
-  5. `TenantProvisioning.replay_migrations/1`.
-  6. `assert_schema_complete!/2`.
+  4-5. Either `Letflow.Test.TenantTemplate.ensure_template!/0` +
+     `clone_tenant_schema!/1` (`opts[:template] == :clone`, the default — ISS-0427), or
+     `TenantProvisioning.provision_tenant_schema/1` + `replay_migrations/1`
+     (`opts[:template] == :replay`, today's exact original behaviour, kept as an
+     explicit escape hatch — design §4.1).
+  6. `assert_schema_complete!/2` — unchanged, runs against either path.
 
   Any failure in 4-6 raises `ExUnit.AssertionError` carrying the full
   `capture_schema_state/1` report, and emits it once more via `Logger.error/1` under the
@@ -186,6 +190,16 @@ defmodule Letflow.TenantFixture do
   `opts[:teardown]` defaults to `true`. `false` exists only so the design's fail-first
   tests can construct a broken state without this fixture's own teardown racing their
   assertions; neither adopted module uses it.
+
+  `opts[:template]` defaults to `:clone` (ISS-0427,
+  `lib/letflow/design/iss0427-tenant-test-schema-template-clone.md` §4.1, INV-2) —
+  cloned from `Letflow.Test.TenantTemplate`'s prepared `"tenant_template"` schema
+  instead of replaying all tenant-scoped migrations per call. This changes the
+  provisioning *mechanism* for every existing call site by default, not the observable
+  schema shape (design §3's parity check exists to guarantee that). Pass
+  `template: :replay` for a test with a concrete reason to want a real,
+  freshly-migrated-from-scratch schema — in particular any test that also passes a
+  non-default `migration_source` downstream, which the clone path cannot serve at all.
   """
   @spec provisioned_tenant!(opts()) :: tenant_fixture()
   def provisioned_tenant!(opts \\ []) do
@@ -195,6 +209,7 @@ defmodule Letflow.TenantFixture do
     display_name = Keyword.get(opts, :display_name, "Tenant Fixture")
     oidc_mode = Keyword.get(opts, :oidc_mode, :disabled)
     expected = Keyword.get(opts, :expected_tables, :default)
+    template = Keyword.get(opts, :template, :clone)
     owner = owning_test()
 
     tenant =
@@ -212,8 +227,7 @@ defmodule Letflow.TenantFixture do
       on_exit(fn -> teardown(tenant.id, owner) end)
     end
 
-    schema_name = provision!(tenant.id)
-    replay!(tenant.id)
+    schema_name = provision_schema!(template, tenant.id)
     assert_schema_complete!(tenant.id, expected)
 
     %{tenant_id: tenant.id, schema_name: schema_name, tenant: tenant}
@@ -310,9 +324,31 @@ defmodule Letflow.TenantFixture do
   def expected_tenant_tables, do: @expected_tenant_tables
 
   # -----------------------------------------------------------------------------------
-  # Provisioning steps -- the two primitives are sequenced explicitly here, never
-  # chained through each other (INV-F-3, req022 lines 288-294).
+  # Provisioning steps -- the two production primitives (:replay path) are sequenced
+  # explicitly here, never chained through each other (INV-F-3, req022 lines 288-294).
+  # The :clone path (ISS-0427, default) is a separate, test-only fast path -- see
+  # Letflow.Test.TenantTemplate, design §4.1.
   # -----------------------------------------------------------------------------------
+
+  defp provision_schema!(:replay, tenant_id) do
+    schema_name = provision!(tenant_id)
+    replay!(tenant_id)
+    schema_name
+  end
+
+  defp provision_schema!(:clone, tenant_id) do
+    Letflow.Test.TenantTemplate.ensure_template!()
+
+    case Letflow.Test.TenantTemplate.clone_tenant_schema!(tenant_id) do
+      {:ok, schema_name} ->
+        schema_name
+
+      {:error, reason} ->
+        report_and_raise(@phase_replay_failed, tenant_id, [
+          "clone_tenant_schema!/1 returned {:error, #{inspect(reason)}}"
+        ])
+    end
+  end
 
   defp provision!(tenant_id) do
     case TenantProvisioning.provision_tenant_schema(tenant_id) do

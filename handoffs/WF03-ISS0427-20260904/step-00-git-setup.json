@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0427-20260904-step-00",
+  "run_id": "WF03-ISS0427-20260904",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0427-20260904/step-00-git-setup.json",
+  "created_at": "2026-09-04T05:22:32Z",
+  "started_at": "2026-09-04T05:22:32Z",
+  "completed_at": "2026-09-04T05:30:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0427"],
+    "artifacts_in": [
+      "docs/issues/ISS-0427.yaml",
+      "docs/issues/ISS-0423.yaml",
+      "docs/issues/ISS-0432.yaml",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "lib/letflow/sandbox_pool.ex"
+    ],
+    "branch_name": "fix/ISS-0427-tenant-schema-template-clone-20260904",
+    "owned_modules": [
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "lib/letflow/sandbox_pool.ex"
+    ]
+  },
+  "task": {
+    "description": "Git setup for ISS-0427 (MAJOR): tenant test-schema provisioning replays the full tenant-scoped migration manifest per schema, hundreds of times per suite run. Selected by the project owner's explicit instruction to resolve issues degrading test performance. Queue task 427 claimed via set_lock.\n\nWHY THIS ISSUE AND NOT THE OTHER TWO: three test-performance issues are open -- ISS-0427 (MAJOR, task 427, this one), ISS-0423 (MINOR, task 423, suite runs 99.2% serially), ISS-0418 (MAJOR, task 418, wasm_hang concurrency cap). ISS-0427 was chosen because it is the only one whose lever is measured to help CI: per ISS-0423's own ci_gives_almost_nothing note, .github/workflows/ci.yml runs on ubuntu-latest (2 vCPU) where scripts/test_parallel.sh derives N=2, so the parallelism win measured on a 16-core workstation does not transfer. Fewer round trips per schema helps the serial suite, the parallel suite AND CI.\n\nSIZING VERDICT (ORCHESTRATOR.md section 10): FAILS decisively -- full WF-03 chain. Check 1 fails (at minimum lib/letflow/tenant_provisioning.ex and test/support/tenant_fixture.ex, likely lib/letflow/sandbox_pool.ex too). Check 5 fails (tenant_provisioning.ex IS a tenant-data path -- schema isolation is the mechanism INV-1..INV-8 rest on). Check 6 is at best ambiguous. This is nowhere near direct-action territory."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 427 locked via set_lock (agent_id letflow-2-orch, github_issue_number 831; set_lock rather than get_next_task because the issue was named by the user's instruction to fix test-performance issues -- selection is exempt from the Hard Rule per TASK_QUEUE.md, locking is not). Branch created from main 153ac4db and pushed. No owned_modules collision: the only other IN_PROGRESS run in registry.json is WF03-ISS0451-20260904 (a sibling session) whose owned_modules are lib/letflow/application.ex and the supervisor tree -- disjoint from this run's tenant-provisioning surface.\n\nFACTS MEASURED BY ORCH THIS SESSION, so downstream agents need not rediscover them:\n  - THE MANIFEST HAS GROWN SINCE THE ISSUE WAS FILED. ISS-0427 says 52 entries; TenantProvisioning.tenant_scoped_migrations() returns 53 today (measured directly via mix run, not counted from source). The cost this issue describes is therefore slightly WORSE now, and any design must read the manifest at runtime rather than hardcoding a count.\n  - replay_migrations/2 is at lib/letflow/tenant_provisioning.ex:323, delegating to Ecto.Migrator.run(Repo, migrations, :up, all: true, ...) at :334. That is the call site to displace for tests.\n  - provision_tenant_schema/1 rejects a non-UUID tenant_id ({:error, :invalid_tenant_id}), and replay_migrations/2 requires an existing Registration row ({:error, :tenant_not_found}) -- so any benchmark harness must go through a real Tenant insert + provision, not a synthesised id. ORCH burned two probe attempts on this; documented here so nobody repeats it.\n  - MEASUREMENT IS HARDER THAN IT LOOKS ON THIS HOST, and this is a real risk to the design's evidence base. ORCH attempted an in-suite timing probe (a throwaway ExUnit case calling TenantFixture.provisioned_tenant!/1 twice) and it exceeded a 400-SECOND tool timeout without emitting its own output, dominated by test-env compilation rather than the provisioning itself. Whoever measures must account for compile time separately (pre-compile with MIX_ENV=test mix compile first, then time only the provisioning calls) or the numbers will be meaningless.\n  - ISS-0432 (status no_defect) carries a LOAD-BEARING CAVEAT already appended to ISS-0427: ~92% of a DB round trip on this dev host is Docker Desktop host<->container network overhead, not Postgres. Repo.query!(\"SELECT 1\") costs 1186-1436 us from the BEAM vs 0.110-0.113 ms inside the container. The 4.9x replay-vs-clone RATIO remains valid (both sides paid the same tax) but the ABSOLUTE 2259 ms does NOT transfer to CI. Re-measure on the target environment; do not inherit the filed numbers.\n  - THE HARD DESIGN CONSTRAINT, stated in the issue and NOT to be rediscovered the expensive way: CREATE TABLE (LIKE <tpl> INCLUDING ALL) does NOT copy foreign-key constraints -- Postgres omits them from LIKE. A naive clone yields schemas with the right table count, indexes, defaults and sequences but NO referential integrity, silently weakening every test that depends on real constraint behaviour. Any implementation must re-add FKs from pg_constraint (contype='f'), use a DDL-dump clone, or use a Postgres template database -- and MUST ASSERT constraint parity against a migration-built schema rather than assuming it.\n  - SCOPE BOUNDARY: production tenant onboarding (provision_tenant_schema/1 + replay_migrations/2 on the real path) is a separate risk surface. A test-only change is the expected, lower-risk outcome; if the design proposes touching the production path it must say so explicitly and be gated by SECURITY-REVIEWER, not folded in silently.\n  - COMPLEMENTARY, NOT COMPETING: Letflow.SandboxPool already pools pre-provisioned schemas. The pool decides WHEN a schema is available; this issue decides HOW CHEAPLY one is made. ISS-0423 (task 423) covers the parallelism/pool angle and remains open -- do not silently absorb its scope here.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

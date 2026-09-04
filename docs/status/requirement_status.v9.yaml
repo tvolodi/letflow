@@ -384,3 +384,54 @@ history:
       One self-inflicted false alarm along the way (a stale DB row from
       a force-killed foreground test run) diagnosed and cleaned up, not
       a regression. See docs/issues/ISS-0468.yaml for full detail.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T19:23:55Z"
+    note: >
+      WF03-ISS0467-20260904 resolved (queue task 467, GH#896, stage S6).
+      Found live by ORCH immediately after ISS-0441/PR #895 configured
+      branch protection: a bare `git push origin main` bypassed the new
+      required-status-checks protection entirely, with only a quiet
+      server-side "Bypassed rule violations" notice -- unlike `gh pr
+      merge`'s own explicit --admin requirement, no distinct flag or
+      confirmation was needed. ISSUE-FIXER's live diagnosis (gh api
+      branch protection call, gh auth status/gh api user/permissions)
+      confirmed GitHub's `restrictions` push-allowlist (Option 1) would
+      be a structural no-op on this project: every git push, gh pr
+      merge, and gh api call authenticates as the single admin identity
+      tvolodi, so an allowlist naming that identity accepts the exact
+      bypass it would need to reject. CODE-DESIGNER chose Option 2
+      (documented prohibition) after independently checking for a
+      distinguishing auth mechanism the diagnosis might have missed
+      (deploy key, bot account, scoped PAT) -- none exists, and
+      manufacturing one was judged out of scope for a MINOR issue. One
+      rework cycle: CODE-DESIGN-VALIDATOR FAILed the first design pass
+      for misattributing its acceptance-criteria mapping to a
+      docs/issues/ISS-0467.yaml field that does not exist (the criteria
+      actually came from the GitHub issue body / this run's own task
+      framing -- an ORCH sourcing error in the original dispatch, not a
+      CODE-DESIGNER defect); CODE-DESIGNER's narrow rework re-sourced
+      the citation and re-passed on regate, with all 7 other
+      independently-derived findings unchanged. Fix (commit bd6bddf5):
+      docs/agents/protocols/GIT_MERGE.md gains an explicit
+      no-direct-push-to-main-ever paragraph in its Precondition section;
+      docs/agents/ORCHESTRATOR.md sec.10 gains a closing paragraph
+      clarifying its sizing-rule exception licenses skipping the
+      producer/validator review chain, never the branch+PR git
+      mechanics; docs/migration/decisions/0018-branch-protection-posture.md
+      gains a new dated "ISS-0467 resolution" subsection amending the
+      record in place (0018 had already scoped and named this exact
+      follow-up, so no new decisions/ record was opened). REVIEWER
+      independently confirmed both insertions verbatim-match the
+      approved design and that the new 0018 subsection is internally
+      consistent with the existing Decision (a)-(d) section. Docs-only
+      fix, no code/lib/priv/web touched -- no regression test exists;
+      verification was the CODE-DESIGN-VALIDATOR and REVIEWER gates on
+      the textual change itself. docs/issues/ISS-0467.yaml: status
+      resolved. GitHub issue #896 closed with an evidence comment citing
+      the run, the record, and the fix commit, explicitly stating no
+      test exists for this docs-only change. Queue task 467 released
+      status:"done". Step Final's own merge is the first real-world
+      application of this run's own new prohibition -- via gh pr merge,
+      never a direct push.

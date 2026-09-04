@@ -1,0 +1,54 @@
+{
+  "handoff_id": "b7c8d9e0-1f20-4132-d4e5-6f7081920314",
+  "run_id": "WF03-ISS0467-20260904",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0467-20260904/step-final-git-merge.json",
+  "created_at": "2026-09-04T19:25:03Z",
+  "started_at": "2026-09-04T19:25:03Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0467-20260904/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0467-20260904/step-04-reviewer.json",
+      "handoffs/WF03-ISS0467-20260904/step-05-issue-fixer-close.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ]
+  },
+  "task": {
+    "description": "Run Step Final (git-merge) for WF03-ISS0467-20260904, following docs/agents/protocols/GIT_MERGE.md's procedure exactly -- this branch's own current commit already carries THAT SAME PROCEDURE'S own new Precondition-section prohibition against a bare `git push origin main`, added by this run's own Step 3, so dogfood it: never push directly to main under any circumstance, always via steps 1-9's branch-and-PR-and-gh-pr-merge path. All prior steps (design, design-gate, implementation, REVIEWER, issue close) are already PASS/COMPLETED and committed on this branch (currently 26 commits ahead of the last-known origin/feature/WF03-ISS0467-20260904 push). Follow GIT_MERGE.md's steps 1-10 literally: verify branch, stage/commit any remaining uncommitted files (there should be none -- working tree is clean per ORCH's own last check, but verify), fetch+rebase onto origin/main, run mix format --check-formatted / mix compile --warnings-as-errors / mix test after rebase (attribute any failures structurally per core-directives.md, do not assume none exist), push the branch (expect this to need --force-with-lease since the rebase will likely replay commits -- follow the non-fast-forward guidance in GIT_MERGE.md step 6), open the PR with title 'fix: prohibit direct push to main, amend 0018 [WF03-ISS0467-20260904]' and body per step 7's template (this branch's commits and gate PASSes are the source material -- cite them), wait for both required CI checks (Backend gate, Frontend gate), then merge via the three-path procedure in step 8 (plain merge if green; PENDING-retry if pending; attributed --admin override only if a required check is FAILURE and you have a genuine structural attribution -- do not invent one). Clean up per step 9, verify per the acceptance criteria below.",
+    "acceptance_criteria": [
+      "git branch --show-current confirmed feature/WF03-ISS0467-20260904 before starting",
+      "Rebase onto origin/main completed, format/compile/test re-verified post-rebase with any failures structurally attributed per core-directives.md",
+      "Branch pushed (force-with-lease if rebase replayed commits, per GIT_MERGE.md step 6's non-fast-forward guidance)",
+      "PR opened, both required CI checks (Backend gate, Frontend gate) confirmed via gh pr checks before merge attempt",
+      "Merge performed via gh pr merge --squash --delete-branch (plain path preferred; --admin only with a genuine, stated structural attribution for any FAILURE)",
+      "Post-merge: git checkout main, git pull --ff-only, git branch -d feature/WF03-ISS0467-20260904, verified clean working tree on main at the new squash-merge commit",
+      "PR number and merge commit sha reported in result.summary"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

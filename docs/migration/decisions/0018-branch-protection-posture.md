@@ -489,6 +489,31 @@ everything, including one-line doc corrections, through the same PR path this re
 protects) — closing the gap by removing the alternate path entirely rather than trying
 to make direct pushes themselves refuse the same way `gh pr merge` does.
 
+## ISS-0467 resolution: direct-push prohibition (2026-09-05)
+
+**Option chosen: Option 2 — documented prohibition, not `restrictions`.** ISS-0467 (filed
+to resolve the follow-up named above) is now designed and applied. The reasoning:
+GitHub's `restrictions` field gates *who* may push, not *why* or *under what check
+state* — and every push and every merge this pipeline makes authenticates as the same
+single admin identity (`tvolodi`, `admin: true`, live-confirmed by ISSUE-FIXER's
+diagnosis in `handoffs/WF03-ISS0467-20260904/step-01-issue-fixer.json`). An allowlist
+naming that one identity would accept the exact bypass it would need to reject, and no
+distinguishing mechanism (deploy key, bot account, differently-scoped PAT) currently
+exists in this project's auth setup — manufacturing one purely to make `restrictions`
+non-degenerate would be a larger piece of infrastructure than this MINOR-severity issue
+justifies. Option 2 — removing the alternate path entirely rather than trying to make it
+discriminate — is the only one of the two candidates named above that actually closes
+the gap.
+
+This resolution made two textual changes, applied verbatim as designed: a new
+prohibition paragraph in `docs/agents/protocols/GIT_MERGE.md`'s `## Precondition`
+section (no direct `git push origin main`, ever, for any change including a one-line doc
+fix), and a new closing paragraph in `docs/agents/ORCHESTRATOR.md`'s `## 10. Sizing
+rule` section clarifying that the sizing-rule exception licenses skipping the
+producer/validator review chain, not skipping `GIT_MERGE.md`'s branch-and-PR procedure.
+Full reasoning, the exact verbatim text, and the acceptance-criteria mapping are in
+`lib/letflow/design/iss-0467-direct-push-prohibition.md`.
+
 ## What this record does not decide
 
 - Whether other branches (`feature/*`) get any protection. Out of scope — this pipeline's

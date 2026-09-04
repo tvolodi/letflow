@@ -1,0 +1,50 @@
+{
+  "handoff_id": "3c4d5e6f-7a8b-4c3d-ae4f-5a6b7c8d9e0f",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "2c",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0430-20260905/step-02c-security-reviewer.json",
+  "created_at": "2026-09-04T23:01:27Z",
+  "started_at": "2026-09-04T23:01:27Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "lib/letflow/design/iss0430-notify-listen-decision.md",
+      "handoffs/WF03-ISS0430-20260905/step-02b-code-design-validator.json",
+      "docs/agents/instructions/security-invariants.md",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "This is a MANDATORY sign-off per ISS-0430's own acceptance criterion 4 ('Tenant isolation is addressed as a security property, not a naming convention -- the design names the mechanism preventing tenant A's notification reaching tenant B's listener, and SECURITY-REVIEWER signs off on it as a tenant-data-path change'), even though this is a DESIGN-ONLY artefact with zero implementation (lib/letflow/design/iss0430-notify-listen-decision.md, gated PASS by CODE-DESIGN-VALIDATOR at handoffs/WF03-ISS0430-20260905/step-02b-code-design-validator.json). Read docs/agents/instructions/security-invariants.md in full, focusing on INV-1 (tenant data isolation, BLOCKER severity, schema-per-tenant via Ecto :prefix, per docs/migration/decisions/0003-ecto-schema-strategy.md Dimension B).\n\nRead the design artefact's Question 2 section ('Multi-tenancy (the hardest part)') in full -- this is the section your sign-off is against. The design proposes: a single, database-global, shared NOTIFY channel (or small fixed set of channels, one per wake-up category); a NOTIFY payload that is always a bare opaque routing id (a row's own per-tenant-schema primary key) and NEVER tenant-identifying data, schema name, or row content; and a receiving process that never trusts the payload directly -- it re-derives its own already-known tenant :prefix scope and does a normal Ecto :prefix-scoped fetch, discarding any id that resolves to nothing under that scope. The design also argues the sequential-id cross-tenant-enumeration risk is structurally defused because Letflow's schema-per-tenant model gives each tenant's own table its own physical Postgres sequence object (no shared cross-tenant id ordering to correlate).\n\nIndependently verify this reasoning against INV-1 and against decision 0003's actual mechanism -- do not accept the design's or CODE-DESIGN-VALIDATOR's own conclusion on trust; re-derive your own verdict, per core-directives.md's 'Every producing step has a validating step' (a validator that echoes a prior validator's PASS has not validated anything). Specifically assess: (a) does this mechanism actually prevent tenant A's notification from being usable as tenant B's data, given Postgres NOTIFY has no schema/:prefix scoping at all (confirm this is true of Postgres's actual documented behavior, don't take the design's word for it); (b) is 'payload carries only an opaque id, receiver re-derives its own :prefix' a sufficient structural guarantee, or does it merely relocate the risk somewhere the design hasn't examined (e.g. could a future careless consumer implementation accidentally derive its :prefix FROM the NOTIFY payload or channel instead of from its own already-known scope, defeating the invariant -- if so, does the design's own stated invariants I1/I2 section adequately warn against that for a future implementer); (c) is the sequential-id enumeration argument (disjoint per-schema sequences) actually sound, i.e. does Letflow truly provision one physical sequence per tenant schema under its actual TenantProvisioning mechanism (cite the real provisioning code/migration if you can find it, don't just accept the design doc's citation of decision 0003's prose); (d) is there any OTHER tenant-data leak vector the design didn't consider (e.g. NOTIFY's own transport is unencrypted database-session traffic already covered by Postgres's normal connection security -- is there a new attack surface being introduced, such as any process on the same OS host being able to open a raw connection and LISTEN on the shared channel to observe cross-tenant activity timing, and if so does the design need to say more about it, or is that already covered by ordinary Postgres access control which is out of this design's scope). State explicitly which of INV-1 through INV-9 apply and your verdict against each, per the security-invariants.md 'How to verify' sections and the SECURITY-REVIEWER worked example in HANDOFF_PROTOCOL.md (a verdict per invariant, APPLIES/NOT-APPLICABLE stated for each, not just the ones that seem relevant).",
+    "acceptance_criteria": [
+      "Verdict stated against every invariant INV-1..INV-9 (APPLIES-and-PASS, APPLIES-and-FAIL, or NOT-APPLICABLE with reason), not only INV-1",
+      "INV-1's verdict is independently re-derived, not copied from CODE-DESIGN-VALIDATOR's or CODE-DESIGNER's own reasoning",
+      "Confirms or corrects, with evidence, whether Postgres NOTIFY genuinely has no schema/:prefix scoping (the load-bearing premise of the design's whole tenant-isolation answer)",
+      "Assesses whether the opaque-id/receiver-re-derives-scope structural guarantee could be defeated by a future careless implementation, and whether the design's own stated invariants (I1/I2) adequately guard against that",
+      "Assesses the sequential-id enumeration argument's factual soundness against Letflow's actual tenant-schema provisioning mechanism, citing real code/migrations if locatable",
+      "States whether any additional tenant-data leak vector exists that the design did not consider",
+      "PASS or FAIL/BLOCKER stated explicitly with evidence; on FAIL, next_action names CODE-DESIGNER for rework with the exact gap"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

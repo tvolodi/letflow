@@ -435,3 +435,20 @@ history:
       status:"done". Step Final's own merge is the first real-world
       application of this run's own new prohibition -- via gh pr merge,
       never a direct push.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T22:22:00Z"
+    note: >
+      WF03-ISS0469-20260904 done (queue task 469, GH#904, stage S6).
+      executor_test.exs:654's raw wall-clock elapsed-time comparison
+      (a repeat CI flake, also seen on ISS-0446) removed as genuinely
+      redundant -- the test's own existing deterministic outcome
+      assertions already prove REQ-156 AC-1's load-bearing-limit claim
+      without any timing measurement, per test/specs/REQ-156.md T1's
+      own accepted outcome-differs alternative, verified directly by
+      REVIEWER. Eliminates this flake class permanently (the deleted
+      line was the only wall-clock-dependent assertion in the test).
+      Full suite 3222/3224, 2 pre-existing rustc-gap failures; isolated
+      :lua_wallclock_race group 11/11 unaffected. See
+      docs/issues/ISS-0469.yaml for full detail.

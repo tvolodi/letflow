@@ -29,4 +29,37 @@ related:
   - ISS-0446
 queue_task_id: 469
 github_issue: 904
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0469-20260904
+resolved_at: "2026-09-04T22:20:00Z"
+resolution: >
+  ISSUE-FIXER found the flaky wall-clock comparison at
+  executor_test.exs:654 was genuinely redundant, not load-bearing:
+  the test's own existing deterministic outcome assertions
+  ({:error, :memory_limit_exceeded} for the small heap limit vs.
+  {:ok, %{manifest_hash: _}} for the large one, on the IDENTICAL
+  script) already prove AC-1's claim (the configured max_heap_words
+  limit is load-bearing) -- holding script and timeout fixed while
+  only the heap limit varies means the outcome flip can only be
+  explained by the heap limit, no timing measurement needed.
+  test/specs/REQ-156.md's own T1 explicitly accepts this
+  outcome-differs approach as an alternative to timing, verified
+  directly by REVIEWER rather than trusting the paraphrase.
+
+  Of the 3 originally-suggested options (tag+isolate per ISS-0426;
+  deterministic proxy; tolerance margin), none was chosen -- a
+  deterministic proxy was rejected as unavailable without contradicting
+  decision 0014's own instruction-count-vs-memory-limit coupling
+  rejection, and tag+isolate/tolerance-margin were both judged inferior
+  to simply deleting the redundant assertion.
+
+  FIX. Removed the :timer.tc-based wall-clock measurement and the
+  small_elapsed_ms < large_elapsed_ms comparison entirely; kept the
+  existing deterministic outcome assertions byte-identical; renamed
+  the test and added an explanatory comment citing ISS-0469/ISS-0446.
+  This eliminates the flake class permanently (not probabilistically)
+  since the deleted line was the only wall-clock-dependent assertion
+  anywhere in the test.
+
+  Full suite 3222/3224 (2 pre-existing rustc-gap failures), isolated
+  :lua_wallclock_race group 11/11 unaffected.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-final-git-merge.json",
   "created_at": "2026-09-04T04:36:00Z",
   "started_at": "2026-09-04T04:36:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T05:45:00Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -34,18 +34,26 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
+    "summary": "Rebased fix/ISS-0451-persistent-poller-crash-budget-20260904 cleanly onto origin/main (58 commits replayed, no conflicts). Post-rebase re-verification: mix format --check-formatted PASS, mix compile --warnings-as-errors PASS, mix test (full suite) 3198/3204 passed / 6 failed / 21 excluded -- all 6 failures isolated to Letflow.ServiceCatalogTest (undefined_table: process_definitions does not exist), a module/test file this branch's diff never touches; re-ran that file alone immediately after and got 33/33 passed, 0 failures, confirming the failures were transient shared-checkout contamination (a concurrent unrelated session was independently observed running `mix test test/m0427_probe_test.exs`, PIDs 28964/34312, against the same shared Postgres instance during verification). Force-pushed (--force-with-lease, own branch only, expected non-fast-forward after rebase) and opened PR #874. CI: frontend gate passed on both triggered runs; backend gate passed cleanly on the pull_request-event run (33840208029, commit f7858821) but failed on the push-event run (33840184735, same commit f7858821, confirmed via `gh run view --json headSha` on both) inside the isolated wasm_hang phase -- two timing-sensitive tests (plugin_handler_test.exs REQ-170 AC4 wall-clock-ordering assertion; host_api_write_test.exs hitting the full 180s ExUnit timeout) alongside unrelated concurrent Keycloak econnrefused noise, with zero diff overlap in lib/letflow/engine/wasm|lua and matching this repo's already-documented recurring 'wasm_hang timing assertion flakes under CI runner contention' class (ISS-0418, ISS-0453). Attribution route: known recurring flake class + zero diff overlap + the identical commit passing cleanly on the concurrent job. Reported the new flake instance to ORCH for queue registration (per ISSUE_QUEUE.md, id allocation belongs to letflow-queue via ORCH's register_task, not self-assigned by ELIXIR-DEV) rather than filing a locally-numbered docs/issues/ record myself. Merged PR #874 via gh pr merge --squash --delete-branch (merge commit 77fe6bf44c184bb8caef287c9df0da00a6c4dc05). Local cleanup: gh's merge side effect already left the checkout on main, fast-forwarded to the merge commit; git fetch --prune removed the stale remote-tracking ref; verified branch --show-current=main, log shows the squash-merge commit at HEAD, status clean, remote branch confirmed deleted (git ls-remote --heads origin returns nothing for it).",
+    "artifacts_out": [
+      "branch: fix/ISS-0451-persistent-poller-crash-budget-20260904 (squash-merged into main as 77fe6bf4, branch deleted both locally and on origin)"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "New flaky-CI instance found during this step's CI wait, not caused by this branch: PR #874's push-event backend-gate run (33840184735, job 100920721979) failed the isolated wasm_hang phase on test/letflow/engine/wasm/plugin_handler_test.exs:474 (REQ-170 AC4 wall-clock-ordering assertion, both measured elapsed times pinned at 30000ms) and test/letflow/engine/wasm/host_api_write_test.exs:460 (ExUnit.TimeoutError after 180000ms in start_instance/2), with concurrent unrelated 'Metadata load failed for issuer http://localhost:8082/realms/bpm-default ... econnrefused' Keycloak noise throughout the same window -- consistent with CI runner resource contention, not a logic defect. The identical commit (f7858821) passed the entire backend gate cleanly on the pull_request-event run (33840208029). Branch diff touches zero files under lib/letflow/engine/wasm/, test/letflow/engine/wasm/, or lib/letflow/engine/lua/ (git diff origin/main --stat over those paths returns empty). Matches this repo's already-tracked recurring class (see ISS-0418, ISS-0453 -- both note the wasm_hang family and wall-clock-ordering assertions are contention-sensitive under CI load). Not filed as docs/issues/ISS-NNNN.yaml by this agent per ISSUE_QUEUE.md step 2's division of labor (id allocation is letflow-queue's via ORCH's register_task; the discovering agent reports to ORCH rather than self-numbering or calling gh directly). ORCH should register this via register_task and file the local record once allocated, folding it into whatever resolves ISS-0418/ISS-0453's shared wasm_hang-timing-flake question per that issue's own note against deciding it a third time independently."
+      }
+    ],
     "git_evidence": {
-      "branch_name": "",
+      "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
       "commit_sha_list": [],
-      "remote_branch": "",
+      "remote_branch": "deleted (squash-merged)",
       "push_status": "ok",
-      "pr_url": null,
-      "pr_create_error": null
+      "pr_url": "https://github.com/tvolodi/letflow/pull/874",
+      "pr_create_error": null,
+      "merge_commit_sha": "77fe6bf44c184bb8caef287c9df0da00a6c4dc05"
     },
-    "next_action": ""
+    "next_action": "ORCH marks run WF03-ISS0451-20260904 COMPLETED, releases the owned_modules lock on lib/letflow/application.ex and lib/letflow/supervisor/, and registers the wasm_hang flake instance noted in result.issues via letflow-queue's register_task before filing docs/issues/ISS-NNNN.yaml for it."
   },
   "rework_count": 0,
   "max_rework": 3

@@ -1,0 +1,66 @@
+{
+  "handoff_id": "WF03-ISS0442-20260904-step02-elixir-dev",
+  "run_id": "WF03-ISS0442-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0442-20260904/step-02-elixir-dev.json",
+  "created_at": "2026-09-04T04:50:23Z",
+  "started_at": "2026-09-04T04:26:00Z",
+  "completed_at": "2026-09-04T04:50:23Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0442", "ISS-0440"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0442-20260904/step-01b-code-design-validator.json",
+      "handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+    "branch_name": "feature/WF03-ISS0442-20260904"
+  },
+  "task": {
+    "description": "Implement the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md, option b) exactly: replace write_json!/2 with rewrite_top_level_status!/3 and splice_top_level_status/2, a depth-aware raw-text substitution that structurally excludes nested status keys (e.g. result.status) from collision, leaving everything outside the top-level status value token byte-identical.",
+    "acceptance_criteria": [
+      "write_json!/2 removed; rewrite_top_level_status!/3 and splice_top_level_status/2 implement the §2.2 scan exactly (depth tracking outside strings, depth-1 key-vs-value by syntactic colon lookahead, last-key-wins on duplicates, escape-aware string consumption including \\uXXXX)",
+      "autofix_file/1's FAIL/missing/non-string/already-legal refusal branches unchanged in match pattern, return shape, and reason strings -- only the fixed branch's action changes",
+      "No change to run/1's no-flag CI path",
+      "Real diff measurement on a real handoff file demonstrating the fix (AC1 of ISS-0442)",
+      "mix compile --warnings-as-errors clean",
+      "Regression coverage / manual verification of: minimal diff on a real fixture, the nested result.status PASS/PASS collision case, escaped quotes and embedded braces in string values, no-trailing-newline preservation, and unchanged refusal paths",
+      "Mutation testing on the new splice logic with real, specific, demonstrated failures"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented exactly per the approved design. lib/mix/tasks/letflow.lint_handoffs.ex: removed write_json!/2 (its only call site, autofix_file/1's fixed branch at the former line 420, now calls rewrite_top_level_status!(path, raw, to) using the `raw` binding already in scope from autofix_file/1's own with-clause -- no second file read). Added rewrite_top_level_status!/3 (writes File.write!/2 with no trailing-newline append, preserving the original file's own convention) and splice_top_level_status/2 (pure, no I/O), implementing the §2.2 scan via a set of private recursive-descent helpers (scan_for_status/4, handle_string_token/5, key_follows?/1, skip_ws/1, consume_colon_and_ws/1,2, consume_colon_and_ws_after/2, consume_json_string/1, consume_json_string_body/2) that walk the raw binary one codepoint at a time via binary pattern matching (no numeric byte-offset slicing, per the design's UTF-8 implementation note), tracking depth via brace/bracket counting outside strings, resolving string boundaries first (escape-aware: a backslash starts a two-character escape, so \\u is consumed as one such escape and its four following hex digits are then ordinary characters needing no special-casing), classifying a depth-1 string as KEY iff followed (mod whitespace) by ':', decoding key content via Jason.decode!/1 on the captured raw string token (avoids hand-rolling escape resolution), keeping the LAST depth-1 \"status\" match (last-key-wins, matching Jason.decode/1's own semantics), and splicing only the matched value token. On the open question left to ELIXIR-DEV's judgment: used a plain `raise/1` with a descriptive message for the internal-invariant-violation path (not Mix.raise/1 -- this is not a user-facing usage error, it indicates a scanner/decoder disagreement that should never occur given autofix_file/1's calling contract, matching the design's own reasoning for that choice), and explicitly does NOT fall back to the old whole-document re-encode on that path.\n\nVERIFICATION (all commands run synchronously in the foreground, actual output quoted, nothing assumed):\n- `mix compile --warnings-as-errors`: clean, no warnings.\n- `mix format --check-formatted lib/mix/tasks/letflow.lint_handoffs.ex`: clean.\n- `mix test test/mix/tasks/letflow.lint_handoffs_test.exs`: 43/43 passed (run twice, foreground, including all pre-existing T-AUTOFIX-* tests: PASS/COMPLETE/DONE fixes, FAIL/legal-but-unmapped/missing refusals, byte-identical-on-refusal, nested-result.status-untouched, stdout reporting).\n- `mix letflow.lint_handoffs` against the real corpus: 'OK -- 0 new violations across 2005 handoff files under \"handoffs\" (25 pre-existing grandfathered, traced to ISS-0190)' -- baseline unchanged.\n- Full-suite `mix test` (not scoped to this file) did not complete within this sandbox's practical foreground time budget across three attempts (up to ~590s each, all still running when killed) -- disclosing this explicitly rather than claiming a full-suite pass I did not observe. Given this is a single dev-tooling Mix task with its own dedicated test file (unaffected by DB/tenant fixtures), the scoped file's 43/43 pass plus the clean compile and the real-corpus lint run are the verification evidence for this change.\n\nREAL DIFF MEASUREMENT (AC1, ISS-0442's own acceptance criterion): copied handoffs/WF03-ISS0392-20260901/step-00-git-setup.json (a real 48-line handoff) to a scratch dir, mutated its top-level status from COMPLETED to PASS (its nested result.status is already \"PASS\", reproducing ISSUE-FIXER's exact demonstrated collision), then called rewrite_top_level_status!/3 directly to fix PASS -> COMPLETED. `diff -u` output: exactly one changed line (`-  \"status\": \"PASS\",` / `+  \"status\": \"COMPLETED\",`), 11 total unified-diff lines including headers/context -- versus the old write_json!/2 path's demonstrated 88-line rewrite of the same file shape. The nested `\"status\": \"PASS\"` at line 32 (result.status) was confirmed untouched by grep. Trailing newline was confirmed byte-identical (both files end `0a`).\n\nMANUAL REGRESSION VERIFICATION (the four cases the task asked me to resolve as open questions, since I own implementation-level judgment calls here): (a) real handoff minimal diff -- see above, 1 line changed. (b) nested result.status PASS/PASS collision -- confirmed untouched in the same real-fixture test above; separately confirmed via mutation testing (below) that removing the depth==1 guard causes exactly this collision to manifest as real corruption, proving the guard is load-bearing, not incidental. (c) escaped quotes and embedded braces -- built a fixture `{\"status\": \"PASS\", \"note\": \"escaped \\\"quote\\\" and brace { } inside string\", \"arr\": [\"a\", \"b\"], \"result\": {\"status\": \"PASS\"}}` with no trailing newline; after fixing PASS -> COMPLETED, diff showed only the top-level status token changed, the embedded quote/brace content and the inline array `[\"a\", \"b\"]` were untouched (proof effect (2)/reflow is gone, not just effect (1)/reordering), and the file still had no trailing newline afterward (proof the new write path does not force-append one). (d) FAIL/missing/null/non-string refusal paths -- untouched code path, confirmed unchanged by the 43/43 passing pre-existing T-AUTOFIX-REFUSES-* tests, which exercise exactly these branches end-to-end via run/1.\n\nMUTATION TESTING (on the new splice logic specifically, temporarily broken then reverted, real specific failures observed both times):\n- Mutant 1: changed `scan_for_status(rest, depth + 1, ...)` to `scan_for_status(rest, depth, ...)` for `{`/`[` (never increments depth). Result: 5 of 43 tests in the scoped file failed (T-AUTOFIX-PASS, -COMPLETE, -DONE, and the combined fix+refusal stdout test) -- all failing with the new internal-invariant raise, because depth never reaches 1 so no candidate is ever found. A real, specific, correctly-attributable failure, not a silent wrong-answer.\n- Reverted mutant 1: `diff` against my pre-mutation backup showed zero difference; `mix compile --warnings-as-errors` clean; scoped test file back to 43/43.\n- Mutant 2: removed the `depth == 1 and` guard from the KEY-candidate check in handle_string_token/5 (so any depth's \"status\" string, not just depth-1, becomes a candidate, and last-key-wins means the LAST status key anywhere in file order wins regardless of nesting). Result: the scoped test file still showed 43/43 passed -- an existing-coverage gap, because none of ISS-0440's pre-existing fixtures combine a *fixable* top-level status (PASS/COMPLETE/DONE) with a nested status key in the *same* file (the one fixture that has both, T-AUTOFIX-DOES-NOT-TOUCH-NESTED-RESULT-STATUS, uses top-level COMPLETED, which is already legal and hits the :skip branch, never reaching the splice code at all). I confirmed the mutation's real effect manually instead: re-ran the same real-fixture reproduction from the diff-measurement above (top-level PASS + nested result.status PASS, same file, same order) through the mutated code, and it corrupted the WRONG field -- the nested `result.status` was rewritten to COMPLETED (since it is the last \"status\" string in file order) while the actual top-level status was left at PASS. This is exactly the collision ISS-0442 is about, confirms the depth==1 guard is load-bearing (not redundant with last-key-wins), AND surfaces a real gap in the existing regression suite that TEST-DESIGNER should close -- flagged in issues[] below.\n- Reverted mutant 2: `diff` against the pre-mutation backup showed zero difference; `mix compile --warnings-as-errors` clean; `mix format --check-formatted` clean; scoped test file back to 43/43; re-ran `mix letflow.lint_handoffs` against the real corpus afterward too -- unchanged baseline (0 new violations, 25 grandfathered).\n\nNo deviation from the approved design. No new dependency, no mix.lock change, no decode-shape fork. run/1's `if autofix? do ... end` guard is untouched; resolve_dir/1, guard_empty_scope/2, lint_file/2, and the H1-H6/H-SIZE checks were not touched by this change.",
+    "artifacts_out": [
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "issues": [
+      {
+        "severity": "ADVISORY",
+        "type": "test_coverage_gap",
+        "location": "test/mix/tasks/letflow.lint_handoffs_test.exs",
+        "summary": "No pre-existing test combines a FIXABLE top-level status (PASS/COMPLETE/DONE) with a nested `status` key (e.g. result.status) in the SAME file -- the one fixture that has both nesting levels (T-AUTOFIX-DOES-NOT-TOUCH-NESTED-RESULT-STATUS) uses an already-legal top-level COMPLETED, which never reaches the new splice code (:skip branch). My mutation testing (mutant 2 in result.summary) demonstrated this gap concretely: removing the depth==1 guard from the new scanner silently corrupts the nested field instead of the top-level one, and all 43 existing tests still passed. This is exactly the fixture the design doc's own §4 asks TEST-DESIGNER to add ('a regression fixture combining a top-level status: \"PASS\" with a nested result.status: \"PASS\" ... assert the rewritten file is byte-identical to the original except for that one substring, and the nested result.status value is untouched') -- flagging it here so TEST-DESIGNER treats it as load-bearing, not optional, given it is the one mutation my own testing found live coverage does not catch."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0442-20260904",
+      "commit_sha_list": ["447a07290b2ee73583274b22c7f59d4631bb1eee"],
+      "remote_branch": "origin/feature/WF03-ISS0442-20260904",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER (dev-tooling file, not a tenant-data path, so SECURITY-REVIEWER is not required per ORCH's routing rule) to check OTP/idiom conformance, scope, and decision-record consistency before TEST-DESIGNER writes the committed regression suite at WF-03 Step 4 -- see issues[0] above for the one gap TEST-DESIGNER should prioritize."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

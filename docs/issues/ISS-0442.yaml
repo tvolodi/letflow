@@ -61,7 +61,10 @@ source: >
   file.
 queue_task_id: 442
 github_issue: 852
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0442-20260904
+resolved_at: "2026-09-04T06:35:44Z"
+regression_test: test/mix/tasks/letflow.lint_handoffs_test.exs
 orch_routing_note: >
   ORCH (2026-09-03): ISSUE-FIXER's diagnosis
   (handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json)
@@ -84,3 +87,32 @@ orch_routing_note: >
   the fix against real, on-main code. Whoever next picks this up should
   first re-check ISS-0440's status/branch before dispatching
   CODE-DESIGNER.
+
+  ELIXIR-DEV (2026-09-04, WF03-ISS0442-20260904, Step Final/git-merge):
+  ISS-0440 merged in the interim, unblocking this run. CODE-DESIGNER
+  produced lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md
+  (option (b): a targeted raw-text splice of the top-level "status" key,
+  never re-encoding the whole document), CODE-DESIGN-VALIDATOR passed it
+  after one rework (a false Jason.OrderedObject version claim), ELIXIR-DEV
+  implemented `splice_top_level_status/2` in
+  lib/mix/tasks/letflow.lint_handoffs.ex, REVIEWER passed idiom/scope,
+  TEST-DESIGNER/TEST-DESIGN-VALIDATOR added
+  test/mix/tasks/letflow.lint_handoffs_test.exs (47 tests, mutant-killing
+  coverage including the depth==1-guard case), and TEST-RUNNER's Step 5
+  (handoffs/WF03-ISS0442-20260904/step-05-test-runner.json) independently
+  re-ran everything: full suite 3202/3204 passed (2 pre-existing
+  rustc-toolchain-gap failures in
+  test/mix/tasks/letflow_check_toolchain_test.exs, unrelated to this
+  diff -- rustc absent from this host, System.cmd ENOENT), real-corpus
+  lint clean (0 new violations, same 25-item grandfathered baseline).
+  TEST-DESIGN-VALIDATOR's Step 4b MINOR finding (duplicate-top-level-
+  status-key Jason-semantics discrepancy) was carried forward out of
+  scope for this run and is tracked separately as ISS-0457
+  (queue task 457, GH#877) -- not addressed here. Merged to main via
+  Step Final; see that step's handoff for PR number and merge commit.
+  ORCH (2026-09-04): ISS-0440 has since merged (write_json!/2 confirmed
+  present on main at lib/mix/tasks/letflow.lint_handoffs.ex:454).
+  Sequencing blocker resolved. Re-claimed queue task 442, branch
+  feature/WF03-ISS0442-20260904 created from main, dispatching Step 1
+  directly to CODE-DESIGNER per ISSUE-FIXER's already-valid prior sizing
+  verdict (see handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json).

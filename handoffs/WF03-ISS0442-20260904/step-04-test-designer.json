@@ -1,0 +1,52 @@
+{
+  "handoff_id": "WF03-ISS0442-20260904-step-04",
+  "run_id": "WF03-ISS0442-20260904",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0442-20260904/step-04-test-designer.json",
+  "created_at": "2026-09-04T06:05:00Z",
+  "started_at": "2026-09-04T05:20:00Z",
+  "completed_at": "2026-09-04T06:05:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0442", "ISS-0440"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0442-20260904/step-01-code-designer.json",
+      "handoffs/WF03-ISS0442-20260904/step-01b-code-design-validator.json",
+      "handoffs/WF03-ISS0442-20260904/step-02-elixir-dev.json",
+      "handoffs/WF03-ISS0442-20260904/step-03-reviewer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "handoffs/WF03-ISS0442-20260904/step-03-reviewer.json"
+    ],
+    "branch_name": "feature/WF03-ISS0442-20260904"
+  },
+  "task": {
+    "description": "Write the committed regression suite closing REVIEWER's REQUIRED, named coverage gap: removing the depth==1 guard in handle_string_token/5 (the mechanism that prevents a nested result.status field from being mistaken for the top-level one) survived all 43 pre-existing tests. Add a mutation-killing fixture, plus close any other undertested design-doc edge cases without padding with redundant tests."
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "ADDED 4 NEW TESTS to test/mix/tasks/letflow.lint_handoffs_test.exs (43 -> 47), all under a new describe block 'ISS-0442 -- minimal-diff splice'. Spec written to test/specs/ISS-0442.md (did not exist before this run).\n\nAC1 (REQUIRED, REVIEWER-named) -- T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS: a fixture with top-level status \"PASS\" (FIXABLE, reaches the splice branch) and a nested result.status \"PASS\" (mirroring ISSUE-FIXER's original collision). Asserts (a) Jason.decode!(rewritten)[\"status\"] == \"COMPLETED\", (b) Jason.decode!(rewritten)[\"result\"][\"status\"] == \"PASS\", AND (c) the whole rewritten file is byte-identical to a hand-computed `expected` string -- the strongest check, since it proves the ONLY changed span in the entire file is the top-level value token.\n\nMUTATION-KILL CONFIRMATION (measured myself, not asserted): removed the depth==1 guard from handle_string_token/5 in the TRACKED file (`if depth == 1 and key_follows?(after_string) do` -> `if key_follows?(after_string) do`), ran `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` BEFORE adding my new tests conceptually verified via REVIEWER's own prior finding (43/43 passed under this same mutant, per their handoff) -- then, with my 4 new tests added, re-ran the identical mutant: 'Finished in 9.6 seconds' / 'Result: 45/47 passed' / 'Failed: 2 tests' -- the 2 failures were EXACTLY T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS and T-SPLICE-PRESERVES-ESCAPES-BRACES-ARRAY-NO-NEWLINE (both fail because under the mutant the LATER-scanned, higher-depth nested `result.status` candidate unconditionally overwrites `best`, so the mutant edits the WRONG span -- exactly REVIEWER's independently-reproduced corruption mechanism). All other 45 tests in the file were unaffected by the mutant, confirming these two -- and specifically the REQUIRED T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS -- are what actually kill it, not incidental breakage elsewhere. Reverted the mutant via `cp` from a pre-edit backup; `git diff --stat -- lib/mix/tasks/letflow.lint_handoffs.ex` confirmed EMPTY (byte-exact revert) before re-running the real suite: `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` on the real (unmutated) code -> 'Finished in 9.3 seconds' / 'Result: 47 passed'.\n\nAC2 (escape/embedded-structure safety) -- T-SPLICE-PRESERVES-ESCAPES-BRACES-ARRAY-NO-NEWLINE: a fixture with a string value containing an escaped quote AND a literal, unbalanced `{`/`}` character, plus an inline single-line array, plus a nested result.status, with NO trailing newline. Asserts the whole file is byte-identical to expected except the top-level token, and that no trailing newline was force-appended. (Iterated once: an earlier draft put \"note\"/\"arr\" at the top level, which incidentally tripped the UNRELATED H3 non-schema-key check -- reproduced and diagnosed directly via a throwaway debug test module before fixing, not guessed at; final fixture nests them inside \"context\", an @schema_top_keys member.)\n\nAC3 (preserved-behavior regression, run/1 --autofix path specifically) -- T-AUTOFIX-REFUSES-MISSING-STATUS and T-AUTOFIX-REFUSES-NULL-STATUS: missing/null top-level status was previously only exercised via direct lint_file/2 calls (which never touch the autofix/refusal machinery); these two close that gap for the real --dir/--autofix path, asserting byte-identity and the REFUSED report line.\n\nDROPPED, WITH REASON (not silently omitted): a duplicate-top-level-status-key test. While building the fixture I discovered `Jason.decode!(~s({\"status\":\"a\",\"status\":\"b\"}))` returns `%{\"status\" => \"a\"}` (FIRST-key-wins) on this exact pinned Jason version -- directly verified via `mix run -e`, not assumed -- which CONTRADICTS the design doc's own §2.2 step 2 claim that the scan's last-match-wins `best` accumulator 'mirrors Jason.decode/1's own last-key-wins semantics'. Built the duplicate-key fixture anyway to see what happens: `--autofix` picked the FIRST occurrence (\"PASS\", matching Jason's actual first-wins decode) to compute the fix, but `splice_top_level_status/2`'s last-MATCH-wins scan edited the LAST occurrence's text instead, producing a file whose decoded status was still \"PASS\" (illegal) -- and the very next lint pass then reported a FRESH H1 violation, i.e. `--autofix` on a duplicate-key file currently fails its own subsequent lint pass. This is a real, latent, separate defect, but out of scope for every criterion this run is scoped to (duplicate top-level keys are malformed JSON no real handoff has ever contained), and committing a test for it would require asserting the buggy behavior as 'correct' to pass -- forbidden by this project's own rules. Documented in test/specs/ISS-0442.md's 'Known gap' section and here for ORCH to route as a new issue if judged worth fixing.\n\nFULL SUITE RUN (`mix letflow.check.test`, blocked on in the foreground across three sequential 600s `tail --pid=<pid> -f /dev/null` waits totalling ~43 minutes wall clock, per this run's own instruction not to background-and-end-turn): 'Finished in 1434.8 seconds (17.7s async, 1417.1s sync)' / 'Result: 3201/3207 passed (6/6 properties, 3195/3201 tests), 21 excluded' / 'Failed: 6 tests'. Diagnosed all 6, not accepted on faith: (1-2) `Mix.Tasks.Letflow.CheckToolchainTest`'s two rust-pin tests, `System.cmd(\"rustc\", ...)` raising `:enoent` -- the same pre-existing, environment-only gap (no rustc toolchain in this sandbox) REVIEWER's own Step 3 handoff already independently confirmed also fails identically on `main`, unrelated to this diff. (3-6) `Letflow.IdentityMigrationTest`'s ISS-0050 skip-guard test and 3 `Letflow.TenantSchemaReaperTest` tests, all failing with real-Postgres schema/connection errors (`42P01 undefined_table`, etc.) under the full async run -- re-ran ONLY these two files in isolation (`mix test test/letflow/identity_migration_test.exs test/letflow/tenant_schema_reaper_test.exs`): 'Finished in 11.1 seconds' / 'Result: 12 passed', all 12 green with zero failures, confirming these are shared-Postgres-schema concurrency flakes under the full async suite, not a real regression -- and neither file is touched by, or related to, this diff (`git status --short` confirms the only changes on this branch's test tree are `test/mix/tasks/letflow.lint_handoffs_test.exs` (modified) and `test/specs/ISS-0442.md` (new)). Confirmed the target substring `\"default values for the optional arguments\"` (ISS-0069's own gate) does NOT appear anywhere in the captured output (`grep` returned nothing) -- the ISS-0069 warning-class check this task exists to enforce passes cleanly; the task's own FAILED verdict is driven entirely by the underlying `mix test` process's nonzero exit from the 6 diagnosed-and-explained failures above, none of which implicate this diff. `mix test test/mix/tasks/letflow.lint_handoffs_test.exs` in isolation (both before and after the full run): 'Result: 47 passed' both times, zero failures, zero flakiness observed for this file specifically.",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Latent defect (not introduced by this run, pre-existing in ELIXIR-DEV's Step 2 implementation): for a MALFORMED document with a duplicate top-level 'status' key, autofix_file/1's Map.get(data, \"status\") (via Jason.decode!/1, which is first-key-wins on this pinned version, verified directly) picks a different occurrence than splice_top_level_status/2's scan (which is last-MATCH-wins, per the design's own, factually incorrect, 'mirrors Jason.decode/1's last-key-wins' claim in §2.2 step 2) -- causing --autofix to edit the wrong span and the file to immediately re-fail its own next lint pass with a fresh H1 violation. Reproduced directly via a throwaway fixture (not merely reasoned about); full mechanism documented in test/specs/ISS-0442.md's 'Known gap' section. Recommend a new issue for ORCH to route (ISSUE-FIXER diagnosis + a design/code fix, likely correcting either the design's semantic claim or the scan's tie-break rule to match Jason's actual first-key-wins behavior) -- out of scope for this WF-03 run's own acceptance criteria."
+      }
+    ],
+    "artifacts_out": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "test/specs/ISS-0442.md",
+      "handoffs/WF03-ISS0442-20260904/step-04-test-designer.json"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

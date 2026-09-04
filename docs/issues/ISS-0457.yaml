@@ -1,0 +1,47 @@
+id: ISS-0457
+title: "lint_handoffs autofix splice desyncs from Jason-decode validation on a (malformed, currently unseen) duplicate top-level status key"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0442-20260904
+discovered_at: "2026-09-04T06:00:00Z"
+severity: MINOR
+tags: [tooling, lint-handoffs, autofix, s6]
+description: >
+  Found by TEST-DESIGNER, independently confirmed by TEST-DESIGN-VALIDATOR,
+  during WF03-ISS0442-20260904 (fixing the minimal-diff --autofix splice in
+  lib/mix/tasks/letflow.lint_handoffs.ex).
+
+  autofix_file/1 decides whether a fix is needed by reading the decoded map
+  (Jason.decode!, which is FIRST-key-wins on a JSON object with a duplicate
+  key: `Jason.decode!(~s({"status":"a","status":"b"}))` returns
+  `%{"status" => "a"}`), but the actual text rewrite is performed by
+  splice_top_level_status/2, a raw-text scanner that is LAST-match-wins by
+  construction (it keeps scanning and overwrites its captured position on
+  every depth-1 status key it sees). On a handoff file with two top-level
+  status keys, these two mechanisms would examine/mutate different
+  occurrences -- decode-based validation would decide whether to fix based
+  on the FIRST occurrence, but the text splice would edit the LAST
+  occurrence, producing a file that does not match what validation believed
+  it was correcting. Confirmed via a direct Jason.decode!/1 check, not a
+  naive assumption.
+
+  NOT currently exploitable in practice: TEST-DESIGN-VALIDATOR ran a
+  JSON-aware duplicate-key scan (python json.loads with object_pairs_hook)
+  across all 1989 real handoffs/**/step*.json files in the corpus and found
+  zero with a duplicate top-level key -- no producing pathway in this
+  codebase emits one, and a duplicate key is non-canonical/malformed JSON
+  to begin with. The failure mode is also self-limiting: a wrongly-spliced
+  file would be immediately re-flagged by the next lint_handoffs run rather
+  than silently passing.
+affected_files:
+  - lib/mix/tasks/letflow.lint_handoffs.ex
+related:
+  - ISS-0442
+  - ISS-0440
+source: >
+  handoffs/WF03-ISS0442-20260904/step-04-test-designer.json (original
+  finding) and step-04b-test-design-validator.json (independent
+  confirmation and corpus-wide verification that no real handoff currently
+  triggers it).
+queue_task_id: 457
+github_issue: 877
+status: open

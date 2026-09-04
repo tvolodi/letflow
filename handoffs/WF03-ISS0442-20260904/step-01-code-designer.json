@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF03-ISS0442-20260904-step-01",
+  "run_id": "WF03-ISS0442-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0442-20260904/step-01-code-designer.json",
+  "created_at": "2026-09-04T05:30:00Z",
+  "started_at": "2026-09-04T05:30:00Z",
+  "completed_at": "2026-09-04T05:30:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0442", "ISS-0440"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0442-20260904/step-01b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md",
+      "handoffs/WF03-ISS0442-20260904/step-01b-code-design-validator.json",
+      "mix.exs",
+      "mix.lock",
+      "deps/jason/lib/ordered_object.ex",
+      "deps/jason/CHANGELOG.md",
+      "deps/jason/lib/jason.ex",
+      "deps/jason/lib/formatter.ex",
+      "deps/jason/lib/encode.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0442-20260904"
+  },
+  "task": {
+    "description": "Rework iteration 1: fix the single BLOCKER raised by CODE-DESIGN-VALIDATOR in step-01b -- section 1.1 of the design doc falsely claimed Jason.OrderedObject is not present in the pinned jason 1.4.5. Correct the factual claim and re-ground the rejection of option (a) on grounds that don't depend on version availability.",
+    "acceptance_criteria": [
+      "Section 1.1 states accurately that Jason.OrderedObject IS available at the pinned jason 1.4.5, citing deps/jason/CHANGELOG.md (shipped 1.3.0), deps/jason/lib/ordered_object.ex, the objects: :ordered_objects decode option, and the Encoder clause",
+      "The prior false claim is not silently deleted -- the doc records that an earlier draft asserted the opposite and that this was checked and found false, so a future reader does not re-derive it",
+      "Rejection of option (a) rests solely on grounds independent of version availability: effect (2) pretty-print reflow (Jason.encode!(pretty: true) compact-encodes then reformats via Jason.Formatter.pretty_print_to_iodata regardless of key order) plus the decode-shape-fork argument",
+      "No other section of the design doc is modified (recommendation of option (b), the depth-tracking algorithm in section 2, sections 3 and 4 all untouched)",
+      "No implementation code introduced"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Corrected lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md section 1.1 only. Re-verified directly against the vendored dependency (not inherited): deps/jason/CHANGELOG.md shows Jason.OrderedObject shipped in 1.3.0 (21.12.2021), three minor versions before the pinned 1.4.5; deps/jason/lib/ordered_object.ex fully implements it; deps/jason/lib/jason.ex documents the `objects: :ordered_objects` decode option; deps/jason/lib/encode.ex implements the Jason.Encoder clause for the struct. Rewrote the version-check paragraph to state this correctly, and explicitly noted that an earlier draft claimed the opposite, that this was checked here and found false, so a future reader doesn't have to re-derive it themselves. Re-grounded the rejection of option (a) entirely on grounds that don't depend on version availability: effect (2) (pretty-print reflow) is untouched by key order because Jason.encode!(data, pretty: true) always compact-encodes first and then reformats via Jason.Formatter.pretty_print_to_iodata unconditionally (cited deps/jason/lib/jason.ex:217-226 and deps/jason/lib/formatter.ex, matching the validator's own verification), plus the pre-existing decode-shape-fork argument (Jason.OrderedObject.decode!/1 yields a distinct struct, forcing either a second decode shape across autofix_file/1 and the H1-H4 checks, or a second separate decode call scoped only to the write path). No other section touched: left section 1.2 (option c), section 1.3/section 2 (recommendation and depth-tracking algorithm), section 3 (preserved refusal/no-flag-CI behavior), and section 4 (open questions) exactly as they were -- confirmed via diff that only the lines within section 1.1's version-check and rejection paragraphs changed.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md"
+    ],
+    "issues": [],
+    "next_action": "CODE-DESIGN-VALIDATOR: re-verify section 1.1's corrected Jason.OrderedObject claim against deps/jason directly, confirm the rejection of option (a) no longer depends on version availability, and confirm no other section was modified."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

@@ -417,7 +417,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
       case Map.get(data, "status") do
         status when is_map_key(@autofix_map, status) ->
           to = Map.fetch!(@autofix_map, status)
-          data |> Map.put("status", to) |> write_json!(path)
+          rewrite_top_level_status!(path, raw, to)
           {:fixed, status, to}
 
         "FAIL" ->
@@ -445,15 +445,178 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     end
   end
 
-  # Rewrites only the top-level "status" key, preserving every other field.
-  # Jason.decode/1 returns a regular map, which does not preserve original
-  # key order on re-encode -- acceptable here per the design (§7 item 1
-  # leaves the exact re-serialization approach to ELIXIR-DEV) since no
-  # consumer of these files depends on top-level key order, only on the
-  # keys and values themselves (H3 checks membership, not order).
-  defp write_json!(data, path) do
-    encoded = Jason.encode!(data, pretty: true)
-    File.write!(path, encoded <> "\n")
+  # ISS-0442 -- replaces the old write_json!/2 whole-document re-encode
+  # (Jason.decode -> mutate -> Jason.encode!(pretty: true)), which turned a
+  # one-field status correction into a near-total-file rewrite: every
+  # level's keys got alphabetically re-sorted (Jason.decode/1's plain map
+  # has no order metadata) AND every value got independently reflowed by
+  # Jason.Formatter's pretty-printer, regardless of key order. See
+  # `lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md` for
+  # the full analysis and the option comparison (a: Jason.OrderedObject --
+  # rejected, only fixes reordering, not reflow; b: this raw-text splice --
+  # adopted; c: correct the reviewability claim instead -- rejected as
+  # premature given (b) is proportionate).
+  #
+  # `rewrite_top_level_status!/3` writes `raw`, rewritten by
+  # `splice_top_level_status/2`, straight back to `path` with a single
+  # `File.write!/2` call and NO trailing-newline append -- the original
+  # file's own trailing-newline convention (or lack of one) is preserved
+  # automatically because it lies entirely outside the one modified span.
+  @spec rewrite_top_level_status!(path :: String.t(), raw :: String.t(), new_status :: String.t()) ::
+          :ok
+  def rewrite_top_level_status!(path, raw, new_status) do
+    rewritten = splice_top_level_status(raw, new_status)
+    File.write!(path, rewritten)
+    :ok
+  end
+
+  # Pure (no I/O): implements the depth-aware raw-text substitution
+  # algorithm from the design doc's §2.2. Walks `raw` left to right exactly
+  # once, tracking JSON nesting `depth` via brace/bracket counting OUTSIDE
+  # string literals -- string boundaries are always resolved first
+  # (`consume_json_string/1`), so embedded `{`/`}`/`:`/`"` inside string
+  # VALUES never affect depth tracking or key detection. The root object's
+  # members sit at `depth == 1`; a depth-1 string immediately followed
+  # (mod whitespace) by `:` is a KEY candidate -- this is a purely
+  # syntactic rule, not alternating-parity bookkeeping, so it cannot desync
+  # on an odd/malformed structure. Only a depth-1 KEY whose *decoded*
+  # content equals exactly "status" is a candidate; a nested `result.status`
+  # (or any `status` key at depth >= 2) is scanned over but never a
+  # candidate, by construction, regardless of where it appears in the file
+  # -- this is what structurally rules out the PASS/PASS collision
+  # ISSUE-FIXER demonstrated on a real fixture. If more than one depth-1
+  # `status` key exists (a malformed/duplicate-key document), the LAST one
+  # found wins, mirroring `Jason.decode/1`'s own last-key-wins semantics --
+  # so the span this scan edits is guaranteed to be the same member
+  # `autofix_file/1`'s `Map.get(data, "status")` actually acted on.
+  #
+  # Raises if no depth-1 "status" key is found -- an internal invariant
+  # violation, not a normal refusal path: it can only happen if `raw`'s
+  # structure disagrees with what `Jason.decode/1` already reported
+  # earlier in `autofix_file/1` on this same `raw`, which should never
+  # occur for valid JSON. Deliberately does NOT fall back to the old
+  # whole-document re-encode on this failure -- that would silently
+  # reintroduce the exact bug ISS-0442 is about.
+  @spec splice_top_level_status(raw :: String.t(), new_status :: String.t()) :: String.t()
+  def splice_top_level_status(raw, new_status) do
+    case scan_for_status(raw, 0, "", nil) do
+      {_consumed, {prefix_before_value, _old_value_raw, suffix_after_value}} ->
+        prefix_before_value <> Jason.encode!(new_status) <> suffix_after_value
+
+      {_consumed, nil} ->
+        raise "letflow.lint_handoffs: internal invariant violation -- " <>
+                "splice_top_level_status/2 found no depth-1 \"status\" key in raw text " <>
+                "that Jason.decode/1 already reported as having one; this indicates a bug " <>
+                "in the scanner, not a normal --autofix refusal case"
+    end
+  end
+
+  # Single forward pass. `depth` is the current JSON nesting depth; `acc` is
+  # every byte consumed so far (used only to build a candidate's
+  # `prefix_before_value` at the moment a match is found -- not needed for
+  # anything else, since the winning candidate's own two captured pieces
+  # are enough to reconstruct the final text); `best` is `nil` or the most
+  # recently found candidate as `{prefix_before_value, old_value_raw,
+  # suffix_after_value}`.
+  @spec scan_for_status(String.t(), integer(), String.t(), tuple() | nil) ::
+          {String.t(), tuple() | nil}
+  defp scan_for_status(<<>>, _depth, acc, best), do: {acc, best}
+
+  defp scan_for_status(<<c::utf8, rest::binary>>, depth, acc, best) when c in [?{, ?[] do
+    scan_for_status(rest, depth + 1, acc <> <<c::utf8>>, best)
+  end
+
+  defp scan_for_status(<<c::utf8, rest::binary>>, depth, acc, best) when c in [?}, ?]] do
+    scan_for_status(rest, depth - 1, acc <> <<c::utf8>>, best)
+  end
+
+  defp scan_for_status(<<?", _::binary>> = rest, depth, acc, best) do
+    {string_raw, after_string} = consume_json_string(rest)
+    handle_string_token(string_raw, after_string, depth, acc, best)
+  end
+
+  defp scan_for_status(<<c::utf8, rest::binary>>, depth, acc, best) do
+    scan_for_status(rest, depth, acc <> <<c::utf8>>, best)
+  end
+
+  # A depth-1 string immediately followed (mod whitespace) by `:` is a KEY
+  # candidate. Every other string (depth >= 2, or a depth-1 VALUE not
+  # followed by `:`) is just copied through and scanning continues.
+  defp handle_string_token(string_raw, after_string, depth, acc, best) do
+    acc_with_string = acc <> string_raw
+
+    if depth == 1 and key_follows?(after_string) do
+      {colon_and_ws, after_colon_ws} = consume_colon_and_ws(after_string)
+      prefix_before_value = acc_with_string <> colon_and_ws
+
+      if Jason.decode!(string_raw) == "status" do
+        # Guaranteed to be a JSON string value at this call site: the fixed
+        # branch is only reached when Map.get(data, "status") already
+        # decoded as a string matching @autofix_map's keys, so the raw
+        # text's corresponding value token here is necessarily a JSON
+        # string literal -- never a number/bool/null/object/array.
+        {old_value_raw, after_value} = consume_json_string(after_colon_ws)
+        new_best = {prefix_before_value, old_value_raw, after_value}
+        scan_for_status(after_value, depth, prefix_before_value <> old_value_raw, new_best)
+      else
+        scan_for_status(after_colon_ws, depth, prefix_before_value, best)
+      end
+    else
+      scan_for_status(after_string, depth, acc_with_string, best)
+    end
+  end
+
+  defp key_follows?(rest) do
+    case skip_ws(rest) do
+      <<?:, _::binary>> -> true
+      _ -> false
+    end
+  end
+
+  defp skip_ws(<<c::utf8, rest::binary>>) when c in [?\s, ?\t, ?\n, ?\r], do: skip_ws(rest)
+  defp skip_ws(rest), do: rest
+
+  # Consumes leading whitespace, the mandatory `:`, and trailing whitespace,
+  # returning `{exact consumed text, remainder starting at the value's
+  # opening quote}`.
+  defp consume_colon_and_ws(rest), do: consume_colon_and_ws(rest, "")
+
+  defp consume_colon_and_ws(<<c::utf8, rest::binary>>, acc) when c in [?\s, ?\t, ?\n, ?\r] do
+    consume_colon_and_ws(rest, acc <> <<c::utf8>>)
+  end
+
+  defp consume_colon_and_ws(<<?:, rest::binary>>, acc) do
+    consume_colon_and_ws_after(rest, acc <> ":")
+  end
+
+  defp consume_colon_and_ws_after(<<c::utf8, rest::binary>>, acc)
+       when c in [?\s, ?\t, ?\n, ?\r] do
+    consume_colon_and_ws_after(rest, acc <> <<c::utf8>>)
+  end
+
+  defp consume_colon_and_ws_after(rest, acc), do: {acc, rest}
+
+  # Consumes one JSON string literal starting at its opening `"` (inclusive)
+  # through its matching closing `"` (inclusive), escape-aware: a `\`
+  # starts a two-character escape, so `\"` inside the string never ends it,
+  # and a `\uXXXX` escape is handled correctly for free -- `\u` is consumed
+  # as the two-character escape, and the four hex digits that follow are
+  # then just ordinary characters (they can never be a bare `"` or `\`), so
+  # no special-casing beyond skipping past `\u` is needed. Returns `{raw
+  # text including both quotes, remainder after the closing quote}`.
+  # Decoding the raw token's actual string content (when needed) is done by
+  # the caller via `Jason.decode!/1` on the returned raw text, rather than
+  # by hand-rolling escape resolution here.
+  defp consume_json_string(<<?", rest::binary>>), do: consume_json_string_body(rest, "\"")
+
+  defp consume_json_string_body(<<?\\, c::utf8, rest::binary>>, acc) do
+    consume_json_string_body(rest, acc <> <<?\\, c::utf8>>)
+  end
+
+  defp consume_json_string_body(<<?", rest::binary>>, acc), do: {acc <> "\"", rest}
+
+  defp consume_json_string_body(<<c::utf8, rest::binary>>, acc) do
+    consume_json_string_body(rest, acc <> <<c::utf8>>)
   end
 
   defp print_autofix_report(fixed) do

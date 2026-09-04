@@ -174,3 +174,36 @@ recurrence_2026_09_04_b: >
 queue_task_id: 418
 github_issue: 816
 status: open
+
+recurrence_evidence_20260904: >
+  THREE OCCURRENCES ON A SINGLE PR (#899, WF03-ISS0428-20260904), observed
+  by ORCH and recorded here because frequency data is what OQ-5's cap
+  proposal needs and this is the densest sample yet.
+
+  All three ran on the same commit, on GitHub's ubuntu-latest (N=4 vCPU),
+  and in EVERY case the main parallel suite passed completely --
+  "combined: 3217 tests, 6 properties, 0 failures (3223/3223 passed)" --
+  with the failure isolated entirely to the separate
+  `mix test --only wasm_hang` subprocess:
+
+    run 33905940608 (initial):  Result: 5/7 passed  -- GenServer.call timeouts
+                                at platform_test.exs:1939 on the deliberately
+                                hanging Lua script
+    run 33905976557 (duplicate): PASSED clean
+    run 33906933563 (later):    Result: 6/7 passed
+    ORCH's own rerun of 33905940608: PASSED clean
+
+  So on this PR the isolated subprocess failed 2 of 4 attempts (50%) while
+  the 3223-test parallel suite passed 4 of 4. That asymmetry is the whole
+  point: the flake lives specifically in the isolated wasm_hang run, not in
+  the suite at large, and it is frequent enough on a 4-vCPU runner to block
+  merges routinely.
+
+  CONTEXT WORTH NOTING FOR WHOEVER IMPLEMENTS OQ-5: ISS-0428 (merged
+  alongside this observation) moved the main suite to the parallel runner
+  but DELIBERATELY LEFT the wasm_hang and lua_wallclock_race subprocesses
+  serial, precisely because they exist due to contention sensitivity. That
+  decision is unaffected by these recurrences -- the flake predates it and
+  reproduces identically -- but it does mean the wasm_hang subprocess is
+  now the single slowest and least reliable segment of the backend gate,
+  which raises this issue's priority relative to when it was filed.

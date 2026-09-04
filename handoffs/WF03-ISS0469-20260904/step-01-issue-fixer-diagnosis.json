@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0469-20260904-step-01",
+  "run_id": "WF03-ISS0469-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0469-20260904/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-04T21:13:28Z",
+  "started_at": "2026-09-04T21:00:00Z",
+  "completed_at": "2026-09-04T21:13:28Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-156"],
+    "issue_ids": ["ISS-0469", "ISS-0426", "ISS-0446"],
+    "artifacts_in": [
+      "docs/issues/ISS-0469.yaml",
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/specs/REQ-156.md",
+      "docs/issues/ISS-0426.yaml",
+      "lib/letflow/engine/lua/executor.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0469-20260904"
+  },
+  "task": {
+    "description": "Size ISS-0469 (executor_test.exs:654 raw wall-clock comparison, unguarded by :lua_wallclock_race, flaked 440ms vs 398ms on identical-commit CI reruns) and choose among its own 3 laid-out options -- (a) tag+isolate per ISS-0426 precedent, (b) deterministic proxy, (c) tolerance margin -- or route to CODE-DESIGNER if the choice needs real design invention.",
+    "acceptance_criteria": [
+      "Root cause confirmed by reading the actual failing assertion and its surrounding test, not just re-quoting the issue's prose",
+      "Determined whether a deterministic proxy is readily available from data the Lua executor already exposes, or would require new design work",
+      "A real judgment call made among the viable options, with reasoning, not a bare enumeration",
+      "Routed to CODE-DESIGNER (if real design work is needed) or ELIXIR-DEV (if mechanical)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "ROOT CAUSE (confirmed by reading executor_test.exs:625-658 in full, not just the issue's prose): the flaky assertion at line 654 (`assert small_elapsed_ms < large_elapsed_ms`) is REDUNDANT, not load-bearing. The test 'AC-1: a smaller configured max_heap_words halts sooner than a larger one on the same allocating script' already asserts, at lines 648-649, the fully deterministic outcome pair: `assert {:error, :memory_limit_exceeded} = small_result` and `assert {:ok, %{manifest_hash: _}} = large_result`, on the SAME allocating script under two different configured max_heap_words values. That pair alone already proves the configured limit is load-bearing (small limit kills the script; a materially larger limit lets the identical script complete) -- which is the entire substance AC-1 needs. The wall-clock `:timer.tc` comparison at 651-657 adds no additional proof of that property; it just re-measures the same two already-differently-outcomed calls in raw milliseconds and asserts on a margin (observed 440.152ms vs 398.195ms, ~10% -- well within ordinary CI scheduler-contention noise, and independently corroborated by ISS-0446 hitting the identical file:line on a prior, unrelated PR #866, i.e. this is a repeat offender, not a one-off).\n\nCRUCIALLY, this redundancy is not incidental -- the test's own governing spec, test/specs/REQ-156.md T1 (lines 11-25), explicitly offers the outcome-based approach as an accepted, arguably PREFERRED alternative to a pure timing comparison: 'The test quotes real mix test output showing both calls' outcomes and relative timing (OR the larger-limit call's outcome differing from the smaller-limit call's ... IF THAT IS THE MORE RELIABLE WAY to demonstrate the limit is load-bearing rather than a no-op).' The test as written already does the outcome-differs half (satisfying T1/AC-1 on its own) AND additionally, unnecessarily, does the timing half too -- so the flaky half can be removed without losing any coverage the spec requires, because the spec itself names the surviving half as an acceptable, more-reliable substitute.\n\nOPTION (b) DELIBERATELY EXCLUDED, not just 'not readily available': I checked whether the executor already exposes a deterministic proxy (instruction count, checkpoint counter) that could replace the wall-clock comparison while proving the SAME property. It does expose `instruction_count` (lib/letflow/engine/lua/executor.ex ~line 275-292, 488-492, off `Lua.VM.State`) -- but that counter belongs to the UNRELATED :max_instructions in-band budget mechanism (REQ-154), not to :max_heap_words. The module's own moduledoc (lines 123-127) explicitly documents this as a REJECTED design choice already on record (decision 0014's OQ-1): '`:max_instructions` is rejected as a memory-limit proxy ... allocation is not proportional to instruction count.' The max_heap_size kill path (lines 530-563) is an async BEAM-level `:erlang.spawn_opt` kill with `max_heap_size: %{kill: true}` -- it exposes no in-band counter of 'how much was allocated when killed' at all; the ONLY observable signal from that path is the return value itself (`{:error, :memory_limit_exceeded}` vs `{:ok, _}`), which the test already asserts on. Building a genuine word-count/checkpoint proxy would mean adding new instrumentation to a security-relevant kill path against an already-recorded decision-record preference not to couple the two mechanisms -- real design work, not a mechanical test edit, and not obviously worth it when the outcome assertions already prove the property per spec.\n\nOPTIONS (a) AND (c) REJECTED AS WORSE THAN JUST DELETING THE REDUNDANT ASSERTION: (a) tag+isolate (ISS-0426 precedent, test_helper.exs's :lua_wallclock_race exclusion + lib/mix/tasks/letflow.check.test.ex's isolated subprocess) is a clean mechanical fit, but it would grow the isolated-subprocess partition (already 11 tests per ISS-0426's own closure count) to cover an assertion that, per the spec, need not exist at all -- paying an isolation-and-maintenance cost for zero net coverage gain, and adding pattern debt the issue's own text already flags as a downside. (c) a tolerance margin keeps a wall-clock dependency and a hardcoded magic number that could still flake under sufficiently bad CI contention (this file:line has now flaked twice, per ISS-0446 and this issue) -- it treats the symptom, not the redundancy that is the actual root cause.\n\nJUDGMENT: neither (a), (b), nor (c) as literally stated is the best fix. The correct fix is a 4th, narrower option the issue's framing did not need to anticipate because it falls out directly from re-reading the test against its own spec: DELETE the wall-clock measurement and comparison (the `:timer.tc` wrapping at lines 628-646 and the `small_elapsed_ms`/`large_elapsed_ms`/assert block at lines 651-657), keeping the two `Executor.run_with_heap_limit_sync/4` calls and their existing deterministic outcome assertions (lines 648-649) unchanged, and update the test's docstring/name (currently 'halts sooner than a larger one') to describe the outcome-differs property instead of a timing property (e.g. 'a smaller configured max_heap_words halts the script; a materially larger one lets the same script complete', matching test/specs/REQ-156.md's own alternative phrasing). This is mechanical -- deleting already-redundant lines and adjusting a test name/comment to match spec-sanctioned wording -- not a new design decision, so it does not need CODE-DESIGNER. No production code changes; scope is entirely inside the one test in test/letflow/engine/lua/executor_test.exs (lines 611-658, the AC-1 test and its preceding comment block).",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "ELIXIR-DEV: in test/letflow/engine/lua/executor_test.exs, rewrite the 'AC-1' test (currently lines 625-658) to remove the :timer.tc wall-clock measurement and the small_elapsed_ms < large_elapsed_ms assertion entirely, keeping the two run_with_heap_limit_sync/4 calls and their existing {:error, :memory_limit_exceeded} / {:ok, %{manifest_hash: _}} outcome assertions unchanged. Rename the test description from '...halts sooner than a larger one...' to an outcome-differs framing consistent with test/specs/REQ-156.md T1's own accepted alternative wording, and update the preceding comment block (lines 611-624) to state plainly that the timing comparison was removed as redundant with the outcome assertions (cite ISS-0469, and ISS-0446 as the prior corroborating flake) rather than isolated per ISS-0426, since the property no longer depends on wall-clock time at all. Run mix test against this one test file to confirm it still passes and no other test in the file references small_elapsed_ms/large_elapsed_ms. Update docs/issues/ISS-0469.yaml status/resolution once TEST-RUNNER confirms green, per WF-03's normal closeout."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

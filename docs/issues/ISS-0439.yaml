@@ -125,4 +125,35 @@ acceptance_criteria:
     all, that verdict is recorded with its reasoning rather than the issue being
     closed silently"
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0439-20260904
+resolved_at: "2026-09-04T21:38:57Z"
+resolution: >
+  This issue's own six acceptance criteria are entirely about DURABLY RECORDING the
+  deferral decision and its reasoning -- not about the underlying 1C-taxonomy-adoption
+  question itself, which ISS-0439's own text explicitly scopes out ("ONLY DELIVERABLE
+  if picked up: a design-exploration artefact ... Explicitly NOT requirements, NOT
+  implementation, NOT a schema"). That recording gap is the root cause this issue names,
+  and it is now genuinely removed: docs/migration/decisions/0019-defer-1c-typed-
+  templates.md exists (the decision, the three reasons, the review triggers, the
+  ISS-0438/REQ-225..231 dependency status, all six ACs covered) plus its companion
+  grounding artefact lib/letflow/design/iss0439-1c-taxonomy-mapping.md (the taxonomy-to-
+  existing-machinery mapping). Both are independently gated PASS by CODE-DESIGN-VALIDATOR
+  (step 2) and REVIEWER (step 3) of this run (WF03-ISS0439-20260904) -- not merely
+  produced and self-reported.
+
+  No regression test is cited because none applies: this is a design-exploration issue
+  that produces no code, per its own AC5 ("No requirements are created, no schema is
+  defined, and no code is written by this issue"). The gate gap this issue names is
+  closed by the two artefacts above plus their independent validation, which is the
+  applicable evidence for a docs-only issue.
+
+  THE DEFERRAL ITSELF IS UNCHANGED. The underlying product question -- should Letflow
+  adopt the 1C Directory/Document/Register/Report taxonomy -- remains open and deferred,
+  exactly as decided by the user on 2026-09-02. Nothing about that verdict was resolved,
+  built, or changed by this run. What closed is only the tracking/recording gap: the
+  decision and its reasoning are now durably findable by a future reader instead of
+  living only in this issue's own filing text. Re-opening the taxonomy question itself
+  is governed by the three review triggers stated in decision 0019 (a concrete
+  tenant/domain, observed cross-tenant duplication, or a deliberate ERP-adjacent market
+  decision) -- none of which is affected by this closure.

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0439-20260904/step-05-issue-fixer-close.json",
   "created_at": "2026-09-04T21:38:03Z",
   "started_at": "2026-09-04T21:38:03Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T21:39:22Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -40,9 +40,11 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Read ISSUE_QUEUE.md's status vocabulary in full before choosing. Concluded 'resolved' is correct: ISS-0439's own six ACs are entirely about durably RECORDING the deferral decision (not about the underlying taxonomy question, which its own text scopes out -- 'ONLY DELIVERABLE if picked up: a design-exploration artefact ... Explicitly NOT requirements, NOT implementation, NOT a schema'). That recording gap is the root cause this issue names, and it is now genuinely removed: docs/migration/decisions/0019-defer-1c-typed-templates.md (the decision record) plus lib/letflow/design/iss0439-1c-taxonomy-mapping.md (the grounding artefact) both exist and are independently gated PASS by CODE-DESIGN-VALIDATOR and REVIEWER this run -- not self-reported. 'instrumented' doesn't fit (there is no root cause left un-removed -- the recording gap, the thing named, IS removed). 'no_defect' doesn't fit (a real gap existed and was closed, not investigated-and-found-absent). No regression test is cited in the yaml/GH comment because none applies: this is a design-exploration issue producing no code, per its own AC5. Wrote docs/issues/ISS-0439.yaml: status: resolved, resolved_in_run: WF03-ISS0439-20260904, resolved_at: 2026-09-04T21:38:57Z, and a resolution: field stating plainly the deferral itself is unchanged -- the underlying 1C-taxonomy-adoption question remains open/deferred per decision 0019's three review triggers; only the tracking/recording gap closed. Closed GitHub issue #846 via `gh issue close 846 --comment ...` citing the run-id, the docs/issues/ISS-0439.yaml record, and the decision record path; comment explicitly states no fix was shipped and no regression test exists, and that the taxonomy question remains deferred. Verified post-close via `gh issue view 846 --json state,closedByPullRequestsReferences`: state CLOSED. Committed docs/issues/ISS-0439.yaml and this handoff to git on feature/WF03-ISS0439-20260904, not pushed (ORCH's Step Final). Did not touch handoffs/registry.json and did not call letflow-queue.",
+    "artifacts_out": [
+      "docs/issues/ISS-0439.yaml"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0439-20260904",
@@ -52,7 +54,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to Step Final (git-merge)"
   },
   "rework_count": 0,
   "max_rework": 3

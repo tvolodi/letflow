@@ -66,19 +66,24 @@ substance ship in the production module's documentation, not just here.
   before the admission gate itself starts rejecting/queuing new attempts.
 - **Gives an operator a real dial.** Per OQ-5's own wording ("operator-configurable"),
   §5 below names the config key, default, and justification.
-- **DOES fix the isolated `mix test --only wasm_hang` CI flake's own documented
-  CONCURRENT-contention failure mode — REWORK 2, ORCH's own "option three" decision
-  (§6).** All eight hang dispatches across the seven `:wasm_hang`-tagged tests are, in
-  this rework, wired to acquire/release a lease around their own EXISTING direct calls
-  (`PluginInterface.invoke/2,3`, `PluginHandler.handle_node/1`, or raw
-  `Wasmex.call_function/4`), using exactly the crash-safety placement §2 already worked
-  out for a real caller. §6.3 works through the claim precisely rather than asserting
-  it: concurrent admission is genuinely serialized by construction (no two hangs are
-  ever admitted at once, closing the exact race ISS-0418's own recurrence log
-  documents); a wedged native slot is never reclaimed regardless (§0's own core
-  finding, unchanged), and §6.3.1 names the one residual arithmetic risk (cumulative
-  sequential leaks exceeding a small runner's total pool size) this wiring does not and
-  cannot close.
+- **CLOSES the isolated `mix test --only wasm_hang` CI flake's own documented
+  CONCURRENT-contention failure mode — REWORK 3, refined per CODE-DESIGN-VALIDATOR's
+  second BLOCKER.** The wiring in §6 covers six hang dispatches (reduced from eight
+  found in the suite as-is, §6.3.1 — two removed with zero coverage loss: one merged
+  into an existing dispatch, one converted to a synthetic captured-string replay
+  mirroring a technique this same test file already uses once). §6.3 works through the
+  concurrent-admission claim precisely: no two hangs are ever admitted at once, closing
+  the exact race ISS-0418's own recurrence log documents. **This alone was found, on
+  re-derivation against ISS-0418's own measured CI evidence (`ubuntu-latest`, N=4
+  vCPU), to be insufficient by itself** — 8 sequential, permanently-unrecoverable
+  leaks (now 6) cannot be proven to fit inside a pool that small merely by being
+  well-sequenced, since serialization bounds simultaneous admission but never regrows
+  the pool. **The "fixes ISS-0418's CI flake" claim is therefore GATED on a real
+  measurement, not asserted as settled by this design alone — §6.3.1's own required-
+  verification subsection states exactly what must be measured
+  (`available_parallelism()` inside a real `mix test --only wasm_hang` subprocess on
+  the real target runner) and what each possible outcome of that measurement implies**,
+  rather than resting on an inferred vCPU-count analogy a second time.
 - **DOES NOT cap production WASM dispatch. This is the limitation that must not
   erode, stated here with the same prominence as the CI-flake fix above, per this
   rework's own explicit instruction not to let it go quiet:** the wiring in §6 is
@@ -517,7 +522,7 @@ operator-facing warning (last bullet) rather than a buried caveat.
 
 ---
 
-## 6 — Test strategy: ORCH's option three — wire the lease into the eight `:wasm_hang` hang dispatches directly, in this same run
+## 6 — Test strategy: ORCH's option three — wire the lease into the `:wasm_hang` hang dispatches directly, with the footprint reduced and the final claim measurement-gated
 
 **REWORK 2 NOTE (ORCH decision, following CODE-DESIGN-VALIDATOR's step-02b BLOCKER and
 this design's own rework-1 §6.4 finding).** Rework 1 retracted the false determinism
@@ -528,6 +533,17 @@ run without waiting for OQ-C's unbuilt production dispatch integration. **ORCH h
 now chosen that option explicitly** (its own message to this rework, reasoning
 recapped in §6.0 below) — this section replaces rework 1's §6 entirely with that
 design.
+
+**REWORK 3 NOTE, added on top of rework 2's own text below without disturbing it.**
+CODE-DESIGN-VALIDATOR's second gate found rework 2's wiring, though correctly
+serializing concurrent admission, wires MORE permanent native leaks (8, at the time)
+into one isolated subprocess than ISS-0418's own measured real CI runner
+(`ubuntu-latest`, N=4 vCPU) can hold regardless of sequencing — accepted in full,
+§6.3.1 rewritten accordingly. The dispatch count is now 6 (reduced with zero coverage
+loss, §6.3.1), and the "this closes the CI flake" claim is gated on a real measurement
+of the actual pool size rather than asserted outright. §0's headline and this section's
+own title above are updated to match; §6.1-§6.2's content below is otherwise unchanged
+from rework 2 except where §6.3.1 documents a specific row's disposition.
 
 ### 6.0 ORCH's reasoning, recapped for the implementer's context (not re-litigated — accepted)
 
@@ -545,27 +561,31 @@ existing calls from the test's own process. This design accepts that reasoning; 
 records why it holds up against a second, independent check (the exact case-by-case
 mechanics below) rather than merely on ORCH's say-so.
 
-### 6.1 The exact tests, and why the count is eight, not seven
+### 6.1 The exact tests: eight dispatches as found, six after this rework's own reduction (§6.3.1)
 
 **Seven `@tag :wasm_hang` tests exist across three files, but one dispatches two
-sequential live hangs, so this section wires eight hang-dispatch sites across seven
+sequential live hangs, so the AS-FOUND state is eight hang-dispatch sites across seven
 test bodies.** Confirmed by direct re-read of all three files this rework:
 
-| # | File:line | Call shape | Hang dispatches in this test body |
-|---|---|---|---|
-| 1 | `call_timeout_test.exs:76` (AC2) | Raw `Wasmex.call_function/4`, no `PluginInterface`/`PluginHandler` at all — `Wasmex.start_link/1` then two sequential `Wasmex.call_function/4` calls on the SAME pid, both wrapped in `try/catch :exit` | 2 (the test's own second call on the now-wedged `pid` is itself a second live hang, per §1.2's "Store stays wedged" finding — see §6.2's note on this specific test) |
-| 2 | `call_timeout_test.exs:155` (AC5) | `PluginInterface.invoke/2` directly | 1 |
-| 3 | `host_api_write_test.exs:458` | Raw `Wasmex.call_function/4` via `start_instance/2`'s own helper, wrapped in `try/catch :exit` | 1 |
-| 4 | `plugin_handler_test.exs:152` (AC5) | `PluginInterface.invoke/3` directly | 1 |
-| 5 | `plugin_handler_test.exs:353` (REQ-170 AC1) | `PluginInterface.invoke/2` directly | 1 |
-| 6 | `plugin_handler_test.exs:393` (REQ-170 AC3) | `Task.Supervisor.async_nolink/2` + `PluginHandler.handle_node/1` directly, MIRRORING `invoke/2,3`'s own internal algorithm (the test itself plays the role `invoke/2,3` plays in production) | 1 |
-| 7 | `plugin_handler_test.exs:472` (REQ-170 AC4) | `PluginInterface.invoke/2` directly, called TWICE sequentially (`timeout_ms` 300 then 7,000) in one test body | 2 |
+| # | File:line | Call shape | Hang dispatches AS FOUND | Disposition after §6.3.1's reduction |
+|---|---|---|---|---|
+| 1 | `call_timeout_test.exs:76` (AC2) | Raw `Wasmex.call_function/4`, no `PluginInterface`/`PluginHandler` at all — `Wasmex.start_link/1` then two sequential `Wasmex.call_function/4` calls on the SAME pid, both wrapped in `try/catch :exit` | 2 (the test's own second call on the now-wedged `pid` is itself a second live hang, per §1.2's "Store stays wedged" finding — see §6.2's note on this specific test) | **Unchanged, 2 — irreducible (§6.3.1 item 3)** |
+| 2 | `call_timeout_test.exs:155` (AC5 sibling) | `PluginInterface.invoke/2` directly | 1 | **REMOVED — converted to a synthetic captured-string replay (§6.3.1 item 2)** |
+| 3 | `host_api_write_test.exs:458` | Raw `Wasmex.call_function/4` via `start_instance/2`'s own helper, wrapped in `try/catch :exit` | 1 | **Unchanged, 1 — irreducible (§6.3.1 item 3)** |
+| 4 | `plugin_handler_test.exs:152` (AC5) | `PluginInterface.invoke/3` directly | 1 | **Unchanged, 1 — irreducible after item 2's conversion (§6.3.1 item 3); now the sole live source of the outer-timeout-fires-safely mechanism** |
+| 5 | `plugin_handler_test.exs:353` (REQ-170 AC1) | `PluginInterface.invoke/2` directly | 1 | **REMOVED — merged into row 7's existing first dispatch (§6.3.1 item 1); AC1's own assertions checked against that dispatch's already-captured result/elapsed-time instead** |
+| 6 | `plugin_handler_test.exs:393` (REQ-170 AC3) | `Task.Supervisor.async_nolink/2` + `PluginHandler.handle_node/1` directly, MIRRORING `invoke/2,3`'s own internal algorithm (the test itself plays the role `invoke/2,3` plays in production) | 1 | **Unchanged, 1 — irreducible (§6.3.1 item 3)** |
+| 7 | `plugin_handler_test.exs:472` (REQ-170 AC4) | `PluginInterface.invoke/2` directly, called TWICE sequentially (`timeout_ms` 300 then 7,000) in one test body | 2 | **Unchanged dispatch count, 2 — but its FIRST dispatch now also carries row 5's assertions (§6.3.1 item 1); irreducible below 2 for AC4's own ordering claim (§6.3.1 item 3)** |
 
-Total: 7 tagged tests, 8 hang dispatches (`call_timeout_test.exs:76`'s test body
-contains 2, `plugin_handler_test.exs:472`'s test body contains 2, the remaining five
-contain 1 each) — this reconciles ORCH's "eight" against the validator's own "seven"
-citation, which counted tagged tests, not hang dispatches; both counts are correct for
-what they count, stated here so neither is mistaken for an error in the other.
+**AS-FOUND total: 7 tagged tests, 8 hang dispatches** — this reconciles the prior
+gate's "seven" (tagged tests) against ORCH's "eight" (dispatches); both counts are
+correct for what they count.
+
+**AFTER THIS REWORK'S §6.3.1 REDUCTION: 6 tagged tests, 6 hang dispatches** (row 2
+converted to synthetic, row 5's test body deleted and merged into row 7). §6.3.1 states
+in full why each remaining dispatch could not be reduced further without deleting real
+coverage, and why 6 is still not asserted as sufficient on its own — a real measurement
+gates the final claim (§6.3.1's own required-verification subsection).
 
 ### 6.2 Three distinct wiring shapes, one principle applied three times
 
@@ -575,10 +595,12 @@ production caller: acquire the lease in the process that is never the one
 and release it on every return path, including the hang path, via a guaranteed-cleanup
 construct.** Concretely, per call shape:
 
-**Shape A — tests calling `PluginInterface.invoke/2,3` directly** (rows 2, 4, 5, 7):
-the test process itself IS `invoke/2,3`'s caller, exactly the position §2/§8.1 already
-specify for a production caller. Each such test wraps its existing
-`PluginInterface.invoke(...)` call as:
+**Shape A — tests calling `PluginInterface.invoke/2,3` directly** (rows 4, 7; row 2 is
+removed and row 5 is merged into row 7 per §6.3.1's reduction, so only two independent
+Shape A test bodies remain, one of which — row 7 — dispatches twice): the test process
+itself IS `invoke/2,3`'s caller, exactly the position §2/§8.1 already specify for a
+production caller. Each such test wraps its existing `PluginInterface.invoke(...)` call
+as:
 
 ```
 {:ok, lease} = InvocationLease.try_acquire()
@@ -598,7 +620,11 @@ shape instead of a brutal-kill). Row 7's test acquires and releases the lease **
 once around each of its two sequential `invoke/2` calls — not once around both, since
 each call is an independent admission event and the second call must not be admitted
 until the first's lease (and, more importantly per §6.3, the first's OWN outer bound)
-has actually returned.
+has actually returned. Per §6.3.1 item 1, row 7's FIRST dispatch now also carries row
+5's own four assertions (`{:error, reason}`, `is_binary(reason)`, `elapsed_ms <
+10_000`, `classify == :wall_clock_timeout`), checked against that same dispatch's
+already-captured `short_result`/`short_elapsed_ms` — no additional lease acquisition is
+needed for this, since it is the same dispatch, not a new one.
 
 **Shape B — the test mirroring `invoke/2,3`'s own internal algorithm** (row 6,
 `plugin_handler_test.exs:393`): this test does not call `invoke/2,3` at all — it
@@ -678,7 +704,10 @@ a specific configured value.)
   and `invoke/2,3` (or its equivalent) has returned.
 - **For a wedged native slot's effect on LATER tests: no — the cap does not, and cannot,
   fix this, and this must be stated as plainly as the concurrent-admission guarantee
-  above, per ORCH's own instruction (b).** Every one of the eight dispatches
+  above, per ORCH's own instruction (b).** Every one of the dispatches (8 as found in
+  the suite; §6.3.1 immediately below reduces this to 6, with zero coverage loss, and
+  gates the final "closes the flake" claim on a real pool-size measurement rather than
+  asserting the reduced count is automatically sufficient)
   permanently wedges one native `TOKIO_RUNTIME` slot FOREVER (§0 — this is the leak
   ISSUE-FIXER's diagnosis confirms has no BEAM-side reclamation). The LEASE releases
   when `invoke/2,3` (or its equivalent) returns — because the outer boundary always
@@ -709,35 +738,188 @@ a specific configured value.)
   arithmetic risk, since 8 dispatches against a small CI runner's pool is a real,
   checkable number, not a hypothetical.
 
-#### 6.3.1 Closing the residual arithmetic risk: the pool must have at least 8 free slots at the START of the isolated subprocess
+#### 6.3.1 The residual arithmetic risk, and this rework's actual response — REWORK 3 (CODE-DESIGN-VALIDATOR step-02b-regate BLOCKER)
 
-Since the isolated `mix test --only wasm_hang` subprocess is short-lived and freshly
-started (per ISS-0352's own architecture — a brand-new BEAM node, hence a brand-new,
-completely unused `TOKIO_RUNTIME`), its native pool starts this run with its FULL
-`available_parallelism()`-sized capacity, zero slots already consumed by anything else.
-**The residual risk in §6.3 above is therefore only live if `available_parallelism()`
-in that fresh subprocess is smaller than 8** (the total, strictly-sequential dispatch
-count this section wires). ISS-0418's own recurrence evidence cites CI runners as small
-as ~4 vCPU. **This is a real, named constraint this design surfaces rather than
-silently assumes away: on a CI runner where `available_parallelism()` < 8, this
-design's serialization removes the CONCURRENCY failure mode but the sequential dispatch
-count (8) can still exceed a small runner's total pool size, and the cap's own
-mechanism (bounding how many are admitted AT ONCE) does not, and cannot, address a
-pool that is simply too small for 8 sequential, non-recoverable leaks in one process
-lifetime.** This is not a defect this rework can fix by tuning `cap` (a smaller cap
-does not change the total number of dispatches, only how many run concurrently, and
-these dispatches are already forced fully sequential by the wiring above regardless of
-`cap`'s value — no `:test`-environment override of `cap` is used at all, per §11's own
-note that the wiring, not a specific numeric cap, is what serializes here). It is a
-fact about this test suite's own
-total hang footprint versus a given runner's pool size, independent of this design.
-**Named as residual scope, not silently absorbed:** if this specific failure mode
-(exhaustion from cumulative sequential leaks within one `wasm_hang` run, distinct from
-ISS-0418's own documented concurrent-contention shape) is ever observed after this
-design ships, it is evidence the suite's OWN total hang footprint (8 dispatches) needs
-further reduction — the same "reduce genuine-hang footprint" lever ISS-0352's original
-resolution already used once (from ~9 to ~7) — not evidence this design's serialization
-failed at what it actually claims to do.
+**REWORK 3 NOTE, replacing the prior revision of this section in full.** The prior
+revision named this residual risk and then argued it away as merely theoretical,
+because no PAST recurrence note in ISS-0418's own record shows a sequential-exhaustion
+failure shape. **The gate's rebuttal is accepted without reservation: that silence is
+EXACTLY what would be observed regardless of whether the risk is real, because every
+recurrence to date failed via CONCURRENT contention first — a failure mode this rework
+genuinely closes — so a sequential-only failure could never yet have been observed
+either way.** Absence of evidence is not evidence of absence, and treating it as such
+here would repeat the identical reasoning error the gate correctly named (the same
+category of mistake that let ISS-0352's test-only mitigation ship six times while the
+underlying mechanism persisted). The prior revision's dismissal is retracted, not
+softened.
+
+**Re-derived precisely, using the gate's own verified number.** ISS-0418's real target
+CI runner (GitHub `ubuntu-latest`) is confirmed at **N=4 vCPU** — not inferred from a
+vCPU-count analogy this time, but read directly from a real CI log line the gate itself
+quoted (`"test_parallel: N=4 (source: nproc)"`, run 33905940608). §5.5's own formula
+and this design's own §0/§4 finding (the leak is unbounded and unrecoverable within a
+process's lifetime) together mean: **8 sequential, permanently-unrecoverable leaks
+cannot fit inside a ~4-slot pool, no matter how perfectly admission is serialized.**
+Serialization (§6.3) bounds SIMULTANEOUS admission; it does not, and structurally
+cannot, regrow the pool between dispatches. This is accepted as correct arithmetic, not
+contested.
+
+**Response: lever (a), applied concretely, as far as it honestly goes — reduces the
+footprint from 8 to 6 dispatches, with zero loss of any acceptance criterion's actual
+coverage — PLUS lever (b), gating the final claim on a real measurement rather than
+resting on reduction alone, since 6 is still not verified to fit a ~4-slot pool.**
+Both are applied together, because working through the reduction honestly (below) shows
+it cannot reach 4 without deleting real coverage, and ORCH's own instruction was explicit
+that coverage must not be weakened to hit a number.
+
+**Applying lever (a): which of the 8 dispatches can be removed, and what would be lost
+if consolidation were pushed further.**
+
+Re-examined every dispatch in §6.1's table against two questions: (i) does another
+dispatch already produce, as a byproduct, everything this dispatch's own assertions
+need, and (ii) can this dispatch's live-hang be replaced by a synthetic captured-string
+replay (the exact lever `call_timeout_test.exs`'s own AC5 "a real captured
+wall-clock-timeout... outcome" test already uses, converting what used to be a THIRD
+live dispatch into a zero-hang synthetic replay of a string captured from a live run
+elsewhere in the suite) without losing the property under test.
+
+1. **`plugin_handler_test.exs:353` (AC1) MERGES into `plugin_handler_test.exs:472`
+   (AC4)'s existing first (300ms) dispatch — dispatch removed, zero coverage lost.**
+   AC1's test dispatches `req170_hang.wat` through `PluginInterface.invoke/2` with
+   `node_config["timeout_ms"] => 500` and asserts: `{:error, reason}`, `is_binary(reason)`,
+   `elapsed_ms < 10_000`, and `CallTimeout.classify(result) == :wall_clock_timeout`. AC4's
+   own FIRST dispatch (already live, already required for AC4's own ordering-comparison
+   proof) is structurally identical in every respect that matters: `req170_hang.wat`,
+   `PluginInterface.invoke/2`, an inner `timeout_ms` (300ms instead of 500ms, still
+   comfortably inside the same `< 10_000ms` bound), with `short_result`/`short_elapsed_us`
+   already captured by AC4's own code. AC1's four assertions can be checked against
+   AC4's own `short_result`/`short_elapsed_ms` values with no new dispatch: `{:error,
+   reason} = short_result`, `is_binary(reason)`, `short_elapsed_ms < 10_000`, and
+   `CallTimeout.classify(short_result) == :wall_clock_timeout` all hold on data AC4's
+   test already produces as a byproduct of proving its own AC. AC1's OWN test body is
+   deleted; a comment at AC4's own call site names which of AC1's assertions are now
+   checked there and why (mirroring AC4's own existing precedent comment for its 3→2
+   history). **Nothing is lost:** AC1's own claim (inner bound fires, elapsed time
+   reflects the configured value, not the outer default, classify/1 recognizes it) is
+   exactly as true of AC4's 300ms dispatch as it was of AC1's own 500ms dispatch — the
+   specific millisecond value was never the point of AC1's assertion (`< 10_000` is a
+   loose bound in both cases, per design req170 §5.5's own "loose tolerance, not exact
+   millisecond values" discipline).
+
+2. **`call_timeout_test.exs:155` (AC5 sibling, "the outer `Task.yield/2` timeout shape
+   also classifies as `:wall_clock_timeout`") CONVERTS to a synthetic captured-string
+   replay — dispatch removed, zero coverage lost.** This test's ENTIRE purpose is to
+   confirm `CallTimeout.classify/1` recognizes the OUTER-timeout `nil`-clause reason
+   string (`"...did not respond within #{timeout_ms}ms"`, `plugin_interface.ex`'s own
+   `handle_yield_result/4`, quoted verbatim in `CallTimeout`'s own `@doc`) as
+   `:wall_clock_timeout` — a claim about a STRING PATTERN MATCH, not about live timing
+   (contrast AC1/AC4, which assert real elapsed time and therefore cannot be
+   replayed). This exact live mechanism — the outer bound firing and producing that
+   literal reason-string shape — is ALREADY proven live, in this same rework's own
+   wiring, by TWO other dispatches: `plugin_handler_test.exs:152` (AC5, REQ-165's
+   original outer-timeout-fires safety property) and `plugin_handler_test.exs:393`
+   (AC3, the outer bound firing independently of a longer inner bound, task-death
+   proof). Capturing the exact reason string ONE of those two live dispatches actually
+   produces (a `IO.inspect`/log capture during ELIXIR-DEV's implementation, mirroring
+   exactly how `call_timeout_test.exs`'s existing sibling test at line ~113 already
+   captured `req170_hang.wat`'s INNER-timeout string verbatim from "one real run,"
+   per that test's own comment) and asserting `CallTimeout.classify/1` against that
+   captured string is the identical, already-established, already-gate-approved lever —
+   this is not a new technique invented for this rework, it is the SAME technique this
+   very file already uses once, applied a second time to the shape that duplicates
+   live coverage elsewhere. **Nothing is lost:** the outer-timeout-fires mechanism is
+   still proven live by two other, necessarily-live dispatches (AC3, AC5); `classify/1`'s
+   own pattern-matching correctness against that exact string shape is proven exactly as
+   rigorously by a captured-string replay as by a fresh live dispatch, since
+   `classify/1` is a pure function operating on a string — this is precisely the
+   argument `call_timeout_test.exs`'s own existing sibling test already makes for the
+   inner-timeout shape, restated here for the outer-timeout shape.
+
+3. **Not reduced, and why, stated for each remaining dispatch so a future reader does
+   not wonder why the pass stopped here:**
+   - `call_timeout_test.exs:76` (AC2), 2 dispatches: irreducible. This test's entire
+     purpose is live-verifying `wasmex`'s documented interrupt-and-keep-Store claim is
+     FALSE (design req170 §1.1/§1.2) — it is the canonical live-verification test the
+     whole REQ-170 divergence rests on; replacing either of its two calls with a
+     synthetic replay would defeat the specific thing it exists to prove (that this
+     really happens, live, against the real dependency), and its second call
+     deliberately targets the SAME already-wedged `pid` as its first (§6.2's own
+     documented exception, unchanged) — it is not a candidate for AC1-style merging
+     with any other test either, since no other test dispatches against
+     `req170_hang.wat` via raw `Wasmex.call_function/4` with this exact
+     wedged-Store-reuse shape.
+   - `host_api_write_test.exs:458`, 1 dispatch: irreducible. Proves REQ-172's
+     `write_variable` discard-on-timeout semantics via `HostApi`'s own process-dictionary
+     staging mechanism — a distinct module and behavior (write-staging discard) with no
+     duplicate anywhere else in the suite.
+   - `plugin_handler_test.exs:393` (AC3), 1 dispatch: irreducible. Proves the outer
+     bound fires even when the INNER bound is deliberately LONGER (60,000ms) —
+     the one test in the suite proving independence from a longer inner bound, and the
+     only Shape B (task-pid-observable) dispatch; no other test's assertions can absorb
+     this one without losing the "independent of a longer inner timeout" claim
+     specifically.
+   - `plugin_handler_test.exs:152` (AC5), 1 dispatch: irreducible after item 2's
+     conversion above — this is now the SOLE surviving live proof of the outer-timeout-
+     fires-and-no-exit-reaches-the-caller mechanism (REQ-165's own original safety
+     property, distinct from REQ-170's classify/1 concern), and item 2 above explicitly
+     relies on this dispatch (or AC3's) remaining live to capture the reason string
+     from — it cannot itself also be converted without leaving zero live dispatches of
+     this mechanism at all.
+   - `plugin_handler_test.exs:472` (AC4), 2 dispatches: irreducible below 2, per that
+     test's own already-established history (§6.1's table; the test's own comment
+     documents the 3→2 reduction already applied once, and explains precisely why 2 is
+     the floor — the test's entire claim is an ORDERING comparison between two
+     independently-timed dispatches, which is structurally impossible to prove with
+     fewer than two live measurements).
+
+**Net result of lever (a): 8 dispatches → 6 dispatches** (AC1 merged into AC4's
+existing first call; AC5-sibling converted to synthetic replay), with every acceptance
+criterion's own actual claim still fully covered by a live dispatch and zero test
+weakened to hit a number, per ORCH's own explicit instruction.
+
+**Why lever (a) alone is not claimed as sufficient, and lever (b) is applied on top:**
+6 is still not proven to fit inside the actual measured pool. ISS-0418's own evidence
+gives N=4 **vCPU**, not a confirmed measurement of `available_parallelism()` **inside a
+real `mix test --only wasm_hang` subprocess on that exact runner** — and this design's
+own §5.5 already states plainly that no BEAM-side API reads that quantity directly, so
+inferring "vCPU count implies pool size 1:1" is exactly the kind of unverified analogy
+the gate is right to distrust twice over (once for the original 8-vs-8 self-contradiction
+this rework already fixed in §5.5, and now again here). **This design does NOT claim 6
+fits.** It requires the fit to be established by measurement, not inference, before the
+"this closes ISS-0418's CI flake" claim in §0/§6 may be asserted as fact:
+
+**Required verification, concrete and gating, per lever (b):** before this design's
+test wiring (§6.2) is considered to have closed ISS-0418's CI flake, ELIXIR-DEV/
+TEST-RUNNER must measure `available_parallelism()` (or an equivalent proxy — e.g. a
+one-line diagnostic script run inside an actual `mix test --only wasm_hang`-shaped CI
+job on `ubuntu-latest`, printing `:erlang.system_info(:logical_processors_available)` or
+shelling out to `nproc` from within that exact job, mirroring how `test_parallel.sh`
+already prints its own `N=4 (source: nproc)` diagnostic line the gate quoted) and
+confirm it is **strictly greater than 6** in that exact environment before merging this
+design's implementation with an unqualified "fixes the flake" claim. Two concrete
+outcomes, stated so neither is silently assumed:
+
+- **If measured pool size > 6:** the combination of lever (a)'s reduction and §6.3's
+  serialization genuinely closes ISS-0418's own documented concurrent-contention flake,
+  and this may be claimed in the merged PR/CI-verification report with the measured
+  number cited as evidence, not an inferred one.
+- **If measured pool size ≤ 6:** lever (a) alone is insufficient, and TEST-RUNNER/
+  ELIXIR-DEV must escalate back through this same design's own decision points rather
+  than merge silently — either push lever (a) further (accepting that AC2's 2
+  dispatches or AC4's ordering-comparison floor would then need to be revisited with a
+  fresh design decision, since this design's own analysis above found no further
+  reduction possible without real coverage loss at the current requirement set), or
+  adopt this design's own rework-1 fallback position honestly: ship the primitive and
+  the test wiring's genuine concurrent-contention fix, state plainly that sequential
+  exhaustion on small runners remains open, and let ORCH decide whether that is
+  shippable as a partial fix or blocks the run further. **This design does not
+  pre-decide which of those ORCH would choose** — it states the gate (the measurement)
+  and both of its honest consequences, per this rework's own governing instruction not
+  to claim more than is verified.
+
+**This measurement is NOT optional future work — it is a precondition of this design's
+own central claim, stated as plainly as §0's other limits.** §0's headline is updated
+to match (below).
 
 ### 6.4 What this test wiring proves about the primitive that `invocation_lease_test.exs`'s unit tests alone would not
 
@@ -789,7 +971,13 @@ of any kind until a future dispatch-integration requirement (OQ-C) wires a real 
 against §8.1's contract. A comment on the new `try_acquire/0`/`on_exit` wiring inside
 each test file must say so explicitly (e.g. "this lease is test-side only; production
 dispatch does not acquire one yet — see design doc §0/§7"), not merely rely on the
-moduledoc living in a different file. Per §0/§7, this is a comment/documentation
+moduledoc living in a different file. **It must additionally NOT claim ISS-0418's CI
+flake is closed outright** — per §6.3.1's own required-verification subsection, that
+claim is conditional on a real measurement of `available_parallelism()` inside the
+actual isolated subprocess exceeding the final dispatch count (6); TEST-RUNNER's own
+verification report (WF-03 Step 4/5) must record that measured number, not merely a
+green `mix test --only wasm_hang` run, before this design's own implementation may be
+described as having closed the flake. Per §0/§7, this is a comment/documentation
 obligation carried into implementation, not a design element with its own separate
 artifact.
 
@@ -961,17 +1149,32 @@ between.
   plausible owner, still `pending` as of this writing). Whoever builds that requirement
   must read this design's §8.1 before wiring `PluginInterface.invoke/2,3` into a real
   dispatch path, so the lease is not silently omitted from the first real caller.
-- **OQ-D (REWORK 2: RESOLVED by ORCH's own decision — kept here for the historical
-  record of how this design arrived at its current scope).** Rework 1 named this as an
-  undecided prioritization question for ORCH: wait for OQ-C's production caller, or
-  wire the `wasm_hang` tests onto the lease now as an interim measure. **ORCH chose the
-  interim wiring explicitly** (recapped §6.0) — the eight hang dispatches across seven
-  tests are wired in this same run (§6.1/§6.2), while OQ-C's production call site
-  remains unbuilt and out of scope here. This is no longer an open question for a
-  future reader; it is recorded as settled, with the reasoning kept so a future reader
-  understands why production remains uncapped despite the CI flake being addressed.
+- **OQ-D (RESOLVED by ORCH's own decision, then REFINED by rework 3 — kept here for
+  the historical record of how this design arrived at its current scope).** Rework 1
+  named this as an undecided prioritization question for ORCH: wait for OQ-C's
+  production caller, or wire the `wasm_hang` tests onto the lease now as an interim
+  measure. **ORCH chose the interim wiring explicitly** (recapped §6.0). Rework 2 wired
+  all 8 as-found dispatches; rework 3 (§6.3.1) reduced that to 6, with zero coverage
+  loss, after re-derivation against ISS-0418's own measured CI evidence showed 8 could
+  not fit inside the real target runner's pool regardless of sequencing — and gated the
+  final "closes the flake" claim on a real measurement of that pool size rather than
+  asserting it outright. This is no longer an open question for a future reader; it is
+  recorded as settled (with the measurement gate as the one remaining precondition), so
+  a future reader understands both why production remains uncapped and why the CI-flake
+  claim itself is conditional rather than unconditional.
+- **OQ-E (new, rework 3) — what does TEST-RUNNER/ELIXIR-DEV do if the required
+  measurement (§6.3.1) finds the real pool size ≤ 6?** §6.3.1 states both outcomes of
+  the measurement explicitly but does not pre-choose between the two paths the
+  ≤6 outcome opens (push footprint reduction further at the cost of revisiting AC2's or
+  AC4's own already-argued floors, vs. reverting to the rework-1 fallback position of
+  shipping the primitive honestly unproven against the flake) — that choice depends on
+  the actual measured number, which does not exist yet, so this design correctly leaves
+  it open rather than guessing an answer to a question whose deciding fact is not yet
+  known.
 
-None of these open questions block implementation of §5/§8's actual contract. Whoever
+None of these open questions block implementation of §5/§8's actual contract, except
+that OQ-E's resolution gates whether this design's implementation may be described as
+having closed ISS-0418's CI flake (§6.3.1). Whoever
 builds OQ-C's production dispatch integration must still read §8.1 in full before
 wiring a real production call site — the test wiring in §6 does not substitute for it,
 and does not, by construction, make production dispatch safe (§0's own restated
@@ -989,16 +1192,16 @@ limitation).
 | 4 | The cap's numeric default and config surface | §5.5; OQ-B |
 | 5 | Extend `Letflow.Admission` or build new — justified explicitly | §3 (four independent reasons) |
 | — | Is reclamation possible at all (ISS-0418's own item 4 in the task description) | §4 (no — stated plainly, with the two named non-cap follow-ups) |
-| — | Test strategy: deterministic vs. probabilistic fix for `wasm_hang` | §6 (REWORK 2, ORCH's option three: the eight hang dispatches across seven tests are wired to the lease in this run, closing the CONCURRENT-contention failure mode deterministically by construction, §6.3; a residual sequential-exhaustion risk is named, not hidden, §6.3.1; production dispatch stays uncapped, §0/§8.1) |
+| — | Test strategy: deterministic vs. probabilistic fix for `wasm_hang` | §6 (REWORK 3, ORCH's option three: the 8 as-found hang dispatches are reduced to 6 with zero coverage loss (§6.3.1), all wired to the lease in this run, closing the CONCURRENT-contention failure mode deterministically by construction (§6.3); the sequential-exhaustion residual risk found by the gate's own re-derivation is fixed, not merely renamed, via footprint reduction PLUS a required real-pool-size measurement gating the final "closes the flake" claim, §6.3.1; production dispatch stays uncapped, §0/§8.1) |
 
 ---
 
 ## 11 — Confirmation: exactly which existing files this design touches, and which it does not
 
-**REWORK 2: this section's shape changed from rework 1** — ORCH's option-three
-decision (§6) means the three `wasm_hang` test files ARE modified in this run, unlike
-rework 1's scope. Restated in full below rather than diffed, so this section stays a
-single, unambiguous source of truth.
+**REWORK 3: this section's file-level detail changed again from rework 2** — §6.3.1's
+footprint reduction means `plugin_handler_test.exs` and `call_timeout_test.exs` are no
+longer PURELY additive wiring; one test body is deleted (merged into another) and one
+is converted to a synthetic replay. Restated in full below rather than diffed.
 
 **New files:** `lib/letflow/engine/wasm/invocation_lease.ex` (§5/§7); one new test file,
 `test/letflow/engine/wasm/invocation_lease_test.exs` (§6.5) — TEST-DESIGNER's scope, not
@@ -1006,13 +1209,22 @@ built here.
 
 **Modified:** `lib/letflow/application.ex` (add `InvocationLease` as a new supervised
 child, §5.1 — no ordering dependency on any existing child);
-`test/letflow/engine/wasm/call_timeout_test.exs` (2 hang dispatches wired, §6.2 Shapes A/C,
-rows 1-2 of §6.1's table); `test/letflow/engine/wasm/host_api_write_test.exs` (1 hang
-dispatch wired, §6.2 Shape C, row 3); `test/letflow/engine/wasm/plugin_handler_test.exs`
-(4 hang dispatches across 4 tests wired, §6.2 Shapes A/B, rows 4-7) — in every case the
-change is additive `try_acquire/0`/`on_exit(release/1)` wrapping around each test's
-EXISTING call, per §6.2's three shapes; no test's own existing assertions, fixtures, or
-`@tag` values change.
+`test/letflow/engine/wasm/call_timeout_test.exs` (row 1's 2 dispatches wired additively,
+§6.2 Shape C; row 2's own test body is REWRITTEN, not merely wired — its live dispatch
+is replaced by a captured-string synthetic replay per §6.3.1 item 2, mirroring this same
+file's own existing AC5 synthetic-replay precedent at line ~113; net: 1 fewer live
+dispatch in this file, same file, same acceptance criterion still covered);
+`test/letflow/engine/wasm/host_api_write_test.exs` (1 hang dispatch wired additively,
+§6.2 Shape C, row 3); `test/letflow/engine/wasm/plugin_handler_test.exs` (row 4 and row
+6 wired additively per §6.2 Shapes A/B; row 5's ENTIRE TEST BODY IS DELETED, its four
+assertions relocated onto row 7's existing first dispatch per §6.3.1 item 1, with a
+comment at that call site explaining the merge, mirroring row 7's own existing
+3-dispatch-to-2 reduction comment; row 7 itself is wired additively, twice, once per its
+two existing dispatches) — net effect across all three files: 6 hang dispatches remain,
+each wrapped in `try_acquire/0`/`on_exit(release/1)` per §6.2's three shapes; the
+DELETED and CONVERTED tests are the only two whose own assertions or call graph change
+beyond additive wrapping, and both changes are documented in §6.3.1 as coverage-neutral,
+not silently dropped.
 
 **NOT modified by this design:** `lib/letflow/admission.ex` (§3 — a new module is used
 instead, Admission stays exactly as REQ-216/REQ-217/REQ-218 shipped it);

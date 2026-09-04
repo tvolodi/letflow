@@ -136,6 +136,41 @@ recurrence_2026_09_04: >
   operator-configurable concurrency cap remains undesigned and unimplemented;
   each further recurrence is additional evidence it is load-bearing, not new
   information about the mechanism itself.
+recurrence_2026_09_04_b: >
+  ANOTHER RECURRENCE, observed live 2026-09-04T13:23-13:26Z by ORCH during
+  WF03-ISS0458-20260904's Step Final CI wait, PR #883 (a docs-only issue-close
+  run for ISS-0458 -- docs/issues/ISS-0458.yaml plus handoffs/ bookkeeping,
+  zero lib/ or test/ files, confirmed via `gh pr view 883 --json files`).
+
+  BOTH CI runs (push-event 33875941734, pull_request-event 33875964751) hit
+  this class in the isolated `mix test --only wasm_hang` stage while the MAIN
+  suite passed cleanly on both (3217/3217 on the pull_request-event run).
+    - Run 33875941734 (job 101032814207): 1 failure --
+      test/letflow/engine/wasm/host_api_write_test.exs:460,
+      ExUnit.TimeoutError after 180000ms in start_instance/2 via
+      :proc_lib.sync_start/2 -- BYTE-FOR-BYTE identical (file, line, bound,
+      stack shape) to this issue's own recurrence_2026_09_03 and
+      recurrence_2026_09_04 entries above.
+    - Run 33875964751 (job 101032891363): 2 failures --
+      test/letflow/engine/wasm/call_timeout_test.exs:78 (AC2 wasmex
+      interrupt-and-keep-Store claim, ExUnit.TimeoutError after 180000ms,
+      same shape as recurrence_2026_09_03's call_timeout_test.exs:78 hit) and
+      test/letflow/engine/wasm/host_api_write_test.exs:460 (same signature as
+      above).
+  Both runs' backend-gate failing step read directly (`gh run view --log-failed`),
+  not inferred. PR #883's diff independently confirmed to touch zero files
+  under lib/letflow/engine/wasm/, test/letflow/engine/wasm/, or
+  lib/letflow/engine/lua/ -- structurally cleared, cannot be causal. Merged
+  past the red gate on that basis, same documented judgement as every prior
+  recurrence in this issue's own history.
+
+  Taking the recurrence count past ELEVEN. Filed here directly rather than as
+  a new ISS-NNNN, since ISS-0458's own investigation (a different issue, DB-
+  provisioning/teardown-race class, resolved separately as instrumented/
+  superseded_by:ISS-0219) is unrelated to this WASM-engine mechanism -- this
+  is purely a CI-wait observation on that run's own PR, filed per this
+  issue's now-established direct-append convention rather than a fresh
+  register_task call.
 queue_task_id: 418
 github_issue: 816
 status: open

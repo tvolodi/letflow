@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-04-rework1",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-04-test-designer-rework1.json",
+  "created_at": "2026-09-04T01:46:52Z",
+  "started_at": "2026-09-04T01:00:00Z",
+  "completed_at": "2026-09-04T01:46:52Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0446-20260904/step-04b-test-design-validator.json",
+      "handoffs/WF03-ISS0446-20260904/step-04-test-designer.json",
+      "test/specs/ISS-0446.md",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": []
+  },
+  "task": {
+    "description": "WF-03 Step 4 rework 1 of 3 for ISS-0446. TEST-DESIGN-VALIDATOR (step-04b) FAILED the prior handoff: the central claim that the race reproduces only under async:true sibling contention, and that a fast/reliable/committable sequential regression test is structurally impossible, was independently falsified (validator's own async:false, max_cases:1, 20-case module reproduced the CI failure 5/5 runs). Required: independently re-verify the corrected mechanism, design and commit a regression test that discriminates the deleted check-then-act shape from the shipped fix, argue explicitly for which Letflow-owned property it guards (not a re-enactment of ExUnit's own on_exit behaviour), evaluate whether the coordinator's trap_exit detail belongs in the test, update test/specs/ISS-0446.md to correct (not silently drop) the wrong mechanism claim, and report real numbers."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "INDEPENDENTLY RE-VERIFIED the corrected mechanism before building anything (did not take the validator's or coordinator's numbers on faith, per this project's re-derive-don't-inherit rule). Confirmed: (1) async:false, no trap_exit, 20 sequential cases, Process.sleep(5) in terminate/2 -- DOES reproduce the race sequentially (5 runs: 0,0,1,3,1 failures), falsifying the original spec's 'zero across 100+ async:false runs' claim -- the original attempts must have tested 'one isolated test at a time' rather than 'many sequential tests in one BEAM VM run,' which are different experiments. (2) Adding Process.flag(:trap_exit, true) to the child GenServer's init/1 makes the race FULLY DETERMINISTIC with a SINGLE test case: 10/10 runs of one async:false trap_exit case crashed the OLD shape with the exact CI stacktrace (GenServer.stop/3 -> :sys.terminate -> EXIT shutdown, through on_exit_handler.ex:140), and 10/10 runs of the identical harness against the shipped fixed shape (fetch_test_supervisor/0 + start_supervised!/1, no on_exit) passed clean, 0 failures. Wall time per run: well under 1 second. trap_exit does not change WHAT races -- it removes a second, unrelated source of randomness (how long the child's own death takes) so the ONE race this issue is about is exercised every run instead of only some; verified this is the same mechanism, not a different one, by reasoning through why non-trapping still showed run-to-run variance while trapping did not.\n\nDECISION ON THE LETFLOW-OWNED PROPERTY: did NOT build a test that re-enacts the deleted old shape and asserts it crashes -- that would test ExUnit's/OTP's own on_exit-runner and link-teardown behaviour in the abstract, since the old pattern no longer exists anywhere in the shipped file for such a test to regress against, and would be manufactured busywork per this role's own scope test. Instead built a test guarding the DURABLE, LETFLOW-OWNED PROPERTY this file actually depends on going forward: this suite's own established fixture idiom (ExUnit.fetch_test_supervisor/0 + start_supervised!/1, no on_exit) -- already used by the test directly above it, plus test/letflow/admission_test.exs and test/letflow/scheduler/poller_test.exs -- tears down cleanly even when a child's shutdown is deliberately slow. This is a property of THIS SUITE'S OWN CHOSEN IDIOM, not ExUnit's public contract in the abstract, and its violation is exactly what reintroducing a check-then-act on_exit guard here would look like. A synthetic child (Iss0446RegressionGuard.SlowTrapChild, file-local, defined at the bottom of the test file) is necessary despite this framing: the real Letflow.Engine.ServiceTaskDispatcher.Poller neither traps exits nor does slow terminate/2 work, so it would not exercise the teardown window at all -- this is why the test above it uses the real Poller for its which_children/1 proof while the new test uses a synthetic child for its different, timing-shaped proof. Complementary, not redundant.\n\nCOMMITTED: one new test in test/letflow/engine/service_task_dispatcher_test.exs, describe \"boot gating\" block, immediately after the ISS-0446-fixed test -- 'the ExUnit.fetch_test_supervisor!/0 + start_supervised!/1 fixture idiom above tears down cleanly even when the child's shutdown is slow (ISS-0446 regression guard)'. Plus the file-local Iss0446RegressionGuard.SlowTrapChild helper module (traps exits, Process.sleep(5) in terminate/2, documented as file-local-only in its own @moduledoc). No on_exit callback in the new test either, deliberately, matching the property being guarded.\n\nRELIABILITY, MEASURED:\n- New test in isolation (mix test ..._test.exs --only line:1136): 5/5 runs, 0.4-0.5s each, all passed.\n- Whole modified file (43 tests total, real Postgres via Letflow.DataCase): 5/5 full-file runs -- 'Result: 43 passed' every time, 34.5s-38.4s each (dominated by the file's other DB-backed tests).\n- FAIL-FIRST PROOF, performed in the REAL SHIPPED FILE (not a throwaway script), since the new module did not exist pre-fix: temporarily replaced the new test's body with the exact deleted old shape (Supervisor.start_link/2 unnamed + on_exit(fn -> if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid) end)), same SlowTrapChild fixture -- 5/5 mutant runs FAILED, every time, exact CI stacktrace. Reverted via a pristine backup copy; SHA256 before mutation and after revert both e34091b81d3eddf01b11553eeee7574a0a464c47fa5a6e15391347c2da3fc3f4 (byte-identical, not merely 'no diff shown'); re-ran the full file post-revert -- 'Result: 43 passed', 0 failures, confirming the revert was clean, not just byte-matching.\n- mix letflow.check.test (full suite, forces fresh warnings-as-errors recompile, checks ISS-0069 dead-default-argument class): real output quoted -- 'Finished in 1609.7 seconds (22.0s async, 1587.6s sync)', 'Result: 3193 passed (6 properties, 3187 tests), 21 excluded', 'mix letflow.check.test: OK -- no test failures, no ISS-0069 warnings.' 3193 is exactly one more than the pre-existing 3192 baseline, matching the single new test added.\n- mix compile --warnings-as-errors: exit 0, zero output. mix format --check-formatted: exit 0, zero output.\n\nSPEC UPDATED (test/specs/ISS-0446.md): added an explicit 'REVISION NOTE (rework 1 of 3)' section stating the original 'why no test was committed' section was WRONG and is superseded, not silently dropped -- names the false claim, cites the validator's counterexample, states what survives unchanged (the async:true numbers, the 8-file grep finding, honest caveat framing). Added a 'Corrected mechanism' section with the async:false/N=20 and single-case trap_exit measurements and the trap_exit-same-mechanism reasoning. Added a 'What is committed' section with the property argument and reliability numbers above. Kept the 8-file grep finding section (renamed 'Why no additional suite-wide guard was added') unchanged in substance -- still correctly out of this issue's scope, unaffected by the mechanism correction. Coverage checklist's 'no permanent regression test added' line flipped to checked, with a note explaining the reversal.\n\nCLEANUP: all throwaway probe scripts (rework's own async:false/trap_exit probes, the pristine backup copy used for the mutation revert) deleted after use. git status --porcelain (repo root) shows exactly two modified files: test/letflow/engine/service_task_dispatcher_test.exs and test/specs/ISS-0446.md -- no scratch/, no other lib/ or test/ changes.\n\nDid NOT modify lib/ or the shipped fix itself at any point (the mutation was applied and reverted only inside the test file, in the new test's own body, never touching the ISS-0446-fixed test or any production module).",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "title": "8 other test files in the suite share ISS-0446's exact check-then-act on_exit(Process.alive? + stop) pattern and carry the same latent teardown-race risk",
+        "description": "Unchanged from the prior handoff (step-04-test-designer.json) and TEST-DESIGN-VALIDATOR's own re-confirmation (step-04b) -- grep -rn 'on_exit.*Process.alive?' test/ finds the identical shape at test/letflow/definitions/promotion_assertion_rerun_test.exs:127, test/letflow/event_store/platform_events_test.exs:316, test/letflow/sandbox_pool/fixture_loader_test.exs:47, test/letflow/sandbox_pool_test.exs:103/662/1458/1486, test/support/service_catalog_reaper_test.exs:247. Still correctly out of ISS-0446's own affected_files scope; not fixed here. Re-filing since this rework did not action it, only re-confirmed it.",
+        "suggested_severity": "MINOR"
+      }
+    ],
+    "artifacts_out": [
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "test/specs/ISS-0446.md"
+    ],
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (step 04b re-gate) to independently re-verify the committed test's reliability and the corrected mechanism claim before this proceeds."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

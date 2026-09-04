@@ -1,0 +1,45 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-05",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-05-test-runner.json",
+  "created_at": "2026-09-04T03:59:30Z",
+  "started_at": "2026-09-04T03:59:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "test/letflow/supervisor/pollers_breaker_test.exs",
+      "test/letflow/supervisor/pollers_test.exs",
+      "test/letflow/supervisor/infrastructure_test.exs",
+      "test/letflow/supervisor/http_test.exs"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Run the full test suite (mix letflow.check.test or mix test, whichever is this project's standard full-suite command -- check mix.exs aliases) on this branch, synchronously in the foreground per core-directives.md's 'No Background Wait For A Cross-Turn Notification' section -- do not background it. Report the real pass/fail counts. For any failure, apply core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching' -- attribute each failure to either this branch (blocks) or pre-existing/environmental (file-and-forward per ISSUE_QUEUE.md, does not block). This branch's diff touches lib/letflow/application.ex, lib/letflow/supervisor/pollers_breaker.ex (new), test/letflow/supervisor/pollers_test.exs, test/letflow/supervisor/infrastructure_test.exs, test/letflow/supervisor/pollers_breaker_test.exs (new) -- pay particular attention to any failure in or near the supervisor/ test directory, since that is where a genuine regression from this branch would surface; a failure in an unrelated file/subsystem is a stronger candidate for pre-existing/environmental per route 1 of the Failure Attribution rule (module not in git diff --name-only main...HEAD).",
+    "acceptance_criteria": [
+      "Full suite run synchronously, real output quoted (not summarized from memory)",
+      "Every failure attributed via one of the 3 structural routes, named explicitly -- 'known failure' or count-matching alone is not acceptable",
+      "test/letflow/supervisor/ directory's own tests (all 4 files) confirmed passing, quoted separately",
+      "A structured test report written to test/reports/ per this role's standard output"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

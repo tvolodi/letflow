@@ -1,0 +1,56 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-01",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-04T06:28:42Z",
+  "started_at": "2026-09-04T06:28:42Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457", "ISS-0442"],
+    "artifacts_in": [
+      "docs/issues/ISS-0457.yaml",
+      "docs/issues/ISS-0442.yaml",
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md",
+      "handoffs/WF03-ISS0442-20260904/step-03-reviewer.json",
+      "handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Diagnose ISS-0457 (see docs/issues/ISS-0457.yaml in full -- it already carries ORCH's own direct re-verification, do not re-derive what it states, but DO independently confirm it yourself rather than trusting it, per HANDOFF_PROTOCOL.md section 1.1). CRITICAL SEQUENCING CONSTRAINT, different from a normal WF-03 diagnosis: the code this issue is about (autofix_file/1's decode step and splice_top_level_status/2) does NOT exist on main. It exists only on the still-open, unmerged sibling branch feature/WF03-ISS0442-20260904, which is an ACTIVE run on another host (last commit 2026-09-04T05:21:18Z, Step 3 REVIEWER PASS, next_action already routes to TEST-DESIGNER -- check `git log -1 origin/feature/WF03-ISS0442-20260904` yourself for the current tip before concluding anything about its state). Diagnose against that branch's actual code, the same disposable-git-worktree technique the prior WF03-ISS0442-20260903 diagnosis handoff used (listed in artifacts_in) -- do not check out that branch directly in this run's own working tree, since this run's own branch (feature/WF03-ISS0457-20260904) must stay clean of lib/ changes until the routing decision below is made.\n\nYour job: (1) independently reproduce the decode/splice occurrence-selection mismatch on a real duplicate-top-level-status fixture against feature/WF03-ISS0442-20260904's actual code (build one -- something like {\"status\":\"PASS\",\"other\":1,\"status\":\"DONE\"} at the top level -- and show autofix_file/1's decode-based branch selection versus what splice_top_level_status/2 actually edits). (2) Independently verify the false 'mirrors Jason.decode's last-key-wins semantics' claim in that branch's design doc (line ~201 of lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md) and in splice_top_level_status/2's own code comment -- ORCH already measured Jason.decode!/1 as first-key-wins (jason 1.4.5) but re-derive this yourself rather than inheriting ORCH's number. (3) Make the routing call: since feature/WF03-ISS0442-20260904 is still mid-pipeline (not yet at TEST-DESIGNER, let alone merged), is the correct fix to REQUIRE this be corrected as part of ISS-0442's own in-flight design/implementation (amend the still-open design doc + implementation before that branch merges, analogous to how REVIEWER just added a REQUIRED acceptance-criteria-for-next-step item on that same run for the depth==1 collision gap), or does it need its own separate CODE-DESIGNER dispatch on a fresh branch once ISS-0442 lands? State your reasoning explicitly -- this is the one judgement this diagnosis step is trusted to make; do not implement either option yourself.\n\nDo NOT implement a fix. Do NOT touch feature/WF03-ISS0442-20260904 or lib/mix/tasks/letflow.lint_handoffs.ex from this run's own branch.",
+    "acceptance_criteria": [
+      "Root cause independently reproduced against feature/WF03-ISS0442-20260904's real code (not re-quoted from ISS-0457.yaml or this dispatch)",
+      "The design doc's/implementation's false 'mirrors Jason.decode' claim independently re-measured, not inherited from ORCH's figure in ISS-0457.yaml",
+      "A concrete duplicate-top-level-status fixture demonstrated, showing the actual occurrence divergence between autofix_file/1's decode-based selection and splice_top_level_status/2's edited span",
+      "A clear routing verdict (fold into ISS-0442's still-open pipeline vs. a distinct follow-on fix after ISS-0442 merges) with reasoning, written into result.summary and next_action",
+      "No file outside handoffs/ and docs/issues/ modified by this step"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

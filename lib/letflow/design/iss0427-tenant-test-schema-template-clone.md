@@ -196,18 +196,175 @@ Findings, numbered for cross-reference from §3.2:
    correction it makes to this design's own prior (wrong) claim about how
    constraint triggers are created.
 
-No further gap was found after this pass across `pg_class`, `pg_constraint`,
-`pg_attribute`, `pg_trigger`, `pg_statistic_ext`, and
-`information_schema.columns` — the six catalogs most likely to carry a
-table-shape property `LIKE ... INCLUDING ALL` could plausibly mishandle.
-`pg_policy` (row security policies) was checked implicitly via
-`relrowsecurity` being false everywhere (a false `relrowsecurity` means no
-policy can be in effect regardless of `pg_policy` contents, so no separate
-`pg_policy` query was needed once finding 5 established RLS is off
-everywhere). Sequences and their ownership (§0.1 findings 3-4, dimension
-#5) and indexes (§0.1 finding 2, dimension #4) were already covered by the
-original draft and re-confirmed still correct by the validator, not
-re-probed in this rework.
+This pass covered `pg_class`, `pg_constraint`, `pg_attribute`, `pg_trigger`,
+`pg_statistic_ext`, and `information_schema.columns` — the six catalogs
+judged most likely to carry a table-shape property `LIKE ... INCLUDING ALL`
+could plausibly mishandle. **This judgement turned out to be incomplete —
+see §0.3 for two further gaps CODE-DESIGN-VALIDATOR's rework-2 gate found,
+both by extending this same method to catalogs/views this pass did not
+reach, and both traced to the same root cause: `information_schema.columns`,
+the one column-type source this pass used, structurally cannot see a
+domain/enum/collation's true schema, because the SQL-standard view
+normalizes exactly that detail away.** `pg_policy` (row security policies)
+was checked implicitly via `relrowsecurity` being false everywhere (a false
+`relrowsecurity` means no policy can be in effect regardless of `pg_policy`
+contents, so no separate `pg_policy` query was needed once finding 5
+established RLS is off everywhere). Sequences and their ownership (§0.1
+findings 3-4, dimension #5) and indexes (§0.1 finding 2, dimension #4) were
+already covered by the original draft and re-confirmed still correct by the
+validator, not re-probed in this rework.
+
+### 0.3 Rework 2 — `information_schema` vs `pg_catalog`, and the column-type/collation-schema gap (CODE-DESIGN-VALIDATOR gate, rework 2 of 3)
+
+The rework-1 re-gate FAILED on one MAJOR and two MINORs. This section
+addresses all three, plus the re-examination the coordinator specifically
+asked for: whether `information_schema.*` (a SQL-standard abstraction that
+deliberately normalizes away Postgres-specific detail) misled §0.2's own
+method anywhere else, not just at the one spot the validator found.
+
+**THE MAJOR, independently re-verified.** A column typed as a custom
+Postgres `DOMAIN` or `ENUM` clones with its true type still schema-qualified
+to the TEMPLATE, not the clone. Reproduced exactly: built
+`probe_tpl.positive_int` (a `DOMAIN ... AS integer CHECK (VALUE > 0)`) and
+`probe_tpl.color_enum` (a plain `ENUM`), used both as column types on a
+template table, cloned via `LIKE ... INCLUDING ALL`. `pg_attribute` +
+`pg_type` ground truth showed the clone's `amount`/`color` columns have true
+type `probe_tpl.positive_int`/`probe_tpl.color_enum` — IDENTICAL type
+objects to the template's own, not clone-local copies — confirmed further by
+`pg_depend` (`deptype = 'n'`, a normal, real dependency) showing
+`probe_clone.parents.amount` depends directly on `probe_tpl.positive_int`.
+Tearing the probes down demonstrated the consequence directly: dropping
+`probe_clone` first, then `probe_tpl`, produced the expected cascade
+(`DROP SCHEMA probe_tpl CASCADE` reporting "drop cascades to type
+probe_tpl.positive_int / probe_tpl.color_enum" as those types' own drop,
+harmless in the correct teardown order) — but dropping `probe_tpl` FIRST
+(the order the validator used to demonstrate the hazard) cascades into and
+destroys the CLONE's own columns, exactly the sequence-trap/FK-qualifier
+hazard class this design already treats as first-tier, now confirmed for
+column types too.
+
+**THE ROOT CAUSE, examined as asked rather than just patched around.**
+§0.2's own instrument — `information_schema.columns`, the only column-type
+source that pass used — is not merely a spot where this rework happened to
+look in the wrong place; it is SQL-standard-specified to resolve a
+domain-typed column's `data_type`/`udt_name` down to the domain's BASE type.
+Verified directly this rework: `information_schema.columns` reported
+`amount` as `data_type=integer, udt_schema=pg_catalog` on BOTH template and
+clone, identically — masking the true, template-qualified `pg_attribute`
+type underneath. This is the same shape of blind spot as the rework-1
+BLOCKER (an instrument structurally incapable of showing the property being
+asked about), not a new category of mistake.
+
+**What the re-examination of every OTHER `information_schema` use in this
+design turned up** (per the coordinator's explicit ask — walked each one
+against its `pg_catalog` ground truth rather than declaring the method safe
+by assumption):
+
+- `information_schema.tables` (dimension #1, table-name set). NOT a gap.
+  A table's own identity IS its own schema+name pair — there is no
+  "points at another object" indirection for a table the way there is for a
+  column's type, default, or collation, so there is nothing for this view to
+  normalize away that would matter here. Re-confirmed by comparing directly
+  against `pg_class`/`pg_namespace`: identical, no hidden field.
+- `information_schema.columns.collation_name` (dimension #6, Collations).
+  **A SECOND REAL GAP, found by this same re-examination, same shape as the
+  MAJOR above.** Built a genuinely custom, non-default collation
+  (`CREATE COLLATION probe_tpl.custom_ci (...)`), used it on a template
+  column, cloned via `LIKE ... INCLUDING ALL`. `information_schema.columns`
+  DOES carry a `collation_schema` field (distinct from the bare
+  `collation_name` this design's dimension #6 actually compares) that
+  correctly reports `probe_tpl` on the CLONE side too — proving the clone's
+  column collation is the template's own object, not a clone-local one,
+  exactly like the DOMAIN/ENUM case. Confirmed independently via
+  `pg_attribute.attcollation` → `pg_collation.collnamespace`: `probe_tpl` on
+  both sides. **Dimension #6 as originally specified only compares
+  `collation_name` (the bare string, e.g. `"custom_ci"`), never
+  `collation_schema` — so an identically-named collation object living in
+  the wrong schema would sail past it identically to how the DOMAIN gap
+  sailed past the column-type comparison.** Fixed in dimension #6 below.
+  Confirmed dormant: `grep -rl "CREATE COLLATION" priv/repo/migrations/*.exs`
+  — zero hits; every column in the real tenant schema uses Postgres's
+  built-in default collation, which needs no schema qualifier and has no
+  "wrong schema" failure mode to begin with (there is no per-database
+  DOMAIN/ENUM/COLLATION-style redirection possible for `pg_catalog`-owned
+  built-in types/collations, since `pg_catalog` is not per-schema and cannot
+  be shadowed by `search_path` the way a custom type's bare name could be —
+  this is why ordinary column comparisons never showed a false positive in
+  any of this design's probes across three rounds).
+- `information_schema.role_table_grants` (item 8's Privileges rule-out).
+  NOT a gap. Verified `pg_class.relacl` directly on both template and clone:
+  empty on both sides (no explicit ACL exists on either — the grants
+  `role_table_grants` reports are implicit owner privileges, identical by
+  construction since one Postgres role owns every schema this codebase
+  creates). Unlike the DOMAIN/collation cases, there is no schema-qualified
+  object a grant could point "at the wrong one of" — a privilege is a
+  property of the (role, relation) pair itself, not a reference to a shared
+  object another schema could still own. The existing rule-out's reasoning
+  holds exactly as stated.
+
+**Nowhere else in this design relies on an `information_schema` view for a
+property that could reference a shared, schema-qualified object living
+outside the table/column being described** — table set, generic column
+scalar comparisons (name/nullable/ordinal), and privileges each confirmed
+above to have no such indirection. Every OTHER dimension in this design
+(#3 constraints, #4 indexes, #5 sequences, #9 reloptions, #10 attstattarget,
+#11 pg_statistic_ext) was already built directly against `pg_catalog`
+(`pg_constraint`, `pg_indexes`/`pg_index`, `pg_get_serial_sequence`,
+`pg_class.reloptions`, `pg_attribute.attstattarget`,
+`pg_statistic_ext`/`pg_get_statisticsobjdef`), never through an
+`information_schema` intermediary, so none of those was at risk of this
+specific failure mode — the risk was narrowly confined to the two
+`information_schema.columns` fields (base column type resolution, bare
+collation name) this rework corrects.
+
+**THE FIX — column type and collation schema, added to §3.2 as new
+dimension #13** (see §3.2 for the exact specification). **What the CLONE
+MECHANISM (§2.3) must do about it, stated plainly per the coordinator's
+ask:** nothing, today — no `CREATE DOMAIN`/`CREATE TYPE`/`CREATE COLLATION`
+exists anywhere in `priv/repo/migrations/` (grepped, zero hits for either),
+so there is no clone-local type or collation object for the mechanism to
+create, and the current absence of a recreation step is correct, not an
+oversight, for exactly the same reason OQ-2 (triggers) and OQ-5
+(reloptions/attstattarget) currently need no mechanism step. This slots into
+that established pattern as **OQ-6** (§9) rather than requiring new
+mechanism machinery today: if a future migration introduces a custom
+domain, enum, or collation, dimension #13 will catch the resulting
+clone/template coupling immediately and loudly (§5's no-silent-fallback
+stance), and the mechanism would then need a new step — creating a
+clone-local `CREATE DOMAIN`/`CREATE TYPE`/`CREATE COLLATION` in the clone's
+own schema (built from the template's definition, e.g.
+`pg_get_constraintdef`-style catalog introspection for domain constraints,
+or `\dT+`-equivalent enum label enumeration) and repointing the column to
+it — symmetric in shape to §2.3 step 4's FK re-add and step 5's sequence
+recreation, but not designed in full here since nothing exists today to
+design a concrete recreation step against.
+
+**THE FIRST MINOR — index comments.** Verified directly: `COMMENT ON INDEX
+...` on a template index does not survive `LIKE ... INCLUDING ALL`
+(`obj_description` on the clone's corresponding index is `NULL` where the
+template's is populated) — dimension #8's comments sub-bullet is scoped, by
+its own text, to table/column comments only, so this was never a
+false-exhaustiveness claim, but it was an uncovered gap. Confirmed dormant
+this rework (the validator's own gate had left this unconfirmed):
+`grep -rl "COMMENT ON" priv/repo/migrations/*.exs` — zero hits of ANY kind
+(table, column, index, or constraint) anywhere in the real migration set.
+Decision: RULE OUT WITH A STATED REASON, added to dimension #8's own
+sub-bullet list below, rather than added as an active check — comments are
+purely cosmetic (no query result, constraint enforcement, or planner
+behavior depends on a comment's text, unlike every other property this
+design actively checks), and the confirmed-zero dormancy means this is a
+considered omission of the same shape as the RLS/partitioning/tablespace
+rule-out (dimension #12), not a silent one.
+
+**THE SECOND MINOR — missing `## 1.` header.** Fixed: the rework-1 edit's
+new §0.2 content had been inserted in a way that orphaned the pre-existing
+"Scope and non-goals" text with no header of its own. Restored `## 1. Scope
+and non-goals` above that content; §11's "§1 non-goals" cross-reference now
+resolves again. Purely mechanical — verified no content was lost, only the
+header line was missing (confirmed by reading the orphaned text in place
+before restoring the header, rather than reconstructing it from memory).
+
+## 1. Scope and non-goals
 
 **In scope:** how `test/support/tenant_fixture.ex`'s `provisioned_tenant!/1`
 materializes a tenant schema for tests, backed by a template-clone fast path
@@ -459,11 +616,13 @@ than name-based per §0.1 finding 2.
 
 Comparison dimensions, each normalized to strip the schema-name qualifier
 before comparing (so `"tenant_template".parent` and `"tenant_abc123...".parent`
-compare equal on structure) — twelve dimensions, this is the full enumerated
-list the dispatch asked for, not "and anything else." (Grown from eight to
-twelve in rework 1, per §0.2's systematic catalog walk — dimensions #9-#12
-are new; #3 and item 8's triggers sub-bullet were corrected, not just
-supplemented, per §0.2 findings 1 and 7.)
+compare equal on structure) — thirteen dimensions, this is the full
+enumerated list the dispatch asked for, not "and anything else." (Grown from
+eight to twelve in rework 1, per §0.2's systematic catalog walk — dimensions
+#9-#12 were new there, #3 and item 8's triggers sub-bullet were corrected,
+not just supplemented, per §0.2 findings 1 and 7. Grown from twelve to
+thirteen in rework 2, per §0.3 — dimension #13 is new, item 8's comments and
+collations sub-bullets were corrected/extended, per §0.3's findings.)
 
 1. **Table set** — `information_schema.tables` table names, set-equal, both
    directions. (Reuses `TenantFixture`'s existing table-enumeration query
@@ -588,18 +747,50 @@ supplemented, per §0.2 findings 1 and 7.)
      this check would then need a real trigger-recreation step symmetric to
      §2.3 step 4's FK handling — flagged as Open Question OQ-2 below rather
      than silently assumed safe forever.
-   - *Comments* (`obj_description`/`col_description`): no migration in this
-     codebase issues `COMMENT ON` (grepped, no hits), and `INCLUDING ALL`'s
-     `INCLUDING COMMENTS` component would copy them if present — the parity
-     check compares comment text (schema-normalized) per table/column as a
-     cheap symmetric check; expected to be `NULL`/`NULL` on both sides today,
-     which the check still asserts equal (not skipped) so a future
-     migration adding a comment is covered for free.
-   - *Collations*: `information_schema.columns.collation_name` compared
-     per column as part of check #2 (folded in, not a separate pass) —
-     Postgres copies column collation under plain `LIKE` already (it is a
-     column-type property, not an `INCLUDING` option), so this is
-     expected-equal by construction; asserted rather than assumed.
+   - *Comments — table/column* (`obj_description`/`col_description`): no
+     migration in this codebase issues `COMMENT ON` of any kind (grepped,
+     no hits, re-confirmed rework 2), and `INCLUDING ALL`'s
+     `INCLUDING COMMENTS` component would copy table/column comments if
+     present — the parity check compares comment text (schema-normalized)
+     per table/column as a cheap symmetric check; expected to be
+     `NULL`/`NULL` on both sides today, which the check still asserts equal
+     (not skipped) so a future migration adding a table/column comment is
+     covered for free.
+   - *Comments — indexes and constraints* (added rework 2, per
+     CODE-DESIGN-VALIDATOR's MINOR finding): `COMMENT ON INDEX`/
+     `COMMENT ON CONSTRAINT` are a DIFFERENT case from table/column
+     comments — verified directly this rework that `LIKE ... INCLUDING ALL`
+     does NOT carry an index's own comment to its clone (`obj_description`
+     on the clone's corresponding index came back `NULL` where the
+     template's showed real text), while a constraint's comment DOES survive
+     (checked as a control, verified identical on both sides). Explicitly
+     OUT of this check's active scope, ruled out rather than silently
+     omitted: confirmed fully dormant this rework (`grep -rl "COMMENT ON"
+     priv/repo/migrations/*.exs` — zero hits of any kind, table/column/
+     index/constraint alike, across every migration), and comments are
+     purely cosmetic — no query result, constraint enforcement, or planner
+     behavior depends on a comment's text, unlike every other property this
+     design actively checks. If a future migration adds `COMMENT ON INDEX`,
+     this is a currently-known, currently-accepted gap (not silently
+     reintroduced) rather than a promise to catch it.
+   - *Collations — bare name only, see dimension #13 for the schema this
+     bullet alone does NOT cover*: `information_schema.columns.collation_name`
+     compared per column as part of check #2 (folded in, not a separate
+     pass). **CORRECTED rework 2** — the previous claim here ("Postgres
+     copies column collation under plain `LIKE` already ... so this is
+     expected-equal by construction") was true only for Postgres's own
+     built-in, `pg_catalog`-owned default collation, and was WRONG as a
+     general claim: verified directly this rework that a column using a
+     CUSTOM (non-default) collation clones with its true collation object
+     still schema-qualified to the TEMPLATE, identically to the DOMAIN/ENUM
+     column-type finding below — `collation_name` alone (a bare string) does
+     not reveal this, because the name itself is identical on both sides;
+     only `collation_schema` (a separate `information_schema.columns` field
+     this bullet never compared) shows the true, template-pointing
+     namespace. This bullet's comparison of bare `collation_name` remains in
+     the check (still meaningful — it would catch a wrong DEFAULT
+     collation), but is no longer claimed sufficient on its own; dimension
+     #13 is what actually closes this gap.
    - *Privileges* (`information_schema.role_table_grants` / `has_table_privilege`):
      explicitly OUT of this check's scope, with a stated reason rather than
      a silent omission — `CREATE SCHEMA`/`CREATE TABLE` in this codebase's
@@ -696,6 +887,47 @@ supplemented, per §0.2 findings 1 and 7.)
     that current set — not included as an active check, listed here so a
     reader can see they were considered rather than missed.
 
+13. **Column type and collation NAMESPACE — not just name/rendering** —
+    REWORK 2 ADDITION, the fix for CODE-DESIGN-VALIDATOR's MAJOR finding and
+    the collation-schema gap §0.3 found alongside it while re-examining the
+    same method. For every column, in addition to dimension #2's
+    name/data-type/nullable/default comparison: resolve the column's TRUE
+    type via `pg_attribute.atttypid` joined through `pg_type` to
+    `pg_type.typnamespace::regnamespace`, and its TRUE collation (when
+    non-default, i.e. `pg_attribute.attcollation <> 0`) via
+    `pg_attribute.attcollation` joined through `pg_collation` to
+    `pg_collation.collnamespace::regnamespace`. Assert, per column: (a) if
+    the type/collation is a Postgres built-in (`typnamespace`/`collnamespace`
+    resolves to `pg_catalog`), both sides must show `pg_catalog` — this
+    covers the overwhelming majority of columns today, is expected-equal by
+    construction, and is asserted rather than assumed, matching this
+    design's established pattern; (b) if the type/collation is
+    **schema-qualified to anything other than `pg_catalog`**, its namespace
+    on the CANDIDATE side must equal the candidate's OWN schema, never the
+    reference schema's — the direct, mechanical test for the DOMAIN/ENUM/
+    custom-collation coupling this section exists to close, symmetric in
+    shape to dimension #5's sequence-namespace assertion (`pg_get_serial_sequence`'s
+    result must live in the candidate's own schema, never the reference's).
+    `format_type(atttypid, atttypmod)` (schema-qualifier-normalized, per
+    §3.3's general technique) is used for the human-readable diff message on
+    failure, but the actual pass/fail assertion is the structural
+    `typnamespace`/`collnamespace` comparison above, not string matching on
+    `format_type`'s rendered output — the same "structural, not name/string
+    based" discipline dimension #4 (indexes) already established, applied
+    here to a different catalog. **Currently a defaults-only assertion**:
+    grepped `priv/repo/migrations/` for `CREATE TYPE`, `CREATE DOMAIN`, and
+    `CREATE COLLATION` — zero hits for all three, confirmed rework 2 — so
+    every column in the real tenant schema today resolves to a
+    `pg_catalog`-owned built-in type and the default (`pg_catalog`-owned)
+    collation, meaning branch (a) is what actually fires today and branch
+    (b) is exercised only by this design's own probes, not by the real
+    schema. Same "live check, currently-default operands" soundness class
+    the validator already accepted for dimensions #9-#11 — not a
+    theoretical check that does nothing, a real one whose current inputs
+    happen to be at their default. See OQ-6 (§9) for what the CLONE MECHANISM
+    (§2.3) does NOT yet do about a future non-default case, and why that is
+    the correct current state rather than a gap.
+
 ### 3.3 Comparison mechanics (structural, not name-based)
 
 Every dimension above that compares strings containing a schema name (FK
@@ -718,7 +950,7 @@ test code:
    `replay_migrations/2` production path (a genuine migration-built
    reference), then calls
    `assert_clone_parity!("tenant_template", <that reference schema>)`
-   restricted to dimensions #1-6 and #8-#12 (NOT #7, since a fresh
+   restricted to dimensions #1-6 and #8-#13 (NOT #7, since a fresh
    `replay_migrations/2` call and the template's own build both seed
    `event_type_registry` identically by construction, but row-for-row
    `event_type_registry` equality is still a meaningful assertion and IS
@@ -732,7 +964,7 @@ test code:
    (`test/support/tenant_template_test.exs`, TEST-DESIGNER's artefact) that
    clones a throwaway tenant and calls
    `assert_clone_parity!("tenant_template", <clone's own schema_name>)`
-   across ALL twelve dimensions #1-12. This is the test that stays green build after
+   across ALL thirteen dimensions #1-13. This is the test that stays green build after
    build and is what "constraint parity must be ASSERTED, not assumed" (the
    issue's own words) cashes out to as an actual, permanent, always-run
    regression test — not a one-time manual check this design doc merely
@@ -1027,6 +1259,28 @@ explicitly rather than silently assumed resolvable.
   template's own `pg_attribute.attstattarget`. Not designed here since
   nothing exists today to design a concrete recreation step against — same
   posture as OQ-2's triggers gap, and named explicitly for the same reason.
+- **OQ-6 (added rework 2).** §3.2 dimension #13 (column type/collation
+  namespace) is, like OQ-5's dimensions, currently a defaults-only
+  assertion: no `CREATE TYPE`/`CREATE DOMAIN`/`CREATE COLLATION` exists in
+  any tenant-scoped migration today (grepped, zero hits for all three), so
+  §2.3's clone mechanism has no corresponding recreation step. If a future
+  migration introduces a custom domain, enum, or collation, dimension #13
+  will catch the resulting clone/template type-object coupling immediately
+  and loudly (§5's no-silent-fallback stance — and per §0.3, this is a more
+  severe failure mode than OQ-5's if left uncaught: dropping the template
+  schema can cascade into and destroy a clone's own columns, not merely
+  leave a stale/coupled default value as the sequence trap did before it was
+  fixed). The mechanism would then need a new step symmetric to §2.3 step
+  4's FK re-add and step 5's sequence recreation: create a clone-local
+  `DOMAIN`/`TYPE`/`COLLATION` object (built from the template's own
+  definition — e.g. `pg_get_constraintdef`-style introspection of a domain's
+  CHECK constraints, or enumerating an enum's labels via `pg_enum`, or the
+  collation's `pg_collation` provider/locale/deterministic settings) in the
+  clone's own schema, then repoint the affected column(s) to it before or
+  as part of the `LIKE` step. Not designed here since nothing exists today
+  to design a concrete recreation step against — same posture as OQ-2 and
+  OQ-5, and named explicitly for the same reason, per §0.3's own statement
+  of what the clone mechanism does (nothing, correctly) about this today.
 
 ## 10. Expected speedup — stated honestly
 

@@ -35,9 +35,9 @@ description: >
   looking.
 affected_files:
   - test/letflow/definitions/promotion_assertion_rerun_test.exs
-  - test/letflow/service_catalog_reaper_test.exs
+  - test/support/service_catalog_reaper_test.exs
   - test/letflow/service_catalog_test.exs
-  - test/letflow/tenant_schema_reaper_test.exs
+  - test/support/tenant_schema_reaper_test.exs
 related: []
 queue_task_id: 458
 github_issue: 882

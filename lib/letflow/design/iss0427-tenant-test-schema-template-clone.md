@@ -194,7 +194,12 @@ Findings, numbered for cross-reference from §3.2:
 7. **Constraint triggers (`contype='t'`) are real and are NOT copied** —
    see §3.2 dimension #3's own REWORK NOTE for the full finding and the
    correction it makes to this design's own prior (wrong) claim about how
-   constraint triggers are created.
+   constraint triggers are created. **REWORK 3 UPDATE: this finding's own
+   dormancy claim generalized too far** — confirming no CONSTRAINT trigger
+   exists does not mean no trigger of any kind exists. See §0.4: five real,
+   plain (non-constraint) triggers exist today and were missed by every
+   pass up to and including this one, caught only when ELIXIR-DEV queried a
+   real built template directly during implementation.
 
 This pass covered `pg_class`, `pg_constraint`, `pg_attribute`, `pg_trigger`,
 `pg_statistic_ext`, and `information_schema.columns` — the six catalogs
@@ -363,6 +368,151 @@ and non-goals` above that content; §11's "§1 non-goals" cross-reference now
 resolves again. Purely mechanical — verified no content was lost, only the
 header line was missing (confirmed by reading the orphaned text in place
 before restoring the header, rather than reconstructing it from memory).
+
+### 0.4 Rework 3 — the trigger-dormancy premise was false, live security-relevant surface, plus two mechanism corrections and a full dormancy re-audit
+
+ELIXIR-DEV reached Step 3 (implementation), built the mechanism per this
+design, and — while running the parity check against a real, freshly-built
+template — found `pg_trigger` returned 5, not 0, directly contradicting this
+design's own repeated, re-verified claim that no tenant-scoped migration
+creates a trigger. This is the most severe finding of any rework so far:
+unlike the DOMAIN/ENUM/collation gap (rework 2, dormant, zero current
+migrations), this is LIVE, CURRENT surface, and the property it protects
+(audit-log and artifact-repository immutability) is a security guarantee,
+not a structural nicety. Had this shipped uncorrected, dimension #8 as
+originally specified (count-equal-to-zero) would have PASSED every clone
+while silently omitting all five triggers — the exact silent-degradation
+failure mode ISS-0427 exists to prevent, now demonstrated as a real defect
+this design would have shipped, not merely a hypothetical this design failed
+to anticipate.
+
+**The five real triggers, backing three real functions, confirmed by
+reading the migration source directly:**
+
+| Migration | Function (schema-qualified at apply time) | Trigger | Event |
+|---|---|---|---|
+| `20260830020001_create_audit_entries_tenant_scoped.exs` | `audit_entries_immutable()` | `audit_entries_no_update` | BEFORE UPDATE ON `audit_entries` |
+| `20260830020001_create_audit_entries_tenant_scoped.exs` | `audit_entries_immutable()` | `audit_entries_no_delete` | BEFORE DELETE ON `audit_entries` |
+| `20260830030001_create_repository_artifacts.exs` | `repository_artifacts_immutable()` | `repository_artifacts_no_update` | BEFORE UPDATE ON `repository_artifacts` |
+| `20260830030001_create_repository_artifacts.exs` | `repository_artifacts_immutable()` | `repository_artifacts_no_delete` | BEFORE DELETE ON `repository_artifacts` |
+| `20260830030001_create_repository_artifacts.exs` | `artifact_versions_immutable()` | `artifact_versions_no_update` | BEFORE UPDATE ON `artifact_versions` |
+
+Each function is a fixed `plpgsql` body (`RAISE EXCEPTION '<table> is
+immutable'`) created fresh, per-tenant-schema, inside its own migration's
+`execute/1` block with the schema name interpolated at apply time (Decision
+0003-B's physical-isolation model — no shared `public`-schema function to
+reference across schemas). Independently re-verified against a real,
+freshly-built template this rework (not inherited from ELIXIR-DEV's report):
+built `probe_tpl.audit_entries` with an equivalent function/trigger pair,
+confirmed `pg_get_functiondef`/`pg_get_triggerdef` both emit text literally
+qualified to the source schema
+(`CREATE OR REPLACE FUNCTION probe_tpl.audit_entries_immutable() ...`,
+`... EXECUTE FUNCTION probe_tpl.audit_entries_immutable()`), confirmed a
+`LIKE ... INCLUDING ALL` clone gets zero triggers (`pg_trigger` count 0),
+then built and verified the fix end-to-end: created the function in the
+clone schema via `pg_get_functiondef` with the schema qualifier textually
+substituted, then the two triggers via `pg_get_triggerdef` with the same
+substitution, confirmed the clone's function is a genuinely distinct object
+(different OID, `pg_proc`/`pg_namespace` confirms `probe_clone` ownership),
+confirmed the immutability guarantee fires against the clone
+(`UPDATE ... SET val='y'` on the clone raised `ERROR: audit_entries is
+immutable` from the CLONE's own function), and — checked specifically
+because §0.3's DOMAIN/ENUM finding showed a superficially similar mechanism
+can still leave a live coupling — confirmed the clone remains fully
+functional after the TEMPLATE schema is dropped entirely (`DROP SCHEMA
+probe_tpl CASCADE`, then `UPDATE` against the clone still raised the
+expected exception from the clone's own function). This last check is the
+one that distinguishes this fix from the DOMAIN/ENUM case: a function or
+trigger created via `CREATE OR REPLACE FUNCTION`/`CREATE TRIGGER` in a
+different schema is, by Postgres construction, a wholly new, independent
+object with its own OID — not a shared reference the way a column's
+`atttypid`/`attcollation` slot is, so once the schema-qualifier rewrite is
+applied and the object is (re)created in the clone's own schema, there is
+no residual coupling left to find, unlike domains/enums/collations, which
+this section's step 6 does NOT attempt to fix (that remains OQ-6's deferred,
+still-dormant case). All probe schemas from this check dropped clone-before-
+template and confirmed gone (`SELECT nspname FROM pg_namespace WHERE
+nspname LIKE 'probe%'` — 0 rows) before this document was written.
+
+The fix — a new mechanism step (§2.3 step 6) and a corrected, non-vacuous
+dimension #8 (§3.2 item 8) — is specified in full at each of those
+locations; this section does not duplicate the specification, only the
+verification trail.
+
+**Point 3 — the full dormancy re-audit, per the coordinator's explicit
+instruction to re-run every remaining claim, not just patch the one found
+instance.** Every dormancy claim in this document was re-checked THIS
+rework, by TWO independent methods where a real template made both
+possible: (1) a wide, case-insensitive grep against
+`priv/repo/migrations/*.exs` source (not narrowly anchored to the exact
+phrasing a prior pass used — the trigger miss happened partly because
+earlier greps were anchored to `execute("CREATE TRIGGER"` -style literal
+patterns rather than a broad `CREATE TRIGGER` scan, per the coordinator's
+own suspicion, and (1) below uses the broad form throughout), and (2) where
+applicable, a direct catalog query against a real template built by
+`ensure_template!/0`'s own mechanism (the same real template ELIXIR-DEV
+built during implementation surfaced the trigger gap in the first place —
+catalog ground truth, not migration-source inference, is what actually
+caught it, so it is what this re-audit leans on wherever practical):
+
+| Claim | How checked this rework | Result |
+|---|---|---|
+| Triggers (plain `CREATE TRIGGER`) | Wide grep: `grep -ril "CREATE TRIGGER\|CREATE CONSTRAINT TRIGGER" priv/repo/migrations/*.exs` (case-insensitive, no anchor to `execute("CREATE TRIGGER"` literal form) | **FALSE — 2 files, 5 triggers** (the finding this section documents). Confirmed live via a real probe template, per above. |
+| Constraint triggers (`CREATE CONSTRAINT TRIGGER` specifically) | Same grep as above, filtered to the `CONSTRAINT` form | Zero hits — genuinely dormant, `contype='t'` remains a true zero-vs-zero rule-out (§3.2 dimension #3's own REWORK NOTE, unaffected by this finding). |
+| Table-level storage parameters (`reloptions`/`WITH (fillfactor...)`) | Wide grep: `grep -ril "WITH (fillfactor\|WITH(fillfactor\|options:\s*\[" priv/repo/migrations/*.exs`, plus re-reading every `execute(` call in the migration tree (18 call sites total, enumerated below) for anything storage-option-shaped | Zero hits. Every `execute(` call in the tree is either a trigger/function definition (the finding above), an `ALTER TABLE ... ADD CONSTRAINT ... CHECK (...)` (already covered by dimension #3), a partial `CREATE INDEX ... WHERE ...` (already covered by dimension #4), or a one-time `DO $$ ... $$` data-migration block with no persistent structural residue (`20260819000004_drop_legacy_public_identity_tables.exs`'s legacy-table drop, `20260830000004_add_secret_ref_to_webhook_subscriptions.exs`'s secret-blanking) — none is a `reloptions`-shaped statement. Confirmed still dormant. |
+| Per-column statistics target (`SET STATISTICS`) | Wide grep: `grep -ril "SET STATISTICS" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant. |
+| Extended statistics objects (`CREATE STATISTICS`) | Wide grep: `grep -ril "CREATE STATISTICS" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant. |
+| Custom types/domains (`CREATE TYPE`/`CREATE DOMAIN`) | Wide grep: `grep -ril "CREATE TYPE\|CREATE DOMAIN" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (OQ-6 remains correctly deferred). |
+| Custom collations (`CREATE COLLATION`) | Wide grep: `grep -ril "CREATE COLLATION" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (OQ-6 remains correctly deferred). |
+| Comments of any kind (`COMMENT ON`) | Wide grep: `grep -ril "COMMENT ON" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (dimension #8's table/column and index/constraint comment rule-outs both hold). |
+| Row-level security (`ROW LEVEL SECURITY`) | Wide grep: `grep -ril "ROW LEVEL SECURITY" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (dimension #12 rule-out holds). |
+| Partitioning (`PARTITION BY`) | Wide grep: `grep -ril "PARTITION BY" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (dimension #12 rule-out holds). |
+| Tablespaces (`TABLESPACE`) | Wide grep: `grep -ril "TABLESPACE" priv/repo/migrations/*.exs` | Zero hits. Confirmed still dormant (dimension #12 rule-out holds). |
+
+**Why the trigger claim was the one that broke, stated as a real answer, not
+a shrug.** Re-reading how each prior pass phrased its own trigger check: the
+original draft and rework 1 both grepped specifically for `execute("CREATE
+TRIGGER"` — a pattern anchored to the literal call shape the design's own
+prose assumed a trigger-creating migration would use, which happens to be
+exactly the call shape the real migrations do NOT use (the real migrations
+call `execute(<multi-line heredoc>, <multi-line heredoc>)`, a two-argument
+`execute/2`-shaped call with the SQL as a separate heredoc argument, not a
+single-line `execute("CREATE TRIGGER ...")` string the anchored pattern
+would match). This is precisely the coordinator's own suspicion, confirmed:
+the earlier greps were "too narrow," not "not run" — they were run, against
+a pattern that could not have matched the real migrations' actual call
+shape even when the offending content was already present in the tree. The
+wide `CREATE TRIGGER` scan used throughout this section's re-audit (and now
+specified as the standing grep form in §3.2 item 8's corrected sub-bullet)
+does not have this blind spot: it matches the SQL keyword itself, regardless
+of which Elixir call shape carries it.
+
+Two further, smaller corrections from ELIXIR-DEV's same handoff, folded
+into the design text at their own locations (not merely narrated here):
+
+- **§4.3's advisory-lock pattern, as literally written, does not work** —
+  `Ecto.Migrator.run/4` (called by the template build, whether via the real
+  `replay_migrations/2` per OQ-1 option (b), which ELIXIR-DEV adopted, or a
+  direct call per option (a)) checks out its OWN Postgres connection rather
+  than participating in an ambient `Repo.transaction`'s connection, so a
+  transaction-scoped `pg_advisory_xact_lock` plus `CREATE SCHEMA` issued
+  inside that same transaction is invisible to the migrator, reproducibly
+  (`Postgrex.Error` 3F000, "schema does not exist"). Corrected in §4.3
+  below to a session-level `pg_advisory_lock`/`pg_advisory_unlock` pair, not
+  wrapped in a `Repo.transaction`, matching `SandboxPool.provision_sandbox/2`'s
+  own already-established sequential pattern — scoped to `ensure_template!/0`
+  only; `clone_tenant_schema!/1` (which never calls `replay_migrations/2`)
+  is unaffected and still uses one `Repo.transaction` exactly as §2.3
+  specifies.
+- **Dimension #2's raw `ordinal_position` comparison false-fails on any
+  table with a dropped column** — REQ-064's ten `tenant_id`-drop migrations
+  leave a permanent ordinal gap in the TEMPLATE (e.g. `instance_projections`,
+  `users`) that `LIKE ... INCLUDING ALL` does not preserve in the clone
+  (Postgres renumbers a `LIKE`-built table's columns to consecutive
+  positions regardless of the source's own drop history) — a benign,
+  expected difference dimension #2 was never meant to catch. Corrected in
+  §3.2 dimension #2 below to compare each side's own RELATIVE column order
+  (re-ranked 1..N) rather than the raw absolute integer.
 
 ## 1. Scope and non-goals
 
@@ -549,7 +699,88 @@ inherits those rows as ordinary table data (§2.3 step 6).
    default (1) — tests must not depend on a specific starting sequence
    value carried over from the template (an explicit invariant; see §8
    INV-3).
-6. **Seed-data copy.** `INSERT INTO "<clone_schema>".event_type_registry
+6. **Trigger and trigger-function re-add — REWORK 3 ADDITION, mandatory, not
+   optional.** ELIXIR-DEV's rework-3 blocker found this design's own
+   dormancy claim false: `priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs`
+   and `priv/repo/migrations/20260830030001_create_repository_artifacts.exs`
+   each install real, currently-live triggers enforcing audit-log and
+   artifact IMMUTABILITY — a security property, not a cosmetic one. Five
+   triggers exist today: `audit_entries_no_update`, `audit_entries_no_delete`
+   (both `EXECUTE FUNCTION "<schema>".audit_entries_immutable()`),
+   `repository_artifacts_no_update`, `repository_artifacts_no_delete` (both
+   `EXECUTE FUNCTION "<schema>".repository_artifacts_immutable()`), and
+   `artifact_versions_no_update` (`EXECUTE FUNCTION
+   "<schema>".artifact_versions_immutable()`) — backed by three per-schema
+   `plpgsql` functions, each created fresh inside its own migration's
+   `execute/1` block with the schema name interpolated at migration-apply
+   time (so every tenant schema, including the template, gets its own copy
+   of each function — no shared `public`-schema function exists to
+   reference across schemas, per Decision 0003-B). `LIKE ... INCLUDING ALL`
+   does NOT copy triggers (a documented Postgres exception, already
+   established in §0.2/§0.3 for the general case; independently
+   re-confirmed for these five specific triggers this rework — see §0.4).
+   This is the SAME qualifier-rewrite hazard class already solved for FKs
+   (§0.1 finding 1) and sequences (§0.1 findings 3-4): both
+   `pg_get_functiondef(oid)` and `pg_get_triggerdef(oid)` emit text
+   literally qualified to the TEMPLATE schema (`CREATE OR REPLACE FUNCTION
+   "tenant_template".audit_entries_immutable() ...`,
+   `... EXECUTE FUNCTION "tenant_template".audit_entries_immutable()`),
+   verified directly this rework (§0.4) — so, exactly as with FK re-add, the
+   template's own qualifier must be textually replaced with the clone's
+   before executing either statement, or the clone's trigger would silently
+   invoke the TEMPLATE's function object rather than a clone-local one
+   (which, unlike the DOMAIN/ENUM/collation coupling §0.3 found, would not
+   even survive the template being dropped — the function-call target would
+   simply fail to resolve). Concretely, in order, per table (walked over
+   `expected_tenant_tables/0`, same stable order as step 3):
+   1. Discover this table's own triggers and their backing functions:
+      `SELECT DISTINCT t.tgname, t.tgfoid::regprocedure, p.oid AS func_oid
+      FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid WHERE t.tgrelid =
+      '"tenant_template"."<table>"'::regclass AND NOT t.tgisinternal` — the
+      `NOT tgisinternal` guard excludes Postgres-internal triggers (e.g. the
+      FK-enforcement `RI_ConstraintTrigger_*` triggers §0.2 finding 7
+      already documented as a DIFFERENT, unrelated `pg_trigger` population;
+      those are recreated for free as a side effect of step 4's FK re-add,
+      not by this step, and must not be double-counted or double-created
+      here).
+   2. For each DISTINCT function OID found (a function backing more than one
+      trigger, as none currently do but a future migration could, must be
+      created exactly once): `pg_get_functiondef(func_oid)`, with the
+      template schema's qualifier textually replaced by the clone's
+      (`replace(def, '"tenant_template".', '"<clone_schema>".')` — the exact
+      technique already proven for FK definitions, applied to a different
+      catalog function), executed as-is (`CREATE OR REPLACE FUNCTION` is
+      itself the statement `pg_get_functiondef` returns, so no separate
+      `CREATE`/`ALTER` split is needed).
+   3. For each trigger found: `pg_get_triggerdef(oid)`, same qualifier
+      substitution, executed as-is. Functions MUST be created before the
+      triggers that reference them (step 2 before step 3, per table, or
+      more simply: all functions across all tables before any trigger,
+      since a trigger's `EXECUTE FUNCTION` clause is resolved at
+      `CREATE TRIGGER` time) — sequencing this correctly is the
+      implementer's responsibility, not left ambiguous: do all of step 2 for
+      every table first, then all of step 3 for every table.
+
+   Verified end-to-end this rework (§0.4): a clone built this way has its
+   own, genuinely independent copy of each function (confirmed via
+   `pg_proc`/`pg_namespace` — a distinct OID, not the template's), its
+   triggers correctly repointed at the clone-local function (confirmed via
+   `pg_get_triggerdef` on the clone showing the clone's own schema
+   throughout), the immutability guarantee actually firing against the
+   clone (`UPDATE`/`DELETE` against the clone's own table raises the
+   expected exception), and — checked specifically because the DOMAIN/ENUM
+   case (§0.3) showed a superficially similar mechanism can still leave a
+   live coupling — the clone remains fully functional after the TEMPLATE
+   schema is dropped entirely, unlike the domain/enum/collation hazard
+   class. This is expected and explained by a real Postgres distinction, not
+   asserted by analogy: a function or trigger created via `CREATE OR REPLACE
+   FUNCTION`/`CREATE TRIGGER` in a different schema is, by construction, a
+   wholly new, independent catalog object with its own OID — unlike a
+   `DOMAIN`/`TYPE`/`COLLATION` referenced by a column's type/collation
+   slot, which (absent an explicit `CREATE DOMAIN`/`CREATE TYPE`/
+   `CREATE COLLATION` step of its own, which this step IS performing via
+   `pg_get_functiondef`) would otherwise still point at the source object.
+7. **Seed-data copy.** `INSERT INTO "<clone_schema>".event_type_registry
    SELECT * FROM "tenant_template".event_type_registry` — the one table
    whose *data*, not just structure, must be present for the clone to
    behave like a `replay_migrations/2`-provisioned schema (per §0's
@@ -557,14 +788,25 @@ inherits those rows as ordinary table data (§2.3 step 6).
    copied — every other tenant-scoped table starts empty in both the
    migration-replay path and the clone path, so this is not a special case
    invented for cloning, it is preserving what replay already does.
-7. `INSERT INTO "<clone_schema>".schema_migrations SELECT * FROM
+8. **`schema_migrations` structure, then data — REWORK 3 CORRECTION.**
+   ELIXIR-DEV's rework-3 handoff found this step's prose assumed the clone's
+   own `schema_migrations` table already existed when the row-copy ran; it
+   does not — `expected_tenant_tables/0` deliberately excludes
+   `schema_migrations` (it is the migrator's own bookkeeping, not a
+   tenant-scoped application table), so step 3's per-table `LIKE` loop never
+   creates it. Corrected, now two sub-steps where the design previously
+   stated only the second: (a) `CREATE TABLE "<clone_schema>".schema_migrations
+   (LIKE "tenant_template".schema_migrations INCLUDING ALL)` — the same
+   `LIKE` mechanism used for every other table, applied explicitly to this
+   one rather than left implicit; (b) `INSERT INTO
+   "<clone_schema>".schema_migrations SELECT * FROM
    "tenant_template".schema_migrations` — so a clone's `schema_migrations`
    table reports the same applied-version set a real replay would have
    recorded. This matters because `assert_schema_complete!/2`'s check #3
    (§ existing code, `versions_missing`) queries exactly this table; without
-   this copy, a clone would look under-migrated to that existing oracle even
-   though it is not.
-8. Insert the caller's `Registration` row exactly as
+   both (a) and (b), a clone would either fail outright (undefined table) or
+   look under-migrated to that existing oracle even though it is not.
+9. Insert the caller's `Registration` row exactly as
    `provision_tenant_schema/1` would have (a plain `Repo.insert!/1` on
    `TenantProvisioning.Registration`, not a call to
    `provision_tenant_schema/1` itself — because that function issues its own
@@ -575,15 +817,18 @@ inherits those rows as ordinary table data (§2.3 step 6).
    what `replay_migrations/2`'s own `mark_migrations_applied/1` does.
 
 Every identifier interpolated into raw SQL above (`clone_schema`, `table`,
-`column`, `conname`, `seq`) is either a compile-time-known table/column name
-from `expected_tenant_tables/0` (a fixed, hand-maintained list, not
+`column`, `conname`, `seq`, and — added rework 3 — the trigger/function
+names and full definition text step 6 reads back via `pg_get_functiondef`/
+`pg_get_triggerdef`) is either a compile-time-known table/column name from
+`expected_tenant_tables/0` (a fixed, hand-maintained list, not
 caller/attacker input) or the output of
 `TenantProvisioning.schema_name_for_tenant/1` (constrained to
 `tenant_[0-9a-f]{32}` by construction, the same invariant
-`provision_tenant_schema/1` itself already relies on) or a name read back
-from Postgres's own catalog (`pg_constraint`/`pg_get_serial_sequence`,
-which by definition can only contain names Postgres itself already accepted
-as valid identifiers when the template was built by this codebase's own
+`provision_tenant_schema/1` itself already relies on) or a name/definition
+read back from Postgres's own catalog (`pg_constraint`/
+`pg_get_serial_sequence`/`pg_get_functiondef`/`pg_get_triggerdef`, which by
+definition can only contain names and DDL text Postgres itself already
+accepted as valid when the template was built by this codebase's own
 migrations) — never a value threaded through from an external/test-supplied
 string. No new identifier-injection surface is introduced beyond what
 `provision_tenant_schema/1` already accepts as safe today.
@@ -622,7 +867,11 @@ eight to twelve in rework 1, per §0.2's systematic catalog walk — dimensions
 #9-#12 were new there, #3 and item 8's triggers sub-bullet were corrected,
 not just supplemented, per §0.2 findings 1 and 7. Grown from twelve to
 thirteen in rework 2, per §0.3 — dimension #13 is new, item 8's comments and
-collations sub-bullets were corrected/extended, per §0.3's findings.)
+collations sub-bullets were corrected/extended, per §0.3's findings. Held at
+thirteen in rework 3, but two of the thirteen were themselves CORRECTED, not
+just extended — dimension #2's column-order comparison and item 8's triggers
+sub-bullet both stated false premises before this rework; see §0.4 for the
+full finding and the fix each now specifies.)
 
 1. **Table set** — `information_schema.tables` table names, set-equal, both
    directions. (Reuses `TenantFixture`'s existing table-enumeration query
@@ -630,8 +879,22 @@ collations sub-bullets were corrected/extended, per §0.3's findings.)
 2. **Columns** — per table: name, data type, `is_nullable`,
    `column_default` (schema-qualifier-normalized — a
    `nextval('"<schema>"."x_seq"')` default must match after substituting
-   each side's own schema name), ordinal position. Source:
-   `information_schema.columns`.
+   each side's own schema name), and column ORDER. Source:
+   `information_schema.columns`. **CORRECTED rework 3** (ELIXIR-DEV finding,
+   confirmed against the real schema): column order must be compared as each
+   side's own RELATIVE rank (re-rank both sides' `ordinal_position` values to
+   a dense `1..N` sequence before comparing), never the raw absolute
+   `ordinal_position` integer. REQ-064's ten `tenant_id`-drop migrations
+   leave a permanent gap in the TEMPLATE's own `ordinal_position` sequence
+   (e.g. `instance_projections`, `users` both have a dropped column at a
+   mid-table position) that `LIKE ... INCLUDING ALL` does not reproduce in
+   the clone — Postgres renumbers a `LIKE`-built table's columns to
+   consecutive positions regardless of the source table's own drop history,
+   confirmed directly. Comparing raw `ordinal_position` therefore false-fails
+   on every such table despite every live column's relative order and every
+   other property being genuinely identical; comparing relative rank is the
+   correct fix, not a weakening — it still catches a real reordering, just
+   not the artifact of a dropped column's now-absent slot.
 3. **Constraint kinds and definitions** — `pg_constraint` grouped by
    `contype` over the **full six-member set Postgres actually defines**:
    `c` check, `f` foreign key, `p` primary key, `u` unique, `x` exclusion,
@@ -678,14 +941,26 @@ collations sub-bullets were corrected/extended, per §0.3's findings.)
    `INCLUDING ALL` exception (§3.2 item 8's triggers sub-bullet already
    states this correctly for plain triggers; it now applies identically to
    constraint triggers, for the same reason and via the same mechanism).
-   `grep`-verified again this rework: no migration under `priv/repo/migrations/`
-   contains `CREATE TRIGGER` or `CREATE CONSTRAINT TRIGGER` in any `execute/1`
-   call. So: `contype = 't'` is folded into the same count-equal-to-zero
-   assertion §3.2 item 8 already makes for triggers generally (not a new,
-   separate check) — it is genuinely the same property (a trigger-backed
-   constraint is still a trigger, absent from every current migration, not
-   copied by `LIKE`), correctly ruled in-scope-but-currently-zero rather than
-   silently omitted.
+   `grep`-verified again this rework (rework 1): no migration under
+   `priv/repo/migrations/` contains `CREATE CONSTRAINT TRIGGER` specifically
+   — that half of this claim still holds, re-confirmed again in rework 3
+   (§0.4). **THE OTHER HALF OF THIS CLAIM WAS FALSE, found in rework 3, not
+   here:** plain `CREATE TRIGGER` (without the `CONSTRAINT` keyword) DOES
+   appear in `priv/repo/migrations/` — five real triggers across two
+   migrations (`20260830020001`, `20260830030001`), installing real
+   audit-log and artifact-repository immutability enforcement. See §0.4 for
+   the full finding and §3.2 item 8's own REWORK 3 CORRECTION for the fix.
+   So: `contype = 't'` (constraint triggers specifically) remains a genuine
+   zero-vs-zero rule-out, confirmed dormant as stated — but `pg_trigger`
+   generally (plain triggers, dimension #8) is NOT dormant, and this design
+   incorrectly generalized "no constraint trigger" into "no trigger of any
+   kind," which is the exact false premise ELIXIR-DEV's blocker corrected.
+   The lesson, stated plainly rather than left implicit: confirming one
+   narrow case (constraint triggers via the `CONSTRAINT` keyword) is not the
+   same as confirming the broader category (triggers in general) — this
+   design conflated the two here, across three passes and two validator
+   gates, before an implementer actually querying a real built template
+   caught it.
 4. **Indexes** — `pg_indexes.indexdef`, schema-qualifier-normalized, compared
    as a **multiset of normalized definitions per table**, explicitly NOT by
    `indexname` (§0.1 finding 2 — verified empirically that `LIKE INCLUDING
@@ -730,23 +1005,57 @@ collations sub-bullets were corrected/extended, per §0.3's findings.)
 8. **Privileges, comments, triggers, collations — explicitly checked and
    found not-applicable, not skipped by omission** (the dispatch's own
    instruction: enumerate and say how each is verified, not hand-wave):
-   - *Triggers, including constraint triggers*: `pg_trigger` queried for both
-     schemas (this single query covers plain triggers AND constraint
-     triggers — a constraint trigger is still a `pg_trigger` row, additionally
-     represented by a `contype='t'` `pg_constraint` row per dimension #3
-     above); the real tenant schema has zero triggers of either kind today
-     (grepped `priv/repo/migrations/` for `CREATE TRIGGER` and
-     `CREATE CONSTRAINT TRIGGER` inside any `execute/1` call — no hits, both
-     re-verified this rework), so this check asserts
-     **count-equal-to-zero on both sides**, not skipped — if a future
-     migration adds either kind, `LIKE INCLUDING ALL` does NOT copy it
-     (Postgres documents `INCLUDING ALL` as covering
-     comments/constraints/defaults/identity/indexes/statistics/storage —
-     triggers are a **documented exception**, verified directly this rework
-     for both plain and constraint triggers, not merely untested here), so
-     this check would then need a real trigger-recreation step symmetric to
-     §2.3 step 4's FK handling — flagged as Open Question OQ-2 below rather
-     than silently assumed safe forever.
+   - *Triggers, including constraint triggers* — **REWORK 3 CORRECTION, a
+     false premise, not a refinement.** Every earlier version of this
+     sub-bullet (original draft, rework 1, rework 2, and both
+     CODE-DESIGN-VALIDATOR gates that re-verified it) stated that the real
+     tenant schema has zero triggers today and specified this check as a
+     bare **count-equal-to-zero assertion** on that basis. THAT PREMISE IS
+     FALSE, found by ELIXIR-DEV during implementation and independently
+     re-confirmed here: `priv/repo/migrations/20260830020001_create_audit_entries_tenant_scoped.exs`
+     and `priv/repo/migrations/20260830030001_create_repository_artifacts.exs`
+     each install real, currently-shipping triggers — five total
+     (`audit_entries_no_update`, `audit_entries_no_delete`,
+     `repository_artifacts_no_update`, `repository_artifacts_no_delete`,
+     `artifact_versions_no_update`), backed by three per-schema `plpgsql`
+     functions, enforcing audit-log and artifact-repository IMMUTABILITY —
+     a security property. A literal count-equal-to-zero check would have
+     **silently PASSED a clone missing all five**, since `LIKE INCLUDING
+     ALL` does not copy triggers (confirmed, §0.4) — exactly the
+     silent-degradation hazard this entire design exists to prevent, now a
+     live defect rather than a hypothetical one. **The corrected
+     specification:** `pg_trigger` queried for both schemas (`NOT
+     tgisinternal`, excluding Postgres's own FK-enforcement
+     `RI_ConstraintTrigger_*` rows, which are a side effect of dimension #3's
+     FK check, not this dimension's concern), compared as a **per-table
+     multiset of `pg_get_triggerdef(oid)` text, schema-qualifier-normalized**
+     — the same structural, name-independent-where-needed discipline already
+     established for indexes (dimension #4) and constraints (dimension #3):
+     `pg_get_triggerdef` embeds the trigger's timing/event/function-call
+     clause directly, so this single comparison catches a trigger that is
+     missing entirely, one whose definition differs, AND (critically, the
+     exact hazard the qualifier-rewrite mechanism step exists to prevent) one
+     that is present but still calls the TEMPLATE's own function rather than
+     a clone-local one — the trigger def's `EXECUTE FUNCTION` clause is part
+     of the compared text and carries the function's schema qualifier
+     directly. A SECOND, separate comparison covers the backing functions
+     themselves: `pg_proc` (joined to `pg_namespace`) for every function
+     referenced by a `NOT tgisinternal` trigger, compared as a **per-schema
+     multiset of `pg_get_functiondef(oid)` text, schema-qualifier-normalized**
+     — this catches a function that is missing, differs in body, OR (again,
+     the exact hazard) exists in the clone's own schema but is not the one
+     the clone's triggers actually invoke (a drift the trigger-def comparison
+     alone would not fully distinguish from "function correctly recreated,
+     trigger correctly repointed"). **Currently exercises real, non-default
+     data** — unlike dimensions #9-#11/#13, which are today's zero-vs-zero
+     rule-outs, this dimension's operands are 5 real triggers and 3 real
+     functions on the reference side right now, so this check is
+     immediately load-bearing, not merely forward-looking. Constraint
+     triggers specifically (`contype='t'` in dimension #3's own enumeration)
+     remain confirmed absent today (re-grepped this rework, no hits) and
+     would be covered by this same `pg_trigger`/`pg_get_triggerdef`
+     machinery if one were ever added — no separate handling needed, since a
+     constraint trigger is still a `pg_trigger` row.
    - *Comments — table/column* (`obj_description`/`col_description`): no
      migration in this codebase issues `COMMENT ON` of any kind (grepped,
      no hits, re-confirmed rework 2), and `INCLUDING ALL`'s
@@ -1042,17 +1351,48 @@ does make these calls genuinely concurrent.
 
 ### 4.3 Concurrency guard (forward-looking, not currently load-bearing)
 
-`ensure_template!/0`'s build sequence (§2.3) is wrapped in the SAME
-`pg_advisory_xact_lock` pattern `provision_tenant_schema/1` already uses for
-its own idempotent-concurrent-call safety (`SELECT
-pg_advisory_xact_lock(hashtext($1))` keyed on the literal string
-`"tenant_template"` rather than a per-tenant schema name) — cheap to add,
-matches an established in-codebase idiom exactly, and makes this design safe
-even if ISS-0423 later changes `Sandbox.mode` behavior in a way that makes
-concurrent `ensure_template!/0` calls within one partition possible. Without
-it, two concurrent first-callers could both see `:not_built` and both
-attempt `CREATE SCHEMA "tenant_template"` — the second would hit a real
-Postgres error (no `IF NOT EXISTS` deliberately, per §2.3 step 1's own
+**CORRECTED rework 3 — the transaction-scoped form does not work, confirmed
+by running it.** This section originally specified wrapping
+`ensure_template!/0`'s build sequence in the same `pg_advisory_xact_lock`
+pattern `provision_tenant_schema/1` uses, inside one `Repo.transaction`.
+ELIXIR-DEV implemented that literally first and it failed reproducibly:
+`Ecto.Migrator.run/4` (invoked by the template build, whichever OQ-1 option
+is taken — ELIXIR-DEV adopted option (b), building the template via the
+real, unmodified `replay_migrations/2`) checks out its OWN Postgres
+connection from the pool rather than participating in the ambient
+`Repo.transaction`'s connection, so `CREATE SCHEMA "tenant_template"` issued
+inside that outer transaction is invisible to the migrator's own connection
+— `Postgrex.Error` code `3F000` ("schema \"tenant_template\" does not
+exist"), reproduced and quoted in full during implementation. This is a
+correction to this design's own prior text, not an implementation detail
+left to ELIXIR-DEV's discretion: **the corrected mechanism uses a
+SESSION-level `pg_advisory_lock(hashtext($1))` /
+`pg_advisory_unlock(hashtext($1))` pair** (keyed on the literal string
+`"tenant_template"`, same key as originally specified), acquired before the
+build sequence and released in an `after`/ensure block so a raised exception
+still releases it, with **no surrounding `Repo.transaction`** — matching
+`SandboxPool.provision_sandbox/2`'s own already-established pattern of
+plain sequential `Repo.query!`/`Ecto.Migrator.run` calls with no wrapping
+transaction. This is scoped to `ensure_template!/0` only:
+`clone_tenant_schema!/1` never calls `replay_migrations/2` or
+`Ecto.Migrator.run/4` (it only issues raw `Repo.query!` DDL, all of which
+does share one ambient connection), so it is unaffected and still uses one
+`Repo.transaction` exactly as §2.3 specifies — this correction does not
+touch the clone path, only the template-build path.
+
+The underlying purpose is unchanged from the original text: this guard
+matches an established in-codebase idiom (session-level advisory locks are
+themselves a standard idiom, and `provision_tenant_schema/1`'s own use of
+the transaction-scoped variant remains the right choice THERE, since that
+function's entire body — including its DDL — genuinely does run on one
+connection inside one transaction; the template build's use of
+`Ecto.Migrator.run/4` internally is what makes it different, not a
+weakening of the underlying safety goal), and makes this design safe even
+if ISS-0423 later changes `Sandbox.mode` behavior in a way that makes
+concurrent `ensure_template!/0` calls within one partition possible.
+Without it, two concurrent first-callers could both see `:not_built` and
+both attempt `CREATE SCHEMA "tenant_template"` — the second would hit a
+real Postgres error (no `IF NOT EXISTS` deliberately, per §2.3 step 1's own
 "IF NOT EXISTS" being used ONLY there specifically because concurrent
 first-build IS a real, if currently-rare, race) rather than corrupting
 state, but the advisory lock avoids the wasted work and the error entirely.
@@ -1225,14 +1565,18 @@ explicitly rather than silently assumed resolvable.
   literally true; (a) is architecturally cleaner but requires a
   SECURITY-REVIEWER-visible (if trivial) addition to a tenant-data-path
   module's public surface. This design does not decide between them.
-- **OQ-2.** §3.2 item 8 notes triggers are a documented exception to
-  `INCLUDING ALL` and are currently absent from every tenant-scoped
-  migration. If a future migration adds a trigger, this design's clone
-  mechanism (§2.3) does NOT yet recreate triggers — the parity check would
-  catch the resulting drift (loudly, per §5's no-silent-fallback stance),
-  but the clone mechanism itself would need a new step symmetric to FK
-  re-add. Not designed here since no trigger exists today to design against
-  concretely; flagged so it is not forgotten when one is added.
+- **OQ-2 — RESOLVED, rework 3.** This question originally asked what the
+  clone mechanism should do about triggers, on the (false — see §0.4) belief
+  that none existed today and the question was purely hypothetical. It no
+  longer is: §2.3 step 6 now specifies trigger and trigger-function
+  recreation in full (qualifier-rewrite via `pg_get_functiondef`/
+  `pg_get_triggerdef`, the same technique §0.1 finding 1 already proved for
+  FKs), and §3.2 item 8 specifies the corresponding non-vacuous structural
+  check. Left here, marked resolved rather than deleted, so a future reader
+  auditing this document's open-question history can see that this one was
+  not a design choice deferred by preference — it was a false premise that
+  made the question look deferrable until real implementation surfaced the
+  five triggers it was actually about.
 - **OQ-3.** Whether flipping `provisioned_tenant!/1`'s default (INV-2)
   warrants a `docs/migration/decisions/` record of its own, given this
   project's convention of recording decisions that affect established
@@ -1336,7 +1680,8 @@ this role's "no TBD" obligation.)
 | Clone from a prepared template instead of replaying 53 migrations per schema | §2.3 `clone_tenant_schema!/1`, backed by `ensure_template!/0` |
 | FK constraints must be re-added, not silently dropped | §2.3 step 4, verified §0.1 finding 1 |
 | Constraint parity must be ASSERTED, not assumed | §3 `assert_clone_parity!/2`, wired to two real runnable use sites in §3.4 |
-| Test-only; production path untouched, or flagged for SECURITY-REVIEWER if not | §7 — zero `lib/letflow/` diff, explicitly stated; OQ-1's option (a) is the one path that would touch `lib/`, flagged, not chosen |
+| Test-only; production path untouched, or flagged for SECURITY-REVIEWER if not | §7 — zero `lib/letflow/` diff, explicitly stated. OQ-1 resolved (implementation, per ELIXIR-DEV's step-3 handoff) as option (b) — the template is built via a throwaway `Tenant`/`Registration` row plus the real, unmodified `replay_migrations/2`, both throwaway rows deleted afterward — keeping §7's "zero `lib/letflow/` diff" claim literally true, not merely aspirational. |
 | Complementary to, not absorbing, ISS-0423 | §1 non-goals, §4.2's explicit non-fix of `Sandbox.mode`, §6 |
 | Complementary to, not competing with, SandboxPool | §6 |
 | Sequence/DEFAULT cross-schema coupling (the second hazard ISSUE-FIXER found, not in the original issue text) | §2.3 step 5, verified §0.1 findings 3-4, checked by §3.2 item 5 |
+| Trigger/trigger-function cross-schema coupling, enforcing audit-log and artifact-repository immutability (a THIRD hazard, found in rework 3 by ELIXIR-DEV during implementation, not by any design pass) | §2.3 step 6, verified §0.4, checked non-vacuously by §3.2 item 8 (corrected) |

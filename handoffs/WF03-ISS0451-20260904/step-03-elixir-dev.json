@@ -1,0 +1,64 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-03",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0451-20260904/step-03-elixir-dev.json",
+  "created_at": "2026-09-04T03:22:00Z",
+  "started_at": "2026-09-04T03:22:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "docs/issues/ISS-0451.yaml",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "lib/letflow/supervisor/http.ex",
+      "test/letflow/supervisor/pollers_test.exs"
+    ],
+    "owned_modules": [
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/pollers_breaker.ex"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Implement the design at lib/letflow/design/iss0451-poller-crash-budget-isolation.md exactly as specified (it passed CODE-DESIGN-VALIDATOR's gate after 2 rework cycles, both of which found and fixed real OTP-semantics defects -- the design has been independently re-verified live, twice, so implement it as written rather than second-guessing its mechanism choices; if you find a genuine additional defect while implementing, stop and report it rather than silently deviating).\n\nSummary of what the design requires (read the design doc itself for the authoritative, complete spec -- this is a pointer, not a restatement):\n1. A new module Letflow.Supervisor.PollersBreaker (circuit breaker GenServer) at lib/letflow/supervisor/pollers_breaker.ex, per the design's state machine (:closed/:open/:half_open), monitoring Letflow.Supervisor.Pollers, trip threshold, exponential backoff schedule, and Supervisor.start_child/2-based restart mechanism (NOT restart_child/2 -- the design explicitly corrected this).\n2. lib/letflow/application.ex's children list: Pollers' entry changed to Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary) used directly as the list entry, PollersBreaker added as a new child listed after Pollers and before Http, and the top-level Supervisor.start_link/2 opts' max_restarts raised per the design's stated value.\n3. test/letflow/supervisor/pollers_test.exs's existing restart_pollers!/0 helper (or whatever the design calls it) needs updating from terminate_child+restart_child to terminate_child+start_child/2 with the full child spec, per the design's own §5/§6 discussion of this consequence -- this is a required correction to EXISTING test code, not new test authoring (TEST-DESIGNER handles the NEW persistent-fault regression test at the next step; you fix this specific existing-test breakage since it's a structural consequence of your own application.ex/pollers.ex changes, not new coverage).\n\nAfter implementing: run `mix compile --warnings-as-errors` and `mix format --check-formatted` and fix anything either flags. Run the EXISTING test/letflow/supervisor/ test files (pollers_test.exs, infrastructure_test.exs, http_test.exs) and confirm they still pass under your changes -- REQ-219's own AC2/AC4 tests living in pollers_test.exs must not regress (per ISS-0451's own AC3). Do NOT write the new persistent-fault regression test yourself -- that is TEST-DESIGNER's job at the next step; you may leave a TODO comment or simply leave it to that step.\n\nThis will then go to SECURITY-REVIEWER (supervision-tree/boot-sequence changes are in scope even though this isn't a tenant-data path -- confirm scope test yourself and state your reasoning either way) and REVIEWER (OTP idiom, supervision integrity) before TEST-DESIGNER.",
+    "acceptance_criteria": [
+      "lib/letflow/supervisor/pollers_breaker.ex created, matching the design's module/state/callback spec",
+      "lib/letflow/application.ex updated per the design (child spec syntax, PollersBreaker added, max_restarts value)",
+      "test/letflow/supervisor/pollers_test.exs's restart helper corrected to use start_child/2, not restart_child/2, per the design's own required consequence",
+      "mix compile --warnings-as-errors passes",
+      "mix format --check-formatted passes",
+      "test/letflow/supervisor/pollers_test.exs, infrastructure_test.exs, http_test.exs all still pass (REQ-219 AC2/AC4 no regression, per ISS-0451 AC3)",
+      "No new persistent-fault regression test written by this step -- that is TEST-DESIGNER's job next"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "",
+      "commit_sha_list": [],
+      "remote_branch": "",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

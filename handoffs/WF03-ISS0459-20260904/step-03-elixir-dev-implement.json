@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000005",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0459-20260904/step-03-elixir-dev-implement.json",
+  "created_at": "2026-09-04T13:50:52Z",
+  "started_at": "2026-09-04T13:50:52Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0459-20260904/step-02-code-designer.json",
+      "handoffs/WF03-ISS0459-20260904/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0459-20260904/step-02-code-designer.json",
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "Apply the validated design at handoffs/WF03-ISS0459-20260904/step-02-code-designer.json's result.summary (PASSed CODE-DESIGN-VALIDATOR after rework -- see handoffs/WF03-ISS0459-20260904/step-02b-code-design-validator.json for the gate record). This is a DOCUMENTATION-ONLY fix -- no letflow-queue source changes, no lib/letflow/design/ artefact, no migration.\n\n1. docs/agents/protocols/TASK_QUEUE.md: insert the design's drafted 'status: \"blocked\"' prose (quoted in full in step-02's result.summary, under the heading 'DRAFTED TASK_QUEUE.md PROSE') into section 4 (release_lock), immediately after the existing 'status: \"done\"' paragraph (the one ending '...or delivered requirement, not an investigation, partial finding, or reverted attempt.') and before the two existing ```bash release_lock examples. Use the drafted text verbatim or with only light copy-editing (formatting/heading-level fixes) -- do not alter its substance.\n\n2. docs/agents/protocols/ISSUE_QUEUE.md: apply the two cross-reference sentence insertions the design specifies (quoted in step-02's result.summary under 'ISSUE_QUEUE.md CROSS-REFERENCE DECISION') -- one appended to the end of the existing `instrumented` bullet, one appended to the end of the existing `no_defect` bullet's evidence-bar paragraph, in the 'Issue status vocabulary' section.\n\n3. WIDENED SCOPE (added by ORCH beyond the design's own owned_modules, because leaving it undone means every future WF-03 run repeats ISS-0458's exact mistake): docs/agents/workflows/WF-03_issue_resolving.md Step 5 (around line 206-213) currently instructs release_lock(status:\"done\") unconditionally on this step's PASS, with no branch for instrumented/no_defect outcomes -- this is the design's own 'WF-03_issue_resolving.md STEP 5 FINDING' (quoted in step-02's result.summary). Rewrite that instruction to branch on the local docs/issues/ISS-NNNN.yaml status Step 5 section 1 just wrote: `resolved` -> release_lock(status: \"done\"); `instrumented` or `no_defect` -> release_lock(status: \"blocked\"). Mirror the branching structure Step 5's own section 2 (the GitHub close-comment text) already uses for the same three-way split, a few lines above -- match that existing style rather than inventing a new one.\n\n4. Verify the result reads coherently as one piece: read all three edited files back in full after editing, confirm no formatting break, no dangling cross-reference, no duplicate content.\n\n5. Do NOT touch letflow-queue's repo in this step. Do NOT re-release queue task 458 in this step -- that is a separate ORCH action after this step merges (per the design's AC3 recommendation), not part of this handoff.\n\nSECURITY-REVIEWER is SKIPPED for this step, stated explicitly here rather than left implicit: this change touches only docs/agents/protocols/*.md and docs/agents/workflows/*.md prose -- no lib/, no priv/repo/migrations/, no tenant-data path, no supervision-tree file. It fails check 1 of ORCH's sizing rule (more than one file) so the full workflow runs, but SECURITY-REVIEWER's own scope test (tenant-data path) does not apply -- REVIEWER still gates this step for idiom/consistency/decision-record alignment.",
+    "acceptance_criteria": [
+      "TASK_QUEUE.md's release_lock section (function 4) contains the drafted status:blocked prose, placed exactly where specified, substance unaltered",
+      "ISSUE_QUEUE.md's instrumented and no_defect bullets each carry the specified one-sentence release_lock(status:\"blocked\") cross-reference",
+      "WF-03_issue_resolving.md Step 5's release_lock instruction is rewritten to branch on resolved vs instrumented/no_defect, mirroring Step 5's existing GitHub-close branching style",
+      "No letflow-queue repo files touched",
+      "No queue task 458 release_lock call made in this step",
+      "All three edited files read back in full post-edit and confirmed internally coherent"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

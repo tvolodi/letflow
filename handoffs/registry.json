@@ -4778,6 +4778,25 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED PASS -- PR #934 squash-merged to main (commit 51223d17) via gh pr merge --admin, sanctioned per GIT_MERGE.md step 8 FAILURE-with-structural-attribution path (both backend-gate CI failures on the final commit structurally cleared: wasm_hang class timing out on req172_write_then_hang.wat in test/letflow/engine/wasm/host_api_write_test.exs, zero wasm files in this branch diff, already-documented open ISS-0418). GH#827 closed with an evidence comment. ISS-0113 also closed resolved (GH#367, already closed 2026-08-26 for unrelated reasons predating this run -- evidence comment added). ISS-0480 filed (GH#933) for a newly-discovered flake (RowApprovalTest/PackUpdateMigrationTest inter-run inconsistency) found during the required double full-suite verification; ISS-0445 (GH#860) cited for the LintHandoffsTest failure already on record. Queue task 423 released status:done. Run complete.",
       "note": "Task pre-claimed/locked in letflow-queue before this run (task 423, agent_id tvolodi-orch, locked 2026-09-05T00:06:41Z, github_issue 827) per dispatching instruction. IMPORTANT CORRECTION recorded in-run: docs/issues/ISS-0423.yaml already existed (filed ORCH-adhoc-20260902-arch-review, six commits of measurement, two scope-splits to ISS-0427/ISS-0428) -- the dispatching instruction's premise that it did not exist yet was wrong (HANDOFF_PROTOCOL.md section 1.1). ORCH's own first pass overwrote it; caught before any further step ran, reverted to original content, and a dated reopen note appended reconciling that ISS-0427/ISS-0428/ISS-0426 are now all resolved and ISS-0113 (Sandbox.mode(:auto) global leak) is the one still-open blocker on this issue's own original causal chain. mix letflow.check itself changed since the 2026-09-02 filing too (ISS-0428 landed: it now shells to scripts/test_parallel.sh, not plain serial mix test) -- the queue task's own \"30 min gate\" framing needs re-verification against current main, not assumption. RUN OUTCOME: fixed ISS-0113 (global Sandbox.mode(:auto) leak) enabling real async: true for 2 of 46 TenantFixture call sites (secrets_test.exs, webhooks_test.exs). Design cycle self-corrected once (rework 1 of 3): first design (restore_sandbox opt-in) passed its own gate then genuinely FAILED at implementation (26/38), tracing a real 4th Sandbox.mode/2 mechanism; rework removed the mechanism entirely, relying on the pre-existing :auto call, verified clean by 4 independent parties/seeds. Full-suite AFTER: 2.2% async share vs 1.4% before, passing count unchanged >=3060 floor. One own-bookkeeping defect caught by CI (a REVIEWER handoff completed_at preceding started_at) and corrected transparently before merge."
+    },
+    {
+      "run_id": "WF03-ISS0418-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0418",
+      "queue_task_id": 418,
+      "queue_agent_id": "letflow-2-orch",
+      "github_issue_number": 816,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine/wasm/"
+      ],
+      "started_at": "2026-09-04T22:31:26Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
+      "note": "WF-03 run for ISS-0418 (MAJOR): implement OQ-5's cap on concurrently in-flight WASM invocations. Selected because ORCH measured the CI gate at a 44% pass rate (14 fail / 11 pass across 25 runs) with EVERY classifiable failure being this exact flake. NOT MERELY A TEST FLAKE: per req170's live-verified findings against wasmex's Rust source, each timed-out invocation permanently leaks an uncancellable native thread in a Tokio pool shared by every tenant on the node -- a production availability defect currently manifesting as CI noise. STALE-LOCK RECOVERY DISCLOSED: task 418 was locked by a dead session (branch 3 days stale, one Step 00 commit, no registry entry, no handoffs dir); ORCH declined to force it initially, the user reported nobody was working it, ORCH re-verified with evidence and force-released per the dead-sibling-session discretion rule."
     }
   ]
 }

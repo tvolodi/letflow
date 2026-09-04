@@ -1,0 +1,55 @@
+{
+  "handoff_id": "c2d3e4f5-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+  "run_id": "WF03-ISS0467-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0467-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T19:05:18Z",
+  "started_at": "2026-09-04T19:05:18Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0467-20260904/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0467.yaml",
+      "handoffs/WF03-ISS0467-20260904/step-01-issue-fixer.json",
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/agents/ORCHESTRATOR.md"
+    ],
+    "owned_modules": [
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/agents/ORCHESTRATOR.md"
+    ]
+  },
+  "task": {
+    "description": "Design the fix for ISS-0467. Read step-01-issue-fixer.json's result.summary in full (cited in artifacts_in) -- its live-verified diagnosis is that GitHub's `restrictions` (push-allowlist) mechanism CANNOT distinguish a legitimate ORCH direct-action push (ORCHESTRATOR.md section 10's sizing rule) from an illegitimate bypass, because every push and merge in this pipeline authenticates as the single admin identity `tvolodi` -- an allowlist naming that one identity would be a no-op. This is a materially different mechanism than 0018's required-status-checks + enforce_admins:false + --admin design, which works BECAUSE GitHub's check-state gate is orthogonal to WHO is pushing; `restrictions` has no equivalent 'gate on CI/check state' capability for a bare push at all -- it only gates on WHO, never on WHAT STATE the branch's checks are in.\n\nGiven that diagnosis, decide between the two options ISS-0467's acceptance criteria name: (1) configure GitHub's restrictions setting, or (2) add an explicit prohibition line to GIT_MERGE.md. Do not treat this as open-ended -- the diagnosis materially constrains it. If your own reasoning reaches a different conclusion than the diagnosis's factual finding, you must engage with WHY (e.g. if you find a way to distinguish push classes the diagnosis missed), not silently pick a different option.\n\nIf you choose option 2 (documented prohibition, which the diagnosis points toward): design the exact new paragraph/section for docs/agents/protocols/GIT_MERGE.md prohibiting direct pushes to main for ANY change, including a one-line doc fix -- route everything through the existing git-setup/git-merge branch+PR wrapper. You MUST also explicitly reconcile this against docs/agents/ORCHESTRATOR.md section 10's sizing rule, which currently authorizes ORCH to 'act directly' for qualifying one-file/no-new-public-API/no-migration/no-supervision-file/no-tenant-data/no-test-behavior-change edits. Read ORCHESTRATOR.md section 10 and AGENT_SYSTEM.md section 4 (both in artifacts_in) closely: does 'ORCH may act directly' as currently written actually mean 'ORCH may git push straight to main outside the branch+PR wrapper', or does it only mean 'ORCH may skip the producer/validator agent chain, but must still route the resulting single-file edit through git-setup/git-merge like everything else'? State your reading explicitly, with the textual evidence for it, and design whichever correction is actually needed: either (a) ORCHESTRATOR.md section 10 needs an explicit sentence clarifying that a direct-action edit is still committed via the feature-branch+PR path, never a bare push to main, or (b) if you conclude section 10 already implies routing through git-setup/git-merge and the direct-push-to-main behavior observed in 0018's own 'real gap found live' section was itself a deviation from section 10 as written (not a licensed reading of it), then GIT_MERGE.md's new prohibition line is sufficient on its own and ORCHESTRATOR.md needs no change -- but you must still say so explicitly, with reasoning, rather than leaving the ambiguity unaddressed.\n\nIf your investigation finds option 1 IS viable despite the diagnosis (e.g. a distinguishing mechanism the diagnosis didn't consider -- a deploy key, a bot account, a fine-grained PAT scoped differently from the interactive gh auth), design that instead, including the exact `gh api` configuration call and how AC2's live-verification (a real attempted direct push that is genuinely rejected, with real quoted rejection output) would be performed. Either way, produce a design artefact in lib/letflow/design/ per your role's normal convention (this is a docs/protocol change, not Elixir code, so the design artefact documents the exact textual changes to make -- the new/amended paragraphs verbatim -- rather than any @spec/module interface; CODE-DESIGN-VALIDATOR will check the artefact covers every acceptance criterion and contains no code, same bar as always). State explicitly whether this needs its own docs/migration/decisions/ record or is adequately covered by amending 0018 in place (0018's own 'What this record does not decide' section and its 'Follow-up, not re-opening this decision' framing are relevant -- read them).\n\nAcceptance criteria to design against (from docs/issues/ISS-0467.yaml, copied verbatim):\n1. Either configure GitHub's separate branch-protection 'restrict who can push to matching branches' setting (the `restrictions` field, left null in 0018's own configuration) so a direct push to main is rejected the same way a plain `gh pr merge` already is, or add an explicit line to docs/agents/protocols/GIT_MERGE.md prohibiting direct pushes to main for any change including trivial doc fixes -- decide and record which, and why, mirroring 0018's own decision-record discipline\n2. If restrictions are added, live-verify them the same way 0018 verified required-status-checks: a real attempted direct push to main that is genuinely rejected, with the real quoted rejection output\n3. No regression to the existing gh pr merge / --admin override path 0018 already verified",
+    "acceptance_criteria": [
+      "Design artefact written to lib/letflow/design/ naming the exact option chosen (1 or 2) with explicit reasoning tied to the ISSUE-FIXER diagnosis",
+      "If option 2: exact verbatim new text for GIT_MERGE.md is specified",
+      "ORCHESTRATOR.md section 10 reconciliation is addressed explicitly either way -- either a specific textual correction is designed, or an explicit reasoned statement that no correction is needed, never left silent",
+      "If option 1: exact gh api/gh ruleset command specified, plus the live-verification procedure for AC2",
+      "AC3 (no regression to gh pr merge / --admin path) explicitly addressed -- state what, if anything, changes about that path (expected: nothing)",
+      "Explicit statement on whether a new docs/migration/decisions/ record is needed or whether amending 0018 in place suffices, with reasoning",
+      "No implementation code, no .ex/.exs bodies -- text/markdown/yaml specification only",
+      "Every acceptance criterion in ISS-0467.yaml mapped to a concrete design element"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

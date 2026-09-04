@@ -56,6 +56,60 @@ defmodule Letflow.Supervisor.Infrastructure do
   REQ-045/ISS-0422 unaffected) -- this is not a claim about which layer it
   belongs in once (if ever) a future requirement gives it real children;
   left explicitly open (design doc §7/§9 Q3).
+
+  ## Task.Supervisor sprawl review (REQ-220, closes ISS-0425 part 3)
+
+  This supervisor owns 7 separate `Task.Supervisor`s. RECOMMENDATION: KEEP
+  ALL 7 SEPARATE. None share a crash domain or a resource-contention
+  profile that would make consolidation meaningfully safer or cheaper, and
+  each pairing a reader might plausibly propose merging already has a
+  stated, on-record reason not to (see below). Consolidated here so a
+  reader does not need to hunt 7 separate scattered comments to see why
+  none should merge; each one's own comment at its child-spec site above
+  remains the source of truth for its individual justification.
+
+    * `SandboxPool.TaskSupervisor` (ISS-0224) -- isolates `SandboxPool`'s
+      own Ecto-sandbox-ownership `async_nolink` calls so a `claim/2`
+      failure cannot exit the pool.
+    * `Engine.PluginTaskSupervisor` (REQ-057) -- generic plugin-handler
+      execution.
+    * `Engine.Lua.TaskSupervisor` (REQ-155) -- wall-clock kill isolation
+      for LUA-10 layer 2, deliberately NOT sharing `PluginTaskSupervisor`:
+      a killed Lua task must not risk a concurrently running plugin task.
+    * `Engine.Wasm.ModuleRegistryTaskSupervisor` (REQ-166) -- crash-isolates
+      `Wasmex.start_link/1`'s unresolved-import EXIT signal during module
+      registration, an upload-time-only path.
+    * `Engine.Wasm.CapabilityGateTaskSupervisor` (REQ-167) -- the same
+      crash-isolation need, but for capability-gated instantiation, an
+      orthogonal caller/input from `ModuleRegistry` per REQ-166 design
+      §2.2 -- deliberately not reusing it.
+    * `Engine.Wasm.ModuleVersionRegistryTaskSupervisor` (REQ-173) -- the
+      hot-reload `invoke/4` path's own outer `async_nolink` task plus its
+      nested instantiation-attempt task.
+    * `Obs.Alerts.TaskSupervisor` (ISS-0429) -- I/O-bound HTTP alert-hook
+      delivery, unrelated to any sandbox/plugin/Lua/Wasm concern above.
+
+  TWO CONSOLIDATION CANDIDATES CONSIDERED AND REJECTED:
+
+    * The three Wasm `Task.Supervisor`s into one shared Wasm
+      `Task.Supervisor` -- rejected. Per REQ-166 design §2.2, module
+      registration, capability-gated instantiation, and hot-reload
+      invocation are three genuinely orthogonal call paths, each
+      independently crash-isolated on purpose: sharing one supervisor
+      would mean a crash-isolated task from one path could exhaust or
+      contend with tasks from an unrelated path, reintroducing the
+      cross-path blast radius each was split out to avoid.
+    * `Engine.PluginTaskSupervisor` and `Engine.Lua.TaskSupervisor` into
+      one shared Engine `Task.Supervisor` -- rejected. REQ-155's own
+      wall-clock-kill mechanism must not risk a concurrently running
+      plugin task's blast radius; sharing a supervisor would couple Lua's
+      kill isolation to Plugin's execution, the exact coupling REQ-155
+      split them apart to prevent.
+
+  NOT IN THIS REQUIREMENT: no Task.Supervisor removed, renamed, or merged
+  as a side effect of this review -- see this section's own recommendation
+  (KEEP ALL 7). All 7 remain inside this module, matching REQ-219's own
+  layer assignment.
   """
 
   use Supervisor

@@ -13089,7 +13089,7 @@ requirements:
   - id: REQ-220
     title: Task.Supervisor sprawl review -- one consolidated rationale for all 7, consolidate only if the review itself concludes it's safe (closes ISS-0425 part 3)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     impl_order: 446  # letflow-queue task id, GH#859
     description: >

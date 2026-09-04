@@ -4438,6 +4438,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #878 squash-merged to main (373f5363) after 1 mix-format CI failure (fixed, same recurring gap as REQ-219's PR #869) and 1 wasm_hang rerun (known flake class, duplicate parallel run passed clean). Queue task 442 released done, GH#852 best-effort closed.",
       "note": "WF-03 issue-resolving run for ISS-0442: lint_handoffs --autofix's write_json!/2 re-encodes the WHOLE handoff JSON via Jason.encode!, alphabetically re-sorting keys and reflowing formatting at every nesting level, so a one-field status fix produces an ~84-line diff instead of a minimal one -- defeats the per-file diff-reviewability property SECURITY-REVIEWER relied on when passing ISS-0440. Fixed via a targeted raw-text splice of the top-level status key (splice_top_level_status/2), never re-encoding the whole document -- see docs/issues/ISS-0442.yaml for the full pipeline trail (CODE-DESIGNER/CODE-DESIGN-VALIDATOR/ELIXIR-DEV/REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER, all PASS). TEST-DESIGN-VALIDATOR's Step 4b MINOR finding (duplicate-top-level-status-key Jason-semantics discrepancy) filed separately as ISS-0457 (queue task 457, GH#877), out of scope for this run."
+    },
+    {
+      "run_id": "WF02-REQ220-20260904",
+      "requirement_id": "REQ-220",
+      "issue_id": null,
+      "queue_task_id": 446,
+      "github_issue_number": 859,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/supervisor/infrastructure.ex"
+      ],
+      "started_at": "2026-09-04T07:53:00Z",
+      "lock_released_at": "2026-09-04T08:25:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- direct ORCH action (all 6 ORCHESTRATOR.md S10 checks passed). Consolidated Task.Supervisor sprawl rationale added to infrastructure.ex's moduledoc, real recommendation KEEP ALL 7 (already fully elaborated in the requirement's own text, transcribed not re-derived). mix compile/format clean, test/letflow/supervisor/ 11/11, full suite 3206/3208 (2 pre-existing rustc-gap failures).",
+      "note": "WF-02 requirement-implementation run for REQ-220: closes ISS-0425 part 3 (Task.Supervisor sprawl review). Documentation-only deliverable per the requirement's own text -- no Task.Supervisor removed/renamed/merged, both named consolidation candidates (3 Wasm supervisors; Plugin+Lua) explicitly considered and rejected with stated reasons."
     }
   ]
 }

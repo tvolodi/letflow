@@ -24,16 +24,50 @@ description: >
   it was correcting. Confirmed via a direct Jason.decode!/1 check, not a
   naive assumption.
 
-  NOT currently exploitable in practice: TEST-DESIGN-VALIDATOR ran a
-  JSON-aware duplicate-key scan (python json.loads with object_pairs_hook)
-  across all 1989 real handoffs/**/step*.json files in the corpus and found
-  zero with a duplicate top-level key -- no producing pathway in this
-  codebase emits one, and a duplicate key is non-canonical/malformed JSON
-  to begin with. The failure mode is also self-limiting: a wrongly-spliced
-  file would be immediately re-flagged by the next lint_handoffs run rather
-  than silently passing.
+  ORCH RE-VERIFICATION (2026-09-04, run WF03-ISS0457-20260904), performed
+  per HANDOFF_PROTOCOL.md section 1.1 rather than trusting the filing's
+  premise at face value: independently ran `Jason.decode!(~s({"status":"a",
+  "status":"b"}))` via a throwaway `elixir -e` / `Mix.install` script
+  (jason 1.4.5, the exact pinned version) and confirmed it returns
+  `%{"status" => "a"}` -- first-key-wins, exactly as the filing states.
+  ISSUE-FIXER (this run's own Step 1, see
+  handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json)
+  independently re-derived the same result a second time and additionally
+  built and ran a concrete duplicate-top-level-status fixture directly
+  against the real splice_top_level_status/2 implementation (diagnosis
+  fixture and transcript under handoffs/WF03-ISS0457-20260904/diagnosis/),
+  demonstrating the actual divergence: the decode-based decision picks the
+  FIRST occurrence's value as the thing being fixed, but the raw-text scan
+  edits the LAST occurrence, so the tool can report
+  `{:fixed, "DONE", "COMPLETED"}` while leaving the value it reasoned about
+  ("DONE") untouched in the file.
+
+  SEQUENCING NOTE, now resolved: at the time this run started, the code
+  this issue is about (autofix_file/1's decode step and
+  splice_top_level_status/2) did not yet exist on `main` -- it existed only
+  on the then-unmerged branch feature/WF03-ISS0442-20260904. That branch's
+  own design doc (lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md,
+  section 2.2 step 2) and the splice implementation's own code comment both
+  assert the last-wins scan behaviour "mirrors" Jason.decode's own
+  semantics -- confirmed FALSE by the direct measurement above (Jason is
+  first-wins, not last-wins). ISS-0442 has since merged to `main` (PR #878,
+  commit 373f5363), carrying this discrepancy as a known, explicitly
+  deferred gap (its own TEST-DESIGNER/TEST-RUNNER flagged it as this
+  follow-up issue rather than a merge blocker, following this session's
+  established precedent for MINOR non-blocking findings). The fix is now
+  scoped against real, on-main code.
+
+  NOT currently exploitable in practice on real data: TEST-DESIGN-VALIDATOR
+  ran a JSON-aware duplicate-key scan (python json.loads with
+  object_pairs_hook) across all 1989 real handoffs/**/step*.json files in
+  the corpus and found zero with a duplicate top-level key -- no producing
+  pathway in this codebase emits one, and a duplicate key is
+  non-canonical/malformed JSON to begin with. The failure mode is also
+  self-limiting: a wrongly-spliced file would be immediately re-flagged by
+  the next lint_handoffs run rather than silently passing.
 affected_files:
   - lib/mix/tasks/letflow.lint_handoffs.ex
+  - lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md
 related:
   - ISS-0442
   - ISS-0440
@@ -41,7 +75,8 @@ source: >
   handoffs/WF03-ISS0442-20260904/step-04-test-designer.json (original
   finding) and step-04b-test-design-validator.json (independent
   confirmation and corpus-wide verification that no real handoff currently
-  triggers it).
+  triggers it), plus this issue's own resolving run's Step 1 diagnosis at
+  handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json.
 queue_task_id: 457
 github_issue: 877
 status: open

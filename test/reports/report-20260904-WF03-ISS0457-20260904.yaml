@@ -1,0 +1,129 @@
+# Test run report -- WF-03 Step 5 (TEST-RUNNER pre-merge verification)
+# ISS-0457 -- lint_handoffs autofix splice desyncs from Jason-decode
+# validation on a (malformed, currently unseen) duplicate top-level status
+# key. Fix makes splice_top_level_status/2 first-match-wins, matching
+# Jason.decode!'s own first-key-wins semantics.
+
+workflow: WF-03
+step: "05 (TEST-RUNNER)"
+agent: TEST-RUNNER
+run_id: WF03-ISS0457-20260904
+date_utc_start: 2026-09-04T09:35:33Z
+date_utc_end: 2026-09-04T10:05:00Z
+wall_clock_duration: "~10 min (compile/format checks + one crashed 16-way run + one clean 8-way full-suite run + lint corpus check)"
+
+verdict: PASS
+
+git:
+  branch: feature/WF03-ISS0457-20260904
+  branch_confirmed: true
+  working_tree: clean at start (git status --porcelain empty; no TEST-RUNNER edits to lib/ or test/)
+  diff_vs_main: >
+    git diff --name-only main...HEAD lists 18 files, all within: docs/issues/ISS-0457.yaml,
+    handoffs/WF03-ISS0457-20260904/** (including this run's own bookkeeping),
+    handoffs/orchestrator.log, handoffs/registry.json,
+    lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md,
+    lib/letflow/design/iss0457-splice-first-wins.md,
+    lib/mix/tasks/letflow.lint_handoffs.ex, test/mix/tasks/letflow.lint_handoffs_test.exs,
+    test/specs/ISS-0457.md. No file under lib/letflow/ (application/domain code) is
+    touched -- the change is entirely confined to the lint_handoffs Mix task, its design
+    docs, its own test file, and process bookkeeping.
+
+environment:
+  toolchain: local (Elixir/OTP via mix on PATH), not Docker fallback
+  containers: "docker compose up -d run; letflow-postgres-1 recreated and started, letflow-keycloak-1 already running"
+  command_run: "mix compile --warnings-as-errors; mix format --check-formatted; scripts/test_parallel.sh; mix letflow.lint_handoffs"
+  run_mode: >
+    Foreground, blocking, synchronous throughout -- each call run to completion in this
+    agent's own tool call per core-directives' "No Background Wait For A Cross-Turn
+    Notification". Nothing backgrounded, nothing watched via Monitor.
+
+compile_and_format:
+  mix_compile_warnings_as_errors: "exit 0, no output (clean)"
+  mix_format_check_formatted: "exit 0, no output (clean)"
+
+full_suite_result:
+  first_attempt:
+    command: "scripts/test_parallel.sh (TEST_PARALLEL_N unset, derived N=16 from nproc)"
+    outcome: >
+      8 of 16 partitions (9-16) crashed identically during ecto.migrate with
+      `** (Postgrex.Error) ERROR 42P07 (duplicate_table) relation "secrets" already
+      exists`, each producing no Result: line (script's own WARNING output). This is the
+      documented ISS-0219 failure class (script header, scripts/test_parallel.sh:53-65):
+      on a host whose nproc-derived N exceeds what its Postgres/CPU budget can sustain,
+      partitions crash outright during ecto.create/ecto.migrate before any Result: line,
+      and the script explicitly says this is not fixed by capping N internally --
+      set TEST_PARALLEL_N lower for this host instead. Not treated as a suite failure or
+      as evidence about this branch; treated as an environmental ceiling per the script's
+      own documented precedent, and independently confirmed structurally: the crash is a
+      DB-provisioning race in Postgres/ecto_sql/Ecto.Migration.Runner, none of which is
+      in this branch's diff (see diff_vs_main above) -- Route 1 (structurally, this
+      branch cannot have caused it) plus a demonstrated, previously-documented mechanism
+      (Route 3), not asserted by count-matching.
+    remedy_applied: "TEST_PARALLEL_N=8 (per script header's own stated mitigation), re-ran full suite"
+  second_attempt:
+    command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+    combined_tally: "3200 tests, 6 properties, 0 failures (3206/3206 passed)"
+    per_partition: >
+      8 partitions, all exit 0, all with real Result: lines: 1:465/2p/0f, 2:343/1p/0f,
+      3:425/0p/0f, 4:435/1p/0f, 5:419/0p/0f, 6:320/0p/0f, 7:417/2p/0f, 8:376/0p/0f.
+    script_exit_code: 0
+
+pre_existing_failure_reverification: >
+  TEST-DESIGNER's Step 4 (WF03-ISS0442-20260904, this ISS's discovering run) had
+  previously found 10 pre-existing, unrelated full-suite failures: PromotionAssertion
+  RerunTest, ServiceCatalogReaperTest x3, ServiceCatalogTest x3, TenantSchemaReaperTest
+  x3. Per core-directives' "Failure Attribution Is Structural, Never By Count-Matching",
+  this run did NOT assume that finding still holds -- it re-derived. The clean 8-way run
+  above (TEST_PARALLEL_N=8) reports 0 failures suite-wide. Grepped all 8 partition logs
+  for the four test-module names: all four modules' individual tests are present and
+  executed (real per-test teardown log lines confirmed for ServiceCatalogTest,
+  ServiceCatalogReaperTest, and PromotionAssertionRerunTest across partitions 3, 5, and
+  7), and none of the 8 partition logs contains a "Failed:" line. So on this run, none of
+  the 10 previously-reported failures reproduced. This is consistent with core-directives'
+  own worked example (WF03-ISS0106-20260821: "13 failures, then 15" across two runs ten
+  minutes apart on the same commit, three different failure sets across three runs) --
+  this suite's dominant failure class is intermittent/environmental (Route 3), and an
+  all-green run is a valid, real outcome of that same intermittency, not evidence the
+  underlying flake mechanism was fixed by this branch (this branch touches none of the
+  four modules' files or their dependencies -- confirmed against diff_vs_main above).
+  No failure requiring attribution exists in this run's own output to route.
+
+lint_handoffs_corpus_check:
+  command: "MIX_ENV=dev mix letflow.lint_handoffs"
+  exit_code: 0
+  output_tail: |
+    letflow.lint_handoffs: OK -- 0 new violations across 2033 handoff files under "handoffs" (25 pre-existing grandfathered, traced to ISS-0190).
+  confirms: >
+    docs/issues/ISS-0457.yaml's own AC3 -- 0 new violations against the real handoffs/
+    corpus (2033 files), not just the scoped unit test. This is the direct, real-corpus
+    equivalent of what test/mix/tasks/letflow.lint_handoffs_test.exs's new
+    T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS test exercises synthetically -- run
+    separately here per the task's explicit instruction, not inferred from the unit
+    test's pass alone.
+
+scoped_test_file:
+  file: test/mix/tasks/letflow.lint_handoffs_test.exs
+  note: >
+    Already independently re-run and confirmed by TEST-DESIGN-VALIDATOR at step-04b
+    (48/48 passed, including the new T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS test and
+    a from-scratch worktree re-derivation of the fail-first claim at commit 373f5363).
+    This run's own full-suite pass (TEST_PARALLEL_N=8) additionally confirms no
+    regression in this file when run alongside the entire suite, not in isolation: no
+    partition log shows a failure against letflow.lint_handoffs_test.exs.
+
+overall_verdict: >
+  PASS. mix compile --warnings-as-errors and mix format --check-formatted both clean.
+  Full suite run to completion in the foreground, twice: the first (N=16, nproc-derived)
+  attempt hit the documented ISS-0219 partition-count ceiling on this host (8 partitions
+  crashed on a DB-provisioning race, structurally unrelated to this branch's diff, no
+  Result: line produced, not counted as suite failures); the second (N=8, per the
+  script's own documented remedy) completed cleanly: 3206/3206 passed, 0 failures,
+  0 properties failed. None of the 10 previously-reported pre-existing failures
+  reproduced this run -- re-verified structurally (all four modules' tests executed,
+  none failed) rather than assumed from the prior report, consistent with this suite's
+  documented intermittent-environmental-failure pattern. mix letflow.lint_handoffs
+  against the real 2033-file handoffs/ corpus reports 0 new violations (ISS-0457's own
+  AC3), exit 0. No failure in this run requires attribution or filing.
+
+next_action: "Route to RELEASE-VALIDATOR (WF-03 Step Final / merge readiness) per ORCHESTRATOR.md -- RELEASE-VALIDATOR re-runs the suite independently rather than trusting this report alone."

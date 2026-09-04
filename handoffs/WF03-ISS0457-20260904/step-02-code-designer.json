@@ -1,0 +1,61 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-02",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0457-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T07:53:37Z",
+  "started_at": "2026-09-04T07:53:37Z",
+  "completed_at": "2026-09-04T07:56:04Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457"],
+    "artifacts_in": [
+      "docs/issues/ISS-0457.yaml",
+      "handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/divergence-probe-transcript.txt",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0457 (docs/issues/ISS-0457.yaml, ISSUE-FIXER's diagnosis in artifacts_in above -- both already carry the confirmed root cause and a reproducing fixture; do not re-derive what they already establish, but do independently verify anything you build the design on top of, per HANDOFF_PROTOCOL.md section 1.1). The target code, splice_top_level_status/2 and its helper scan_for_status/4 (lib/mix/tasks/letflow.lint_handoffs.ex, currently around lines 500-567), is now REAL, MERGED code on main -- ISS-0442 landed as PR #878 (commit 373f5363) since this run started, so design against the file as it exists on disk right now, not against any historical branch state.\n\nPick between the two options AC1 of docs/issues/ISS-0457.yaml names: (a) make autofix_file/1 (decode-based) and splice_top_level_status/2 (text-scan-based) agree on which occurrence wins for a duplicate top-level key -- both first-wins or both last-wins (Jason.decode!/1 is confirmed first-wins, so the natural alignment is making the splice scanner first-wins too, by keeping only the FIRST depth-1 'status' match found instead of the current unconditional overwrite-on-every-match); or (b) make the decode step (or a preceding H-check) reject a handoff with a duplicate top-level key outright as its own malformed-JSON violation class, so the ambiguity can never reach the splice path. Make and justify the actual call yourself -- ORCH's own steer, not binding on you: option (a) is likely simpler (a small, local change to scan_for_status/4's match-handling, keeping the same single-pass structure) and lower-risk than introducing a new H-check class with its own grandfathering/CI implications, but you may find (b) is actually preferable once you've looked at the real code -- state your reasoning either way.\n\nAlso in scope: correct the FALSE 'mirrors Jason.decode/1's own last-key-wins semantics' claim in TWO places -- the code comment at lib/mix/tasks/letflow.lint_handoffs.ex around lines 487-491, and lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md section 2.2 step 2 (around line 201). Both currently assert Jason.decode is last-wins; it is first-wins (confirmed twice now -- once by ORCH, once by ISSUE-FIXER, both against jason 1.4.5, the pinned version). Whichever option you pick, these two false claims must not survive uncorrected.\n\nProduce a design artefact in lib/letflow/design/ per your normal role (interface/behavior spec, not implementation code) -- do NOT write the .ex fix yourself, that is ELIXIR-DEV's job at Step 3.",
+    "acceptance_criteria": [
+      "Design picks and justifies option (a) or (b) from ISS-0457.yaml's AC1, reasoned against the real, merged code on main -- not against a historical/branch description",
+      "If (a): design states exactly how scan_for_status/4's match-handling changes to become first-match-wins (or first-match-wins-with-early-stop), preserving every other property REVIEWER already verified for this scanner (depth tracking, string-escape handling, nested result.status immunity, byte-identical passthrough elsewhere in the file)",
+      "If (b): design states the new H-check's exact detection rule, where it slots into autofix_file/1's control flow, and how it reports (refusal shape, consistent with the existing FAIL/missing/non-string refusal branches)",
+      "Design explicitly names both false-claim locations (letflow.lint_handoffs.ex ~487-491, iss0442-lint-handoffs-minimal-diff-autofix.md ~line 201) and states the corrected text for each",
+      "No implementation code (.ex function bodies) in the design artefact -- signatures/specs/behavior description only",
+      "Design accounts for the existing regression suite (test/mix/tasks/letflow.lint_handoffs_test.exs, 47 tests as of the ISS-0442 merge) not regressing"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design chose OPTION (a) -- make scan_for_status/4 first-match-wins to align with Jason.decode!/1's confirmed first-key-wins duplicate-key semantics (jason 1.4.5, re-verified a fourth time here directly against main's real code at tip ea9aed95: autofix_file/1:414-446, splice_top_level_status/2:501-512, scan_for_status/4:521-567/handle_string_token/5:545-567, all confirmed unchanged in shape from ISSUE-FIXER's diagnosis). Rejected (b) (a new duplicate-top-level-key H-check) because it would require inventing new detection machinery (Jason.decode!/1 already silently absorbs the duplicate; a real duplicate-key scan needs its own raw key inventory or ordered decode), a new control-flow slot in autofix_file/1, a new refusal shape, and grandfathering/CI-visibility implications for a lint tool that scans the whole handoffs/ corpus every run -- all to guard against an input class that (a) already renders harmless (post-fix, the divergence cannot occur; the input is just malformed JSON that now resolves consistently). Zero real occurrences (1989-file corpus scan) meant no urgency pulling toward the heavier option either.\n\nBehavior-change spec (design lib/letflow/design/iss0457-splice-first-wins.md section 2): scan_for_status/4's `best` accumulator must be set exactly once, on the FIRST depth-1 \"status\" key match, and never overwritten by a later depth-1 match in the same pass -- two equally-acceptable implementation shapes given (conditional-preservation vs. early-stop), both producing an identical end-of-scan `best` value; @spec and return shape unchanged. Depth tracking, string-escape handling (consume_json_string/1), the depth==1 nested-immunity guard, and the zero-match raise are all explicitly confirmed untouched by this change (section 2's preserved-properties list) since no existing corpus file or the 47 existing tests contain more than one depth-1 status key, so the new selection rule is behaviorally identical to the old one on every input any existing test constructs.\n\nCorrected text for both false-claim locations (design section 3, full corrected paragraphs provided verbatim for both): (1) letflow.lint_handoffs.ex ~487-491's code comment, changed from asserting LAST-wins 'mirroring Jason.decode/1's own last-key-wins semantics' to asserting FIRST-wins matching Jason's confirmed first-key-wins behavior, with the jason 1.4.5 probe result cited inline. (2) iss0442-lint-handoffs-minimal-diff-autofix.md section 2.2 step 2 (~line 201), same correction applied to the design doc's own algorithm-step prose, also noting scanning still walks the full input but no later candidate is allowed to replace the first.\n\nRegression-suite impact (design section 4): all 47 existing tests in test/mix/tasks/letflow.lint_handoffs_test.exs are expected to pass unchanged -- the ISS-0442 test file's own comment block at :722-742 already documents that duplicate-top-level-status was investigated and deliberately left uncovered specifically because it exposed this defect, so no existing assertion encodes the old last-wins behavior as correct. New coverage (asserting first-occurrence-wins post-fix, using the fixture ISSUE-FIXER already built) is flagged as TEST-DESIGNER's job at the next step, including updating that now-stale comment block.\n\nNo implementation code included -- signatures/@specs/behavior prose only, per role constraints.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0457-splice-first-wins.md",
+      "handoffs/WF03-ISS0457-20260904/step-02-code-designer.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0457-20260904",
+      "commit_sha_list": ["142b0701"],
+      "remote_branch": "origin/feature/WF03-ISS0457-20260904",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate this design (verify option (a) is justified against the real main code, the scan_for_status/4 behavior-change spec is unambiguous and preserves depth/escape/nested-immunity/raise properties, both false-claim corrections are present and accurate, no .ex implementation code appears, and the regression-suite impact claim is checked against the actual test file). Once PASSED, route to ELIXIR-DEV (Step 3) to implement the scan_for_status/4 first-match-wins change and apply both corrected-text edits verbatim from lib/letflow/design/iss0457-splice-first-wins.md section 3."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

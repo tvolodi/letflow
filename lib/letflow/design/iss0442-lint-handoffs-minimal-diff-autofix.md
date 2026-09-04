@@ -195,13 +195,18 @@ Algorithm:
 
 1. Scan the whole file once, left to right, as described above.
 2. Each time a depth-1 KEY string token's *decoded* content (i.e., with JSON escapes
-   resolved) equals exactly `"status"`, that member is a candidate. Do **not** stop at
-   the first candidate — keep scanning. If more than one depth-1 `status` key exists
-   (a malformed/duplicate-key document), keep the **last** one found by the time the
-   scan reaches the root object's closing `}`, mirroring the last-key-wins semantics
-   `Jason.decode/1` itself already applied when `autofix_file/1` read `Map.get(data,
-   "status")` — so the span this scan edits is guaranteed to be the same member the
-   decision logic actually acted on.
+   resolved) equals exactly `"status"`, that member is a candidate. Keep the **first**
+   candidate found and do not let any later depth-1 `status` match overwrite it — this
+   matches `Jason.decode/1`'s own confirmed FIRST-key-wins duplicate-key semantics
+   (verified directly against the pinned `jason 1.4.5`: `Jason.decode!(~s({"status":"a",
+   "status":"b"}))` returns `%{"status" => "a"}`, not `"b"`) — so the span this scan
+   edits is guaranteed to be the same member the decision logic in `autofix_file/1`
+   (`Map.get(data, "status")`) actually acted on. Scanning does not need to stop once the
+   first candidate is found — the rest of the input still must be walked so the pass
+   completes and any remaining structure is validated — but no candidate found after the
+   first is allowed to replace it. (An earlier version of this design stated the last
+   candidate wins, "mirroring" a last-key-wins `Jason.decode/1` semantics — this was
+   false; `Jason.decode/1` is first-key-wins, corrected here per ISS-0457.)
 3. For the (final) candidate KEY token, continue scanning forward from its closing
    quote: skip the mandatory `:` and any surrounding whitespace, then expect the next
    non-whitespace character to open a JSON string (`"`) — this is guaranteed to hold at

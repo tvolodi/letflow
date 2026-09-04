@@ -1,0 +1,54 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-02b",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0457-20260904/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T07:57:11Z",
+  "started_at": "2026-09-04T07:57:11Z",
+  "completed_at": "2026-09-04T07:58:50Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0457-splice-first-wins.md",
+      "docs/issues/ISS-0457.yaml",
+      "handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "related_handoff_ids": ["handoffs/WF03-ISS0457-20260904/step-02-code-designer.json"],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design (lib/letflow/design/iss0457-splice-first-wins.md). Independently re-derive your verdict from the artefact itself and from the real code on main -- do not take CODE-DESIGNER's own summary on trust. Confirm: (1) the design's own re-verification claims in its section 0 actually hold against the real, current lib/mix/tasks/letflow.lint_handoffs.ex on main (line numbers, function bodies, the false-claim text at ~487-491); (2) the chosen option (a) is adequately justified and the design contains no implementation code (.ex function bodies) -- signatures/specs/behavior-prose only; (3) the behavior-change spec in section 2 is unambiguous enough for ELIXIR-DEV to implement without further judgement calls, and correctly preserves every property named (depth tracking, string-escape handling, nested result.status immunity, byte-identical passthrough, the zero-match raise); (4) the corrected text in section 3 for BOTH false-claim locations is accurate and matches Jason's real first-key-wins behavior; (5) every acceptance criterion on the Step 2 dispatch (handoffs/WF03-ISS0457-20260904/step-02-code-designer.json) is actually met by the artefact.",
+    "acceptance_criteria": [
+      "Every claim in the design's section 0 independently re-checked against the real file on main, not copied from the design's own prose",
+      "Confirms zero .ex function-body code present in the design artefact",
+      "Confirms the behavior-change spec is implementable without further design decisions beyond the explicitly-stated (i)/(ii) non-load-bearing choice",
+      "Confirms both corrected-text blocks in section 3 are factually accurate",
+      "PASS or FAIL verdict with specific, named gaps if FAIL -- never a general impression"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS. Independently re-derived every checkable claim in lib/letflow/design/iss0457-splice-first-wins.md against the real file on main (not copied from the design's own prose or from CODE-DESIGNER's summary).\n\n(1) Section 0 re-verification: read lib/mix/tasks/letflow.lint_handoffs.ex directly. autofix_file/1 at :414-446 confirmed (uses `Jason.decode(raw)` in a `with` at :416, not `Jason.decode!` as the design's prose paraphrases -- a cosmetic prose imprecision only, since decode/decode! share identical duplicate-key resolution and this does not affect any behavioral claim; noted as a MINOR issue below, not gate-failing). splice_top_level_status/2 confirmed at :501-512 (spec at :500). scan_for_status/4 spec+clauses confirmed at :521-540, handle_string_token/5 at :545-567. The false-claim comment text at :487-491 read directly and matches the design's quoted 'Current (false) text' in section 3.1 verbatim, word-for-word. The best-overwrite mechanism at :559-560 read directly: `new_best` is unconditionally constructed and threaded through on every depth-1 'status' match regardless of prior `best` state -- confirmed genuinely last-match-wins by construction, exactly as claimed. Independently re-ran the Jason 1.4.5 duplicate-key probe myself (a fourth/fifth independent measurement, not inherited): `Jason.decode!(~s({\"status\":\"a\",\"status\":\"b\"}))` => `%{\"status\" => \"a\"}`, and a second probe `Jason.decode!(~s({\"status\":\"PASS\",\"other\":1,\"status\":\"DONE\"}))` => `%{\"other\" => 1, \"status\" => \"PASS\"}` -- both confirm FIRST-key-wins on the actual pinned jason (mix.lock line 8: jason 1.4.5), matching the design's claim exactly.\n\n(2) Option (a) is justified in section 1 against the real code (not a historical branch description) with concrete reasoning (Jason's resolution is a fixed point outside this codebase's control; option (b) would require inventing new duplicate-key detection machinery Jason's decode already silently absorbs; zero real occurrences in a 1989-file corpus removes urgency for the heavier option). No .ex function bodies present anywhere in the artefact -- verified by reading the full document: only prose, one unchanged @spec block, and quoted comment/documentation text (the before/after false-claim blocks, which are prose, not code).\n\n(3) Section 2's behavior-change spec is unambiguous: `best` set exactly once, on the first depth-1 'status' match, never overwritten by a later one. The (i)/(ii) implementation choice is explicitly stated as non-load-bearing for observable output, and checked this myself against the real clause shapes (:552-566) -- both converge to an identical final `acc`/`best` regardless of which is chosen, so this is a legitimate implementation-detail fork, not a hidden ambiguity. Every named preserved property traces to real, still-present code: depth-counting clauses (:525-531) untouched by this change; consume_json_string/1 (:610-620) untouched; the depth==1 guard (:548) untouched; splice construction (:504) untouched; the zero-match raise (:506-510) untouched. All citations checked against the actual file, not assumed.\n\n(4) Both corrected-text blocks (section 3.1 for the code comment, section 3.2 for lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md's own algorithm step 2 at :197-204, read directly and confirmed to match the design's quoted 'Current (false) text' verbatim) state FIRST-key-wins and cite the same jason 1.4.5 probe result I independently reproduced -- factually accurate.\n\n(5) All six Step 2 dispatch acceptance criteria independently checked against the artefact and met: option (a) picked/justified against real main code; behavior-change spec for scan_for_status/4 stated exactly with all named properties addressed; both false-claim locations named with corrected text; zero .ex function-body code (grep for TBD/deferred/'to be determined' also returned no matches); regression-suite impact addressed in section 4 and independently spot-checked -- confirmed test/mix/tasks/letflow.lint_handoffs_test.exs has exactly 47 tests (`grep -c '  test '` => 47) and the ISS-0442 comment block at lines ~721-740 (design cites ~722-742, close enough -- same block) matches the design's characterization verbatim: duplicate-top-level-status was investigated and deliberately left uncovered, with no test asserting the old last-wins behavior as correct, and no test fixture in the file constructs a duplicate-key document.\n\nOne MINOR issue found and recorded below (does not affect the verdict): section 0's prose says autofix_file/1 decides 'via Map.get(Jason.decode!(raw), \"status\")' but the real code at :416 uses `Jason.decode(raw)` (non-bang, inside a `with`/`{:ok, data}` match), not `Jason.decode!/1`. This is immaterial to every substantive claim the design makes (decode/1 and decode!/1 apply identical duplicate-key resolution; nothing in sections 1-5 depends on which form is used), so it does not constitute a false claim about behavior and is not gate-failing -- flagged only so the source gets corrected per core-directives.md's 'Never resolve a conflict silently' norm for a MINOR discrepancy.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Design section 0's prose states autofix_file/1 decides 'via Map.get(Jason.decode!(raw), \"status\")' -- an ordinary Map.get/2 on the map Jason.decode!/1 already produced. The real code at lib/mix/tasks/letflow.lint_handoffs.ex:416 actually calls the non-bang `Jason.decode(raw)` inside a `with {:ok, data} <- ...` clause, not `Jason.decode!/1`. Immaterial to the design's substance (decode/1 and decode!/1 share identical duplicate-key resolution; no section of the design depends on the bang form), so not gate-failing, but the prose should say `Jason.decode/1` (non-bang) for accuracy.",
+        "affected_item": "lib/letflow/design/iss0457-splice-first-wins.md, Section 0, second bullet"
+      }
+    ],
+    "next_action": "Design PASSES the gate. Route to ELIXIR-DEV (Step 3) to implement the scan_for_status/4 first-match-wins change per section 2 (either the (i) conditional-preservation or (ii) early-stop shape, ELIXIR-DEV's choice, stated in the implementation's own commit/PR description) and apply both corrected-text edits verbatim from section 3 to lib/mix/tasks/letflow.lint_handoffs.ex (~:487-491) and lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md (~:197-204). ELIXIR-DEV should also correct the MINOR Jason.decode!/1-vs-Jason.decode/1 prose imprecision noted above if convenient, though it is not required for Step 3 to proceed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,11 @@
+{
+  "handoff_id": "TEST-DUP-STATUS",
+  "status": "DONE",
+  "other_field": "irrelevant filler so the two status keys are not adjacent",
+  "nested": {
+    "result": {
+      "status": "PASS"
+    }
+  },
+  "status": "COMPLETE"
+}

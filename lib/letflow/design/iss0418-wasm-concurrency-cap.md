@@ -796,7 +796,21 @@ elsewhere in the suite) without losing the property under test.
    AC4's own `short_result`/`short_elapsed_ms` values with no new dispatch: `{:error,
    reason} = short_result`, `is_binary(reason)`, `short_elapsed_ms < 10_000`, and
    `CallTimeout.classify(short_result) == :wall_clock_timeout` all hold on data AC4's
-   test already produces as a byproduct of proving its own AC. AC1's OWN test body is
+   test already produces as a byproduct of proving its own AC.
+
+   **IMPLEMENTER WARNING (CODE-DESIGN-VALIDATOR re-gate 2, MINOR).** "Already
+   produces" means the *data* (`short_result`, `short_elapsed_ms`) is already
+   captured by AC4's existing code — it does NOT mean the assertions already
+   exist. Verified against AC4 as it stands today: it asserts only
+   `{:error, _} = short_result` (discarding the reason) and a RELATIVE
+   `short_elapsed_ms < long_elapsed_ms` comparison. It never calls
+   `is_binary/1` on the reason, never applies an absolute `< 10_000` bound,
+   and never calls `CallTimeout.classify/1` at all. So THREE of AC1's four
+   assertions must be WRITTEN INTO AC4's body — §6.2's directive text is the
+   controlling instruction. Deleting AC1 without adding them is a silent
+   coverage loss, which is exactly the failure this reduction must not
+   produce. Adding them costs zero new dispatch; only the assertion lines
+   are new. AC1's OWN test body is
    deleted; a comment at AC4's own call site names which of AC1's assertions are now
    checked there and why (mirroring AC4's own existing precedent comment for its 3→2
    history). **Nothing is lost:** AC1's own claim (inner bound fires, elapsed time
@@ -816,10 +830,22 @@ elsewhere in the suite) without losing the property under test.
    (contrast AC1/AC4, which assert real elapsed time and therefore cannot be
    replayed). This exact live mechanism — the outer bound firing and producing that
    literal reason-string shape — is ALREADY proven live, in this same rework's own
-   wiring, by TWO other dispatches: `plugin_handler_test.exs:152` (AC5, REQ-165's
-   original outer-timeout-fires safety property) and `plugin_handler_test.exs:393`
-   (AC3, the outer bound firing independently of a longer inner bound, task-death
-   proof). Capturing the exact reason string ONE of those two live dispatches actually
+   wiring, by `plugin_handler_test.exs:152` (AC5, REQ-165's original
+   outer-timeout-fires safety property).
+
+   **ATTRIBUTION CORRECTION (CODE-DESIGN-VALIDATOR re-gate 2, MINOR).** An earlier
+   revision of this paragraph credited TWO dispatches, adding
+   `plugin_handler_test.exs:393` (AC3). That is wrong, and ORCH verified it against
+   the real test: :393 deliberately MIRRORS `PluginInterface.invoke/3`'s own
+   `async_nolink`/`yield`/`shutdown` algorithm inline (in order to observe the task
+   pid, which `invoke/3`'s wrapper does not expose) — it never calls `invoke/2,3` and
+   therefore never constructs that reason string at all. Row :152 alone is the live
+   source, and it is sufficient: one live producer is all the capture needs. The
+   correction matters because if :152 were ever itself converted or removed, a reader
+   trusting the "two dispatches" claim would believe a redundant live source still
+   existed when none did.
+
+   Capturing the exact reason string that live dispatch actually
    produces (a `IO.inspect`/log capture during ELIXIR-DEV's implementation, mirroring
    exactly how `call_timeout_test.exs`'s existing sibling test at line ~113 already
    captured `req170_hang.wat`'s INNER-timeout string verbatim from "one real run,"

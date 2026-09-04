@@ -4405,22 +4405,6 @@
       "note": "docker-compose.yml postgres healthcheck referenced a bare 'letflow' database (pg_isready's -U default) instead of the real POSTGRES_DB (letflow_dev), causing a FATAL log line every 2s despite reporting healthy correctly. Fixed by adding -d $$POSTGRES_DB (escaped for compose's own interpolation) so the two values can never drift again."
     },
     {
-      "run_id": "WF03-ISS0442-20260904",
-      "requirement_id": null,
-      "issue_id": "ISS-0442",
-      "queue_task_id": 442,
-      "github_issue_number": 852,
-      "status": "IN_PROGRESS",
-      "owned_modules": [
-        "lib/mix/tasks/letflow.lint_handoffs.ex"
-      ],
-      "started_at": "2026-09-04T04:20:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 04 TEST-DESIGNER COMPLETED -- added 4 tests to test/mix/tasks/letflow.lint_handoffs_test.exs (43 -> 47) plus test/specs/ISS-0442.md. T-AUTOFIX-NESTED-STATUS-COLLISION-PASS-PASS closes REVIEWER's REQUIRED gap (fixable top-level PASS + nested result.status PASS, asserting both the correction and byte-identical non-corruption); confirmed by mutating the tracked file (removed the depth==1 guard), re-running (45/47 passed, the 2 failures being exactly this new test plus T-SPLICE-PRESERVES-ESCAPES-BRACES-ARRAY-NO-NEWLINE), then reverting (git diff --stat empty) and re-confirming 47/47 green on real code. Also added escape/embedded-brace/inline-array/no-trailing-newline coverage and missing/null-status refusal coverage via the real --dir/--autofix path. Discovered and flagged (not silently worked around) a separate, out-of-scope latent defect: a duplicate top-level status key desyncs autofix_file/1's Jason-decode-based (first-key-wins, verified directly) target from splice_top_level_status/2's scan (last-match-wins) selection, contradicting the design's own last-key-wins claim -- documented in the spec and this step's handoff for a future issue. Full suite (mix letflow.check.test, blocked on in the foreground ~43 min): 3201/3207 passed, 6 failures -- 2 the same pre-existing rustc-toolchain-absent gap REVIEWER already found, 4 (IdentityMigrationTest + TenantSchemaReaperTest) confirmed via isolated re-run (12/12 passed) to be shared-Postgres async-suite concurrency flakes unrelated to this diff. ISS-0069 target substring absent. Routed to TEST-DESIGN-VALIDATOR.",
-      "note": "WF-03 issue-resolving run for ISS-0442: lint_handoffs --autofix's write_json!/2 re-encodes the WHOLE handoff JSON via Jason.encode!, alphabetically re-sorting keys and reflowing formatting at every nesting level, so a one-field status fix produces an ~84-line diff instead of a minimal one -- defeats the per-file diff-reviewability property SECURITY-REVIEWER relied on when passing ISS-0440. Resuming a prior run (WF03-ISS0442-20260903) that correctly found and recorded a real sequencing blocker (ISS-0440 not yet merged) rather than diagnosing against phantom code."
-    },
-    {
       "run_id": "WF03-ISS0456-20260904",
       "workflow_id": "WF-03",
       "requirement_id": null,

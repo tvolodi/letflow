@@ -195,6 +195,8 @@ every other reader point here rather than restating it.
   record MUST carry `superseded_by: ISS-NNNN` naming the successor issue that carries the
   remaining work, so it can never be a dead end; file that successor before transitioning
   the record. State plainly in the record what the shipped work does *not* close.
+  Release the queue task with `release_lock(status: "blocked")`, not `"done"` and not
+  no-status — see `TASK_QUEUE.md`'s release_lock section for why.
 
 - `no_defect` — **the issue was investigated and measured, and there was no root cause
   there to remove.** Terminal, like `resolved`, but it asserts a different thing and must
@@ -231,6 +233,9 @@ every other reader point here rather than restating it.
      (`ISS-0109.yaml`) — and one key name with two meanings distinguished only by nesting
      depth is not readable by the mechanical linter ISS-0191 specifies. `verdict_at:` is
      when the run reached its verdict, which is not the same event as the GitHub close.
+
+  Release the queue task with `release_lock(status: "blocked")`, not `"done"` and not
+  no-status — see `TASK_QUEUE.md`'s release_lock section for why.
 
   This is deliberately the hardest of the three to earn cheaply, because it is the one an
   uninvestigated issue would most like to take. An issue nobody investigated cannot reach

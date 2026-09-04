@@ -45,4 +45,47 @@ related:
   - ISS-0458
 queue_task_id: 459
 github_issue: 884
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0459-20260904
+resolved_at: "2026-09-04T13:57:42Z"
+resolution_note: >
+  Resolved as a documentation fix of an already-existing mechanism -- no
+  letflow-queue code change was needed. ISSUE-FIXER's Step 1 diagnosis (and
+  CODE-DESIGN-VALIDATOR's independent re-verification, twice, across one
+  rework iteration) confirmed that letflow-queue's existing
+  release_lock(status:"blocked") already mechanically satisfies AC1 today:
+  task.ex:18's @statuses ~w(open done blocked), get_next_task's claim query
+  (tasks.ex:174-204) filtering WHERE status = 'open' (a "blocked" row can
+  never be re-claimed), and tap_maybe_close_github_issue/2 (tasks.ex:382-401)
+  only firing its GitHub-close side effect on a literal "done" status match
+  (a pure passthrough for "blocked"). Independently re-derived against
+  docs/migration/decisions/0017-task-queue-selection-model.md and confirmed
+  disjoint in scope (0017 governs claim/selection, not release_lock's status
+  vocabulary) -- no conflict, no REVIEWER decision-record flag needed.
+
+  Three files edited (commit d76471817853159db0d230d4abf4eba4c635ad36),
+  REVIEWER-approved as reading consistently with each document's existing
+  style and cross-referencing correctly with no drift:
+    - docs/agents/protocols/TASK_QUEUE.md: new release_lock (function 4)
+      prose documenting the instrumented/no_defect -> status:"blocked"
+      convention with the same rigor as the existing done/no-status
+      distinction (AC2), including what "blocked" does NOT assert.
+    - docs/agents/protocols/ISSUE_QUEUE.md: matching cross-reference
+      sentences appended to the instrumented and no_defect status-vocabulary
+      bullets, pointing to TASK_QUEUE.md's release_lock section.
+    - docs/agents/workflows/WF-03_issue_resolving.md: Step 5's ORCH
+      release-lock instruction rewritten to branch on the local
+      docs/issues/ISS-NNNN.yaml status just written (resolved ->
+      release_lock(status:"done"); instrumented/no_defect ->
+      release_lock(status:"blocked")) -- this closes the actual proximate
+      cause of ISS-0458's ad-hoc status:"done" workaround, since the
+      unconditional pre-fix instruction is what produced that workaround.
+
+  AC3: queue task 458's live state (released status:"done" as an ad-hoc
+  workaround for what was actually an instrumented outcome) has an explicit,
+  actionable reconciliation recommendation on record in
+  handoffs/WF03-ISS0459-20260904/step-02-code-designer.json's result.summary
+  -- re-release task 458 as status:"blocked" once this fix is merged; safe
+  to execute since only a transition TO "done" triggers the GitHub-close
+  side effect, never a transition away from it. Not executed by this
+  handoff (ORCH's follow-on per WF-03 Step 5's own closing note).

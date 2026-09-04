@@ -4454,6 +4454,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- direct ORCH action (all 6 ORCHESTRATOR.md S10 checks passed). Consolidated Task.Supervisor sprawl rationale added to infrastructure.ex's moduledoc, real recommendation KEEP ALL 7 (already fully elaborated in the requirement's own text, transcribed not re-derived). mix compile/format clean, test/letflow/supervisor/ 11/11, full suite 3206/3208 (2 pre-existing rustc-gap failures).",
       "note": "WF-02 requirement-implementation run for REQ-220: closes ISS-0425 part 3 (Task.Supervisor sprawl review). Documentation-only deliverable per the requirement's own text -- no Task.Supervisor removed/renamed/merged, both named consolidation candidates (3 Wasm supervisors; Plugin+Lua) explicitly considered and rejected with stated reasons."
+    },
+    {
+      "run_id": "WF03-ISS0421-20260904",
+      "requirement_id": null,
+      "issue_id": "ISS-0421",
+      "queue_task_id": 421,
+      "github_issue_number": 825,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/scheduler/poller.ex"
+      ],
+      "started_at": "2026-09-04T09:27:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- claimed via set_lock (not get_next_task, which keeps returning the already-diagnosed, perpetually-open ISS-0456 ahead of any real work). Dispatching Step 1 to ISSUE-FIXER to re-assess scope against REQ-219/ISS-0451's now-merged restart-intensity/circuit-breaker work.",
+      "note": "WF-03 issue-resolving run for ISS-0421: Scheduler.Poller runs 7 serial per-tenant sweeps per tick with no concurrency bound, and was originally filed with 3 concerns (unbounded tick latency scaling with tenant count; platform-wide SPOF; default restart intensity). The restart-intensity/SPOF concerns are likely now substantially addressed by REQ-219 (layered supervision, Pollers' own max_restarts:5/max_seconds:60) and ISS-0451 (circuit-breaker isolating a persistent Poller fault from the top-level supervisor) -- ISS-0421's own filing text explicitly deferred to whichever of it or REQ-219 settled restart-intensity first."
     }
   ]
 }

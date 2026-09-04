@@ -1,0 +1,62 @@
+{
+  "handoff_id": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0430-20260905/step-02-code-designer.json",
+  "created_at": "2026-09-04T22:53:26Z",
+  "started_at": "2026-09-04T22:53:26Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "docs/issues/ISS-0425.yaml",
+      "handoffs/WF03-ISS0430-20260905/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/poller.ex",
+      "lib/letflow/engine/service_task_dispatcher.ex",
+      "lib/letflow/engine/service_task_dispatcher/poller.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": ["lib/letflow/design/"]
+  },
+  "task": {
+    "description": "Produce the design artefact for ISS-0430 (Postgres LISTEN/NOTIFY as the BEAM<->Postgres push channel). Read docs/issues/ISS-0430.yaml in full -- it is the task, not background, and its 'SEQUENCING NOTE' paragraph carries the corrected framing (REQ-214 and ISS-0425's own REQ-219/REQ-220 have all shipped; this is a retrofit question against two already-existing pollers, not a greenfield sequencing choice). Read handoffs/WF03-ISS0430-20260905/step-01-issue-fixer-diagnose.json's result.summary in full -- it carries, quoted from actual source, both pollers' exact poll intervals/config keys/claim-query shapes, the current supervision-tree placement (Letflow.Supervisor.Infrastructure / Pollers / PollersBreaker / Http), and decision 0003 Dimension B's verbatim :prefix-scoping mechanism plus the flag that LISTEN/NOTIFY has no :prefix/schema-scoping concept at all. Do not re-read those source files from scratch -- build from that evidence.\n\nWrite ONE design artefact to lib/letflow/design/ (pick a filename following this project's existing convention, e.g. iss0430-notify-listen-decision.md) that explicitly answers ALL FIVE named design questions from the issue text (connection ownership, multi-tenancy, payload limit, delivery semantics, test story) PLUS the reframed retrofit-vs-not question for the two already-shipped pollers. This is a DECISION document, not an implementation: no .ex file bodies, no migration DDL beyond a schema sketch if genuinely needed for the payload-limit answer, no @spec-heavy interface unless it is illustrative of the decision being made (e.g. sketching what a Postgrex.Notifications child_spec placement would look like is fine; writing the actual GenServer callback bodies is not).\n\nQUESTION 2 (multi-tenancy) IS THE HARDEST PART AND MUST BE REASONED THROUGH CONCRETELY, NOT HAND-WAVED. ISSUE-FIXER's diagnosis states plainly: Postgres LISTEN/NOTIFY channels are database-global with zero schema/:prefix concept, while Letflow's entire tenant-isolation invariant (INV-1, decision 0003 Dimension B) is a physical Postgres-SCHEMA boundary enforced per-query via Ecto's :prefix option -- there is no connection-level or session-level tenant context to lean on either (decision 0003's own 2026-08-17 addendum explicitly rejected building one). So a NOTIFY issued from within tenant A's schema context (e.g. a trigger on a tenant-schema table) is, by Postgres's own design, visible to ANY backend listening on that channel name, full stop -- there is no server-side mechanism that scopes it. Concretely reason through and choose (or reject) one of these approaches, or propose a better one, and justify the choice against INV-1's severity (BLOCKER, no MAJOR/MINOR tier for cross-tenant exposure):\n  (a) a single shared channel, with the NOTIFY payload carrying only an opaque routing id (e.g. a service_task_dispatches.id or timers.id) that is NEVER tenant-identifying on its own -- the LISTENer, on receiving the id, does a normal prefix-scoped Repo.get(prefix: expected_tenant_schema) fetch, and if the row isn't found under that tenant's schema (because it belongs to another tenant), the fetch simply returns nothing and the id is discarded/ignored. This treats the NOTIFY as a pure 'something changed, go poll now' wake-up signal, never as a data-bearing or even tenant-identifying message -- work out explicitly whether this design leaks ANYTHING (row-existence-adjacent timing signal, id-space cross-tenant enumeration risk if ids are sequential and correlatable) and state the verdict;\n  (b) per-tenant channel naming (e.g. NOTIFY \"dispatch_ready_<tenant_schema>\") with the LISTENer(s) subscribing only to channels for schemas it is entitled to see -- work out whether this actually helps given a single BEAM-side Postgrex.Notifications connection typically needs to listen application-wide (i.e. it would need to LISTEN on every tenant channel anyway, which is the same exposure as (a) unless something else changes) and whether the channel name itself becomes a tenant-enumeration surface (a channel-name list leaks which schemas/tenants exist to anyone who can query pg_listening_channels or similar);\n  (c) any other mechanism you can concretely justify.\n  Do not present a menu without a decision -- CHOOSE one, and state explicitly what a compromised/malicious listener process (in a hypothetical future multi-listener design) could and could not learn from the channel/payload under your chosen scheme.\n\nQUESTION 5 (test story) -- investigate the Ecto/Postgrex ecosystem's actual precedent for testing NOTIFY under Ecto.Adapters.SQL.Sandbox (which rolls back every test transaction, so a NOTIFY issued inside a sandboxed test transaction is never committed and never fires -- Postgres only delivers NOTIFY on COMMIT). Consider Ecto.Adapters.SQL.Sandbox's shared mode (a non-transactional sandbox mode that allows real commits, typically used for testing across-process behavior) as one candidate, and consider this project's own ISS-0031 precedent if it's still applicable (referenced in HANDOFF_PROTOCOL.md's worked examples as 'running one assertion via a checked-out non-sandboxed connection' for an analogous DDL-visibility sandbox limitation) as another. State a concrete, buildable test strategy -- not merely 'this needs more research'.\n\nAll 5 questions plus the retrofit question must each get their own clearly-headed section. State explicitly (AC2/AC3): Postgres remains the source of truth, no state travels in a NOTIFY payload (identifiers/routing hints only, always treated as untrusted on receipt), and polling is RETAINED as a reconciliation backstop -- name the specific retained poll interval(s) for both pollers under your recommendation (they are currently 5000ms/5s each per the diagnosis). State explicitly (AC5) where a Postgrex.Notifications connection (or connections -- decide how many) would sit in the CURRENT, ALREADY-SHIPPED tree (Infrastructure / Pollers / PollersBreaker / Http) -- as a new child of Infrastructure, a new sibling supervisor, or inside Pollers itself -- and justify against the existing ordering/restart-intensity reasoning in those modules' own moduledocs (do not silently contradict ISS-0429's or ISS-0451's already-settled ordering guarantees). State explicitly (AC6) whether retrofitting the two already-shipped pollers is worth doing, with reasoning, or whether the answer is 'not now' with a stated reason -- 'not worth it, keep polling' is a legitimate outcome if argued against the round-trip evidence, not chosen by default. State explicitly (AC7) that the dev-host 1.3ms figure is ~92% Docker Desktop network overhead and a co-located deployment measures ~0.11ms, and ground any recommendation in ELIMINATED ROUND TRIPS (e.g. 'N idle tenants x M sweeps/minute x 2 pollers, each currently paying a full round-trip that finds nothing') rather than the raw millisecond figure. Confirm explicitly (AC8) that no consumer implementation is included -- this is a decision document.\n\nOnce done, complete this handoff per HANDOFF_PROTOCOL.md section 4, commit the design artefact and the handoff file, and route to CODE-DESIGN-VALIDATOR.",
+    "acceptance_criteria": [
+      "A design artefact exists under lib/letflow/design/ and is committed",
+      "All five original design questions (connection ownership, multi-tenancy, payload limit, delivery semantics, test story) are answered explicitly, each under its own heading",
+      "The multi-tenancy answer names a specific concrete mechanism (not a menu of options) and states what a listener could/could not learn under it, reasoned against decision 0003 Dimension B's actual :prefix mechanism and its stated absence of any connection/session-level tenant context",
+      "The design states Postgres remains the source of truth and NOTIFY payloads carry only identifiers/routing hints, always treated as untrusted",
+      "The design states polling is retained as a reconciliation backstop, naming the specific retained interval(s) for both Letflow.Scheduler.Poller and Letflow.Engine.ServiceTaskDispatcher.Poller",
+      "The design places the LISTEN connection owner concretely within the CURRENT supervision tree (Infrastructure/Pollers/PollersBreaker/Http) and justifies the placement against that tree's own already-documented ordering/restart-intensity guarantees",
+      "The design states explicitly whether retrofitting the two already-shipped pollers is recommended, with reasoning either way",
+      "Any performance claim cites eliminated round trips, not the raw dev-host millisecond figure, and explicitly notes the ~92%-Docker-overhead / ~0.11ms-co-located caveat",
+      "The test story names a concrete, buildable strategy for testing NOTIFY delivery under Ecto's sandboxed test suite",
+      "No implementation code (.ex bodies, migrations beyond an illustrative schema sketch if truly needed) is present in the artefact",
+      "next_action names CODE-DESIGN-VALIDATOR as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

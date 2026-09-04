@@ -280,3 +280,68 @@ history:
       REQ-218's own tests under a tight pool config). Full suite
       3212/3214, 2 pre-existing rustc-toolchain-gap failures. See
       docs/issues/ISS-0421.yaml for full resolution detail.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-04T15:27:08Z"
+    note: >
+      WF03-ISS0459-20260904 resolved (queue task 459, GH#884, stage S6).
+      letflow-queue had no release_lock status for a WF-03 instrumented/
+      no_defect terminal verdict, so a run reaching that outcome had to
+      either falsely assert resolved (status:"done", which best-effort
+      closes the GitHub issue) or release with no status, leaving the
+      task open/unlocked and immediately re-claimed by the very next
+      get_next_task call under the LIFO issue-priority order -- a live
+      infinite-loop hazard that hit queue task 458/ISS-0458 today and was
+      worked around ad-hoc (released status:"done" anyway, explicitly
+      flagged as not-a-real-fix in that run's own record).
+      ISSUE-FIXER's diagnosis (independently re-verified twice more, by
+      CODE-DESIGN-VALIDATOR and again by REVIEWER, all three reading
+      letflow-queue's own source directly) found letflow-queue already
+      ships a third status value, "blocked" (lib/letflow_queue/tasks/
+      task.ex:18), already excluded from get_next_task's claim query
+      (WHERE status = 'open' only) and already a passthrough for
+      tap_maybe_close_github_issue/2 (fires only on literal "done") --
+      so the mechanism ISS-0459 asked for already existed, zero
+      letflow-queue code change needed. CODE-DESIGN-VALIDATOR FAILed the
+      first design pass on citing letflow-queue's now-retired "exactly
+      four operations" framing (superseded same-day by decision 0017,
+      docs/migration/decisions/0017-task-queue-selection-model.md,
+      "exactly one mutating claim path") as supporting reasoning;
+      CODE-DESIGNER reworked to ground the documentation-only conclusion
+      on non-retired grounds (0017 governs selection/claiming, disjoint
+      from release_lock's status vocabulary) and re-passed. Fix, this
+      repo only (letflow-queue repo untouched): docs/agents/protocols/
+      TASK_QUEUE.md gains a full release_lock(status:"blocked") section
+      matching the existing done/no-status rigor; docs/agents/protocols/
+      ISSUE_QUEUE.md's instrumented and no_defect bullets each gain a
+      cross-reference sentence; docs/agents/workflows/
+      WF-03_issue_resolving.md Step 5's previously-unconditional
+      release_lock(status:"done") instruction now branches on the local
+      issue status (resolved -> done; instrumented/no_defect ->
+      blocked), closing the actual proximate cause of ISS-0458's
+      workaround. TEST-DESIGNER correctly returned SKIPPED (no lib/ or
+      priv/ diff exists for a regression test to exercise; the
+      underlying mechanism is already covered by letflow-queue's own
+      pre-existing tests/letflow_queue/tasks_test.exs, quoted and
+      verified in this run's own handoffs). REVIEWER PASSED (idiom,
+      cross-file consistency, decision-0017 re-check against the
+      implemented text, not just the design). Full pipeline: mix format
+      clean, mix compile --warnings-as-errors clean, mix test 3217
+      passed / 0 failed / 21 excluded. PR #886 merged (squash commit
+      a6902425) after one structurally-cleared wasm_hang CI flake
+      (identical commit passed on the concurrent push-triggered run;
+      zero lib/priv touched by this docs-only PR; already tracked under
+      ISS-0418, not re-filed). docs/issues/ISS-0459.yaml: status:
+      resolved. GitHub issue #884 closed with mandated evidence comment
+      stating plainly no code change was needed. Queue task 459 released
+      status:"done". AC3 reconciliation executed as its own follow-on
+      action once the design's safety claim was independently verified
+      three times over: queue task 458 re-released status:"blocked"
+      (was status:"done", the ad-hoc workaround this issue was filed
+      against) -- confirmed safe (only a transition TO "done" triggers
+      GitHub-close, so this did not reopen or re-close GH#882, itself
+      independently re-verified still CLOSED after the call) and
+      confirmed GitHub-visible: GH#882's own state is unaffected by a
+      transition to "blocked". No letflow-queue repo commit, no deploy
+      -- this fix needed neither.

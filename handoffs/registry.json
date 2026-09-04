@@ -4406,6 +4406,22 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- direct ORCH fix (all 6 ORCHESTRATOR.md S10 checks passed, single config file, no code/test change), verified live against the running letflow-1-postgres-1 container (before: FATAL every ~2s; after: healthy, zero FATAL lines across multiple healthcheck intervals). No PR needed -- infra-only, no CI-relevant code changed; committed direct to main.",
       "note": "docker-compose.yml postgres healthcheck referenced a bare 'letflow' database (pg_isready's -U default) instead of the real POSTGRES_DB (letflow_dev), causing a FATAL log line every 2s despite reporting healthy correctly. Fixed by adding -d $$POSTGRES_DB (escaped for compose's own interpolation) so the two values can never drift again."
+    },
+    {
+      "run_id": "WF03-ISS0442-20260904",
+      "requirement_id": null,
+      "issue_id": "ISS-0442",
+      "queue_task_id": 442,
+      "github_issue_number": 852,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.lint_handoffs.ex"
+      ],
+      "started_at": "2026-09-04T04:20:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 git setup COMPLETED -- ISS-0440's sequencing block resolved (merged to main), dispatching Step 1 directly to CODE-DESIGNER per the prior WF03-ISS0442-20260903 ISSUE-FIXER diagnosis's already-valid sizing verdict.",
+      "note": "WF-03 issue-resolving run for ISS-0442: lint_handoffs --autofix's write_json!/2 re-encodes the WHOLE handoff JSON via Jason.encode!, alphabetically re-sorting keys and reflowing formatting at every nesting level, so a one-field status fix produces an ~84-line diff instead of a minimal one -- defeats the per-file diff-reviewability property SECURITY-REVIEWER relied on when passing ISS-0440. Resuming a prior run (WF03-ISS0442-20260903) that correctly found and recorded a real sequencing blocker (ISS-0440 not yet merged) rather than diagnosing against phantom code."
     }
   ]
 }

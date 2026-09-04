@@ -84,3 +84,9 @@ orch_routing_note: >
   the fix against real, on-main code. Whoever next picks this up should
   first re-check ISS-0440's status/branch before dispatching
   CODE-DESIGNER.
+  ORCH (2026-09-04): ISS-0440 has since merged (write_json!/2 confirmed
+  present on main at lib/mix/tasks/letflow.lint_handoffs.ex:454).
+  Sequencing blocker resolved. Re-claimed queue task 442, branch
+  feature/WF03-ISS0442-20260904 created from main, dispatching Step 1
+  directly to CODE-DESIGNER per ISSUE-FIXER's already-valid prior sizing
+  verdict (see handoffs/WF03-ISS0442-20260903/step-01-issue-fixer-diagnosis.json).

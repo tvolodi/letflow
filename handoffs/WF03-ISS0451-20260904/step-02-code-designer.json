@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-02-code-designer.json",
   "created_at": "2026-09-04T02:50:00Z",
   "started_at": "2026-09-04T03:09:23Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T03:17:04Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -42,10 +42,12 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "REWORK ITERATION 2 complete. Fixed lib/letflow/design/iss0451-poller-crash-budget-isolation.md section 3.4a's children-list syntax from the broken `{Letflow.Supervisor.Pollers, restart: :temporary}` (a 2-tuple {module, arg} form, which Supervisor.init/2 normalizes as 'call module.child_spec(arg)', threading arg into start_link -- confirmed live, no :restart key results, defaults :permanent) to the corrected `Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary)` used directly as the children-list entry -- confirmed live (Elixir 1.20.3, this project's pinned toolchain) that this form genuinely produces a %{..., restart: :temporary} spec, and that a supervisor started with it never auto-restarts a killed child, its which_children goes empty, and the PARENT supervisor's own restart-intensity counter is untouched (0/1 max_restarts survived 10 kill cycles). While re-deriving the downstream sections per the rework note (not merely re-asserting), discovered and fixed a SECOND, previously-unflagged defect that only surfaces once the child spec is genuinely :temporary: Supervisor.restart_child/2 cannot restart a :temporary child that has already exited once, because OTP deletes a :temporary child's spec the instant it terminates (confirmed live: restart_child/2 on an already-exited :temporary child returns {:error, :not_found}, not a fresh pid). This breaks every restart call the design specifies for PollersBreaker (the :closed-branch handler on 1st :DOWN, and the :half_open_probe handler) -- both corrected to Supervisor.start_child/2 with the full child spec, confirmed live to work correctly and repeatably across cycles, and to safely no-op with {:error, {:already_started, pid}} if called while the child is still alive. This same defect also breaks the EXISTING test/letflow/supervisor/pollers_test.exs test's own restart_pollers!/0 helper (terminate_child/2 then restart_child/2 -- confirmed live that terminate_child/2 on a :temporary child also deletes its spec immediately, so the helper's own {:ok, _pid} = restart_child(...) match would raise MatchError once Pollers is :temporary), used both inline in the AC4 test body and in its on_exit teardown -- flagged as a required fix for that helper, separate from and in addition to updating the AC4 test's own assertions to expect PollersBreaker's mechanism. Re-derived (not re-asserted) sections 3.6/3.7/4's 'exactly 0, structurally unconditional' top-level-restart-consumption arithmetic against the corrected start_child/2-based mechanism -- still holds, now backed by a live probe showing 10 kill/start_child-restart cycles never touched a max_restarts:1 top-level supervisor. Re-derived section 5's AC4-preservation claim -- the existing test still 'fails as written' once Pollers is genuinely :temporary (this time verified against a genuinely-:temporary spec, not assumed), plus the newly-discovered restart_pollers!/0 helper consequence is now stated explicitly. Re-derived section 6.2 step 6's Process.whereis(...) == nil observable -- still correct, confirmed live against the corrected form; also corrected step 3's test procedure (it referenced the now-broken restart_pollers!/0 shape) and step 6's stray restart_child/2 mention. All ~20 occurrences of restart_child/2 in the mechanism description were audited; each was either corrected to start_child/2, left as accurate historical description of the prior iteration's defect, or confirmed already correct (the terminate_child/restart_child pattern's role as 'not needed to stop a :temporary child' at section 3.4's own paragraph, which does not depend on which restart call is used). No implementation code (.ex function bodies) added -- the only code-shaped content is throwaway probe snippets (a trivial ProbeCD.Worker GenServer) used to demonstrate/verify OTP's own Supervisor.child_spec/2 semantics, consistent with this design's existing convention of citing live-verified evidence, not part of the PollersBreaker/Pollers implementation itself (which remains signatures/types/state-shape only throughout).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Re-gate with CODE-DESIGN-VALIDATOR (step-02b) against this rework-iteration-2 revision."
   },
   "gate_history": [
     {

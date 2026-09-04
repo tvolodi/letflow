@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000003",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0459-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T13:38:28Z",
+  "started_at": "2026-09-04T13:38:28Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0459-20260904/step-01-issue-fixer-diagnose.json"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0459-20260904/step-01-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0459.yaml",
+      "docs/issues/ISS-0458.yaml",
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks.ex",
+      "c:/Users/tvolo/dev/ai-dala/letflow-queue/lib/letflow_queue/tasks/task.ex"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ]
+  },
+  "task": {
+    "description": "Design the fix for ISS-0459, building on ISSUE-FIXER's Step 1 diagnosis (read result.summary in full in the artifact above -- do not re-derive from scratch, but DO verify its central claim yourself against the cited letflow-queue source before designing on top of it, per HANDOFF_PROTOCOL.md 1.1). ISSUE-FIXER's finding, to verify then build on: letflow-queue's existing status:\"blocked\" (task.ex line 18, tasks.ex get_next_task SQL requiring status='open', tasks.ex tap_maybe_close_github_issue firing only on status==\"done\") already mechanically satisfies ISS-0459 Acceptance Criterion 1 today -- releasing a task with release_lock(status:\"blocked\") excludes it from all future get_next_task claims AND does not best-effort-close its GitHub issue. No new letflow-queue status value, no migration, no letflow-queue application code change was found necessary.\n\nYour design must cover, as ONE coherent design even though it spans two repos:\n\n1. DECIDE: does 'blocked' as the vocabulary word genuinely suffice, or is it risky enough (reads as 'stuck, needs action' vs the actual meaning 'investigated to a stable terminal stop, not a defect') that the design should instead propose a small letflow-queue enhancement -- e.g. an optional 'reason' or 'release_note' field stored alongside status, so a future reader of the queue's own data can distinguish 'this task is stuck because X is blocking it' from 'this task reached a genuine terminal non-fix verdict' without cross-referencing docs/issues/*.yaml by hand. Make a real design decision here, don't punt it back to ORCH -- but if you conclude a code change IS warranted, keep it minimal (e.g. one new nullable string column + one new optional request field) and scope it as an ADDITIVE, backward-compatible change (existing release_lock calls with no reason field must keep working unchanged).\n2. Write the actual new prose for docs/agents/protocols/TASK_QUEUE.md's release_lock (#4) section: document the instrumented/no_defect -> release_lock(status:\"blocked\") convention explicitly, with the same rigor as the existing done/no-status distinction (ISS-0459 AC2) -- name it, define when to use it, state what it does NOT do (does not close GH issue, does not assert 'stuck'/'needs action'), and cross-reference ISSUE_QUEUE.md's resolved/instrumented/no_defect status vocabulary so a reader can map a WF-03 Step 5 local-status outcome to the correct release_lock call.\n3. Also decide whether docs/agents/protocols/ISSUE_QUEUE.md needs a matching cross-reference addition (Step 5's own text) so a future ISSUE-FIXER reading THAT file alone still learns the correct release_lock call for instrumented/no_defect, not just TASK_QUEUE.md.\n4. AC3 reconciliation: docs/issues/ISS-0458.yaml's queue task 458 was released with status:\"done\" (the ad-hoc, flagged-as-wrong workaround) for what was actually an instrumented outcome. Your design must state explicitly what ELIXIR-DEV/ORCH should do about task 458's current live state once the new mechanism/documentation exists -- e.g. re-release it as status:\"blocked\" to correct the record, or leave it (state why, if so). This does not require a letflow-queue code change to execute -- it's an operational release_lock call ORCH can make directly once the design is validated -- but the design must say so explicitly so nothing is silently skipped.\n5. If (per point 1) you decide a letflow-queue code change IS warranted: write it as a design artefact under lib/letflow/design/ in THIS repo (interfaces/@spec/schema changes only, no implementation code, per this project's own design-artefact convention) describing the new column/field, the changeset change, and the release endpoint's new optional param -- ELIXIR-DEV will implement it in the SEPARATE letflow-queue repo directly from this design doc plus its own artifacts_in pointer, since letflow-queue does not have its own design-artefact pipeline (state this explicitly in your design doc's own preamble, so ELIXIR-DEV knows to treat it as instructive spec, not a literal file to copy into letflow-queue's tree).\n6. If (per point 1) you decide documentation-only is correct and no code change is warranted: state that explicitly and do not produce a design artefact under lib/letflow/design/ for a code change that isn't happening -- write your reasoning into this handoff's own result.summary instead, and route Step 3 directly to the TASK_QUEUE.md/ISSUE_QUEUE.md doc edits.\n\nDo NOT write the actual TASK_QUEUE.md/ISSUE_QUEUE.md edits yourself as committed file changes in this step -- draft the exact prose in this handoff's result.summary (or a design artefact) for CODE-DESIGN-VALIDATOR to review, then ELIXIR-DEV applies it at Step 3.",
+    "acceptance_criteria": [
+      "ISSUE-FIXER's core finding (blocked status already satisfies AC1 mechanically) is independently re-verified against the cited letflow-queue source, not merely copied",
+      "A clear, justified decision is made: documentation-only fix, OR a minimal additive letflow-queue schema/API change -- not left ambiguous",
+      "If documentation-only: exact TASK_QUEUE.md release_lock section prose is drafted, meeting ISS-0459 AC2's rigor bar (same level of detail as the existing done/no-status distinction)",
+      "If a code change is proposed: a design artefact exists under lib/letflow/design/ with interfaces/@spec/schema only, no implementation code, and explicitly states it targets the separate letflow-queue repo",
+      "ISSUE_QUEUE.md cross-reference need is explicitly assessed (add or explicitly justify not adding)",
+      "AC3 (task 458 reconciliation) has an explicit, actionable recommendation in the design, not left for a later run to figure out",
+      "No committed edits to TASK_QUEUE.md, ISSUE_QUEUE.md, or letflow-queue source in this step -- design/draft only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

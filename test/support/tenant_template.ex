@@ -268,6 +268,34 @@ defmodule Letflow.Test.TenantTemplate do
   defp build_template! do
     staging_schema = generate_staging_schema_name()
 
+    # OQ-7 / SECURITY-REVIEWER re-gate MAJOR (process hygiene, not a security
+    # exposure): every path out of the build between CREATE SCHEMA and the
+    # step-5 rename must drop the staging schema, or a failed build leaks a
+    # randomly-named, fully-populated schema that nothing will ever clean up.
+    # Unlike the pre-INV-8 failure mode this replaces, such debris does NOT
+    # wedge later runs (the next attempt mints a fresh random name), but it
+    # accumulates silently across runs -- and leftover state of exactly this
+    # class already cost this run hours of misdiagnosis, so it is worth
+    # closing rather than deferring.
+    #
+    # The rescue re-raises the ORIGINAL exception after cleanup: the build's
+    # own failure is the information the caller needs, and a cleanup failure
+    # must never mask it. Cleanup is itself best-effort for the same reason.
+    try do
+      do_build_template!(staging_schema)
+    rescue
+      exception ->
+        try do
+          Repo.query!(~s(DROP SCHEMA IF EXISTS "#{staging_schema}" CASCADE))
+        rescue
+          _cleanup_failure -> :ok
+        end
+
+        reraise(exception, __STACKTRACE__)
+    end
+  end
+
+  defp do_build_template!(staging_schema) do
     # Step 1: no IF NOT EXISTS -- a freshly-randomized name colliding with an
     # existing schema would itself indicate a random-name-generation bug, not
     # a legitimate re-attempt case (design §2.3 step 1).

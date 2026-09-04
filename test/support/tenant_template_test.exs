@@ -126,7 +126,10 @@ defmodule Letflow.Test.TenantTemplateTest do
       end
     end
 
-    # Also `@tag :skip`, same MAJOR finding as the two below -- a FK that is
+    # HISTORICAL NOTE (kept because the reasoning is still worth reading):
+    # this test and the two below were originally committed `@tag :skip`,
+    # because normalize/3 stripped BOTH schema qualifiers from BOTH sides and
+    # was therefore structurally blind to this exact tamper -- a FK that is
     # PRESENT but repointed at the template (as opposed to the ABOVE test's
     # "missing entirely" shape, which the check catches correctly) is
     # invisible to dimension #3 for the identical normalize/3 reason. This
@@ -138,7 +141,7 @@ defmodule Letflow.Test.TenantTemplateTest do
     # dropping a real FK and re-adding it with its qualifier rewritten to
     # `tenant_template.` instead of the clone's own schema left
     # assert_clone_parity!/2 returning :ok.
-    test "a clone FK present but repointed at the template fails dimension #3 -- CURRENTLY DOES NOT (MAJOR finding, see comment above)" do
+    test "a clone FK present but repointed at the template fails dimension #3" do
       :ok = TenantTemplate.ensure_template!()
 
       tenant = insert_throwaway_tenant!()
@@ -177,7 +180,10 @@ defmodule Letflow.Test.TenantTemplateTest do
       end
     end
 
-    # BOTH tests below are `@tag :skip`, deliberately, with a full report of
+    # HISTORICAL NOTE, as above: both tests below were originally `@tag :skip`
+    # and are now live and passing, because normalize/3 was fixed to strip
+    # only each side's OWN schema qualifier. What follows is the original
+    # report of
     # WHY rather than deleted or silently made to pass. Run against this
     # step's own wiring (2026-09-04), both actually FAILED with "Expected
     # exception ExUnit.AssertionError but nothing was raised" -- i.e.
@@ -189,7 +195,7 @@ defmodule Letflow.Test.TenantTemplateTest do
     # scope (TEST-DESIGNER does not modify parity-check logic; that is
     # ELIXIR-DEV's / a follow-up issue's job). Left present, not deleted,
     # because they are exactly the regression proof whoever fixes
-    # normalize/3 needs -- remove the @tag :skip once fixed and both should
+    # normalize/3 needed -- the fix landed, the skips are gone, and both
     # pass.
     #
     # ROOT CAUSE (independently reproduced via throwaway `mix run` probes
@@ -259,7 +265,7 @@ defmodule Letflow.Test.TenantTemplateTest do
       assert error.message =~ "tenant_template.#{template_seq_local}"
     end
 
-    test "a clone trigger repointed at the template's own function fails dimension #8 -- CURRENTLY DOES NOT (MAJOR finding, see comment above)" do
+    test "a clone trigger repointed at the template's own function fails dimension #8" do
       :ok = TenantTemplate.ensure_template!()
 
       tenant = insert_throwaway_tenant!()

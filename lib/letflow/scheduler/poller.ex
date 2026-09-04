@@ -27,12 +27,17 @@ defmodule Letflow.Scheduler.Poller do
   `fire_at` value (SCH-06) -- when `jitter_ms()` is `0`, no random draw is
   made at all, the delay is exactly `poll_interval_ms()`.
 
-  A raise inside one tenant schema's `Letflow.Scheduler.poll_and_fire/1`
-  call is not additionally guarded here -- that function's own contract
-  (design §2.2) already guarantees it never raises, so a second, redundant
-  `try/rescue` around the `Enum.each` below would duplicate an
-  already-established isolation boundary for no additional safety
-  property.
+  A raise inside one tenant schema's `Letflow.Scheduler.poll_and_fire/1` call
+  is additionally guarded by a top-level `try/rescue` at this sweep's
+  `Task.async_stream/3` call site (ISS-0421 design §4b), even though that
+  function's own contract (design §2.2) already guarantees it never raises.
+  This is no longer redundant now that iteration is concurrent:
+  `Task.async_stream/3`'s failure blast radius (the whole in-flight batch,
+  were an unhandled raise to reach it) is categorically larger than
+  `Enum.each/2`'s ever was (only the rest of that one serial loop), so
+  relying solely on the callee's own non-raising contract became a
+  materially bigger bet than it was before that fix -- see the "ISS-0421
+  addition" section below.
 
   ## REQ-219 addition -- test-only forced-crash seam (`force_poller_crash`)
 
@@ -58,6 +63,50 @@ defmodule Letflow.Scheduler.Poller do
   module's own existing "config read fresh on every tick" convention) is
   what lets one specific test flip the behavior on/off without a fresh
   compile.
+
+  ## ISS-0421 addition -- bounded per-tenant concurrency within each sweep
+  (design `iss0421-poller-bounded-concurrency.md`)
+
+  Each of the seven per-tenant sweeps below iterates `schemas` via
+  `Task.async_stream/3` instead of `Enum.each/2`, bounding how many tenants'
+  calls are in flight together for that ONE sweep. The seven sweeps
+  themselves remain strictly sequential relative to each other (design §2) --
+  only the per-tenant iteration *inside* a single sweep is now concurrent.
+
+  Two concurrency-bound classes (design §3):
+
+    * The six Admission-gated sweeps (poll-and-fire, retention, alert
+      detection, ordering cycle/sweeper/metrics) use `max_concurrency: 8`,
+      i.e. exactly `Admission.global_cap` at default config (`pool_size(10) -
+      reserved_headroom(2)`). This is a literal, not derived live, because
+      `Admission.try_acquire(:global)`'s own non-blocking gate is already the
+      true ceiling on concurrent `DBConnection` checkouts for these six
+      sweeps regardless of this value (design §3a) -- raising it above 8
+      cannot push checkouts past 8, it would only spawn extra BEAM processes
+      that immediately lose the admission race.
+    * `maybe_refresh_active_instances/1` (the one sweep with NO Admission
+      backstop) instead uses `Letflow.Admission.reserved_headroom/0`'s LIVE
+      return value, read fresh inside that sweep's own function body every
+      tick, never cached or hoisted -- this is the one sweep where the
+      `Task.async_stream` bound IS the only thing standing between the fix
+      and pool exhaustion, so it must always track Admission's own
+      configured headroom rather than duplicate it as an independent literal
+      (design §3b's `global_cap + max_concurrency = pool_size` identity).
+
+  Every `Task.async_stream/3` call site sets `timeout:
+  Scheduler.sweep_task_timeout_ms()`, `on_timeout: :kill_task` (a timed-out
+  task is killed and yielded as an `{:exit, {schema_name, :timeout}}`
+  element, rather than crashing this GenServer the way the library's own
+  `on_timeout: :exit` default would), and `zip_input_on_exit: true` (so a
+  timeout/crash exit tuple carries which schema it belongs to, for logging).
+  The poll-and-fire loop and the retention sweep -- the two call sites with
+  no pre-existing inline rescue -- additionally wrap their per-schema
+  function in a top-level `try/rescue` (design §4b): `Task.async_stream/3`'s
+  own failure blast radius (the whole concurrent batch) is categorically
+  larger than `Enum.each/2`'s ever was, so a callee's own non-raising
+  contract is no longer a safe-enough bet on its own. The other four sweeps
+  already wrap their op call in an inline `try/rescue -> :ok` and need no
+  second, redundant one.
 
   ## REQ-218 addition -- admission-control wiring on the six sequential
   per-tenant operations (design `req218-poller-admission-wiring.md`)
@@ -130,6 +179,11 @@ defmodule Letflow.Scheduler.Poller do
           last_tick_started_at: DateTime.t() | nil
         }
 
+  # ISS-0421 design §3a/§7 -- exactly Admission.global_cap at default config
+  # (pool_size(10) - reserved_headroom(2)). A literal, not derived live: see
+  # moduledoc's "ISS-0421 addition" section for why this is safe.
+  @admission_gated_max_concurrency 8
+
   # See "REQ-219 addition" moduledoc section above. Resolved once at
   # compile time (not a runtime Mix.env() call, which is unavailable in a
   # compiled release) -- becomes a literal true/false in the compiled BEAM
@@ -168,10 +222,15 @@ defmodule Letflow.Scheduler.Poller do
     new_state =
       case fetch_tenant_schemas() do
         {:ok, schemas} ->
-          Enum.each(schemas, fn schema_name ->
-            with_admission(schema_name, :poll_and_fire, fn ->
-              Scheduler.poll_and_fire(schema_name)
-            end)
+          run_sweep(schemas, :poll_and_fire, @admission_gated_max_concurrency, fn schema_name ->
+            try do
+              with_admission(schema_name, :poll_and_fire, fn ->
+                Scheduler.poll_and_fire(schema_name)
+              end)
+            rescue
+              error ->
+                log_task_raise(schema_name, :poll_and_fire, error, __STACKTRACE__)
+            end
           end)
 
           maybe_refresh_active_instances(schemas)
@@ -220,6 +279,49 @@ defmodule Letflow.Scheduler.Poller do
     :ok
   end
 
+  # ISS-0421 §4a/§7 -- bounds `schemas`' per-tenant iteration for `fun` with
+  # `Task.async_stream/3`, fully consumes the resulting stream, and logs
+  # every `{:exit, _}` yield (timeout or crash) tagged with `schema:`/`op:`,
+  # mirroring `with_admission/3`'s own capacity-skip log style. `fun` is
+  # responsible for its own admission/rescue handling; this helper only
+  # bounds concurrency and surfaces exits that escape `fun` anyway (a
+  # timeout, which no rescue inside `fun` can catch).
+  @spec run_sweep(list(String.t()), atom(), pos_integer(), (String.t() -> any())) :: :ok
+  defp run_sweep(schemas, op, max_concurrency, fun) do
+    schemas
+    |> Task.async_stream(
+      fun,
+      max_concurrency: max_concurrency,
+      timeout: Scheduler.sweep_task_timeout_ms(),
+      on_timeout: :kill_task,
+      zip_input_on_exit: true
+    )
+    |> Enum.each(fn
+      {:ok, _result} -> :ok
+      {:exit, {schema_name, reason}} -> log_task_exit(schema_name, op, reason)
+    end)
+
+    :ok
+  end
+
+  defp log_task_exit(schema_name, op, reason) do
+    Logger.warning("poller sweep task did not complete, skipping schema/operation",
+      schema: schema_name,
+      op: op,
+      reason: inspect(reason)
+    )
+  end
+
+  defp log_task_raise(schema_name, op, error, stacktrace) do
+    Logger.warning("poller sweep task raised, skipping schema/operation",
+      schema: schema_name,
+      op: op,
+      error: Exception.format(:error, error, stacktrace)
+    )
+
+    :ok
+  end
+
   defp compute_lag(nil, _now), do: nil
   defp compute_lag(last, now), do: DateTime.diff(now, last, :millisecond)
 
@@ -232,10 +334,15 @@ defmodule Letflow.Scheduler.Poller do
   # this tick's timer-poll loop above -- not queried a second time.
   defp maybe_run_retention_sweep(schemas, state) do
     if Scheduler.retention_enabled?() and Scheduler.retention_due?(state.last_retention_run_at) do
-      Enum.each(schemas, fn schema_name ->
-        with_admission(schema_name, :retention_sweep, fn ->
-          Scheduler.run_retention_sweep(schema_name)
-        end)
+      run_sweep(schemas, :retention_sweep, @admission_gated_max_concurrency, fn schema_name ->
+        try do
+          with_admission(schema_name, :retention_sweep, fn ->
+            Scheduler.run_retention_sweep(schema_name)
+          end)
+        rescue
+          error ->
+            log_task_raise(schema_name, :retention_sweep, error, __STACKTRACE__)
+        end
       end)
 
       %{state | last_retention_run_at: DateTime.utc_now()}
@@ -251,7 +358,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :alert_hooks, [])
 
     if Keyword.get(cfg, :enabled, false) do
-      Enum.each(schemas, fn schema_name ->
+      run_sweep(schemas, :alert_detection, @admission_gated_max_concurrency, fn schema_name ->
         with_admission(schema_name, :alert_detection, fn ->
           try do
             Alerts.build_context_and_detect(schema_name, observed_lag_ms, last_tick_started_at)
@@ -285,9 +392,28 @@ defmodule Letflow.Scheduler.Poller do
   # writes the platform-wide total. Never raises -- each schema's own failure is
   # isolated in count_active_for_schema/1.
   defp maybe_refresh_active_instances(schemas) do
+    # ISS-0421 §3b/§7 -- read live, fresh on every call, never cached or
+    # hoisted: this is the one sweep with NO Admission backstop, so its
+    # Task.async_stream bound must always track Admission's actual
+    # reserved_headroom, not an independent literal (see moduledoc).
+    max_concurrency = Admission.reserved_headroom()
+
     total =
-      Enum.reduce(schemas, 0, fn schema_name, acc ->
-        acc + count_active_for_schema(schema_name)
+      schemas
+      |> Task.async_stream(
+        &count_active_for_schema/1,
+        max_concurrency: max_concurrency,
+        timeout: Scheduler.sweep_task_timeout_ms(),
+        on_timeout: :kill_task,
+        zip_input_on_exit: true
+      )
+      |> Enum.reduce(0, fn
+        {:ok, count}, acc ->
+          acc + count
+
+        {:exit, {schema_name, reason}}, acc ->
+          log_task_exit(schema_name, :refresh_active_instances, reason)
+          acc
       end)
 
     MetricsRegistry.set_active_instances(total)
@@ -323,7 +449,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      Enum.each(schemas, fn schema_name ->
+      run_sweep(schemas, :ordering_cycle, @admission_gated_max_concurrency, fn schema_name ->
         with_admission(schema_name, :ordering_cycle, fn ->
           try do
             Letflow.Ordering.run_cycle(schema_name, prefix: schema_name)
@@ -340,7 +466,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      Enum.each(schemas, fn schema_name ->
+      run_sweep(schemas, :ordering_sweeper, @admission_gated_max_concurrency, fn schema_name ->
         with_admission(schema_name, :ordering_sweeper, fn ->
           try do
             Letflow.Ordering.sweep_gaps(schema_name, prefix: schema_name)
@@ -357,7 +483,7 @@ defmodule Letflow.Scheduler.Poller do
     cfg = Application.get_env(:letflow, :ordering, [])
 
     if Keyword.get(cfg, :enabled, true) do
-      Enum.each(schemas, fn schema_name ->
+      run_sweep(schemas, :ordering_metrics, @admission_gated_max_concurrency, fn schema_name ->
         with_admission(schema_name, :ordering_metrics, fn ->
           try do
             Letflow.Ordering.emit_lag_metrics(schema_name, prefix: schema_name)

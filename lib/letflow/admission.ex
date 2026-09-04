@@ -207,15 +207,34 @@ defmodule Letflow.Admission do
     GenServer.call(server, {:release, ref})
   end
 
+  @doc """
+  Returns this instance's own `reserved_headroom`, live from GenServer state —
+  the identical value that instance's own `global_cap` was derived from at
+  `init/1` (see moduledoc/state-shape comment below), whether this instance was
+  started from config defaults or a `start_link/1` `opts` override. Added per
+  `lib/letflow/design/iss0421-poller-bounded-concurrency.md` §3b/§7 so callers
+  (e.g. `Letflow.Scheduler.Poller`'s unwrapped sweep) can derive a concurrency
+  bound that always stays in lockstep with this instance's actual headroom,
+  rather than duplicating it as an independent literal.
+
+  `server` defaults to `__MODULE__`, mirroring `try_acquire/2`/`release/2`.
+  """
+  @spec reserved_headroom(server :: GenServer.server()) :: pos_integer()
+  def reserved_headroom(server \\ __MODULE__) do
+    GenServer.call(server, :reserved_headroom)
+  end
+
   # GenServer callbacks
 
-  # State shape (design doc §2.2):
+  # State shape (design doc §2.2; reserved_headroom added per
+  # lib/letflow/design/iss0421-poller-bounded-concurrency.md §3b/§7):
   #
   #   %{
-  #     global_cap:    pos_integer(),               # fixed at init/1, from config
-  #     global_in_use: non_neg_integer(),
-  #     tenants:       %{optional(String.t()) => %{in_use: non_neg_integer()}},
-  #     refs:          %{optional(reference()) => pool_selector()}
+  #     global_cap:        pos_integer(),               # fixed at init/1, from config
+  #     global_in_use:     non_neg_integer(),
+  #     tenants:           %{optional(String.t()) => %{in_use: non_neg_integer()}},
+  #     refs:              %{optional(reference()) => pool_selector()},
+  #     reserved_headroom: pos_integer()                 # fixed at init/1, same source as global_cap
   #   }
   @impl true
   def init(%{pool_size: pool_size, reserved_headroom: reserved_headroom}) do
@@ -226,7 +245,8 @@ defmodule Letflow.Admission do
        global_cap: global_cap,
        global_in_use: 0,
        tenants: %{},
-       refs: %{}
+       refs: %{},
+       reserved_headroom: reserved_headroom
      }}
   end
 
@@ -273,6 +293,10 @@ defmodule Letflow.Admission do
     else
       {:reply, {:error, :capacity}, state}
     end
+  end
+
+  def handle_call(:reserved_headroom, _from, state) do
+    {:reply, state.reserved_headroom, state}
   end
 
   def handle_call({:release, %Ref{id: id}}, _from, state) do

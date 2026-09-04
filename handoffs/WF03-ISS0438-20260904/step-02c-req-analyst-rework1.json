@@ -1,0 +1,43 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000006",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF03-ISS0438-20260904/step-02c-req-analyst-rework1.json",
+  "created_at": "2026-09-04T15:48:41Z",
+  "started_at": "2026-09-04T15:48:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "handoffs/WF03-ISS0438-20260904/step-02b-req-validator.json"
+    ],
+    "owned_modules": ["docs/requirements.yaml"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: REQ-VALIDATOR FAILed one check on your prior draft (handoffs/WF03-ISS0438-20260904/step-02-req-analyst.json). Read the FAIL verdict's full result.issues entry in handoffs/WF03-ISS0438-20260904/step-02b-req-validator.json for the exact reasoning. Summary: REQ-225's depends_on list is [REQ-202, REQ-203], but REQ-225's own description never uses REQ-203 (per-tenant artifact activation) anywhere -- REQ-225 is scoped to definition JSON shape, structural validation rules, canonicalisation, and logical-shape versioning ONLY (its own text explicitly excludes persistence/CRUD/activation as REQ-226's job, which correctly lists REQ-203 itself already). Fix: locate REQ-225's entry in docs/requirements.yaml (currently starting at line 13398 -- line numbers may have shifted since, so search for '- id: REQ-225' to be sure) and change its depends_on from [REQ-202, REQ-203] to [REQ-202] only. Do not touch REQ-226 through REQ-231 -- REQ-VALIDATOR confirmed all six of them need no changes. Complete this handoff as normal on finishing (status -> COMPLETED, result.status PASS/FAIL as your own attested report of whether the fix was applied correctly).",
+    "acceptance_criteria": [
+      "REQ-225's depends_on in docs/requirements.yaml reads exactly [REQ-202] (REQ-203 removed)",
+      "No other requirement (REQ-226 through REQ-231, or any pre-existing entry) is modified",
+      "The edit is a surgical one-line change, not a rewrite of REQ-225's entry"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

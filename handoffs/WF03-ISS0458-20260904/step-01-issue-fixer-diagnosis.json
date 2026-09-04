@@ -1,0 +1,56 @@
+{
+  "handoff_id": "f918e096-7d7f-47d3-a247-b68b3073770d",
+  "run_id": "WF03-ISS0458-20260904",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0458-20260904/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-04T11:53:30Z",
+  "started_at": "2026-09-04T11:53:30Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0458.yaml",
+      "docs/issues/ISS-0219.yaml",
+      "docs/issues/ISS-0427.yaml",
+      "docs/agents/instructions/core-directives.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Diagnose ISS-0458 (queue task 458, GH#882) -- a real investigation, not a rubber-stamp. Read docs/issues/ISS-0458.yaml in full for the exact filing (symptoms, which modules, which run found it, why it was structurally cleared for its discovering run). Then do the following, in order:\n\n1. STEP 0.5 REGISTRY LOOKUP: read docs/issues/ISS-0219.yaml first (this filing explicitly names it as a possible matching class -- a genuine intermittent DB-provisioning/teardown race). Also grep docs/issues/ for any OTHER DB-provisioning/teardown-race issue already on file (search for terms like 'undefined_table', '42P01', 'provisioning', 'reaper', 'schema race', 'tenant schema'). Note in your result.summary which candidates you checked and why each did or did not match, even the ones that didn't.\n\n2. IMPORTANT NEW CONTEXT ORCH found since this issue was filed, not present in the yaml: a SIBLING run (WF03-ISS0427-20260904, a different host/session, queue_agent_id 'letflow-2-orch') merged PR #881 to main AFTER ISS-0458 was discovered but BEFORE this run started. That PR rewrote lib/letflow/tenant_provisioning.ex, lib/letflow/sandbox_pool.ex, and test/support/tenant_fixture.ex -- switching tenant test-schema provisioning from replaying 52 migrations to cloning a prepared template. docs/issues/ISS-0427.yaml's own resolution notes FIVE separately-fixed silent-corruption hazards it found and fixed during that work (missing foreign keys, template-qualified constraint/trigger/function definitions, shared sequence defaults, renamed indexes breaking Ecto.ConstraintError matching, non-copied audit-immutability triggers) -- several of these are plausible root causes for exactly the kind of failure ISS-0458 reports (Postgrex 42P01 undefined_table on process_definitions is consistent with an incompletely-cloned schema; reaper-test failures are consistent with a provisioning/teardown timing or constraint-parity defect). Do NOT assume ISS-0427's fix resolved ISS-0458 -- that is exactly the premise you must test, not inherit. You are now investigating on a tree that already has ISS-0427's fix merged (this run's own feature branch is cut from post-#881 main), so any reproduction attempt runs against the FIXED provisioning code already -- state this explicitly in your evidence and reasoning about what a reproduction result does and does not tell you.\n\n3. STEP 1 DIAGNOSE -- REPRODUCE, do not diagnose from prose alone: run `mix letflow.check.test` (the same full-suite entry point the filing used) at least twice, and specifically re-run the four affected files (test/letflow/definitions/promotion_assertion_rerun_test.exs, test/support/service_catalog_reaper_test.exs, test/letflow/service_catalog_test.exs, test/support/tenant_schema_reaper_test.exs -- NOTE: ORCH already corrected two paths in ISS-0458.yaml from test/letflow/ to their real location test/support/, verify this yourself too) individually and under whatever load/parallel conditions plausibly triggered the original race (e.g. scripts/test_parallel.sh, or running the affected files concurrently with the rest of the suite, since a single isolated file run may not reproduce a provisioning race at all -- see ISS-0219's own documented mechanism for why). Read actual output, don't infer.\n\n4. Reach a genuine verdict among exactly these three shapes -- do not presuppose which one before investigating:\n   (a) KNOWN/DUPLICATE DB-provisioning race matching an existing tracked issue (e.g. ISS-0219, or another one you found in step 1) -- route as instrumented/superseded_by, same pattern as ISS-0456 folding into ISS-0418 today (see docs/issues/ISS-0456.yaml and handoffs/WF03-ISS0456-20260904/step-01-issue-fixer-diagnosis.json for the exact shape of that verdict and its evidence bar).\n   (b) A NEW distinct intermittent race, not matching anything on file -- state the mechanism as precisely as you can even if you cannot fully root-cause it, and say so plainly (do not manufacture false certainty). This may still need its own root-cause fix routed through CODE-DESIGNER, or may be filed as its own tracked issue for a later fix run if you cannot design a fix in this diagnosis step.\n   (c) A REAL, REPRODUCIBLE regression needing an actual code fix -- e.g. if ISS-0427's provisioning change is now shown to be the actual current cause (even though it postdates the original filing) or a genuine defect in one of the four test files' own fixtures/assertions.\n\nDo NOT implement any fix yourself -- diagnosis only, per your role. State clearly which of (a)/(b)/(c) you concluded and exactly what evidence (commands run, output quoted, reproduction counts) supports it. If you conclude no_defect is the eventual right status, you must still meet ISSUE_QUEUE.md's no_defect evidence bar (first-hand measurement, specific candidate mechanisms tested including negative results, stated method limitations) -- state whether you believe the evidence you gathered meets that bar, since ORCH will make the final status call from your diagnosis, not you.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0219.yaml (and any other DB-provisioning/teardown-race issue found via grep) read and explicitly compared against ISS-0458's symptoms in result.summary, stating match or no-match with reasoning for each",
+      "At least two real attempts to reproduce each of the four affected test files' failures are made and their actual output quoted (not paraphrased) -- both an isolated run and a full-suite/parallel run, since a provisioning race may only surface under load",
+      "The ISS-0427/PR#881 context is explicitly addressed: state whether the reproduction attempts ran against the post-#881 (template-clone) provisioning code, and whether that changes what a non-reproduction or reproduction result means",
+      "A genuine verdict is reached among (a) known-race-fold-in, (b) new distinct race, (c) real regression -- not a rubber-stamped default to any one of them without the evidence above",
+      "Do not implement a fix. Do not write to lib/ or test/ except transient reproduction runs that leave no residue (git status clean at completion)",
+      "next_action names the concrete next step for ORCH (route to CODE-DESIGNER, fold into an existing issue as instrumented, or state no_defect evidence gathered)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

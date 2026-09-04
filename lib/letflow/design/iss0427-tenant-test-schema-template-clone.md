@@ -1,6 +1,8 @@
 # ISS-0427 — Tenant test-schema provisioning: clone from a prepared template
 
-Status: design (WF-03 Step 2). Test-only. Does not change
+Status: design (WF-03 Step 2, rework 4 — WF03-ISS0427-20260904/step-06,
+fixing two post-merge/near-merge defects: index/constraint NAME parity
+§0.6 and `build_template!/0` crash-safety §0.7). Test-only. Does not change
 `Letflow.TenantProvisioning.provision_tenant_schema/1` or `replay_migrations/2`
 semantics, and does not add any new function reachable from the production
 tenant-onboarding call path (see §7 "Production-path reachability" — a hard
@@ -554,6 +556,274 @@ qualifier-normalized definition text between clone and reference and would
 fail on exactly this divergence. The rewrite is the mechanism; the parity
 check is the backstop. Neither alone is the guarantee.
 
+### 0.6 Rework 4 — index/constraint NAMES are load-bearing (ISS-0427 post-merge defect, CODE-DESIGNER dispatch WF03-ISS0427-20260904/step-06)
+
+**The assumption this design missed, stated plainly, per the dispatch's item
+4.** §0.1 finding 2 and the rework-3 gate correction (dimension #4) both
+established, correctly, that a cloned index's STRUCTURE (columns, predicate,
+access method, uniqueness) is what must match the template's — never its
+auto-generated NAME, because `LIKE ... INCLUDING ALL` renames every index
+that is not the primary key. That reasoning is still correct as far as it
+goes. What this design never stated, and should have: **`Ecto.Repo`'s
+`unique_constraint/3` (and `foreign_key_constraint/3`,
+`check_constraint/3`) resolve a Postgres constraint-violation error back to
+a changeset field by matching the VIOLATING OBJECT'S NAME against a
+`:name` option supplied at the call site** (Ecto's own default is derived
+from the field/table the same way Postgres's migration-time default naming
+is — see `docs/anti-patterns.md`'s NAMEDATALEN entry for the same root
+mechanism cited already in §0.1 finding 2, applied there only to why a
+name-based PARITY check is wrong, never followed through to "and therefore
+the APPLICATION depends on the name being right"). **A structurally
+identical but differently-named index is invisible to Ecto's error-mapping
+layer**: the unique constraint still fires (correct data), but
+`Ecto.Changeset.unique_constraint/3` cannot find `users_username_idx` in its
+own list of `{:unique, "users_username_index"}` markers, so instead of
+returning `{:error, changeset}` with a field-level error, `Repo.insert/1`
+lets the raw `Ecto.ConstraintError` propagate — which is what turned seven
+of ORCH's eight remaining suite failures into 500-shaped crashes instead of
+clean 409s. **"Structurally equivalent" was necessary but not sufficient —
+name identity is a SEPARATE, independently-load-bearing property this
+design's parity check must also assert, not a redundant restatement of
+structure.** This section is that correction; §3.2 dimension #4 below is
+updated to match, and §2.3 step 3 gains the mechanism step that makes the
+assertion true rather than merely checked-for.
+
+**0.6.1 Which index names `LIKE ... INCLUDING ALL` preserves, and why —
+settled by direct probe, not inferred.** Built two throwaway schemas in
+`letflow_dev` (`probe_tpl`/`probe_clone`, dropped before this section was
+written — verified via `pg_namespace`, 0 rows) modeling `users`' real shape:
+a `PRIMARY KEY`, a plain expression unique index
+(`users_username_index` on `lower(username)`), a partial unique index
+(`users_external_identity_partial_index`), and a named table-level `UNIQUE`
+constraint (`users_username_uq`). Result, `pg_indexes`/`pg_constraint`
+queried directly on both sides:
+
+| Template name | Kind | Clone name (auto-generated) |
+|---|---|---|
+| `users_pkey` | Primary key | `users_pkey` (unchanged) |
+| `users_username_index` | Plain unique index (expression) | `users_lower_idx` |
+| `users_external_identity_partial_index` | Partial unique index | `users_external_realm_external_id_idx` |
+| `users_username_uq` | Named `UNIQUE` table constraint | `users_username_key` (the CONSTRAINT's `conname` renamed identically to its backing index) |
+
+**The primary key name is not "preserved" by any special-case logic — it is
+coincidentally regenerated identically.** Postgres's own default naming
+convention for a `LIKE`-copied primary key is `<table>_pkey`, and that is
+also the convention `mix ecto.gen.migration`'s `primary_key: true`/`:id`
+column produces at the ORIGINAL migration-build time — the two independently
+arrive at the same string because both use Postgres's own unqualified
+default, not because `LIKE` treats the PK specially or "knows" the source
+name. **This means the fix must not "skip renaming `users_pkey`" as a
+special case — it is already correct by coincidence, and the general
+mechanism (§2.3 step 3, below) naturally leaves it alone because its
+auto-generated clone name already equals the template's name (a no-op
+rename, or simply excluded because the names already match).** Every OTHER
+index — including a named `UNIQUE` table CONSTRAINT's backing index — gets
+Postgres's generic `<table>_<col(s)>_key`/`_idx`/`_idx1...` auto-naming and
+therefore does need the fix.
+
+**0.6.2 Constraint-backed indexes: `ALTER INDEX ... RENAME` renames the
+owning constraint too, atomically, in one statement — verified, not
+assumed.** This settles the dispatch's specific concern ("a unique
+CONSTRAINT's index cannot simply be renamed independently of its
+constraint"). Ran `ALTER INDEX probe_clone.users_username_key RENAME TO
+users_username_uq` directly against the probe above. Result: `pg_constraint`
+re-queried afterward shows `conname` is now `users_username_uq` — Postgres
+updates the constraint's own catalog name as a side effect of renaming its
+backing index, in the same statement, with no separate `ALTER TABLE ...
+RENAME CONSTRAINT` needed and no window where the two names could
+disagree. Confirmed functionally end-to-end: after renaming all three
+non-pkey indexes back to their template names, a duplicate-`username`
+insert into the clone raised `ERROR: duplicate key value violates unique
+constraint "users_username_index"` — the template's own name, verbatim,
+which is exactly the string `Ecto.Changeset.unique_constraint(:username,
+name: :users_username_index)` (or the equivalent default-derived name) is
+written to match against. This is a **single-statement, atomic, purely
+catalog-level operation** — it does not touch the index's physical B-tree
+data, only `pg_class.relname`/`pg_constraint.conname`.
+
+**0.6.3 Mechanism decision: (b), `ALTER INDEX ... RENAME`, chosen over (a)
+and (c) — cost measured, not assumed.**
+
+- **(b) chosen.** Pair each clone index to its template counterpart by
+  STRUCTURE (the exact comparison dimension #4 already computes —
+  schema-qualifier-normalized, own-name-stripped `indexdef`, per-table
+  multiset — already proven 1:1 unambiguous in this same probe: eight
+  normalized `indexdef` rows across template+clone reduced to four distinct
+  values, each appearing exactly twice), then `ALTER INDEX
+  "<clone_schema>"."<clone_auto_name>" RENAME TO "<template_index_name>"`
+  for every pair whose names already differ (skip the pair — there will
+  always be at most one, the PK — whose auto-generated clone name already
+  equals the template's). Measured cost, this probe, three renames on the
+  real `users`-shaped table: **1.0-9.8ms each** (`\timing`, real numbers
+  quoted, not estimated) — a pure `pg_class`/`pg_constraint` catalog update,
+  no index rebuild, no table scan, no lock stronger than the same
+  `ACCESS EXCLUSIVE` a `CREATE TABLE (LIKE ...)` already takes on the
+  brand-new clone table nothing else can see yet.
+- **(a) rejected — costs ~3-30x more per index for identical structural
+  result, no correctness advantage.** Measured directly, same probe
+  approach: `DROP INDEX` + `CREATE UNIQUE INDEX ... (lower(username))`
+  (recreating one index from the template's `indexdef` with the name
+  already correct because it comes from the source text) cost **1.5ms +
+  30.1ms = ~31.6ms** — the `CREATE INDEX` half physically rebuilds the
+  B-tree from a full table scan, which (b) never does. On a genuinely empty,
+  freshly `LIKE`-copied clone table the scan is over zero rows, so the
+  absolute gap will not scale with data volume the way it would on a
+  populated table — but it is still a measured 3-30x per-index cost
+  multiplier for a result (b) achieves identically, for no offsetting
+  benefit: (a) does not avoid the constraint/index pairing problem either
+  (a `CREATE UNIQUE INDEX` recreating a constraint-backed index does not
+  itself recreate the `pg_constraint` row — that still requires a following
+  `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE USING INDEX <name>`, an
+  extra statement (b) does not need). Rejected on cost with no correctness
+  upside, not on any flaw in its structural correctness.
+- **(c) (no `INCLUDING INDEXES`, build every index explicitly from the
+  template's catalog) rejected — reintroduces the exact per-clone
+  round-trip cost this whole issue exists to eliminate.** ISS-0427's own
+  measured 2.5-4.9x win comes from `LIKE ... INCLUDING ALL` doing the bulk
+  index/constraint/column copy in ONE `CREATE TABLE` statement per table
+  instead of N migration-replay statements. (c) would replace that single
+  statement with one `CREATE INDEX`/`CREATE UNIQUE INDEX` per index (each
+  costing the same ~30ms full-rebuild-from-scan measured for (a) above,
+  since (c) has no `LIKE`-copied starting point to rename), for every one
+  of the real schema's ~105 indexes (§0's own count) — this would not be a
+  clone anymore, it would be a hand-rolled re-implementation of
+  `replay_migrations/2`'s own per-object DDL issuance, at the same or worse
+  per-object cost, forfeiting the entire premise of the design. Rejected
+  without needing a fresh measurement beyond what (a)'s per-index cost
+  already establishes as the floor for any "recreate, don't rename"
+  approach.
+
+**0.6.4 The fix, concretely — new mechanism step and parity dimension.**
+Both specified in full at their own locations (§2.3 new step 3.5, inserted
+between the existing step 3's `LIKE` loop and step 4's FK re-add — chosen
+this position because index renaming must happen before the parity/name
+check ever runs, and has no ordering dependency on FK re-add, sequence
+recreation, or trigger recreation, which touch different catalog objects
+entirely; §3.2 dimension #4's updated specification) — this section states
+the decision and its evidence, not a duplicate of the mechanism text.
+
+All probe schemas from this section (`probe_tpl`, `probe_clone`,
+`probe_tpl2`, `probe_clone2`, `probe_tpl3`, `probe_clone3`) dropped
+clone-before-template in each case and confirmed gone (`SELECT nspname FROM
+pg_namespace WHERE nspname LIKE 'probe%'` — 0 rows, checked twice, once
+mid-sequence and once at the end) before this document was written.
+
+### 0.7 Rework 4 — `build_template!/0` crash-safety (ISSUE-FIXER diagnosis, step-05 handoff)
+
+**The defect, independently re-confirmed against ISSUE-FIXER's own
+diagnosis rather than merely inherited.** `build_template!/0`'s first
+statement, `CREATE SCHEMA IF NOT EXISTS "tenant_template"`, runs inside
+`Sandbox.unboxed_run/2` (`sandbox: false` — no surrounding transaction) and
+therefore commits immediately and unconditionally. If ANY later statement
+in the same build raises — migration replay fails, the throwaway
+`Registration` insert hits a stale-row unique violation (the MINOR below),
+anything — the schema is left behind, physically real, permanently empty
+(0 tables, not even `schema_migrations`). `template_built_in_db?/0` treats
+"the schema exists in `information_schema.schemata`" as sufient evidence a
+build succeeded or is at least safe to self-check; it is neither. Every
+subsequent `ensure_template!/0` call in that same partition database then
+finds the schema, runs the self-check, correctly finds 0/39 tables, and
+raises `TENANT_TEMPLATE_SELF_CHECK_FAILED` — forever, for the rest of that
+BEAM VM's life, with no self-repair path.
+
+**Mechanism decision: atomic build-then-rename-into-place, not
+detect-and-repair.** Two options were on the table (per the dispatch):
+
+- **(i) Detect-and-repair.** `template_built_in_db?/0` (or
+  `ensure_template!/0` itself) catches a self-check failure, `DROP SCHEMA
+  "tenant_template" CASCADE`, and retries the build once. Rejected as the
+  PRIMARY mechanism (see below for why it is still specified as a defensive
+  second layer): it requires the self-check failure path itself to be
+  perfectly reliable and non-recursive (what if the retry also fails
+  partway? what bounds the retry count?), and it does nothing about the
+  window BETWEEN the empty `CREATE SCHEMA` commit and the failure — any
+  OTHER process (a concurrent test in a hypothetically-non-serialized
+  future, per §4.3's own forward-looking concurrency note) that calls
+  `ensure_template!/0` in that window would still observe the broken
+  half-state and could itself raise or begin acting on it before the
+  repair runs, because there is no way to make "detect a bad prior build"
+  and "the schema briefly existed in a bad state" not both be true at
+  once — repair is reactive, not preventive.
+- **(ii) Atomic build-then-rename-into-place — CHOSEN.** Build the ENTIRE
+  template (schema, all tables, indexes, FKs, sequences, triggers, seed
+  data — the complete §2.3 sequence, unchanged in every other respect) under
+  a randomized STAGING schema name (e.g. `"tenant_template_build_" <>
+  <random hex>`, chosen fresh per build attempt so a crashed prior attempt's
+  own staging schema — itself now orphaned debris, see the reaper note
+  below — can never collide with a new attempt), and only as the LAST step,
+  after the self-check (§2.3 step 3, now step 3-renumbered per §0.6's
+  insertion) has PASSED against the staging schema, issue `ALTER SCHEMA
+  "<staging_name>" RENAME TO "tenant_template"`. Postgres's `ALTER SCHEMA
+  ... RENAME` is a single catalog-level statement — it does not move or
+  rebuild any table, index, or row; it changes exactly one `pg_namespace`
+  row. **This means `"tenant_template"` (the literal, well-known name every
+  other function in this design and `TenantFixture` already looks up)
+  never exists in Postgres's catalog at all until a build has fully
+  succeeded and self-checked correctly** — there is no window, however
+  brief, in which a caller could observe a schema by that name in any state
+  other than "complete and self-checked." A crash at any point before the
+  rename leaves ONLY the randomly-named staging schema behind, never
+  `"tenant_template"` itself — so `template_built_in_db?/0`'s existing
+  check (schema named `"tenant_template"` exists) is never satisfied by a
+  half-built attempt, and no self-check-failure/retry path is needed for
+  THIS failure mode at all, because the failure mode (a same-named,
+  incomplete schema) is now structurally impossible to produce, not merely
+  detected after the fact.
+
+  **Orphaned staging schemas are debris, but inert, structurally-nameable,
+  and cleanable by the SAME mechanism §0's own INV-4 already relies on for
+  the template itself** — a crashed staging schema is never named
+  `"tenant_template"`, is never registered via a `tenant_schemas` row (the
+  throwaway `Registration` insert, per §2.2/OQ-1, still targets whatever
+  schema name the build is CURRENTLY using — see the naming note below),
+  and therefore cannot be mistaken for a live template or a live tenant by
+  ANY existing code path — it is purely inert leftover schema-namespace,
+  the same shape of harmless debris a crashed `SandboxPool.provision_sandbox/2`
+  call already can leave today (this design introduces no new CLASS of
+  cleanup problem, only a new INSTANCE of an already-accepted one). Not
+  designed as an active sweep here (no code path currently sweeps orphaned
+  staging schemas by pattern-matching `pg_namespace`, and none is required
+  for correctness — see OQ-7 below for why this is deliberately deferred,
+  not silently dropped).
+
+**Naming detail, resolving the OQ-1 interaction explicitly.** The staging
+schema's name is what `insert_throwaway_tenant_and_registration!/1` (§0.7's
+MINOR, below) and every DDL statement in the build sequence must target
+UNTIL the final rename — not `"tenant_template"` itself. This is a
+mechanical substitution throughout §2.3's existing step list (every
+`"tenant_template"` literal in steps 1-2 and the self-check in step 3
+becomes the staging name; steps in §2.3 that already read from
+`"tenant_template"` as an established, already-built fact — i.e. every step
+of `clone_tenant_schema!/1`, which only ever runs AFTER `ensure_template!/0`
+has returned — are unaffected, since by the time `clone_tenant_schema!/1`
+runs, the rename has already happened and `"tenant_template"` is the real,
+final name). Stated explicitly here rather than left for ELIXIR-DEV to
+infer, per this role's own "don't silently resolve" obligation.
+
+**The MINOR — `insert_throwaway_tenant_and_registration!/1` has no
+upsert.** Confirmed by direct reading of ISSUE-FIXER's diagnosis and not
+re-litigated (already reproduced twice with real Postgrex output in the
+step-05 handoff): the throwaway `Registration` row's `schema_name` column
+is unique-indexed, and a stale leftover row from an earlier interrupted
+build permanently blocks every future build attempt targeting the SAME
+schema name with a `unique_violation`. **This MINOR is subsumed, not just
+coincidentally fixed, by the (ii) rename-into-place mechanism above**: once
+each build attempt targets a FRESH, randomized staging schema name (never
+reusing `"tenant_template"` literally, and never reusing a prior attempt's
+own randomized name, since a new random suffix is drawn per attempt), the
+throwaway `Registration` row's `schema_name` value is also fresh per
+attempt, so a stale row from a PRIOR crashed attempt (naming that prior
+attempt's own now-abandoned staging schema) can never collide with a NEW
+attempt's insert — the two rows have different `schema_name` values by
+construction. **This does not mean "no upsert is needed" as a general
+rule** — it is specifically the randomized-staging-name choice that makes
+collision structurally impossible for THIS row, not a claim that
+`insert_throwaway_tenant_and_registration!/1` is safe to leave without
+upsert in general. Recorded as resolved via the MAJOR's own fix rather than
+needing a separate independent change, per the dispatch's "also in scope"
+framing — ELIXIR-DEV does not need a second, unrelated upsert patch on top
+of the rename mechanism to close this MINOR.
+
 ## 1. Scope and non-goals
 
 **In scope:** how `test/support/tenant_fixture.ex`'s `provisioned_tenant!/1`
@@ -685,24 +955,63 @@ inherits those rows as ordinary table data (§2.3 step 6).
 
 ### 2.3 The clone mechanism, step by step
 
-`ensure_template!/0` (build once per process/database):
+`ensure_template!/0` (build once per process/database) — **REWORK 4:
+restructured around §0.7's atomic build-then-rename-into-place fix. Every
+`"tenant_template"` literal below that appears BEFORE step 5's rename
+targets a fresh, randomized STAGING schema name instead — see §0.7's
+"Naming detail" for exactly which steps this affects.**
 
-1. `CREATE SCHEMA IF NOT EXISTS "tenant_template"`.
-2. `Ecto.Migrator.run(Repo, TenantProvisioning.tenant_scoped_migrations(), :up, all: true, prefix: "tenant_template", log: false)`,
-   then seed the 13 platform event types into `"tenant_template".event_type_registry`
+0. Generate a fresh staging schema name,
+   `"tenant_template_build_" <> <16 random hex bytes>` (e.g. via
+   `:crypto.strong_rand_bytes/1` + `Base.encode16/2`, lowercased — any
+   collision-resistant per-attempt token; cryptographic strength is not the
+   requirement, uniqueness-per-attempt is). Call it `staging_schema` for the
+   rest of this sequence.
+1. `CREATE SCHEMA "<staging_schema>"` (no `IF NOT EXISTS` — a fresh random
+   name colliding with an existing schema would itself indicate a bug in
+   the random-name generation, not a legitimate re-attempt case the way the
+   OLD literal-named step 1 needed `IF NOT EXISTS` for).
+2. `Ecto.Migrator.run(Repo, TenantProvisioning.tenant_scoped_migrations(), :up, all: true, prefix: staging_schema, log: false)`,
+   then seed the 13 platform event types into `"<staging_schema>".event_type_registry`
    (see OQ-1) — mirrors exactly what `replay_migrations/2` does for a real
-   tenant, applied to the template schema instead.
-3. Self-check: assert the template's own table set matches
+   tenant, applied to the staging schema instead. The throwaway
+   `Tenant`/`Registration` row this step's OQ-1(b) implementation inserts
+   (per ELIXIR-DEV's already-adopted resolution, §11) targets
+   `staging_schema`, not the literal string `"tenant_template"` — see
+   §0.7's MINOR fix, which this naming choice subsumes.
+3. Self-check: assert the staging schema's own table set matches
    `TenantFixture.expected_tenant_tables/0` (reusing that existing oracle,
    not inventing a second one) and that `tenant_scoped_migrations/0`'s
-   version list matches `"tenant_template".schema_migrations` exactly
+   version list matches `"<staging_schema>".schema_migrations` exactly
    (reusing the exact query shape `TenantFixture`'s own `applied_versions_in/1`
-   already uses). Raise immediately, do not proceed to serving clones, if
-   either check fails — a broken template must never silently serve broken
-   clones (this is what ISSUE-FIXER's diagnosis (ii) flagged as "must design
-   one" for staleness detection; this self-check is that mechanism, run at
-   build time rather than trusted).
-4. Mark built (persist a `:built` marker — see §4.2 for exactly where).
+   already uses). Raise immediately, do not proceed to renaming into place,
+   if either check fails — a broken build must never become
+   `"tenant_template"` (this is what ISSUE-FIXER's diagnosis (ii) flagged
+   as "must design one" for staleness detection; this self-check is that
+   mechanism, run at build time rather than trusted, and §0.7 is what
+   makes a FAILED self-check's own schema harmless debris instead of a
+   permanently-wedged `"tenant_template"`).
+4. Delete the throwaway `Tenant`/`Registration` row (mirrors the existing
+   `delete_throwaway_tenant_and_registration!/1` call, targeting
+   `staging_schema`'s own throwaway row) — cleanup of BOOKKEEPING rows, not
+   of the schema itself, which step 5 is about to rename rather than drop.
+5. **Atomic commit point.** `ALTER SCHEMA "<staging_schema>" RENAME TO
+   "tenant_template"` — per §0.7, a single catalog-level statement with no
+   table/index rebuild. Only after this statement succeeds does
+   `"tenant_template"` exist under its well-known name; every step above
+   this one operates exclusively on `staging_schema` and can fail without
+   ever producing a broken `"tenant_template"`.
+6. Mark built (persist a `:built` marker — see §4.2 for exactly where).
+
+**What this restructuring does NOT change:** the migration-replay
+mechanism (step 2), the self-check's own two assertions (step 3, unchanged
+in substance from the prior single-schema version), the "once per BEAM
+VM/database" scoping (§4.2), and the session-level advisory-lock guard
+(§4.3) — the lock still wraps this WHOLE numbered sequence 0-6, unchanged,
+so two concurrent first-callers still cannot both attempt a build; the lock
+was never keyed on the schema's own name (it is keyed on the fixed literal
+string `"tenant_template"`, §4.3), so nothing about the staging-name change
+affects it.
 
 `clone_tenant_schema!(source_tenant_id)` (per test, the fast path):
 
@@ -715,6 +1024,41 @@ inherits those rows as ordinary table data (§2.3 step 6).
    order is reproducible across runs, not because Postgres requires it for
    `LIKE`):
    `CREATE TABLE "<clone_schema>"."<table>" (LIKE "tenant_template"."<table>" INCLUDING ALL)`.
+3.5. **Index/constraint rename to template names — REWORK 4 ADDITION,
+   mandatory, not optional (§0.6).** `LIKE ... INCLUDING ALL` renames every
+   non-primary-key index (and, for a named `UNIQUE`/`EXCLUDE` table
+   constraint, its backing constraint along with it) to Postgres's
+   auto-generated default name, which does not match the template's own
+   name — and `Ecto.Changeset.unique_constraint/3`/`foreign_key_constraint/3`
+   match violations by NAME, so a structurally-correct-but-misnamed index
+   causes a raw `Ecto.ConstraintError` instead of a clean changeset error
+   (§0.6 is the full finding; this step is the fix). Per table (walked over
+   `expected_tenant_tables/0`, same stable order as step 3):
+   1. Query the template's own indexes: `SELECT indexname, indexdef FROM
+      pg_indexes WHERE schemaname = 'tenant_template' AND tablename =
+      '<table>'`.
+   2. Query the clone's just-created indexes the same way, schemaname =
+      `<clone_schema>`.
+   3. Pair each clone index to its template counterpart by comparing
+      `indexdef` after (a) normalizing away the schema qualifier (the exact
+      technique §3.3 already specifies) and (b) stripping the index's own
+      name substring from the `CREATE [UNIQUE] INDEX <name> ON ...` prefix
+      (the exact rework-3 gate correction already established for dimension
+      #4, reused here rather than reinvented) — this yields, per §0.6.3's
+      verified probe, an unambiguous 1:1 pairing (every normalized
+      definition on the template side matches exactly one on the clone
+      side, confirmed empirically, not assumed).
+   4. For every pair whose names differ (i.e. every pair except a
+      coincidentally-already-matching primary key, per §0.6.1):
+      `ALTER INDEX "<clone_schema>"."<clone_auto_name>" RENAME TO
+      "<template_index_name>"`. Per §0.6.2, this single statement also
+      renames the owning `pg_constraint` row when the index backs a named
+      `UNIQUE`/`EXCLUDE` constraint — no separate `ALTER TABLE ... RENAME
+      CONSTRAINT` is needed or issued.
+   Measured cost (§0.6.3): 1.0-9.8ms per rename on the real `users`-shaped
+   probe, a pure catalog-metadata operation with no index rebuild — cheap
+   relative to the 2.0-2.5x win this design's overall clone mechanism
+   already banks, per §10.
 4. **Foreign-key re-add.** Query `pg_constraint` (joined to `pg_class` for
    the owning table name) for every `contype = 'f'` constraint in the
    `tenant_template` namespace. For each, build the `ALTER TABLE
@@ -913,7 +1257,12 @@ collations sub-bullets were corrected/extended, per §0.3's findings. Held at
 thirteen in rework 3, but two of the thirteen were themselves CORRECTED, not
 just extended — dimension #2's column-order comparison and item 8's triggers
 sub-bullet both stated false premises before this rework; see §0.4 for the
-full finding and the fix each now specifies.)
+full finding and the fix each now specifies. Held at thirteen in rework 4
+too — no new numbered dimension was added, but dimension #4 (indexes)
+gained a second, mandatory NAME-identity sub-assertion (b) alongside its
+existing structural sub-assertion (a), per §0.6's post-merge finding that
+structural equivalence alone is necessary but not sufficient because Ecto
+matches constraint violations by name, not by shape.)
 
 1. **Table set** — `information_schema.tables` table names, set-equal, both
    directions. (Reuses `TenantFixture`'s existing table-enumeration query
@@ -1003,30 +1352,73 @@ full finding and the fix each now specifies.)
    design conflated the two here, across three passes and two validator
    gates, before an implementer actually querying a real built template
    caught it.
-4. **Indexes** — `pg_indexes.indexdef`, schema-qualifier-normalized, compared
-   as a **multiset of normalized definitions per table**, explicitly NOT by
-   `indexname` (§0.1 finding 2 — verified empirically that `LIKE INCLUDING
-   ALL` renames indexes). This single-handedly covers unique indexes,
-   partial/predicate indexes (the `WHERE` clause is part of `indexdef`), and
-   expression indexes (the expression text is part of `indexdef`) — no
-   separate check needed for those three, they fall out of comparing the
-   full `indexdef` string.
+4. **Indexes** — TWO separate assertions per table, both mandatory as of
+   rework 4 (§0.6) — **structure** (unchanged from rework 3) and **name**
+   (NEW, rework 4). Neither subsumes the other: structure alone is exactly
+   the check that shipped and did not catch ISS-0427's post-merge defect
+   (a structurally-perfect, differently-named clone passed it and then
+   crashed the application, per §0.6); name alone, done naively, is exactly
+   what the rework-3 gate correction already proved false-fails on
+   `indexdef`'s embedded name substring. Both must hold together.
+
+   **(a) Structure** — `pg_indexes.indexdef`, schema-qualifier-normalized,
+   compared as a **multiset of normalized definitions per table**,
+   explicitly NOT by `indexname` at this stage (§0.1 finding 2 — verified
+   empirically that `LIKE INCLUDING ALL` renames indexes). This
+   single-handedly covers unique indexes, partial/predicate indexes (the
+   `WHERE` clause is part of `indexdef`), and expression indexes (the
+   expression text is part of `indexdef`) — no separate step needed for
+   those three, they fall out of comparing the full `indexdef` string.
 
    **REWORK-3 GATE CORRECTION (do not skip this — it is not implied by
    "not by indexname" above).** `indexdef` text itself EMBEDS the index's
-   own name (`CREATE INDEX <name> ON <schema>.<table> ...`), and `LIKE
-   INCLUDING ALL` auto-renames indexes. So schema-qualifier normalization
-   alone is NOT sufficient: the object's own name substring must also be
-   stripped out of each side's `indexdef` before comparison, or every
-   auto-renamed index false-fails. This is unlike `pg_get_constraintdef`,
-   which never embeds the constraint's name — which is why the FK half of
-   dimension #3 needs no equivalent step, and why the asymmetry is easy to
-   miss. Failure direction is a false FAIL (noisy, not silent), so it is a
-   usability defect rather than a safety hole — but it must be implemented
-   or the parity check cries wolf on every clone. The same correction
-   applies verbatim to dimension #11 (`pg_statistic_ext`), whose
+   own name (`CREATE INDEX <name> ON <schema>.<table> ...`), and — as
+   currently written, prior to this dimension's own step 4.5-style
+   mechanism fix — `LIKE INCLUDING ALL` auto-renames indexes. So schema-
+   qualifier normalization alone is NOT sufficient for the STRUCTURE
+   comparison: the object's own name substring must also be stripped out
+   of each side's `indexdef` before comparing structure, or every
+   auto-renamed index false-fails on (a) even when its shape is identical.
+   This is unlike `pg_get_constraintdef`, which never embeds the
+   constraint's name — which is why the FK half of dimension #3 needs no
+   equivalent step, and why the asymmetry is easy to miss. The same
+   correction applies verbatim to dimension #11 (`pg_statistic_ext`), whose
    `pg_get_statisticsobjdef` output embeds the statistics object's own
    auto-renamed name for the same reason.
+
+   **(b) Name — NEW, rework 4, the fix for the post-merge defect §0.6
+   documents.** After pairing each candidate index to its reference
+   counterpart via (a)'s structural, name-stripped comparison (the pairing
+   is unambiguous — §0.6.3 verified a real 1:1 correspondence, every
+   normalized definition value appears exactly once per side), assert
+   `indexname` is IDENTICAL between the paired reference and candidate
+   indexes — not merely structurally equivalent, the literal catalog name
+   string must match. **Why this does not reintroduce the rework-3
+   false-fail:** the rework-3 correction is about HOW TWO INDEXES ARE
+   MATCHED TO EACH OTHER for the structural comparison (never by name,
+   because a template name and an auto-generated clone name legitimately
+   differ before §2.3 step 3.5's rename runs) — it says nothing about
+   whether, once matched by structure, their names ought to agree. Ordering
+   matters and is exactly what avoids the conflict: (a) pairs first
+   (structure, name-blind), THEN (b) asserts on the now-paired objects
+   (name, structure-blind) — never the reverse, and never a single
+   combined "name AND structure in one comparison" that would have to
+   choose a matching key up front and get it wrong. Same technique already
+   established for dimension #13's structural-vs-display distinction
+   (assert on the structural fact, use string rendering only for the
+   diagnostic message) — reused here, not invented fresh. **This is the
+   check that would have caught ISS-0427's post-merge defect at build time
+   or clone-test time, before any application test ever hit the raw
+   `Ecto.ConstraintError`**: a clone whose index-rename mechanism (§2.3
+   step 3.5) is missing, wrong, or incomplete fails THIS assertion loudly,
+   rather than passing dimension #4 as it did before this rework and
+   surfacing instead as an unrelated-looking `Ecto.ConstraintError` seven
+   application tests away. On today's real schema this check is
+   IMMEDIATELY load-bearing once §2.3 step 3.5 ships (not a
+   forward-looking, currently-dormant rule-out like dimensions #9-#11/#13)
+   — it exercises real, current index names (`users_username_index`,
+   `users_external_identity_partial_index`, and every other named unique
+   index in the 39-table schema) on every single suite run.
 5. **Sequences reachable from a column default** — for every column with a
    non-null default in the reference schema, compare
    `pg_get_serial_sequence(schema.table, column) IS NOT NULL` on both sides
@@ -1595,6 +1987,36 @@ explicitly rather than silently assumed resolvable.
 - **INV-6 (production path is untouched).** Zero diff to
   `provision_tenant_schema/1`'s or `replay_migrations/2`'s own function
   bodies. See §7.
+- **INV-7 (index/constraint names are load-bearing, not cosmetic — added
+  rework 4).** Every non-primary-key index and named `UNIQUE`/`EXCLUDE`
+  constraint in a cloned schema must carry the SAME catalog name as its
+  counterpart in the template, not merely the same structure — because
+  `Ecto.Changeset.unique_constraint/3` and `foreign_key_constraint/3`
+  resolve a Postgres constraint violation back to a changeset field by
+  matching that name (§0.6). §2.3 step 3.5 is what makes this true; §3.2
+  dimension #4(b) is what asserts it stays true on every run. A future
+  change to either the clone mechanism or Ecto's own error-mapping
+  convention that breaks this invariant must fail dimension #4(b) loudly,
+  not surface as an unrelated-looking `Ecto.ConstraintError` in an
+  application test, which is exactly how this defect was originally found
+  (see §0.6's opening paragraph).
+- **INV-8 (the literal name `"tenant_template"` never exists in a
+  half-built state — added rework 4).** Per §0.7's atomic
+  build-then-rename mechanism, no Postgres session can ever observe a
+  schema named `"tenant_template"` that is not either (a) fully built and
+  self-check-passed, or (b) entirely absent. A crash, exception, or
+  interruption at any point in §2.3's steps 0-4 leaves behind only a
+  randomly-named staging schema, never a broken `"tenant_template"` —
+  `template_built_in_db?/0`'s existing "does this schema exist" check
+  therefore never has to distinguish "complete" from "in progress" from
+  "failed partway," because the schema's very existence under that name IS
+  the completeness proof, by construction of the rename being the last
+  statement in the sequence. This is the invariant that closes
+  ISSUE-FIXER's MAJOR finding (step-05 handoff) — restated here as a
+  standing property, not merely a one-time fix, per this project's
+  convention (see INV-1, INV-4, INV-5 above) of naming what a fix
+  guarantees so REVIEWER can check it mechanically rather than re-deriving
+  it from the mechanism text.
 
 ## 9. Open questions (not silently resolved)
 
@@ -1683,6 +2105,32 @@ explicitly rather than silently assumed resolvable.
   to design a concrete recreation step against — same posture as OQ-2 and
   OQ-5, and named explicitly for the same reason, per §0.3's own statement
   of what the clone mechanism does (nothing, correctly) about this today.
+- **OQ-7 (added rework 4).** §0.7's atomic build-then-rename fix leaves a
+  randomly-named, orphaned staging schema (`tenant_template_build_<hex>`)
+  behind whenever a build attempt fails after `CREATE SCHEMA` but before
+  the rename — by design, this is harmless, inert debris (never named
+  `"tenant_template"`, never registered against a live `tenant_schemas`
+  row that any reaper or application code path could mistake for a real
+  tenant or the live template, per §0.7's own reasoning). This design does
+  NOT add an active sweep for these orphaned staging schemas — no code
+  path today pattern-matches `pg_namespace` for `tenant_template_build_*`
+  the way `TenantSchemaReaper.sweep_orphans/2` pattern-matches
+  `tenant_<32-hex>` for real tenant debris. Left undesigned deliberately: a
+  test-run's database is itself ephemeral per §5's own reasoning (each
+  partition's database starts fresh via the existing `mix ecto.reset`-
+  equivalent flow between full test-suite invocations), so accumulated
+  staging-schema debris does not outlive one CI/dev run's database
+  lifetime the way a genuinely persistent artifact would — but a
+  long-lived dev database that is NOT reset between many interrupted local
+  `mix test` runs (exactly the shape of debris ISSUE-FIXER found and
+  ORCH's own earlier probing produced, per the step-05 handoff) could
+  accumulate several. Whether `TenantSchemaReaper` should gain a second,
+  parallel sweep pattern for `tenant_template_build_*` schemas (symmetric
+  in shape to its existing tenant-schema sweep, but keyed on schema AGE via
+  `pg_namespace`/creation-time inference rather than a `tenant_schemas` row,
+  since staging schemas are deliberately NEVER registered in that table)
+  is not decided here — filed as an open question rather than silently
+  assumed unnecessary, per this role's own forbidden-list.
 
 ## 10. Expected speedup — stated honestly
 
@@ -1743,3 +2191,6 @@ this role's "no TBD" obligation.)
 | Complementary to, not competing with, SandboxPool | §6 |
 | Sequence/DEFAULT cross-schema coupling (the second hazard ISSUE-FIXER found, not in the original issue text) | §2.3 step 5, verified §0.1 findings 3-4, checked by §3.2 item 5 |
 | Trigger/trigger-function cross-schema coupling, enforcing audit-log and artifact-repository immutability (a THIRD hazard, found in rework 3 by ELIXIR-DEV during implementation, not by any design pass) | §2.3 step 6, verified §0.4, checked non-vacuously by §3.2 item 8 (corrected) |
+| Index/constraint NAME parity — a FOURTH hazard, found post-merge by ORCH's honest re-measurement + ISSUE-FIXER's rollback diagnosis, causing `Ecto.ConstraintError` instead of clean 409s on 7/8 remaining suite failures | §0.6 (finding + mechanism decision), §2.3 step 3.5 (fix), §3.2 dimension #4(b) (assertion), INV-7 |
+| `build_template!/0` crash-safety — schema commits unconditionally before migrations run, permanently wedging a partition database if any later step fails | §0.7 (finding + mechanism decision), §2.3 steps 0/5 (atomic build-then-rename), INV-8 |
+| `insert_throwaway_tenant_and_registration!/1` stale-row unique-violation (MINOR, ISSUE-FIXER step-05) | §0.7's MINOR fix — subsumed by the randomized staging-schema-name choice, no separate upsert change needed |

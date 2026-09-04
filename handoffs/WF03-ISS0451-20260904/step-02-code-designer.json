@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-02-code-designer.json",
   "created_at": "2026-09-04T02:50:00Z",
   "started_at": "2026-09-04T02:58:55Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T03:04:20Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -42,10 +42,10 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "REWORK ITERATION 1: revised lib/letflow/design/iss0451-poller-crash-budget-isolation.md to close CODE-DESIGN-VALIDATOR's BLOCKER (step-02b, result.issues[0]) -- the prior version's SS4 margin arithmetic ('5 - 2 = 3') assumed, without proof, that PollersBreaker's terminate_child call always beat the top-level Letflow.Supervisor's own automatic restart-on-exit for the same child crash. Applied the validator's named approach (a) rather than attempting to prove an ordering guarantee: Letflow.Application.start/2's children list now gives Letflow.Supervisor.Pollers' own child spec `restart: :temporary` (new SS3.4a) -- Elixir Supervisor's documented, unconditional contract for that restart type is that a :temporary child is NEVER restarted by its supervisor automatically, for any exit reason, ever. This makes the top-level Supervisor structurally incapable of auto-restarting Pollers at all, so PollersBreaker becomes the SOLE restart authority for Pollers via explicit Supervisor.restart_child/2 calls, from the very first exit onward (not merely after the 2nd, as the prior iteration modeled) -- removing the race by construction rather than winning it. Consequences worked through and written into the doc: (1) revised SS3.4's handle_info({:DOWN,...}) :closed-branch text so the breaker itself calls restart_child/2 on the FIRST :DOWN (previously supplied for free by the top level's default :permanent restart); (2) revised SS3.6 to state the breaker's own two-:DOWN-vs-one-observation-timer distinction is now purely internal bookkeeping with no other actor to race against; (3) revised SS3.7 to state terminate_child is no longer needed to preempt a 3rd automatic restart, since no such automatic restart exists any more, for any exit; (4) re-derived SS4's top-level margin arithmetic from scratch: Pollers' own exits now consume EXACTLY 0 of the top-level's max_restarts budget, unconditionally, under any fault pattern or duration -- proven by the child-spec contract itself, not measured or bounded to a finite number of cycles -- so `0 <= max_restarts` holds for every max_restarts value and for every fault duration including indefinite, which is the literal 'tolerates a persistent fault indefinitely' bar AC2 sets. The max_restarts: 5, max_seconds: 5 top-level raise is kept, now justified purely as defense-in-depth against an unrelated coincidental restart among Infrastructure/Http/PollersBreaker (all still :permanent), independent of Pollers entirely -- a strictly safer margin than the prior iteration's race-dependent one. (5) revised SS5's AC4 preservation section to state explicitly that the EXISTING test/letflow/supervisor/pollers_test.exs AC4 test's own assertion (top-level auto-restarts Pollers) no longer holds under :temporary and must be updated by ELIXIR-DEV/TEST-DESIGNER to attribute the restart to PollersBreaker's explicit call instead -- flagged as a required update, not a AC4 regression, since the observable end state (Pollers restarted once, Infrastructure/Http/Repo untouched) is unchanged. (6) revised SS6.2 step 6's test observable: since Supervisor.which_children/1 against an unregistered Pollers name would raise rather than return [], the correct observable is Process.whereis(Letflow.Supervisor.Pollers) == nil. (7) sharpened open question Q3 (SS7) now that the breaker is sole restart authority: what a fresh breaker's init/1 should do if it restarts while Pollers is legitimately :open, left explicitly unresolved rather than silently guessed. Grepped the revised file for def/defp/case-do patterns: zero matches, no implementation code introduced. The race CODE-DESIGN-VALIDATOR identified is now structurally impossible (proven by Supervisor's own :temporary restart-type contract), not merely probabilistically unlikely.",
+    "artifacts_out": ["lib/letflow/design/iss0451-poller-crash-budget-isolation.md"],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (step-02b) for re-gate, rework iteration 1 of 3"
   },
   "gate_history": [
     {

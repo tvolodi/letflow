@@ -12,6 +12,21 @@ code below — module shapes, exact config values/state machine, and prose
 only, per this project's design-vs-implementation convention (see
 `req219-supervision-layering.md` as the precedent this doc follows).
 
+**REWORK ITERATION 1 (2026-09-04):** CODE-DESIGN-VALIDATOR FAILed the prior
+version of this document
+(`handoffs/WF03-ISS0451-20260904/step-02b-code-design-validator.json`,
+`result.issues[0]`) because §4's margin arithmetic assumed, without proof,
+that `PollersBreaker`'s `terminate_child` call always beat the top-level
+`Letflow.Supervisor`'s own automatic restart-on-exit for the same child
+crash. This revision closes that gap using the validator's named
+approach (a): `Letflow.Supervisor.Pollers`' own child spec is now
+`restart: :temporary` in `Letflow.Application`'s children list, so the top
+level is structurally unable to auto-restart Pollers at all —
+`PollersBreaker` becomes solely responsible for every restart of Pollers,
+via explicit `Supervisor.restart_child/2` calls, removing the race by
+construction rather than attempting to win it. See §3.4a (new), and the
+revised §3.6, §3.7, §4, §5, and §6.2 step 6.
+
 ## 0. Inputs read in full before this design
 
 * `handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json`
@@ -153,20 +168,25 @@ does not chase a large top-level number as its primary lever — see §4 for
 the specific, small, justified value chosen instead, scoped to stay
 compatible with that decision.
 
-**Why NOT circuit-breaker-alone (the option this design also does not take
-in pure form):** the breaker (§3) has a startup transient — its own state
-machine needs to observe Pollers' OWN budget being exhausted at least once
-(the `:closed → :open` transition, §3.2) before it starts suppressing
-further top-level-consuming restarts. During that one observation window,
-the top-level supervisor experiences exactly the SAME restarts REQ-219's
-existing AC4 test already proves it tolerates (a single Pollers exhaustion
-cycle = 1 top-level restart, comfortably inside the OTP default's 3/5
-budget) — so a breaker-alone design is not unsafe, but leaving the top
-level at the bare OTP default provides zero margin if, e.g., an unrelated
-transient Infrastructure or Http restart happens to land in the same
-5-second window as the breaker's first observation cycle. §4's 2-restart
-increase is sized exactly to cover that one coincidence case, not to do any
-of the persistent-fault-bounding work itself.
+**Why NOT circuit-breaker-alone, i.e. why §4's top-level raise is kept even
+though (REVISED, rework iteration 1 — see §3.4a/§4) Pollers' own exits now
+consume ZERO top-level restart-budget slots, always:** the breaker (§3)
+still has a startup transient — its own state machine needs to observe
+Pollers' OWN budget being exhausted at least once (the `:closed → :open`
+transition, §3.2) before it opens, and during that observation window (and
+during every subsequent `:closed` window after a `:half_open` recovery) the
+`PollersBreaker` process ITSELF is an ordinary `:permanent` top-level child
+whose own restarts (Q3, §7) plus Infrastructure's and Http's do still draw
+from the shared top-level budget, exactly as they would with no breaker at
+all. Leaving the top level at the bare OTP default of 3 would provide zero
+margin if, e.g., an unrelated transient Infrastructure or Http restart
+happens to coincide with a `PollersBreaker` restart (Q3) in the same
+5-second window — a coincidence unrelated to Pollers' own fault behavior
+entirely, and not addressed by the breaker no matter how well it bounds
+Pollers specifically. §4's 2-restart increase is sized exactly to cover
+that unrelated-coincidence case, not to do any of the persistent-fault-
+bounding work itself (that work is now done entirely, and provably, by
+§3.4a's `restart: :temporary`).
 
 ## 3. `Letflow.Supervisor.Pollers` circuit-breaker — exact state machine
 
@@ -298,6 +318,93 @@ Supervisor.Infrastructure, Letflow.Supervisor.Pollers, Letflow.
 Supervisor.PollersBreaker, Letflow.Supervisor.Http]` — Http stays last,
 unaffected; the breaker sits between Pollers and Http.
 
+### 3.4a `restart: :temporary` on Pollers' own child spec — REVISED (rework iteration 1), the mechanism that makes this design's central race structurally impossible rather than merely won
+
+**This subsection replaces the prior iteration's implicit reliance on
+"the breaker's `terminate_child` call happens before the top level's own
+automatic restart-on-exit reacts to the same child exit."**
+CODE-DESIGN-VALIDATOR correctly identified
+(`handoffs/WF03-ISS0451-20260904/step-02b-code-design-validator.json`,
+`result.issues[0]`) that the prior version never proved that ordering: the
+top-level `Letflow.Supervisor`'s own automatic restart reacts to a child's
+EXIT signal directly, in-process, with no extra message hop, while
+`PollersBreaker`'s intervention required its own `Process.monitor` `:DOWN`
+message to be delivered to its mailbox, `handle_info` to be scheduled and
+run, and then a synchronous `Supervisor.terminate_child/2` round trip to
+complete -- a strictly LONGER chain reacting to the exact same exit event,
+with nothing in OTP's documented `Supervisor`/`GenServer` contracts
+guaranteeing the longer chain wins. That gap is real, and no OTP contract
+proving the opposite was found on review, so this design does not attempt
+to re-litigate the ordering (the validator named this as one of exactly
+two acceptable fixes, and named it the safer, verifiable one).
+
+**The fix: `Letflow.Application.start/2`'s children list gives Pollers'
+OWN child spec `restart: :temporary` explicitly** (Elixir's `Supervisor`
+child-spec `:restart` option -- one of `:permanent` (the implicit default
+every child in this list currently uses, including Pollers itself today),
+`:transient`, or `:temporary`; see the "Restart values" section of the
+`Supervisor` module docs). `:temporary` means: **a `:temporary` child is
+never restarted by its supervisor, regardless of exit reason** -- not on a
+normal exit, not on an abnormal exit, not once, not ever. This is
+`Supervisor`'s own documented, unconditional contract for that restart
+type, decided statically from the child spec at the moment it is
+registered, not evaluated at exit time against any runtime condition or
+race. There is therefore no race left to win: **the top-level `Letflow.
+Supervisor` structurally never attempts to restart `Letflow.
+Supervisor.Pollers` automatically, under any circumstance, ever again.**
+The children list becomes:
+
+```
+children = [
+  Letflow.Supervisor.Infrastructure,
+  {Letflow.Supervisor.Pollers, restart: :temporary},
+  Letflow.Supervisor.PollersBreaker,
+  Letflow.Supervisor.Http
+]
+```
+
+(Elixir's 2-tuple `{module, opts}` children-list form merges `opts` into
+that child's own default child spec, per `Supervisor.child_spec/2`'s
+documented shape -- no change to `Letflow.Supervisor.Pollers.child_spec/1`
+itself, which still comes from `use Supervisor`'s own generated default;
+the override happens entirely at the call site in
+`Letflow.Application.start/2`, the same place REQ-219's own boot-order
+guarantee already lives, so this is a small, structurally-scoped,
+one-line-of-intent change.)
+
+**Consequence, stated precisely because it changes the mechanism from the
+prior iteration, not just patches it: `PollersBreaker` becomes the SOLE
+mechanism by which `Letflow.Supervisor.Pollers` is ever restarted, full
+stop -- sole from the very FIRST exit onward, not merely "sole after the
+2nd exit" as the prior iteration modeled.** This means the single-shot
+case REQ-219's existing AC4 test already exercises (one Pollers exit, then
+the fault clears) now ALSO depends on `PollersBreaker` performing an
+explicit restart -- the top level no longer does this automatically for
+ANY Pollers exit, including the very first one. §3.4b below revises the
+breaker's own `:closed`-state handling accordingly (it must call
+`Supervisor.restart_child/2` on the FIRST `:DOWN`, not merely observe it),
+and §4 below re-derives the top-level margin arithmetic under the new,
+now-airtight invariant that Pollers' own exits consume ZERO top-level
+restart-budget slots, ever -- not "usually 2, hopefully never 3" as
+before.
+
+**Why this does not merely relocate the race to a different pair of
+processes, and is not merely "very likely" safe:** `PollersBreaker` still
+learns of a Pollers exit via the same `Process.monitor`/`:DOWN` message
+path as the prior iteration -- but now there is nothing racing against it.
+The top-level `Letflow.Supervisor` has no restart-on-exit code path to
+invoke for a `:temporary` child at all; per `Supervisor`'s own documented
+contract, that decision not to restart is made from the child spec's
+static `:restart` value, independent of scheduling order, message
+latency, or which process reacts first. There is no second actor whose
+speed matters, because there is no second actor with a restart action to
+take. `PollersBreaker`'s own `handle_info({:DOWN, ...})` handler runs
+whenever the BEAM schedules it -- sooner or later changes only how long
+Pollers is briefly absent from supervision (itself an accepted, visible
+`:open`-state or restart-in-flight property of this design, §3.2, not a
+hazard), never whether the top level might still "win" a restart race,
+because the top level has no restart move left to make.
+
 **Mechanism, at the level of what state it holds and what triggers each
 transition (signatures/types only, no bodies):**
 
@@ -313,37 +420,59 @@ transition (signatures/types only, no bodies):**
   process (started just before it in the top-level children list), state
   starts `:closed`, `consecutive_trips: 0`.
 * `handle_info({:DOWN, ref, :process, pollers_pid, reason}, state)` — fires
-  every time `Letflow.Supervisor.Pollers` exits, for ANY reason (matches
-  today's already-accepted "the whole supervisor exits and is restarted"
-  event exactly — REQ-219's own AC4 test already asserts this `:DOWN`
-  happens once per single-shot event; this handler is the multi-event
-  extension). On EACH such `:DOWN`:
-  * If current state is `:closed`: this is the FIRST observed exhaustion.
-    Do NOT open the breaker yet on a single event — a single Pollers exit
-    is exactly the ALREADY-ACCEPTED, ALREADY-TESTED (REQ-219 AC4) case that
-    needs no additional handling; the top level's own default restart
-    absorbs it exactly as today. Instead: re-monitor the NEW `Letflow.
-    Supervisor.Pollers` pid (the top level has, by the time this handler
-    runs, either already restarted it or is about to — see §3.6 for the
-    exact race and why it is safe) and start a short observation timer
-    (§3.6). If a SECOND `:DOWN` for the re-monitored pid arrives before
-    that observation timer fires, THAT is what trips `:closed -> :open`
-    (transition to `:open`, `consecutive_trips: 1`, call
-    `Supervisor.terminate_child(Letflow.Supervisor, Letflow.
-    Supervisor.Pollers)` so the top level does not even attempt a further
-    automatic restart while the breaker holds it open — see §3.7 for why
-    this call, not merely "let it keep restarting," is required),
-    `Process.send_after(self(), :half_open_probe, 1_000)` (§3.3's 1st
-    interval).
-  * If current state is `:open`: should not observe a `:DOWN` here (Pollers
-    is already terminated by this process itself) — a defensive no-op /
-    log, not a crash, since `Supervisor.terminate_child/2` is itself
-    request-response and this handler does not race against it.
-  * If current state is `:half_open`: the probe restart (§3.2) itself
-    crash-looped and re-exhausted — trip back to `:open`,
-    `consecutive_trips: consecutive_trips + 1`, `terminate_child` again,
+  every time `Letflow.Supervisor.Pollers` exits, for ANY reason. **REVISED
+  (rework iteration 1): because §3.4a now gives Pollers' child spec
+  `restart: :temporary`, the top level NEVER restarts Pollers
+  automatically -- not on the 1st exit, not ever -- so this handler is now
+  responsible for issuing every restart itself, including the one REQ-219's
+  existing AC4 test already exercises (previously supplied for free by the
+  top level's own default `:permanent` restart).** On EACH such `:DOWN`:
+  * If current state is `:closed`: this is either the FIRST observed exit,
+    or a subsequent exit that arrived after a prior observation window
+    already cleared (§3.6). Either way: immediately call
+    `Supervisor.restart_child(Letflow.Supervisor, Letflow.
+    Supervisor.Pollers)` -- this is the SAME action REQ-219's existing AC4
+    test's own `restart_pollers!/0` helper already performs manually today,
+    now performed automatically by the breaker instead of needing a
+    top-level default to do it. Re-monitor the resulting new pid, and start
+    a short observation timer (§3.6). Do NOT open the breaker yet on a
+    single event -- a single Pollers exit, immediately restarted, is
+    exactly the ALREADY-ACCEPTED, ALREADY-TESTED (REQ-219 AC4) case, now
+    served by an explicit `restart_child/2` call instead of an implicit
+    top-level one; the observable end state (Pollers restarted once,
+    running again) is unchanged from today, only the mechanism producing it
+    moved from "top level's own default" to "breaker's explicit call." If a
+    SECOND `:DOWN` for the re-monitored pid arrives before that observation
+    timer fires, THAT is what trips `:closed -> :open` (transition to
+    `:open`, `consecutive_trips: 1` -- no further `restart_child/2` call
+    this time; §3.3's `:open` state means Pollers stays down, unrestarted,
+    for the backoff interval), `Process.send_after(self(), :half_open_probe,
+    1_000)` (§3.3's 1st interval).
+  * If current state is `:open`: should not observe a `:DOWN` here (no
+    restart was issued while `:open`, so no live Pollers process exists to
+    exit) -- a defensive no-op / log, not a crash.
+  * If current state is `:half_open`: the probe restart (§3.2/§3.3's
+    `:half_open_probe` handler below) itself crash-looped and re-exhausted
+    -- trip back to `:open`, `consecutive_trips: consecutive_trips + 1`,
     schedule the NEXT backoff interval per §3.3's table indexed by the new
-    `consecutive_trips` value.
+    `consecutive_trips` value. No `restart_child/2` call here either (same
+    reasoning as the `:closed -> :open` transition above) -- the NEXT
+    restart attempt happens only when the next `:half_open_probe` fires.
+  * **What `Supervisor.terminate_child/2` is for now, since restart
+    responsibility moved to the `:DOWN` handler above:** with `:temporary`,
+    a crash-looping Pollers instance exits ON ITS OWN once its own
+    `max_restarts: 5, max_seconds: 60` budget is exhausted (§3.2's
+    `:closed` state, unchanged) -- no explicit `terminate_child/2` call is
+    needed to STOP it, because a `:temporary` child that exits is already
+    gone from the top level's restart-eligible set structurally; the "no
+    3rd automatic restart" property §3.7 (previous iteration) had to argue
+    for is now true by construction for every exit, not just the 2nd. The
+    breaker's own `terminate_child/2` calls are reserved for one case only:
+    forcing a KNOWN-still-alive Pollers process down (e.g. if a future
+    operational need required stopping Pollers outside its own crash-loop
+    path) -- not exercised by this design's own state machine, since every
+    transition here reacts to an ALREADY-exited Pollers via `:DOWN`, never
+    to a still-running one.
 * `handle_info(:half_open_probe, state)` (fires when a `:open`-state backoff
   timer elapses): transition to `:half_open`,
   `Supervisor.restart_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)`,
@@ -372,7 +501,7 @@ for §5's regression test and for any future health-check/ops-visibility
 endpoint (out of this issue's scope to wire one up, but the accessor is
 cheap and test-load-bearing regardless — see §5).
 
-### 3.6 Race-safety note: the two-`:DOWN`-events-vs-one-observation-timer mechanism, and why it does not double-count REQ-219's own AC4 single-shot case
+### 3.6 REVISED (rework iteration 1): why the two-`:DOWN`-events-vs-one-observation-timer mechanism still does not double-count REQ-219's own AC4 single-shot case, now under explicit-restart semantics
 
 **This is the one subtlety load-bearing enough to spell out arithmetically,
 since a sloppy version of this mechanism could accidentally trip the
@@ -382,162 +511,228 @@ already exercises exactly ONE Pollers-level exit-and-restart cycle and
 explicitly, deliberately clears the fault right after — the breaker MUST
 NOT open on that single event, or it would change AC4's own already-passing
 behavior (Pollers restarting once, staying healthy afterward) into "Pollers
-restarts once, then is immediately terminated by the breaker before its
-own fault-cleared state has any chance to run" — a regression against
-REQ-219, forbidden by this design's own §6 guarantee below.
+never comes back because the breaker treats one exit as enough to open" — a
+regression against REQ-219, forbidden by this design's own §6 guarantee
+below. This subsection's role changed under §3.4a's revision: it is no
+longer about winning a race against the top level's own automatic restart
+(§3.4a already made that race impossible by construction), it is purely
+about the breaker's OWN internal one-exit-vs-two-exits distinction — a
+question entirely internal to `PollersBreaker`'s own state machine now,
+with no other actor involved.
 
 The mechanism in §3.4 handles this correctly BECAUSE it requires TWO
 `:DOWN` events with no successful settle in between, not one:
 
-1. 1st `:DOWN` (Pollers exhausted its own 5/60 budget once, top level
-   auto-restarts it) → breaker starts an observation timer, does NOT open.
+1. 1st `:DOWN` (Pollers exhausted its own 5/60 budget once) →
+   `PollersBreaker` itself calls `Supervisor.restart_child/2` (§3.4a/§3.4 —
+   the breaker's OWN explicit action now, not a top-level default), then
+   starts an observation timer. Does NOT open.
 2. If the fault was a SINGLE-SHOT (REQ-219 AC4's own scenario, and any
    ordinary transient burst): the re-monitored, freshly-restarted Pollers
    process keeps running — no 2nd `:DOWN` arrives before the observation
    timer's own deadline. The observation timer's `handle_info` clears the
    "watching for a 2nd `:DOWN`" flag and the breaker stays `:closed`,
-   `consecutive_trips: 0` — REQ-219 AC4's exact scenario, unaffected.
+   `consecutive_trips: 0` — REQ-219 AC4's exact scenario, and its
+   Pollers-restarted-once end state, both reproduced, just via the
+   breaker's explicit `restart_child/2` call instead of the top level's
+   former implicit one (§5 below confirms the existing AC4 test needs a
+   corresponding update, not a behavior change).
 3. If the fault is PERSISTENT (ISS-0451's scenario): per §1's own measured
    ~24-30ms full-cycle cadence, the 2nd `:DOWN` arrives well inside any
    reasonable observation-timer duration — set to **2 seconds** (comfortably
-   longer than the top-level's own 5-second intensity window so a 2nd
-   exhaustion that would ALSO threaten the top level's own budget is always
-   caught before that budget could be threatened a 2nd time, and
-   comfortably shorter than needing to wait out Pollers' full 60-second
-   window, since — per §1 — a persistent fault's 2nd cycle arrives in
-   milliseconds, not anywhere near 60s). This 2nd `:DOWN` is what actually
-   opens the breaker.
+   longer than the empirically-measured cadence so a genuinely persistent
+   fault is reliably caught on its 2nd cycle, and comfortably shorter than
+   needing to wait out Pollers' full 60-second window). This 2nd `:DOWN` is
+   what actually opens the breaker — no further `restart_child/2` call is
+   issued for it (§3.4's `:closed`-branch text above); Pollers simply stays
+   down, unrestarted, until the `:half_open_probe` fires.
 
-**Arithmetic tying this back to the top level's own budget (§4):** in the
-worst case this mechanism allows, the top level absorbs exactly 2 Pollers
-exits (the 1st, which starts observation, and the 2nd, which trips the
-breaker and is followed immediately by `terminate_child` — no 3rd automatic
-restart is ever attempted, because `terminate_child` removes Pollers from
-the top level's own restart-eligible state entirely, it is not a "crash"
-event the top level's intensity counter even sees as a 3rd restart). **2
-consumed restarts, inside the OTP-default 3-restart budget, with 1 full
-restart of headroom remaining** — this is exactly why §4 only raises the
-top level's own budget by a small, precisely-justified margin (to 5) rather
-than needing a large one: the breaker itself already keeps the top level's
-own consumption at 2, not the 4 ISSUE-FIXER's probe measured for the
-NO-BREAKER case.
+**Arithmetic tying this back to the top level's own budget (§4) — REVISED,
+now airtight rather than probabilistic:** because §3.4a makes Pollers'
+child spec `restart: :temporary`, the top-level `Letflow.Supervisor` NEVER
+attempts an automatic restart of Pollers for ANY of these `:DOWN` events —
+not the 1st, not the 2nd, not any subsequent one across any number of
+breaker trip/backoff cycles. **Every restart of Pollers, across the
+mechanism described in this section, is an explicit
+`Supervisor.restart_child/2` call issued by `PollersBreaker` itself, never
+an automatic action by the top-level Supervisor.** Consequently, the
+top-level `Letflow.Supervisor`'s own restart-intensity counter is
+incremented by Pollers-related activity **exactly zero times, under any
+fault pattern, persistent or otherwise, structurally and unconditionally**
+— not "usually 2, hopefully never 3" as the prior iteration's unproven
+race required, but a fixed, provable **0**, because there is no code path
+by which the top level's own automatic-restart logic is ever invoked for a
+`:temporary` child. This is what makes §4's own margin arithmetic below
+simple rather than delicately balanced against a race outcome.
 
-### 3.7 Why `terminate_child`, not merely "let the top level's own budget run out on its own after 2 attempts"
+### 3.7 What replaces `terminate_child`-as-race-winner: nothing needs to, because there is no race to win
 
-Calling `Supervisor.terminate_child(Letflow.Supervisor, Letflow.
-Supervisor.Pollers)` immediately after the 2nd `:DOWN` (rather than passively
-waiting for the top level to attempt and fail a 3rd automatic restart) is
-what actually produces "stopped, not crash-looping" (ISS-0451's own
-required end state) instead of merely "stopped once the top level's OWN
-budget happens to run out too." Two independent reasons this matters, not
-one: (a) it is what makes the top-level-intensity value chosen in §4
-correct regardless of exactly how large or small it is — the breaker's
-active intervention, not the top level's own arithmetic, is what stops the
-retries, so §4's value is free to be chosen for its OWN, unrelated
-defense-in-depth reason (§2's paragraph) without having to also be sized
-to "survive exactly N breaker cycles"; (b) it produces a clean, deliberate
-`:open` state the breaker's own `breaker_state/0` accessor (§3.5) can report
-truthfully — a Pollers process left to exhaust the top level's OWN budget
-would instead take the ENTIRE `:letflow` application down with it (back to
-ISS-0451's original failure mode), since the top level itself has no
-"stop trying, but stay up" state; only actively removing Pollers from
-supervision before that budget is threatened again achieves "stay up AND
-stop retrying."
+The prior iteration's §3.7 argued that calling `Supervisor.terminate_child/2`
+immediately after the 2nd `:DOWN` was necessary to preempt the top level's
+own automatic restart before it could fire a 3rd time — an argument that
+CODE-DESIGN-VALIDATOR correctly identified as unproven (no ordering
+guarantee that the preemption would win). **Under §3.4a's `restart:
+:temporary` revision, this entire question is moot: the top level has no
+automatic-restart action to preempt in the first place**, for the 1st,
+2nd, or any exit. "Stopped, not crash-looping" (ISS-0451's own required end
+state) is produced simply by `PollersBreaker` declining to call
+`restart_child/2` again while in `:open` state (§3.4's `:closed -> :open`
+transition text) — there is no longer a competing top-level restart path
+that must be beaten to a synchronous call; there is only the breaker's own
+single, uncontested decision of whether to call `restart_child/2` or not.
+This is a strictly simpler, and now fully verifiable-from-the-child-spec-
+alone, mechanism than the prior iteration's.
 
-## 4. Top-level `Letflow.Supervisor` intensity: `max_restarts: 5, max_seconds: 5` — defense-in-depth only, not the primary fix
+## 4. Top-level `Letflow.Supervisor` intensity: `max_restarts: 5, max_seconds: 5` — REVISED margin arithmetic (rework iteration 1), now under a proven zero-Pollers-consumption invariant
 
-**Exact value: raise `max_restarts` from the OTP default of 3 to 5;
-`max_seconds` stays at the OTP default of 5** (i.e. `opts = [strategy:
-:one_for_one, max_restarts: 5, max_seconds: 5, name: Letflow.Supervisor]` in
-`Letflow.Application.start/2`).
+**Exact value, unchanged from the prior iteration: raise `max_restarts`
+from the OTP default of 3 to 5; `max_seconds` stays at the OTP default of
+5** (i.e. `opts = [strategy: :one_for_one, max_restarts: 5, max_seconds: 5,
+name: Letflow.Supervisor]` in `Letflow.Application.start/2`). The VALUE is
+the same 5; the ARITHMETIC justifying it is re-derived below because the
+prior iteration's justification depended on the now-removed "breaker
+consumes 2 of the top level's restarts" premise, which no longer applies.
 
 **Arithmetic for why 5, not some other number, per ISS-0451's own AC2
-requirement for concrete arithmetic (this paragraph is intentionally
-narrower in scope than §1's "cannot survive indefinitely" finding — it is
-not claiming to solve the persistent-fault case on its own, §3 does that;
-this is the SEPARATE, smaller claim the raised value is actually sized
-for):**
+requirement for concrete arithmetic:**
 
-* §3.6 established the breaker's own worst-case top-level consumption for
-  a PERSISTENT fault is exactly **2** restarts (1st `:DOWN` starts
-  observation, 2nd `:DOWN` trips the breaker and `terminate_child` follows
-  immediately — no further automatic restart is ever attempted after that).
-* The OTP default (3) already covers 2 with 1 to spare — so the breaker
-  ALONE, even at the bare default, would never itself exhaust the top
-  level. The raise to 5 is NOT sized to cover the breaker's own worst
-  case; it is sized for the residual, DIFFERENT risk §2 named explicitly:
-  an UNRELATED transient restart (e.g. a single genuinely-transient
-  Infrastructure or Http hiccup, of the ordinary kind the OTP default
-  already tolerates today) landing in the SAME rolling 5-second window as
-  the breaker's own 2-restart consumption from a persistent-Poller-fault
-  episode. Without the raise, 2 (breaker) + 1 unrelated transient restart
-  already equals the OTP default's ceiling of 3, leaving ZERO margin for a
-  second unrelated coincidence in the same window — an operationally
-  plausible coincidence (a bad tenant migration and, say, a brief Oidcc
-  discovery-endpoint blip, both real, both already-tolerated-individually
-  events) that would otherwise take the WHOLE application down for a
-  reason having nothing to do with Pollers at all, which is precisely the
-  failure mode REQ-219 exists to prevent.
-* Raising to 5 (2 more than the default) restores that same 2-restart
-  margin the OTP default originally provided for OTHER children, on top of
-  the 2 the breaker's own mechanism now structurally consumes during a
-  persistent-Poller-fault episode: `5 (new ceiling) - 2 (breaker's own
-  worst-case consumption) = 3`, i.e. exactly the OTP default's own original
-  margin, preserved rather than eroded by this design's addition of the
-  breaker's own 2-restart cost. `max_seconds` is left at the OTP default
-  (5s) unchanged, since nothing in this design's reasoning depends on a
-  wider window — only on the count.
-* This is a SMALL, JUSTIFIED, NON-ARBITRARY increase (2, not "raised until
-  it works") — chosen specifically so it does not reopen the exact
-  cross-child-budget-sharing risk §2 raised against a large top-level
-  raise: a genuinely crash-looping Infrastructure or Http child (the
-  scenario REQ-219 decision 3 deliberately wanted the OTP default to catch)
-  still exhausts this only-slightly-larger 5-restart budget in the same
-  order of magnitude of time the OTP default would have, and still brings
-  the application down — decision 3's own stated correctness property
-  ("a fault severe enough that taking the app down is still correct") is
-  preserved, not weakened, by a 2-restart increase in a way it would not be
-  by, say, raising to 50.
+* §3.4a/§3.6 established, by construction (not by racing), that Pollers'
+  `restart: :temporary` child spec means the top-level `Letflow.Supervisor`
+  NEVER restarts `Letflow.Supervisor.Pollers` automatically, for any exit,
+  under any fault pattern. **Pollers-related activity consumes exactly 0
+  of the top level's own `max_restarts` budget, unconditionally.** This
+  holds whether the fault is single-shot, persistent, or the breaker is
+  mid-way through any number of `:open`/`:half_open` backoff cycles (§3.3)
+  — every one of those cycles' restarts is `PollersBreaker`'s own explicit
+  `Supervisor.restart_child/2` call, which does not touch or increment the
+  TOP level's intensity counter at all (that counter only counts the top
+  level's OWN automatic restarts of its OWN children; a `:temporary` child
+  that is manually restarted via `restart_child/2` by a THIRD process is
+  invisible to it, per `Supervisor`'s documented intensity-tracking scope,
+  which is per-supervisor and reacts only to that supervisor's own
+  automatic restart decisions).
+* This means the top-level's own `max_restarts`/`max_seconds` budget is now
+  available ENTIRELY for its two remaining `:permanent` children,
+  Infrastructure and Http (plus `PollersBreaker` itself, also
+  `:permanent` by default — see Q3 in §7, unchanged from the prior
+  iteration, now scoped to a budget that is no longer shared with Pollers
+  activity at all). The raise from 3 to 5 is therefore no longer sized
+  against any breaker-consumption figure (there is none) — it is sized,
+  exactly as the prior iteration's residual paragraph already argued, for
+  tolerating more than one UNRELATED transient restart among
+  Infrastructure/Http/PollersBreaker landing in the same rolling window,
+  a margin that is now MORE conservative than strictly required (the prior
+  iteration needed the +2 to offset the breaker's assumed 2-restart
+  consumption; this iteration gets that same +2 as pure extra headroom,
+  since actual Pollers-attributable consumption is now 0, not 2).
+* **Restated as the exact inequality ISS-0451's AC2 asks for:** for the
+  top level to survive a persistent Poller fault indefinitely, it is
+  sufficient that Pollers-attributable restarts-of-Pollers-by-the-top-level
+  stay at 0 for the ENTIRE duration of the fault, for any duration,
+  including forever. §3.4a's `restart: :temporary` proves exactly that:
+  `0 <= max_restarts` holds for every value of `max_restarts >= 0`,
+  independent of how long the fault persists, how many breaker trip cycles
+  occur, or how fast the fault's own internal cadence is (§1's ~24-30ms
+  figure, which mattered enormously to the prior iteration's arithmetic,
+  is now irrelevant to the TOP level's own survival — it only affects how
+  quickly `PollersBreaker` itself reaches `:open`, an internal breaker-only
+  concern). This is the "tolerates a persistent fault indefinitely" bar
+  ISS-0451/AC2 sets, met exactly, not merely approximated or bounded to a
+  large-but-finite number of cycles.
+* The raise to 5 (rather than leaving the OTP default at 3) is kept for
+  the SAME, now purely orthogonal, defense-in-depth reason §2's rejected-
+  alternatives paragraph already named: covering a coincidence of multiple
+  independent UNRELATED transient restarts (Infrastructure, Http, or
+  `PollersBreaker` itself, per Q3) landing in the same 5-second window —
+  `5 (new ceiling) - 0 (Pollers' now-proven zero consumption) = 5` full
+  restarts of headroom for those three children combined, one more than
+  the OTP default's original 3 (which had to cover the same three children
+  in today's, pre-this-design, world), a strictly SAFER position than
+  either the prior iteration (margin of 3) or today's unmodified default
+  (margin of 3), not merely an equally-safe one.
+* This remains a SMALL, JUSTIFIED, NON-ARBITRARY increase (2, not "raised
+  until it works") for the identical reason the prior iteration gave and
+  which is unaffected by this rework: a genuinely crash-looping
+  Infrastructure or Http child (the scenario REQ-219 decision 3
+  deliberately wanted the OTP default to catch) still exhausts this
+  only-slightly-larger 5-restart budget in the same order of magnitude of
+  time the OTP default would have, and still brings the application down —
+  decision 3's own stated correctness property ("a fault severe enough
+  that taking the app down is still correct") is preserved, not weakened.
+  `max_seconds` is left at the OTP default (5s) unchanged, since nothing in
+  this design's reasoning depends on a wider window.
 
-## 5. REQ-219 AC2/AC4 preservation — stated explicitly, both criteria
+## 5. REQ-219 AC2/AC4 preservation — stated explicitly, both criteria — REVISED (rework iteration 1) for the `restart: :temporary` mechanism change
 
 **AC2 (boot order: Infrastructure before Pollers, structural via list
-order) — UNCHANGED, fully preserved.** `Letflow.Application.start/2`'s
-children list gains exactly one new element
-(`Letflow.Supervisor.PollersBreaker`), inserted AFTER `Letflow.
-Supervisor.Pollers` and before `Letflow.Supervisor.Http`: `[Infrastructure,
-Pollers, PollersBreaker, Http]`. Infrastructure is still listed first, still
-starts (and, per `Supervisor.start_link/3`'s own sequential-startup
-contract, still fully completes its own 17-child `init/1`) strictly before
-Pollers starts — nothing about where the breaker sits in the list changes
-that relative ordering. The breaker's own `init/1` (§3.4) does not depend
-on Infrastructure's contents at all (it only calls
+order) — UNCHANGED, fully preserved, and unaffected by §3.4a's revision.**
+`Letflow.Application.start/2`'s children list gains exactly one new element
+(`Letflow.Supervisor.PollersBreaker`) and one modified child-spec option on
+the existing Pollers entry (`restart: :temporary`, §3.4a) — neither changes
+LIST ORDER: `[Infrastructure, {Pollers, restart: :temporary},
+PollersBreaker, Http]`. Infrastructure is still listed first, still starts
+(and, per `Supervisor.start_link/3`'s own sequential-startup contract,
+still fully completes its own 17-child `init/1`) strictly before Pollers
+starts — nothing about the breaker's insertion or Pollers' `:restart`
+option changes that relative ordering; `:restart` governs ONLY what
+happens when a child later EXITS, never when or whether it starts, so it
+has zero effect on boot-order sequencing. The breaker's own `init/1` (§3.4)
+does not depend on Infrastructure's contents at all (it only calls
 `Process.whereis(Letflow.Supervisor.Pollers)`, a name lookup independent of
 list position beyond "Pollers must already be registered," which is
 guaranteed by the breaker being listed strictly after Pollers). REQ-219's
-own AC2 test (`pollers_test.exs`'s cold-boot ordering test, §4 of that
-design) is untouched by this design and needs no modification — it asserts
-a property entirely about Infrastructure-before-Pollers, which nothing here
-touches.
+own AC2 test (`pollers_test.exs`'s cold-boot ordering test) is untouched by
+this design and needs no modification — it asserts a property entirely
+about Infrastructure-before-Pollers, which nothing here touches.
 
 **AC4 (single-crash isolation: Pollers exhausting its budget once must
-still leave Infrastructure/Http alone) — UNCHANGED, fully preserved, and
-explicitly analyzed in §3.6 above for why the breaker does not alter this
-specific test's own already-passing behavior.** A single Pollers-budget
-exhaustion event still: (a) leaves `Letflow.Repo` and `Letflow.
-Supervisor.Infrastructure`'s pid untouched (nothing in this design's new
-`PollersBreaker` process ever calls `terminate_child`/`restart_child`
-against `Letflow.Supervisor.Infrastructure` or `Letflow.Supervisor.Http` —
-its ENTIRE mechanism is scoped to monitoring and, only on a SECOND
-consecutive exhaustion, terminating `Letflow.Supervisor.Pollers` alone);
-(b) is restarted once by the top-level `Letflow.Supervisor`, exactly as
-AC4's own text requires — the breaker's 1st-`:DOWN` handler does not
-intervene in that restart at all, it only starts observing. REQ-219's own
-AC4 test needs no modification for the SAME reason as AC2 above: it never
-produces a 2nd `:DOWN` (its own fault is cleared immediately, per its
-"GENUINE TIMING HAZARD" comment), so it never crosses this design's own
-two-consecutive-`:DOWN` threshold (§3.6) and the breaker never leaves
-`:closed` during that test.
+still leave Infrastructure/Http alone) — the OBSERVABLE PROPERTY is
+UNCHANGED and fully preserved; the MECHANISM producing it changes, and
+this design states that change explicitly rather than leaving it implicit
+(per CODE-DESIGN-VALIDATOR's own "unambiguous enough for ELIXIR-DEV to
+implement" bar).** A single Pollers-budget exhaustion event still: (a)
+leaves `Letflow.Repo` and `Letflow.Supervisor.Infrastructure`'s pid
+untouched (nothing in this design's `PollersBreaker` process ever calls
+`terminate_child`/`restart_child` against `Letflow.Supervisor.Infrastructure`
+or `Letflow.Supervisor.Http` — its ENTIRE mechanism is scoped to
+monitoring and restarting `Letflow.Supervisor.Pollers` alone); (b) IS still
+restarted once, but **now via `PollersBreaker`'s own explicit
+`Supervisor.restart_child/2` call on the 1st `:DOWN` (§3.4's revised
+`:closed`-branch text), not via the top-level `Letflow.Supervisor`'s
+former automatic restart** — that automatic path no longer exists at all
+once Pollers' child spec is `restart: :temporary` (§3.4a). The END STATE
+AC4 requires (Pollers restarted once, running again, Infrastructure/Http/
+Repo untouched) is unchanged; ONLY the mechanism producing the restart
+moved from "top level's implicit default" to "breaker's explicit call."
+
+**Consequence this design states explicitly, since it is a REAL change to
+existing, already-passing test code, not merely new test code alongside
+it:** REQ-219's own existing AC4 test
+(`test/letflow/supervisor/pollers_test.exs`, lines 152-161 as read for this
+design) currently asserts, in its own words, "The top-level
+`Letflow.Supervisor` did restart the exited layer, not merely leave it
+down" and polls `Process.whereis(Letflow.Supervisor.Pollers)` for a NEW pid
+appearing WITHOUT the test itself calling `restart_child/2` for that
+occurrence. **Once Pollers' child spec is `restart: :temporary`, that
+specific assertion's premise (the top level restarts it automatically) is
+no longer true, and this existing test will fail as written** unless
+updated. This design requires ELIXIR-DEV/TEST-DESIGNER to update that
+existing test so it reflects the new mechanism rather than leaving it red:
+the test's own crash-loop procedure (already an `async: false`, real
+`terminate_child`/`restart_child`-based test) must now expect `Letflow.
+Supervisor.Pollers` to be restarted via `PollersBreaker`'s own `:DOWN`
+handler (i.e. wait for `PollersBreaker`'s explicit `restart_child/2` call
+to land, the same "new pid appears" polling pattern already in
+`wait_for_new_pollers_pid/2`, just now attributing that restart correctly
+to the breaker rather than to the top level) instead of asserting a bare
+top-level automatic restart occurred. **This is not a weakening of AC4** —
+the same observable property (Pollers restarted once after exhausting its
+own budget; Infrastructure/Http/Repo untouched) is still asserted and
+still holds; only the CAUSE named in the test's own assertions/comments
+needs to change to match the new, airtight mechanism. Flagged here as a
+required, in-scope update (not a "nice to have") so TEST-DESIGNER does not
+treat `pollers_test.exs` as out of scope because this design's own new
+test file lives elsewhere.
 
 ## 6. What TEST-DESIGNER must write — exact test mechanism and observables
 
@@ -612,17 +807,24 @@ body itself clears it early.
    cycle could ever occur — this test's whole point is to prove the
    property holds even though (in fact BECAUSE) the fault is still active.
 6. **Confirm the breaker is genuinely holding Pollers stopped, not merely
-   "the test got lucky with timing":** `assert Supervisor.which_children(
-   Letflow.Supervisor.Pollers) == []` OR `assert Process.whereis(Letflow.
-   Supervisor.Pollers) == nil` (whichever the implementation actually
-   produces once `terminate_child` has run and the top level's own
-   `:one_for_one` restart of the TERMINATED — as opposed to crashed — child
-   does not automatically re-fire, matching `Supervisor.terminate_child/2`'s
-   own documented contract that a child stopped this way is not
-   automatically restarted until `restart_child/2` is called; ELIXIR-DEV
-   should confirm which of the two observables is accurate against the
-   real implementation and TEST-DESIGNER should assert the one that
-   matches, not both defensively).
+   "the test got lucky with timing" — REVISED (rework iteration 1) for the
+   `restart: :temporary` mechanism:** `assert Process.whereis(Letflow.
+   Supervisor.Pollers) == nil`. This holds simply because Pollers'
+   `restart: :temporary` child spec (§3.4a) means the top-level `Letflow.
+   Supervisor` structurally never re-registers a live `Letflow.
+   Supervisor.Pollers` process once the crash-looping instance has exited on
+   its own (per its own unchanged `max_restarts: 5, max_seconds: 60`
+   budget, §3.2's `:closed` state) — no `terminate_child/2` call is needed
+   or made by the breaker to produce this (§3.7's revised text); the pid
+   simply stays unregistered because nothing (top level OR breaker) issues
+   another `restart_child/2` call while the breaker holds `:open`.
+   `Supervisor.which_children(Letflow.Supervisor.Pollers)` is NOT a valid
+   alternative observable here (unlike the prior iteration's phrasing) —
+   once the process itself has exited and is not restarted,
+   `Letflow.Supervisor.Pollers` is not a running supervisor at all and
+   `which_children/1` against a dead/unregistered name will raise, not
+   return `[]`; `Process.whereis/1` returning `nil` is the correct and only
+   observable for "this named process does not currently exist."
 7. **Optionally, and only if wall-clock budget allows (this is a SHOULD,
    not a MUST — flagged as an open question, §7 Q1):** advance past the
    1st backoff interval (§3.3, 1 second) and confirm the breaker attempts
@@ -681,18 +883,29 @@ were ever accidentally left on.
   criterion constrains the exact text, only that a transition is logged at
   `Logger.warning/1` with the trip count and next interval.
 * **Q3 — whether `Letflow.Supervisor.PollersBreaker` itself needs its own
-  restart-intensity consideration as a top-level child** (i.e., what
-  happens if the BREAKER process itself crashes) is explicitly flagged as
-  NOT resolved by this design and left for REVIEWER/ELIXIR-DEV: the
-  breaker is an ordinary `GenServer` under the top-level `Letflow.Supervisor`'s
-  own default `:one_for_one`/OTP-default intensity, so a breaker crash
-  consumes ONE of the top level's own restart-budget slots (now 5, per
-  §4) and restarts fresh in `:closed` state, re-establishing its monitor
-  on whatever `Letflow.Supervisor.Pollers` pid is currently live. This is
-  believed to be safe and self-healing (a fresh breaker in `:closed` simply
-  resumes normal observation) but is not empirically verified in this
-  design pass the way ISSUE-FIXER's probe verified §1's core cascade — a
-  future review or a TEST-DESIGNER-authored test of "breaker itself
-  crashes mid-observation" would close this gap if judged worth the
-  additional test cost; ISS-0451's own acceptance criteria do not require
+  restart-intensity consideration as a top-level child, AND (REVISED,
+  rework iteration 1, sharper now that the breaker is the SOLE restart
+  authority for Pollers rather than a secondary observer) what its fresh
+  `init/1` should do if it restarts while Pollers is currently `:open`
+  (stopped, `Process.whereis(Letflow.Supervisor.Pollers) == nil`)** is
+  explicitly flagged as NOT resolved by this design and left for
+  REVIEWER/ELIXIR-DEV. The breaker is an ordinary `GenServer` under the
+  top-level `Letflow.Supervisor`'s own default `:one_for_one`/OTP-default
+  intensity, so a breaker crash consumes ONE of the top level's own
+  restart-budget slots (now 5, per §4) and restarts fresh — but a fresh
+  `init/1` restarting `consecutive_trips: 0`/`:closed` unconditionally
+  would, if Pollers was legitimately `:open` at the moment of the crash,
+  either leave Pollers stopped forever (if the fresh breaker does not
+  itself call `restart_child/2`) or prematurely resume restarting a still-
+  persistent fault with the backoff schedule reset to its shortest interval
+  (if it does) — NEITHER is clearly correct without a decision this design
+  does not make: whether `init/1` should call `Process.whereis(Letflow.
+  Supervisor.Pollers)` and treat `nil` as "resume in `:open` with a fresh
+  backoff timer" versus some other recovery. This is believed to be a rare
+  case (the breaker crashing is itself an unrelated fault) but is not
+  empirically verified in this design pass the way ISSUE-FIXER's probe
+  verified §1's core cascade — a future review or a TEST-DESIGNER-authored
+  test of "breaker itself crashes mid-observation, or while `:open`" would
+  close this gap if judged worth the additional test cost; ISS-0451's own
+  acceptance criteria do not require
   it.

@@ -251,7 +251,7 @@ defmodule Letflow.Test.TenantTemplate do
     :ok
   end
 
-  defp insert_throwaway_tenant_and_registration! do
+  defp insert_throwaway_tenant_and_registration!(schema_name \\ @template_schema) do
     tenant =
       %Tenant{}
       |> Tenant.create_changeset(
@@ -263,26 +263,28 @@ defmodule Letflow.Test.TenantTemplate do
       )
       |> Repo.insert!()
 
-    # Registration.changeset/2's validate_format/3 deliberately REJECTS
-    # "tenant_template" (it only accepts the "tenant_" <> 32-hex shape
-    # schema_name_for_tenant/1 produces) -- that rejection is INV-1 working
-    # exactly as designed (design §2.2): no code path that goes through the
-    # normal changeset can ever register the template as if it were a real
-    # tenant schema. This insert deliberately bypasses that changeset via
-    # Repo.insert_all/3 with a literal map (not Registration.changeset/2),
-    # because this row is required only transiently, to satisfy
-    # replay_migrations/2's own Registration-row lookup precondition, and is
-    # deleted again by delete_throwaway_tenant_and_registration!/1 before
-    # build_template!/0 returns -- see design §2.2's OQ-1 option (b). No
-    # Registration row naming "tenant_template" ever survives outside this
-    # one function's own transaction.
+    # Registration.changeset/2's validate_format/3 deliberately REJECTS both
+    # "tenant_template" and "tenant_template_refcheck" (it only accepts the
+    # "tenant_" <> 32-hex shape schema_name_for_tenant/1 produces) -- that
+    # rejection is INV-1 working exactly as designed (design §2.2): no code
+    # path that goes through the normal changeset can ever register either
+    # synthetic schema as if it were a real tenant schema. This insert
+    # deliberately bypasses that changeset via Repo.insert_all/3 with a
+    # literal map (not Registration.changeset/2), because this row is
+    # required only transiently, to satisfy replay_migrations/2's own
+    # Registration-row lookup precondition, and is deleted again by
+    # delete_throwaway_tenant_and_registration!/1 before the caller returns
+    # -- see design §2.2's OQ-1 option (b), reused here (§3.4 use site 1) for
+    # the independent reference-schema build too. No Registration row naming
+    # either synthetic schema ever survives outside this one function's own
+    # caller.
     now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     Repo.insert_all(Registration, [
       %{
         id: Ecto.UUID.generate(),
         tenant_id: tenant.id,
-        schema_name: @template_schema,
+        schema_name: schema_name,
         provisioned_at: now
       }
     ])
@@ -300,6 +302,14 @@ defmodule Letflow.Test.TenantTemplate do
   # §3.4 use site 1) against a genuinely independent replay_migrations/2
   # build. Raise immediately rather than serving clones from a broken
   # template (design §5).
+  #
+  # The two cheap MapSet diffs below (table-set, migration-version-set) are
+  # NOT the parity self-check -- they are a fast pre-check that fails loudly
+  # before paying for a whole second migration replay if the template is
+  # obviously broken. The actual design §3.4 use-site-1 check is the
+  # assert_clone_parity!/2 call at the end of this function, against a
+  # SECOND schema built independently via the real, unmodified
+  # replay_migrations/2 (not derived from or compared against itself).
   defp template_self_check!() do
     expected = MapSet.new(Letflow.TenantFixture.expected_tenant_tables())
     actual = MapSet.new(tables_in(@template_schema))
@@ -328,6 +338,50 @@ defmodule Letflow.Test.TenantTemplate do
         message:
           "TENANT_TEMPLATE_SELF_CHECK_FAILED versions_missing=" <>
             inspect(MapSet.to_list(versions_missing))
+    end
+
+    assert_template_parity_against_independent_reference!()
+    :ok
+  end
+
+  # design §3.4 use site 1: build a SECOND schema via the real, unmodified
+  # replay_migrations/2 (a genuine migration-built reference, structurally
+  # independent of the template's own build -- its own throwaway
+  # Tenant/Registration row, its own schema) and compare the template against
+  # it across dimensions #1-6 and #8-13 (NOT #7 -- design §3.4 item 1's own
+  # text: a fresh replay and the template's own build both seed
+  # event_type_registry identically by construction, so #7's row-for-row
+  # comparison there is moot, not skipped for cost reasons). Runs ONCE per
+  # template build (§4.2), not once per clone -- amortized across every test
+  # in the run. Raises (via assert_clone_parity!/2, uncaught here) rather
+  # than serving clones from an unproven template -- design §5's no-silent-
+  # fallback rule.
+  defp assert_template_parity_against_independent_reference!() do
+    reference_schema = "tenant_template_refcheck"
+
+    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{reference_schema}" CASCADE))
+    Repo.query!(~s(CREATE SCHEMA "#{reference_schema}"))
+
+    reference_tenant_id = insert_throwaway_tenant_and_registration!(reference_schema)
+
+    try do
+      case TenantProvisioning.replay_migrations(reference_tenant_id) do
+        {:ok, _applied_versions} ->
+          :ok
+
+        {:error, reason} ->
+          raise ExUnit.AssertionError,
+            message:
+              "TENANT_TEMPLATE_SELF_CHECK_FAILED reference build via replay_migrations/2 " <>
+                "returned #{inspect(reason)}"
+      end
+
+      assert_clone_parity!(reference_schema, @template_schema,
+        dimensions: [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13]
+      )
+    after
+      delete_throwaway_tenant_and_registration!(reference_tenant_id)
+      Repo.query!(~s(DROP SCHEMA IF EXISTS "#{reference_schema}" CASCADE))
     end
 
     :ok
@@ -552,17 +606,6 @@ defmodule Letflow.Test.TenantTemplate do
     |> String.split(".", parts: 2)
     |> List.last()
     |> String.trim("\"")
-  end
-
-  defp columns_in(schema_name, table_name) do
-    %{rows: rows} =
-      Repo.query!(
-        "SELECT column_name FROM information_schema.columns " <>
-          "WHERE table_schema = $1 AND table_name = $2",
-        [schema_name, table_name]
-      )
-
-    Enum.map(rows, fn [column_name] -> column_name end)
   end
 
   defp tables_in(schema_name) do
@@ -804,6 +847,16 @@ defmodule Letflow.Test.TenantTemplate do
   # dimension #5: sequences reachable from a column default. Both sides must
   # agree on which columns are sequence-backed, and the candidate's sequence
   # must live IN the candidate schema (design §0's "sequence trap" check).
+  #
+  # REVIEWER's MINOR finding (step-03c): the original per-(table,column)
+  # discovery here had the SAME N+1 shape recreate_sequences!/1 was measured
+  # to have and fixed (design §0.1 finding 3's pg_get_serial_sequence,
+  # invoked once per column instead of once per schema side). Batched into
+  # ONE information_schema.columns-driven query per schema side, identical
+  # technique to recreate_sequences!/1 -- same discovery primitive
+  # (pg_get_serial_sequence, per design §0.1 finding 3), same correctness,
+  # far fewer round trips. See the cost-measurement note in this run's own
+  # handoff for the measured before/after.
   defp check_sequences(reference_schema, candidate_schema) do
     common_tables =
       MapSet.intersection(
@@ -811,12 +864,24 @@ defmodule Letflow.Test.TenantTemplate do
         MapSet.new(tables_in(candidate_schema))
       )
 
+    ref_seqs = serial_sequences_in(reference_schema)
+    cand_seqs = serial_sequences_in(candidate_schema)
+
     Enum.flat_map(common_tables, fn table ->
-      columns = columns_in(reference_schema, table)
+      ref_columns_for_table =
+        ref_seqs |> Map.keys() |> Enum.filter(fn {t, _c} -> t == table end)
+
+      cand_columns_for_table =
+        cand_seqs |> Map.keys() |> Enum.filter(fn {t, _c} -> t == table end)
+
+      columns =
+        (ref_columns_for_table ++ cand_columns_for_table)
+        |> Enum.map(fn {_t, c} -> c end)
+        |> Enum.uniq()
 
       Enum.flat_map(columns, fn column ->
-        ref_seq = serial_sequence(reference_schema, table, column)
-        cand_seq = serial_sequence(candidate_schema, table, column)
+        ref_seq = Map.get(ref_seqs, {table, column})
+        cand_seq = Map.get(cand_seqs, {table, column})
 
         cond do
           is_nil(ref_seq) and is_nil(cand_seq) ->
@@ -842,14 +907,29 @@ defmodule Letflow.Test.TenantTemplate do
     end)
   end
 
-  defp serial_sequence(schema_name, table, column) do
+  # One round trip for the whole schema: `pg_get_serial_sequence` invoked
+  # once per (table, column) pair inside the SQL query itself (a set-based
+  # scalar-subquery-shaped SELECT over information_schema.columns), not once
+  # per pair from Elixir. Returns a map keyed by {table, column} to the
+  # schema-qualified sequence name (or absent from the map if that column has
+  # no sequence-backed default) -- callers use Map.get/2, which yields nil
+  # for a missing key, so is_nil/1 checks downstream behave identically to
+  # the pre-fix per-column serial_sequence/3 call's nil return.
+  defp serial_sequences_in(schema_name) do
     %{rows: rows} =
-      Repo.query!("SELECT pg_get_serial_sequence($1, $2)", ["#{schema_name}.#{table}", column])
+      Repo.query!(
+        """
+        SELECT c.table_name, c.column_name,
+               pg_get_serial_sequence(quote_ident($1) || '.' || quote_ident(c.table_name), c.column_name)
+        FROM information_schema.columns c
+        WHERE c.table_schema = $1
+        """,
+        [schema_name]
+      )
 
-    case rows do
-      [[nil]] -> nil
-      [[seq]] -> seq
-    end
+    rows
+    |> Enum.reject(fn [_table, _column, seq] -> is_nil(seq) end)
+    |> Map.new(fn [table, column, seq] -> {{table, column}, seq} end)
   end
 
   # dimension #6: NOT NULL/identity -- attidentity equality per column

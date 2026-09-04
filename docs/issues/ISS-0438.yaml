@@ -67,4 +67,24 @@ source: >
 queue_task_id: 438
 github_issue: 845
 
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0438-20260904
+resolved_at: "2026-09-04T15:56:10Z"
+resolution: >
+  Resolution took the form of a scoping decision plus registration, NOT
+  implementation -- this issue's own AC7 explicitly excluded implementing
+  the entity subsystem itself, so 'resolved' here means the coverage/tracking
+  gap (a subsystem invisible to task selection) is closed, not that
+  Letflow.Routers.Entities/EntityQuery now exist in lib/letflow/.
+
+  Scoping decision recorded at
+  lib/letflow/design/iss0438-entity-subsystem-scoping.md: IN SCOPE, port the
+  generic entity subsystem into Stage 6 (grounded in 4,158 lines of R-Co
+  source read directly). CODE-DESIGN-VALIDATOR, REQ-VALIDATOR, and REVIEWER
+  all independently PASSed the resulting deliverables (see
+  handoffs/WF03-ISS0438-20260904/step-03-reviewer.json).
+
+  Expanded into 7 real, gated, queue-registered requirements -- REQ-225
+  through REQ-231 in docs/requirements.yaml, each independently claimable
+  via get_next_task: letflow-queue task ids 460-466, GitHub issues 888-894.
+  The subsystem is no longer tracked only as a router comment.

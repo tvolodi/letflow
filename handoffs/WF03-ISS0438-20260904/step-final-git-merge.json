@@ -1,0 +1,56 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-00000000000a",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0438-20260904/step-final-git-merge.json",
+  "created_at": "2026-09-04T15:57:05Z",
+  "started_at": "2026-09-04T15:57:05Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226", "REQ-227", "REQ-228", "REQ-229", "REQ-230", "REQ-231"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": ["docs/agents/protocols/GIT_MERGE.md"],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "docs/migration/decisions/",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/requirements.yaml"
+    ]
+  },
+  "task": {
+    "description": "Run GIT_MERGE.md's full procedure (steps 1-10) on branch feature/WF03-ISS0438-20260904 to close out this run. This branch resolves ISS-0438 (a scoping/architecture decision, no implementation): produced lib/letflow/design/iss0438-entity-subsystem-scoping.md (the CODE-DESIGN-VALIDATOR-passed scoping recommendation), 7 new requirements REQ-225..231 in docs/requirements.yaml (REQ-VALIDATOR-passed after 1 rework iteration, registered in letflow-queue as tasks 460-466 / GH#888-894), an addendum paragraph in docs/migration/stage-6-operational-cross-cutting.md, and docs/issues/ISS-0438.yaml flipped to status: resolved with GH#845 closed. No lib/letflow/*.ex or priv/repo/migrations/ files were touched by this run (confirmed by REVIEWER at Step 3) -- this is a docs+design-artefact-only PR, so SECURITY-REVIEWER is out of scope (no tenant-data path touched) and the mix test/mix compile checks in step 5d exist as this project's standard gate but should show no attributable changes from this branch. Stage the remaining handoff files this final step itself produces, rebase onto origin/main, run the format/compile/test checks, push, open the PR (prefix \"fix:\" per WF-03 convention, citing ISS-0438 and all 7 new REQ ids), wait for CI, merge, and clean up per steps 9-10.",
+    "acceptance_criteria": [
+      "git branch --show-current equals feature/WF03-ISS0438-20260904 before starting",
+      "mix format --check-formatted, mix compile --warnings-as-errors, and mix test all run post-rebase with real output quoted; any test failures structurally attributed per core-directives.md, not asserted",
+      "PR opened citing ISS-0438, GH#845 (closed), and REQ-225 through REQ-231",
+      "PR merged via gh pr merge --squash --delete-branch after CI green (or no-failure-attributable-to-this-branch)",
+      "Local cleanup: back on main, fast-forwarded, clean working tree, feature branch deleted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "",
+    "git_evidence": {
+      "branch_name": null,
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    }
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

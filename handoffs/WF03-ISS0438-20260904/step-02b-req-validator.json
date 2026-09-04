@@ -1,0 +1,57 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000005",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-VALIDATOR",
+  "file": "handoffs/WF03-ISS0438-20260904/step-02b-req-validator.json",
+  "created_at": "2026-09-04T15:45:36Z",
+  "started_at": "2026-09-04T15:45:36Z",
+  "completed_at": "2026-09-04T15:48:16Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226", "REQ-227", "REQ-228", "REQ-229", "REQ-230", "REQ-231"],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "docs/issues/ISS-0438.yaml",
+      "docs/migration/decisions/",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "handoffs/WF03-ISS0438-20260904/step-02-req-analyst.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "HARD GATE (WF-01 Step 2) on REQ-ANALYST's seven new requirements, REQ-225 through REQ-231, drafted into docs/requirements.yaml for ISS-0438 (the entity/data-model subsystem port). Read docs/requirements.yaml in full for context (existing schema, and read all seven new entries plus their neighbors). For EACH of the seven, independently check: (a) TESTABILITY -- vague words ('appropriately', 'as needed', 'reasonably') fail; (b) CONSISTENCY -- no conflict with any done requirement (specifically REQ-202, REQ-203, REQ-024, all cited as dependencies) or any docs/migration/decisions/ record; (c) DEPENDS_ON CORRECTNESS -- not just non-orphaned, genuinely required before that slice can start, in the right order; (d) STAGE FIT -- S6 is the correct stage per the design artefact's own reasoning (read lib/letflow/design/iss0438-entity-subsystem-scoping.md section 1's 'Target stage' subsection for the argument -- verify it, don't just trust it); (e) SIZE -- one agent turn each, not multiple unrelated deliverables bundled. Also verify REQ-230 (the query-DSL compiler slice) correctly reads as touching a tenant-data path (SQL compilation over tenant-scoped entity records) so it will correctly route through SECURITY-REVIEWER at WF-02 implementation time -- if its description doesn't make that scope clear, that is a real gap to FAIL on, not a nice-to-have.\n\nAlso independently verify the three open design questions the handoff instructions required REQ-ANALYST to name explicitly (JsonSchema cross-namespace reuse in REQ-227, entity ownership model in REQ-225, synthetic-instance-per-type in REQ-228) are actually present in those requirements' text, not silently resolved and not omitted -- spot check by reading each cited requirement's actual description text yourself.\n\nAlso verify docs/migration/stage-6-operational-cross-cutting.md's addendum paragraph was actually added (read the file's tail) and that it appends rather than rewrites the existing 'S6 is now complete' line.\n\nIf ANY check fails: FAIL, listing issues by requirement id and check letter, per WF-01 Step 2's own acceptance criteria. If all pass: PASS.",
+    "acceptance_criteria": [
+      "Every check (a-e) actually run against each of the seven new requirements individually, not assumed or impressionistic",
+      "Any FAIL cites the specific requirement id and which check failed",
+      "The tenant-data-path scope of REQ-230 (SQL compiler) is explicitly confirmed or flagged as missing",
+      "The three named open design questions' presence in their respective requirement descriptions is independently spot-checked, not trusted from REQ-ANALYST's own report",
+      "The stage-6-operational-cross-cutting.md addendum is confirmed present and additive (not a rewrite)"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "6 of 7 requirements pass all five checks. REQ-225 fails check (c) depends_on correctness: it lists REQ-203 (per-tenant artifact activation) as a dependency, but REQ-225's own description scopes it to ONLY the definition JSON shape, 11 structural validation rules, canonicalisation (via REQ-202's Canonicaliser), and logical-shape versioning -- it explicitly states 'NOT IN THIS REQUIREMENT: no entity_definitions table, no persistence... no route or controller layer' and never mentions activation anywhere in SOURCE/SCOPE/acceptance_criteria. Activation is REQ-226's job (its scope item 5, 'activateDefinition-equivalent... REQ-203's already-shipped artifact_activations machinery'), and REQ-226 already lists REQ-203 correctly. REQ-203 on REQ-225 is not 'genuinely required before that slice can start' -- it is an over-inclusion (likely copy-paste from REQ-226's dependency list) that does not block REQ-225's actual work; REQ-225 needs only REQ-202. All other checks pass for all seven requirements: (a) testability -- no vague terms found in any of the seven descriptions/ACs, every AC is concrete (specific fixtures, counts, git diff --stat checks, direct table queries); (b) consistency -- REQ-202/REQ-203/REQ-024/REQ-067/REQ-069 all confirmed status: done; lib/letflow/repository/artifact_kind.ex confirmed to currently hold exactly the 7 atoms REQ-226 claims (no :entity yet); decision 0003 Decision B (schema-per-tenant) matches REQ-226's schema claim; docs/anti-patterns.md's fragment/1 entry exists as REQ-230 cites; no conflicting decision record found and none expected (design artefact SS2 correctly notes no decision record is needed since the in-scope path was taken, and no 0018 file exists); (d) stage fit -- independently verified stage-5-scripting-plugins.md's scope is Lua/WASM only with zero entity mentions, confirming the design artefact's S6-vs-S5 argument in section 1 'Target stage' holds up under direct check, not just trusted; (e) size -- all seven slices match the design artefact's own precedented breakdown, none bundle unrelated deliverables. REQ-230's tenant-data-path scope is explicitly and unambiguously stated ('Treat this requirement as a tenant-data-path change requiring SECURITY-REVIEWER's hard gate', plus a dedicated acceptance criterion naming SECURITY-REVIEWER's hard gate) -- no gap. All three named open design questions independently spot-checked present verbatim as 'OPEN DESIGN QUESTION' blocks, not silently resolved: REQ-227 (JsonSchema cross-namespace reuse, two options named, AC requires stating which was chosen), REQ-225 (entity ownership model, tenant-scoped vs platform-scoped, explicitly not picked), REQ-228 (synthetic-instance-per-type vs per-record, default stated but CODE-DESIGNER still required to name/justify it explicitly). docs/migration/stage-6-operational-cross-cutting.md's 2026-09-04 addendum paragraph confirmed present (lines 126-160), confirmed additive (explicitly states 'This does not reopen or contradict \"S6 is now complete\" above, nor the 2026-09-01 REQ-211/212 note'), and the original 'S6 is now complete' line (line 107) and the 2026-09-01 REQ-211/212 note (lines 111-124) are both still intact and unmodified.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "requirement_id": "REQ-225",
+        "check": "c",
+        "check_name": "depends_on correctness",
+        "description": "depends_on: [REQ-202, REQ-203] lists REQ-203 (per-tenant artifact activation) as a dependency, but REQ-225's description never uses activation anywhere in its SOURCE, SCOPE, or acceptance_criteria -- it explicitly excludes persistence, CRUD, and anything beyond definition JSON shape/structural validation/canonicalisation/logical-shape versioning. Activation belongs to REQ-226 (which correctly lists REQ-203 itself). REQ-203 is not genuinely required before REQ-225 can start.",
+        "recommended_fix": "Remove REQ-203 from REQ-225's depends_on, leaving depends_on: [REQ-202]."
+      }
+    ],
+    "next_action": "Route back to REQ-ANALYST: fix REQ-225's depends_on list (drop REQ-203, keep REQ-202 only), then resubmit all seven for re-validation. The other six requirements (REQ-226 through REQ-231) need no changes."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -78,6 +78,25 @@ defmodule Letflow.Test.TenantTemplateTest do
     end
   end
 
+  describe "the template itself is faithful to a genuine migration build" do
+    # design §3.4 use site 1. This is what proves the TEMPLATE is not merely
+    # self-consistent but actually equivalent to a schema built by replaying
+    # all 53 migrations -- without it, every clone could be a faithful copy
+    # of a wrong template.
+    #
+    # It is exercised HERE, explicitly, rather than on ensure_template!/0's
+    # default path: it replays the full migration set a second time, and
+    # paying that once per partition under scripts/test_parallel.sh's 16
+    # partitions (TEST_POOL_SIZE=5) exhausted the connection pool and broke
+    # the suite outright (measured: 393 failures). Running it once, here,
+    # gets the same guarantee at a cost the suite can afford.
+    test "template matches an independently migration-built reference schema" do
+      :ok = TenantTemplate.ensure_template!()
+
+      assert :ok = TenantTemplate.assert_template_parity_against_independent_reference!()
+    end
+  end
+
   describe "non-vacuity — a genuinely divergent clone must fail this same check" do
     # These three tests are this file's own proof that the assertion above
     # is not a tautology. Each independently reproduces one of the three
@@ -119,7 +138,6 @@ defmodule Letflow.Test.TenantTemplateTest do
     # dropping a real FK and re-adding it with its qualifier rewritten to
     # `tenant_template.` instead of the clone's own schema left
     # assert_clone_parity!/2 returning :ok.
-    @tag :skip
     test "a clone FK present but repointed at the template fails dimension #3 -- CURRENTLY DOES NOT (MAJOR finding, see comment above)" do
       :ok = TenantTemplate.ensure_template!()
 
@@ -197,8 +215,17 @@ defmodule Letflow.Test.TenantTemplateTest do
     # So the ONE dimension-#5 assertion built specifically to survive
     # qualifier-normalization blindness (see design §0's "sequence trap"
     # framing) is not reached by this tamper shape at all.
-    @tag :skip
-    test "a clone whose sequence-backed default is repointed at the template fails dimension #5 -- CURRENTLY DOES NOT (MAJOR finding, see comment above)" do
+    # POST-FIX UPDATE (ORCH, after normalize/3 was corrected to strip only
+    # each side's OWN schema qualifier): this tamper IS now caught, and is
+    # caught EARLIER than dimension #5 -- dimension #2's column comparison
+    # sees the surviving qualifier directly, reference reading
+    # `nextval('events_global_seq_seq'::regclass)` against candidate
+    # `nextval('tenant_template.events_global_seq_seq'::regclass)`. The
+    # assertion below therefore matches [dim #2], not [dim #5]. Catching it
+    # at #2 is strictly better than at #5 (the leak is visible in the raw
+    # column default, no pg_depend resolution needed); the original [dim #5]
+    # expectation was written against the pre-fix blind behaviour.
+    test "a clone whose sequence-backed default is repointed at the template is caught (dimension #2 sees the surviving qualifier)" do
       :ok = TenantTemplate.ensure_template!()
 
       tenant = insert_throwaway_tenant!()
@@ -219,12 +246,19 @@ defmodule Letflow.Test.TenantTemplateTest do
           ~s|SET DEFAULT nextval('"tenant_template"."#{template_seq_local}"')|
       )
 
-      assert_raise ExUnit.AssertionError, ~r/\[dim #5\]/, fn ->
-        TenantTemplate.assert_clone_parity!("tenant_template", clone_schema)
-      end
+      error =
+        assert_raise ExUnit.AssertionError, fn ->
+          TenantTemplate.assert_clone_parity!("tenant_template", clone_schema)
+        end
+
+      # The surviving `tenant_template.` qualifier is the whole point: after
+      # the normalize/3 fix it is no longer stripped out of the candidate,
+      # so it shows up as a real textual difference rather than collapsing
+      # into a false match.
+      assert error.message =~ "[dim #2]"
+      assert error.message =~ "tenant_template.#{template_seq_local}"
     end
 
-    @tag :skip
     test "a clone trigger repointed at the template's own function fails dimension #8 -- CURRENTLY DOES NOT (MAJOR finding, see comment above)" do
       :ok = TenantTemplate.ensure_template!()
 

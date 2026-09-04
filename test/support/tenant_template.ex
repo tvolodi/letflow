@@ -66,6 +66,21 @@ defmodule Letflow.Test.TenantTemplate do
   """
   @spec ensure_template!() :: :ok
   def ensure_template! do
+    # The template schema is SHARED, long-lived state -- it must survive the
+    # calling test's own sandbox transaction, or its DDL is rolled back and
+    # the next caller finds a half-built schema. Measured symptom when this
+    # was left to the caller: partition databases ended up with a
+    # tenant_template holding 1 table instead of ~39, and every dependent
+    # test failed TENANT_TEMPLATE_SELF_CHECK_FAILED with the full table set
+    # reported missing.
+    #
+    # tenant_fixture.ex's provisioned_tenant!/1 already sets :auto before it
+    # reaches here, but ensure_template!/0 is public and must not depend on
+    # its caller having done so. Setting it here is idempotent and matches
+    # what tenant_fixture.ex itself does (and deliberately does not restore,
+    # for the same reason -- see its own note at line 171).
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
     if template_ready?() do
       :ok
     else
@@ -340,7 +355,27 @@ defmodule Letflow.Test.TenantTemplate do
             inspect(MapSet.to_list(versions_missing))
     end
 
-    assert_template_parity_against_independent_reference!()
+    # COST PLACEMENT (ORCH, after measuring a real full-suite run): this
+    # reference check builds a SECOND complete schema by replaying all 53
+    # migrations via the real replay_migrations/2. Running it on every
+    # template build means once per PARTITION -- and scripts/test_parallel.sh
+    # runs up to 16 partitions with TEST_POOL_SIZE=5. Measured on this branch
+    # with it unconditionally on: 393 failures out of 3204, dominated by
+    # DBConnection.ConnectionError and TENANT_TEMPLATE_BUILD_FAILED, because
+    # every partition doubled its provisioning work at exactly the moment all
+    # of them were starting up and exhausted the connection pool. The check
+    # itself is correct and valuable -- it is what proves the TEMPLATE is
+    # faithful to a genuine migration build -- but paying for it once per
+    # partition is not affordable.
+    #
+    # So it is opt-in, defaulting OFF. It still runs for real in
+    # test/support/tenant_template_test.exs, which exercises it explicitly,
+    # and can be turned on suite-wide with LETFLOW_TEMPLATE_REFCHECK=1 when
+    # someone wants the stronger guarantee and can afford the connections.
+    if System.get_env("LETFLOW_TEMPLATE_REFCHECK") == "1" do
+      assert_template_parity_against_independent_reference!()
+    end
+
     :ok
   end
 
@@ -356,7 +391,18 @@ defmodule Letflow.Test.TenantTemplate do
   # in the run. Raises (via assert_clone_parity!/2, uncaught here) rather
   # than serving clones from an unproven template -- design §5's no-silent-
   # fallback rule.
-  defp assert_template_parity_against_independent_reference!() do
+  @doc """
+  Builds an independent, genuinely migration-built reference schema and
+  asserts the template matches it.
+
+  Public so `test/support/tenant_template_test.exs` can exercise it directly.
+  It is deliberately NOT on `ensure_template!/0`'s default path -- see the
+  cost-placement comment there -- because paying for a second full
+  53-migration replay once per partition exhausts the connection pool under
+  `scripts/test_parallel.sh`. Raises on divergence; returns `:ok` otherwise.
+  """
+  @spec assert_template_parity_against_independent_reference!() :: :ok
+  def assert_template_parity_against_independent_reference!() do
     reference_schema = "tenant_template_refcheck"
 
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{reference_schema}" CASCADE))
@@ -648,10 +694,31 @@ defmodule Letflow.Test.TenantTemplate do
     ]
   end
 
-  defp normalize(text, reference_schema, candidate_schema) do
-    text
-    |> String.replace(~s(#{reference_schema}.), "")
-    |> String.replace(~s(#{candidate_schema}.), "")
+  # ISS-0427 MAJOR fix (found by TEST-DESIGNER at step 4, confirmed by ORCH):
+  # this used to strip BOTH schema qualifiers from BOTH sides. That made the
+  # whole parity check structurally blind to the PRIMARY hazard this design
+  # exists to catch -- an object that is PRESENT in the clone but still
+  # REPOINTED AT THE TEMPLATE. A clone FK reading
+  # `REFERENCES tenant_template.parents(id)` stripped to `REFERENCES
+  # parents(id)`, which is byte-identical to what a CORRECT clone's own
+  # `REFERENCES tenant_abc.parents(id)` stripped to, so the comparison
+  # reported :ok on a genuinely coupled clone. Reproduced three ways (FK
+  # repoint, sequence-DEFAULT repoint, trigger-function repoint), all of
+  # which passed before this fix.
+  #
+  # The correct rule: normalize each side against ITS OWN schema only. Text
+  # read out of the reference schema strips the reference's qualifier; text
+  # read out of the candidate strips the candidate's. Every other qualifier
+  # SURVIVES normalization, so a leftover `tenant_template.` inside a
+  # candidate definition no longer collapses into a match -- it stays as a
+  # visible textual difference and fails the comparison, which is exactly
+  # the signal we need.
+  #
+  # `own_schema` is the schema the text was actually read from. Do not
+  # reintroduce a second strip here "for symmetry" -- the asymmetry IS the
+  # check.
+  defp normalize(text, own_schema) do
+    String.replace(text, ~s(#{own_schema}.), "")
   end
 
   # dimension #1: table set, set-equal, both directions.
@@ -683,12 +750,12 @@ defmodule Letflow.Test.TenantTemplate do
       ref_norm =
         ref_cols
         |> reindex_ordinal()
-        |> Enum.map(&normalize_column_row(&1, reference_schema, candidate_schema))
+        |> Enum.map(&normalize_column_row(&1, reference_schema))
 
       cand_norm =
         cand_cols
         |> reindex_ordinal()
-        |> Enum.map(&normalize_column_row(&1, reference_schema, candidate_schema))
+        |> Enum.map(&normalize_column_row(&1, candidate_schema))
 
       if ref_norm != cand_norm do
         [
@@ -730,13 +797,12 @@ defmodule Letflow.Test.TenantTemplate do
 
   defp normalize_column_row(
          [name, data_type, nullable, default, ordinal],
-         reference_schema,
-         candidate_schema
+         own_schema
        ) do
     normalized_default =
       case default do
         nil -> nil
-        text -> normalize(text, reference_schema, candidate_schema)
+        text -> normalize(text, own_schema)
       end
 
     [name, data_type, nullable, normalized_default, ordinal]
@@ -753,14 +819,14 @@ defmodule Letflow.Test.TenantTemplate do
     ref_norm =
       ref
       |> Enum.map(fn [table, contype, def_sql] ->
-        {table, contype, normalize(def_sql, reference_schema, candidate_schema)}
+        {table, contype, normalize(def_sql, reference_schema)}
       end)
       |> Enum.frequencies()
 
     cand_norm =
       cand
       |> Enum.map(fn [table, contype, def_sql] ->
-        {table, contype, normalize(def_sql, reference_schema, candidate_schema)}
+        {table, contype, normalize(def_sql, candidate_schema)}
       end)
       |> Enum.frequencies()
 
@@ -800,8 +866,8 @@ defmodule Letflow.Test.TenantTemplate do
   # compared as a multiset per table, explicitly NOT by indexname (design
   # §0.1 finding 2).
   defp check_indexes(reference_schema, candidate_schema) do
-    ref = index_defs(reference_schema, reference_schema, candidate_schema)
-    cand = index_defs(candidate_schema, reference_schema, candidate_schema)
+    ref = index_defs(reference_schema)
+    cand = index_defs(candidate_schema)
 
     ref_freq = Enum.frequencies(ref)
     cand_freq = Enum.frequencies(cand)
@@ -813,7 +879,7 @@ defmodule Letflow.Test.TenantTemplate do
     end
   end
 
-  defp index_defs(schema_name, reference_schema, candidate_schema) do
+  defp index_defs(schema_name) do
     %{rows: rows} =
       Repo.query!(
         "SELECT tablename, indexdef FROM pg_indexes WHERE schemaname = $1",
@@ -821,7 +887,7 @@ defmodule Letflow.Test.TenantTemplate do
       )
 
     Enum.map(rows, fn [table, def_sql] ->
-      {table, structural_indexdef(normalize(def_sql, reference_schema, candidate_schema))}
+      {table, structural_indexdef(normalize(def_sql, schema_name))}
     end)
   end
 
@@ -1036,8 +1102,8 @@ defmodule Letflow.Test.TenantTemplate do
   end
 
   defp check_trigger_defs(reference_schema, candidate_schema) do
-    ref = trigger_defs(reference_schema, reference_schema, candidate_schema)
-    cand = trigger_defs(candidate_schema, reference_schema, candidate_schema)
+    ref = trigger_defs(reference_schema)
+    cand = trigger_defs(candidate_schema)
 
     ref_freq = Enum.frequencies(ref)
     cand_freq = Enum.frequencies(cand)
@@ -1049,7 +1115,7 @@ defmodule Letflow.Test.TenantTemplate do
     end
   end
 
-  defp trigger_defs(schema_name, reference_schema, candidate_schema) do
+  defp trigger_defs(schema_name) do
     %{rows: rows} =
       Repo.query!(
         """
@@ -1063,13 +1129,13 @@ defmodule Letflow.Test.TenantTemplate do
       )
 
     Enum.map(rows, fn [table, def_sql] ->
-      {table, normalize(def_sql, reference_schema, candidate_schema)}
+      {table, normalize(def_sql, schema_name)}
     end)
   end
 
   defp check_trigger_function_defs(reference_schema, candidate_schema) do
-    ref = trigger_function_defs(reference_schema, reference_schema, candidate_schema)
-    cand = trigger_function_defs(candidate_schema, reference_schema, candidate_schema)
+    ref = trigger_function_defs(reference_schema)
+    cand = trigger_function_defs(candidate_schema)
 
     ref_freq = Enum.frequencies(ref)
     cand_freq = Enum.frequencies(cand)
@@ -1081,7 +1147,7 @@ defmodule Letflow.Test.TenantTemplate do
     end
   end
 
-  defp trigger_function_defs(schema_name, reference_schema, candidate_schema) do
+  defp trigger_function_defs(schema_name) do
     %{rows: rows} =
       Repo.query!(
         """
@@ -1095,7 +1161,7 @@ defmodule Letflow.Test.TenantTemplate do
         [schema_name]
       )
 
-    Enum.map(rows, fn [def_sql] -> normalize(def_sql, reference_schema, candidate_schema) end)
+    Enum.map(rows, fn [def_sql] -> normalize(def_sql, schema_name) end)
   end
 
   defp table_comment(schema_name, table_name) do
@@ -1189,8 +1255,8 @@ defmodule Letflow.Test.TenantTemplate do
   # definitions if any exist (same structural-not-name-based treatment as
   # indexes/constraints).
   defp check_statistics_ext(reference_schema, candidate_schema) do
-    ref = statistics_ext_defs(reference_schema, reference_schema, candidate_schema)
-    cand = statistics_ext_defs(candidate_schema, reference_schema, candidate_schema)
+    ref = statistics_ext_defs(reference_schema)
+    cand = statistics_ext_defs(candidate_schema)
 
     ref_freq = Enum.frequencies(ref)
     cand_freq = Enum.frequencies(cand)
@@ -1202,7 +1268,7 @@ defmodule Letflow.Test.TenantTemplate do
     end
   end
 
-  defp statistics_ext_defs(schema_name, reference_schema, candidate_schema) do
+  defp statistics_ext_defs(schema_name) do
     %{rows: rows} =
       Repo.query!(
         """
@@ -1216,7 +1282,7 @@ defmodule Letflow.Test.TenantTemplate do
       )
 
     Enum.map(rows, fn [table, def_sql] ->
-      {table, structural_statisticsdef(normalize(def_sql, reference_schema, candidate_schema))}
+      {table, structural_statisticsdef(normalize(def_sql, schema_name))}
     end)
   end
 

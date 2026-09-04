@@ -1,0 +1,52 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-final",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0451-20260904/step-final-git-merge.json",
+  "created_at": "2026-09-04T04:36:00Z",
+  "started_at": "2026-09-04T04:36:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Run docs/agents/protocols/GIT_MERGE.md's procedure exactly, in full, for this branch. This is WF-03 (issue-resolving), so use commit prefix 'fix' not 'feat' for step 3's finalize commit and the PR title (per GIT_MERGE.md's own note for WF-03 branches). All upstream gates are green: CODE-DESIGN-VALIDATOR PASSED (after 3 rework cycles -- 2 real OTP-semantics bugs and 1 real race condition, all genuinely fixed and independently re-verified live each time), ELIXIR-DEV implementation PASSED, SECURITY-REVIEWER PASSED (out of scope for tenant-data gates, INV-4/6/7/8 all independently checked clean), REVIEWER PASSED (idiomatic OTP, supervision integrity preserved, no scope creep, decision-record consistent), TEST-DESIGNER/TEST-DESIGN-VALIDATOR PASSED (mutation-tested fail-then-pass regression coverage, independently re-verified), TEST-RUNNER PASSED (mix letflow.check.test: 3203+7+11 passed, 0 failures across all 3 phases). ISS-0451 is already marked resolved in docs/issues/ISS-0451.yaml and its GitHub mirror (#865) is already closed with the mandated evidence comment.\n\nFollow every step of GIT_MERGE.md exactly: stage remaining uncommitted files by explicit filename, commit, fetch+rebase onto origin/main (handle any conflict per that doc's guidance -- this branch should rebase cleanly since no other run has touched lib/letflow/application.ex or lib/letflow/supervisor/ concurrently, per this run's own owned_modules lock), re-verify mix format/compile/test after rebase, push (handle the expected non-fast-forward-after-rebase case per that doc's own note), open the PR with title prefix 'fix:' and the full validation summary in the body (mix compile PASS, mix test counts with 0 failures -- no attribution parenthetical needed since there were none, SECURITY-REVIEWER PASS with the out-of-scope reasoning, RELEASE-VALIDATOR line: N/A for WF-03, omit or note 'not part of WF-03'), wait for CI (backend + frontend jobs) to report green -- attribute any failure structurally per core-directives.md, never by count-matching -- then merge with --squash --delete-branch, and do the mandatory local cleanup (checkout main, pull --ff-only, delete local branch, verify clean).",
+    "acceptance_criteria": [
+      "Branch rebased cleanly onto origin/main (or conflict resolved per GIT_MERGE.md's guidance)",
+      "mix format --check-formatted, mix compile --warnings-as-errors, mix test all re-verified post-rebase",
+      "PR opened with title prefix 'fix:', full validation summary in the body per GIT_MERGE.md step 7",
+      "CI backend + frontend jobs confirmed green (or failures structurally attributed) before merging",
+      "gh pr merge --squash --delete-branch succeeds",
+      "Local cleanup verified: on main, pulled, clean working tree, log shows the squash-merge commit"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "",
+      "commit_sha_list": [],
+      "remote_branch": "",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

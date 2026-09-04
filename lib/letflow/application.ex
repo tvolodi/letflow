@@ -40,15 +40,49 @@ defmodule Letflow.Application do
     # force-restart Pollers or Http; a Pollers crash-loop exhausting its own
     # restart intensity (Letflow.Supervisor.Pollers' own moduledoc) now
     # kills and restarts ONLY that one layer.
+    #
+    # ISS-0451 (design iss0451-poller-crash-budget-isolation.md §3.4a/§4):
+    # Pollers' own child spec is `restart: :temporary` -- the top-level
+    # Letflow.Supervisor structurally NEVER auto-restarts
+    # Letflow.Supervisor.Pollers, for any exit, ever. This closes a
+    # PERSISTENT (never-clearing) Poller fault's path to exhausting THIS
+    # supervisor's own restart budget: without it, Pollers re-exhausts its
+    # own 5/60 budget in ~24-30ms per cycle (measured), which cascades to
+    # exhaust the top level's budget too and takes the whole application
+    # down in well under a second. Letflow.Supervisor.PollersBreaker (added
+    # below, right after Pollers) becomes the SOLE process that ever
+    # restarts Pollers, via Supervisor.start_child/2 -- see that module's
+    # own moduledoc for the full state machine. The children-list entry
+    # below MUST use the 2-arg Supervisor.child_spec/2 call form (not a
+    # bare {module, arg} 2-tuple, which Supervisor.init/2 normalizes as
+    # "call module.child_spec(arg)" -- threading arg into start_link, not
+    # into child-spec overrides -- and would silently NOT apply
+    # `:temporary`; live-verified during this design's own rework, see the
+    # design doc §3.4a).
     children = [
       Letflow.Supervisor.Infrastructure,
-      Letflow.Supervisor.Pollers,
+      Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary),
+      Letflow.Supervisor.PollersBreaker,
       Letflow.Supervisor.Http
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Letflow.Supervisor]
+    #
+    # ISS-0451: max_restarts raised from the OTP default (3) to 5;
+    # max_seconds stays at the OTP default (5). Pollers-attributable
+    # restarts now consume exactly ZERO of this budget (restart: :temporary
+    # above), so this budget is available entirely to
+    # Infrastructure/Http/PollersBreaker (all :permanent). The +2 is pure
+    # extra headroom for an unrelated coincidence of transient restarts
+    # among those three landing in the same rolling window -- not sized
+    # against any Pollers-consumption figure, since there is none. A
+    # genuinely crash-looping Infrastructure or Http child still exhausts
+    # this only-slightly-larger budget in the same order of magnitude of
+    # time the OTP default would have, preserving REQ-219 decision 3's own
+    # "a fault severe enough that taking the app down is still correct"
+    # property for those children.
+    opts = [strategy: :one_for_one, max_restarts: 5, max_seconds: 5, name: Letflow.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

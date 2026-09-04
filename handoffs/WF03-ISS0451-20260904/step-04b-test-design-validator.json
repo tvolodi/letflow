@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-04b",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0451-20260904/step-04b-test-design-validator.json",
+  "created_at": "2026-09-04T03:56:30Z",
+  "started_at": "2026-09-04T03:56:30Z",
+  "completed_at": "2026-09-04T03:58:05Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "test/letflow/supervisor/pollers_breaker_test.exs",
+      "test/specs/ISS-0451.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "docs/issues/ISS-0451.yaml"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's coverage. Read test/letflow/supervisor/pollers_breaker_test.exs and test/specs/ISS-0451.md directly. Check: every one of ISS-0451's 3 acceptance criteria has a runnable test covering it; no skipped/deferred coverage; fixtures are isolated (this test shares Pollers/PollersBreaker singletons with pollers_test.exs -- confirm no ordering/isolation hazard, e.g. via async: false and clean teardown). Then, per docs/agents/workflows/WF-03_issue_resolving.md's mutation-testing section: TEST-DESIGNER reported applying 2 mutants (trip-threshold removal in pollers_breaker.ex; reverting application.ex's :temporary child-spec change) and recorded both failing the new test as expected. You must INDEPENDENTLY APPLY AT LEAST ONE of these two mutants yourself and re-run the test, per that workflow section's explicit rule ('accepting the reported pass counts is copying a claim, not validating one') -- do not simply trust TEST-DESIGNER's own report of the mutation results. Use the same revert-and-verify discipline (git checkout -- after, git status --porcelain empty, clean re-run confirmed) -- a mutant left in the tree is a step failure in itself.",
+    "acceptance_criteria": [
+      "Verdict confirms all 3 of ISS-0451's ACs are covered by a runnable test, citing specific test functions",
+      "Verdict confirms fixture isolation (async: false, singleton-sharing hazard addressed)",
+      "At least 1 of TEST-DESIGNER's 2 reported mutants independently re-applied and re-run by this validator, with the result quoted",
+      "Confirmation the mutant was reverted and the tree verified clean (git status --porcelain empty) before this handoff completes",
+      "A FAIL verdict lists every gap; a PASS verdict states exactly what was independently re-derived"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "AC coverage (all 3 ISS-0451 ACs re-derived from source, not from TEST-DESIGNER's report): (1) test/letflow/supervisor/pollers_breaker_test.exs exists with one test at line 31 ('top-level Supervisor, Repo, and Http survive a persistent crash-loop, and the breaker trips to :open') implementing design section 6.2 steps 1-6 verbatim (capture-pids, Process.monitor on top-level, set-and-never-clear :force_poller_crash, terminate_child+start_child trigger, wait_for_breaker_open/1 poll, assert-while-faulted, confirm Pollers genuinely stopped). (2) Read lines 90-95 and 103-105 directly: the Repo/Infrastructure/Http/top-level-Supervisor pid-unchanged assertions and the refute_received {:DOWN,...} on the top-level monitor all run with :force_poller_crash still set (never cleared before them, only in on_exit) -- the exact persistent-fault moment REQ-219's own AC4 test cannot reach since that test clears the flag immediately after the first :DOWN. Process.whereis(Pollers)==nil plus breaker_state()==:open confirm genuine hold-down, not timing luck. (3-5) Mutation ACs: see mutation re-verification below. No @tag :skip, no 'TODO: implement test' anywhere in the file (grepped). No hardcoded secrets/connection strings present.\n\nFixture isolation: both pollers_breaker_test.exs and pollers_test.exs declare async: false (grepped and confirmed in both files) -- ExUnit serializes async:false modules, so the shared Letflow.Supervisor.Pollers/PollersBreaker singletons cannot be touched concurrently by both files. pollers_breaker_test.exs's on_exit calls restart_pollers_and_reset_breaker!/0, which terminates+restarts Pollers via the :temporary-carrying child spec AND terminates+restarts PollersBreaker itself (via Supervisor.restart_child, a plain :permanent child) so the breaker's own internal state (consecutive_trips, mode) resets to a clean :closed before the next test -- addresses the singleton-sharing hazard structurally, not just by ordering. I independently ran both files together twice (see below) with no cross-file interference: 'mix test test/letflow/supervisor/pollers_test.exs test/letflow/supervisor/pollers_breaker_test.exs' -> Result: 5 passed, matching TEST-DESIGNER's reported count exactly (re-derived, not copied).\n\nMUTATION RE-VERIFICATION (independently performed, not trusted from TEST-DESIGNER's report). Baseline first: 'mix test test/letflow/supervisor/pollers_breaker_test.exs' against unmutated shipped code -> Result: 1 passed (0.1s). Then applied MUTANT 1 myself in place: in lib/letflow/supervisor/pollers_breaker.ex, changed the 2nd-consecutive-:DOWN-while-:closed clause (defp handle_pollers_down(%{state: :closed} = state), previously calling trip_to_open(state)) to instead perform the same restart-and-rearm behavior as the 1st-:DOWN branch (ref = restart_pollers(); rearm observation timer) -- so the breaker never transitions to :open regardless of how many consecutive exits occur. Ran 'mix test test/letflow/supervisor/pollers_breaker_test.exs' against my own mutant -> Result: 0/1 passed, Failed: 1 test, exact message 'PollersBreaker did not reach :open within the timeout' at test/letflow/supervisor/pollers_breaker_test.exs:83 (the assert wait_for_breaker_open() line), after the full 5s poll timeout was exhausted -- this exactly reproduces TEST-DESIGNER's own reported result for the same mutant (same 0/1, same failure message, same line). Reverted with 'git checkout -- lib/letflow/supervisor/pollers_breaker.ex'. Verified: 'git status --porcelain lib/ test/' -> empty (confirmed no output). Re-ran 'mix test test/letflow/supervisor/pollers_breaker_test.exs' against the restored, unmutated code -> Result: 1 passed (0.09s), clean. Final full-tree check: 'git status --porcelain' (no path filter) -> empty, confirming no mutated file, temp file, or stray artifact was left anywhere in the tree at handoff completion.\n\nDid not additionally apply Mutant 2 -- the task instruction and WF-03's own rule require at least one independently-reproduced mutant, which Mutant 1 satisfies with an exact match to the reported result (same pass/fail counts, same failure message, same assertion line).\n\nVerdict: PASS. Independently re-derived: all 3 ACs' test coverage read from source (not from any report), fixture isolation (async: false in both files, breaker-state-resetting teardown) confirmed by direct file inspection, the shared-singleton run (5 passed) reproduced myself, and Mutant 1 independently applied/run/reverted/re-verified with results matching TEST-DESIGNER's report exactly. No gaps found.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to next WF-03 step (TEST-RUNNER, full-suite run) per orchestrator's pipeline."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

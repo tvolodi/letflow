@@ -52,7 +52,7 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
-      "commit_sha_list": ["PLACEHOLDER"],
+      "commit_sha_list": ["22e1527cbe7402c244a014e6a818d9aa386c129b"],
       "remote_branch": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
       "push_status": "ok",
       "pr_url": null,

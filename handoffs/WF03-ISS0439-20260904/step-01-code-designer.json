@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0439-20260904/step-01-code-designer.json",
   "created_at": "2026-09-04T21:31:00Z",
   "started_at": "2026-09-04T21:31:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T21:33:47Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -44,19 +44,22 @@
     ]
   },
   "result": {
-    "status": "",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Produced two prose-only artefacts for ISS-0439 (deliberately deferred design exploration): (1) lib/letflow/design/iss0439-1c-taxonomy-mapping.md maps Directory/Document/Register/Report onto Letflow's actual code, read this session -- event log + Letflow.EventStore.Registry (typed payload schema versioning, real reuse for Document's journal half) + Letflow.EventStore.InstanceProjection (instance_projections, real reuse for Register's rebuildable-projection pattern) + Letflow.Repository/ArtifactKind (definition storage, not yet extended with :entity). Directory and Report have no existing mechanism at all -- stated plainly, not hedged. Document's posting-step and Register's generic ledger/aggregation semantics are stated as genuine gaps. Verdict given (not neutral): sequencing (build generic substrate, watch usage) is the right call, not outright rejection. (2) docs/migration/decisions/0019-defer-1c-typed-templates.md records the deferral with the three reasons quoted verbatim from ISS-0439.yaml, the three review triggers, and the REQ-225..231 dependency -- re-verified directly against docs/requirements.yaml this session: all seven still status: pending, none done. 0019 re-confirmed as next free decision-record number by directory listing before writing. Neither artefact contains a fenced code block (grep verified) or touches docs/requirements.yaml or lib/letflow/ implementation.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0439-1c-taxonomy-mapping.md",
+      "docs/migration/decisions/0019-defer-1c-typed-templates.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0439-20260904",
-      "commit_sha_list": [],
+      "commit_sha_list": ["00966554"],
       "remote_branch": "origin/feature/WF03-ISS0439-20260904",
       "push_status": "skipped",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
   },
   "rework_count": 0,
   "max_rework": 3

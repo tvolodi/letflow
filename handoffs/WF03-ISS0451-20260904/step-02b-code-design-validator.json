@@ -1,0 +1,49 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-02b",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0451-20260904/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T02:54:46Z",
+  "started_at": "2026-09-04T02:54:46Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "docs/issues/ISS-0451.yaml",
+      "handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/design/req219-supervision-layering.md",
+      "test/letflow/supervisor/pollers_test.exs"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0451-poller-crash-budget-isolation.md. Independently re-derive your verdict from the artefact itself, not from CODE-DESIGNER's own result.summary (which you should treat as a claim to verify, not a fact to copy) -- see core-directives.md's 'Every producing step has a validating step'. Check specifically:\n1. Does the design cover every one of ISS-0451's three acceptance criteria (docs/issues/ISS-0451.yaml): AC1 (a persistent-fault test scenario proving Letflow.Supervisor/Repo/Bandit survive), AC2 (documented restart-intensity arithmetic showing the fix tolerates at least one full Pollers-budget-exhaustion cycle), AC3 (no regression to REQ-219's own AC2 boot-order or AC4 single-crash-isolation tests)?\n2. Is the arithmetic in the design actually correct? Work it through yourself rather than trusting the doc's own numbers -- re-derive independently whether the chosen top-level restart-intensity value plus the circuit-breaker's trip threshold genuinely prevents an indefinite persistent fault from ever exhausting the top-level supervisor's budget (not merely delaying it by a bounded, finite number of extra cycles).\n3. Does the design contain any implementation code (.ex function bodies)? If it names a new module (e.g. a PollersBreaker GenServer), it should specify signatures/@specs/state-shape/callback contracts only -- fail this check if you find an actual function body implementing logic, not just a signature.\n4. Is the design unambiguous enough for ELIXIR-DEV to implement without having to invent any missing decision (exact config keys, exact state machine transitions, exact backoff schedule values, exact module/file placement)?\n5. Does the design explicitly state how REQ-219's own AC2 (boot order: Infrastructure before Pollers) and AC4 (single Pollers-budget-exhaustion event still leaves Infrastructure/Http alone) are preserved, with reasoning you can independently verify against the current code (lib/letflow/application.ex, lib/letflow/supervisor/pollers.ex)?\n6. Is the specified regression-test mechanism (how the test keeps the fault persistent, unlike REQ-219's own AC4 test which clears it) concrete enough for TEST-DESIGNER to build without design ambiguity?\n\nThis is a hard gate -- FAIL with specific, itemized gaps (per HANDOFF_PROTOCOL.md's validator-fail worked example) if any check above doesn't pass; do not rubber-stamp.",
+    "acceptance_criteria": [
+      "Verdict states explicitly, per ISS-0451 AC, whether AC1/AC2/AC3 are each covered by the design",
+      "Verdict states the validator's own independently re-derived arithmetic check result, not a repetition of CODE-DESIGNER's numbers",
+      "Verdict states explicitly whether any implementation code was found in the design doc",
+      "Verdict states explicitly whether REQ-219 AC2/AC4 preservation reasoning is checked and correct",
+      "A FAIL verdict lists every gap by section/line with what must change; a PASS verdict states what was independently re-derived and how"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

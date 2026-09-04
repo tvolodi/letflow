@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0418-20260905-step-02",
+  "run_id": "WF03-ISS0418-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0418-20260905/step-02-code-designer.json",
+  "created_at": "2026-09-04T23:16:48Z",
+  "started_at": "2026-09-04T23:16:48Z",
+  "completed_at": "2026-09-04T23:16:48Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0418-20260905/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0418.yaml",
+      "docs/issues/ISS-0352.yaml",
+      "docs/issues/ISS-0437.yaml",
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md",
+      "lib/letflow/admission.ex",
+      "lib/letflow/engine/wasm/plugin_handler.ex",
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "lib/letflow/engine/plugin_interface.ex"
+    ],
+    "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
+    "owned_modules": ["lib/letflow/engine/wasm/"]
+  },
+  "task": {
+    "description": "Step 2 (design) of WF-03 for ISS-0418. Produce the design artefact for OQ-5's operator-configurable cap on concurrently in-flight WASM invocations, resolving ISSUE-FIXER's five explicit decision points (step-01 handoff §5), in particular the never-released-Admission-ref-on-brutal-kill problem, before any code reuses Letflow.Admission (or a new module) unmodified."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0418-wasm-concurrency-cap.md. Answers to the handoff's six numbered questions:\n\n1. WHAT THE CAP GUARANTEES (design §0/§7): stated as bluntly as possible, up front and again in the required moduledoc content, that this bounds CONCURRENT CALLERS/simultaneous blast radius, never leaked threads. Every hang, admitted one at a time or in parallel, permanently consumes one native TOKIO_RUNTIME slot forever; the cap changes the RATE and worst-case INSTANTANEOUS damage of exhaustion, not whether exhaustion can eventually occur on a long-lived node under continued hangs. This is filed as an honest harm-reduction mechanism, not harm-elimination -- explicitly not claiming more than ISSUE-FIXER's live reproduction (16 concurrent hangs exhaust the pool; 90s, no recovery) supports.\n\n2. ADMISSION-REF LEAK (design §2, §8.1): solved by acquiring/releasing the lease from PluginInterface.invoke/2,3's CALLER (one level outside the process Task.shutdown(:brutal_kill) ever targets), not from inside the killed inner task -- so a hang's brutal-kill never skips the lease's own release. A Process.monitor-based auto-release (mirroring Letflow.SandboxPool's own Process.monitor/handle_info({:DOWN,...}) idiom, cited directly in plugin_interface.ex's own moduledoc as established precedent) covers the residual case of the LEASE-HOLDER itself dying uncleanly before invoke/2,3 returns. IMPORTANT SELF-CORRECTION MADE DURING DESIGN, RECORDED IN THE DOC ITSELF (design section 8.1): an earlier draft of section 8 proposed wiring try_acquire/release inside PluginHandler.handle_node/1 -- traced against the real call graph, handle_node/1 itself runs INSIDE the task that CAN be brutal-killed, so that placement would have reintroduced exactly the leak it exists to prevent. Caught and corrected in the same authoring pass rather than shipped; the doc states this explicitly so CODE-DESIGN-VALIDATOR treats section 8.1 as superseding section 8's original sketch, not as two conflicting instructions.\n\n3. EXTEND ADMISSION OR BUILD NEW: built new (Letflow.Engine.Wasm.InvocationLease), argued explicitly on four independent grounds (design section 3): (a) Admission's documented crash semantics assume a caller that either cooperates or crashes as a WHOLE process -- retrofitting monitor-based release would change a shipped, gate-approved module's invariant for REQ-217/218's existing callers too; (b) different exhaustion semantics (fail-fast is right here since invoke/2,3 already has its own outer timeout one layer up); (c) the underlying resource (TOKIO_RUNTIME) has no per-tenant partition at all, so Admission's core per-tenant fair-share feature would be actively misleading here; (d) sidesteps ISS-0437's per-tenant-retention gap entirely, by construction, since there is no tenant-keyed map. Admission's SHAPE (single GenServer, opaque ref struct, idempotent release, no-rollback atomicity) is reused as precedent, not its code.\n\n4. RECLAMATION: stated plainly as NOT possible from inside the BEAM today (design section 4), citing ISSUE-FIXER's own live 90s-no-recovery finding and wasmex's discarded JoinHandle. Two non-cap follow-ups named but explicitly NOT designed here (subprocess-per-invocation isolation; periodic health-probe-triggered node restart) -- flagged as candidate future scope, matching REQ-170 section 8's own filing discipline.\n\n5. CONFIG: key Application.get_env(:letflow, :invocation_lease, [])[:cap], default max(System.schedulers_online() - 2, 1), justified in section 5.5 including the honest caveat that no BEAM API reads wasmex's own native pool size directly, so this is the best available proxy, not a guaranteed match.\n\n6. TEST STRATEGY (design section 6): the fix is made DETERMINISTIC, not merely less likely to flake, specifically within the isolated `mix test --only wasm_hang` subprocess, by a test-environment-scoped cap override (cap: 1, section 6.1/OQ-D) composing with ISS-0352's/ISS-0428's already-shipped serial-isolation architecture for that subprocess -- a cap of 1 makes concurrent admission structurally impossible there, not probabilistically rarer. A new unit test (invocation_lease_test.exs, section 6.2, TEST-DESIGNER's scope) proves the monitor-based auto-release directly via an ordinary Process.exit(:kill), without depending on real wasmex hang timing at all.\n\nOpen questions left explicit, not guessed (section 9): OQ-A (whether the capacity-rejection error should get its own CallTimeout-style classifier -- not built, not blocking), OQ-B (final numeric default/config-key naming), OQ-C (which future requirement owns the actual PluginInterface.invoke/2,3 call site this design's contract binds -- REQ-056 named as most plausible per plugin_interface.ex's own moduledoc, still pending), OQ-D (exact mechanism for the test-environment cap override -- config/test.exs vs. an env-var read inside letflow.check.test.ex).\n\nNo implementation code written. No production file under lib/letflow/engine/wasm/, lib/letflow/admission.ex, or elsewhere was modified -- only the new design doc was created. Traceability table (design section 10) maps every one of ISSUE-FIXER's five decision points plus the two headline questions (guarantee scope, reclamation) to its design element.",
+    "issues": []
+  },
+  "next_action": "Route to CODE-DESIGN-VALIDATOR for WF-03 Step 2 gate.",
+  "artifacts_out": [
+    "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
+    "handoffs/WF03-ISS0418-20260905/step-02-code-designer.json"
+  ],
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -4403,6 +4403,24 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- direct ORCH fix (all 6 ORCHESTRATOR.md S10 checks passed, single config file, no code/test change), verified live against the running letflow-1-postgres-1 container (before: FATAL every ~2s; after: healthy, zero FATAL lines across multiple healthcheck intervals). No PR needed -- infra-only, no CI-relevant code changed; committed direct to main.",
       "note": "docker-compose.yml postgres healthcheck referenced a bare 'letflow' database (pg_isready's -U default) instead of the real POSTGRES_DB (letflow_dev), causing a FATAL log line every 2s despite reporting healthy correctly. Fixed by adding -d $$POSTGRES_DB (escaped for compose's own interpolation) so the two values can never drift again."
+    },
+    {
+      "run_id": "WF03-ISS0456-20260904",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0456",
+      "queue_task_id": 456,
+      "github_issue_number": 875,
+      "stage": null,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "started_at": "2026-09-04T05:45:50Z",
+      "lock_released_at": "2026-09-04T06:21:11Z",
+      "released_lock": true,
+      "backfilled": false,
+      "queue_agent_id": "tvolodi-orch",
+      "last_known_step": "COMPLETE. PR #876 merged to main (023c4e17, fast-forward). Queue task 456 released WITHOUT status (stays open -- not resolved, only diagnosed/folded). GH#875 closed with mandated evidence comment. docs/issues/ISS-0456.yaml status: instrumented, superseded_by: ISS-0418.",
+      "note": "WF-03 issue-resolving run for ISS-0456 (wasm_hang timing flake recurrence, PR #874 push-event backend gate). ISSUE-FIXER (Step 0.5/1) independently verified -- via direct CI log inspection (gh run view --log-failed), not the filing text -- that this recurrences failure signature (plugin_handler_test.exs:474, host_api_write_test.exs:460) is byte-for-byte identical in file/line/timeout-bound/stack-shape to ISS-0418s own recurrence_2026_09_03 entry, and cross-checked ISS-0453 as a genuinely different, unrelated mechanism (poller_test.exs scheduler-admission race, main suite not the isolated wasm_hang stage). No new root cause found. Steps 2-4 (fix design/implement/regression-test) SKIPPED -- no fix was designed or applied for ISS-0456 itself; ISS-0418 already owns the deferred OQ-5 concurrency-cap fix for this whole recurrence class. ORCH performed the docs-only fold-in directly (ISS-0456.yaml -> instrumented/superseded_by: ISS-0418; ISS-0418.yaml -> new recurrence_2026_09_04 field) and ran it through the full git-setup/PR/CI/merge pipeline per this projects convention that direct ORCH action shortens the agent chain, not the CI gate. Both backend-gate CI runs on PR #876 passed cleanly (no wasm_hang flake recurred on this PRs own CI, notably). Queue task 456 released WITHOUT status per TASK_QUEUE.mds rule that status:\"done\" asserts the underlying defect is fixed, which is not true here -- only diagnostic/record-linking work was done."
     }
   ]
 }

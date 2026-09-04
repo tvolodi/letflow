@@ -13394,3 +13394,441 @@ requirements:
       - "docs/agents/ORCHESTRATOR.md §1 mentions GET /tasks + set_lock as a sanctioned selection path with get_next_task as the default"
       - "every REQ-222/REQ-223 behaviour this file describes matches what those requirements actually shipped -- the writer re-reads letflow-queue's merged code rather than this requirement's own description, and quotes the endpoint's real response shape"
     depends_on: [REQ-222, REQ-223]
+
+  - id: REQ-225
+    title: Entity definition JSON schema shape and structural validation rules (definition.zig + validator.zig's definition-validation half)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Opens the entity/data-model subsystem port, per ISS-0438's CODE-DESIGN-VALIDATOR-passed
+      scoping recommendation (lib/letflow/design/iss0438-entity-subsystem-scoping.md,
+      "IN SCOPE -- port the generic (untyped) entity subsystem as new S6
+      requirements, additive to S6's already-closed batches"). This is
+      slice 1 of that artefact's breakdown, split further from the
+      artefact's own slice 1 because the artefact itself flags it as an
+      oversized candidate (~900 combined R-Co source lines: definition.zig,
+      370 lines, plus roughly half of validator.zig's 1005 lines). This
+      requirement covers ONLY the definition JSON shape and its structural
+      validation rules -- no persistence, no record-payload validation (that
+      is REQ-227), no CRUD (REQ-226).
+
+      SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\definition.zig
+      (370 lines) and the definition-validation half of
+      c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\validator.zig (1005
+      lines total; this requirement covers the half that validates an
+      EntityDefinition document itself, not the half that validates a
+      record payload against one -- REQ-227 covers that half). Also read
+      c:\Users\tvolo\dev\ai-dala\R-Co\src\design\entities.md's "Entity
+      definition JSON schema" section for the documented shape.
+
+      SCOPE:
+      1. The EntityDefinition/FieldDef/IndexDef/FKDef/ConstraintDef JSON
+      shape, as an Elixir-side structural representation (not necessarily
+      an Ecto schema -- this is a document shape, not a persisted table;
+      REQ-226 owns the persisted table).
+      2. The 11 numbered structural validation rules from validator.zig's
+      definition-validation half: name format, field uniqueness, the
+      "queried" + "json" field-kind mutual exclusion, index field coverage
+      (every field an index references must exist), FK field coverage,
+      enum validity, decimal-field validation, cardinality limits on
+      fields/indexes/FKs/constraints, and self-referential-FK rejection.
+      Every rule must reject with a specific, identifiable error (not a
+      generic "invalid definition") so a caller can surface which rule
+      failed.
+      3. Canonicalisation and content hashing of a definition document,
+      reusing the EXISTING lib/letflow/repository/canonicaliser.ex
+      (Letflow.Repository.Canonicaliser, REQ-202) rather than building a
+      second canonicaliser -- an entity definition is JSON content destined
+      for the artifact store the same way a form or script definition is,
+      so it must canonicalise identically. State this reuse explicitly in
+      the moduledoc; do not hand-roll a second canonicalisation algorithm.
+      4. Logical-shape versioning: the scheme by which two definition
+      documents that differ only in non-logical ways (e.g. field ordering,
+      display-only metadata) are recognised as the same logical shape,
+      versus a change that is a genuinely new logical shape requiring a new
+      logical_shape_version. State the concrete rule this module applies
+      (which fields/changes bump the logical shape versus which do not).
+
+      OPEN DESIGN QUESTION for this slice's own CODE-DESIGNER pass, named
+      explicitly rather than silently resolved (per the design artefact's
+      §6 item 2): entity type OWNERSHIP MODEL -- tenant-scoped vs.
+      platform-scoped definitions. R-Co's own design doc leaves this open
+      ("Deferring to REQ-ANALYST"). Given Letflow's existing schema-per-tenant
+      convention (Letflow.EventStore.Registry and Letflow.Repository are
+      both tenant-scoped via prefix/tenant_id), tenant-scoped is the natural
+      default, but this requirement does NOT pick it -- CODE-DESIGNER must
+      state the choice and its rationale explicitly in the design artefact,
+      not inherit it silently from this description.
+
+      NOT IN THIS REQUIREMENT: no `entity_definitions` table, no
+      persistence, no CRUD context module, no ArtifactKind extension (all
+      REQ-226); no record-payload validation (REQ-227); no event
+      registration or commands (REQ-228); no route or controller layer --
+      matching REQ-202's own precedent, there is no consumer contract for
+      entity data today (verified in the design artefact: router.ex's two
+      entity-related rows are the deferred-routes table, not a built
+      surface).
+    acceptance_criteria:
+      - "a definition document conforming to the EntityDefinition/FieldDef/IndexDef/FKDef/ConstraintDef shape passes structural validation with no errors"
+      - "each of the 11 structural validation rules (name format, field uniqueness, queried+json exclusion, index field coverage, FK field coverage, enum validity, decimal validation, cardinality limits, self-referential-FK rejection) is independently exercised by a fixture that violates only that rule, and the reported error identifies which rule failed rather than a generic failure"
+      - "canonicalising two structurally-equivalent definition documents that differ only in key order or insignificant whitespace produces the same content hash, verified by calling the existing Letflow.Repository.Canonicaliser (REQ-202) directly rather than a second, newly-written canonicaliser -- confirmed by git diff --stat showing no new canonicaliser module added"
+      - "the logical-shape-versioning rule is stated concretely and tested: a change this module classifies as non-logical (e.g. reordering fields) does not bump logical_shape_version, and a change it classifies as logical (e.g. adding a required field) does"
+      - "the design artefact for this requirement explicitly states the entity-type ownership model decision (tenant-scoped vs. platform-scoped) and its rationale, rather than the choice being inferred only from code"
+      - "no `entity_definitions` migration, no persistence code, and no route/controller file is added, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-202, REQ-203]
+
+  - id: REQ-226
+    title: entity_definitions persistence, definition CRUD context module, and the ArtifactKind :entity extension
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 2 of the ISS-0438 entity-subsystem port (see REQ-225's
+      description for the originating scoping recommendation; not restated
+      here). Builds the persisted, denormalised `entity_definitions` table
+      and its CRUD context module atop REQ-225's definition shape and
+      validation, and extends lib/letflow/repository/artifact_kind.ex's
+      closed @artifact_kinds list with an eighth atom, :entity -- confirmed
+      a one-line, non-structural addition (that module's own moduledoc
+      states the list exists to prevent drift BETWEEN the schemas that
+      reference it, not to stay closed forever; R-Co's own ArtifactKind
+      equivalent, ALLOWED_KINDS in src/repository/artifacts.zig, went
+      through the identical one-line addition for this identical feature).
+
+      SOURCE: R-Co's design doc
+      (c:\Users\tvolo\dev\ai-dala\R-Co\src\design\entities.md)'s migration
+      section and "Entity definitions as Repository artifacts, kind =
+      entity" section.
+
+      SCHEMA: `entity_definitions` (tenant-scoped, per-tenant Postgres
+      schema per decision 0003-ecto-schema-strategy.md Decision B, the same
+      placement REQ-202/REQ-203/REQ-211 use). Fields, per R-Co's design
+      doc: id, tenant_id, name, display_name, definition_json,
+      content_hash, logical_shape_version, artifact_version_id (FK into
+      REQ-202's artifact_versions), status, timestamps. UNIQUE
+      (tenant_id, name, logical_shape_version).
+
+      SCOPE:
+      1. The `entity_definitions` migration.
+      2. `:entity` added to lib/letflow/repository/artifact_kind.ex's
+      @artifact_kinds list.
+      3. createDefinition/2: validates via REQ-225's structural rules,
+      calls Letflow.Repository.create/2 (REQ-202) with artifact_kind:
+      :entity, content_type: "application/json", content: the definition
+      JSON -- reusing REQ-202's existing canonicalise-hash-dedup-version
+      pipeline rather than reimplementing it -- then writes the
+      denormalised entity_definitions row referencing the returned
+      artifact_version_id.
+      4. getDefinition/2, getDefinitionByName/2, listDefinitions/2
+      (tenant-scoped, cursor-paginated per REQ-067's contract).
+      5. activateDefinition-equivalent: R-Co's "only ACTIVE entity
+      definitions can receive entity command events" maps onto REQ-203's
+      already-shipped artifact_activations/artifact_activation_history
+      machinery -- kind = :entity flows through activation the same way
+      :definition or :form already do. No new activation mechanism.
+
+      NOT IN THIS REQUIREMENT: no record-payload validation (REQ-227); no
+      event registration or commands (REQ-228); no route or controller --
+      same deferral REQ-202 already recorded, no consumer contract exists.
+    acceptance_criteria:
+      - "lib/letflow/repository/artifact_kind.ex's @artifact_kinds includes :entity as an eighth value, and every existing artifact_kind value (:definition, :form, :schema, :service_catalog, :script, :module, :scenario) is still present and unmodified"
+      - "createDefinition/2 rejects a definition failing REQ-225's structural validation and creates neither an artifact_versions row nor an entity_definitions row on rejection"
+      - "createDefinition/2 for a structurally valid definition calls Letflow.Repository.create/2 with artifact_kind: :entity and creates one entity_definitions row referencing the returned artifact_version_id -- verified by inspecting both tables after the call"
+      - "submitting byte-identical definition content twice reuses the same repository_artifacts row (REQ-202's dedup) while creating two distinct entity_definitions rows if names differ, or is rejected by the UNIQUE (tenant_id, name, logical_shape_version) constraint if name and logical_shape_version match"
+      - "listDefinitions/2 is tenant-scoped (a definition created under tenant A is absent from tenant B's list) and paginates via REQ-067's cursor contract"
+      - "activating an entity_definitions row's underlying artifact_version_id uses REQ-203's existing artifact_activations machinery with no new activation table or mechanism added, confirmed by git diff --stat showing no new activation-shaped table"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-225, REQ-202, REQ-203, REQ-067]
+
+  - id: REQ-227
+    title: Entity record payload validation against a definition's derived schema (validator.zig's record-payload half, ISS-0160/GH#481 parity)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 3 of the ISS-0438 entity-subsystem port (see REQ-225's
+      description for the originating scoping recommendation). Ports
+      validator.zig's validateRecordPayload/buildRecordSchema half (~475
+      of its 1005 lines) -- the fix for a real R-Co defect
+      (ISS-0160/GH#481: createRecord/updateRecord once silently accepted
+      any payload). A port must not reintroduce that gap by treating this
+      as optional.
+
+      SOURCE: R-Co's validateRecordPayload/buildRecordSchema in
+      validator.zig, and the design artefact's §3 (AC4) analysis of how
+      this relates to Letflow.EventStore.Registry.validate_payload/3 --
+      read that section before drafting the design artefact for this
+      requirement, since it distinguishes two validations that are easy to
+      conflate: this requirement validates a record's field_values against
+      an entity definition's DERIVED schema; REQ-228's event envelope
+      validation (via Registry.validate_payload/3) is a separate, outer
+      concern.
+
+      SCOPE:
+      1. buildRecordSchema-equivalent: translate a REQ-225 definition's
+      `fields` array into a JSON-Schema-shaped constraint set.
+      2. validateRecordPayload-equivalent: validate a record payload
+      against that derived schema, returning EVERY violation (not just the
+      first) as (field_path, constraint, actual) triples -- the same
+      returned shape Letflow.EventStore.Registry.JsonSchema already uses.
+      3. REUSE, do not duplicate: this requirement's design artefact must
+      determine whether to call the existing
+      Letflow.EventStore.Registry.JsonSchema engine directly (confirmed by
+      the design artefact's own analysis to be a strict superset of the
+      keywords R-Co's buildFieldSchema/buildRecordSchema actually emit --
+      type, properties, required, additionalProperties: false, enum,
+      maxLength, minimum, maximum -- no keyword gap exists) rather than
+      hand-rolling a second constraint engine, matching R-Co's own
+      validator.zig module comment ("this deliberately does NOT hand-roll a
+      second constraint engine").
+
+      OPEN DESIGN QUESTION for this slice's own CODE-DESIGNER pass, named
+      explicitly rather than silently resolved (design artefact §6 item 1):
+      WHERE should this module call
+      Letflow.EventStore.Registry.JsonSchema FROM, given that module
+      currently lives under the Letflow.EventStore.Registry namespace
+      rather than a shared/top-level one? Two legitimate options exist --
+      (a) call it as-is, accepting the cross-subsystem namespace reach (the
+      same shape of cross-reach lib/letflow/repository/attachments.ex
+      already makes into Letflow.Repository.upsert_content/6, per that
+      module's own moduledoc precedent), or (b) extract a shared top-level
+      Letflow.JsonSchema module first. This requirement does NOT pick one;
+      CODE-DESIGNER must state the choice and rationale in the design
+      artefact, and REVIEWER weighs it at that slice's own gate.
+
+      NOT IN THIS REQUIREMENT: no event registration or commands (REQ-228);
+      no route or controller.
+    acceptance_criteria:
+      - "a record payload whose field_values conform to every field constraint in a REQ-225 definition passes validation with zero violations"
+      - "a record payload violating multiple independent field constraints in one submission returns ALL violations in one call, not only the first -- demonstrated by a fixture violating at least three distinct fields' constraints simultaneously and asserting all three appear in the result"
+      - "each returned violation carries a (field_path, constraint, actual) triple identifying exactly which field and which constraint failed"
+      - "the validation engine used is Letflow.EventStore.Registry.JsonSchema (REQ-024), not a newly hand-rolled constraint engine -- confirmed by git diff --stat showing no new general-purpose JSON-Schema-shaped validator module added by this requirement"
+      - "the design artefact for this requirement explicitly states which of the two named namespace options (call EventStore.Registry.JsonSchema as-is, or extract a shared Letflow.JsonSchema module first) was chosen and why, rather than the choice being inferred only from the code"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-225, REQ-024]
+
+  - id: REQ-228
+    title: Entity event registration and record commands (events.zig + commands.zig -- create/update/delete, idempotent replay, synthetic-instance-per-type)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 4 of the ISS-0438 entity-subsystem port (see REQ-225's
+      description for the originating scoping recommendation). Ports
+      events.zig + commands.zig (~640 combined lines).
+
+      SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\events.zig (106
+      lines) and commands.zig (536 lines). Also read the design artefact's
+      §3 (AC4) in full before drafting the design artefact for this
+      requirement -- it states concretely how entity events register
+      through the EXISTING Letflow.EventStore.Registry (REQ-024), not a
+      parallel mechanism, and how the outer event-envelope validation
+      (Registry.validate_payload/3) relates to REQ-227's inner
+      field_values validation.
+
+      SCOPE:
+      1. Register ENTITY_RECORD_CREATED, ENTITY_RECORD_UPDATED,
+      ENTITY_RECORD_DELETED through Letflow.EventStore.Registry.register_type/2
+      (three calls, one per event type, most naturally from this module's
+      own one-time seed step) -- the same shape any other platform event
+      type registration already takes in this project, not a bespoke
+      "entity event" mechanism. Each event type's registered json_schema is
+      the outer envelope shape (entity_type, entity_def_version, record_id,
+      field_values keys all present and correctly typed).
+      2. create/update/delete command functions: validate (REQ-225
+      definition-level rules already passed at definition-create time;
+      REQ-227's record-payload validation on the incoming field_values) ->
+      append exactly one event -> update the entity_record_latest
+      projection, all in one transaction.
+      3. IDEMPOTENCY-KEY handling matching R-Co's own already-fixed
+      ISS-0159/GH#480 idempotent-replay behavior: a duplicate submission
+      (same idempotency key) looks up and returns the ORIGINAL record, not
+      a freshly-minted one. Read commands.zig directly for this behavior
+      rather than working from the design doc alone -- the design artefact
+      names this as an easy defect to reintroduce if ported from
+      documentation rather than source.
+      4. The synthetic-instance-per-entity-type mapping (entity_type_instances):
+      one synthetic instance_projections row per entity TYPE (not per
+      record), matching R-Co's actual shipped commands.zig
+      (getOrCreateEntityTypeInstance/ensureEntityInstanceProjection), per
+      the OPEN DESIGN QUESTION below.
+
+      OPEN DESIGN QUESTION for this slice's own CODE-DESIGNER pass, named
+      explicitly rather than silently resolved (design artefact §6 item 3):
+      SYNTHETIC-INSTANCE-PER-ENTITY-TYPE vs. PER-RECORD. R-Co's design doc
+      explicitly defers this ("the table structure supports either model"),
+      but R-Co's actual shipped commands.zig uses per-entity-type. This
+      requirement's default is to match the actual shipped implementation
+      (per-entity-type) rather than the more abstract design-doc hedge, but
+      CODE-DESIGNER must state this choice explicitly in the design
+      artefact rather than it being inferred only from the code, since the
+      design doc itself left it open.
+
+      NOT IN THIS REQUIREMENT: no projection/replay logic beyond writing to
+      entity_record_latest inside the command transaction (REQ-229 owns
+      replay-from-log and full re-projection); no route or controller.
+    acceptance_criteria:
+      - "ENTITY_RECORD_CREATED, ENTITY_RECORD_UPDATED and ENTITY_RECORD_DELETED are each registered exactly once via Letflow.EventStore.Registry.register_type/2, verified by querying event_type_registry after this module's seed step runs"
+      - "a create command for a record conforming to its entity definition appends exactly one ENTITY_RECORD_CREATED event, updates entity_record_latest in the same transaction, and a forced failure after the event append but before the projection update leaves neither committed -- one explicit test"
+      - "submitting a create command twice with the SAME idempotency key returns the ORIGINAL record both times (same record_id, same field_values) rather than creating a second record or event -- ISS-0159/GH#480 parity, verified against commands.zig's actual behavior, not only the design doc"
+      - "a create command whose field_values fail REQ-227's record-payload validation is rejected with zero events appended"
+      - "the entity_type_instances synthetic-instance mapping creates exactly one instance_projections-equivalent row per entity TYPE, not per record -- demonstrated by creating three records of the same entity type and confirming only one synthetic instance row exists for that type"
+      - "the design artefact for this requirement explicitly states the per-entity-type (not per-record) synthetic-instance decision and that it matches R-Co's actual shipped commands.zig rather than the design doc's more abstract hedge"
+      - "the outer event-envelope schema (registered at Registry.register_type/2 time) and REQ-227's inner field_values validation are both exercised by at least one test each, and the moduledoc states which validates which, per the design artefact's §3 distinction"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-225, REQ-226, REQ-227, REQ-024]
+
+  - id: REQ-229
+    title: Entity record projection and replay (projector.zig -- entity_record_latest, replay-to-snapshot, full re-projection)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 5 of the ISS-0438 entity-subsystem port (see REQ-225's
+      description for the originating scoping recommendation). Ports
+      projector.zig (213 lines).
+
+      SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\projector.zig.
+
+      SCOPE:
+      1. entity_record_latest: the JSONB current_state projection table,
+      tenant-scoped, one row per entity record holding its current
+      field_values plus bookkeeping (entity_type, record_id, last event id
+      or sequence, updated_at). REQ-228's command functions already write
+      to this table inside their own transaction as records are
+      created/updated/deleted; this requirement owns the table's schema and
+      the two functions below that operate on it independently of the live
+      command path.
+      2. replayStream-equivalent: given an entity record's event stream,
+      replay every event in order and produce the resulting snapshot --
+      used to reconstruct a record's state from the event log alone,
+      independent of whatever entity_record_latest currently holds.
+      3. rebuildProjection-equivalent: full re-projection of
+      entity_record_latest for a tenant (or an entity type) from the event
+      log, discarding and rewriting the projection table's rows --
+      i.e. the recovery path if entity_record_latest is ever suspected
+      inconsistent with the event log.
+
+      NOT IN THIS REQUIREMENT: no query DSL (REQ-230/REQ-231); no route or
+      controller.
+    acceptance_criteria:
+      - "replaying a record's full event stream (create, then two updates, then no delete) via the replay function produces a snapshot matching the record's actual current field_values"
+      - "replaying a stream ending in an ENTITY_RECORD_DELETED event produces a snapshot correctly reflecting deletion (per this requirement's own stated representation of a deleted record, named explicitly in the moduledoc)"
+      - "rebuildProjection discards and correctly rewrites entity_record_latest such that, after an artificial corruption of the projection table's rows for one entity type, running rebuildProjection restores exactly the state the replay function would independently compute from the event log for every record of that type"
+      - "rebuildProjection is tenant-scoped: rebuilding tenant A's projection does not read or write tenant B's entity_record_latest rows"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-228]
+
+  - id: REQ-230
+    title: Entity query DSL -- closed-enum operators, per-tenant field allowlist, and the parameterised SQL compiler (query/types.zig + allowlist.zig + compiler.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 6a of the ISS-0438 entity-subsystem port -- a materially sized
+      sixth subsystem the original ISS-0438 filing did NOT mention or size
+      at all (the design artefact measured query/ directly at 1,064 lines,
+      roughly a third of the whole subsystem's real size; see
+      lib/letflow/design/iss0438-entity-subsystem-scoping.md's "A finding
+      ISS-0438 itself missed" section). Split into two requirements
+      (this one and REQ-231) because 1,064 lines is oversized for one
+      agent turn, matching the design artefact's own suggested split
+      (allowlist+compiler as one, cursor+field_grants as another).
+
+      This is the security-relevant half: a three-layer SQL-injection
+      defence (closed operator enum -> allowlist-only column resolution ->
+      positional-parameter binding). Treat this requirement as a
+      tenant-data-path change requiring SECURITY-REVIEWER's hard gate, same
+      as any other tenant-data-path change in this project.
+
+      SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\query\types.zig,
+      allowlist.zig, compiler.zig.
+
+      SCOPE:
+      1. types.zig-equivalent: the closed enum of filter/sort operators
+      (QRY-01..05's operator set) -- no free-form operator string ever
+      reaches the compiler.
+      2. allowlist.zig-equivalent: a per-tenant field allowlist loader
+      resolving a query's referenced field names against REQ-225's entity
+      definition (typed-column vs. JSONB-key shadowing -- a field backed by
+      a real typed column takes precedence over the same name found only in
+      the JSONB field_values blob, and this requirement must state which
+      wins and why). A field not present in the allowlist is rejected
+      before reaching the compiler, never passed through.
+      3. compiler.zig-equivalent: compiles an allowlisted filter/sort
+      request into a parameterised SQL query -- every value from caller
+      input is bound positionally (never string-interpolated into the SQL
+      text), matching this project's existing Ecto.Query.fragment/1
+      SQL-injection discipline (see docs/anti-patterns.md's
+      "Duplicating an Ecto.Query.fragment/1 SQL literal" entry for the
+      project's own established fragment/1 literal-vs-runtime-value
+      constraint, relevant here since this compiler will use fragment/1 or
+      equivalent for JSONB field access).
+
+      NOT IN THIS REQUIREMENT: no cursor pagination or field-grant
+      redaction (REQ-231); no route or controller -- this compiler backs
+      the second deferred router row (Letflow.Routers.EntityQuery), which
+      remains deferred per the same "no consumer contract" reasoning
+      REQ-225/REQ-226 already state.
+    acceptance_criteria:
+      - "a filter/sort request using an operator outside the closed enum is rejected before reaching the compiler, with a specific error identifying the unrecognised operator"
+      - "a filter/sort request referencing a field name absent from the entity definition's allowlist is rejected before reaching the compiler -- demonstrated by a request naming a plausible-looking but non-existent field"
+      - "for a field name present both as a typed column and (theoretically) as a JSONB key, the allowlist resolves to the typed column, and this precedence rule is stated explicitly in the moduledoc"
+      - "every caller-supplied filter VALUE in a compiled query is bound as a positional parameter, never string-interpolated into SQL text -- demonstrated by a fixture containing a value with a SQL-metacharacter payload (e.g. a value containing a quote and a semicolon) that is treated as inert data, not executed as SQL, when the compiled query runs"
+      - "SECURITY-REVIEWER's hard gate is applied to this requirement's implementation before it merges, per docs/agents/instructions/security-invariants.md, since it is a tenant-data query path"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-226]
+
+  - id: REQ-231
+    title: Entity query DSL -- keyset pagination cursor codec and field-grant row-level redaction (query/cursor.zig + field_grants.zig)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Slice 6b of the ISS-0438 entity-subsystem port -- the second half of
+      the query/ split REQ-230 opens (see REQ-230's description for the
+      full originating context, not restated here).
+
+      SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\query\cursor.zig
+      and field_grants.zig.
+
+      SCOPE:
+      1. cursor.zig-equivalent: a keyset-pagination cursor codec for entity
+      query results, matching REQ-067's existing cursor-pagination contract
+      already used across this project's other paginated listings
+      (REQ-176's DLQ list, REQ-202's version history, REQ-211's attachment
+      list) so entity query results paginate the same way every other
+      cursor-paginated endpoint in this project does.
+      2. field_grants.zig-equivalent: a per-user field-level access-control
+      loader (entity_field_restrictions/user_entity_grants-shaped) that
+      redacts specific fields from a query result row rather than the whole
+      row, per QRY-05.
+
+      OPEN DESIGN QUESTION for this slice's own CODE-DESIGNER pass, named
+      explicitly rather than silently resolved (design artefact §6 item
+      4): DOES this field-grant mechanism map onto an EXISTING Letflow
+      authorization/RBAC primitive, or does it need new tables? The design
+      artefact states explicitly it did not read Letflow's
+      authorization/RBAC modules in full and cannot answer this. CODE-DESIGNER
+      for this slice MUST read Letflow's existing authorization modules
+      (e.g. REQ-069's Letflow.Api.Authorization) before deciding, and state
+      in the design artefact whether field-level grants are ported as new,
+      dedicated tables or mapped onto an existing permission mechanism --
+      this requirement does not pick an answer.
+
+      NOT IN THIS REQUIREMENT: no operator/allowlist/compiler logic
+      (REQ-230); no route or controller -- same deferral as REQ-230.
+    acceptance_criteria:
+      - "a query result set larger than one page returns a next_cursor, and passing that cursor back returns the next distinct page with no repeated or skipped records -- REQ-067's contract"
+      - "a user holding a field-level restriction on a given entity type/field has that field redacted (not the whole row) from query results, while a user without that restriction sees the field populated -- two explicit tests"
+      - "the design artefact for this requirement explicitly states whether field-level grants reuse an existing Letflow authorization primitive or introduce new dedicated tables, and names which existing module was read to make that determination"
+      - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-230]

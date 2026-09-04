@@ -66,11 +66,16 @@ substance ship in the production module's documentation, not just here.
   before the admission gate itself starts rejecting/queuing new attempts.
 - **Gives an operator a real dial.** Per OQ-5's own wording ("operator-configurable"),
   §5 below names the config key, default, and justification.
-- **Directly fixes the isolated `mix test --only wasm_hang` CI flake's proximate
-  trigger**, which is exactly this shape: several `:wasm_hang`-tagged tests dispatching
-  hangs in overlapping windows under CI runner contention, racing to exhaust a
-  4-16-slot pool before the short-lived test subprocess exits. §6 shows this
-  deterministically, not probabilistically.
+- **Does NOT, by itself, fix the isolated `mix test --only wasm_hang` CI flake —
+  corrected in rework, see §6.** Every `:wasm_hang`-tagged test calls
+  `PluginInterface.invoke/2,3`/`PluginHandler.handle_node/1` directly, and this design's
+  own §1/§8.1 scope boundary keeps those call sites unmodified, deferring the actual
+  lease-acquiring call site to a future, unbuilt dispatch-integration requirement
+  (OQ-C). §6 states this plainly and names what this design delivers instead: a
+  correctly-specified, independently-testable primitive and a contract that future
+  caller must follow — not a fix to the flake this run was selected to address. An
+  earlier revision of this document claimed the opposite; that claim was false and is
+  retracted, not softened, in §6.
 - **Does not require solving reclamation to ship.** §4 states plainly that reclamation
   (subprocess isolation, periodic node-health-triggered restart) is out of scope here,
   named as follow-up, and that without it the cap's guarantee is bounded-rate, not
@@ -162,7 +167,7 @@ never the one killed.**
   not on the killed inner task (irrelevant, per above), but as a backstop against the
   **lease-holder** itself dying uncleanly. `InvocationLease` therefore monitors the
   acquiring process's pid at acquire time (mirroring `SandboxPool`'s
-  `owner_ref = Process.monitor(owner_pid)`, `sandbox_pool.ex:567`) and releases the
+  `owner_ref = Process.monitor(owner_pid)`, `sandbox_pool.ex:566`) and releases the
   lease automatically on that pid's own `:DOWN`, exactly once, idempotently with an
   explicit `release/1` call (matching `Letflow.Admission.release/2`'s own idempotent-
   no-op-on-unknown-ref contract, so a `:DOWN`-triggered auto-release racing an explicit
@@ -369,7 +374,7 @@ can look up and release exactly the right lease entry, and so an explicit `relea
 call can `Process.demonitor(monitor_ref, [:flush])` to avoid a stale `:DOWN` arriving
 after an already-completed explicit release (mirrors `SandboxPool`'s own documented
 "flush so a normally-returning worker never ALSO delivers a `:DOWN`" precedent,
-`sandbox_pool.ex:406`).
+`sandbox_pool.ex:407`).
 
 ### 5.4 GenServer-internal behavior (prose, not code)
 
@@ -413,133 +418,230 @@ at `init/1` — mirrors `Letflow.Admission.start_link/1`'s own
 application-env value, matching `Letflow.Admission.start_link/1`'s own `:pool_size`/
 `:reserved_headroom` overrides).
 
-**Default:** `max(System.schedulers_online() - 2, 1)`.
+**Default:** `max(div(System.schedulers_online(), 2), 1)`.
+
+**REWORK NOTE (CODE-DESIGN-VALIDATOR step-02b, MAJOR finding), read before the
+justification below.** The prior revision of this section recommended
+`max(System.schedulers_online() - 2, 1)` and, in the same paragraph, quoted this exact
+host's own numbers (`available_parallelism()` = 8 per REQ-170 §1.5, `schedulers_online()`
+= 16) as illustration — without checking its own formula against those numbers. Checked
+now: `max(16 - 2, 1) = 14`, which is **greater than** the cited pool size of 8. That is a
+non-protective default on the design's own worked example, exactly the "a cap at or
+above the actual native pool size bounds nothing" failure this same section warns
+against one paragraph earlier. This was a real design defect, not a wording slip, and is
+fixed by replacing the fixed-subtraction formula with a fixed-fraction one (below), which
+degrades far more gracefully when the two counts diverge, plus an explicit
+operator-facing warning (last bullet) rather than a buried caveat.
 
 **Justification, stated explicitly per OQ-5's own "operator-configurable" wording
 (the number must be justified, not merely picked):**
 
-- The underlying native resource this cap protects (`wasmex`'s `TOKIO_RUNTIME`) is
-  sized to `std::thread::available_parallelism()` — which ISSUE-FIXER's diagnosis
-  confirms is a **different, typically smaller** count than
-  `System.schedulers_online()` on the same host (REQ-170 §1.5 measured
-  `available_parallelism()` = 8 against `System.schedulers_online()` = 16 on one host;
-  ISSUE-FIXER's own reproduction host measured both at 16, i.e. the two counts are not
-  reliably related in either direction across environments). **This is a real gap this
-  design cannot close by formula alone: there is no BEAM-side API that reads
-  `wasmex`'s own native pool size directly** (confirmed absent by ISSUE-FIXER's grep of
-  the full native/lib source trees, per its diagnosis §1). `System.schedulers_online()`
-  is used as the best available BEAM-side proxy for host core count, which is what
-  `available_parallelism()` itself derives from — not because the two are guaranteed
-  equal, but because it is the closest available signal without adding a new
-  dependency or native call solely to read a thread-pool size.
-- **The `- 2` headroom, and why a cap must stay strictly BELOW the pool size to bound
-  anything at all:** per ISSUE-FIXER's diagnosis and OQ-5's own wording ("a cap at or
-  above that number bounds nothing"), a cap set at or above the actual native pool size
-  permits exactly the same worst case as no cap — every concurrent slot could still be
-  consumed by hangs simultaneously. Subtracting a fixed headroom (2, mirroring
-  `Letflow.Admission`'s own `@default_reserved_headroom 2` naming and magnitude, §3.5's
-  "reuse the shape, not the code" precedent) guarantees the cap is strictly below the
-  proxy count on every host this formula runs on, including small hosts (`max(_, 1)`
-  floors at 1 rather than 0 or a negative number on a 1-2 core host, mirroring
-  `Letflow.Admission.init/1`'s own identical `max(pool_size - reserved_headroom, 1)`
-  floor).
+- **The core problem, stated first because it drives every choice below: there is no
+  BEAM-side API that reads `wasmex`'s own native `TOKIO_RUNTIME` pool size directly**
+  (confirmed absent by ISSUE-FIXER's grep of the full native/lib source trees, per its
+  diagnosis §1 — no NIF parameter, env var, or `Wasmex.EngineConfig` field exposes it;
+  this design's own review of the codebase found no existing `:erlang.system_info/1`-
+  based proxy for it either, so nothing already in this codebase can be reused here).
+  `wasmex`'s pool is sized to `std::thread::available_parallelism()`, a Rust-side OS
+  query with **no Elixir/BEAM equivalent surfaced anywhere in this dependency or the
+  standard library** — `System.schedulers_online()` is the nearest BEAM-side number,
+  but it counts BEAM schedulers, not OS logical cores, and the two are configured
+  independently (`+S`/`+SDcpu` VM flags can set BEAM's scheduler count to anything,
+  unrelated to what `available_parallelism()` reports). **This design cannot compute an
+  exact answer and does not claim to; it computes a deliberately conservative one.**
+- **Corrected figures for this host, re-measured directly this session (not assumed
+  from a different host's numbers, which was the prior revision's own error):
+  `nproc` = 16 and `System.schedulers_online()` = 16 on the CODE-DESIGN-VALIDATOR's
+  and this rework's own host** — i.e. on THIS host the two counts agree, unlike
+  REQ-170's original design-session host (`available_parallelism()` = 8 against
+  `schedulers_online()` = 16, a 2x divergence). Both real, both cited accurately now:
+  REQ-170 §1.5's host is a genuine, documented case where the two diverge sharply, and
+  this rework's own host is a case where they do not — the formula below is chosen to
+  survive the divergent case, since that is the one that can silently fail to protect.
+- **Why a fixed FRACTION, not a fixed SUBTRACTION, of `schedulers_online()`:** a fixed
+  subtraction (the prior `- 2`) shrinks the cap by a constant amount regardless of how
+  large `schedulers_online()` gets relative to the real pool size — exactly why it
+  failed on the 16-vs-8 case (16 - 2 = 14, still far above 8). A fixed **fraction**
+  shrinks proportionally, so it degrades gracefully as the divergence widens instead of
+  becoming a no-op past some threshold. `div(schedulers_online(), 2)` on the two
+  concretely known cases: REQ-170's divergent host, `div(16, 2) = 8`, exactly equal to
+  the cited real pool size of 8 (not strictly below it — see the explicit caveat below,
+  this is not claimed as a proof of protection, only as no longer a proven no-op); this
+  rework's own convergent host, `div(16, 2) = 8`, comfortably below the real pool size
+  of 16. A small CI runner (~4 vCPU, ISS-0418's own recurrence evidence, where the two
+  counts typically track 1:1 on a dedicated runner): `div(4, 2) = 2`, below a pool of
+  ~4. `max(_, 1)` floors at 1 rather than 0 or a negative number on a 1-2 core host,
+  mirroring `Letflow.Admission.init/1`'s own identical `max(pool_size - reserved_headroom, 1)`
+  floor shape (though the operation before the floor now differs, per above).
+- **Explicit caveat, stated plainly rather than buried, per the validator's own
+  required fix:** this formula is a **heuristic over an unmeasurable quantity, not a
+  guarantee.** On REQ-170's own cited host it lands exactly AT the real pool size
+  (`div(16,2)=8` vs. an actual 8) — the boundary case, not strictly below it — so it is
+  not proven protective there either, only no longer proven non-protective as the prior
+  `-2` formula was. **An operator whose BEAM scheduler count is set (via `+S`/`+SDcpu`)
+  to significantly exceed the host's actual logical core count — the specific
+  divergence this default cannot detect or correct for — must override `cap` manually
+  to a value measured against that host's real `available_parallelism()`** (obtainable
+  operationally outside the BEAM, e.g. `nproc` on Linux, since no in-BEAM read exists).
+  This is not a hypothetical: REQ-170's own design-session host is a real, already-
+  measured instance of exactly this divergence.
 - **This default is deliberately NOT tight enough to fully prevent exhaustion under a
   sufficiently large burst** — per §0/§4, no default can, since the cap bounds
   concurrent callers, not leaked threads, and this default is sized for ordinary
   production headroom, not adversarial-burst safety. An operator running WASM plugins
   under a threat model where many simultaneous tenant-supplied hangs are expected
   should configure a tighter value explicitly; this default optimizes for "do not
-  throttle ordinary traffic" over "survive a deliberate burst," consistent with this
-  being a harm-reduction mechanism (§0), not a hard security boundary.
+  throttle ordinary traffic too aggressively" over "survive a deliberate burst,"
+  consistent with this being a harm-reduction mechanism (§0), not a hard security
+  boundary.
 - **This is explicitly separate from and smaller in scope than the `:test`-environment
-  override (§6.1)**, which deliberately sets `cap: 1` for the isolated `wasm_hang`
-  subprocess specifically — that override is not this default, and must not replace it
-  in non-test environments.
+  override (§6.1, now superseded by §6's rework below — see that section)** — a test
+  or CI-specific override is not this production default, and must not replace it in
+  non-test environments.
 
 ---
 
-## 6 — Test strategy: making `wasm_hang` deterministic, not merely less likely to flake
+## 6 — Test strategy, and an honest correction: this design does NOT, by itself, fix the `wasm_hang` CI flake
 
-**The core question, stated per the handoff's own framing:** does this design make the
-`wasm_hang` tests deterministic, or merely reduce flake probability? **Answer: it makes
-the CI failure mode structurally impossible to reproduce via pool exhaustion, by
-construction, PROVIDED the cap is configured at or below the pool size in the isolated
-`mix test --only wasm_hang` subprocess — §6.1 states exactly how that is arranged and
-verified, not left to chance.**
+**REWORK NOTE (CODE-DESIGN-VALIDATOR step-02b, BLOCKER finding).** The prior revision
+of this section claimed the cap made `wasm_hang` admission "structurally impossible…
+by construction, not probabilistic," resting on a `cap: 1` test-environment override.
+**That claim was false, and the validator's finding is accepted in full without
+qualification:** every real `:wasm_hang`-tagged test
+(`test/letflow/engine/wasm/plugin_handler_test.exs:152,353,393,472`;
+`call_timeout_test.exs:76,155`; `host_api_write_test.exs:458`) calls
+`PluginInterface.invoke/2,3` or `PluginHandler.handle_node/1` **directly from the test
+process**. This design's own §1 and §8.1 forbid modifying `PluginInterface.invoke/2,3`,
+`PluginHandler`, and `handle_node/1`, and defer the only specified
+lease-acquiring call site (§8.1) to a **future, unbuilt** dispatch-integration
+requirement (OQ-C). The former §6.2 explicitly did not rewrite the existing
+`wasm_hang` tests to call `try_acquire/0`/`release/1` either. **Net effect: nothing this
+design specifies building is ever called from the actual flaking tests' call graph.** A
+`cap: 1` override on a `GenServer` nothing in that call path invokes gates nothing —
+the determinism claim was unsupported by the design's own scope boundary, visible on a
+straight read of the (former) §6.1 against §1/§8.1/§6.2 in the same document. This
+rework takes **route (b)** from the gate's own two offered options: the scope boundary
+in §1/§8.1 is kept (see §6.4 below for why), and the false claim is deleted rather than
+patched around.
 
-### 6.1 Why "operator-configurable, default X" alone does not fix the CI flake, and what closes the gap
+**Stated plainly, per the gate's own instruction: this design, as scoped, does NOT fix
+ISS-0418's CI flake.** The `mix test --only wasm_hang` subprocess will continue to
+exercise real hangs through `PluginInterface.invoke/2,3` exactly as it does today,
+uninfluenced by `InvocationLease`, until a future dispatch-integration requirement (1)
+builds the real call site §8.1 specifies and (2) that call site's caller is what the
+`wasm_hang` tests exercise instead of calling `invoke/2,3`/`handle_node/1` directly —
+neither of which this design builds. ORCH selected this issue on the premise that the
+fix here would move the CI gate off its measured 44% pass rate; **on this design's own
+honest scope, it does not, by itself, do that**, and ORCH must decide, informed by this
+correction, whether shipping the primitive alone (without wiring) is worth doing now or
+whether the wiring must be pulled into this same run's scope (§6.4 discusses the
+tradeoff but does not decide it — that is ORCH's call, not CODE-DESIGNER's to make
+unilaterally by silently widening scope).
 
-Per ISS-0418's own OQ-5 wording and §5's cap default (§5.5 below recommends a default
-derived from `System.schedulers_online()`), the DEFAULT cap in a production or
-ordinary-dev deployment is deliberately generous (close to the actual pool size) so
-normal WASM traffic is not artificially throttled. **A generous default alone does NOT
-fix the CI flake**, because the flake's own precondition (ISS-0418's own recurrence
-data: 4-16 concurrent `:wasm_hang`-tagged tests contending on a 4-16-slot pool) is
-exactly sized to a generous cap — it would still allow all of them to dispatch at once.
+### 6.1 What this design DOES deliver, stated affirmatively and precisely
 
-**What actually closes the gap: `test/test_helper.exs`'s existing `:wasm_hang`
-isolation architecture (ISS-0352) already runs those tests in their OWN short-lived,
-serial (per ISS-0428's explicit "deliberately left serial" note quoted in ISS-0418's
-own recurrence log) subprocess.** This design's cap composes with that existing
-architecture by configuring a **test-specific override** — `config :letflow,
-:invocation_lease, cap: 1` (or a small number strictly less than the number of
-`:wasm_hang`-tagged tests that could otherwise overlap) for the `:test` environment's
-`mix test --only wasm_hang` invocation specifically (via `config/test.exs` or an
-env-var override read at `init/1`, per §5.5's mechanism) — **so within that isolated
-subprocess, hangs are admitted ONE AT A TIME by construction, never
-concurrently, regardless of runner size or contention.** Since `wasm_hang` tests already
-run serially within their own ExUnit run (ISS-0428's note), a cap of 1 does not slow
-that suite further than it already runs — it converts "serial in ExUnit's own test
-ordering, but each test's OWN internal concurrent-dispatch fixtures could still overlap
-with a NEIGHBORING test's not-yet-cleaned-up leak" into "structurally serialized at the
-admission layer, independent of ExUnit's own scheduling," which is the actual gap the
-recurrence evidence (§6.2) shows matters.
+- A correctly-specified admission primitive (§5) whose placement (§2/§8.1) genuinely
+  solves the never-released-ref-on-brutal-kill problem — this part of the gate's
+  check-by-check review passed independently, and is not touched by this correction.
+- A **contract** (§8.1) that a future dispatch-integration call site (OQ-C — most
+  plausibly REQ-056, per `plugin_interface.ex`'s own moduledoc, still `pending`) must
+  follow to actually gate production WASM dispatch. That future requirement's
+  CODE-DESIGNER does not need to re-derive the brutal-kill hazard or the monitor-backstop
+  design — it is done here, once, correctly.
+- Full, independently-verifiable unit coverage of the primitive itself (§6.2, unchanged
+  by this correction) — `try_acquire/0`, `release/1`, and the monitor-based auto-release
+  under an ordinary process kill (the non-WASM-dependent stand-in for
+  `PluginInterface.invoke/2,3`'s own brutal-kill), all provable today with zero
+  dependency on `wasmex` or on the future call site existing.
+- Nothing else. In particular: **no change to the `wasm_hang` tests' own pass/fail
+  behavior, no change to CI's measured pass rate, and no claim of either.**
 
-This is the deterministic fix: **a test that cannot begin dispatching until the
-previous invocation's lease is held cannot race that previous invocation for pool
-slots**, full stop, by construction of the semaphore — not "less likely," genuinely
-`cap`-many-at-once, structurally.
-
-### 6.2 What test asserts this, concretely (design-level test plan, not test code)
+### 6.2 What test asserts what this design DOES deliver (design-level test plan, not test code — unchanged in substance from the prior revision, since this part was never the finding)
 
 - **New test, `test/letflow/engine/wasm/invocation_lease_test.exs`** (ELIXIR-DEV/
   TEST-DESIGNER scope): starts an isolated `InvocationLease` instance (mirrors
   `Letflow.Admission`'s own `start_link/1` test-isolation `opts` override convention,
-  §5.1/`admission.ex`'s own `:name`/`:pool_size` overrides) with `cap: 1`. Asserts:
+  §5.1/`admission.ex`'s own `:name`/`:pool_size` overrides). Asserts:
   (a) a first `try_acquire/0` succeeds; (b) a second, concurrent `try_acquire/0` (from a
-  second process) returns `{:error, :capacity}` while the first lease is held; (c) after
-  the first lease's holder process is killed (`Process.exit(pid, :kill)`) WITHOUT
-  calling `release/1`, a subsequent `try_acquire/0` succeeds within a bounded wait —
-  this is the direct proof of §2's monitor-based auto-release, using an ordinary process
-  kill as the cheap, non-WASM-dependent stand-in for `PluginInterface.invoke/2,3`'s own
-  brutal-kill; (d) an explicit `release/1` followed immediately by that same process
-  exiting does not double-decrement `in_use` (proves the demonitor+flush race is closed,
-  §5.3).
-- **Existing `:wasm_hang`-tagged tests are NOT rewritten to assert on `InvocationLease`
-  directly** — they continue asserting their own REQ-170/`CallTimeout` acceptance
-  criteria unchanged. This design's own regression coverage for "does the cap actually
-  prevent CI exhaustion" is the `invocation_lease_test.exs` unit-level proof above
-  (deterministic, fast, no real `wasmex` dependency) PLUS a live end-to-end
-  confirmation that `mix test --only wasm_hang` itself completes and passes cleanly
-  after this design ships, run by TEST-RUNNER per the normal WF-03 Step 4/5 gate,
-  quoting real output — not a new automated test that re-runs ISS-0418's own
-  32-concurrent-hang saturation scenario inside `mix test` (REQ-170 §5.7 already
-  established why that specific scenario does not belong inside the normal suite: it
-  durably occupies the shared native pool for over a minute, corrupting every other
-  WASM test's timing assumptions).
-- **This is not "hope it stops flaking."** The `cap: 1` test-environment override
-  (§6.1) is a structural guarantee, verifiable by the unit test above without touching
-  `wasmex` at all, and CI's own subsequent real runs of `mix test --only wasm_hang`
-  (which TEST-RUNNER/RELEASE-VALIDATOR already runs on every PR per the existing
-  `lib/mix/tasks/letflow.check.test.ex` two-subprocess gate) serve as the ongoing,
-  repeated confirmation in the exact environment the flake was originally observed in.
+  second process) against a `cap: 1` instance returns `{:error, :capacity}` while the
+  first lease is held; (c) after the first lease's holder process is killed
+  (`Process.exit(pid, :kill)`) WITHOUT calling `release/1`, a subsequent `try_acquire/0`
+  succeeds within a bounded wait — this is the direct proof of §2's monitor-based
+  auto-release, using an ordinary process kill as the cheap, non-WASM-dependent stand-in
+  for `PluginInterface.invoke/2,3`'s own brutal-kill; (d) an explicit `release/1`
+  followed immediately by that same process exiting does not double-decrement `in_use`
+  (proves the demonitor+flush race is closed, §5.3).
+- **This test suite proves the PRIMITIVE is correct in isolation. It does not, and
+  cannot, prove anything about the `wasm_hang` CI flake**, since (per §6 above) nothing
+  in that flake's own call graph calls this primitive yet. Stated here explicitly so a
+  future reader does not mistake a green `invocation_lease_test.exs` for evidence the
+  flake is fixed.
+- **Existing `:wasm_hang`-tagged tests are unmodified by this design** — they continue
+  exercising `PluginInterface.invoke/2,3`/`PluginHandler.handle_node/1` directly, exactly
+  as they do today, and will continue to flake exactly as ISS-0418 already documents
+  until the future dispatch-integration work (§6.4) exists and is wired into their call
+  path (or they are themselves rewritten to go through it — a decision for that future
+  work, not this one).
 
 ### 6.3 Honesty clause, mirroring REQ-170 §5.2 item 3's precedent
 
 Any new test or moduledoc content this design's implementation produces must not claim
-the underlying native leak is prevented or reclaimed — only that concurrent admission
-is bounded. Per §0, this is a comment/documentation obligation carried into
-implementation, not a design element with its own separate artifact.
+the underlying native leak is prevented or reclaimed, and — per this rework — must not
+claim the `wasm_hang` CI flake is fixed or made deterministic by this design alone. Per
+§0/§7, this is a comment/documentation obligation carried into implementation, not a
+design element with its own separate artifact.
+
+### 6.4 Why route (b) — keeping the scope boundary — rather than route (a) — widening scope to touch the flaking call path
+
+The gate offered two honest routes: widen scope so the lease sits on the actual flaking
+path (route (a)), or keep the boundary and state the limitation plainly (route (b),
+taken here). Reasoning for (b), not asserted by default:
+
+- **Route (a) would require modifying `PluginInterface.invoke/2,3` and/or
+  `PluginHandler`/`handle_node/1`, or rewriting all seven `wasm_hang`-tagged tests to
+  call a new wrapper instead of `invoke/2,3` directly.** Either sub-option re-opens
+  exactly the scope boundary §1 stated as deliberate: `invoke/2,3` is REQ-057/165's own
+  shipped, gate-approved crash-safety algorithm, reused unmodified by REQ-170 already;
+  changing it now to accept a lease parameter (or wrapping every call site, test and
+  future-production alike, in a new required entry point) is a materially larger and
+  differently-shaped change than "add an admission primitive," and was not what
+  ISSUE-FIXER's diagnosis characterized as the missing piece — its own diagnosis
+  described the gap as "no bound on how many such abandoned native executions can
+  accumulate concurrently," which is what §5's primitive answers, not "the tests
+  themselves need reshaping."
+- **Widening scope to rewrite the `wasm_hang` tests specifically (a narrower version of
+  route (a)) is plausible and is not rejected outright** — it would mean each
+  `wasm_hang` test acquires/releases a lease around its own direct `invoke/2,3` call,
+  using the SAME crash-safety reasoning §2 already worked out (the test process itself
+  is never the process `Task.shutdown(:brutal_kill)` targets, exactly like a real
+  future caller, so the reasoning transfers without re-deriving it). **This was not
+  chosen in this rework because it silently answers OQ-C's own open question (which
+  future requirement owns the real call site) by making the TEST SUITE the only caller
+  that ever exists** — a fix that only tests exercise, with no production call site
+  built, is a different and lesser deliverable than "the cap protects production
+  traffic," and shipping it under this issue's own title ("operator-configurable cap on
+  concurrently in-flight WASM invocations... so the isolated subprocess... cannot
+  exhaust the pool") without also building the production path risks exactly the kind
+  of "protection that looks real but isn't where it matters" finding this gate's own
+  brief was watching for, just relocated from "gates nothing" to "gates only tests, not
+  the traffic the issue is actually about." **This is flagged explicitly as a
+  legitimate smaller-scope alternative ORCH may choose instead of full route (a) or (b)
+  as written here** — a test-only wiring would genuinely fix the CI flake (this issue's
+  proximate, measured pain) faster than waiting for OQ-C's production caller, at the
+  cost of leaving production WASM dispatch unprotected by any cap until that caller
+  exists. This design does not choose that path unilaterally; it names it as a third
+  option for ORCH alongside the gate's original (a)/(b), since (b) as strictly stated
+  leaves the 44% CI pass rate unresolved, which is the outcome ORCH's own dispatch
+  flagged as unacceptable to leave silently unaddressed.
+- **Given the ambiguity above, this design commits to (b) literally** (keep §1/§8.1's
+  boundary, state the limitation) **and surfaces the test-only-wiring alternative to
+  ORCH explicitly** rather than picking it silently — consistent with core-directives'
+  "two or more genuinely equivalent options requiring a decision no agent can infer"
+  rule: whether to accept a slower, fully-correct fix (wait for OQ-C's real dispatch
+  integration) or a faster, narrower one (wire only the tests now, production later) is
+  a real prioritization call about this issue's own urgency (44% CI pass rate, ORCH's
+  own stated binding constraint) that this design does not have standing to make for
+  ORCH.
 
 ---
 
@@ -695,19 +797,22 @@ between.
   plausible owner, still `pending` as of this writing). Whoever builds that requirement
   must read this design's §8.1 before wiring `PluginInterface.invoke/2,3` into a real
   dispatch path, so the lease is not silently omitted from the first real caller.
-- **OQ-D — should the `:test`-environment `cap: 1` override (§6.1) be wired via
-  `config/test.exs` (applies to the WHOLE `:test` env, including the main suite) or an
-  env-var read only by the `mix test --only wasm_hang` subprocess invocation inside
-  `lib/mix/tasks/letflow.check.test.ex`?** This design recommends the latter — scoping
-  the tight cap to exactly the subprocess it is meant to protect, so the main suite's
-  own (currently zero, per ISS-0352's resolution) WASM-hang-adjacent tests are never
-  affected by a cap of 1 they don't need — but the exact mechanism (an application-env
-  override passed via `MIX_ENV`-scoped config, vs. a literal `Application.put_env/3`
-  call inside the mix task before shelling out) is ELIXIR-DEV's to finalize against
-  `letflow.check.test.ex`'s existing subprocess-invocation shape, which this design did
-  not modify or fully re-derive here.
+- **OQ-D (REWORK: superseded, restated) — does closing ISS-0418's own CI flake require
+  pulling the `wasm_hang` tests onto this design's lease, ahead of OQ-C's production
+  call site?** §6.4 names this explicitly as a real, undecided prioritization question
+  for ORCH: (i) wait for OQ-C's real dispatch-integration requirement and accept the
+  flake persists until then, or (ii) as a narrower, faster interim step, rewrite the
+  seven `wasm_hang`-tagged tests to acquire/release a lease around their own existing
+  direct `invoke/2,3` calls (reusing §2's crash-safety reasoning verbatim, since a test
+  process is never the process `Task.shutdown(:brutal_kill)` targets, exactly like a
+  real caller), closing the flake immediately at the cost of leaving production WASM
+  dispatch itself uncapped until OQ-C's caller exists. This design does not choose (i)
+  or (ii) — that decision belongs to ORCH, informed by this rework's correction, not to
+  CODE-DESIGNER unilaterally widening or narrowing scope after a gate FAIL.
 
-None of these open questions block implementation of §5/§8's actual contract.
+None of these open questions block implementation of §5/§8's actual contract. OQ-D
+specifically DOES block whether this run, as currently scoped, resolves ISS-0418's own
+selection criterion (the 44% CI pass rate) — see §6's own retraction.
 
 ---
 
@@ -721,7 +826,7 @@ None of these open questions block implementation of §5/§8's actual contract.
 | 4 | The cap's numeric default and config surface | §5.5; OQ-B |
 | 5 | Extend `Letflow.Admission` or build new — justified explicitly | §3 (four independent reasons) |
 | — | Is reclamation possible at all (ISS-0418's own item 4 in the task description) | §4 (no — stated plainly, with the two named non-cap follow-ups) |
-| — | Test strategy: deterministic vs. probabilistic fix for `wasm_hang` | §6 (deterministic within the isolated subprocess, via a `cap: 1` test-environment override composing with ISS-0352's existing serial isolation) |
+| — | Test strategy: deterministic vs. probabilistic fix for `wasm_hang` | §6 (REWORK: neither — this design does not fix the flake at all, since no code path it builds is called by the flaking tests; §6.1 states what it delivers instead, §6.4 names the undecided prioritization question for ORCH) |
 
 ---
 
@@ -732,17 +837,24 @@ None of these open questions block implementation of §5/§8's actual contract.
 built here.
 
 **Modified:** `lib/letflow/application.ex` (add `InvocationLease` as a new supervised
-child, §5.1 — no ordering dependency on any existing child); `config/test.exs` or
-`lib/mix/tasks/letflow.check.test.ex` (§6.1/OQ-D — the test-environment cap override for
-the isolated `:wasm_hang` subprocess specifically).
+child, §5.1 — no ordering dependency on any existing child).
 
-**NOT modified by this design:** `lib/letflow/admission.ex` (§3 — a new module is used
-instead, Admission stays exactly as REQ-216/REQ-217/REQ-218 shipped it);
-`lib/letflow/engine/plugin_interface.ex` (§8.1 — the lease is acquired/released by
-`invoke/2,3`'s future caller, never inside `invoke/2,3` itself);
-`lib/letflow/engine/wasm/plugin_handler.ex` (§8.1's correction — this design's first
-draft proposed a `handle_node/1` change and struck it in the same pass once the actual
-brutal-kill boundary was traced precisely; `PluginHandler` needs no change at all);
+**NOT modified by this design (REWORK: this list grew — §6's correction removes the
+`config/test.exs`/`letflow.check.test.ex` test-override entry the prior revision
+claimed here, since that override gated nothing and is no longer proposed):**
+`lib/letflow/admission.ex` (§3 — a new module is used instead, Admission stays exactly
+as REQ-216/REQ-217/REQ-218 shipped it); `lib/letflow/engine/plugin_interface.ex` (§8.1 —
+the lease is acquired/released by `invoke/2,3`'s future caller, never inside
+`invoke/2,3` itself); `lib/letflow/engine/wasm/plugin_handler.ex` (§8.1's correction —
+this design's first draft proposed a `handle_node/1` change and struck it in the same
+pass once the actual brutal-kill boundary was traced precisely; `PluginHandler` needs no
+change at all); `test/letflow/engine/wasm/{call_timeout,plugin_handler,host_api_write}_test.exs`
+(§6 — the existing `:wasm_hang`-tagged tests are unmodified; this is the direct
+consequence of this design's own scope boundary, stated here rather than only in §6, so
+this file-touch inventory itself does not silently imply the flake was addressed);
+`test/test_helper.exs`, `lib/mix/tasks/letflow.check.test.ex`, `config/test.exs` (§6 —
+no test-environment override is specified by this design; ISS-0352's existing isolation
+architecture is left exactly as it stands);
 `lib/letflow/engine/wasm/call_timeout.ex`, `resource_limits.ex`, `capability_gate.ex`,
 `module_registry.ex`, `memory_guard.ex` (untouched, no interaction with this design's
 scope).

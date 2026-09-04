@@ -125,13 +125,19 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     end)
 
     fixture_root =
-      Path.join(System.tmp_dir!(), "letflow_check_test_fixture_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "letflow_check_test_fixture_#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(fixture_root)
     on_exit(fn -> File.rm_rf!(fixture_root) end)
 
     fake_bin_dir =
-      Path.join(System.tmp_dir!(), "letflow_check_test_fakebin_#{System.unique_integer([:positive])}")
+      Path.join(
+        System.tmp_dir!(),
+        "letflow_check_test_fakebin_#{System.unique_integer([:positive])}"
+      )
 
     File.mkdir_p!(fake_bin_dir)
     on_exit(fn -> File.rm_rf!(fake_bin_dir) end)

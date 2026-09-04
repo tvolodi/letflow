@@ -1,0 +1,47 @@
+id: ISS-0455
+title: "postgres healthcheck probes a nonexistent database, FATAL log line every 2 seconds"
+discovered_by: project_owner
+discovered_in_run: WF03-ISS0446-20260904
+discovered_at: "2026-09-04T03:07:31Z"
+severity: MINOR
+tags: [docker, postgres, healthcheck, logging, s6]
+description: >
+  Reported by the project owner during WF03-ISS0446-20260904.
+  docker-compose.yml's postgres healthcheck was `pg_isready -U letflow`
+  with interval 2s; pg_isready defaults dbname to the -U value, but
+  POSTGRES_DB is letflow_dev, so every probe hit a nonexistent database
+  named `letflow` and logged FATAL. Confirmed via `docker inspect` on the
+  live container. COSMETIC ONLY -- the healthcheck still correctly
+  reported healthy (a FATAL response proves the server is answering) and
+  nothing in the app uses a bare `letflow` database. Worth fixing because
+  it emitted ~43k FATAL-level noise lines/day, degrading the postgres log
+  as a debugging surface.
+affected_files:
+  - docker-compose.yml
+related: []
+queue_task_id: 455
+github_issue: 872
+status: resolved
+resolved_in_run: ORCH-direct-20260904
+resolved_at: "2026-09-04T04:15:00Z"
+resolution: >
+  ORCHESTRATOR.md S10 direct-action sizing: single file, no application
+  code, no migration, no supervision-tree touch, no tenant-data path, no
+  test-asserted-behavior change -- applied directly by ORCH.
+
+  FIX. `pg_isready -U letflow` -> `pg_isready -U letflow -d $$POSTGRES_DB`
+  (the doubled `$$` escapes docker compose's own variable interpolation so
+  the reference resolves inside the container's shell against the real
+  POSTGRES_DB env var already set on this service, per the issue's own
+  "consider referencing POSTGRES_DB so the two cannot drift" suggestion --
+  chosen over hardcoding `letflow_dev` a second time).
+
+  VERIFICATION (real container, not assumed). Before: `docker logs` showed
+  a `FATAL: database "letflow" does not exist` line every ~2s. Manually
+  ran the fixed command inside the running container
+  (`pg_isready -U letflow -d $POSTGRES_DB`) -- clean "accepting
+  connections", no FATAL. Recreated the postgres service
+  (`docker compose up -d --force-recreate postgres`) to pick up the new
+  healthcheck definition: container reports `(healthy)`, and `docker logs
+  --since 8s` after startup settled shows zero output across multiple
+  full healthcheck intervals (was previously ~1 FATAL line per interval).

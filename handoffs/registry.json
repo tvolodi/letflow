@@ -4390,6 +4390,22 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED -- PR #873 squash-merged to main (8ee7cdb3). Queue task 453 released status: done, ISS-0446 flipped to resolved.",
       "note": "WF-03 run for ISS-0446: check-then-act teardown race in service_task_dispatcher_test.exs:1131-1133 (Process.alive?/1 then Supervisor.stop/1 on a linked, already-terminating supervisor). Test-only flake but it reddens unrelated branches' CI gates, costing every future run an attribution investigation. Sizing rule section 10 FAILS on checks 4 and 6 (both ambiguous -> 'no'), so full WF-03 chain, not ORCH direct action. NOTE: queue task 453's issue_ref field wrongly reads ISS-0453 (derived from its own task id); real issue is ISS-0446. | OUTCOME: fixed via ExUnit.fetch_test_supervisor/0 + start_supervised!/1, removing the race rather than tolerating it. TWO GATES CAUGHT REAL DEFECTS AND FORCED REWORK: CODE-DESIGN-VALIDATOR found the design had rejected start_supervised! on a FALSE PREMISE (fetch_test_supervisor/0 is public since 1.11.0), and TEST-DESIGN-VALIDATOR refuted TEST-DESIGNER's claim that a regression test was structurally impossible, then on re-gate caught that the resulting guard did not actually protect the fix site (2/15 detection) -- which also corrected ORCH's own mutation check, that had only proven the guard tests itself. Final guard is deterministic but honestly scoped, with the residual gap recorded. Rebase hit a concurrent-fix collision with a sibling session's ISS-0452 (same defect, try/catch remedy); resolved in favour of this fix with the decision recorded in ISS-0452.yaml's superseded_by. Suite 3200/3200 on the rebased tree, all 4 CI checks green first attempt, no flake. Filed ISS-0447 (task 454) and ISS-0448 (task 455)."
+    },
+    {
+      "run_id": "ORCH-direct-20260904-ISS0455",
+      "requirement_id": null,
+      "issue_id": "ISS-0455",
+      "queue_task_id": 455,
+      "github_issue_number": 872,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docker-compose.yml"
+      ],
+      "started_at": "2026-09-04T04:12:03Z",
+      "lock_released_at": "2026-09-04T04:16:00Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- direct ORCH fix (all 6 ORCHESTRATOR.md S10 checks passed, single config file, no code/test change), verified live against the running letflow-1-postgres-1 container (before: FATAL every ~2s; after: healthy, zero FATAL lines across multiple healthcheck intervals). No PR needed -- infra-only, no CI-relevant code changed; committed direct to main.",
+      "note": "docker-compose.yml postgres healthcheck referenced a bare 'letflow' database (pg_isready's -U default) instead of the real POSTGRES_DB (letflow_dev), causing a FATAL log line every 2s despite reporting healthy correctly. Fixed by adding -d $$POSTGRES_DB (escaped for compose's own interpolation) so the two values can never drift again."
     }
   ]
 }

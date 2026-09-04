@@ -41,30 +41,39 @@ and that a handoff with top-level status `"PASS"` sitting alongside a nested
 
 ### 1.1 Option (a) — `Jason.OrderedObject` / order-preserving round trip
 
-**Version check (per ISSUE-FIXER, re-confirmed here):** `mix.exs` declares
-`{:jason, "~> 1.4"}`; `mix.lock` currently pins `jason 1.4.5`, which does **not**
-include `Jason.OrderedObject` (that landed later in the 1.x line). Because the
-`mix.exs` constraint already permits any `1.x`, adopting it needs only a `mix.lock`
-bump (`mix deps.update jason`), not a `mix.exs` edit — but that bump requires hex.pm
-network access, unavailable in this sandbox (same documented constraint as
-`mix deps.get` generally; ELIXIR-DEV would need a networked host for this one step).
+**Version check (re-confirmed directly against the vendored dependency, not inherited
+from ISSUE-FIXER):** `mix.exs` declares `{:jason, "~> 1.4"}`; `mix.lock` pins
+`jason 1.4.5`. `Jason.OrderedObject` **is available at this exact pinned version** —
+`deps/jason/lib/ordered_object.ex` fully implements it, `deps/jason/CHANGELOG.md` shows
+it shipped in `1.3.0` (three minor versions before `1.4.5`, not "later in the 1.x
+line"), `deps/jason/lib/jason.ex` documents the `objects: :ordered_objects` decode
+option, and `deps/jason/lib/encode.ex` implements the `Jason.Encoder` clause for the
+struct. No `mix.lock` bump, and no network access, is needed to use it. (An earlier
+draft of this section stated the opposite — that OrderedObject was unavailable at
+1.4.5 — which was checked directly here and found false; recorded so a future reader
+does not have to re-derive this.)
 
-**Rejected, for a reason stronger than the version-bump friction:** even with
-`Jason.OrderedObject` available, decoding as an ordered object and re-encoding with
-`pretty: true` fixes **effect (1) only**. **Effect (2) (reflow) is untouched** — an
-inline array or a file not already in Jason's own 2-space pretty style would still
-produce a large diff on re-encode, order or no order. Since ISSUE-FIXER's own
-reproduction shows effect (2) contributes real diff lines independently of effect (1)
-(several of the 88 changed lines were pure reflow, not reordering), option (a) does not
-actually deliver "minimal diff" — it delivers "no key reordering," a strictly weaker
-property than the one ISS-0442 is about. It also forces a decode-shape fork:
-`Jason.OrderedObject.decode!/1` yields a distinct struct, not a plain map, so either
-every read site (`autofix_file/1`, and by extension the four `check_h1..h4` hard
-checks if they were ever asked to consume it) needs a second decode shape, or the
-ordered decode is used **only** inside the write path with its own separate
-`Jason.decode/1` call for the value that is already in hand from `autofix_file/1`'s own
-read — itself a second decision with more than one reasonable shape, per ISSUE-FIXER's
-own flag. Not worth it for a partial fix.
+**Rejected anyway, on grounds that don't depend on version availability at all:**
+availability doesn't matter, because ordered decode/encode only ever fixes **effect
+(1)** (key reordering). **Effect (2) (pretty-print reflow) is untouched by key order**:
+`Jason.encode!(data, pretty: true)` always compact-encodes first and then reformats via
+`Jason.Formatter.pretty_print_to_iodata` (confirmed by reading
+`deps/jason/lib/jason.ex:217-226` and `deps/jason/lib/formatter.ex` directly) — that
+reformatting pass reflows indentation, line breaks, and array layout unconditionally,
+regardless of what order the keys came in. An inline array, or a file not already in
+Jason's own 2-space pretty style, still produces a large diff on re-encode whether or
+not key order is preserved. Since ISSUE-FIXER's own reproduction shows effect (2)
+contributes real diff lines independently of effect (1) (several of the 88 changed
+lines were pure reflow, not reordering), option (a) does not actually deliver "minimal
+diff" — it delivers "no key reordering," a strictly weaker property than the one
+ISS-0442 is about. It also forces a decode-shape fork: `Jason.OrderedObject.decode!/1`
+yields a distinct struct, not a plain map, so either every read site (`autofix_file/1`,
+and by extension the four `check_h1..h4` hard checks if they were ever asked to consume
+it) needs a second decode shape, or the ordered decode is used **only** inside the
+write path with its own separate `Jason.decode/1` call for the value that is already in
+hand from `autofix_file/1`'s own read — itself a second decision with more than one
+reasonable shape, per ISSUE-FIXER's own flag. Not worth it for a fix that, even once
+built, would still only be partial.
 
 ### 1.2 Option (c) — leave the rewrite, correct the claim instead
 

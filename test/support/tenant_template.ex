@@ -362,12 +362,21 @@ defmodule Letflow.Test.TenantTemplate do
       # Step 5: sequence re-creation, default repoint, OWNED BY, starting at 1.
       recreate_sequences!(clone_schema)
 
-      # Step 6: seed-data copy (event_type_registry).
+      # Step 6: trigger and trigger-function re-add (design §2.3 step 6,
+      # rework 3 addition -- mandatory, not optional. LIKE ... INCLUDING ALL
+      # does NOT copy triggers; five real triggers backed by three real
+      # functions currently enforce audit-log/artifact-repository
+      # IMMUTABILITY -- a security property, not a cosmetic one). ALL
+      # functions before ANY trigger -- CREATE TRIGGER resolves its EXECUTE
+      # FUNCTION target at creation time.
+      readd_triggers_and_functions!(clone_schema)
+
+      # Step 7: seed-data copy (event_type_registry).
       Repo.query!(
         ~s(INSERT INTO "#{clone_schema}".event_type_registry SELECT * FROM "#{@template_schema}".event_type_registry)
       )
 
-      # Step 7: schema_migrations row copy. schema_migrations itself is the
+      # Step 8: schema_migrations row copy. schema_migrations itself is the
       # migrator's own bookkeeping table (deliberately excluded from
       # expected_tenant_tables/0's list, see that module attribute's own
       # comment) and is never created by the per-table LIKE loop above, so it
@@ -381,7 +390,7 @@ defmodule Letflow.Test.TenantTemplate do
         ~s(INSERT INTO "#{clone_schema}".schema_migrations SELECT * FROM "#{@template_schema}".schema_migrations)
       )
 
-      # Step 8: the caller's Registration row, exactly as
+      # Step 9: the caller's Registration row, exactly as
       # provision_tenant_schema/1 would have produced (plain Repo.insert!, not
       # a call to provision_tenant_schema/1 itself -- design §2.3 step 8).
       now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
@@ -431,46 +440,103 @@ defmodule Letflow.Test.TenantTemplate do
     end)
   end
 
+  # design §2.3 step 6 (rework 3 addition, mandatory -- five real triggers
+  # backed by three real functions currently enforce audit-log/artifact-
+  # repository IMMUTABILITY, a security property LIKE ... INCLUDING ALL does
+  # NOT preserve). Same qualifier-rewrite hazard class already solved for FKs
+  # (§0.1 finding 1) -- pg_get_functiondef/pg_get_triggerdef both emit text
+  # literally qualified to the TEMPLATE schema, UNQUOTED (design §0.5 --
+  # NOT the quoted `"tenant_template".` form; Postgres emits schema
+  # qualifiers unquoted whenever the identifier needs no quoting, which
+  # `tenant_template` never does, so a quoted search pattern would silently
+  # match nothing and the rewrite would become a no-op).
+  #
+  # ORDERING IS LOAD-BEARING: ALL functions across ALL tables are created
+  # before ANY trigger, because CREATE TRIGGER resolves its EXECUTE FUNCTION
+  # target at creation time and fails outright if the function does not yet
+  # exist in the clone's own schema.
+  defp readd_triggers_and_functions!(clone_schema) do
+    %{rows: trigger_rows} =
+      Repo.query!(
+        """
+        SELECT DISTINCT t.tgname, t.oid AS trigger_oid, p.oid AS func_oid
+        FROM pg_trigger t
+        JOIN pg_class rel ON rel.oid = t.tgrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        JOIN pg_proc p ON p.oid = t.tgfoid
+        WHERE nsp.nspname = $1 AND NOT t.tgisinternal
+        """,
+        [@template_schema]
+      )
+
+    # All DISTINCT function OIDs first (a function backing more than one
+    # trigger must be created exactly once), then all triggers.
+    trigger_rows
+    |> Enum.map(fn [_tgname, _trigger_oid, func_oid] -> func_oid end)
+    |> Enum.uniq()
+    |> Enum.each(fn func_oid ->
+      %{rows: [[def_sql]]} =
+        Repo.query!("SELECT pg_get_functiondef($1)", [func_oid])
+
+      rewritten = String.replace(def_sql, ~s(#{@template_schema}.), ~s(#{clone_schema}.))
+      Repo.query!(rewritten)
+    end)
+
+    Enum.each(trigger_rows, fn [_tgname, trigger_oid, _func_oid] ->
+      %{rows: [[def_sql]]} =
+        Repo.query!("SELECT pg_get_triggerdef($1)", [trigger_oid])
+
+      rewritten = String.replace(def_sql, ~s(#{@template_schema}.), ~s(#{clone_schema}.))
+      Repo.query!(rewritten)
+    end)
+  end
+
   # design §0.1 finding 3 (pg_get_serial_sequence is the robust primitive,
   # not pg_depend walking) and §0.1 finding 4 (end-to-end verified: after
   # this fix-up, an insert into the clone advances ONLY the clone's own
   # sequence). Design §2.3 step 5, INV-3: new sequence starts at its default
   # (1), never inherits the template's current last_value.
   defp recreate_sequences!(clone_schema) do
-    Enum.each(Letflow.TenantFixture.expected_tenant_tables(), fn table ->
-      columns = columns_in(@template_schema, table)
+    # Batched into ONE round trip for discovery, rather than one
+    # pg_get_serial_sequence call per table x column pair (39 tables x up to
+    # ~9 columns each = hundreds of round trips, which on a host with real
+    # per-round-trip latency dominates the whole mechanism's cost -- exactly
+    # the round-trip-count lever this issue exists to pull). Still uses
+    # pg_get_serial_sequence as the discovery primitive per design §0.1
+    # finding 3 (the robust one, not pg_depend walking) -- just invoked once,
+    # set-based, over every column in information_schema.columns for this
+    # schema, instead of once per column from Elixir.
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT c.table_name, c.column_name,
+               pg_get_serial_sequence(quote_ident($1) || '.' || quote_ident(c.table_name), c.column_name)
+        FROM information_schema.columns c
+        WHERE c.table_schema = $1
+        """,
+        [@template_schema]
+      )
 
-      Enum.each(columns, fn column ->
-        %{rows: rows} =
-          Repo.query!("SELECT pg_get_serial_sequence($1, $2)", [
-            "#{@template_schema}.#{table}",
-            column
-          ])
+    rows
+    |> Enum.reject(fn [_table, _column, seq] -> is_nil(seq) end)
+    |> Enum.each(fn [table, column, qualified_seq] ->
+      # qualified_seq is schema-qualified, e.g. "tenant_template.events_global_seq_seq"
+      # (double-quoted per Postgres's own rendering when needed). Extract
+      # the LOCAL sequence name so the clone gets a same-named,
+      # clone-local sequence object (design §2.3 step 5).
+      seq_local_name = local_identifier_name(qualified_seq)
 
-        case rows do
-          [[nil]] ->
-            :ok
+      Repo.query!(~s(CREATE SEQUENCE "#{clone_schema}"."#{seq_local_name}"))
 
-          [[qualified_seq]] ->
-            # qualified_seq is schema-qualified, e.g. "tenant_template.events_global_seq_seq"
-            # (double-quoted per Postgres's own rendering when needed). Extract
-            # the LOCAL sequence name so the clone gets a same-named,
-            # clone-local sequence object (design §2.3 step 5).
-            seq_local_name = local_identifier_name(qualified_seq)
+      Repo.query!(
+        ~s(ALTER TABLE "#{clone_schema}"."#{table}" ALTER COLUMN "#{column}" ) <>
+          ~s|SET DEFAULT nextval('"#{clone_schema}"."#{seq_local_name}"')|
+      )
 
-            Repo.query!(~s(CREATE SEQUENCE "#{clone_schema}"."#{seq_local_name}"))
-
-            Repo.query!(
-              ~s(ALTER TABLE "#{clone_schema}"."#{table}" ALTER COLUMN "#{column}" ) <>
-                ~s|SET DEFAULT nextval('"#{clone_schema}"."#{seq_local_name}"')|
-            )
-
-            Repo.query!(
-              ~s(ALTER SEQUENCE "#{clone_schema}"."#{seq_local_name}" OWNED BY ) <>
-                ~s("#{clone_schema}"."#{table}"."#{column}")
-            )
-        end
-      end)
+      Repo.query!(
+        ~s(ALTER SEQUENCE "#{clone_schema}"."#{seq_local_name}" OWNED BY ) <>
+          ~s("#{clone_schema}"."#{table}"."#{column}")
+      )
     end)
   end
 
@@ -849,11 +915,22 @@ defmodule Letflow.Test.TenantTemplate do
     count
   end
 
-  # dimension #8: triggers (count-equal-to-zero on both sides today),
-  # table/column comments (compared, expected NULL/NULL today).
+  # dimension #8: triggers -- REWORK 3 CORRECTION (design §3.2 item 8). No
+  # longer a count-equal-to-zero assertion (that premise was false -- five
+  # real triggers backed by three real functions currently enforce
+  # audit-log/artifact-repository IMMUTABILITY, a security property). Two
+  # separate structural, schema-qualifier-normalized comparisons, per the
+  # design: (1) per-table multiset of pg_get_triggerdef text -- catches a
+  # trigger missing entirely, one whose definition differs, AND one that is
+  # present but still calls the TEMPLATE's own function (the EXECUTE
+  # FUNCTION clause is part of the compared text); (2) per-schema multiset
+  # of pg_get_functiondef text for every function referenced by a
+  # NOT tgisinternal trigger -- catches a function missing, differing in
+  # body, or present but not the one the clone's triggers actually invoke.
+  # Plus table/column comments (compared, expected NULL/NULL today).
   defp check_triggers_comments(reference_schema, candidate_schema) do
-    ref_triggers = trigger_count(reference_schema)
-    cand_triggers = trigger_count(candidate_schema)
+    trigger_diffs = check_trigger_defs(reference_schema, candidate_schema)
+    function_diffs = check_trigger_function_defs(reference_schema, candidate_schema)
 
     common_tables =
       MapSet.intersection(
@@ -875,25 +952,70 @@ defmodule Letflow.Test.TenantTemplate do
         end
       end)
 
-    []
-    |> add_if(
-      ref_triggers != cand_triggers,
-      "trigger count reference=#{ref_triggers} candidate=#{cand_triggers}"
-    )
-    |> Kernel.++(comment_diffs)
+    trigger_diffs ++ function_diffs ++ comment_diffs
   end
 
-  defp trigger_count(schema_name) do
-    %{rows: [[count]]} =
+  defp check_trigger_defs(reference_schema, candidate_schema) do
+    ref = trigger_defs(reference_schema, reference_schema, candidate_schema)
+    cand = trigger_defs(candidate_schema, reference_schema, candidate_schema)
+
+    ref_freq = Enum.frequencies(ref)
+    cand_freq = Enum.frequencies(cand)
+
+    if ref_freq == cand_freq do
+      []
+    else
+      ["triggers: reference=#{inspect(ref_freq)} candidate=#{inspect(cand_freq)}"]
+    end
+  end
+
+  defp trigger_defs(schema_name, reference_schema, candidate_schema) do
+    %{rows: rows} =
       Repo.query!(
-        "SELECT count(*) FROM pg_trigger trg " <>
-          "JOIN pg_class rel ON rel.oid = trg.tgrelid " <>
-          "JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace " <>
-          "WHERE nsp.nspname = $1 AND NOT trg.tgisinternal",
+        """
+        SELECT rel.relname, pg_get_triggerdef(trg.oid)
+        FROM pg_trigger trg
+        JOIN pg_class rel ON rel.oid = trg.tgrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1 AND NOT trg.tgisinternal
+        """,
         [schema_name]
       )
 
-    count
+    Enum.map(rows, fn [table, def_sql] ->
+      {table, normalize(def_sql, reference_schema, candidate_schema)}
+    end)
+  end
+
+  defp check_trigger_function_defs(reference_schema, candidate_schema) do
+    ref = trigger_function_defs(reference_schema, reference_schema, candidate_schema)
+    cand = trigger_function_defs(candidate_schema, reference_schema, candidate_schema)
+
+    ref_freq = Enum.frequencies(ref)
+    cand_freq = Enum.frequencies(cand)
+
+    if ref_freq == cand_freq do
+      []
+    else
+      ["trigger functions: reference=#{inspect(ref_freq)} candidate=#{inspect(cand_freq)}"]
+    end
+  end
+
+  defp trigger_function_defs(schema_name, reference_schema, candidate_schema) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT DISTINCT pg_get_functiondef(p.oid)
+        FROM pg_trigger trg
+        JOIN pg_class rel ON rel.oid = trg.tgrelid
+        JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        JOIN pg_proc p ON p.oid = trg.tgfoid
+        WHERE nsp.nspname = $1 AND NOT trg.tgisinternal
+        """,
+        [schema_name]
+      )
+
+    Enum.map(rows, fn [def_sql] -> normalize(def_sql, reference_schema, candidate_schema) end)
   end
 
   defp table_comment(schema_name, table_name) do

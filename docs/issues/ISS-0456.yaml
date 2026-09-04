@@ -37,4 +37,34 @@ related:
   - ISS-0453
 queue_task_id: 456
 github_issue: 875
-status: open
+status: instrumented
+superseded_by: ISS-0418
+resolved_in_run: WF03-ISS0456-20260904
+resolved_at: "2026-09-04T05:49:02Z"
+resolution: >
+  ISSUE-FIXER (handoffs/WF03-ISS0456-20260904/step-01-issue-fixer-diagnosis.json)
+  independently verified this recurrence's failure signature against ISS-0418's
+  already-diagnosed mechanism rather than accepting this issue's own filing
+  text on trust, per HANDOFF_PROTOCOL.md's "a handoff's factual premises are
+  checkable" rule applied to this issue's own filing.
+
+  Verified by direct CI log inspection (gh run view 33840184735 --log-failed,
+  job 100920721979), not by paraphrase: host_api_write_test.exs:460's failure
+  is byte-for-byte the same file, line number, 180000ms bound, and
+  :proc_lib.sync_start/2-inside-start_instance/2 stack shape as ISS-0418's own
+  recurrence_2026_09_03 entry. plugin_handler_test.exs:474's failure (both
+  elapsed times pinned at the outer 30000ms default) matches ISS-0418's
+  documented "wall-clock-ordering assertion pinned at its configured bound"
+  shape. PR #874's zero-touch claim on lib/letflow/engine/wasm/,
+  test/letflow/engine/wasm/, lib/letflow/engine/lua/ was independently
+  re-checked via `gh pr view 874 --json files` (22 files, all
+  handoffs/docs/application.ex/pollers_breaker -- none under those paths).
+  Cross-checked against ISS-0453 and confirmed NOT a match (different
+  subsystem, different file, different CI stage -- main suite, not the
+  isolated wasm_hang subprocess).
+
+  No new root cause found. This is another recurrence of ISS-0418's own
+  already-load-bearing wasmex native-thread-pool-exhaustion class; ISS-0418's
+  OQ-5 concurrency-cap fix remains the correct and only structural fix. No
+  independent fix was designed or applied for this issue -- see ISS-0418 for
+  the fix that will resolve this class, including this instance.

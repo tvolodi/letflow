@@ -106,6 +106,36 @@ source: >
   `candidate_scope_for_whoever_picks_this_up` (c) / resolution notes),
   docs/issues/ISS-0406.yaml, PR #810/ISS-0404's CI run 33628938373 (sixth
   recurrence, observed live during this filing).
+recurrence_2026_09_04: >
+  ANOTHER RECURRENCE, filed as its own issue (ISS-0456, queue task 456, GH#875)
+  by ELIXIR-DEV mid-run during WF03-ISS0451-20260904's Step Final CI wait, then
+  independently diagnosed and folded back into this issue by
+  WF03-ISS0456-20260904 (handoffs/WF03-ISS0456-20260904/step-01-issue-fixer-diagnosis.json)
+  rather than treated as a fresh root cause -- ISS-0456 is now `status:
+  instrumented`, `superseded_by: ISS-0418`.
+
+  PR #874's push-event backend-gate run (33840184735, job 100920721979) failed
+  the isolated `mix test --only wasm_hang` stage on commit f7858821, while the
+  identical commit passed cleanly on the concurrent pull_request-event run
+  (33840208029) -- same nondeterministic-under-contention shape as every prior
+  recurrence. Two failures:
+    - test/letflow/engine/wasm/plugin_handler_test.exs:474 (REQ-170 AC4
+      wall-clock-ordering assertion) -- both measured elapsed times pinned at
+      the outer 30000ms default, the same "assertion pinned at its configured
+      bound" shape as prior recurrences.
+    - test/letflow/engine/wasm/host_api_write_test.exs:460 -- ExUnit.TimeoutError
+      after 180000ms in start_instance/2, stack via :proc_lib.sync_start/2 --
+      BYTE-FOR-BYTE identical (same file, same line, same bound, same stack
+      shape) to this issue's own recurrence_2026_09_03 entry above.
+  PR #874's diff independently confirmed (via `gh pr view 874 --json files`) to
+  touch zero files under lib/letflow/engine/wasm/, test/letflow/engine/wasm/,
+  or lib/letflow/engine/lua/ -- structurally cleared, cannot be causal.
+
+  Taking the recurrence count (per this issue's own running tally: six at
+  filing, "nine-plus" as of recurrence_2026_09_03) to TEN-PLUS. OQ-5's
+  operator-configurable concurrency cap remains undesigned and unimplemented;
+  each further recurrence is additional evidence it is load-bearing, not new
+  information about the mechanism itself.
 queue_task_id: 418
 github_issue: 816
 status: open

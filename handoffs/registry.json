@@ -4546,7 +4546,7 @@
       "issue_id": "ISS-0441",
       "queue_task_id": 441,
       "github_issue_number": 851,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/migration/decisions/",
         ".github/workflows/ci.yml",
@@ -4554,8 +4554,8 @@
         "GitHub repo branch protection settings"
       ],
       "started_at": "2026-09-04T14:58:30Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T16:45:00Z",
+      "released_lock": true,
       "last_known_step": "REVIEWER (Step 3) PASSED -- independently re-verified live branch protection via `gh api repos/tvolodi/letflow/branches/main/protection` (matches design/handoff exactly), independently confirmed PR #887 genuinely merged with consistent real commit/check-run evidence, re-validated ci.yml's YAML after the comment additions, confirmed GIT_MERGE.md's new three-path Step 8 is unambiguous, confirmed no scope creep (only the four named docs plus this run's own handoff/registry artifacts touched), confirmed SECURITY-REVIEWER correctly not needed (no tenant-data path touched), and judged the deferred 'succeeds when green' half of AC3 sufficient to close via this run's own real closing PR rather than needing a further scratch PR. Routed to ORCH for Step Final (real PR merge).",
       "note": "WF-03 issue-resolving run for ISS-0441: main has zero branch protection, so every hard gate this pipeline relies on is enforced only by the merging agent's own judgment. Requires a real decision record (docs/migration/decisions/), not just a config change, per the issue's own AC1."
     },

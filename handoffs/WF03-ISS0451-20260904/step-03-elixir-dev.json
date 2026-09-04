@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-03-elixir-dev.json",
   "created_at": "2026-09-04T03:22:00Z",
   "started_at": "2026-09-04T03:40:29Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T03:44:34Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -47,18 +47,18 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Applied the rewritten design doc section 5 (REWORK ITERATION 3) to test/letflow/supervisor/pollers_test.exs's AC4 test: removed the test's own competing Supervisor.start_child/2 call entirely, replaced the manual restart-then-assert_receive-:DOWN structure with a single Supervisor.terminate_child/2 trigger followed by a poll (renamed wait_for_new_pollers_pid/2 to wait_for_breaker_restart/2) that waits for BOTH a new, non-nil Pollers pid AND PollersBreaker.breaker_state() == :closed, then kept the original Repo/Infrastructure pid-unchanged assertions and added the new breaker_state() == :closed confirming assertion (design step 8). No changes to lib/letflow/supervisor/pollers_breaker.ex or lib/letflow/application.ex, confirmed unnecessary by the design and by this run's git diff --stat (only the test file changed). One deviation from the design's literal 50ms-sleep poll cadence was required and is flagged here: force_poller_crash stays true through the wait, so the newly-breaker-restarted Poller's zero-delay first tick re-exhausts Pollers' 5/60 budget and trips the breaker to :open within roughly the same tens-of-milliseconds order of magnitude the design's own section 6.2 arithmetic predicts (~24-96ms per full cycle) -- a 50ms-interval poll missed that :closed window on the first live run (1 failure, new_pollers_pid asserted != nil but was nil after the breaker had already opened). Replaced the sleeping poll with a tight busy-poll (no Process.sleep, attempts_left bound raised to 2_000 as an iteration ceiling rather than a wall-clock timeout) so the loop samples densely enough to reliably land inside the brief :closed window; this is a test-only polling-granularity fix, not a further design change, and does not touch the design's stated observables or assertions.",
+    "artifacts_out": ["test/letflow/supervisor/pollers_test.exs"],
     "issues": [],
     "git_evidence": {
-      "branch_name": "",
-      "commit_sha_list": [],
-      "remote_branch": "",
+      "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
+      "commit_sha_list": ["PLACEHOLDER"],
+      "remote_branch": "fix/ISS-0451-persistent-poller-crash-budget-20260904",
       "push_status": "ok",
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to SECURITY-REVIEWER (supervision-tree/boot-sequence change, not a tenant-data path per se, but in scope per this handoff's original task instruction) per WF-03 step 2b/2c; production code (pollers_breaker.ex, application.ex) unchanged from the prior iteration, so this hand-off's only new surface is the AC4 test rewrite."
   },
   "gate_history": [
     {
@@ -68,6 +68,14 @@
       "summary": "Production code (pollers_breaker.ex, application.ex) implemented correctly per the then-current design, compiled and formatted clean. But applying design section 5's THEN-guidance to pollers_test.exs's existing AC4 test surfaced a genuine, previously-unflagged race: PollersBreaker and the test process both react to the same terminate_child-induced :DOWN and race to restart Pollers -- reproduced deterministically at seed 0, flaky (2/5) otherwise.",
       "issues": ["BLOCKER: two-restarter race in the AC4 test's adaptation, full detail retained in git history of this file (commit at 2026-09-04T03:30:42Z) -- routed to CODE-DESIGNER, resolved via a redesigned section 5 (single breaker-mediated flow, no test-issued competing start_child/2 call), independently re-verified PASS by CODE-DESIGN-VALIDATOR."],
       "next_action": "Rework: apply the redesigned section 5 procedure to pollers_test.exs, re-verify pollers_test.exs/infrastructure_test.exs/http_test.exs all pass reliably."
+    },
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-04T03:44:34Z",
+      "status": "PASS",
+      "summary": "Applied the redesigned section 5 procedure (REWORK ITERATION 3, single breaker-mediated flow, no test-issued competing start_child/2) to pollers_test.exs's AC4 test. mix compile --warnings-as-errors and mix format --check-formatted both clean. pollers_test.exs run individually across 25 distinct --seed values (0-24): 4/4 tests passed every run (100/100 total). Combined pollers_test.exs + infrastructure_test.exs + http_test.exs run across seeds 0, 1, 2 and once with the default seed: 10/10 passed every run. One test-only polling-cadence fix beyond the design's literal text was required (50ms sleep interval was too coarse to reliably observe the brief :closed window before the persistent-crash poller re-trips the breaker; replaced with a tight busy-poll) -- flagged in result.summary, no change to result observables/assertions or to production code.",
+      "issues": [],
+      "next_action": "Route to SECURITY-REVIEWER."
     }
   ],
   "rework_count": 1,

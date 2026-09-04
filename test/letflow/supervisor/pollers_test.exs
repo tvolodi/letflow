@@ -102,85 +102,38 @@ defmodule Letflow.Supervisor.PollersTest do
       Application.put_env(:letflow, :start_scheduler, true)
       Application.put_env(:letflow, :force_poller_crash, true)
 
-      # This terminate_child call, only, is what makes
-      # Letflow.Supervisor.Pollers' own init/1 re-read the two env overrides
-      # above (it does not, by itself, exercise the crash-loop property
-      # under test -- terminate_child/2 always produces a `:DOWN` for
-      # pollers_pid_before regardless of whether a crash-loop would ever
-      # happen, so asserting on THAT `:DOWN` would prove nothing). The pid
-      # that comes back up AFTER this is the one whose SUBSEQUENT,
-      # AUTOMATIC exit -- once the crash-looping Letflow.Scheduler.Poller
-      # exhausts Letflow.Supervisor.Pollers' own max_restarts: 5,
-      # max_seconds: 60 budget -- is the actual AC4 property this test
-      # asserts.
-      #
-      # GENUINE ADDITIONAL DEFECT found while implementing this design,
-      # reported per this step's own task instructions rather than silently
-      # worked around (see the ELIXIR-DEV handoff's result.issues for the
-      # full report): design doc §5's guidance for this call site ("update
-      # `restart_pollers!/0`-style call sites to `start_child/2`... the
-      # existing test's own crash-loop procedure must now expect
-      # `Letflow.Supervisor.Pollers` to be restarted via `PollersBreaker`'s
-      # own `:DOWN` handler... instead of asserting a bare top-level
-      # automatic restart occurred") does not actually resolve to a
-      # deterministic test once `Letflow.Supervisor.PollersBreaker` is
-      # live: `PollersBreaker` ALSO monitors `Letflow.Supervisor.Pollers`
-      # and reacts to the SAME `terminate_child/2`-induced `:DOWN` this
-      # test relies on to force a re-read of `init/1`'s env overrides --
-      # concurrently with whatever this test process does next. Two
-      # observed failure modes, both empirically reproduced during this
-      # implementation:
-      #   (a) if the test also calls `start_child/2` itself here (the
-      #       design's literal text), it races the breaker's own
-      #       `start_child/2` call for the identical child spec --
-      #       whichever call loses gets `{:error, {:already_started, pid}}`
-      #       instead of `{:ok, pid}`, a `MatchError` against the design's
-      #       own literal `{:ok, pid} = ...` pattern.
-      #   (b) if the test instead waits for the breaker's own restart
-      #       (removing its own competing start_child/2 call), the
-      #       Letflow.Scheduler.Poller's zero-delay first tick means the
-      #       newly-breaker-restarted Pollers can already be crash-looping,
-      #       inside the breaker's own 2-second observation window, before
-      #       this test process is even scheduled to run its next line --
-      #       there is no synchronous window left, unlike the ORIGINAL
-      #       top-level-auto-restart mechanism this test was written
-      #       against, for this test process to clear :force_poller_crash
-      #       before a second exhaustion cycle occurs. Empirically, the
-      #       breaker was observed reaching :open (consecutive_trips: 2)
-      #       before the test's own post-wait assertions ran, so
-      #       Letflow.Supervisor.Pollers had already gone back to `nil`.
-      # Left as the design's literally-specified start_child/2 call below
-      # (failure mode (a)) rather than the (b) workaround, since (a) is a
-      # more direct illustration of the race and matches the design's own
-      # written instruction; TEST-DESIGNER/REVIEWER should treat this
-      # specific test as NOT reliably green until this is resolved at the
-      # design level (see result.issues) -- this is flagged here rather
-      # than silently patched into a passing-but-not-representative shape.
+      # ISS-0451 rework iteration 3 (design doc
+      # iss0451-poller-crash-budget-isolation.md §5, "REWORK ITERATION 3"):
+      # single trigger, no test-issued restart call. Once
+      # Letflow.Supervisor.PollersBreaker exists, it is the SOLE restart
+      # authority for Letflow.Supervisor.Pollers from the very first :DOWN
+      # onward -- a test that also issues its own start_child/2 call here
+      # competes with the one actor that legitimately owns all such
+      # restarts (empirically reproduced in this rework's prior iteration:
+      # a MatchError race on {:error, {:already_started, pid}}, or a lost
+      # synchronous window before the breaker's own observation timer).
+      # This terminate_child/2 call alone produces exactly the :DOWN
+      # PollersBreaker needs to perform its own first, :closed-state
+      # restart -- the same trigger mechanism this design's own §6.2
+      # regression test uses.
       :ok = Supervisor.terminate_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)
 
-      {:ok, pollers_pid_after_manual_restart} =
-        Supervisor.start_child(
-          Letflow.Supervisor,
-          Supervisor.child_spec(Letflow.Supervisor.Pollers, restart: :temporary)
-        )
+      # Wait for the breaker's own restart, not a bare pid-appears poll:
+      # poll PollersBreaker.breaker_state/0 together with
+      # Process.whereis/1 until a new, non-nil pid distinct from
+      # pollers_pid_before appears AND breaker_state() == :closed --
+      # confirming the breaker's own observation timer has not yet seen a
+      # 2nd :DOWN (i.e. this is the single-shot case, not yet tripped).
+      new_pollers_pid = wait_for_breaker_restart(pollers_pid_before)
+      assert new_pollers_pid != nil
+      assert new_pollers_pid != pollers_pid_before
 
-      refute pollers_pid_after_manual_restart == pollers_pid_before
-
-      ref = Process.monitor(pollers_pid_after_manual_restart)
-
-      assert_receive {:DOWN, ^ref, :process, ^pollers_pid_after_manual_restart, _reason}, 5_000
-
-      # GENUINE TIMING HAZARD, found empirically while mutation-testing this
-      # test (not anticipated by the design doc), UPDATED for ISS-0451
-      # (design iss0451-poller-crash-budget-isolation.md §5): the top level
-      # no longer auto-restarts Letflow.Supervisor.Pollers at all (its child
-      # spec is now restart: :temporary) -- Letflow.Supervisor.PollersBreaker
-      # is now the sole process that restarts it. Clearing both here,
-      # immediately after observing the first :DOWN and before checking
-      # anything else, is retained from the pre-ISS-0451 version of this
-      # test but no longer has a clear theory of why it should reliably win
-      # any particular race now that the breaker (not the top level) is the
-      # actor being raced -- see the defect note above.
+      # Clear the fault before a possible SECOND exhaustion cycle,
+      # immediately after step 4's wait succeeds -- preserves the existing
+      # test's "clear the fault promptly so only ONE exhaustion cycle
+      # occurs" intent (REQ-219 AC4's single-shot scenario), now correctly
+      # synchronized against the ONE actor (PollersBreaker) that could
+      # otherwise trip a 2nd time.
       Application.delete_env(:letflow, :force_poller_crash)
       Application.put_env(:letflow, :start_scheduler, false)
 
@@ -190,21 +143,17 @@ defmodule Letflow.Supervisor.PollersTest do
       assert Process.whereis(Letflow.Repo) == repo_pid_before
       assert Process.whereis(Letflow.Supervisor.Infrastructure) == infrastructure_pid_before
 
-      # Letflow.Supervisor.Pollers WAS restarted, not merely left down -- a
-      # THIRD, distinct pid. ISS-0451 (design doc §5): this restart is now
-      # issued by Letflow.Supervisor.PollersBreaker's own explicit
-      # Supervisor.start_child/2 call (its :closed-state handler reacting to
-      # the first :DOWN), not by the top-level Letflow.Supervisor's former
-      # automatic restart -- that automatic path no longer exists once
-      # Pollers' child spec is restart: :temporary. The observable end state
-      # (Pollers restarted once, running again) is unchanged from before;
-      # only the mechanism producing it moved. The breaker's own handler
-      # runs asynchronously relative to this test process, so a short poll
-      # (design doc §5 step 4's own guidance) rather than a single immediate
-      # check.
-      new_pollers_pid = wait_for_new_pollers_pid(pollers_pid_after_manual_restart)
-      assert new_pollers_pid != nil
-      assert new_pollers_pid != pollers_pid_after_manual_restart
+      # Letflow.Supervisor.Pollers WAS restarted, not merely left down --
+      # restated against the breaker-restarted pid captured above (no
+      # longer "a third pid distinct from a test-restarted second pid" --
+      # there is no test-restarted second pid any more, only the
+      # breaker's one restart).
+      assert Process.whereis(Letflow.Supervisor.Pollers) == new_pollers_pid
+
+      # ISS-0451-motivated confirming assertion: the single-shot fault did
+      # NOT trip the breaker, i.e. this really was REQ-219 AC4's
+      # single-shot scenario and not an accidental 2nd trip.
+      assert Letflow.Supervisor.PollersBreaker.breaker_state() == :closed
     end
   end
 
@@ -242,21 +191,29 @@ defmodule Letflow.Supervisor.PollersTest do
     end
   end
 
-  # Polls (up to ~2 seconds wall clock, well under any real hang scenario)
-  # for Process.whereis(Letflow.Supervisor.Pollers) to become a pid other
-  # than `stale_pid` -- the top-level Letflow.Supervisor's own restart of
-  # its exited child is asynchronous relative to this test process.
-  defp wait_for_new_pollers_pid(stale_pid, attempts_left \\ 40) do
-    case Process.whereis(Letflow.Supervisor.Pollers) do
-      pid when not is_nil(pid) and pid != stale_pid ->
+  # ISS-0451 rework iteration 3 (design doc §5 step 4): polls (up to ~2
+  # seconds wall clock, comfortably inside PollersBreaker's own
+  # @observation_window_ms) for BOTH Process.whereis(Letflow.Supervisor.Pollers)
+  # to become a pid other than `stale_pid` AND
+  # PollersBreaker.breaker_state() == :closed at the same moment --
+  # PollersBreaker's own :closed-state restart (Supervisor.start_child/2)
+  # is asynchronous relative to this test process, and requiring
+  # breaker_state() == :closed alongside the new pid confirms this
+  # observation lands on the single-shot restart, not a moment after a
+  # 2nd :DOWN has already flipped the breaker toward :open.
+  defp wait_for_breaker_restart(stale_pid, attempts_left \\ 2_000) do
+    pid = Process.whereis(Letflow.Supervisor.Pollers)
+    state = Letflow.Supervisor.PollersBreaker.breaker_state()
+
+    cond do
+      not is_nil(pid) and pid != stale_pid and state == :closed ->
         pid
 
-      _ when attempts_left > 0 ->
-        Process.sleep(50)
-        wait_for_new_pollers_pid(stale_pid, attempts_left - 1)
+      attempts_left > 0 ->
+        wait_for_breaker_restart(stale_pid, attempts_left - 1)
 
-      other ->
-        other
+      true ->
+        pid
     end
   end
 

@@ -1,0 +1,52 @@
+{
+  "handoff_id": "2b3c4d5e-6f7a-4b2c-9d3e-4f5a6b7c8d9e",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "2b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0430-20260905/step-02b-code-design-validator.json",
+  "created_at": "2026-09-04T22:59:53Z",
+  "started_at": "2026-09-04T22:59:53Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "lib/letflow/design/iss0430-notify-listen-decision.md",
+      "handoffs/WF03-ISS0430-20260905/step-01-issue-fixer-diagnose.json",
+      "lib/letflow/application.ex",
+      "lib/letflow/supervisor/pollers.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "docs/migration/decisions/0003-ecto-schema-strategy.md",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's design artefact for ISS-0430, lib/letflow/design/iss0430-notify-listen-decision.md. Read docs/issues/ISS-0430.yaml in full for the 8 acceptance criteria and 5 named design questions. Independently re-derive your verdict from the artefact itself and from the real source files it cites -- do NOT accept CODE-DESIGNER's own claims about supervision-tree ordering or poller mechanics without checking them yourself against lib/letflow/application.ex, lib/letflow/supervisor/pollers.ex, and lib/letflow/supervisor/infrastructure.ex directly (per core-directives.md's 'Every producing step has a validating step' -- a validator that only reads the producer's own summary has not validated anything). Specifically verify: (1) the claimed placement (new child of Infrastructure, immediately after Repo/Ecto.Migrator, before Oidcc.ProviderConfiguration.Worker) does not contradict ISS-0429's or ISS-0451's already-documented ordering/restart-intensity guarantees -- read those modules' own moduledocs yourself; (2) the tenant-isolation mechanism (Question 2's 'option (a), opaque routing id, receiver re-derives its own :prefix scope') is reasoned concretely against decision 0003 Dimension B's actual mechanism, not asserted; check that the per-tenant sequential-id enumeration argument (schema-per-tenant means disjoint per-schema id sequences) is factually sound given Letflow's actual schema-per-tenant migration strategy; (3) all 8 ACs are individually satisfied -- go through each AC from ISS-0430.yaml by name and state a verdict against it; (4) no implementation code (.ex bodies, runnable migrations) is present -- the Question 3 schema sketch and Question 1's illustrative wrapper description are the two places most likely to have drifted into implementation, check both specifically; (5) the design's own self-reported correction (Question 5's ISS-0031 mis-citation) is itself accurate -- briefly confirm docs/issues/ISS-0031.yaml really is unrelated, as claimed. This is a hard gate: if any AC is unmet or any claim about existing source doesn't check out, FAIL with the specific gap named (per HANDOFF_PROTOCOL.md's validator-fail worked example), not a general impression.",
+    "acceptance_criteria": [
+      "Each of ISS-0430's 8 acceptance criteria individually verdicted (met/not met) against the artefact",
+      "Supervision-tree placement claim independently checked against lib/letflow/application.ex and the two supervisor modules' own moduledocs, not merely trusted",
+      "Tenant-isolation mechanism (Question 2) independently checked for concrete reasoning against decision 0003, not accepted on the producer's assertion alone",
+      "Confirms no implementation code (.ex bodies, runnable migration DDL) is present in the artefact",
+      "Confirms the Question 5 ISS-0031 self-correction is itself accurate",
+      "PASS or FAIL stated with specific evidence either way; on FAIL, next_action names CODE-DESIGNER for rework with the exact gaps"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0438-20260904/step-00-git-setup.json",
   "created_at": "2026-09-04T15:31:00Z",
   "started_at": "2026-09-04T15:31:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T15:31:45Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -30,10 +30,16 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Only one git worktree entry present, so the standard (non-worktree) GIT_SETUP.md procedure applied. git checkout main + git pull --ff-only origin main exited 0 (already up to date; local main was ahead of origin by ORCH's own dispatch commit b7d3f557, no divergence). No stale feature/WF03-ISS0438-20260904 branch existed locally, so step 4 was a no-op. Created feature/WF03-ISS0438-20260904 from main via git checkout -b, verified with git branch --show-current, and pushed it with git push -u origin feature/WF03-ISS0438-20260904 as the coordination signal -- exited 0, upstream tracking set.",
+    "artifacts_out": ["branch: feature/WF03-ISS0438-20260904"],
     "issues": [],
-    "next_action": ""
+    "next_action": "ORCH routes to next step per active workflow (WF-03 architecture-decision run for ISS-0438 / queue task 438 / GH#845)",
+    "git_evidence": {
+      "commit_sha_list": ["b7d3f5573e5f4c9c696ca1141d89acbe802385b5"],
+      "branch_name": "feature/WF03-ISS0438-20260904",
+      "remote_branch": "origin/feature/WF03-ISS0438-20260904",
+      "push_status": "success"
+    }
   },
   "rework_count": 0,
   "max_rework": 3

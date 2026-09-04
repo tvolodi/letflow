@@ -3322,31 +3322,35 @@
       "requirement_id": "REQ-189",
       "queue_task_id": 362,
       "github_issue_number": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/migration/decisions/0016-secrets-storage-backend.md"
       ],
       "started_at": "2026-08-30T04:35:43Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T00:00:09Z",
+      "released_lock": true,
       "last_known_step": "Step 1b (CODE-DESIGN-VALIDATOR) COMPLETED PASS -- all 8 acceptance criteria met, no implementation code, scope confirmed docs-only. Ad-hoc REVIEWER gate COMPLETED PASS (387a7610) -- SS B/SS F divergences from decision 0003 Decision B and REQ-181 both GRANTED. Requirement has no application-executable surface (decision-record only) -- Step 3 scope test routes directly to Step 5 (RELEASE-VALIDATOR), skipping 2a/2b/2c/2d/3b/4 per WF-02 Step 3's documented scope test.",
-      "note": "Design-only requirement, no lib/ or priv/repo/migrations/ code -- decision + design artefact, mirroring REQ-148/149/150/185's shape, except this one DOES produce a docs/migration/decisions/*.md record per its own title. CODE-DESIGNER's artefact settles 7 sub-questions (storage backend, master key, table placement, reference syntax, crypto, rotation, webhook HMAC key ownership) but explicitly flagged, in its own 'Open questions / gating' section, TWO divergences needing REVIEWER sign-off before the record is settled: (SS B) global secrets table vs. decision 0003 Decision B's per-tenant-schema general rule, and (SS F) superseding REQ-181's hashed-secret-only webhook_subscriptions.secret column with secret_ref/secret_key_id. CODE-DESIGNER did not fabricate a sign-off, per CLAUDE.md's don't-silently-re-decide rule. ORCHESTRATOR.md has no named step for 'design-decision divergence from a prior decision record' -- applying the closest matching rule: REVIEWER's own charter (.claude/agents/reviewer.md) already names 'internal consistency with docs/migration/decisions/ records' as in scope, so REVIEWER is dispatched for this specific adjudication, running in parallel with (not gated by) the normal Step 1b CODE-DESIGN-VALIDATOR gate since the two checks are disjoint (completeness/no-code/unambiguous vs. decision-consistency/divergence sign-off). REQ-190 and REQ-183 remain blocked until BOTH return PASS and, if REVIEWER requires changes, until the sign-off (or a revised decision) is recorded in 0016 itself."
+      "note": "Design-only requirement, no lib/ or priv/repo/migrations/ code -- decision + design artefact, mirroring REQ-148/149/150/185's shape, except this one DOES produce a docs/migration/decisions/*.md record per its own title. CODE-DESIGNER's artefact settles 7 sub-questions (storage backend, master key, table placement, reference syntax, crypto, rotation, webhook HMAC key ownership) but explicitly flagged, in its own 'Open questions / gating' section, TWO divergences needing REVIEWER sign-off before the record is settled: (SS B) global secrets table vs. decision 0003 Decision B's per-tenant-schema general rule, and (SS F) superseding REQ-181's hashed-secret-only webhook_subscriptions.secret column with secret_ref/secret_key_id. CODE-DESIGNER did not fabricate a sign-off, per CLAUDE.md's don't-silently-re-decide rule. ORCHESTRATOR.md has no named step for 'design-decision divergence from a prior decision record' -- applying the closest matching rule: REVIEWER's own charter (.claude/agents/reviewer.md) already names 'internal consistency with docs/migration/decisions/ records' as in scope, so REVIEWER is dispatched for this specific adjudication, running in parallel with (not gated by) the normal Step 1b CODE-DESIGN-VALIDATOR gate since the two checks are disjoint (completeness/no-code/unambiguous vs. decision-consistency/divergence sign-off). REQ-190 and REQ-183 remain blocked until BOTH return PASS and, if REVIEWER requires changes, until the sign-off (or a revised decision) is recorded in 0016 itself.",
+      "stale_lock_swept_by": "ADHOC-ADR0017-20260904",
+      "stale_lock_note": "Lock released by ADHOC-ADR0017-20260904 stale-lock sweep. REQ-189 is status: done in docs/requirements.yaml and its owned module docs/migration/decisions/0016-secrets-storage-backend.md exists on main; the run finished but never wrote its release. No work re-dispatched."
     },
     {
       "run_id": "WF03-ISS0377-20260830",
       "requirement_id": "ISS-0377",
       "queue_task_id": 377,
       "github_issue_number": 730,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/engine/wasm/plugin_handler_test.exs",
         "scripts/test_parallel.sh"
       ],
       "started_at": "2026-08-30T01:20:54Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T00:00:09Z",
+      "released_lock": true,
       "last_known_step": "Step 00 (ORCH bookkeeping to main)",
-      "note": "Windows-specific test-environment defect filed by a sibling session's RELEASE-VALIDATOR: a Unix-hardcoded wasmex .so/.rs assertion, plus MIX_OS_CONCURRENCY_LOCK hard-link contention between parallel test partitions. This sandbox is Linux; diagnosis via source reading, not literal Windows repro."
+      "note": "Windows-specific test-environment defect filed by a sibling session's RELEASE-VALIDATOR: a Unix-hardcoded wasmex .so/.rs assertion, plus MIX_OS_CONCURRENCY_LOCK hard-link contention between parallel test partitions. This sandbox is Linux; diagnosis via source reading, not literal Windows repro.",
+      "stale_lock_swept_by": "ADHOC-ADR0017-20260904",
+      "stale_lock_note": "Lock released by ADHOC-ADR0017-20260904 stale-lock sweep. docs/issues/ISS-0377.yaml is status: resolved and its fix merged as 14584ea3 (PR #732); the run finished but never wrote its release. No work re-dispatched."
     },
     {
       "run_id": "WF02-REQ191-20260830",

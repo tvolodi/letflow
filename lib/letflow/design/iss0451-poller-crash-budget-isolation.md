@@ -50,6 +50,38 @@ restart call in this design (the breaker's `:closed`-branch and
 (both corrections), and the re-derived §3.6, §3.7, §4, §5, and §6.2 step 6
 below.
 
+**REWORK ITERATION 3 (2026-09-04, FINAL):** the design passed
+CODE-DESIGN-VALIDATOR's gate clean at iteration 2, but ELIXIR-DEV's
+implementation of iteration 2's §5 guidance for adapting the EXISTING
+`pollers_test.exs` AC4 test surfaced a genuine, previously-unflagged race
+(`handoffs/WF03-ISS0451-20260904/step-03-elixir-dev.json`
+`result.issues[0]`, full empirical detail there): once `PollersBreaker` is
+live, it and the test process both react to the SAME
+`terminate_child`-induced `:DOWN` and race to restart Pollers, producing
+either a `MatchError` (both call `start_child/2` for the same spec; the
+loser gets `{:error, {:already_started, pid}}`) or a lost synchronous
+window (Letflow.Scheduler.Poller's zero-delay first tick lets the
+breaker-restarted Pollers crash-loop and trip the breaker to `:open`
+before the test's own next line runs). **Root cause: the original AC4
+test's structure — the test process itself performs ONE manual
+synchronous restart, then a SEPARATE automatic top-level restart is what
+gets exercised by the crash-loop — described the PRE-breaker world, where
+the top level's automatic restart-on-exit was a distinct actor from
+anything the test did. That structure no longer maps onto the real
+system: `PollersBreaker` is the SOLE restart authority for Pollers from
+the very first exit onward (§3.4a), so there is no longer a "test does one
+restart, then a separate mechanism does the next" story to preserve —
+attempting to keep that shape means fighting the one actor that now
+legitimately owns every restart.** This revision replaces §5's guidance:
+rather than adapting the test's old manual-restart-then-observe structure,
+the existing AC4 test is redefined to drive the ENTIRE scenario as a
+single breaker-mediated flow (ELIXIR-DEV's own named option 2, chosen over
+their option 1 — see §5's new text for why), matching this design's own
+§6.2 regression-test shape. No changes to `lib/letflow/supervisor/pollers_breaker.ex`
+or `lib/letflow/application.ex` are required — both are confirmed correct
+and complete as implemented; the fix is scoped entirely to the EXISTING
+test's procedure. See the revised §5 below.
+
 ## 0. Inputs read in full before this design
 
 * `handoffs/WF03-ISS0451-20260904/step-01-issue-fixer-diagnosis.json`
@@ -869,55 +901,159 @@ occurrence. **Once Pollers' child spec is genuinely `restart: :temporary`
 (confirmed live in this rework — see §3.4a's probe, which shows the top
 level does NOT bring the child back), that specific assertion's premise
 (the top level restarts it automatically) is no longer true, and this
-existing test will fail as written** unless updated — this re-confirms
-what the prior (broken-syntax) iteration claimed, but this time the
-premise the claim rests on (genuine `:temporary`) is itself verified, not
-assumed.
+existing test will fail as written** unless updated.
 
-**Second, previously-unflagged consequence discovered while re-deriving
-this section for this rework: the existing test's OWN `restart_pollers!/0`
-helper (`pollers_test.exs` lines 217-221) breaks too, independent of the
-breaker's own `:DOWN`-handler mechanism, and for the identical root
-cause.** That helper does `Supervisor.terminate_child(Letflow.Supervisor,
-Letflow.Supervisor.Pollers)` immediately followed by `{:ok, _pid} =
-Supervisor.restart_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)`.
-Live-verified during this rework (§3.4a's "SECOND CORRECTION" probe,
-extended): `terminate_child/2` on a `:temporary` child ALSO deletes its
-spec immediately (not just an automatic exit does) — so the helper's own
-subsequent `restart_child/2` call returns `{:error, :not_found}`, and the
-helper's own `{:ok, _pid} = ...` match crashes with a `MatchError`. This
-helper is used both inline in the AC4 test body (lines 116-119, the same
-manual-restart-to-make-`init/1`-re-read-env-overrides step) and in that
-test's own `on_exit` teardown (line 99) — **both call sites need
-`restart_pollers!/0` itself updated to use `Supervisor.start_child(Letflow.
-Supervisor, Supervisor.child_spec(Letflow.Supervisor.Pollers, restart:
-:temporary))` in place of the `terminate_child`-then-`restart_child` pair**,
-mirroring the exact fix this design applies to `PollersBreaker` itself
-(§3.4a). Flagged explicitly here, separate from the `:DOWN`-handler
-consequence above, because it is a distinct call site that would otherwise
-crash both the AC4 test body and its teardown even after the test's own
-assertions are updated to expect the breaker's mechanism.
+**REWORK ITERATION 3 — the guidance below REPLACES iteration 2's own text
+(which is superseded, not merely amended, because iteration 2's approach —
+"adapt the test's existing manual-restart-then-observe structure to expect
+the breaker instead of the top level" — was tried literally by ELIXIR-DEV
+and does not produce a deterministic test; see
+`handoffs/WF03-ISS0451-20260904/step-03-elixir-dev.json` `result.issues[0]`
+for the full empirical detail, summarized here).**
 
-This design requires ELIXIR-DEV/TEST-DESIGNER to update the existing test
-so it reflects the new mechanism rather than leaving it red, on BOTH
-counts above: the test's own crash-loop procedure (already an
-`async: false` test) must now expect `Letflow.Supervisor.Pollers` to be
-restarted via `PollersBreaker`'s own `:DOWN` handler (i.e. wait for
-`PollersBreaker`'s explicit `start_child/2` call to land, the same "new
-pid appears" polling pattern already in `wait_for_new_pollers_pid/2`, just
-now attributing that restart correctly to the breaker rather than to the
-top level) instead of asserting a bare top-level automatic restart
-occurred; AND `restart_pollers!/0` itself must be updated to the
-`start_child/2`-based form so it keeps working as a helper at all (used in
-teardown regardless of which mechanism produced the restart under test).
-**This is not a weakening of AC4** — the same observable property (Pollers
-restarted once after exhausting its own budget; Infrastructure/Http/Repo
-untouched) is still asserted and still holds; only the CAUSE named in the
-test's own assertions/comments, and the OTP call the shared helper issues,
-need to change to match the new, airtight mechanism. Flagged here as a
-required, in-scope update (not a "nice to have") so TEST-DESIGNER does not
-treat `pollers_test.exs` as out of scope because this design's own new
-test file lives elsewhere.
+**Why iteration 2's approach cannot be patched, only replaced.** The
+original (pre-ISS-0451) AC4 test's structure has the TEST PROCESS itself
+perform ONE manual, synchronous restart (`terminate_child` +
+`restart_child`, "so `init/1` re-reads the env overrides"), and then
+separately exercises the ACTUAL property under test: that supervisor's own
+SUBSEQUENT, AUTOMATIC crash-loop-triggered exit only touches
+`Letflow.Supervisor.Pollers`, not Infrastructure/Http/Repo. That shape —
+"the test does one restart itself, a genuinely separate mechanism does the
+next one" — was a true description of the PRE-breaker world: the test
+process and the top-level `Letflow.Supervisor`'s own automatic
+restart-on-exit were two distinct, non-competing actors, because the test
+process's restart happened first and completed synchronously before any
+crash-loop began. **Once `PollersBreaker` exists, that shape is no longer
+true of the real system: `PollersBreaker` is the SOLE restart authority
+for `Letflow.Supervisor.Pollers` from the very first exit onward (§3.4a),
+including the exact "first restart after `terminate_child`" moment the
+test's own manual step targets.** There is no longer a first restart that
+belongs to the test process and a separate later one that belongs to
+"the automatic mechanism" — both belong to the breaker now, and a test
+that tries to perform one of them itself is competing with the one actor
+that legitimately owns all of them. This is a structural mismatch, not a
+timing bug to smooth over: ELIXIR-DEV's two empirically-reproduced failure
+modes (the `{:already_started, pid}` race and the lost synchronous window
+before the breaker's own 2-second observation timer) are two different
+SYMPTOMS of this one root cause, and no amount of retry/backoff/wait
+tuning in the test removes the root cause, only relocates the symptom.
+
+**Chosen fix: redefine the AC4 test's own procedure to stop performing a
+manual pre-restart at all, and instead drive the entire scenario as a
+single breaker-mediated flow — matching the shape of this design's own new
+regression test (§6.2).** This is ELIXIR-DEV's own named option 2. Chosen
+over their option 1 (a test-only synchronization hook added to
+`PollersBreaker`, double-gated like `pollers_init_probe`/
+`force_poller_crash`) for two reasons: (a) option 1 would still be
+building a mechanism whose entire purpose is to make the breaker
+temporarily step aside so the test can perform a restart that, in the real
+system, the breaker always performs itself — the resulting test would
+verify a synthetic path that never occurs outside the test, not the actual
+always-on breaker-mediated path; (b) option 1 requires new production
+code in `pollers_breaker.ex` (a coordination hook + call sites to check
+it) to preserve a test structure that stopped describing the real
+mechanism the moment the breaker went in, whereas option 2 requires zero
+production-code changes and directly exercises the real, always-on path.
+**Explicit confirmation, since the rework task requires it: this fix
+requires NO addition to `lib/letflow/supervisor/pollers_breaker.ex`'s
+design or to `lib/letflow/application.ex`. Both remain exactly as
+iteration 2 specified and as ELIXIR-DEV already implemented them — the
+gap was entirely in how the EXISTING test's procedure was adapted, not in
+the production mechanism.**
+
+**Revised AC4 test procedure (replaces the existing test body's manual-
+restart step and the assertions that followed it; the test's PURPOSE —
+prove a Pollers crash-loop restarts only Pollers, leaving
+Repo/Infrastructure/Http untouched, and that Pollers itself comes back —
+is unchanged, only the mechanics of driving and observing it change):**
+
+1. Capture `repo_pid_before`, `infrastructure_pid_before`, and (unchanged
+   from the current test) `pollers_pid_before = Process.whereis(Letflow.Supervisor.Pollers)`.
+2. Set `Application.put_env(:letflow, :start_scheduler, true)` and
+   `Application.put_env(:letflow, :force_poller_crash, true)` — unchanged.
+3. **Single trigger, no test-issued restart call:** `:ok =
+   Supervisor.terminate_child(Letflow.Supervisor, Letflow.Supervisor.Pollers)`
+   only. Do NOT follow it with a test-issued `start_child/2` call (this is
+   the one line iteration 2's guidance added and this revision removes).
+   This `terminate_child/2` call alone produces exactly the `:DOWN`
+   `PollersBreaker` needs to perform its OWN first, `:closed`-state
+   restart (§3.4/§3.6's "1st `:DOWN`" branch) — the same call this
+   design's own §6.2 step 3 already uses for its new regression test, so
+   this AC4 test now shares its trigger mechanism with §6.2 exactly,
+   rather than diverging from it.
+4. **Wait for the breaker's restart, not a bare pid-appears poll:** poll
+   `Letflow.Supervisor.PollersBreaker.breaker_state()` (§3.5's public
+   accessor) together with `Process.whereis(Letflow.Supervisor.Pollers)`
+   until a new, non-nil pid distinct from `pollers_pid_before` appears
+   AND `breaker_state() == :closed` (confirming the breaker's own
+   observation timer has not yet seen a 2nd `:DOWN` — i.e. this is the
+   single-shot case, not yet tripped). A short poll loop mirroring the
+   existing `wait_for_new_pollers_pid/2` helper's shape is sufficient
+   (e.g. up to ~2 seconds, comfortably inside the breaker's own
+   `@observation_window_ms`); this replaces the old
+   `assert_receive {:DOWN, ...}` step, since there is no longer a
+   test-owned monitor ref to receive a `:DOWN` for (the test issued no
+   restart of its own to monitor the result of).
+5. **Clear the fault before the SECOND exhaustion cycle, exactly as
+   before, but now racing only the breaker's single observation
+   timer, not a second restarter:** `Application.delete_env(:letflow,
+   :force_poller_crash)` and `Application.put_env(:letflow,
+   :start_scheduler, false)`, immediately after step 4's wait succeeds.
+   This preserves the existing test's own "clear the fault promptly so
+   only ONE exhaustion cycle occurs" intent (REQ-219 AC4's single-shot
+   scenario) — now correctly synchronized against the ONE actor
+   (`PollersBreaker`) that could otherwise trip a 2nd time, rather than
+   against an assumed-but-uncontested top-level auto-restart.
+6. Unchanged: `assert Process.whereis(Letflow.Repo) == repo_pid_before`
+   and `assert Process.whereis(Letflow.Supervisor.Infrastructure) ==
+   infrastructure_pid_before` — AC4's core isolation property.
+7. **New pid assertion, restated against the breaker-restarted pid from
+   step 4** (no longer "a third pid distinct from a test-restarted
+   second pid" — there is no test-restarted second pid any more, only
+   the breaker's one restart): `new_pollers_pid = Process.whereis(Letflow.Supervisor.Pollers)`,
+   `assert new_pollers_pid != nil`, `assert new_pollers_pid != pollers_pid_before`.
+8. **New, ISS-0451-motivated confirming assertion, cheap to add and
+   directly rules out the failure this whole rework exists to prevent:**
+   `assert Letflow.Supervisor.PollersBreaker.breaker_state() == :closed`
+   — confirms the single-shot fault did NOT trip the breaker, i.e. this
+   really was REQ-219 AC4's single-shot scenario and not an accidental
+   2nd trip.
+9. `on_exit` teardown: unchanged in intent (delete `:force_poller_crash`,
+   restore `:start_scheduler`), but its own `restart_pollers!/0` call
+   (used to leave a clean, running `Letflow.Supervisor.Pollers` for later
+   tests) keeps the `start_child/2`-based fix already applied to that
+   helper (§5's "Second, previously-unflagged consequence" text below,
+   unaffected by this rework) — teardown is not part of the race this
+   rework fixes, since by teardown time the fault is already cleared and
+   the breaker is `:closed`, so a teardown-time `{:error,
+   {:already_started, pid}}` tolerance (already present in the helper) is
+   sufficient there, unchanged.
+
+**Why this is not a weakening of AC4.** The same observable property —
+a Pollers crash-loop restarts (only) Pollers once, leaving
+Repo/Infrastructure/Http untouched, and Pollers comes back running — is
+still asserted and still holds, with one assertion ADDED (step 8) that
+the codebase did not have before. What changes is only which actor
+performs the restart the test observes (the breaker, always, matching the
+real system) and how the test waits for it (the breaker's own
+`breaker_state()` accessor plus a pid-appears poll, instead of a
+test-issued `start_child/2` call plus a monitor `:DOWN`) — the same class
+of change already applied, without controversy, to `restart_pollers!/0`
+in the "Second, previously-unflagged consequence" text immediately below.
+
+**Second, previously-unflagged consequence, unaffected by this rework's
+§5 rewrite above and restated for completeness: the existing test's OWN
+`restart_pollers!/0` helper (`pollers_test.exs`, current form) also needed
+its `terminate_child`-then-`restart_child` pair corrected to
+`terminate_child`-then-`start_child/2`, since a `:temporary` child's spec
+is deleted immediately on either an automatic exit or a `terminate_child/2`
+call.** ELIXIR-DEV already applied this fix (visible in the current
+`restart_pollers!/0`, which also tolerates the breaker racing IT for the
+identical spec via `{:error, {:already_started, pid}}` — correct as
+implemented, and this rework does not change it). This helper is used only
+in `on_exit` teardown after this rework's §5 rewrite above (no longer
+inline in the AC4 test body, since step 3 above no longer calls it there),
+so its own race-tolerance is sufficient for the reduced role it now plays.
 
 ## 6. What TEST-DESIGNER must write — exact test mechanism and observables
 

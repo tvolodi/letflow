@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0451-20260904/step-02-code-designer.json",
   "created_at": "2026-09-04T02:50:00Z",
   "started_at": "2026-09-04T03:32:34Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T03:34:30Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": "S6",
@@ -42,10 +42,12 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "Resolved the iteration-3 rework: chose ELIXIR-DEV's own named option 2 (redefine the EXISTING pollers_test.exs AC4 test's procedure to drive the entire scenario as a single breaker-mediated flow, matching this design's own §6.2 regression-test shape) over their option 1 (a test-only synchronization hook added to PollersBreaker). Root cause of the race: the original AC4 test's structure -- test process performs one manual synchronous restart, then a SEPARATE automatic top-level restart is what gets exercised -- correctly described the PRE-breaker world (two non-competing actors), but no longer describes the real system once PollersBreaker became the SOLE restart authority for Pollers from the very first exit onward (design §3.4a): there is no longer a 'test does one restart, a separate mechanism does the next' story to preserve, so any attempt to keep that shape competes with the one actor that now legitimately owns every restart. Option 1 was rejected because it would add production code (a coordination hook in pollers_breaker.ex) whose only purpose is to make the breaker step aside so the test can perform a restart that, in the real system, the breaker always performs itself -- verifying a synthetic path that never occurs outside the test. Option 2 requires zero production-code changes and exercises the real, always-on path directly. Rewrote lib/letflow/design/iss0451-poller-crash-budget-isolation.md's rework-iteration preamble (new ITERATION 3 block) and §5 (full replacement of the AC4-adaptation guidance: removed the test-issued start_child/2 call entirely; the test now triggers via terminate_child/2 alone -- the same single trigger §6.2's own new regression test uses -- then waits for PollersBreaker's own :closed-state restart via breaker_state()==:closed plus a pid-appears poll, clears the fault, and asserts Repo/Infrastructure untouched, a new distinct Pollers pid, AND a new confirming assertion that breaker_state() stayed :closed (proving the single-shot fault never tripped the breaker) -- one assertion added beyond the original AC4 test, not a weakening). Explicitly confirmed and stated in the design doc: this fix requires NO addition to lib/letflow/supervisor/pollers_breaker.ex or lib/letflow/application.ex -- both remain exactly as ELIXIR-DEV already implemented them; the gap was entirely in the existing test's adaptation, not the production mechanism. No implementation code (.ex function bodies) added -- the revised §5 specifies the test's procedure as a numbered list of calls/assertions/observables (signatures and OTP call names only), same convention as every other section of this design doc; the actual test-file edit (pollers_test.exs) is left for TEST-DESIGNER/ELIXIR-DEV's next step per this handoff's own scope.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to ELIXIR-DEV (or TEST-DESIGNER, per ORCH's judgement of WF-03's normal step ordering) to apply the revised design doc §5 procedure to test/letflow/supervisor/pollers_test.exs's AC4 test body (remove the test-issued Supervisor.start_child/2 call and the assert_receive :DOWN step; replace with a breaker_state()/pid-appears poll per §5's numbered steps 3-8), then re-run test/letflow/supervisor/pollers_test.exs, infrastructure_test.exs, and http_test.exs to confirm all pass deterministically (multiple --seed-varied runs, given the race this rework closes was itself seed-sensitive) before proceeding to SECURITY-REVIEWER/REVIEWER."
   },
   "gate_history": [
     {

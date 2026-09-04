@@ -107,7 +107,107 @@ residue.
    correctly rejected. Both hazards ISSUE-FIXER found are confirmed fixable
    by the mechanism this design specifies.
 
-## 1. Scope and non-goals
+### 0.2 Rework 1 — systematic catalog walk (CODE-DESIGN-VALIDATOR gate, rework 1 of 3)
+
+CODE-DESIGN-VALIDATOR's Step 2b gate FAILED the first draft on two findings,
+both independently re-verified below before being folded into §3.2 as new/
+corrected dimensions #3 (contype enumeration) and #9 (reloptions): (1) §3.2
+dimension #3's contype grouping asserted `{c, f, p, u}` was "the full set
+Postgres defines," which is false — `x` (exclusion) and `t` (constraint
+trigger) also exist; (2) table-level storage parameters (`pg_class.reloptions`)
+were silently absent from the parity check, unlike triggers/comments/
+collations/privileges, which were each explicitly ruled out with a reason —
+an asymmetry, not a considered omission.
+
+Rather than patch only those two and stop, this rework re-ran the same
+question the gate itself used — "what else could a degraded clone differ in
+that this check wouldn't see?" — systematically against the real Postgres
+catalogs, not from memory, per the rework instruction. Method: built two
+throwaway schemas (`probe_tpl`/`probe_clone`) in `letflow_dev`, this time
+deliberately provisioning EVERY catalog-visible table/column/constraint
+property this design's reasoning could plausibly miss (an exclusion
+constraint, a `WITH (fillfactor=..., autovacuum_...)` storage option, a
+per-column `SET STATISTICS`, a `GENERATED ... STORED` column, a `CREATE
+STATISTICS` extended-statistics object, a real `CREATE CONSTRAINT TRIGGER`,
+table/column comments), cloned via the same `LIKE ... INCLUDING ALL` the
+design mechanism uses, and queried `pg_class`, `pg_constraint`,
+`pg_attribute`, `pg_trigger`, `pg_statistic_ext`, and
+`information_schema.columns` on both sides side by side. Both probe schemas
+(plus a second, minimal pair used to isolate the exclusion-constraint
+finding from extension noise) were dropped (`DROP SCHEMA ... CASCADE`)
+before this rework was written — verified via `\dn` afterward, only
+`public` remains.
+
+Findings, numbered for cross-reference from §3.2:
+
+1. **Exclusion constraints (`contype='x'`) ARE copied by `LIKE ...
+   INCLUDING ALL`** — confirmed on both the full probe and a second, minimal
+   isolation probe (a bare table with only an `EXCLUDE USING gist (...)`
+   constraint): the clone carries an identical `x`-type constraint with the
+   identical definition text and even the identical (un-renamed) name. This
+   is the CORRECT, expected behavior — exclusion constraints are
+   index-backed, and `INCLUDING INDEXES`/`INCLUDING CONSTRAINTS` (both part
+   of `INCLUDING ALL`) carry them along the same mechanism that carries
+   unique indexes. The validator's finding that dimension #3's contype
+   enumeration was incomplete is correct and is fixed (§3.2 dimension #3
+   now lists all six); the mechanism (§2.3) needs no new step for exclusion
+   constraints specifically, since none is missing from the clone — the gap
+   was only that the CHECK never looked.
+2. **Table-level `reloptions` are NOT copied** — reproduces the validator's
+   own finding exactly: a template table `WITH (fillfactor=70,
+   autovacuum_vacuum_scale_factor=0.05)` clones to a table with empty/NULL
+   `reloptions`. Confirmed via direct `pg_class.reloptions` comparison.
+   Folded into §3.2 as new dimension #9.
+3. **Per-column statistics target (`attstattarget`) is NOT copied** — a
+   column explicitly set to `STATISTICS 500` in the template clones to
+   `attstattarget = -1` (Postgres's "use the system default" sentinel) in
+   the clone. A gap of the same shape and severity class as `reloptions`
+   (#2 above), found by this rework's own systematic pass, not by the
+   validator. Folded into §3.2 as new dimension #10.
+4. **Extended statistics objects (`pg_statistic_ext`, created via `CREATE
+   STATISTICS`) ARE copied**, with an auto-renamed identifier — the same
+   renaming behavior already documented for indexes (§0.1 finding 2):
+   `events_stat` on the template became `events3_parent_id_total_stored_stat`
+   on a `LIKE`-cloned sibling table in the probe. Correctly copied by the
+   mechanism; the gap (same shape as finding 1) was that the parity check
+   never looked. Folded into §3.2 as new dimension #11, with the same
+   name-independent structural-comparison treatment already used for indexes.
+5. **Row security, partitioning, tablespace, ownership all confirmed
+   not-applicable under this codebase's current migrations** — `pg_class`
+   queried directly for `relrowsecurity`, `relforcerowsecurity`, `relkind`,
+   `relispartition`, `reltablespace`, `relowner` on both template and clone;
+   all identical and all at their "nothing special" defaults, consistent
+   with a `grep` across every migration finding no `ENABLE ROW LEVEL
+   SECURITY`, no `PARTITION BY`, no `TABLESPACE`. Folded into §3.2 as new
+   dimension #12, an explicit rule-out rather than a silent one — matching
+   the rigor of the existing triggers/comments/collations/privileges
+   rule-outs the validator asked this design to extend, not abandon.
+6. **Generated columns (`attgenerated = 's'`, `GENERATED ALWAYS ... STORED`)
+   behave correctly under `LIKE ... INCLUDING ALL`** — the clone's
+   generated column carries the identical `attgenerated` flag and
+   (confirmed separately, not shown above for brevity) the identical
+   generation expression via `pg_get_expr` on `pg_attrdef`. Already covered
+   by dimension #2's column comparison (generation expression is a form of
+   column default in Postgres's own catalog representation) — no new
+   dimension needed; recorded here so the walk shows this case was
+   considered, not skipped.
+7. **Constraint triggers (`contype='t'`) are real and are NOT copied** —
+   see §3.2 dimension #3's own REWORK NOTE for the full finding and the
+   correction it makes to this design's own prior (wrong) claim about how
+   constraint triggers are created.
+
+No further gap was found after this pass across `pg_class`, `pg_constraint`,
+`pg_attribute`, `pg_trigger`, `pg_statistic_ext`, and
+`information_schema.columns` — the six catalogs most likely to carry a
+table-shape property `LIKE ... INCLUDING ALL` could plausibly mishandle.
+`pg_policy` (row security policies) was checked implicitly via
+`relrowsecurity` being false everywhere (a false `relrowsecurity` means no
+policy can be in effect regardless of `pg_policy` contents, so no separate
+`pg_policy` query was needed once finding 5 established RLS is off
+everywhere). Sequences and their ownership (§0.1 findings 3-4, dimension
+#5) and indexes (§0.1 finding 2, dimension #4) were already covered by the
+original draft and re-confirmed still correct by the validator, not
+re-probed in this rework.
 
 **In scope:** how `test/support/tenant_fixture.ex`'s `provisioned_tenant!/1`
 materializes a tenant schema for tests, backed by a template-clone fast path
@@ -359,8 +459,11 @@ than name-based per §0.1 finding 2.
 
 Comparison dimensions, each normalized to strip the schema-name qualifier
 before comparing (so `"tenant_template".parent` and `"tenant_abc123...".parent`
-compare equal on structure) — this is the full enumerated list the dispatch
-asked for, not "and anything else":
+compare equal on structure) — twelve dimensions, this is the full enumerated
+list the dispatch asked for, not "and anything else." (Grown from eight to
+twelve in rework 1, per §0.2's systematic catalog walk — dimensions #9-#12
+are new; #3 and item 8's triggers sub-bullet were corrected, not just
+supplemented, per §0.2 findings 1 and 7.)
 
 1. **Table set** — `information_schema.tables` table names, set-equal, both
    directions. (Reuses `TenantFixture`'s existing table-enumeration query
@@ -371,17 +474,59 @@ asked for, not "and anything else":
    each side's own schema name), ordinal position. Source:
    `information_schema.columns`.
 3. **Constraint kinds and definitions** — `pg_constraint` grouped by
-   `contype` (`c` check, `f` foreign key, `p` primary key, `u` unique — the
-   full set Postgres defines), count-equal per kind, AND
-   `pg_get_constraintdef(oid)` textually equal per constraint **after**
-   schema-qualifier normalization on both sides — catches both "FK missing
-   entirely" (§0 hazard 1) and "FK present but pointing at the wrong schema"
-   (§0.1 finding 1, the fix's own failure mode if implemented wrong).
-   Compared as a **multiset of normalized definitions per table**, not by
-   `conname` (per §0.1 finding 2 — Postgres's own default-generated FK names
-   are not guaranteed to match across independently-created objects even
-   when this design does preserve the template's `conname` verbatim for FKs
-   — belt and suspenders).
+   `contype` over the **full six-member set Postgres actually defines**:
+   `c` check, `f` foreign key, `p` primary key, `u` unique, `x` exclusion,
+   `t` constraint trigger (see the REWORK NOTE below — a prior draft of this
+   design asserted `{c, f, p, u}` was the full set, which was factually
+   wrong on two counts, caught by CODE-DESIGN-VALIDATOR and independently
+   re-verified here). Count-equal per kind, AND `pg_get_constraintdef(oid)`
+   textually equal per constraint **after** schema-qualifier normalization
+   on both sides — catches both "FK missing entirely" (§0 hazard 1) and "FK
+   present but pointing at the wrong schema" (§0.1 finding 1, the fix's own
+   failure mode if implemented wrong). Compared as a **multiset of
+   normalized definitions per table**, not by `conname` (per §0.1 finding 2
+   — Postgres's own default-generated FK names are not guaranteed to match
+   across independently-created objects even when this design does preserve
+   the template's `conname` verbatim for FKs — belt and suspenders).
+
+   **`x` (exclusion constraints).** Verified directly (see §0.2 finding 1):
+   `LIKE ... INCLUDING ALL` DOES copy exclusion constraints — they are
+   index-backed (implemented via the same GiST/GIN index machinery `INCLUDING
+   INDEXES` already carries along, same as unique indexes), unlike FK
+   constraints, which are purely relational and never copied. So the clone
+   MECHANISM (§2.3) needs no new step for exclusion constraints — but until
+   this rework, the PARITY CHECK never inspected `contype='x'` at all, so a
+   future migration introducing one, and a future regression in Postgres's
+   own `LIKE` behavior or in this mechanism's assumptions about it, could
+   both go undetected. Included in the grouped-count-and-definition
+   comparison above now; no separate step needed since the general
+   `pg_get_constraintdef`-based comparison already handles arbitrary
+   constraint definition text, exclusion constraints included.
+
+   **`t` (constraint triggers).** REWORK NOTE, stated plainly per this
+   role's own instruction not to bury a correction: an earlier draft of this
+   design (§3.2 item 8, the triggers sub-bullet) asserted "Postgres
+   constraint triggers aren't created via plain `CREATE TRIGGER`" as the
+   reason to treat `t` as not-really-a-`CREATE TRIGGER`-shaped concern. That
+   was WRONG, and it was wrong even though the eventual conclusion (no
+   constraint trigger exists in this codebase's migrations today) still
+   holds. Verified directly this rework: `CREATE CONSTRAINT TRIGGER ...`
+   (the standard SQL syntax for a deferrable, per-row trigger tied to a
+   constraint) does produce a `pg_constraint` row with `contype = 't'`, and
+   `LIKE ... INCLUDING ALL` does NOT copy it (confirmed: a `LIKE`-cloned
+   table sibling to the one carrying the constraint trigger has zero
+   `pg_trigger` rows) — triggers, constraint or plain, are the documented
+   `INCLUDING ALL` exception (§3.2 item 8's triggers sub-bullet already
+   states this correctly for plain triggers; it now applies identically to
+   constraint triggers, for the same reason and via the same mechanism).
+   `grep`-verified again this rework: no migration under `priv/repo/migrations/`
+   contains `CREATE TRIGGER` or `CREATE CONSTRAINT TRIGGER` in any `execute/1`
+   call. So: `contype = 't'` is folded into the same count-equal-to-zero
+   assertion §3.2 item 8 already makes for triggers generally (not a new,
+   separate check) — it is genuinely the same property (a trigger-backed
+   constraint is still a trigger, absent from every current migration, not
+   copied by `LIKE`), correctly ruled in-scope-but-currently-zero rather than
+   silently omitted.
 4. **Indexes** — `pg_indexes.indexdef`, schema-qualifier-normalized, compared
    as a **multiset of normalized definitions per table**, explicitly NOT by
    `indexname` (§0.1 finding 2 — verified empirically that `LIKE INCLUDING
@@ -426,17 +571,23 @@ asked for, not "and anything else":
 8. **Privileges, comments, triggers, collations — explicitly checked and
    found not-applicable, not skipped by omission** (the dispatch's own
    instruction: enumerate and say how each is verified, not hand-wave):
-   - *Triggers*: `pg_trigger` queried for both schemas; the real tenant
-     schema has zero triggers today (grepped `priv/repo/migrations/` for
-     `execute("CREATE TRIGGER"` — no hits), so this check asserts
+   - *Triggers, including constraint triggers*: `pg_trigger` queried for both
+     schemas (this single query covers plain triggers AND constraint
+     triggers — a constraint trigger is still a `pg_trigger` row, additionally
+     represented by a `contype='t'` `pg_constraint` row per dimension #3
+     above); the real tenant schema has zero triggers of either kind today
+     (grepped `priv/repo/migrations/` for `CREATE TRIGGER` and
+     `CREATE CONSTRAINT TRIGGER` inside any `execute/1` call — no hits, both
+     re-verified this rework), so this check asserts
      **count-equal-to-zero on both sides**, not skipped — if a future
-     migration adds a trigger, `LIKE INCLUDING ALL` does NOT copy triggers
+     migration adds either kind, `LIKE INCLUDING ALL` does NOT copy it
      (Postgres documents `INCLUDING ALL` as covering
-     comments/constraints/defaults/identity/indexes/statistics/storage — 
-     triggers are a **documented exception**, not merely untested here),
-     so this check would then need a real trigger-recreation step
-     symmetric to §2.3 step 4's FK handling — flagged as Open Question OQ-2
-     below rather than silently assumed safe forever.
+     comments/constraints/defaults/identity/indexes/statistics/storage —
+     triggers are a **documented exception**, verified directly this rework
+     for both plain and constraint triggers, not merely untested here), so
+     this check would then need a real trigger-recreation step symmetric to
+     §2.3 step 4's FK handling — flagged as Open Question OQ-2 below rather
+     than silently assumed safe forever.
    - *Comments* (`obj_description`/`col_description`): no migration in this
      codebase issues `COMMENT ON` (grepped, no hits), and `INCLUDING ALL`'s
      `INCLUDING COMMENTS` component would copy them if present — the parity
@@ -461,6 +612,90 @@ asked for, not "and anything else":
      inherit that role's ownership. Documented here so a future reader does
      not wonder whether this was overlooked.
 
+9. **Table-level storage parameters (`pg_class.reloptions`)** — REWORK
+   ADDITION, per CODE-DESIGN-VALIDATOR's MAJOR finding, independently
+   re-verified this rework (§0.2 finding 2): `fillfactor`,
+   `autovacuum_vacuum_scale_factor`, and every other `WITH (...)` table
+   storage option are visible in `pg_class.reloptions` and are **silently
+   NOT copied** by `LIKE ... INCLUDING ALL` — confirmed directly: a template
+   table created `WITH (fillfactor=70, autovacuum_vacuum_scale_factor=0.05)`
+   clones to a table whose `reloptions` is `NULL`/empty. This is a real
+   dimension `INCLUDING STORAGE` does NOT cover the way its name might
+   suggest — Postgres's own docs describe `INCLUDING STORAGE` as copying
+   per-column `SET STORAGE` (`attstorage`: `plain`/`external`/`extended`/
+   `main`), a column-level attribute, not table-level `reloptions` at all;
+   these are two different "storage" concepts sharing a confusingly similar
+   name, and this design's prior draft conflated them by omission. New
+   check: `pg_class.reloptions` (an array) compared for set-equality per
+   table between reference and candidate, no schema-qualifier normalization
+   needed (reloptions values like `fillfactor=70` never embed a schema
+   name). **Currently expected empty on both sides** — grepped
+   `priv/repo/migrations/` for `:options` (the Ecto migration DSL's
+   `create table(..., options: ...)` mechanism for `WITH (...)`) and for a
+   raw `execute("... WITH (..."` — no hits in any tenant-scoped migration —
+   so this is, today, a count-equal-to-zero-options assertion, same shape as
+   triggers/comments, not evidence of current divergence. If a future
+   migration adds table storage options, this check catches a clone that
+   silently drops them, which the mechanism (§2.3) would then need a new
+   step for (`ALTER TABLE ... SET (...)` after the `LIKE`, sourced from the
+   template's own `reloptions`) — flagged as Open Question OQ-5 below,
+   parallel to OQ-2's triggers gap, rather than designed against a
+   currently-nonexistent case.
+
+10. **Per-column statistics target (`pg_attribute.attstattarget`)** —
+    REWORK ADDITION, found during this rework's own systematic catalog walk
+    (§0.2 finding 3), not flagged by the validator but the same class of
+    gap: `ALTER TABLE ... ALTER COLUMN ... SET STATISTICS <n>` overrides the
+    planner's sampling depth for that column, stored in
+    `pg_attribute.attstattarget`. Verified directly: a template column set
+    to `STATISTICS 500` clones to `-1` (the "use the default" sentinel) —
+    `LIKE ... INCLUDING ALL` does NOT copy this, confirmed empirically
+    (Postgres's own `INCLUDING ALL` documentation does not list statistics
+    targets among what it copies, consistent with what was observed). New
+    check: `attstattarget` compared per column between reference and
+    candidate. Currently expected `-1`/`-1` (default/default) on both sides
+    — grepped `priv/repo/migrations/` for `SET STATISTICS` — no hits in any
+    tenant-scoped migration, so today this is a defaults-match-by-construction
+    assertion, not a currently-open gap; a future migration tuning a
+    column's statistics target would be caught rather than silently dropped
+    by a clone.
+
+11. **Extended statistics objects (`pg_statistic_ext`, `CREATE STATISTICS`)**
+    — REWORK ADDITION, found during this rework's own systematic catalog
+    walk (§0.2 finding 4): the OPPOSITE direction of gap from #9/#10 above —
+    verified directly that `LIKE ... INCLUDING ALL` DOES copy an extended
+    statistics object (`CREATE STATISTICS ... (dependencies) ON a, b FROM t`)
+    to the clone, with a renamed identifier (same auto-naming behavior
+    already documented for indexes in §0.1 finding 2 / dimension #4 above —
+    `events_stat` became `events3_parent_id_total_stored_stat` in the probe).
+    Since none currently exist (grepped `priv/repo/migrations/` for
+    `CREATE STATISTICS` and for Ecto's migration-DSL equivalent if any — no
+    hits), this is a count-equal-to-zero rule-out today, listed explicitly
+    rather than omitted, consistent with how indexes' own renaming is
+    already handled: if a future migration adds one, the parity check would
+    need to compare `pg_statistic_ext` definitions structurally (via
+    `pg_get_statisticsobjdef(oid)`, schema-qualifier-normalized, compared as
+    a per-table multiset — the identical shape already used for indexes and
+    constraints) rather than by name, for the same reason indexes must not
+    be compared by name.
+
+12. **Row-level security, partitioning, tablespace, table persistence,
+    ownership — checked and found not-applicable, not omitted.** Verified
+    directly (§0.2 finding 5): `pg_class.relrowsecurity`/
+    `relforcerowsecurity` are `false`/`false` on every tenant-scoped table
+    today (no migration issues `ENABLE ROW LEVEL SECURITY` — grepped, no
+    hits); `relkind` is `r` (ordinary table, never `p` partitioned) and
+    `relispartition` is `false` on every table (no migration issues
+    `PARTITION BY` — grepped, no hits); `reltablespace` is `0` (default
+    tablespace) on both template and clone tables alike, since neither this
+    design nor any existing migration ever issues `TABLESPACE`; `relowner`
+    is the single configured `letflow` role on both sides, for the same
+    reason privileges are ruled out above. None of these differ between a
+    migration-built schema and a cloned one under this codebase's current
+    migration set, and none of the four is plausibly test-relevant given
+    that current set — not included as an active check, listed here so a
+    reader can see they were considered rather than missed.
+
 ### 3.3 Comparison mechanics (structural, not name-based)
 
 Every dimension above that compares strings containing a schema name (FK
@@ -483,7 +718,7 @@ test code:
    `replay_migrations/2` production path (a genuine migration-built
    reference), then calls
    `assert_clone_parity!("tenant_template", <that reference schema>)`
-   restricted to dimensions #1-6 and #8 (NOT #7, since a fresh
+   restricted to dimensions #1-6 and #8-#12 (NOT #7, since a fresh
    `replay_migrations/2` call and the template's own build both seed
    `event_type_registry` identically by construction, but row-for-row
    `event_type_registry` equality is still a meaningful assertion and IS
@@ -497,7 +732,7 @@ test code:
    (`test/support/tenant_template_test.exs`, TEST-DESIGNER's artefact) that
    clones a throwaway tenant and calls
    `assert_clone_parity!("tenant_template", <clone's own schema_name>)`
-   across ALL dimensions #1-8. This is the test that stays green build after
+   across ALL twelve dimensions #1-12. This is the test that stays green build after
    build and is what "constraint parity must be ASSERTED, not assumed" (the
    issue's own words) cashes out to as an actual, permanent, always-run
    regression test — not a one-time manual check this design doc merely
@@ -702,7 +937,25 @@ explicitly rather than silently assumed resolvable.
   by `Letflow.ServiceCatalog`'s cross-schema referential guard) must never
   enumerate `"tenant_template"` as a tenant schema — true by construction
   since that function only reads `Registration` rows and none is ever
-  inserted for the template.
+  inserted for the template. **Consequence, stated explicitly (added this
+  rework, per gate feedback):** `Letflow.TenantSchemaReaper.sweep_orphans/2`
+  (`test/support/tenant_schema_reaper.ex`, the module responsible for
+  sweeping orphaned tenant schemas at suite boundaries) selects its
+  candidates via `SELECT id, tenant_id, schema_name FROM tenant_schemas
+  WHERE provisioned_at < $1` — verified by reading the function directly —
+  i.e. it drops only schemas named by rows in the SAME `tenant_schemas`
+  table `Registration`/`list_registrations/0` reads, never by walking
+  Postgres's own `pg_namespace` catalog for schema names directly. Since
+  INV-4 guarantees no `tenant_schemas` row is ever inserted for
+  `"tenant_template"`, the reaper's query can never return it as a
+  candidate — the reaper is STRUCTURALLY incapable of ever selecting the
+  template schema for a drop, with no special-casing, denylist, or name
+  check required anywhere in the reaper's own logic. The safety comes for
+  free from INV-4 holding, not from any reaper-side awareness of the
+  template's existence. This is worth stating plainly rather than leaving
+  implicit, since a future reader auditing "what stops the reaper from
+  eating the template mid-run" would otherwise have to re-derive it from
+  INV-4 and the reaper's own query shape independently.
 - **INV-5 (parity is asserted every run, not just at template build).**
   `assert_clone_parity!/2`'s clone-vs-template use site (§3.4 item 2) is a
   permanent test, not a one-time manual verification — it runs every time
@@ -761,6 +1014,19 @@ explicitly rather than silently assumed resolvable.
   `Ecto.Migrator.run/4` call (§6) — explicitly NOT decided here, left to a
   future issue/requirement if the win is judged worth it once this design's
   real-world speedup is measured (§10).
+- **OQ-5 (added rework 1).** §3.2 dimensions #9 (`reloptions`) and #10
+  (`attstattarget`) are currently zero-vs-zero rule-outs (no tenant-scoped
+  migration sets either today), so §2.3's clone mechanism has no
+  corresponding recreation step. If a future migration introduces a table
+  storage option or a per-column statistics-target override, the parity
+  check (§3.2) will catch the resulting clone/template divergence
+  immediately and loudly (per §5's no-silent-fallback stance) — but the
+  clone mechanism itself would then need two new steps symmetric to §2.3
+  step 4's FK handling: `ALTER TABLE ... SET (<reloptions from template>)`
+  and `ALTER TABLE ... ALTER COLUMN ... SET STATISTICS <n>` sourced from the
+  template's own `pg_attribute.attstattarget`. Not designed here since
+  nothing exists today to design a concrete recreation step against — same
+  posture as OQ-2's triggers gap, and named explicitly for the same reason.
 
 ## 10. Expected speedup — stated honestly
 

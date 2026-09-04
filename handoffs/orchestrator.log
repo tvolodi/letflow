@@ -1723,3 +1723,5 @@
 2026-09-04T15:37:37Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-01b-code-design-validator | ORCH -> CODE-DESIGN-VALIDATOR | PASS
 2026-09-04T15:39:52Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-02-req-analyst | ORCH -> REQ-ANALYST | PASS
 2026-09-04T15:45:36Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-02b-req-validator | ORCH -> REQ-VALIDATOR | PASS
+2026-09-04T15:48:16Z | STEP_FAIL | WF-03 | WF03-ISS0438-20260904/step-02b-req-validator | REQ-VALIDATOR -> ORCH | FAIL -- REQ-225 depends_on incorrectly includes REQ-203 (not used anywhere in REQ-225's own scope); all other 6 checks and all other 6 requirements passed. Rework iteration 1 dispatched to REQ-ANALYST.
+2026-09-04T15:48:41Z | DISPATCH | WF-03 | WF03-ISS0438-20260904/step-02c-req-analyst-rework1 | ORCH -> REQ-ANALYST | REWORK-1

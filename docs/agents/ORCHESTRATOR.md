@@ -340,3 +340,16 @@ one-line config value, a comment.
 The asymmetry justifying the strictness: an unnecessary validator pass costs one agent
 turn; an unvalidated bug reaching `main` with no human backstop is the exact failure
 mode this whole system exists to prevent. When a check is ambiguous, it is a "no."
+
+> **This exception governs review, not git mechanics (clarified 2026-09-05,
+> ISS-0467).** Qualifying under all six checks above licenses skipping the
+> producer/validator agent chain and the handoff-file machinery for this change
+> — it does not license skipping `GIT_SETUP.md`/`GIT_MERGE.md`'s branch-and-PR
+> procedure. A direct-action change still gets its own branch, still opens a PR,
+> and still merges through `gh pr merge` (or `--admin` per 0018's documented
+> override path) exactly like any other change — never a bare `git push origin
+> main`. This was previously left to be inferred from this section's silence on
+> git mechanics, and in practice an agent inferred the opposite (0018's "A real
+> gap found live" section, ISS-0467) — this paragraph closes that specific
+> silence; see `GIT_MERGE.md`'s own Precondition section for the corresponding
+> prohibition.

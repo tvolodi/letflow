@@ -38,4 +38,45 @@ source: >
   routing that very fix through a PR instead.
 queue_task_id: 467
 github_issue: 896
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0467-20260904
+resolved_at: "2026-09-04T19:24:00Z"
+resolution: >
+  Option 2 chosen (documented prohibition of any direct `git push origin main`,
+  added to GIT_MERGE.md's Precondition section, plus a clarifying paragraph
+  appended to ORCHESTRATOR.md sec.10 stating the sizing-rule exception governs
+  skipping the producer/validator review chain, not skipping the branch+PR git
+  procedure) -- NOT Option 1 (configuring GitHub's `restrictions` push-allowlist).
+  Option 1 was rejected because it would be a no-op on this project's current
+  auth setup: ISSUE-FIXER's live diagnosis (step-01-issue-fixer.json) confirmed
+  every `git push`, `gh pr merge`, and `gh api` call this pipeline makes
+  authenticates as the single identity `tvolodi` (repo admin), so a push
+  allowlist naming that one identity would accept the exact same-identity bypass
+  push it would need to reject -- it cannot distinguish a legitimate
+  direct-action push from an accidental/illegitimate one when both come from the
+  same account. Removing the alternate path entirely (Option 2) is the only one
+  of the two named options that actually closes the gap; this is also the exact
+  resolution 0018's own "Follow-up, not re-opening this decision" section had
+  already anticipated as a candidate.
+
+  Files changed (commit bd6bddf5, WF03-ISS0467-20260904):
+    - docs/agents/protocols/GIT_MERGE.md -- new Precondition-section paragraph
+      prohibiting any bare `git push origin main`, no exception for size or
+      triviality, routing every change through the full branch-and-PR procedure.
+    - docs/agents/ORCHESTRATOR.md -- new closing paragraph in sec.10 clarifying
+      the sizing-rule exception licenses skipping the agent/handoff chain, not
+      skipping GIT_SETUP.md/GIT_MERGE.md's branch-and-PR mechanics.
+    - docs/migration/decisions/0018-branch-protection-posture.md -- new dated
+      subsection "## ISS-0467 resolution: direct-push prohibition (2026-09-05)"
+      recording the option chosen and pointing back to the two textual changes
+      above, amending the existing record in place rather than opening a new
+      decisions/ file (0018 already scoped and named both candidate options).
+
+  Design artefact: lib/letflow/design/iss-0467-direct-push-prohibition.md
+  (CODE-DESIGNER, validated by CODE-DESIGN-VALIDATOR before implementation).
+
+  This is a documentation/procedural fix, not a code fix -- there is no
+  regression test file. Verification was CODE-DESIGN-VALIDATOR's gate on the
+  design (coverage of every acceptance criterion, no ambiguity) and REVIEWER's
+  gate on the implemented textual change (step-04-reviewer.json), not a test
+  run.

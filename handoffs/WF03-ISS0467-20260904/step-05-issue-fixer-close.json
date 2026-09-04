@@ -1,0 +1,52 @@
+{
+  "handoff_id": "a6b7c8d9-0e1f-4021-c3d4-5e6f70819203",
+  "run_id": "WF03-ISS0467-20260904",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0467-20260904/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-04T19:21:32Z",
+  "started_at": "2026-09-04T19:21:32Z",
+  "completed_at": "2026-09-04T19:26:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0467-20260904/step-02-code-designer.json",
+      "handoffs/WF03-ISS0467-20260904/step-03-elixir-dev-implement.json",
+      "handoffs/WF03-ISS0467-20260904/step-04-reviewer.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0467.yaml",
+      "lib/letflow/design/iss-0467-direct-push-prohibition.md",
+      "docs/agents/protocols/GIT_MERGE.md",
+      "docs/agents/ORCHESTRATOR.md",
+      "docs/migration/decisions/0018-branch-protection-posture.md"
+    ],
+    "owned_modules": ["docs/issues/ISS-0467.yaml"]
+  },
+  "task": {
+    "description": "Close ISS-0467 per WF-03 Step 5 (docs/agents/workflows/WF-03_issue_resolving.md). This run's fix is a real root-cause closure: the gap (a bare git push to main silently bypassing 0018's required-status-checks protection) is closed by removing the alternate path entirely -- GIT_MERGE.md now explicitly prohibits any direct push to main, and ORCHESTRATOR.md sec.10 no longer leaves ambiguous whether the sizing-rule exception licenses skipping the branch+PR procedure. This qualifies as `status: resolved` (per ISSUE_QUEUE.md's vocabulary: 'a root cause was actually removed') -- NOT `instrumented` or `no_defect`. Note this is a documentation/procedural fix, not a code fix, so there is no regression test file to cite the way a code fix would; cite the actual textual changes and their commits instead as the resolving evidence.\n\n1. Update docs/issues/ISS-0467.yaml: status: resolved, resolved_in_run: WF03-ISS0467-20260904, resolved_at: <real UTC timestamp>, and a resolution: block summarizing what was decided (Option 2, prohibition) and why (Option 1 is a no-op given the single-identity auth setup, per ISSUE-FIXER's own live diagnosis in step-01-issue-fixer.json), plus pointers to the three files changed and the design artefact.\n2. Close GitHub issue #896: `gh issue close 896 --comment \"...\"`. Per WF-03 Step 5's evidence rule, the comment must cite the resolving run-id and the docs/issues/ISS-0467.yaml record, and since this is `resolved` (not instrumented/no_defect), it may also cite the fix commit(s) -- there is no regression test path to cite (docs-only fix), say so plainly rather than inventing one.\n3. Complete this handoff PASS, next_action: \"Route to Step Final (git merge)\".",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0467.yaml status flipped to resolved with resolved_in_run/resolved_at and a real resolution summary",
+      "GitHub issue #896 closed with a --comment citing the run-id, the yaml record, and the fix commits (no fabricated regression-test citation)",
+      "Handoff committed to feature/WF03-ISS0467-20260904"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "docs/issues/ISS-0467.yaml flipped to status: resolved (this is a root-cause removal per ISSUE_QUEUE.md's vocabulary, not instrumented/no_defect) with resolved_in_run: WF03-ISS0467-20260904, resolved_at: 2026-09-04T19:24:00Z, and a resolution: block recording: the option chosen (2, documented prohibition, not GitHub restrictions) and why (Option 1 is a no-op given this project's single-identity auth setup, per ISSUE-FIXER's own live diagnosis in step-01-issue-fixer.json -- every push/merge authenticates as the same admin identity `tvolodi`, so a push-allowlist naming that identity cannot distinguish a legitimate direct-action push from an accidental bypass); the three files changed (docs/agents/protocols/GIT_MERGE.md, docs/agents/ORCHESTRATOR.md sec.10, docs/migration/decisions/0018-branch-protection-posture.md) under commit bd6bddf5; and the design artefact path lib/letflow/design/iss-0467-direct-push-prohibition.md. GitHub issue #896 closed via `gh issue close 896 --comment \"...\"` citing the run-id, docs/issues/ISS-0467.yaml, the fix commit bd6bddf5, and the three changed files -- verified via `gh issue view 896 --json state,title` returning {\"state\":\"CLOSED\",...}. The comment explicitly states this is a docs/procedural fix with no regression test file, and that verification was the CODE-DESIGN-VALIDATOR + REVIEWER gates on the textual change, not a test run -- no fabricated regression-test citation. No `superseded_by`/`verdict_in_run` keys used since this is a genuine `resolved` outcome, not `instrumented`/`no_defect`.",
+    "artifacts_out": [
+      "docs/issues/ISS-0467.yaml"
+    ],
+    "issues": [],
+    "next_action": "Route to Step Final (git merge)"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

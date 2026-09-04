@@ -128,4 +128,34 @@ related:
   - REQ-214
   - REQ-219
   - REQ-220
-status: open
+status: resolved
+status_reasoning: >
+  Determined per docs/agents/protocols/ISSUE_QUEUE.md's "Issue status
+  vocabulary" (read in full before writing this line, not assumed).
+  `no_defect` does not apply: this was never a bug-investigation that
+  turned up nothing to fix -- a deliverable (the design artefact) was
+  produced and independently gated three times. `instrumented` does not
+  apply either: that status requires a real, unremoved root cause plus a
+  mandatory `superseded_by` successor issue naming the remaining work --
+  there is no remaining work here to name a successor for; ISS-0430's own
+  8 acceptance criteria are entirely about producing and gating the
+  design artefact (lib/letflow/design/iss0430-notify-listen-decision.md),
+  and all 8 are independently verdicted MET by CODE-DESIGN-VALIDATOR
+  (step-02b), with tenant-isolation (AC4) independently re-derived a
+  second time by SECURITY-REVIEWER against real provisioning code and
+  migrations (step-02c), and OTP-idiom/decision-record/scope consistency
+  independently re-derived a third time by REVIEWER (step-02d). `resolved`
+  fits: the vocabulary's literal phrasing ("a root cause was actually
+  removed, and a regression test proves it") is written for a bug-report
+  shape, but this issue's own "defect" was a design gap -- an unsettled
+  architectural question with no artefact deciding it -- and that gap has
+  been closed exactly as ISS-0430 itself scoped: the design now exists,
+  answers all 5 named design questions plus the reframed retrofit
+  question, and three independent gates re-derived (not copied) that it
+  is correct, standing in for the regression-test proof a code fix would
+  carry. Nothing remains outstanding and no successor issue is needed --
+  ISS-0430 itself states "Implementation is separate follow-on work",
+  so a future consumer implementation is out of this issue's own scope by
+  its own filing text, not a deferred/unresolved piece of THIS issue.
+resolved_in_run: WF03-ISS0430-20260905
+resolved_at: "2026-09-04T23:09:57Z"

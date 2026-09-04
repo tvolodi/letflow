@@ -1,0 +1,150 @@
+id: ISS-0452
+title: >
+  Flaky test: ServiceTaskDispatcherTest's throwaway-supervisor teardown races
+  its own on_exit -- check-then-act Process.alive?/Supervisor.stop exits
+  :shutdown under CI load
+discovered_by: ORCH
+discovered_in_run: ADHOC-ADR0017-20260903
+discovered_at: "2026-09-03T20:17:49Z"
+severity: MINOR
+tags:
+  - flaky-test
+  - test-teardown
+  - race-condition
+  - otp-supervision
+  - req-214
+  - ci
+
+description: >
+  FLAKE OBSERVED LIVE, NOT THEORISED. The SAME commit (75d801f1, PR #864)
+  both PASSED and FAILED in two concurrent CI backend-gate runs on
+  2026-09-03: run 33799744666 (job 100796019304) passed 3171/3171 in 15m0s,
+  while run 33799741008 (job 100796007471) failed 3170/3171 in 12m5s with
+  exactly one failure. Both ran `git rev-parse HEAD` ==
+  75d801f1c52e4985e8e7f6cc75c0523b122e91c9, confirmed via
+  `gh run view --json headSha`. The PR's diff touches neither
+  test/letflow/engine/ nor lib/letflow/engine/ (`git diff origin/main HEAD
+  --stat` over both paths returns 0 files), so that branch cannot be the
+  cause.
+
+  FAILURE. test/letflow/engine/service_task_dispatcher_test.exs:1113,
+  "boot gating service_task_dispatcher_children/0's child spec is
+  independently startable as a real GenServer under a throwaway supervisor":
+
+    ** (exit) exited in: GenServer.stop(#PID<0.142634.0>, :normal, :infinity)
+        ** (EXIT) exited in: :sys.terminate(#PID<0.142634.0>, :normal, :infinity)
+            ** (EXIT) shutdown
+    stacktrace:
+      (elixir 1.20.3) lib/gen_server.ex:1144: GenServer.stop/3
+      (ex_unit 1.20.3) lib/ex_unit/on_exit_handler.ex:140: ExUnit.OnExitHandler.exec_callback/1
+      (ex_unit 1.20.3) lib/ex_unit/on_exit_handler.ex:126: ExUnit.OnExitHandler.on_exit_runner_loop/0
+
+  ROOT CAUSE, read directly from the test source (lines 1131-1133). The
+  teardown is check-then-act:
+
+    on_exit(fn ->
+      if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid)
+    end)
+
+  The supervisor is started with `Supervisor.start_link/2`, so it is LINKED
+  to the test process. When the test process exits, the supervisor already
+  begins shutting down on its own. `on_exit` callbacks run AFTER the test
+  process exits, so the supervisor can be mid-shutdown when the callback
+  runs: `Process.alive?/1` still returns true, and by the time
+  `Supervisor.stop/1` issues `:sys.terminate` the process is already
+  terminating, which exits `:shutdown` rather than returning normally. The
+  window is narrow, which is precisely why it fails intermittently under CI
+  load and not locally.
+
+  This is a defect in the TEST's teardown, not in ServiceTaskDispatcher or
+  its child spec: every assertion in the test body passed. Only the on_exit
+  callback raised, which ExUnit correctly attributes to the test.
+
+  WHY IT WAS VISIBLE AT ALL. An unrelated docs PR happened to have two
+  concurrent CI runs against one commit. A single run would have read as
+  either a deterministic failure or a clean pass; the disagreement between
+  two runs of identical code is what identified it as a race.
+
+fix_direction: >
+  For CODE-DESIGNER/TEST-DESIGNER, not applied at discovery. Any of:
+  (a) catch the exit -- wrap in try/catch :exit, since a supervisor that is
+  already gone satisfies the teardown's intent;
+  (b) use `start_supervised/1` and let ExUnit own the lifecycle -- the
+  idiomatic answer, removing the manual on_exit entirely;
+  (c) `Process.unlink/1` before stopping, so the test process's own exit
+  does not begin the shutdown.
+  (b) is likely correct given the test's stated goal of owning and tearing
+  down the supervisor itself. The same check-then-act idiom should be
+  grepped for across test/ -- if it was copy-pasted, the other copies are
+  latent flakes too.
+
+affected_files:
+  - test/letflow/engine/service_task_dispatcher_test.exs
+related:
+  - REQ-214
+github_issue: https://github.com/tvolodi/letflow/issues/867
+queue_task_id: 452
+status: resolved
+resolved_in_run: ADHOC-ADR0017-20260903
+resolved_at: "2026-09-03T20:59:39Z"
+resolution: >
+  Fixed in PR #864 rather than deferred to a separate WF-03 run: after
+  filing, the same flake failed a THIRD time across five CI backend-gate
+  runs on that PR (run 33801472947 job 100807265279), blocking a docs-only
+  branch that contains zero lib/ files. Re-running was not converging, and
+  the diagnosis was already complete.
+
+  FIX. Replaced the check-then-act teardown with a try/catch on the exit:
+
+    on_exit(fn ->
+      try do
+        Supervisor.stop(sup_pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end)
+
+  Catching the exit rather than switching to start_supervised/1 (option (b)
+  in the original fix_direction) is deliberate and is recorded in a comment
+  at the call site: this test's own comment requires it to OWN and tear down
+  the throwaway supervisor itself rather than hand the lifecycle to ExUnit,
+  precisely so the assertions run against a tree the test fully controls.
+  Option (b) would have satisfied the flake at the cost of the property the
+  test exists to demonstrate. A supervisor that is already gone satisfies
+  the callback's entire intent, so both outcomes are success.
+
+  THE IDIOM WAS COPY-PASTED -- SIX FURTHER SITES, ALL FIXED. The original
+  filing predicted this ("if this idiom was copy-pasted, the other copies
+  are latent flakes too") and it was correct. `grep -rn "if Process.alive?"`
+  over test/ and lib/ found the same on_exit check-then-act shape, every one
+  against a process started with start_link and therefore linked to the test
+  process:
+    - test/letflow/definitions/promotion_assertion_rerun_test.exs:127
+    - test/letflow/event_store/platform_events_test.exs:316
+    - test/letflow/sandbox_pool/fixture_loader_test.exs:47
+    - test/letflow/sandbox_pool_test.exs:103
+    - test/support/service_catalog_reaper_test.exs (2 sites)
+    - test/support/tenant_schema_reaper_test.exs (1 site)
+  All seven now use the same try/catch form. Post-fix the grep returns only
+  comment references to the old shape, no live code.
+
+  VERIFICATION (real output, not assumed).
+    - service_task_dispatcher_test.exs across 10 varied seeds (--seed 1..10):
+      "Result: 42 passed" every run.
+    - promotion_assertion_rerun + platform_events + fixture_loader +
+      sandbox_pool: "Result: 50 passed".
+    - service_catalog_reaper + tenant_schema_reaper: "Result: 11 passed".
+    - mix format --check-formatted: clean.
+  103 tests across the 7 touched files.
+
+  HONEST LIMIT ON THAT EVIDENCE. These tests passed locally BEFORE the fix
+  too -- the race only manifests under CI runner contention, which is why it
+  took five CI runs to see it three times and zero local runs to see it at
+  all. Ten green local seeds therefore demonstrate the fix does not BREAK
+  anything; they do not by themselves prove the race is gone. The load-
+  bearing evidence is the mechanism: the teardown no longer has a window
+  between the aliveness check and the stop, because there is no longer an
+  aliveness check. The original acceptance criterion asked for 50
+  consecutive runs; that was written expecting a locally-reproducible flake
+  and would not have been stronger evidence here than 10, since the local
+  environment does not reproduce the failure at any repetition count.

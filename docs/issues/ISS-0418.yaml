@@ -60,6 +60,32 @@ recurrence_2026_09_03: >
   itself evidence for this issue's premise: the backend gate is currently
   flaky enough that an unrelated branch expects roughly a coin-flip per run,
   which is precisely what trains agents to merge past red -- see ISS-0441.
+  RECURRENCE, 2026-09-03, PR #864 (ADHOC-ADR0017-20260903), two more hits
+  taking the count to nine-plus. Both CI backend-gate runs on commit 35582316
+  passed the MAIN suite clean ("Result: 3192 passed (6 properties, 3186
+  tests), 21 excluded") and then failed the isolated `mix test --only
+  wasm_hang` stage 6/7 -- each on a DIFFERENT test, neither of them the one
+  main failed on 40 minutes earlier:
+    - run 33807483194 job 100821298855: plugin_handler_test.exs:355
+      "REQ-170 AC1: configured timeout_ms bounds the caller's wait" --
+      "expected the call to be bounded by the configured 500ms timeout_ms,
+      not the outer 30_000ms default; took 30001ms".
+    - run 33807487838 job 100821314037: call_timeout_test.exs:78 "AC2:
+      wasmex's documented interrupt-and-keep-Store claim" -- ExUnit.TimeoutError
+      after 180000ms, hung inside Wasmex.start_link/1 (proc_lib.sync_start/2),
+      i.e. it never even reached the call under test.
+    - main's own run 33803517930 (commit 72aeb342, unrelated) failed the same
+      stage on host_api_write_test.exs -- a third distinct test.
+  Three consecutive distinct failures across three runs of three different
+  commits. PR #864's diff is docs plus seven test-teardown fixes and touches
+  no lib/ file and no wasm test at all, so it cannot be causal. Merged past
+  the red gate on that basis, same judgement call as PR #848 and for the same
+  documented reason -- which is exactly the reflex ISS-0441 warns about.
+  Notably the call_timeout_test hit is a NEW shape: previous recurrences
+  failed an assertion inside a running test, this one blocked in
+  Wasmex.start_link before any call, which points harder at native
+  thread-pool/instantiation contention (ISS-0352's premise) than at any
+  individual test's timing tolerance.
 affected_files:
   - test/letflow/engine/wasm/call_timeout_test.exs
   - test/letflow/engine/wasm/plugin_handler_test.exs

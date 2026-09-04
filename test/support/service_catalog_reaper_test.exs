@@ -177,8 +177,15 @@ defmodule Letflow.ServiceCatalogReaperTest do
           parameters: [application_name: fake_tag]
         )
 
+      # ISS-0452: tolerate the connection process already being gone -- it is
+      # linked to the test process, and on_exit runs after that process
+      # exits, so check-then-act races its own shutdown.
       on_exit(fn ->
-        if Process.alive?(other_conn), do: GenServer.stop(other_conn)
+        try do
+          GenServer.stop(other_conn)
+        catch
+          :exit, _ -> :ok
+        end
       end)
 
       %{rows: [[1]]} =
@@ -244,7 +251,14 @@ defmodule Letflow.ServiceCatalogReaperTest do
           parameters: [application_name: sibling_tag]
         )
 
-      on_exit(fn -> if Process.alive?(other_conn), do: GenServer.stop(other_conn) end)
+      # ISS-0452: tolerate the process already being gone (see that issue).
+      on_exit(fn ->
+        try do
+          GenServer.stop(other_conn)
+        catch
+          :exit, _ -> :ok
+        end
+      end)
 
       # Sanity: the sibling connection is really visible to Postgres under its tag
       # before running the sweep -- otherwise this test could pass/fail for the

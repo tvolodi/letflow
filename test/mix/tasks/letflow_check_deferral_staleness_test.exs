@@ -942,13 +942,44 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert inactive == []
     end
 
-    test "T-LIVE-DEFERRED-COUNT-IS-ZERO -- documents today's vacuous green", %{result: result} do
-      # NOT a permanent invariant. It records that S1/S2/S3/S6 are vacuously
-      # green on today's corpus, so a future reader who adds a real deferral
-      # and sees this test change knows the staleness rule has just become
-      # load-bearing -- rather than reading it as a regression.
-      assert result.deferral_count == 0
+    test "T-LIVE-DEFERRED-COUNT -- the staleness rule is now load-bearing, not vacuous",
+         %{result: result} do
+      # NOT a permanent invariant -- the count is expected to move as the
+      # corpus changes; what is asserted permanently is `stale_count == 0`.
+      #
+      # HISTORY. This test was named T-LIVE-DEFERRED-COUNT-IS-ZERO and
+      # asserted `deferral_count == 0`, recording that S1/S2/S3/S6 were
+      # VACUOUSLY green: the rule held only because no entry had ever
+      # exercised it. Its own comment named the successor condition -- "a
+      # future reader who adds a real deferral and sees this test change
+      # knows the staleness rule has just become load-bearing, rather than
+      # reading it as a regression." That is exactly what happened here, so
+      # the test is renamed and re-pointed rather than deleted or relaxed.
+      #
+      # UPDATE (decision 0017, 2026-09-03): REQ-223 and REQ-224 are the
+      # first real deferrals in the corpus. Both are `blocked-by:`-scoped to
+      # REQ-222 (letflow-queue's read-only GET /tasks endpoint), which is
+      # `pending`, so both are LEGITIMATE and neither is stale -- the rule
+      # is now doing real work and returning green on its merits, not
+      # vacuously. Re-derived, not guessed: confirmed live via
+      # `LETFLOW_SECRETS_MASTER_KEY=... MIX_ENV=test mix run --no-start -e`
+      # calling Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 against the
+      # live docs/requirements.yaml, returning deferral_count == 2,
+      # stale_count == 0, both deferrals verdict: :legitimate with
+      # scope: {:blocked_by, "REQ-222"}. The detector is unchanged.
+      #
+      # This count drops back toward 0 as REQ-222 merges and REQ-223/224 are
+      # registered; it rises again with any new deferral. `stale_count`,
+      # however, must stay 0 -- that one IS the invariant.
+      assert result.deferral_count == 2
       assert result.stale_count == 0
+
+      # The substance, not just the count: every deferral present is
+      # legitimate on its own terms. This is what makes the green
+      # non-vacuous, and would catch a deferral that merely stopped being
+      # counted.
+      assert Enum.all?(result.deferrals, &(&1.verdict == :legitimate))
+      assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == ["REQ-223", "REQ-224"]
     end
 
     test "T-REG-STILL-GREEN -- the bounded `status` addition kept ISS-0231 green" do

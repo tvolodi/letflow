@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0459-20260904/step-00-git-setup.json",
   "created_at": "2026-09-04T13:34:09Z",
   "started_at": "2026-09-04T13:34:09Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-04T13:34:59Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -36,10 +36,10 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
+    "summary": "GIT_SETUP.md procedure completed for run-id WF03-ISS0459-20260904. Single checkout (not a worktree secondary), so standard steps 1-8 applied. `git checkout main` + `git pull --ff-only origin main` succeeded (local main was already ahead of origin by ORCH's own dispatch commit 1779dab9 that created this handoff file — not a divergence, ff-only had nothing to fetch). No pre-existing feature/WF03-ISS0459-20260904 branch found, so step 4's delete-and-retry was not needed. Created feature/WF03-ISS0459-20260904 from main and pushed with -u; the dispatch commit rode along as the branch's first commit.",
+    "artifacts_out": ["branch: feature/WF03-ISS0459-20260904"],
     "issues": [],
-    "next_action": ""
+    "next_action": "ORCH routes to next step per active WF-03 workflow"
   },
   "rework_count": 0,
   "max_rework": 3

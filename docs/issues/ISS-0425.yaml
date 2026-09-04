@@ -80,7 +80,9 @@ source: >
 queue_task_id: 425
 github_issue: 829
 
-status: open
+status: resolved
+resolved_in_run: ORCH-direct-20260904-ISS0425-reconcile
+resolved_at: "2026-09-04T23:30:00Z"
 orch_routing_note: >
   ORCH (2026-09-03): ISSUE-FIXER's sizing pass
   (handoffs/WF03-ISS0425-20260903/step-01-issue-fixer-diagnosis.json)
@@ -92,7 +94,47 @@ orch_routing_note: >
   review, queue task 446, GH#859, depends on REQ-219). REQ-VALIDATOR
   failed REQ-219 once (an unverifiable ordering guarantee for ISS-0429's
   constraint), REQ-ANALYST fixed it with a grep+test-verifiable
-  acceptance criterion, REQ-VALIDATOR passed both on re-check. This
-  record stays open, status unchanged, pending those two requirements'
-  completion -- closing it directly would misrepresent an
-  undiagnosed-but-unfixed gap as resolved.
+  acceptance criterion, REQ-VALIDATOR passed both on re-check.
+resolution: >
+  Both dependent requirements are now done and both explicitly title
+  themselves as closing this issue's parts: REQ-219 ("Layer
+  Letflow.Application's flat 20-child supervision tree into
+  Infrastructure / Pollers / Http, with explicit restart intensity
+  isolating poller crash-loops from Repo and HTTP (closes ISS-0425
+  parts 1+partial-2)", status: done) and REQ-220 ("Task.Supervisor
+  sprawl review -- one consolidated rationale for all 7, consolidate
+  only if the review itself concludes it's safe (closes ISS-0425 part
+  3)", status: done).
+
+  (1) NO DEPENDENCY LAYERING -- closed by REQ-219: application.ex now
+  starts Infrastructure / Pollers / Http as three explicitly-ordered
+  groups under :rest_for_one, with Pollers given its own restart
+  intensity isolated from Infrastructure/Repo and Http. ISS-0421
+  (Poller SPOF, serial sweeps -> Task.async_stream with bounded
+  concurrency) and ISS-0451 (persistent-crash circuit breaker,
+  lib/letflow/supervisor/pollers_breaker.ex) both resolved on top of
+  this layering and are cross-referenced from REQ-219's own design
+  record (lib/letflow/design/req219-supervision-layering.md).
+
+  (2) NO SUPERVISOR OWNS THE DOMAIN -- narrowed scope (this issue's own
+  text explicitly excludes reversing REQ-045's row-based instance
+  decision). The Pollers group introduced by REQ-219, together with
+  ISS-0451's circuit breaker, is the domain-facing layer this issue
+  asked for at the narrower scope it defined; ISS-0422 (empty
+  InstanceSupervisor) remains separately tracked and was never part of
+  this issue's acceptance criteria.
+
+  (3) TASK.SUPERVISOR SPRAWL -- closed by REQ-220: all 7
+  Task.Supervisors (the sprawl had grown from this issue's original 6
+  to 7 by the time REQ-220 ran, per its own updated count) reviewed in
+  one pass in lib/letflow/supervisor/infrastructure.ex's moduledoc,
+  each given a distinct one-line justification and originating
+  req/issue, with the two named consolidation candidates explicitly
+  considered and rejected. Recommendation: KEEP ALL 7 -- a defensible
+  outcome this issue's own text anticipated as acceptable.
+
+  Both requirements' own full suites passed (mix letflow.check) at
+  their respective Step Final merges. Reconciled directly by ORCH
+  after get_next_task surfaced this record as still-open despite the
+  above already being complete and merged to main earlier in the same
+  session; no further implementation work was needed.

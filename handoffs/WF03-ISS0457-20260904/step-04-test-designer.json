@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-04",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0457-20260904/step-04-test-designer.json",
+  "created_at": "2026-09-04T08:07:15Z",
+  "started_at": "2026-09-04T08:07:15Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0457-splice-first-wins.md",
+      "handoffs/WF03-ISS0457-20260904/step-03c-reviewer.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/divergence-probe-transcript.txt",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.lint_handoffs_test.exs"],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Write the regression test for ISS-0457 per WF-03's fail-then-pass rule: this is a fix to EXISTING behavior (scan_for_status/4 already exists and was last-match-wins; ISS-0442 merged before this run's own fix), so the fail-first proof must be shown against the pre-fix code, not against a from-scratch module (the 'code under test does not exist' clause does not apply here). Concretely: (1) build a duplicate-top-level-status fixture -- the one already produced by ISSUE-FIXER in handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json is a real, already-demonstrated one; use it or an equivalent you construct the same way. (2) Add a new test asserting that after --autofix, the FIRST depth-1 status occurrence is the one rewritten to its mapped value, and every later depth-1 status occurrence is left byte-identical to its pre-fix value -- the mirror image of ISSUE-FIXER's originally demonstrated divergence. (3) Demonstrate the fail-then-pass property: check out the pre-fix commit (before ELIXIR-DEV's Step 3 change -- main's tip before this run's own commits landed, i.e. commit 373f5363, the ISS-0442 merge commit) in a disposable worktree, run your new test against that commit's code, confirm it FAILS (the old last-match-wins behavior would edit the wrong occurrence), then confirm it PASSES on this run's own branch. Record both real outputs. (4) Update the stale comment block in test/mix/tasks/letflow.lint_handoffs_test.exs (around lines 722-742) that currently describes this discrepancy as 'deliberately left uncovered' -- since it is now covered, replace that comment with a pointer to the new test and to ISS-0457's resolution, not left describing a now-fixed defect as still-open.",
+    "acceptance_criteria": [
+      "New test uses a real duplicate-top-level-status fixture (not just documented in prose) per ISS-0457.yaml's AC2",
+      "Test asserts BOTH: the first occurrence is corrected to its mapped @autofix_map value, AND every later occurrence is left byte-identical to its pre-fix value",
+      "Fail-then-pass demonstrated against real commits: FAILS at 373f5363 (pre-fix), PASSES on this run's branch -- both real outputs quoted in result.summary, not asserted",
+      "Stale 'deliberately left uncovered' comment block in test/mix/tasks/letflow.lint_handoffs_test.exs updated to reflect the fix",
+      "All existing tests in the file still pass alongside the new one",
+      "No file outside test/ and handoffs/ modified by this step"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

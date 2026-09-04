@@ -1,0 +1,50 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-02",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0457-20260904/step-02-code-designer.json",
+  "created_at": "2026-09-04T07:53:37Z",
+  "started_at": "2026-09-04T07:53:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457"],
+    "artifacts_in": [
+      "docs/issues/ISS-0457.yaml",
+      "handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/dup-status-fixture.json",
+      "handoffs/WF03-ISS0457-20260904/diagnosis/divergence-probe-transcript.txt",
+      "lib/mix/tasks/letflow.lint_handoffs.ex",
+      "lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md"
+    ],
+    "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0457 (docs/issues/ISS-0457.yaml, ISSUE-FIXER's diagnosis in artifacts_in above -- both already carry the confirmed root cause and a reproducing fixture; do not re-derive what they already establish, but do independently verify anything you build the design on top of, per HANDOFF_PROTOCOL.md section 1.1). The target code, splice_top_level_status/2 and its helper scan_for_status/4 (lib/mix/tasks/letflow.lint_handoffs.ex, currently around lines 500-567), is now REAL, MERGED code on main -- ISS-0442 landed as PR #878 (commit 373f5363) since this run started, so design against the file as it exists on disk right now, not against any historical branch state.\n\nPick between the two options AC1 of docs/issues/ISS-0457.yaml names: (a) make autofix_file/1 (decode-based) and splice_top_level_status/2 (text-scan-based) agree on which occurrence wins for a duplicate top-level key -- both first-wins or both last-wins (Jason.decode!/1 is confirmed first-wins, so the natural alignment is making the splice scanner first-wins too, by keeping only the FIRST depth-1 'status' match found instead of the current unconditional overwrite-on-every-match); or (b) make the decode step (or a preceding H-check) reject a handoff with a duplicate top-level key outright as its own malformed-JSON violation class, so the ambiguity can never reach the splice path. Make and justify the actual call yourself -- ORCH's own steer, not binding on you: option (a) is likely simpler (a small, local change to scan_for_status/4's match-handling, keeping the same single-pass structure) and lower-risk than introducing a new H-check class with its own grandfathering/CI implications, but you may find (b) is actually preferable once you've looked at the real code -- state your reasoning either way.\n\nAlso in scope: correct the FALSE 'mirrors Jason.decode/1's own last-key-wins semantics' claim in TWO places -- the code comment at lib/mix/tasks/letflow.lint_handoffs.ex around lines 487-491, and lib/letflow/design/iss0442-lint-handoffs-minimal-diff-autofix.md section 2.2 step 2 (around line 201). Both currently assert Jason.decode is last-wins; it is first-wins (confirmed twice now -- once by ORCH, once by ISSUE-FIXER, both against jason 1.4.5, the pinned version). Whichever option you pick, these two false claims must not survive uncorrected.\n\nProduce a design artefact in lib/letflow/design/ per your normal role (interface/behavior spec, not implementation code) -- do NOT write the .ex fix yourself, that is ELIXIR-DEV's job at Step 3.",
+    "acceptance_criteria": [
+      "Design picks and justifies option (a) or (b) from ISS-0457.yaml's AC1, reasoned against the real, merged code on main -- not against a historical/branch description",
+      "If (a): design states exactly how scan_for_status/4's match-handling changes to become first-match-wins (or first-match-wins-with-early-stop), preserving every other property REVIEWER already verified for this scanner (depth tracking, string-escape handling, nested result.status immunity, byte-identical passthrough elsewhere in the file)",
+      "If (b): design states the new H-check's exact detection rule, where it slots into autofix_file/1's control flow, and how it reports (refusal shape, consistent with the existing FAIL/missing/non-string refusal branches)",
+      "Design explicitly names both false-claim locations (letflow.lint_handoffs.ex ~487-491, iss0442-lint-handoffs-minimal-diff-autofix.md ~line 201) and states the corrected text for each",
+      "No implementation code (.ex function bodies) in the design artefact -- signatures/specs/behavior description only",
+      "Design accounts for the existing regression suite (test/mix/tasks/letflow.lint_handoffs_test.exs, 47 tests as of the ISS-0442 merge) not regressing"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

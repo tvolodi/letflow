@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0457-20260904-step-04b",
+  "run_id": "WF03-ISS0457-20260904",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0457-20260904/step-04b-test-design-validator.json",
+  "created_at": "2026-09-04T09:12:32Z",
+  "started_at": "2026-09-04T09:12:32Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0457"],
+    "artifacts_in": [
+      "test/specs/ISS-0457.md",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "handoffs/WF03-ISS0457-20260904/step-04-test-designer.json",
+      "lib/letflow/design/iss0457-splice-first-wins.md"
+    ],
+    "owned_modules": ["test/mix/tasks/letflow.lint_handoffs_test.exs"],
+    "branch_name": "feature/WF03-ISS0457-20260904"
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's regression test for ISS-0457. Independently confirm every acceptance criterion of the Step 4 dispatch (handoffs/WF03-ISS0457-20260904/step-04-test-designer.json) is genuinely met -- do not accept TEST-DESIGNER's own reported FAIL/PASS outputs on trust: re-run the new test yourself against this run's own branch and confirm it passes with real output. If practical, independently re-verify the fail-first claim too (checking out commit 373f5363 in your own disposable worktree and running the new test there) -- if you judge re-deriving the fail-first check itself is disproportionate given TEST-DESIGNER's transcript is already fairly convincing, you may instead closely inspect the reported FAIL transcript for internal consistency and state explicitly why you judged a full independent re-run unnecessary, but a bare 'looks fine' is not acceptable either way.",
+    "acceptance_criteria": [
+      "New test T-AUTOFIX-DUP-TOP-LEVEL-STATUS-FIRST-WINS independently re-run against this branch, real output quoted",
+      "Full test/mix/tasks/letflow.lint_handoffs_test.exs file re-run, confirming no regression in the other 47 tests",
+      "Fail-first claim scrutinized (either independently re-derived via a fresh worktree, or the reported transcript closely inspected with reasoning for why that suffices)",
+      "Confirms the stale ISS-0442 comment block was actually replaced, not left in place alongside the new test",
+      "PASS or FAIL verdict with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

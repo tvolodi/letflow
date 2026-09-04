@@ -320,12 +320,31 @@ reasons rather than one blanket rationale:
   describes `git checkout main` failing from a secondary worktree because git itself
   refuses to check out a branch already checked out elsewhere — a worktree-checkout
   limitation, unrelated to CI or merge enforcement.
-- **`docs/anti-patterns.md` (three hits).** All are descriptive incident narration about
-  past events — a specific `Backend gate` run failing during an earlier mistake, a
-  proposed future ORCH-side check described as making a recurrence "structurally
-  impossible," and a past incident that got past "five separate hard gates." None asserts
-  a current, general claim about `main`'s merge protection; they recount what happened or
-  propose unrelated future tooling.
+- **`docs/anti-patterns.md` (five hits, across three distinct anti-pattern sections).**
+  All are descriptive incident narration about past events, or a proposed future tooling
+  idea, none asserting a current, general claim about `main`'s merge protection:
+  - Line 1578, in the "top-level `status` field" anti-pattern section: "This was caught
+    only at CI (PR #681's first `Backend gate` run failed on it)" — a specific `Backend
+    gate` run failing during the PR #681 / `lint_handoffs` incident.
+  - Line 1611, in that same section's later recurrence write-up: "...instead make it
+    structurally impossible (e.g. ORCH greps every handoff...)" — a proposed future
+    ORCH-side check, not a description of any existing enforcement.
+  - Line 1689, in the separate "`mix format --check-formatted`" anti-pattern section:
+    "REQ-167's PR #688 failed CI's backend gate on the very first run" — a distinct
+    incident from line 1578, about a formatter line-length failure, not the status-enum
+    mistake.
+  - Line 1910, in the separate "dead default argument" anti-pattern section's REQ-195
+    recurrence: "...the same narrow ISS-0069-focused task CI's backend gate runs" — a
+    third distinct incident, about a compiler warning only surfacing under a specific
+    mix task.
+  - Line 1920, in that same section's later REQ-203 recurrence: "...past FIVE separate
+    hard gates that each ran a real `mix compile`/`mix test` pass on this exact file" —
+    a different occurrence of the same dead-default-argument anti-pattern, still
+    describing what got past review gates, not `main`'s git-merge protection.
+
+  None of the five lines asserts a current, general claim about `main`'s merge
+  protection; they recount what happened in past CI/review runs or propose unrelated
+  future tooling.
 - **`docs/migration/decisions/0011-frontend-ownership.md` (line 118).** "A frontend gate
   equivalent to `mix letflow.check`" refers to a not-yet-built CI job scoped as future S8
   requirement work, not a claim about `main`'s current branch-protection enforcement.

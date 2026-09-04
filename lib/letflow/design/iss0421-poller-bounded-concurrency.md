@@ -12,9 +12,11 @@ each iterate every tenant schema serially via `Enum.each/2`, so wall-clock per t
 scales with tenant count and a single slow/hung tenant call blocks every tenant behind
 it, in every one of the seven sweeps.
 
-Affected file: `lib/letflow/scheduler/poller.ex` only. No change to
-`lib/letflow/supervisor/pollers.ex`, `pollers_breaker.ex`, `application.ex`, or
-`lib/letflow/admission.ex` (its existing public contract is reused, not modified).
+Affected files: `lib/letflow/scheduler/poller.ex`, plus one small, additive,
+backward-compatible extension to `lib/letflow/admission.ex`'s public contract (§3b —
+a new read-only accessor, no change to any existing function's behavior, signature, or
+the `handle_call` clauses already in it). No change to `lib/letflow/supervisor/pollers.ex`,
+`pollers_breaker.ex`, or `application.ex`.
 
 The seven sweeps, in their current tick order (unchanged by this design):
 
@@ -136,52 +138,118 @@ it instead of using 1 of the available 8 at a time.
 
 ### 3b. `maybe_refresh_active_instances/1` (no Admission backstop)
 
-`max_concurrency: 2`, i.e. exactly `Admission`'s own `reserved_headroom` (2).
+`max_concurrency:` is **derived live from `Admission`'s own current `reserved_headroom`
+at call time**, not a second, independently-maintained literal. This replaces the
+rework-1 draft of this section, which hardcoded `max_concurrency: 2` and justified it as
+"exactly `Admission`'s own `reserved_headroom`" — CODE-DESIGN-VALIDATOR correctly failed
+that draft (`handoffs/WF03-ISS0421-20260904/step-02b-code-design-validator.json`, finding
+2): `reserved_headroom` is independently overridable, both via
+`config :letflow, :admission, reserved_headroom:` (admission.ex:160-164) AND via an
+explicit `:reserved_headroom` key in `start_link/1`'s `opts` (e.g. in tests, which can
+start a distinct, differently-configured `Admission` instance under its own name per
+admission.ex:180-182's `server` convention) — nothing tied a hardcoded Poller-side `2` to
+either of those, so a future change to one without the other would silently push the
+combined worst-case peak past `pool_size` with no backstop to catch it.
 
-Arithmetic: this sweep's per-tenant call (`Engine.count_instances_by_status/1`) is not
-routed through `Admission.try_acquire/2` at all (REQ-218's deliberate exclusion, §1),
-so nothing stops its concurrent tasks from each holding a real `DBConnection` checkout
-for the query's duration. Because sweeps are sequential (§2), this sweep's own peak
+**Decision: option (a), a live accessor — rejected option (b) (hardcoded literal +
+comment + equality test) as strictly worse here.** Reasoning: to *test* that a hardcoded
+Poller literal equals Admission's actual `reserved_headroom`, the test itself would need
+some way to read Admission's real current value — and `reserved_headroom` is GenServer
+state set at `init/1` from whichever of (config default, config override, `start_link`
+opts override) won, not a plain module attribute or bare config read visible from outside
+the process. Building that accessor for the test's sake, then NOT using it at the actual
+call site, leaves the exact same runtime literal-drift hazard the validator flagged (the
+test would catch a `mix test` regression, but the running system between deploys — or in
+an environment where `Admission` is started with a `start_link` opts override the test
+suite never exercises — still carries two independently-maintained numbers). Once the
+accessor exists, using it live at the one real call site is strictly safer than using it
+only in a test and leaving the literal in place, and is no more code: same one new
+function on `Admission`, consumed in two possible places (test, or the real call site) —
+this design picks the real call site, which subsumes the test's guarantee rather than
+duplicating it. This also directly fixes the class of problem, not just this instance of
+it: any future change to `reserved_headroom` (config or `start_link` opts, at any value)
+is automatically reflected, with no second edit required anywhere.
+
+**New public accessor on `Letflow.Admission`**: `reserved_headroom/1`, arity 1, mirroring
+the exact existing idiom of `try_acquire/2` and `release/2`
+(admission.ex:184-190,205-208) — a defaulted `server \\ __MODULE__` argument and a
+synchronous `GenServer.call/2`:
+
+- `@spec reserved_headroom(server :: GenServer.server()) :: pos_integer()`
+- `def reserved_headroom(server \\ __MODULE__), do: GenServer.call(server, :reserved_headroom)`
+  (signature and shape only — no function body is prescribed beyond this one-line
+  delegation, matching this design doc's no-implementation-code constraint; ELIXIR-DEV
+  writes the actual clause)
+- One new `handle_call(:reserved_headroom, _from, state)` clause, placed alongside the
+  existing `handle_call({:try_acquire, ...}, ...)` / `handle_call({:release, ...}, ...)`
+  clauses (admission.ex:234-278), replying with the plain integer already held in
+  `state.reserved_headroom` (visible per the state shape documented at
+  admission.ex:212-219) and leaving `state` unchanged — a pure read, no side effect, no
+  new state field.
+- This is a strictly additive change to `Admission`'s public contract: no existing
+  function's name, arity, spec, or behavior changes. `try_acquire/2` and `release/2` are
+  untouched.
+
+**Poller's consumption**: `maybe_refresh_active_instances/1` calls
+`Letflow.Admission.reserved_headroom/0` (default server, i.e. the same named
+`Letflow.Admission` instance every other call site in this codebase already targets) once
+per invocation — read fresh on every tick, no caching, matching this same design's own
+`sweep_task_timeout_ms/0` convention (§4a) and `Letflow.Scheduler`'s established
+"read config/state fresh, never cache" pattern — and passes the returned integer directly
+as this sweep's `Task.async_stream/3` `max_concurrency:` value. No module attribute, no
+config read, no literal `2` anywhere in `poller.ex`.
+
+Arithmetic, now stated as an algebraic invariant rather than an instance-specific
+coincidence: this sweep's per-tenant call (`Engine.count_instances_by_status/1`) is not
+routed through `Admission.try_acquire/2` at all (REQ-218's deliberate exclusion, §1), so
+nothing stops its concurrent tasks from each holding a real `DBConnection` checkout for
+the query's duration. Because sweeps are sequential (§2), this sweep's own peak
 concurrency never overlaps in wall-clock time with another *Poller* sweep's peak, but it
-CAN overlap with concurrent HTTP admission traffic, which can independently be holding
-up to `Admission.global_cap = 8` checkouts at that same instant. Worst case combined
-peak checkout count across the whole platform during this sweep's window is therefore
-`8 (HTTP, admission-gated) + N (this sweep)`. Choosing `N = 2` makes that worst case
-`8 + 2 = 10 = pool_size` exactly — it never exceeds the pool, and it exactly saturates
-`reserved_headroom`, the same 2-connection allowance `Admission`'s own design already
-set aside for exactly this class of non-admission-gated Repo consumer (REQ-216's
-moduledoc does not enumerate what consumes `reserved_headroom`, but the number exists
-precisely so *something* outside Admission's own accounting can use the pool without
-Admission's grants alone exhausting it — this sweep is such a consumer). A higher `N`
-(e.g. 4) would make the worst case `8 + 4 = 12 > 10`, an actual pool-exhaustion risk
-under DBConnection's own queuing/timeout behavior, not merely a slow tick — rejected.
+CAN overlap with concurrent HTTP admission traffic, which can independently be holding up
+to `Admission.global_cap` checkouts at that same instant (`global_cap = pool_size -
+reserved_headroom`, admission.ex:222). Worst case combined peak checkout count across the
+whole platform during this sweep's window is therefore:
 
-This is a conservative, worst-case bound: it assumes HTTP traffic is simultaneously at
-its own admitted peak of 8, which will not be true on every tick. `N = 2` is chosen
-specifically so the design holds even in that coincidence, matching the same
-no-hand-waving standard `Letflow.SandboxPool`'s moduledoc sets for its own
-DBConnection-checkout arithmetic (peak-checkout claims stated as an exact number with
-the derivation shown, not "should be fine").
+```
+global_cap + max_concurrency
+  = (pool_size - reserved_headroom) + reserved_headroom     # max_concurrency == reserved_headroom, by construction, always
+  = pool_size
+```
 
-**Open question, flagged for REVIEWER / ELIXIR-DEV, not silently resolved**: this
-arithmetic assumes `reserved_headroom` (2) is not ALSO being consumed by some other,
-unrelated non-admission-gated Repo caller (LiveView sockets, `Ecto.Migrator`, an IEx
-console session, health checks) at the same instant. That risk pre-dates this design
-(it is inherent in `reserved_headroom` being a single shared allowance for "everything
-Admission doesn't gate") and is not introduced by it, but this design makes
+Because `max_concurrency` is now `Admission.reserved_headroom/1`'s live return value —
+the exact same number `Admission.init/1` used to compute `global_cap` — this equality
+holds **for any configured `reserved_headroom`, at any point in time**, not merely for
+the current default of `2`. At current config (`pool_size = 10`, `reserved_headroom = 2`)
+this is `8 + 2 = 10 = pool_size`, matching the arithmetic §1/§3a already establish; the
+difference from the rework-1 draft is that this equality can no longer drift, because
+there is exactly one number (`Admission`'s live `reserved_headroom`), not two.
+
+**Open question, flagged for REVIEWER / ELIXIR-DEV, not silently resolved** (unchanged
+from rework 1 — this is a capacity-adequacy question, not the lockstep-invariant gap the
+validator flagged, and remains correctly out of scope for this fix): this arithmetic
+assumes `reserved_headroom` is not ALSO being consumed by some other, unrelated
+non-admission-gated Repo caller (LiveView sockets, `Ecto.Migrator`, an IEx console
+session, health checks) at the same instant. That risk pre-dates this design (it is
+inherent in `reserved_headroom` being a single shared allowance for "everything Admission
+doesn't gate") and is not introduced by it, but this design makes
 `maybe_refresh_active_instances/1` a second identified consumer of that allowance
-alongside whatever else already relies on it, and the codebase currently has no
-inventory of every such consumer. If that inventory is ever produced, revisit whether
-`N = 2` still holds or whether `reserved_headroom` itself needs raising.
+alongside whatever else already relies on it, and the codebase currently has no inventory
+of every such consumer. If that inventory is ever produced, revisit whether
+`reserved_headroom`'s current default value still holds or needs raising — this design's
+fix (deriving `max_concurrency` live) means that revisit only requires changing
+`reserved_headroom` in one place; `poller.ex` needs no corresponding edit.
 
 ### 3c. Sanity check: worst case across the whole tick
 
 Because sweeps are strictly sequential (§2), the platform-wide peak attributable to
-Poller at any single instant during a tick is `max(8, 2) = 8` (whichever of the six
-Admission-gated sweeps or the one unwrapped sweep happens to be running), never their
-sum — the six-sweep peak of 8 and the one-sweep peak of 2 are never concurrent with each
-other. Combined with the worst-case external (HTTP) draw already accounted for in §3b,
-the design's stated worst-case total never exceeds `pool_size = 10`.
+Poller at any single instant during a tick is `max(global_cap, reserved_headroom)`
+(whichever of the six Admission-gated sweeps or the one unwrapped sweep happens to be
+running), never their sum — the six-sweep peak (`global_cap`) and the one-sweep peak
+(`reserved_headroom`, now derived live per §3b) are never concurrent with each other. At
+current config this is `max(8, 2) = 8`. Combined with the worst-case external (HTTP) draw
+already accounted for in §3b, the design's stated worst-case total never exceeds
+`pool_size` — and, per §3b, this holds as an algebraic identity for any configured
+`reserved_headroom`, not only the current default.
 
 ## 4. Fault isolation (AC1: one slow/erroring tenant must not block others)
 
@@ -334,22 +402,30 @@ Orthogonal, no changes needed to `lib/letflow/supervisor/pollers.ex`,
 
 ## 7. Summary of required code-shape changes (for ELIXIR-DEV — no code given here)
 
+- `Letflow.Admission`: add one new public accessor, `reserved_headroom/1` (default
+  `server \\ __MODULE__`), delegating via `GenServer.call/2` to a new
+  `handle_call(:reserved_headroom, _from, state)` clause that replies with
+  `state.reserved_headroom` unchanged — see §3b. Purely additive: no existing function's
+  name, arity, spec, or behavior changes.
 - `Letflow.Scheduler`: add one new config accessor, `sweep_task_timeout_ms/0`, following
   the exact existing pattern of `poll_interval_ms/0`/`jitter_ms/0` (reads `config
   :letflow, :scheduler, sweep_task_timeout_ms:`, falls back to a `@default_...` module
   attribute of `10_000`, read fresh on every call — no caching).
 - `Letflow.Scheduler.Poller`: at each of the seven per-schema iteration sites currently
   written as `Enum.each(schemas, fn schema_name -> ... end)`, replace the traversal with
-  `Task.async_stream/3` over `schemas`, options `max_concurrency:` (8 for the six
-  Admission-gated sweeps, 2 for `maybe_refresh_active_instances/1`), `timeout:
-  Scheduler.sweep_task_timeout_ms()`, `on_timeout: :kill_task`, `zip_input_on_exit:
-  true`; fully consume the resulting stream; wrap the two call sites lacking an existing
-  inline rescue (the poll-and-fire loop, `maybe_run_retention_sweep/2`) in a top-level
-  per-task rescue per §4b; log `{:exit, _}` yields (both timeout and crash) at
-  `Logger.warning/2` tagged with `schema:` and `op:`, mirroring the existing
-  `with_admission/3` capacity-skip log.
-- No change to `with_admission/3` itself, to `Letflow.Admission`, to any
-  `lib/letflow/supervisor/*` file, or to `application.ex`.
+  `Task.async_stream/3` over `schemas`, options `max_concurrency:` (8, i.e.
+  `Admission.global_cap`, for the six Admission-gated sweeps; for
+  `maybe_refresh_active_instances/1`, the live return value of
+  `Letflow.Admission.reserved_headroom/0` — called fresh inside that sweep's own function
+  body, never cached or hoisted — per §3b), `timeout: Scheduler.sweep_task_timeout_ms()`,
+  `on_timeout: :kill_task`, `zip_input_on_exit: true`; fully consume the resulting stream;
+  wrap the two call sites lacking an existing inline rescue (the poll-and-fire loop,
+  `maybe_run_retention_sweep/2`) in a top-level per-task rescue per §4b; log `{:exit, _}`
+  yields (both timeout and crash) at `Logger.warning/2` tagged with `schema:` and `op:`,
+  mirroring the existing `with_admission/3` capacity-skip log.
+- No change to `with_admission/3`, to `Admission`'s existing `try_acquire/2`/`release/2`
+  functions or `handle_call` clauses, to any `lib/letflow/supervisor/*` file, or to
+  `application.ex`.
 - No change to how `schemas` is computed or how many times it is computed per tick.
 
 ## 8. Open questions (explicitly not resolved here)
@@ -357,11 +433,14 @@ Orthogonal, no changes needed to `lib/letflow/supervisor/pollers.ex`,
 - §4a's `sweep_task_timeout_ms` default (10 s) vs. `poll_interval_ms`'s default (5 s)
   ordering — flagged, not silently decided; recommendation given (treat as independent
   budgets) but REVIEWER should confirm.
-- §3b's `reserved_headroom` (2) being a single shared allowance for every
+- §3b's `reserved_headroom` being a single shared allowance for every
   non-admission-gated Repo consumer platform-wide, with no current inventory of who else
   draws on it besides this design's `maybe_refresh_active_instances/1` bound — flagged,
-  not resolved; revisit if such an inventory is ever produced or if `N = 2` is observed
-  to be too tight in practice.
+  not resolved; revisit if such an inventory is ever produced or if the current value is
+  observed to be too tight in practice. (Note: because `max_concurrency` for this sweep
+  is now derived live from `Admission.reserved_headroom/1` rather than hardcoded, any
+  such revisit only requires changing `Admission`'s config — no corresponding edit to
+  `poller.ex` is needed.)
 - Whether `Task.Supervisor` (an explicit, named, supervised task pool, following
   `Letflow.SandboxPool`'s own precedent of never leaving `Task.await/2`-style blocking
   calls implicit) should back these `Task.async_stream/3` calls instead of the bare,

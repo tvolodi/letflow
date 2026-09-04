@@ -1,0 +1,44 @@
+id: ISS-0458
+title: "10 pre-existing test failures observed during mix letflow.check.test full-suite run (PromotionAssertionRerunTest, ServiceCatalogReaperTest x3, ServiceCatalogTest x3, TenantSchemaReaperTest x3)"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0457-20260904
+discovered_at: "2026-09-04T09:11:10Z"
+severity: MINOR
+tags: [test-suite, flake, s6]
+description: >
+  Found by TEST-DESIGNER during WF03-ISS0457-20260904 Step 4, running
+  `mix letflow.check.test` as part of verifying the ISS-0457 regression
+  test addition. Letflow.Definitions.PromotionAssertionRerunTest (1
+  failure), Letflow.ServiceCatalogReaperTest (3 failures),
+  Letflow.ServiceCatalogTest (3 failures, all Postgrex 42P01
+  undefined_table on a tenant's process_definitions relation), and
+  Letflow.TenantSchemaReaperTest (3 failures) failed during that
+  full-suite run.
+
+  Structurally cleared as unrelated to WF03-ISS0457-20260904 per
+  core-directives.md's Route 1: none of these modules or their likely
+  dependencies appear in that branch's diff (`git diff --name-only
+  main...HEAD` touched only lib/mix/tasks/letflow.lint_handoffs.ex, its
+  test file, two design docs, and docs/issues/handoffs bookkeeping).
+
+  This same run's own TEST-RUNNER step (Step 5) re-ran the full suite
+  later and did NOT reproduce any of these 10 failures (3206/3206 passed)
+  -- grepped all 8 partition logs, confirmed all four modules' tests
+  actually executed, found zero Failed: lines. This is consistent with
+  this suite's already-documented dominant failure class being
+  intermittent/environmental rather than a stable regression (see
+  core-directives.md's own worked example of the same commit producing
+  three different failure sets across three runs), but the specific
+  failure signature -- undefined_table 42P01 on process_definitions,
+  plus three reaper-test failures -- warrants investigation as a real,
+  if intermittent, defect rather than being dismissed outright without
+  looking.
+affected_files:
+  - test/letflow/definitions/promotion_assertion_rerun_test.exs
+  - test/letflow/service_catalog_reaper_test.exs
+  - test/letflow/service_catalog_test.exs
+  - test/letflow/tenant_schema_reaper_test.exs
+related: []
+queue_task_id: 458
+github_issue: 882
+status: open

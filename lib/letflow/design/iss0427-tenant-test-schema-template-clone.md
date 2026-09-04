@@ -514,6 +514,46 @@ into the design text at their own locations (not merely narrated here):
   §3.2 dimension #2 below to compare each side's own RELATIVE column order
   (re-ranked 1..N) rather than the raw absolute integer.
 
+
+### 0.5 CRITICAL — the qualifier-rewrite pattern must be UNQUOTED (rework 3 gate correction)
+
+Found by CODE-DESIGN-VALIDATOR at the re-gate-3 gate and independently
+re-verified by ORCH against this host's live catalog. Earlier revisions of
+this document wrote the substitution pattern as the QUOTED string
+`'"tenant_template".'`. **That is wrong and fails silently.**
+
+Postgres's `pg_get_constraintdef/1`, `pg_get_functiondef/1` and
+`pg_get_triggerdef/1` emit a schema qualifier UNQUOTED whenever the
+identifier needs no quoting — which `tenant_template` does not. Measured
+directly:
+
+```
+CREATE OR REPLACE FUNCTION tenant_template.imm()
+CREATE TRIGGER a_no_upd BEFORE UPDATE ON tenant_template.a
+  FOR EACH ROW EXECUTE FUNCTION tenant_template.imm()
+```
+
+A `replace/3` searching for `"tenant_template".` (with quotes) therefore
+matches NOTHING, and `replace/3` returns its input unchanged on a non-match.
+The rewrite becomes a silent no-op, the DDL executes successfully, and the
+clone is left with FKs, triggers and functions all still pointing at the
+TEMPLATE schema — reintroducing the exact live cross-schema coupling this
+whole design exists to prevent, with nothing failing and nothing to see.
+
+The implementation already does this correctly
+(`test/support/tenant_template.ex`, `readd_foreign_keys!/1` and the trigger
+recreation step, both using the unquoted `~s(#{@template_schema}.)`), so no
+shipped code is affected. This section exists because the DESIGN TEXT was
+wrong, and a future re-implementation from this document, or a REVIEWER
+auditing the code against its literal words, would have been led straight
+into the defect.
+
+Defence in depth: even if a re-implementation got this wrong, parity
+dimension #8 (triggers/functions) and the FK half of dimension #3 compare
+qualifier-normalized definition text between clone and reference and would
+fail on exactly this divergence. The rewrite is the mechanism; the parity
+check is the backstop. Neither alone is the guarantee.
+
 ## 1. Scope and non-goals
 
 **In scope:** how `test/support/tenant_fixture.ex`'s `provisioned_tenant!/1`
@@ -680,7 +720,8 @@ inherits those rows as ordinary table data (§2.3 step 6).
    `tenant_template` namespace. For each, build the `ALTER TABLE
    "<clone_schema>"."<table>" ADD CONSTRAINT "<conname>" <def>` statement
    from `pg_get_constraintdef(oid)`, with the template schema's own
-   qualifier (`"tenant_template".`) textually replaced by the clone schema's
+   qualifier (`tenant_template.` — UNQUOTED, see the CRITICAL note below)
+   textually replaced by the clone schema's
    qualifier throughout the definition string — per §0.1 finding 1, this
    substitution is NOT optional; skipping it reproduces the FK constraint
    object but points it at the template's own tables.
@@ -723,8 +764,8 @@ inherits those rows as ordinary table data (§2.3 step 6).
    (§0.1 finding 1) and sequences (§0.1 findings 3-4): both
    `pg_get_functiondef(oid)` and `pg_get_triggerdef(oid)` emit text
    literally qualified to the TEMPLATE schema (`CREATE OR REPLACE FUNCTION
-   "tenant_template".audit_entries_immutable() ...`,
-   `... EXECUTE FUNCTION "tenant_template".audit_entries_immutable()`),
+   tenant_template.audit_entries_immutable() ...`,
+   `... EXECUTE FUNCTION tenant_template.audit_entries_immutable()`),
    verified directly this rework (§0.4) — so, exactly as with FK re-add, the
    template's own qualifier must be textually replaced with the clone's
    before executing either statement, or the clone's trigger would silently
@@ -747,7 +788,8 @@ inherits those rows as ordinary table data (§2.3 step 6).
       trigger, as none currently do but a future migration could, must be
       created exactly once): `pg_get_functiondef(func_oid)`, with the
       template schema's qualifier textually replaced by the clone's
-      (`replace(def, '"tenant_template".', '"<clone_schema>".')` — the exact
+      (`replace(def, 'tenant_template.', '<clone_schema>.')` — UNQUOTED on
+      both sides, see the CRITICAL note below; the exact
       technique already proven for FK definitions, applied to a different
       catalog function), executed as-is (`CREATE OR REPLACE FUNCTION` is
       itself the statement `pg_get_functiondef` returns, so no separate
@@ -969,6 +1011,22 @@ full finding and the fix each now specifies.)
    expression indexes (the expression text is part of `indexdef`) — no
    separate check needed for those three, they fall out of comparing the
    full `indexdef` string.
+
+   **REWORK-3 GATE CORRECTION (do not skip this — it is not implied by
+   "not by indexname" above).** `indexdef` text itself EMBEDS the index's
+   own name (`CREATE INDEX <name> ON <schema>.<table> ...`), and `LIKE
+   INCLUDING ALL` auto-renames indexes. So schema-qualifier normalization
+   alone is NOT sufficient: the object's own name substring must also be
+   stripped out of each side's `indexdef` before comparison, or every
+   auto-renamed index false-fails. This is unlike `pg_get_constraintdef`,
+   which never embeds the constraint's name — which is why the FK half of
+   dimension #3 needs no equivalent step, and why the asymmetry is easy to
+   miss. Failure direction is a false FAIL (noisy, not silent), so it is a
+   usability defect rather than a safety hole — but it must be implemented
+   or the parity check cries wolf on every clone. The same correction
+   applies verbatim to dimension #11 (`pg_statistic_ext`), whose
+   `pg_get_statisticsobjdef` output embeds the statistics object's own
+   auto-renamed name for the same reason.
 5. **Sequences reachable from a column default** — for every column with a
    non-null default in the reference schema, compare
    `pg_get_serial_sequence(schema.table, column) IS NOT NULL` on both sides

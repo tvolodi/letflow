@@ -64,9 +64,26 @@ does two things in one pass over one subprocess's captured output:
 each redirected to its own log file (`$tmp_dir/partition-$i.log`), and prints only
 **aggregated pass/fail counts** to its own stdout — never the constituent partitions'
 raw text. If `run/1` is changed to shell out to `test_parallel.sh` and grep *its*
-stdout for the substring, the check finds nothing, forever, regardless of whether the
-warning is actually present in any partition — a silently-vacuous gate, permanently
-green. This is exactly the failure class `docs/anti-patterns.md` already documents
+stdout for the substring, the check becomes unreliable to the point of uselessness —
+it would catch a warning only by accident, and miss every warning emitted during the
+partition runs themselves.
+
+**PRECISION CORRECTION (CODE-DESIGN-VALIDATOR gate, MAJOR).** An earlier draft of this
+section claimed the aggregate stdout "finds nothing, forever." That is factually wrong
+and the correction matters, because a rationale that overstates its case invites a
+future reader to dismiss the whole concern. `scripts/test_parallel.sh` line 99 runs
+`MIX_ENV=test mix compile` **unredirected** as its Step 1, so a compile-time warning
+emitted by that single pre-compile *does* reach the wrapper's stdout — the validator
+verified this directly, observing the injected warning appear there exactly once.
+
+What is genuinely true, and is what this design actually relies on: warnings emitted
+**during the N partition runs** go only to the per-partition logs, and Mix's
+compile-manifest behaviour means a warning may be re-emitted per partition build while
+appearing in the aggregate at most once, or not at all. So grepping the aggregate is
+not a *guaranteed* vacuous pass — it is an unreliable one, which is worse in a
+different way: it would sometimes catch a warning and sometimes not, making a silent
+regression look like a flake. The algorithm below never reads the aggregate for this
+purpose, so its correctness does not depend on which of these two framings is right. This is exactly the failure class `docs/anti-patterns.md` already documents
 repeatedly for ISS-0069 recurrences, and the same shape ISS-0427's own parity check
 shipped blind to once already (named explicitly in the dispatch as the precedent to not
 repeat).
@@ -80,6 +97,16 @@ repeat).
    capturing), passing it `scripts/test_parallel.sh` as the executable. Streaming its
    own stdout is still useful for a human/agent watching the run live, but **that
    captured stream is no longer what the substring check reads.**
+   - **ORDERING RULE (CODE-DESIGN-VALIDATOR gate, MINOR).** When BOTH the wrapper
+     exits non-zero AND the partition-log-dir line is absent, report the WRAPPER'S
+     NON-ZERO EXIT first. This is not cosmetic: the common real case is a `mix compile`
+     failure inside `test_parallel.sh`, which exits at its Step 1 before ever printing
+     the log-dir line (verified by the gate). Reporting "partition logs line missing"
+     there would send an agent hunting a nonexistent log-parsing bug instead of reading
+     the compile error that actually happened. Both orderings fail safely — this rule is
+     about which message an agent sees first, and in a humanless pipeline that is the
+     difference between a two-minute fix and a wasted run.
+
 2. Parse the runner's own stdout (still captured, per step 1) for the line
    `test_parallel: partition logs in <dir>` — this exact line already exists in
    `scripts/test_parallel.sh` (unconditionally printed, never behind a flag, confirmed

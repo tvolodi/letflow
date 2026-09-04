@@ -1,0 +1,55 @@
+{
+  "handoff_id": "a1e5c2d0-4f11-4b8a-9e2a-000000000003",
+  "run_id": "WF03-ISS0438-20260904",
+  "workflow_id": "WF-03",
+  "step": "01b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0438-20260904/step-01b-code-design-validator.json",
+  "created_at": "2026-09-04T15:37:37Z",
+  "started_at": "2026-09-04T15:37:37Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "docs/issues/ISS-0438.yaml",
+      "docs/issues/ISS-0439.yaml",
+      "lib/letflow/event_store/registry.ex",
+      "lib/letflow/repository.ex",
+      "handoffs/WF03-ISS0438-20260904/step-01-code-designer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/router.ex",
+      "docs/migration/decisions/",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/requirements.yaml"
+    ]
+  },
+  "task": {
+    "description": "HARD GATE on CODE-DESIGNER's scoping-decision artefact at lib/letflow/design/iss0438-entity-subsystem-scoping.md. This is NOT a normal implementation-design gate (there is no code yet to check for correctness) -- you are validating that the DECISION and its documented consequences are COMPLETE and UNAMBIGUOUS against all 7 of ISS-0438's acceptance criteria, and that the reasoning is actually grounded in the real source files rather than asserted. Read docs/issues/ISS-0438.yaml in full for the 7 AC text (quoted in step-01's own task.description if you want it inline, but read the issue file directly -- it is the authoritative statement). Independently re-derive your verdict; do not accept CODE-DESIGNER's own claim of completeness on trust (core-directives.md, 'Every producing step has a validating step' -- a validator that only reads the producer's result.summary has not validated anything).\n\nSpecifically check:\n1. AC1: does the artefact state a clear, unambiguous port-vs-defer decision? Not 'it depends' or a menu of options presented as the decision.\n2. AC2 (if in-scope recommended): is the stage/slice breakdown concrete enough that REQ-ANALYST could draft real REQ-xxx entries without re-reading R-Co source? Spot-check at least one of the claimed R-Co file/line facts yourself against the actual R-Co source at c:\\Users\\tvolo\\dev\\ai-dala\\R-Co\\src\\entities\\ -- do not trust the artefact's own citations blindly.\n3. AC3 (if out-of-scope recommended): does it name the exact router.ex edit and the decision-record path (docs/migration/decisions/0018-*.md)?\n4. AC4: is the EventStore.Registry relationship answered by actually reading lib/letflow/event_store/registry.ex's real public interface (register_type/2, validate_payload/3, get_type/2) rather than asserting compatibility abstractly? Verify the claim yourself by opening that file.\n5. AC5: is the Repository/ArtifactKind relationship answered against the REAL lib/letflow/repository.ex and its ArtifactKind value-list mechanism? If the artefact claims ArtifactKind needs extending, verify that claim by reading lib/letflow/repository/artifact_kind.ex (or wherever that module actually lives -- find it) and checking its current value list yourself.\n6. AC6: does the artefact correctly state the ISS-0439 sequencing relationship, consistent with ISS-0439's own already-recorded text (read docs/issues/ISS-0439.yaml), and does it correctly NOT resolve or reopen ISS-0439?\n7. AC7: confirm literally zero implementation code appears -- no Elixir function bodies, no literal Ecto schema field definitions. Sketch-level module/boundary mentions are fine; field-by-field schemas are not.\n\nIf ANY check fails, FAIL with the specific gap named per acceptance criterion (validator-fail example shape in HANDOFF_PROTOCOL.md). If all pass, PASS and state what you independently re-derived and how (validator-pass example shape).",
+    "acceptance_criteria": [
+      "Every one of ISS-0438's 7 acceptance criteria is checked individually against the artefact, not impressionistically",
+      "At least one of CODE-DESIGNER's factual claims about the real Letflow codebase (EventStore.Registry's interface, or ArtifactKind's current value list) is independently verified by opening the actual file, not accepted from the artefact's own citation",
+      "At least one of CODE-DESIGNER's factual claims about R-Co's source (a file size, a line count, a described mechanism) is spot-checked against the real R-Co source",
+      "The verdict is PASS or FAIL, never a soft 'looks reasonable'",
+      "A FAIL names the specific unmet AC and the specific gap, not a general impression"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

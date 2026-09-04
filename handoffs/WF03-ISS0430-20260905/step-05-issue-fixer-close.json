@@ -1,0 +1,49 @@
+{
+  "handoff_id": "5e6f7a8b-9c0d-4e5f-a07b-8c9d0e1f2a3b",
+  "run_id": "WF03-ISS0430-20260905",
+  "workflow_id": "WF-03",
+  "step": "5",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0430-20260905/step-05-issue-fixer-close.json",
+  "created_at": "2026-09-04T23:07:00Z",
+  "started_at": "2026-09-04T23:07:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0430.yaml",
+      "lib/letflow/design/iss0430-notify-listen-decision.md",
+      "handoffs/WF03-ISS0430-20260905/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0430-20260905/step-02c-security-reviewer.json",
+      "handoffs/WF03-ISS0430-20260905/step-02d-reviewer.json",
+      "docs/agents/protocols/ISSUE_QUEUE.md"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Close ISS-0430 per WF-03 Step 5. All three hard gates on the design artefact (lib/letflow/design/iss0430-notify-listen-decision.md) have PASSED: CODE-DESIGN-VALIDATOR (structural/AC completeness, all 8 ACs individually verdicted MET), SECURITY-REVIEWER (INV-1 tenant-isolation sign-off, independently re-derived against real tenant-provisioning code and migrations), REVIEWER (OTP idiom/supervision integrity/decision-record consistency/scope). Read docs/agents/protocols/ISSUE_QUEUE.md's 'Issue status vocabulary' section before writing the status line -- this is a design-first issue whose OWN acceptance criteria are entirely about producing and gating a decision document (not about shipping a running consumer, which ISS-0430's own text explicitly scopes OUT as 'separate follow-on work'). Determine whether 'resolved' is the correct terminal status here: 'resolved' asserts a root cause was actually removed and a regression test proves it -- but ISS-0430 is not a bug with a root cause to remove, it is a design decision to make, and its own 8 ACs are entirely about the artefact's existence and content, all of which are now independently verified true. State explicitly in your result which status you are choosing and why, quoting ISSUE_QUEUE.md's vocabulary definitions rather than assuming 'resolved' is automatically right for a design-first issue -- if you conclude 'resolved' is correct (the issue's own deliverable, the design artefact, IS produced and gated, matching AC1-AC8 exactly as filed), say so with that reasoning; do not default to it without checking.\n\nUpdate docs/issues/ISS-0430.yaml: set status per your determination above, plus that status's own required key pair (resolved_in_run/resolved_at for 'resolved', per ISSUE_QUEUE.md). Close GitHub issue #834 with a --comment citing the resolving run-id, the design artefact path, and the three gate passes -- per WF-03 Step 5's evidence rule (a GitHub close is only valid with either a --comment citing resolving evidence, or a genuinely linked/merged PR with a Closes/Fixes reference; use the --comment path now since the PR is not yet merged at this step, then Step Final's PR body should also carry a Closes #834 reference so the linked-PR evidence exists too). The comment must state plainly this is a DESIGN decision, not a shipped feature -- do not imply a consumer was built.\n\nDo NOT call letflow-queue yourself -- ORCH releases the queue-task lock after this step, per WF-03 Step 5's own 'ORCH, immediately on this step's PASS' instruction. Complete this handoff and route to Step Final (git merge).",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0430.yaml status field set with correct reasoning stated (resolved vs. another terminal value), quoting ISSUE_QUEUE.md's vocabulary",
+      "If resolved: resolved_in_run and resolved_at fields set with a real UTC timestamp from the clock",
+      "GitHub issue #834 closed with a --comment citing the run-id, the design artefact path, and all three gate passes, stating plainly this is a design decision not a shipped feature",
+      "docs/issues/ISS-0430.yaml committed to git on the current branch",
+      "next_action names Step Final (git merge) as the next step"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

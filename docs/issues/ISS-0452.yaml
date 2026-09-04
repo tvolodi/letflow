@@ -148,3 +148,36 @@ resolution: >
   consecutive runs; that was written expecting a locally-reproducible flake
   and would not have been stronger evidence here than 10, since the local
   environment does not reproduce the failure at any repetition count.
+
+superseded_by: >
+  ISS-0446 (WF03-ISS0446-20260904, merged after this issue). BOTH ISSUES ARE
+  THE SAME DEFECT, found independently by two concurrent sessions: this one
+  from PR #864's CI runs, ISS-0446 from PR #866's. They were fixed
+  differently, and the two fixes collided on rebase.
+
+  ISS-0452 shipped option (b) -- keep the explicit Supervisor.stop/1 but wrap
+  it in try/catch :exit, treating an already-dead supervisor as success.
+  ISS-0446 shipped option (d) -- replace the ad-hoc Supervisor.start_link/2
+  entirely with ExUnit.fetch_test_supervisor/0 + start_supervised!/1 and
+  delete the on_exit callback outright.
+
+  ORCH resolved the collision in favour of ISS-0446's fix at rebase time, and
+  the try/catch is no longer present on main. Reasoning, recorded here so the
+  decision is auditable rather than silently applied: (b) TOLERATES the race
+  (the check-then-act is still there; the crash is caught after the fact),
+  while (d) REMOVES it (no on_exit and no ad-hoc supervisor remain, so there
+  is no check-then-act left to race). ISS-0446's own CODE-DESIGN-VALIDATOR
+  gate evaluated exactly these two options against each other and rejected
+  (b) on that ground, having verified against real ExUnit source that
+  ExUnit.OnExitHandler.terminate_supervisor/2 is Process.monitor + a blocking
+  receive with no Process.alive? check anywhere -- structurally immune by
+  construction rather than by exception handling.
+
+  ONE THING THIS RESOLUTION GIVES UP, stated plainly: this test's own comment
+  had argued it should own and tear down its supervisor itself rather than
+  hand the lifecycle to ExUnit. ISS-0446's design examined that claim
+  directly and found the test's real load-bearing property is narrower --
+  "startable under SOME real supervisor that is not Letflow.Supervisor" --
+  which ExUnit's per-test supervisor satisfies identically, with
+  Supervisor.which_children/1 still proving the same fact about the child.
+  No assertion was weakened; the ^pid pin actually strengthened one.

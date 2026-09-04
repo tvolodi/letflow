@@ -1,0 +1,67 @@
+id: ISS-0448
+title: "Postgres container healthcheck probes a nonexistent database, writing a FATAL line to the log every 2 seconds"
+discovered_by: USER
+discovered_in_run: WF03-ISS0446-20260904
+discovered_at: "2026-09-04T06:20:00Z"
+severity: MINOR
+tags: [tooling, docker, dev-env, logging, noise]
+description: >
+  REPORTED BY THE PROJECT OWNER during WF03-ISS0446-20260904, from the
+  letflow-2 stack's own postgres container log:
+
+    2026-09-04 03:03:57.591 UTC [33897] FATAL:  database "letflow" does not exist
+    2026-09-04 03:03:59.763 UTC [33906] FATAL:  database "letflow" does not exist
+    ... (repeating at ~2.1s intervals, indefinitely)
+
+  ROOT CAUSE, confirmed directly against the running container
+  (docker inspect letflow-2-postgres-1) and not merely read off the file:
+  docker-compose.yml's postgres healthcheck is
+
+    test: ["CMD-SHELL", "pg_isready -U letflow"]
+    interval: 2s
+
+  `pg_isready` defaults its DATABASE NAME to the value of -U when no -d is
+  given. The user is `letflow` but POSTGRES_DB is `letflow_dev`, so every
+  probe connects to a database named `letflow`, which has never existed.
+  The 2s healthcheck interval matches the observed log spacing exactly.
+
+  WHY IT IS ONLY MINOR / COSMETIC: pg_isready still correctly reports the
+  server as UP -- receiving a FATAL "database does not exist" response is
+  itself proof the postmaster is accepting connections, which is all the
+  healthcheck is asserting. The container reports (healthy) and nothing is
+  functionally broken. Nothing in the app connects to a bare `letflow`
+  database: config/dev.exs uses letflow_dev, config/test.exs uses
+  letflow_test#{MIX_TEST_PARTITION}.
+
+  WHY IT IS STILL WORTH FIXING: it writes a FATAL-level line to the
+  postgres log every 2 seconds for the entire lifetime of the container --
+  roughly 43,000 lines/day of pure noise at the highest severity postgres
+  emits. That actively degrades the log as a debugging surface (a real
+  FATAL is now a needle in a haystack) and, as happened here, costs an
+  investigation each time someone reasonably asks what it means.
+
+  SUGGESTED FIX, one word: `pg_isready -U letflow -d letflow_dev`. Consider
+  also whether the compose file should reference POSTGRES_DB rather than
+  hardcoding the name a second time, so the two cannot drift apart again.
+  Verify by tailing the container log for >2s after the change and
+  confirming the FATAL lines stop while the container still reports healthy.
+
+  PRE-EXISTING, NOT INTRODUCED BY THE RUN THAT FOUND IT: the healthcheck
+  line is unchanged since commit 2df085b3 (REQ-128, Keycloak dev stack) and
+  is byte-identical to main; `git diff main...HEAD -- docker-compose.yml`
+  on the discovering branch is empty. It was filed rather than fixed
+  in-run because WF03-ISS0446-20260904's design/security/idiom gates all
+  passed on a strictly test-only scope, and amending infrastructure after
+  those gates would ship a change no gate examined.
+affected_files:
+  - docker-compose.yml
+related:
+  - REQ-128
+source: >
+  Project owner's observation of the letflow-2-postgres-1 container log
+  during WF03-ISS0446-20260904; root cause confirmed by ORCH via
+  docker inspect against the live container (healthcheck "pg_isready -U
+  letflow", interval 2s, POSTGRES_DB=letflow_dev).
+queue_task_id: 455
+github_issue: 872
+status: open

@@ -1,0 +1,90 @@
+id: ISS-0447
+title: "The check-then-act on_exit teardown pattern fixed in ISS-0446 exists in 8 other test files -- same latent CI-flake class"
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF03-ISS0446-20260904
+discovered_at: "2026-09-04T02:55:00Z"
+severity: MINOR
+tags: [testing, flake, otp, teardown, ci, s6]
+description: >
+  FOUND while fixing ISS-0446. That issue removed a check-then-act teardown
+  race from a single test in service_task_dispatcher_test.exs. The identical
+  shape -- `on_exit(fn -> if Process.alive?(pid), do: <stop-call> end)` --
+  exists in 8 OTHER test files and was deliberately scoped OUT of
+  WF03-ISS0446-20260904 rather than fixed opportunistically.
+
+  WHY IT IS THE SAME DEFECT CLASS: `Process.alive?/1` followed by a stop call
+  is check-then-act across a process boundary. When the target is linked to
+  the test process it is already being torn down as that process exits, so it
+  can die between the check and the call, and the stop then exits
+  `:shutdown`/`:noproc` instead of returning `:ok`. The guard cannot close the
+  window. See ISS-0446 for the full mechanism, verified against real ExUnit
+  1.20.3 source.
+
+  MEASURED, not assumed -- from ISS-0446's own run: the racy shape reproduces
+  the exact CI stacktrace (GenServer.stop/3 -> :sys.terminate -> EXIT
+  shutdown, through on_exit_handler.ex:140). Under an async:false module of
+  20 sequential cases with a trap_exit child whose terminate/2 sleeps 5ms,
+  ORCH measured the old shape failing 20/20 on every one of 5 runs while the
+  ISS-0446 fixed shape passed 20/20 on every run, in 0.3s. TEST-DESIGN-VALIDATOR
+  independently measured 2-4/20 failures across 5/5 runs with a
+  non-trapping child. The load-bearing ingredient is enough on_exit-driven
+  start/stop cycles back-to-back in ONE BEAM VM -- NOT sibling scheduler
+  contention, which was an incorrect early hypothesis corrected at the Step 4b
+  gate.
+
+  KNOWN SITES (grep -rn "if Process.alive?" test/ on main at the time of
+  filing -- re-verify before acting, these drift):
+    - test/letflow/definitions/promotion_assertion_rerun_test.exs:127
+    - test/letflow/event_store/platform_events_test.exs:316
+    - test/letflow/sandbox_pool/fixture_loader_test.exs:47
+    - test/letflow/sandbox_pool_test.exs:103, 662, 1458, 1486
+    - test/letflow/support/tenant_fixture_test.exs:503
+    - test/support/service_catalog_reaper_test.exs:181, 247
+    - test/support/tenant_schema_reaper_test.exs:309
+
+  NOT ALL OF THESE ARE NECESSARILY DEFECTS. The race requires the target to be
+  LINKED to the test process (so it is already dying at teardown time). A site
+  whose target is unlinked, or already-stopped by design, may be harmless or
+  merely redundant. Some use Process.exit(pid, :kill) or Agent.stop rather
+  than GenServer.stop and need their own analysis. Whoever picks this up must
+  classify each site rather than applying a blanket rewrite -- a mechanical
+  find-and-replace across 8 files is exactly the wrong move here.
+
+  SUGGESTED REMEDY, not prescribed: for genuinely-linked targets, ISS-0446's
+  own remedy applies -- ExUnit's start_supervised/start_supervised!, whose
+  teardown is Process.monitor + a blocking receive of {:DOWN,...} with no
+  Process.alive? check anywhere (on_exit_handler.ex:61-70), i.e. structurally
+  immune rather than merely narrower. Where the on_exit is simply redundant,
+  deleting it is enough.
+
+  WHY FILE RATHER THAN FIX NOW: ISS-0446's run was scoped to one file and its
+  gates passed on that scope. Widening it mid-run would have bypassed the
+  design and review gates that examined only the single-file change, and 8
+  sites across 8 files with differing target-lifecycle semantics is not a
+  one-turn task. REVIEWER and TEST-DESIGN-VALIDATOR both independently agreed
+  the out-of-scope call was correct.
+affected_files:
+  - test/letflow/definitions/promotion_assertion_rerun_test.exs
+  - test/letflow/event_store/platform_events_test.exs
+  - test/letflow/sandbox_pool/fixture_loader_test.exs
+  - test/letflow/sandbox_pool_test.exs
+  - test/letflow/support/tenant_fixture_test.exs
+  - test/support/service_catalog_reaper_test.exs
+  - test/support/tenant_schema_reaper_test.exs
+related:
+  - ISS-0446
+  - ISS-0352
+  - ISS-0426
+source: >
+  Discovered by TEST-DESIGNER during WF03-ISS0446-20260904 Step 4 and
+  independently re-verified by ORCH (grep confirmed 8 files). Mechanism and
+  reproduction numbers measured during that run's Step 4/4b.
+queue_task_id: 454
+github_issue: 870
+queue_ref_note: >
+  The queue rewrote this task's title to "ISS-0454..." and set
+  issue_ref: ISS-0454, deriving both from its own task id (454) rather than
+  from the filed issue id. The real issue is ISS-0447 (this file). Same
+  behaviour was observed on task 453/ISS-0446 in the run that filed this.
+  Treat this file as authoritative; task 454 is the lock to release.
+status: open

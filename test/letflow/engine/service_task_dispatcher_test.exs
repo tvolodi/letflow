@@ -1121,52 +1121,127 @@ defmodule Letflow.Engine.ServiceTaskDispatcherTest do
       # this design's own documented zero-delay-first-tick hazard against
       # the sandboxed Repo connection this test process owns). Instead,
       # starts the exact same {Letflow.Engine.ServiceTaskDispatcher.Poller, []}
-      # child spec application.ex uses under an isolated, throwaway
-      # Supervisor this test fully owns and tears down itself -- proving the
-      # child spec is valid and produces a real, live, uniquely-named
-      # process (Letflow.Scheduler.Poller is not this process, confirmed by
-      # name), without touching the shared application supervision tree or
-      # its Repo-sandbox ownership.
-      {:ok, sup_pid} =
-        Supervisor.start_link(
-          [{Letflow.Engine.ServiceTaskDispatcher.Poller, []}],
-          strategy: :one_for_one,
-          name: __MODULE__.ThrowawaySupervisor
-        )
+      # child spec application.ex uses under ExUnit's own per-test supervisor
+      # (via start_supervised!/1), proving the child spec is valid and
+      # produces a real, live, uniquely-named process (Letflow.Scheduler.Poller
+      # is not this process, confirmed by name), without touching the shared
+      # application supervision tree or its Repo-sandbox ownership. Teardown
+      # is entirely ExUnit's own responsibility (monitor-and-wait, no
+      # check-then-act) -- no on_exit callback of any kind is needed here.
+      {:ok, sup} = ExUnit.fetch_test_supervisor()
+      pid = start_supervised!({Letflow.Engine.ServiceTaskDispatcher.Poller, []})
 
-      on_exit(fn ->
-        # ISS-0452: this teardown must tolerate the supervisor ALREADY being
-        # gone. It is started with Supervisor.start_link/2 above, so it is
-        # LINKED to the test process; on_exit callbacks run after that
-        # process exits, by which point the supervisor may already be
-        # shutting down on its own. The previous form was check-then-act --
-        # `if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid)` -- and
-        # raced: alive?/1 returned true, then :sys.terminate hit a process
-        # already terminating and exited :shutdown, failing the test from
-        # its teardown even though every assertion above had passed. That
-        # flaked three times across five CI backend-gate runs (PR #864,
-        # runs 33799741008 / 33801472947 job 100807265279), always under
-        # runner contention, never locally.
-        #
-        # Catching the exit rather than switching to start_supervised/1 is
-        # deliberate: this test's own comment (above) requires it to own and
-        # tear down the supervisor itself rather than hand its lifecycle to
-        # ExUnit, so that the assertions run against a tree this test fully
-        # controls. A supervisor that is already gone satisfies this
-        # callback's entire intent, so both outcomes are success.
-        try do
-          Supervisor.stop(sup_pid)
-        catch
-          :exit, _ -> :ok
-        end
-      end)
+      children = Supervisor.which_children(sup)
 
-      children = Supervisor.which_children(sup_pid)
-
-      assert [{Letflow.Engine.ServiceTaskDispatcher.Poller, pid, :worker, _modules}] = children
+      assert [{Letflow.Engine.ServiceTaskDispatcher.Poller, ^pid, :worker, _modules}] = children
       assert is_pid(pid)
       assert Process.alive?(pid)
       assert pid != Process.whereis(Letflow.Scheduler.Poller)
     end
+
+    test "ExUnit.fetch_test_supervisor/0 + start_supervised!/1 (this suite's own throwaway-supervisor fixture idiom) tears down cleanly even when the child's shutdown is slow" do
+      # ISS-0446 BACKGROUND (this is not a regression guard for that fix --
+      # see the corrected scope note below): the test directly above this one
+      # used to start its throwaway supervisor via a bare
+      # `Supervisor.start_link/2` and guard teardown with
+      # `on_exit(fn -> if Process.alive?(sup_pid), do: Supervisor.stop(sup_pid) end)`.
+      # That guard was a CHECK-THEN-ACT race across a process boundary: the
+      # ExUnit on_exit callback runs in its own, unrelated process (see
+      # ExUnit.OnExitHandler.exec_callback/1), with no ordering guarantee at
+      # all relative to the link-exit signal that the test process's own exit
+      # sends to the supervisor -- Process.alive?/1 could observe `true` and
+      # the supervisor could still die mid-flight before Supervisor.stop/1's
+      # monitored call completed, making Supervisor.stop/1 exit
+      # `{:shutdown, ...}` instead of returning `:ok`. That crashed on_exit
+      # itself, with no assertion in the test body ever failing -- the shape
+      # that reddened PR #866's CI run (ISS-0446.yaml) while passing cleanly
+      # every time locally. That deleted shape is not re-enacted here (that
+      # would test ExUnit's/OTP's own on_exit and link-teardown behaviour, not
+      # anything Letflow owns, and the deleted shape no longer exists anywhere
+      # in this file for such a test to regress against).
+      #
+      # WHAT THIS TEST ACTUALLY VERIFIES, narrowed after measurement
+      # (TEST-DESIGNER rework 2 of 3; see test/specs/ISS-0446.md's second
+      # REVISION NOTE for the full correction): this suite's own fixture
+      # idiom for a throwaway per-test supervisor --
+      # `ExUnit.fetch_test_supervisor/0` + `start_supervised!/1`, with NO
+      # `on_exit` callback of any kind -- tears down cleanly even under a
+      # DELIBERATELY WIDENED shutdown window. That is all it verifies. It
+      # does NOT verify, and must not be read as verifying, that nobody can
+      # reintroduce a check-then-act `on_exit` guard at the actual fix site
+      # (the test directly above this one) -- an earlier version of this
+      # comment claimed exactly that, and TEST-DESIGN-VALIDATOR measured it
+      # false: reintroducing the deleted pattern at the fix site itself, with
+      # this test left untouched, was caught by the full file's own run in
+      # only 2 of 15 attempts (~13%), because this test exercises a wholly
+      # separate synthetic fixture (`SlowTrapChild`, below) and never touches
+      # the fix site's own code path. A reintroduction there is NOT reliably
+      # caught by this test, or by any other test in this suite -- see
+      # test/specs/ISS-0446.md for that residual gap stated plainly.
+      #
+      # `SlowTrapChild` traps exits and sleeps 5ms in `terminate/2` specifically
+      # to widen that window on demand -- deliberately, not incidentally. This
+      # is necessary: the real `Poller` neither traps exits nor does any slow
+      # work in `terminate/2`, so it would not exercise this window at all (this
+      # is exactly why the test above uses the real Poller for its own
+      # `which_children/1` proof, and this test uses a synthetic child for its
+      # different, timing-shaped proof -- the two tests are not redundant).
+      # Trapping exits is what makes the widened window -- and therefore this
+      # test's discriminating power over ITS OWN fixture -- deterministic
+      # rather than merely likely: verified locally, 10/10 runs, that the OLD
+      # deleted on_exit-guarded shape crashes on EVERY run under this exact
+      # harness (not just some runs), and 10/10 runs that today's shipped
+      # fixture idiom stays clean. That asymmetry is what makes this a
+      # reliable test of the idiom itself -- a probabilistic version of this
+      # same test would be worse than no test at all in a suite that already
+      # carries two documented CI-flake sources (ISS-0352, ISS-0426).
+      {:ok, sup} = ExUnit.fetch_test_supervisor()
+      pid = start_supervised!({Iss0446RegressionGuard.SlowTrapChild, []})
+
+      children = Supervisor.which_children(sup)
+
+      assert [{Iss0446RegressionGuard.SlowTrapChild, ^pid, :worker, _modules}] = children
+      assert is_pid(pid)
+      assert Process.alive?(pid)
+      # No on_exit callback here either, on purpose -- see the test's own
+      # comment above. If teardown ever crashes, ExUnit attributes the
+      # failure to THIS test -- which discriminates a regression in THIS
+      # FIXTURE IDIOM ITSELF (see the scope note above for what that does
+      # and does not cover).
+    end
+  end
+end
+
+defmodule Iss0446RegressionGuard.SlowTrapChild do
+  @moduledoc """
+  Deliberately slow-to-terminate GenServer used only by the fixture-idiom
+  teardown test above (originally added for ISS-0446), to widen the teardown
+  window that a check-then-act `on_exit` guard would race against. Traps
+  exits so that widening is deterministic (see that test's own comment for
+  why) rather than merely probable.
+
+  Module name kept as `Iss0446RegressionGuard` for historical/traceability
+  reasons (this is where the module was first added), but per that test's
+  own corrected scope note, it does not guard against a reintroduction of
+  the check-then-act pattern at the ISS-0446 fix site itself -- only against
+  a teardown regression in this suite's `fetch_test_supervisor/0` +
+  `start_supervised!/1` fixture idiom in the abstract.
+
+  Not a fixture for any other test -- kept file-local intentionally.
+  """
+  use GenServer
+
+  def start_link(_arg), do: GenServer.start_link(__MODULE__, :ok)
+
+  @impl true
+  def init(:ok) do
+    Process.flag(:trap_exit, true)
+    {:ok, %{}}
+  end
+
+  @impl true
+  def terminate(_reason, _state) do
+    Process.sleep(5)
+    :ok
   end
 end

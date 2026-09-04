@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF03-ISS0446-20260904-step-02-rework1",
+  "run_id": "WF03-ISS0446-20260904",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0446-20260904/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-04T00:39:46Z",
+  "started_at": "2026-09-04T00:39:46Z",
+  "completed_at": "2026-09-04T00:39:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0446"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0446-20260904/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0446-20260904/step-01-issue-fixer-diagnosis.json",
+      "docs/issues/ISS-0446.yaml",
+      "test/letflow/engine/service_task_dispatcher_test.exs",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit/callbacks.ex",
+      "/c/Program Files/Elixir/lib/ex_unit/lib/ex_unit/on_exit_handler.ex"
+    ],
+    "branch_name": "fix/ISS-0446-throwaway-supervisor-teardown-race-20260904",
+    "owned_modules": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 2 rework 1 of 3 for ISS-0446: CODE-DESIGN-VALIDATOR FAILED the prior design at Step 2b on one BLOCKER -- section 1.1's rejection of option (d) rested on a false premise that start_supervised!/2 has no accessible supervisor handle for Supervisor.which_children/1. Re-derive the premise against real ExUnit source myself, re-run the (a)-vs-(d) comparison honestly, decide, and correct the design (and any dependent sections) to be internally consistent with the corrected decision. Design only, no implementation code, no edits to the test file itself."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PREMISE INDEPENDENTLY RE-VERIFIED, not taken on the validator's or ISSUE-FIXER's word: read /c/Program Files/Elixir/lib/ex_unit/lib/ex_unit.ex directly -- ExUnit.fetch_test_supervisor/0 is public, @doc since 1.11.0, @spec :: {:ok, pid()} | :error, and callbacks.ex:568-580 confirms start_supervised/2 itself obtains its supervisor via this exact function before calling Supervisor.start_child(sup, child_spec). Read on_exit_handler.ex:59-70: terminate_supervisor/2 is Process.monitor(sup) + blocking receive {:DOWN,...} with NO Process.alive? check anywhere -- the structural-immunity mechanism is real, confirmed at the cited lines. Ran my OWN empirical probe (scratch/iss0446_probe_d.exs, deleted after use, git status confirmed clean afterward), independent of the validator's probe: a GenServer child with a deliberately slow (30ms) terminate/2, registered via {:ok, sup} = ExUnit.fetch_test_supervisor(); pid = ExUnit.Callbacks.start_supervised!({SlowChild, []}), then Supervisor.which_children(sup) -- ran 5/5, every run returning exactly [{SlowChild, ^pid, :worker, [SlowChild]}], the same {module, pid, :worker, modules} shape this test's own assertion checks. The original premise (\"no sup_pid to call which_children/1 on\") is confirmed FALSE.\n\nDECISION REVERSED, honestly re-run rather than defended: adopted option (d), refined -- replace the ad-hoc Supervisor.start_link/2 + name: __MODULE__.ThrowawaySupervisor construction with ExUnit.fetch_test_supervisor/0 + start_supervised!/1, and delete the on_exit block entirely with no replacement teardown code. Re-ran the comparison on the design's own stated axes: diff size is equal-or-smaller (removes the on_exit block AND the ad-hoc supervisor/name plumbing, replacing both with two calls to existing, versioned, already-used-in-spirit ExUnit API -- start_supervised!/start_supervised already appear at test/letflow/admission_test.exs:19 and test/letflow/scheduler/poller_test.exs:148,400); coverage is identical (confirmed by the probe above, zero assertions weakened); precedent is IN-SUITE, not novel (reversing the original design's framing that (d) required 'an unprecedented construction', which was itself downstream of the false premise); and structural safety is STRICTLY STRONGER than option (a), not merely equal -- (a)'s safety depended on this specific test's own Supervisor.start_link/2 call remaining linked forever, a property a future edit could quietly break (the residual risk the original design's section 1.2 explicitly accepted); (d)'s safety is framework-guaranteed by terminate_supervisor/2's monitor-and-block teardown, independent of anything this test's own code does, because there is no ad-hoc supervisor-ownership call left for a future edit to target. Verdict stated without hedging: (d) dominates (a) once its real cost is known -- this was not a genuine two-option tradeoff, it was an assumed cost that turned out not to exist.\n\nWhat is given up, stated plainly (design section 1.2): the test's supervisor is no longer independently named (__MODULE__.ThrowawaySupervisor is gone, confirmed nothing else in the file or suite referenced it via grep, re-run against the current tree); the supervisor is now framework-owned/potentially shared within the test process rather than exclusively bespoke (inert here since this test makes only one start_supervised! call, but a real semantic difference). The residual risk the original design's section 1.2 accepted under (a) (future edit silently breaking link-based cleanup) is explicitly RETIRED, not reworded -- there is no longer an ad-hoc Supervisor.start_link/2 call in the test for such an edit to target, so section 6's Open Question 2 from the prior version is marked retired with an explanation, not silently dropped.\n\nCHECK 6 RE-DERIVED for the new diff shape (not merely re-asserting the prior conclusion, since the diff shape changed from 'delete 3 lines' to 'replace the supervisor construction and delete the on_exit block'): re-confirmed directly against the current file that none of the test's four assertions reference the supervisor's name or its construction mechanism, only the child's pid and which_children/1's return shape, both preserved identically under (d); re-ran grep -n \"ThrowawaySupervisor\" against the file (one hit, the name: option itself) and grep -rn \"ThrowawaySupervisor\" against the whole test/ tree (same single hit, no other file); reconfirmed this is the last test in the file (module closes at line 1141 of 1143). Verdict unchanged in conclusion: no test anywhere asserts on, depends on, or is ordered relative to what is being replaced or removed.\n\nDesign section 3 gives ELIXIR-DEV the exact replacement call sequence (fetch_test_supervisor/0, start_supervised!/1 -- noting it is auto-imported so the bare, unqualified call matches existing in-suite style), the one assertion-line wording change required (which_children/1's tuple assertion now pins ^pid against the already-bound pid from start_supervised!/1's return, strengthening rather than weakening the assertion), and states explicitly that no on_exit/replacement-teardown code of any kind remains.\n\nVerification section (design section 4) restated for the new fixture shape per the validator's Item 5 request: the same widened-timing-analog technique still applies, now registering the slow child via start_supervised!/1 against the fetched test supervisor rather than a bespoke Supervisor.start_link/2 -- section 0's own probe is a direct instance of this transferring cleanly. Sections 4.1 and 4.3 (what does and does not count as evidence) are unchanged in substance from the pre-rework design, since CODE-DESIGN-VALIDATOR found no defect in the underlying method, only asked for restatement against the new fixture shape, which is now done.\n\nNo implementation code present -- verified by inspection: the two indented call/assertion snippets in sections 0 and 3 are quoted specification text describing exactly what ELIXIR-DEV must write (the same kind of quotation the pre-rework design used to quote the exact on_exit block being removed), not authored deliverable code; no function bodies or standalone modules appear anywhere in the file.",
+    "issues": [],
+    "artifacts_out": [
+      "lib/letflow/design/iss0446-throwaway-supervisor-teardown-race-fix.md"
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR (WF-03 gate equivalent to WF-02 Step 1b) -- rework re-check"
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

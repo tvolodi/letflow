@@ -1,0 +1,49 @@
+{
+  "handoff_id": "a1b2c3d4-0001-4001-8001-000000000009",
+  "run_id": "WF03-ISS0459-20260904",
+  "workflow_id": "WF-03",
+  "step": "Final",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0459-20260904/step-final-git-merge.json",
+  "created_at": "2026-09-04T13:59:03Z",
+  "started_at": "2026-09-04T13:59:03Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0459-20260904/step-05-issue-fixer-close.json"
+    ],
+    "artifacts_in": [
+      "docs/agents/protocols/GIT_MERGE.md"
+    ],
+    "owned_modules": [
+      "docs/agents/protocols/TASK_QUEUE.md",
+      "docs/agents/protocols/ISSUE_QUEUE.md",
+      "docs/agents/workflows/WF-03_issue_resolving.md"
+    ]
+  },
+  "task": {
+    "description": "Run GIT_MERGE.md's full procedure for run-id WF03-ISS0459-20260904, branch feature/WF03-ISS0459-20260904, in THIS repo (letflow). This run's own CI gates apply: mix format --check-formatted, mix compile --warnings-as-errors, mix test (attribute any failure structurally per core-directives.md, not by count-matching). This is a docs-only change (no lib/, no priv/) so compile/test should be unaffected, but still run the full procedure -- do not skip verification because the diff 'looks safe.' Use PR title prefix \"fix:\" per WF-03 convention. In the PR body's Validation section, SECURITY-REVIEWER line should read 'out of scope (no lib/, no priv/repo/migrations/, no tenant-data path touched -- REVIEWER independently re-confirmed this scope call at Step 3d)'. Do NOT touch the separate letflow-queue repo in this step -- it is not part of this merge.",
+    "acceptance_criteria": [
+      "Branch rebased cleanly onto origin/main",
+      "mix format --check-formatted, mix compile --warnings-as-errors, mix test all run and reported honestly (attribution stated if any failure)",
+      "PR created and merged (--squash --delete-branch) once CI green (no failure attributable to this branch)",
+      "Local checkout returned to main, clean, up to date"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

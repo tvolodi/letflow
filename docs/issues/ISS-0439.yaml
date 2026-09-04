@@ -30,13 +30,24 @@ description: >
 
   WHY DEFERRED ANYWAY -- three reasons, in weight order:
 
-  (1) THE SUBSTRATE IS NOT PORTED. R-Co already designed a generic,
-  UNTYPED dynamic entity subsystem (~3400 lines, src/design/entities.md,
+  (1) THE SUBSTRATE IS NOT PORTED (AT FILING TIME). R-Co already designed
+  a generic, UNTYPED dynamic entity subsystem (~3400 lines, later
+  measured at 4,158 lines including query/, src/design/entities.md,
   EXP-201/EXP-202) with NO Directory/Document/Register distinction --
   one flat entity concept. Typed templates would specialise that
-  substrate, which is not only unported but untracked (ISS-0438, queue
-  task 438). Designing the specialisation first would likely produce a
-  second parallel data model rather than a layer.
+  substrate, which at filing time was not only unported but untracked
+  (ISS-0438, queue task 438). Designing the specialisation first would
+  likely produce a second parallel data model rather than a layer.
+  **Status update (2026-09-04): ISS-0438 has since resolved** -- the
+  tracking/coverage gap is closed, with a scoping decision (IN SCOPE,
+  port to S6) and 7 requirements (REQ-225..REQ-231) registered and
+  independently claimable. The substrate is now on a concrete build path,
+  but is not yet BUILT (no requirement has status: done) -- this reason
+  is downgraded from "untracked" to "tracked but not yet built," which
+  does not by itself change the deferral: reason (2) below still holds
+  regardless of porting status, and no real tenant usage of the
+  now-porting substrate exists yet to supply reason (2)'s missing
+  evidence.
 
   (2) NO EVIDENCE FOR WHICH FOUR TYPES ARE RIGHT. 1C reached its taxonomy
   from decades of accounting-domain traffic. Letflow is a general BPM
@@ -47,10 +58,13 @@ description: >
 
   (3) OPPORTUNITY COST. The largest scope expansion proposed in this
   project -- a platform layer (typed templates + low-code helpers + query
-  surface + UI conventions + migration story) -- against 2 remaining core
-  requirements (REQ-214/215) and an open queue including two HIGH CVEs
-  (ISS-0420), a live platform-wide scheduler defect (ISS-0429), and an
-  unfixed flake blocking parallel test adoption (ISS-0426).
+  surface + UI conventions + migration story) -- against remaining core
+  requirements and an open issue queue with real defects (at filing time:
+  two HIGH CVEs (ISS-0420), a live platform-wide scheduler defect
+  (ISS-0429), and an unfixed flake blocking parallel test adoption
+  (ISS-0426); the specific set changes run to run, but the shape of the
+  tradeoff -- speculative platform layer vs. real, queued defects -- does
+  not).
 
   RECORDED DECISION (user-confirmed 2026-09-02): forward-looking, no
   committed user. Settle/port the GENERIC entity subsystem first
@@ -74,7 +88,8 @@ description: >
   versus what is renaming of existing shapes. Explicitly NOT
   requirements, NOT implementation, NOT a schema.
 affected_files:
-  - docs/migration/decisions/
+  - docs/migration/decisions/  # new file (0019 at pickup time)
+  - lib/letflow/design/  # new design-exploration artefact
 related:
   - ISS-0438
 depends_on_queue_tasks:
@@ -83,8 +98,31 @@ source: >
   User question 2026-09-02: "what can we introduce at this stage / is it
   required at all", citing 1C's typed-object model. Deferral option chosen
   by the user when the tradeoff was presented. R-Co's untyped entity design
-  read from src/design/entities.md and src/entities/mod.zig.
+  read from src/design/entities.md and src/entities/mod.zig. Cross-checked
+  at pickup time (2026-09-04) against docs/issues/ISS-0438.yaml (resolved)
+  and lib/letflow/design/iss0438-entity-subsystem-scoping.md, whose own §5
+  (AC6) independently states this same sequencing relationship.
 queue_task_id: 439
 github_issue: 846
+acceptance_criteria:
+  - "The decision to defer, and the three reasons for it, are recorded somewhere a
+    future reader will find before re-proposing the idea -- a decision record under
+    docs/migration/decisions/ is the expected home"
+  - "The review triggers are stated explicitly (a concrete domain; observed
+    duplication of Directory/Register-shaped structures across tenants; an
+    ERP-adjacent market decision) so the deferral is reviewable rather than
+    permanent"
+  - "The mapping of the 1C taxonomy onto Letflow's EXISTING machinery is stated --
+    specifically which of Directory/Document/Register/Report is already served by
+    the event log, by projections, by Letflow.EventStore.Registry's typed payload
+    schemas, and by the repository's artifact versioning -- so a future design
+    starts from what exists rather than from a blank page"
+  - "The dependency on the generic entity subsystem (queue task 438) is stated: no
+    typed-template design proceeds until that subsystem's scope status is settled"
+  - "No requirements are created, no schema is defined, and no code is written by
+    this issue"
+  - "If the eventual conclusion is that Letflow should NOT adopt the taxonomy at
+    all, that verdict is recorded with its reasoning rather than the issue being
+    closed silently"
 
 status: open

@@ -622,39 +622,37 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # either by natural completion or by tripping max_heap_words -- satisfying that
     # seam's binding usage contract (design §2.1.2a, restated in the seam's own
     # @doc false).
-    test "AC-1: a smaller configured max_heap_words halts sooner than a larger one on the same allocating script" do
+    # ISS-0469 (a repeat of ISS-0446's identical file:line flake): this test used to
+    # also wrap both calls in :timer.tc/1 and assert small_elapsed_ms < large_elapsed_ms
+    # as additional proof the smaller limit takes effect sooner. That wall-clock
+    # comparison has been removed -- it was redundant with, not additive to, the
+    # deterministic outcome assertions below (small limit errors, large limit
+    # succeeds on the identical script), which alone already prove the configured
+    # limit is load-bearing per REQ-156.md T1's own accepted "outcome differs"
+    # alternative. The timing assertion added nothing but a source of CI-scheduler-
+    # contention flakiness (observed 440ms vs 398ms margin on an otherwise-identical
+    # rerun) with no test now depending on wall-clock time at all.
+    test "AC-1: a smaller configured max_heap_words halts the allocating script while a materially larger one lets the same script complete" do
       empty_manifest = %Manifest{script_id: "", capabilities: []}
 
-      {small_elapsed_us, small_result} =
-        :timer.tc(fn ->
-          Executor.run_with_heap_limit_sync(
-            empty_manifest,
-            @moderate_allocating_script,
-            1_000_000_000,
-            @small_alloc_heap_words
-          )
-        end)
+      small_result =
+        Executor.run_with_heap_limit_sync(
+          empty_manifest,
+          @moderate_allocating_script,
+          1_000_000_000,
+          @small_alloc_heap_words
+        )
 
-      {large_elapsed_us, large_result} =
-        :timer.tc(fn ->
-          Executor.run_with_heap_limit_sync(
-            empty_manifest,
-            @moderate_allocating_script,
-            1_000_000_000,
-            trunc(200 * 1024 * 1024 / @word_size_bytes)
-          )
-        end)
+      large_result =
+        Executor.run_with_heap_limit_sync(
+          empty_manifest,
+          @moderate_allocating_script,
+          1_000_000_000,
+          trunc(200 * 1024 * 1024 / @word_size_bytes)
+        )
 
       assert {:error, :memory_limit_exceeded} = small_result
       assert {:ok, %{manifest_hash: _}} = large_result
-
-      small_elapsed_ms = small_elapsed_us / 1_000
-      large_elapsed_ms = large_elapsed_us / 1_000
-
-      assert small_elapsed_ms < large_elapsed_ms,
-             "the smaller max_heap_words limit (#{small_elapsed_ms}ms) must halt the " <>
-               "allocating script sooner than the larger limit's full run " <>
-               "(#{large_elapsed_ms}ms)"
     end
 
     # AC-2/T2: LUA-09's own acceptance criterion, at the scale it names -- a script

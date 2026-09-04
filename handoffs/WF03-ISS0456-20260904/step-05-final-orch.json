@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF03-ISS0456-20260904-step-05-final",
+  "run_id": "WF03-ISS0456-20260904",
+  "workflow_id": "WF-03",
+  "step": "05-final",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0456-20260904/step-05-final-orch.json",
+  "created_at": "2026-09-04T05:49:33Z",
+  "started_at": "2026-09-04T05:49:33Z",
+  "completed_at": null,
+  "status": "IN_PROGRESS",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0456", "ISS-0418", "ISS-0453"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0456-20260904/step-01-issue-fixer-diagnosis.json (verdict + evidence)"
+    ],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0456-20260904/step-00-git-setup.json",
+      "handoffs/WF03-ISS0456-20260904/step-01-issue-fixer-diagnosis.json"
+    ],
+    "branch_name": "feature/WF03-ISS0456-20260904"
+  },
+  "task": {
+    "description": "Steps 2-4 (fix design, implement, regression test) SKIPPED -- ISSUE-FIXER's Step 1 diagnosis (step-01 handoff) independently verified ISS-0456 is not a new root cause: it is another recurrence of ISS-0418's already-diagnosed wasmex native-thread-pool-exhaustion class, evidenced by direct CI log inspection (not the filing's paraphrase). No fix is being designed or implemented for ISS-0456 itself -- the correct fix (OQ-5's concurrency cap) is ISS-0418's own, already-deferred, work. This is a docs-only outcome per this run's own dispatch brief: fold ISS-0456 into ISS-0418's record and close ISS-0456 as instrumented/superseded_by, then run Step Final (git merge) around the docs-only change, since even a docs-only change goes through the standard commit/push/merge per this project's git protocols (GIT_MERGE.md). ORCHESTRATOR.md SS10's sizing rule does not license true ORCH direct action here without a handoff/PR (change touches 2 files, not 1) -- but a full CODE-DESIGNER/ELIXIR-DEV/REVIEWER chain is not warranted either, since no code or design decision is being made; ORCH performs the docs edit itself and still runs it through Step 00 (already done)/PR/CI/merge exactly as a full run would, per this run's own dispatch instructions.",
+    "acceptance_criteria": [
+      "docs/issues/ISS-0456.yaml flipped to status: instrumented with superseded_by: ISS-0418, resolved_in_run/resolved_at, and a resolution field citing the diagnosis handoff and its specific evidence",
+      "docs/issues/ISS-0418.yaml carries a new recurrence_2026_09_04 field, same pattern as its existing recurrence_2026_09_03 field, recording this instance",
+      "Changes committed, branch rebased onto origin/main, pushed, PR opened, CI awaited and confirmed green (or failures attributed per core-directives.md), PR merged, branch cleaned up",
+      "GitHub issue #875 closed with a --comment citing the resolving evidence, stating status is instrumented (not fixed) and naming ISS-0418 as successor -- never claims a fix",
+      "Queue task 456 released: status left OPEN (no status param) since the issue is NOT resolved -- only diagnostic/record-linking work was done, per TASK_QUEUE.md's release_lock rule that status:\"done\" asserts the underlying defect is fixed, which is not true here"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0456-20260904",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0456-20260904",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

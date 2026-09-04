@@ -4458,10 +4458,14 @@
     {
       "run_id": "WF03-ISS0457-20260904",
       "workflow_id": "WF-03",
-      "issue_ids": ["ISS-0457"],
+      "issue_ids": [
+        "ISS-0457"
+      ],
       "stage": "S6",
       "status": "COMPLETED",
-      "owned_modules": ["lib/mix/tasks/letflow.lint_handoffs.ex"],
+      "owned_modules": [
+        "lib/mix/tasks/letflow.lint_handoffs.ex"
+      ],
       "lock_acquired_at": "2026-09-04T06:27:53Z",
       "lock_released_at": "2026-09-04T11:49:36Z",
       "queue_agent_id": "tvolodi-orch",
@@ -4486,18 +4490,18 @@
       "queue_task_id": 427,
       "queue_agent_id": "letflow-2-orch",
       "github_issue_number": 831,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/tenant_provisioning.ex",
         "test/support/tenant_fixture.ex",
         "lib/letflow/sandbox_pool.ex"
       ],
       "started_at": "2026-09-04T05:22:32Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-04T11:55:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 run for ISS-0427 (MAJOR): tenant test-schema provisioning replays the whole tenant-scoped migration manifest per schema, hundreds of times per suite run. Selected on the project owner's explicit instruction to fix test-performance issues; chosen over ISS-0423 and ISS-0418 because it is the only open perf lever measured to help CI (ci.yml runs on 2-vCPU ubuntu-latest where test_parallel.sh derives N=2, so workstation parallelism gains do not transfer). Sizing rule section 10 fails on checks 1 and 5 (multiple files; tenant_provisioning.ex IS a tenant-data path), so full chain. ORCH measured that the manifest has grown 52 -> 53 entries since filing. HARD CONSTRAINT carried forward: CREATE TABLE (LIKE ... INCLUDING ALL) silently omits foreign keys, so constraint parity must be asserted, not assumed. No owned_modules collision with the sibling WF03-ISS0451-20260904 run (application.ex/supervisor tree, disjoint)."
+      "last_known_step": "Step Final COMPLETED -- PR #881 squash-merged to main (8187d4bb). Queue task 427 released done, ISS-0427 flipped to resolved.",
+      "note": "WF-03 run for ISS-0427 (MAJOR): tenant test-schema provisioning replays the whole tenant-scoped migration manifest per schema, hundreds of times per suite run. Selected on the project owner's explicit instruction to fix test-performance issues; chosen over ISS-0423 and ISS-0418 because it is the only open perf lever measured to help CI (ci.yml runs on 2-vCPU ubuntu-latest where test_parallel.sh derives N=2, so workstation parallelism gains do not transfer). Sizing rule section 10 fails on checks 1 and 5 (multiple files; tenant_provisioning.ex IS a tenant-data path), so full chain. ORCH measured that the manifest has grown 52 -> 53 entries since filing. HARD CONSTRAINT carried forward: CREATE TABLE (LIKE ... INCLUDING ALL) silently omits foreign keys, so constraint parity must be asserted, not assumed. No owned_modules collision with the sibling WF03-ISS0451-20260904 run (application.ex/supervisor tree, disjoint). | OUTCOME: shipped at 1.79x median (filed 4.9x; re-measured downward three times, each tied to a verified cost and each volunteered rather than caught at a gate). FIVE silent-corruption hazards found and fixed, the most serious being that LIKE does not copy the five immutability triggers -- shipping without that would have given every cloned schema silently mutable AUDIT ENTRIES. The design gate failed this design three times, each on a real defect, and the parity check itself was later found blind to the primary hazard it existed to catch. Full suite 3213/3213, all 4 CI checks green first attempt."
     }
   ]
 }

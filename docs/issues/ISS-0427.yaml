@@ -96,7 +96,7 @@ source: >
 queue_task_id: 427
 github_issue: 831
 
-status: open
+status: resolved
 
 # ── Measurement correction, 2026-09-02T19:17:07Z (ORCH-adhoc-20260902) ──
 # Profiling in the same session (ISS-0432) found that ~92% of a DB round trip
@@ -117,3 +117,71 @@ status: open
 # per schema) is if anything MORE clearly correct given this finding, since
 # round-trip count is what dominates.
 measurement_caveat_ref: ISS-0432
+
+resolution: >
+  RESOLVED by WF03-ISS0427-20260904, PR #881, squash-merged as 8187d4bb.
+
+  WHAT SHIPPED: test tenant schemas are cloned from a "tenant_template"
+  schema built once per partition database, instead of replaying the
+  53-migration manifest per schema. Production provision_tenant_schema/1 and
+  replay_migrations/2 are untouched -- zero lib/ diff outside the design doc.
+
+  MEASURED SPEEDUP: 1.79x median / 1.74x average on the provisioning step
+  (10-run interleaved comparison). This is BELOW this issue's own filed
+  figure and that should be read honestly: the number was re-measured three
+  times as real costs were discovered (filed 4.9x -> 2.5x at diagnosis ->
+  2.0x at first implementation -> 1.79x after index renaming), each revision
+  downward, each tied to a specific verified cost rather than an unexplained
+  regression, and each volunteered by the agent that found it rather than
+  surfacing at a gate. Roughly 4-5 minutes off a ~30-minute suite, and per
+  ISS-0423's ci_gives_almost_nothing note this remains the only measured
+  lever that helps CI's 2-vCPU runners.
+
+  FIVE SILENT-CORRUPTION HAZARDS FOUND AND FIXED, each verified against a
+  live catalog rather than argued from documentation:
+    1. CREATE TABLE (LIKE ... INCLUDING ALL) does not copy FOREIGN KEYS.
+    2. pg_get_constraintdef/functiondef/triggerdef emit TEMPLATE-QUALIFIED
+       references; a naive re-add points every tenant's FKs at the template.
+       The rewrite pattern must be UNQUOTED -- the quoted form silently
+       no-ops (design section 0.5).
+    3. Cloned column defaults point at the TEMPLATE's sequences, so every
+       tenant would share one id counter.
+    4. FIVE IMMUTABILITY TRIGGERS (audit_entries and repository_artifacts /
+       artifact_versions) plus three per-schema functions are not copied.
+       Shipping without this would have given every cloned schema silently
+       mutable AUDIT ENTRIES -- a security property lost with nothing
+       failing. Verified end-to-end that a clone rejects UPDATE and DELETE,
+       and still does after the template schema is dropped entirely.
+    5. LIKE RENAMES INDEXES (users_username_index -> users_username_idx) and
+       Ecto's unique_constraint/3 matches on the NAME, so cloned schemas
+       raised Ecto.ConstraintError instead of returning clean 409s. Restored
+       via ALTER INDEX ... RENAME TO, which also renames the owning
+       pg_constraint atomically.
+
+  SAFETY: a 13-dimension catalog parity check asserts a clone is equivalent
+  to a migration-built schema, wired to two real use sites and proven
+  non-vacuous for every hazard above. The template build is atomic -- built
+  under a randomized staging schema and renamed into place only after its
+  self-check passes -- so "tenant_template" can never be observed
+  half-built; a failed build drops its staging schema and re-raises the
+  original error (fault-injection verified).
+
+  A NOTE ON PROCESS, worth recording: the design gate FAILED this design
+  three times, each catching a real defect (an asserted-exhaustive
+  pg_constraint contype set that omitted x; information_schema views that
+  resolve away domain types and collation namespaces; and a false
+  trigger-dormancy claim that survived three design passes and two gates
+  before implementation caught it). The parity check itself was later found
+  BLIND to the primary hazard it existed to catch, because normalize/3
+  stripped both schema qualifiers from both sides. None of these would have
+  failed a test; all of them would have silently weakened every
+  tenant-dependent test in the suite.
+
+  KNOWN RESIDUALS, stated rather than buried: OQ-6 (custom DOMAIN/ENUM/
+  collation types would stay template-qualified -- dormant, no migration
+  creates one, and the parity check catches it if one ever does), and
+  check_index_names/2 is deliberately unbatched since it runs ~10x per
+  suite rather than per clone.
+
+  VERIFICATION: full suite 3213/3213 on the rebased tree, zero failures, all
+  16 partitions clean; all four CI checks green on the first attempt.

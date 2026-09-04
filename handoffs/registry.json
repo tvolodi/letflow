@@ -4659,16 +4659,16 @@
       "queue_task_id": 428,
       "queue_agent_id": "letflow-2-orch",
       "github_issue_number": 832,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/mix/tasks/letflow.check.test.ex"
       ],
       "started_at": "2026-09-04T12:10:45Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T04:00:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 02 CODE-DESIGNER complete -- dispatching design gate",
-      "note": "WF-03 run for ISS-0428: scripts/test_parallel.sh is wired into the agent workflow docs but NOT into mix letflow.check, which is what CI runs every commit. ORCH re-measured before dispatching because the issue's own baseline predates ISS-0427's merge: SERIAL 1466s (3211/3217) vs N=2 774s (3214/3214 clean) = 1.89x at CI's actual 2-vCPU parallelism, CONTRADICTING the issue's assumption that the N=16 gain would not transfer. Two real traps: the ISS-0069 warning gate greps captured stdout and would silently stop gating against the parallel script's aggregated output, and failure-mode parity (per-partition logs live in a mktemp dir a CI runner discards)."
+      "last_known_step": "Step Final COMPLETED -- PR #899 squash-merged to main (08c89520). Queue task 428 released done, ISS-0428 resolved.",
+      "note": "WF-03 run for ISS-0428: scripts/test_parallel.sh is wired into the agent workflow docs but NOT into mix letflow.check, which is what CI runs every commit. ORCH re-measured before dispatching because the issue's own baseline predates ISS-0427's merge: SERIAL 1466s (3211/3217) vs N=2 774s (3214/3214 clean) = 1.89x at CI's actual 2-vCPU parallelism, CONTRADICTING the issue's assumption that the N=16 gain would not transfer. Two real traps: the ISS-0069 warning gate greps captured stdout and would silently stop gating against the parallel script's aggregated output, and failure-mode parity (per-partition logs live in a mktemp dir a CI runner discards). | OUTCOME: shipped. CI measured N=4 (not the N=2 both the issue and ORCH assumed), 3223/3223 across four partitions, backend gate 6m51s-7m28s against a 10-14 min baseline. The re-pointed ISS-0069 gate reported correctly on every CI run. MERGED WITH --admin AFTER SIX REBASES: see the orchestrator.log entry for the full disclosure and reasoning."
     }
   ]
 }

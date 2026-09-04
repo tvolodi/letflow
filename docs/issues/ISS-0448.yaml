@@ -64,4 +64,28 @@ source: >
   letflow", interval 2s, POSTGRES_DB=letflow_dev).
 queue_task_id: 455
 github_issue: 872
-status: open
+status: resolved
+
+resolution: >
+  SUPERSEDED BY ISS-0455, which is the SAME DEFECT filed independently by a
+  sibling session and fixed in commit e558b1be. Both issues carry
+  queue_task_id: 455 -- the sibling registered against the same queue task,
+  so there was one task and two yaml files describing it. ISS-0455 was
+  flipped to resolved; this file was left open, which would have cost a
+  future agent a wasted turn picking up already-fixed work. Closed here by
+  ORCH on discovering the duplication.
+
+  THE SHIPPED FIX IS BETTER THAN THIS ISSUE'S OWN SUGGESTION, and that is
+  worth recording rather than glossing: ISS-0448 recommended
+  `pg_isready -U letflow -d letflow_dev`, hardcoding the database name a
+  second time. The sibling shipped
+  `pg_isready -U letflow -d $$POSTGRES_DB`, referencing the env var the
+  container is already configured with, so the healthcheck and POSTGRES_DB
+  cannot drift apart -- which is precisely the failure mode that created
+  this bug in the first place (the healthcheck named a database the
+  container was never configured to create).
+
+  VERIFIED BY ORCH on the live container after the fix landed: docker
+  inspect's State.Health.Log shows consecutive probes returning
+  exit 0 "accepting connections", and the FATAL "database \"letflow\" does
+  not exist" lines the project owner originally reported are gone.

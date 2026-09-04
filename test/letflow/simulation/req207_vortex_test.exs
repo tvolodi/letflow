@@ -868,10 +868,14 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # reserved-inventory comment/table context. Since no such module exists at all
       # (signal 3 below), the presence above is necessarily comment/table-only.
 
-      # Signal 2: no docs/requirements.yaml title: claims the entity/entity-query
-      # subsystem, other than REQ-207's own self-referential title (word-bounded
-      # entity/entities match, not the bare "entit" substring which false-positives on
-      # "identity").
+      # Signal 2: every docs/requirements.yaml title: claiming the entity/entity-query
+      # subsystem (word-bounded entity/entities match, not the bare "entit" substring
+      # which false-positives on "identity") traces back to either REQ-207's own
+      # self-referential title, or one of REQ-225..231 -- the scoping requirements
+      # ISS-0438 registered to plan the subsystem's build-out (design doc
+      # lib/letflow/design/iss0438-entity-subsystem-scoping.md). REQ-225..231 *plan*
+      # the subsystem; none of them *build* it -- that's still gated on Signal 3 below,
+      # so their presence here doesn't change the BLOCKED_ON_DEPENDENCY disposition.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -884,18 +888,31 @@ defmodule Letflow.Simulation.Req207VortexTest do
           Regex.match?(~r/title:.*\bentit(y|ies)\b/i, line)
         end)
 
-      assert length(entity_title_matches) == 1,
-             "Expected exactly 1 title: match for word-bounded entity/entities, got: #{inspect(entity_title_matches)}"
+      allowed_ids =
+        MapSet.new([
+          "REQ-207",
+          "REQ-225",
+          "REQ-226",
+          "REQ-227",
+          "REQ-228",
+          "REQ-229",
+          "REQ-230",
+          "REQ-231"
+        ])
 
-      [{_matching_line, idx}] = entity_title_matches
+      refute Enum.empty?(entity_title_matches),
+             "Expected at least 1 title: match for word-bounded entity/entities (REQ-207's own), got none"
 
-      # The line immediately preceding the match should carry `id: REQ-207` (self-
-      # referential -- REQ-207's own title mentions "entity list filter/page" because
-      # AC4 is about entities, not because REQ-207 claims to build the subsystem).
-      preceding_line = Enum.at(title_lines, idx - 1)
+      matched_ids =
+        Enum.map(entity_title_matches, fn {_line, idx} ->
+          Enum.at(title_lines, idx - 1)
+        end)
 
-      assert preceding_line =~ "id: REQ-207",
-             "Expected the line preceding the sole entity title: match to be 'id: REQ-207', got: #{inspect(preceding_line)}"
+      Enum.each(matched_ids, fn preceding_line ->
+        assert Enum.any?(allowed_ids, &(preceding_line =~ "id: #{&1}")),
+               "Expected the line preceding each entity title: match to carry one of " <>
+                 "#{inspect(MapSet.to_list(allowed_ids))}, got: #{inspect(preceding_line)}"
+      end)
 
       # Signal 3: no context module exists under lib/letflow/ for entities/entity_query.
       lib_letflow_dir = Path.expand("../../../lib/letflow", __DIR__)
@@ -923,7 +940,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
         evidence: [
           "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-          "docs/requirements.yaml: the only title: match for word-bounded entity/entities is REQ-207's own self-referential title",
+          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title or the REQ-225..231 scoping requirements (ISS-0438) -- none of which build the subsystem",
           "no lib/letflow/entities.ex or entity_query.ex context module exists"
         ],
         steps_executed: 0

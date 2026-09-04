@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0451-20260904-step-03b",
+  "run_id": "WF03-ISS0451-20260904",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0451-20260904/step-03b-security-reviewer.json",
+  "created_at": "2026-09-04T03:46:00Z",
+  "started_at": "2026-09-04T03:46:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0451"],
+    "requirement_text": {},
+    "artifacts_in": [
+      "lib/letflow/design/iss0451-poller-crash-budget-isolation.md",
+      "lib/letflow/supervisor/pollers_breaker.ex",
+      "lib/letflow/application.ex",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "branch_name": "fix/ISS-0451-persistent-poller-crash-budget-20260904"
+  },
+  "task": {
+    "description": "Run your scope test against `git diff main...HEAD` for this branch (lib/letflow/supervisor/pollers_breaker.ex new file, lib/letflow/application.ex changed, test/letflow/supervisor/pollers_test.exs changed) per docs/agents/instructions/security-invariants.md. This is a supervision-tree/boot-sequence change, not an API route or tenant-data-shaping change -- state your INV-1..INV-8 verdicts per the worked example in HANDOFF_PROTOCOL.md (APPLIES/NOT-APPLICABLE for each, with reasoning), the same as REQ-219's own SECURITY-REVIEWER pass did (see handoffs/WF02-REQ219-20260903/ for that run's precedent, if you want a reference for scope/format -- do not copy its verdicts, this is a different diff). No tenant data, no secrets, no API surface is touched by this diff; confirm that independently rather than taking this description's word for it.",
+    "acceptance_criteria": [
+      "result.summary states a verdict (APPLIES/NOT-APPLICABLE) for every INV-1..INV-8, with reasoning grounded in the actual diff",
+      "Scope determination (in-scope vs out-of-scope for a hard gate) is stated explicitly and justified"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

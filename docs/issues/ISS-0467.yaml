@@ -1,0 +1,41 @@
+id: ISS-0467
+title: "Direct git push to main silently bypasses required-status-checks branch protection (0018)"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0441-20260904
+discovered_at: "2026-09-04T17:35:00Z"
+severity: MINOR
+tags: [ci, branch-protection, git, s6]
+description: >
+  Found by ORCH immediately after ISS-0441/PR #895 merged (the same run that
+  configured branch protection on main). A plain `git push origin main` -- a
+  direct push, not a PR merge -- succeeded despite 2 required status checks
+  being unsatisfied at that moment, with the remote printing only `Bypassed
+  rule violations for refs/heads/main: 2 of 2 required status checks are
+  expected.` No distinct flag was needed (unlike `gh pr merge`'s own
+  explicit `--admin` requirement), no separate confirmation, and the bypass
+  notice is easy to miss in ordinary git push output. This is exactly the
+  invisible-discretion failure mode
+  docs/migration/decisions/0018-branch-protection-posture.md exists to
+  close, reappearing on a path Step 4's live verification never exercised,
+  since this pipeline's own GIT_MERGE.md procedure always merges via
+  `gh pr merge` on a PR, never a bare push to main.
+
+  This does not invalidate 0018's own decision -- every merge this pipeline
+  performs through GIT_MERGE.md's documented procedure IS gated as
+  designed -- but the gap is real for any agent (including the one that
+  found it) that deviates from that procedure, e.g. for a "trivial" one-line
+  doc fix.
+affected_files:
+  - docs/migration/decisions/0018-branch-protection-posture.md
+  - docs/agents/protocols/GIT_MERGE.md
+related:
+  - ISS-0441
+  - decision-0018
+source: >
+  Discovered live by ORCH: a direct `git push origin main` immediately
+  after PR #895's own admin-override merge, made to fix a wording issue in
+  0018's own Verification log, before this discovery itself prompted
+  routing that very fix through a PR instead.
+queue_task_id: 467
+github_issue: 896
+status: open

@@ -457,6 +457,38 @@ unrelated uses of "structurally impossible"/"hard gate"/historical narration) wi
 specific claim was ISS-0441's own point of confusion to resolve, not a defect in those
 other docs' wording.
 
+## A real gap found live, after this record's own configuration (not anticipated by Step 4)
+
+Discovered 2026-09-04, immediately after ISS-0441's own real PR (#895) merged: a plain
+`git push origin main` (not a PR merge — a direct push of a doc-only follow-up commit)
+succeeded, but the remote printed `remote: Bypassed rule violations for refs/heads/main:
+2 of 2 required status checks are expected.` This is a DIFFERENT, more permissive path
+than anything Step 4 tested. `gh pr merge` without `--admin` genuinely refuses outright
+when a required check is unsatisfied — that path is proven. But a direct `git push` to
+`main` by the same admin identity does NOT refuse; it silently bypasses the rule with
+only a server-side informational line, no distinct flag, no separate confirmation, and
+easily missed in a `git push` command's ordinary output. This is exactly the invisible-
+discretion failure mode this whole record exists to close, reappearing on a path Step 4
+never exercised because this pipeline's own `GIT_MERGE.md` procedure always merges via
+`gh pr merge` on a PR, never a direct push to `main`.
+
+**Why this does not invalidate the decision already made**: every merge this pipeline
+performs goes through `GIT_MERGE.md`'s PR-based procedure, which this record's
+protection genuinely gates as designed. A direct push to `main` is already, separately,
+against this project's own established discipline (`GIT_MERGE.md`/`ORCHESTRATOR.md`
+§7.1 prohibit force-pushing `main`, and the whole pipeline's git-setup/git-merge wrapper
+model assumes a PR, never a bare push) — this gap is only reachable by an agent already
+deviating from the documented workflow, as this record's own author did here for a
+trivial doc-only fix.
+
+**Follow-up, not re-opening this decision**: file a new issue recommending GitHub's
+separate "restrict who can push to matching branches" setting (`restrictions`, left
+`null` in this record's own Step 2 configuration) be revisited, or that `GIT_MERGE.md`
+add an explicit line prohibiting direct pushes to `main` even for a trivial fix (route
+everything, including one-line doc corrections, through the same PR path this record
+protects) — closing the gap by removing the alternate path entirely rather than trying
+to make direct pushes themselves refuse the same way `gh pr merge` does.
+
 ## What this record does not decide
 
 - Whether other branches (`feature/*`) get any protection. Out of scope — this pipeline's

@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
   "created_at": "2026-09-05T18:33:25Z",
   "started_at": "2026-09-05T18:33:25Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-05T18:38:24Z",
+  "status": "COMPLETED",
   "priority": "HIGH",
   "context": {
     "stage": null,
@@ -35,7 +35,7 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
+    "summary": "Step 0.5 (registry lookup): searched docs/issues/*.yaml (282 files) for a prior resolved entry with a matching id:/title:-adjacency or PROVENANCE-marker-parsing symptom. Grepped for 'adjacency', 'PROVENANCE', 'walk-back', 'idx - 1' -- only ISS-0511 itself matched. Also checked all vortex/req207-tagged issues (ISS-0388, ISS-0391, ISS-0392, ISS-0393, ISS-0411) and the directly-referenced ISS-0510 (the REQ-237 design-doc amendment that authorized the PROVENANCE marker's placement between id: and title:) -- none describe this test's own adjacency-assumption bug; ISS-0510 is the design precursor, not a resolved instance of this symptom. Confirmed: no matching prior resolved issue exists. This is a novel issue, not a recurrence.\n\nStep 1 (diagnose): ran `mix test test/letflow/simulation/req207_vortex_test.exs` on this branch (pre-fix, real Postgres). Result: 3/4 passed, 1 failed. Actual failure output:\n\n  1) test vortex-entity-list-filter-and-page disposition is BLOCKED_ON_DEPENDENCY, re-verified live against real source state (design §4.1) (Letflow.Simulation.Req207VortexTest)\n     test/letflow/simulation/req207_vortex_test.exs:856\n     Expected the line preceding each entity title: match to carry one of [\"REQ-207\", \"REQ-225\", \"REQ-226\", \"REQ-227\", \"REQ-228\", \"REQ-229\", \"REQ-230\", \"REQ-231\"], got: \"    # PROVENANCE (historical, not current decision authority):\\r\"\n     code: Enum.each(matched_ids, fn preceding_line ->\n     test/letflow/simulation/req207_vortex_test.exs:911: (test)\n\nRoot cause confirmed exactly as diagnosed in docs/issues/ISS-0511.yaml and the handoff task description: in the 'vortex-entity-list-filter-and-page' test, for each docs/requirements.yaml line whose title: matches /entit(y|ies)/i (found via Enum.with_index/Enum.filter at lines 882-889), the code at line 908 does `Enum.at(title_lines, idx - 1)` -- a single-line, exact-adjacency walk-back that assumes the id: line is always exactly one line above title:. REQ-257 correctly inserted a `# PROVENANCE (historical, not current decision authority):` comment line between id: and title: for REQ-225, REQ-227, REQ-228, REQ-229, REQ-230, REQ-231 (per the REQ-237/ISS-0510 convention, which is correct and must not be reverted -- confirmed via ISS-0510's resolution notes). For those 6 entries, idx - 1 now lands on the PROVENANCE comment line instead of the id: line, so the `preceding_line =~ \"id: #{&1}\"` assertion at line 912 fails. Only REQ-226 (no PROVENANCE marker) and REQ-207 (self-referential title) still pass under the old assumption, hence 6 of 7 allowed ids being effectively broken but only 1 test failure surfacing (Enum.each stops at first failing element, alphabetically/positionally REQ-225 or whichever sorts first in file order).\n\nAdditional confirmed detail not in the original issue prose: docs/requirements.yaml has CRLF line endings -- the failing line's captured value ends in a literal \\r (\"...authority):\\r\"). Any fix must account for this when trimming/matching comment lines (e.g. trim \\r\\n, not just \\n, before checking a line against /^\\s*#/ or blank).\n\nPrecise fix requirement for CODE-DESIGNER: replace the single-line `Enum.at(title_lines, idx - 1)` walk-back with a walk-back loop that, starting at idx - 1 and moving upward, skips lines that are blank or match a comment pattern (line trimmed of trailing \\r and leading/trailing whitespace matches /^#/), and stops at the first non-blank, non-comment line -- that line must be the one checked against the allowed id: set. Critically, the loop must NOT continue skipping past a real (non-comment, non-blank) content line while searching further up for an id: -- if the first non-comment/non-blank line found is not an id: line (or no such line exists before the start of the list/file), the test must still fail, preserving the original defect-detection intent (catching a genuinely wrong or missing id: line). This is a bounded skip-comments-only walk-back, not an unbounded search for the nearest id: anywhere above.",
     "artifacts_out": [],
     "issues": [],
     "git_evidence": {
@@ -46,7 +46,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGNER to design the fix per the walk-back requirement stated in this summary, then CODE-DESIGN-VALIDATOR, ELIXIR-DEV (or TEST-DESIGNER, since owned_modules is a test file) to implement, then TEST-RUNNER to confirm test/letflow/simulation/req207_vortex_test.exs passes 4/4."
   },
   "rework_count": 0,
   "max_rework": 3

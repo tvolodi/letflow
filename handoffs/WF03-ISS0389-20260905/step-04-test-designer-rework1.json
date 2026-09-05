@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-04-rework1",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0389-20260905/step-04-test-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-05T04:30:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": [
+      "WF03-ISS0389-20260905-step-04",
+      "WF03-ISS0389-20260905-step-04b"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0389-advance-timer-endpoint.md",
+      "lib/letflow/api/authorization.ex",
+      "handoffs/WF03-ISS0389-20260905/step-04b-test-design-validator.json"
+    ],
+    "artifacts_out": ["test/letflow/api/authorization_test.exs"],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "8b321a59"
+  },
+  "task": {
+    "description": "WF-03 Step 4 rework (iteration 1 of 3): TEST-DESIGN-VALIDATOR (step-04b) found AC3's four-role InstancesAdvanceTimer matrix only had direct/indirect coverage for PROCESS_OPERATOR and TASK_WORKER -- AGENT_RUNNER and PLATFORM_ADMIN were never asserted anywhere in the diff. Add direct unit coverage for all four roles named in design doc §6 AC3."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Added a new describe block 'ISS-0389 AC3 -- InstancesAdvanceTimer role matrix (all four named roles)' to test/letflow/api/authorization_test.exs, immediately before the 'roles_from_strings/1' describe block. Four dedicated tests, matching this file's existing per-role 'grants X, denies Y' pattern (e.g. the acceptance-criterion-2 block's 'PROCESS_OPERATOR grants InstancesCancel, denies DefinitionsWrite' style): 'PROCESS_OPERATOR grants InstancesAdvanceTimer' (assert role_allows?), 'TASK_WORKER denies InstancesAdvanceTimer' (refute), 'AGENT_RUNNER denies InstancesAdvanceTimer' (refute), 'PLATFORM_ADMIN grants InstancesAdvanceTimer' (assert). All four of design AC3's named role/permission pairs are now directly, unambiguously asserted at the unit level, not merely inferred from router-level 200/403 tests. No other file touched -- the router-level PROCESS_OPERATOR/TASK_WORKER coverage from the prior iteration was left as-is since the validator judged it adequate and non-duplicative.",
+    "mix_check_test_run": "mix test test/letflow/api/authorization_test.exs: 'Finished in 0.1 seconds ... Result: 32 passed' (28 pre-existing + 4 new; all pass). mix letflow.check.test (full parallel suite, run fresh in an environment with asdf-provisioned elixir/erlang on PATH): 'Result: 444/446 passed (1/1 property, 443/445 tests), 11 excluded; Failed: 2 tests'. Both failures are test/mix/tasks/letflow_check_toolchain_test.exs's 'rust pin (REQ-165)' tests ('a mismatched rust pin reports a MISMATCH row...' and 'a matching rust pin reports OK with no mismatch...'), both raising `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"])` at test/mix/tasks/letflow_check_toolchain_test.exs:69 -- confirmed via the partition logs (partition-4.log) this sandbox has no rustc binary on PATH, wholly unrelated to authorization.ex/authorization_test.exs. This exactly matches the 444/446 baseline reported in the original step-04 handoff (same count, same two toolchain tests), so nothing in this rework changed the full-suite outcome. Per this task's brief, ORCH is independently re-running the full suite in a working toolchain environment in parallel; this run is offered as corroborating evidence, not a substitute for that.",
+    "issues": [
+      "mix letflow.check.test exits non-zero solely due to the 2 pre-existing rustc-toolchain-check failures (no rustc binary in this sandbox) -- unrelated to ISS-0389 or this rework, consistent with the original step-04 handoff's own note on the same issue."
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

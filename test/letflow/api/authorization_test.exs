@@ -234,6 +234,28 @@ defmodule Letflow.Api.AuthorizationTest do
     end
   end
 
+  describe "ISS-0389 AC3 — InstancesAdvanceTimer role matrix (all four named roles)" do
+    # Design doc lib/letflow/design/iss0389-advance-timer-endpoint.md §6 AC3 is a
+    # closed four-assertion criterion naming these exact roles; each is asserted
+    # directly here (not only indirectly via router-level 200/403 tests) so that a
+    # regression in the role's permission list is caught at the unit level.
+    test "PROCESS_OPERATOR grants InstancesAdvanceTimer" do
+      assert Authorization.role_allows?(:PROCESS_OPERATOR, :InstancesAdvanceTimer)
+    end
+
+    test "TASK_WORKER denies InstancesAdvanceTimer" do
+      refute Authorization.role_allows?(:TASK_WORKER, :InstancesAdvanceTimer)
+    end
+
+    test "AGENT_RUNNER denies InstancesAdvanceTimer" do
+      refute Authorization.role_allows?(:AGENT_RUNNER, :InstancesAdvanceTimer)
+    end
+
+    test "PLATFORM_ADMIN grants InstancesAdvanceTimer" do
+      assert Authorization.role_allows?(:PLATFORM_ADMIN, :InstancesAdvanceTimer)
+    end
+  end
+
   describe "roles_from_strings/1 — untrusted-input conversion (§0.2)" do
     test "recognizes all five real role-name strings" do
       assert Authorization.roles_from_strings([

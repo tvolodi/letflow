@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF03-ISS0480-20260905-step-04b",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-04b-test-design-validator.json",
+  "created_at": "2026-09-05T08:20:00Z",
+  "started_at": "2026-09-05T08:20:00Z",
+  "completed_at": "2026-09-05T08:32:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-04a-test-designer.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/letflow/iss0480_provisioning_repo_isolation_test.exs",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "test/support/provisioning_repo.ex",
+      "test/support/tenant_fixture.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Hard gate on TEST-DESIGNER's regression test for ISS-0480. Verify the new test exists and matches design §10.6's specified mechanism (deterministic Task.async construction, not suite-timing luck); re-verify the fail-then-pass claim independently (own worktree at the pre-fix commit, real output quoted, post-fix re-run on this branch); sanity-check the §10.8 mutation-testing reasoning for the two exception files; confirm no prohibited files (test/support/provisioning_repo.ex, test/support/tenant_fixture.ex) were touched by this test-writing step; write the gate verdict.",
+    "acceptance_criteria": [
+      "test/letflow/iss0480_provisioning_repo_isolation_test.exs exists and matches §10.6's mechanism exactly",
+      "Pre-fix FAIL independently reproduced in a disposable worktree at e31ecb8b (parent of ab817992), real output quoted",
+      "Post-fix PASS independently re-run on this branch, real output quoted",
+      "§10.8 mutation-testing reasoning for the two exception files sanity-checked against the actual shipped edits",
+      "Confirms test/support/provisioning_repo.ex and test/support/tenant_fixture.ex were not modified by TEST-DESIGNER's own commit",
+      "PASS or FAIL verdict with specific named gaps if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "PASS -- all acceptance criteria independently re-derived, not taken on TEST-DESIGNER's report.\n\n1. TEST FILE MATCHES §10.6's MECHANISM. Read test/letflow/iss0480_provisioning_repo_isolation_test.exs and design §10.6 (lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md:1581-1665) side by side. The test is `use Letflow.DataCase, async: true` with zero TenantFixture involvement in its own test body, mirroring RowApprovalTest's exact shape (confirmed by reading test/letflow/row_approval_test.exs:1-19: same `RowApproval.create/1`+`RowApproval.get/1` pattern). Body: (1) RowApproval.create/1 establishes an in-flight insert on the outer test process's own Letflow.Repo connection; (2) Task.async spawns a separate process calling TenantFixture.provisioned_tenant!/1 directly (teardown: false, documented inline as an orthogonal Task/on_exit constraint, not a deviation from the mechanism); (3) Task.await; (4) re-read of the row from step 1. This is §10.6's specified 3-step mechanism exactly -- deterministic construction of the adversarial concurrent caller via Task.async, not reliance on ExUnit's own scheduler. Using RowApproval instead of a raw Letflow.Repo.insert!/1 on a Tenant row (design's own suggested example) is a legitimate implementation choice within the design's own stated latitude ('any schema already migrated... works') and is in fact a closer mirror of the real victim RowApprovalTest than the design's own suggested Tenant-row alternative would have been.\n\n2. PRE-FIX FAIL INDEPENDENTLY RE-REPRODUCED (not copied from TEST-DESIGNER's report). Confirmed via `git log --oneline -- test/support/provisioning_repo.ex` that ab817992 is indeed the commit introducing that file, and `git log --oneline -1 ab817992^` = e31ecb8b, matching TEST-DESIGNER's cited parent commit. Created my own disposable worktree: `git worktree add --detach ../letflow-iss0480-prefix-check e31ecb8b`, copied ONLY the new test file into it (`git status --short` in the worktree showed exactly one untracked file, nothing else from the branch -- the isolation technique WF-03's own workflow doc names as worth copying), reused the main checkout's already-fetched deps/_build via MIX_DEPS_PATH/MIX_BUILD_PATH env vars (no network available for a fresh `mix deps.get`, per README's documented sandbox constraint), and ran `mix test test/letflow/iss0480_provisioning_repo_isolation_test.exs --seed 0`. Real output: `match (=) failed / code: assert %{status: :pending} = RowApproval.get(id) / left: %{status: :pending} / right: {:error, :not_found} ... Result: 0/1 passed / Failed: 1 test` -- byte-for-byte the same symptom TEST-DESIGNER reported. Worktree removed afterward: `git worktree remove --force ../letflow-iss0480-prefix-check`, confirmed via `git worktree list` showing only the main checkout, and `git status --short` on the main tree empty.\n\n3. POST-FIX PASS INDEPENDENTLY RE-RUN. On this branch (feature/WF03-ISS0480-20260905, clean working tree confirmed before and after): `mix test test/letflow/iss0480_provisioning_repo_isolation_test.exs --seed 0` -> `Result: 1 passed`. Matches TEST-DESIGNER's reported result.\n\nThis run is the ordinary WF-03 fail-then-pass case (the pre-fix failure is a real behavioral bug in existing code -- provisioned_tenant!/1's own Sandbox.mode/2 call targeting the wrong repo -- not 'the code under test does not exist'; TenantFixture.provisioned_tenant!/1 already existed pre-fix and the pre-fix run executed real application logic before failing on a real assertion, not UndefinedFunctionError). So the mandatory §10.8-style mutant-isolation-on-shipped-logic requirement (WF-03's 'When the pre-fix failure is code under test does not exist' clause) does NOT apply to the new regression test itself -- correctly not invoked here.\n\n4. §10.8 MUTATION-TESTING REASONING SANITY-CHECKED. Read design §10.8 in full (lines 1717-1955) and the two exception files' actual current source directly (not inherited from either handoff's description). test/letflow/support/tenant_fixture_test.exs:426-448 (hard_cleanup/1) matches §10.8.2.1's specified edit exactly: Sandbox.mode(ProvisioningRepo, :auto) + put_dynamic_repo capture/set + the 3 pre-existing Repo calls unchanged + try/after restore of the previous dynamic repo. test/letflow/definitions/promotion_assertion_rerun_test.exs:113-120 (provisioned_tenant/0) matches §10.8.2.2's specified edit exactly: a single leading Sandbox.mode(Letflow.Repo, :auto) statement with no restore, justified by the file's own async: false status (confirmed unchanged at line 81). Both edits are pre-existing-code fixes to already-shipped test-support helpers whose logic existed before this fix (the bug was a missing wrap/missing leading call, not a missing module), so TEST-DESIGNER's own mutation-testing approach -- reverting each specific line, observing the exact original failure symptom recur (6/14 and 9/12 failures respectively, matching the design's own named symptom classes), then restoring and re-confirming green -- is the right methodology for this case, and is reasoning I can verify without needing to reproduce the mutant myself (this is not the 'code does not exist' clause, so re-deriving the mutant is not mandatory for me either, per WF-03's own scoping of that requirement to non-existence cases). As an independent sanity check I re-ran both files together on the current branch: `mix test test/letflow/support/tenant_fixture_test.exs test/letflow/definitions/promotion_assertion_rerun_test.exs` -> `Result: 26 passed` (14+12, matching TEST-DESIGNER's separately reported 14/14 and 12/12 exactly, confirming both suites are genuinely green together on this branch, not merely each in isolation).\n\n5. NO PROHIBITED FILES TOUCHED BY THIS STEP. `git show --stat cfce9749` (TEST-DESIGNER's own commit) shows exactly one file changed: `test/letflow/iss0480_provisioning_repo_isolation_test.exs`, 100 insertions, 0 deletions -- test/support/provisioning_repo.ex and test/support/tenant_fixture.ex are NOT in this commit's diff (they were modified by ELIXIR-DEV's earlier ab817992/§10.8 rework commits, which is prior, in-scope, already-reviewed work, not this test-writing step's own change).\n\nOther checks performed: no @tag :skip present in the new test file; no 'TODO: implement test' text found; the test is fully self-sufficient (its own row, its own Task, no shared/hardcoded fixture state, no dependency on another test having run first); no hardcoded secrets or connection strings anywhere in the new file (grep for 'password'/'secret'/postgres connection-string patterns: zero hits). Working tree confirmed clean throughout (`git status --short` empty before, during between-check probes, and after).",
+    "artifacts_out": ["handoffs/WF03-ISS0480-20260905/step-04b-test-design-validator.json"],
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER for the full-suite gate (WF-03 Step 4 continuation)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

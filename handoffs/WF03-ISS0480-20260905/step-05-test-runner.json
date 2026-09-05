@@ -1,0 +1,68 @@
+{
+  "handoff_id": "b3f1a9d2-6e4c-4a1b-9c7e-2f8d5a0e9b13",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-05-test-runner.json",
+  "created_at": "2026-09-05T08:32:00Z",
+  "started_at": "2026-09-05T08:32:00Z",
+  "completed_at": "2026-09-05T09:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-04b-test-design-validator.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture.ex",
+      "test/support/provisioning_repo.ex",
+      "test/support/data_case.ex",
+      "config/test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Final gate (WF-03 Step 5) for ISS-0480. Run the full suite via scripts/test_parallel.sh, quote real output, diagnose any failures via git diff --stat main...HEAD to determine structural attribution to this branch versus a known pre-existing flake class, do NOT merge on a structurally-attributable failure. On clean/attributable-flakes-only: write this handoff PASS, flip docs/issues/ISS-0480.yaml to resolved, close the GitHub issue mirror, release the letflow-queue lock with status:done, append a run-history event, commit/push/merge via gh pr merge, sync local main.",
+    "acceptance_criteria": [
+      "Full suite run via scripts/test_parallel.sh with real quoted output",
+      "Any failures diagnosed against git diff --name-only main...HEAD for structural attribution",
+      "Do NOT merge if a failure structurally overlaps this branch's diff",
+      "On clean result: docs/issues/ISS-0480.yaml resolved, GitHub issue closed, queue lock released, run-history appended, PR merged, local main synced"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "DO NOT MERGE. Found a real, reproducible, branch-attributable regression -- not a pre-existing flake. This is the honest opposite of what the dispatching task assumed would happen.\n\nSequence of what was actually run (all real, all quoted, nothing speculative):\n\n1. `bash scripts/test_parallel.sh` at nproc-derived N=16 (this host's core count): 8 of 16 partitions aborted with `** (Postgrex.Error) ERROR 42P07 (duplicate_table) relation \"secrets\" already exists` during `ecto.create`/`ecto.migrate` -- this is the DOCUMENTED, pre-existing ISS-0219 class (README.md Notes: 'If the nproc-derived N exceeds this host's Postgres/CPU capacity, every partition can crash outright during ecto.create/ecto.migrate ... set TEST_PARALLEL_N explicitly to a smaller value (4 is known-good on at least one dev host)'). Correctly not attributed to this branch: scripts/test_parallel.sh's own diff on this branch (git diff main...HEAD -- scripts/test_parallel.sh) touches ONLY the TEST_POOL_SIZE budget-subtraction arithmetic for the new PROVISIONING_POOL_SIZE constant, nothing about migration sequencing, locking, or partition launch order.\n\n2. Re-ran at TEST_PARALLEL_N=4 per README's documented remedy: `combined: 3219 tests, 6 properties, 19 failures (3206/3225 passed)`.\n\n3. Ran a SECOND independent N=4 pass on the same branch/commit to test for load-dependent nondeterminism (the exact signature ISS-0480 itself was originally discovered by -- 'two runs, different failures'): `combined: 3219 tests, 6 properties, 18 failures (3207/3225 passed)`. Diffed the two failing-test-name sets directly (not by count): **18 of 19 failures are IDENTICAL across both independent runs** (only Letflow.SandboxPoolTest's RT-6 differed, present run1/absent run2). This is near-deterministic, not the random-per-run pattern that would support 'load-dependent flake, unrelated to this diff.'\n\n4. Checked host state for a confounding sibling-session explanation before concluding regression: `docker stats --no-stream` showed a second, unrelated Postgres container (`letflow-2-postgres-1`, a sibling checkout per README's documented multi-workspace pattern) with heavy accumulated block I/O, raising the possibility of host-level CPU/IO contention rather than a real bug. Ruled this out directly: re-ran the 10 distinct failing test FILES in complete isolation, one single synchronous `mix test` process, zero partitions, zero parallel load (`MIX_TEST_PARTITION=1 mix test <10 files> --seed 0` -> 'Finished in 230.0 seconds (0.00s async, 230.0s sync)', `Result: 172/190 passed, Failed: 18 tests`). **All 18 failures reproduced with ZERO concurrency and ZERO pool contention** -- this conclusively rules out load/pool exhaustion as the cause.\n\n5. Root-caused by reading test/support/tenant_fixture.ex (this branch's own diff) against test/support/data_case.ex and the failing test test/letflow/tenant_provisioning/backfill_test.exs (git diff shows this file is NOT touched by this branch -- its failure is a downstream consequence, not a direct edit). Concrete mechanism:\n   - test/support/data_case.ex sets `Sandbox.mode(Letflow.Repo, {:shared, self()})` for `async: false` tests -- the calling test process's Letflow.Repo connection stays checked out inside ONE open sandbox transaction/snapshot for the whole test.\n   - Pre-ISS-0480, `TenantFixture.provisioned_tenant!/1` called `Sandbox.mode(Letflow.Repo, :auto)` directly, which flipped the CALLER's own Letflow.Repo connection out of sandboxed/transactional mode so its own writes (the healthy tenant's Registration row) were immediately, unconditionally visible to any later query on that same connection.\n   - Post-ISS-0480 (this branch), `provisioned_tenant!/1` explicitly no longer touches Letflow.Repo's sandbox mode at all (moduledoc lines 217-228, confirmed read directly): it redirects the SAME Repo alias to a second, dedicated `Letflow.Test.ProvisioningRepo` connection via `Repo.put_dynamic_repo/1` inside `with_provisioning_repo/1` (tenant_fixture.ex:291-301), does the Tenant insert and provisioning THERE (on ProvisioningRepo's own `:auto`-mode, non-sandboxed connection), then restores the dynamic repo back to Letflow.Repo in an `after` block.\n   - Result: the caller's own Letflow.Repo connection (test/letflow/tenant_provisioning/backfill_test.exs, async: false) never leaves its own long-running sandbox transaction/snapshot. The healthy tenant's Registration row, committed via the SEPARATE ProvisioningRepo connection, is structurally invisible to that snapshot -- which is exactly Ecto Sandbox's designed isolation behavior, now applying somewhere it did not before because the write moved to a genuinely separate connection that never participated in the caller's transaction. `Letflow.TenantProvisioning.Backfill.run/1` (lib/letflow/tenant_provisioning/backfill.ex:20, `Repo.all(Registration)`) then sees zero registrations for the healthy tenant, and `assert updated >= 1` fails with `left: 0, right: 1` -- the exact, byte-for-byte failure observed in test/letflow/tenant_provisioning/backfill_test.exs:276.\n   - The same mechanism plausibly explains most/all of the other 17 reproduced failures (OnboardingTest, PollerTest, ReconstructionTest, Req077/Req078 routers, ContextTest, IdentityTest, PlatformEventsTest, SandboxPoolTest -- every one of them either calls TenantFixture.provisioned_tenant!/1 directly, or a fixture/helper that does, then makes a cross-connection assertion via the caller's own Letflow.Repo, an HTTP round-trip through the plug pipeline's own Letflow.Repo connection, or a scheduler/poller process reading via Letflow.Repo) -- this was not individually re-derived for all 18 (time-boxed), but the backfill_test.exs case is a complete, verified, root-caused example of the class, and the design doc's own §10.6 fail-then-pass regression test (iss0480_provisioning_repo_isolation_test.exs) exercises only the ORIGINAL hazard (an unrelated async test's connection getting flipped to :auto mid-test) -- it does NOT exercise this NEW cross-connection-visibility hazard the fix itself introduces for `async: false`/shared-mode callers whose OWN assertions need to see data the fixture wrote.\n\n6. This is why TEST-DESIGN-VALIDATOR's step-04b PASS (172 tests, zero unexpected failures) did not catch this: that verification ran only test/letflow/iss0480_provisioning_repo_isolation_test.exs plus the two named exception files (tenant_fixture_test.exs, promotion_assertion_rerun_test.exs) in isolation -- never the full suite. This IS the first full-suite run this fix has been checked against, and TEST-RUNNER's own remit ('the full suite via scripts/test_parallel.sh ... run it') is exactly why this surfaced only now, at Step 5, not earlier.\n\nDid NOT proceed to any of: docs/issues/ISS-0480.yaml status flip, GitHub issue closure, queue lock release, run-history append, commit/push/merge. All of those presuppose the clean/attributable-flakes-only branch of the dispatched task, which this result does not satisfy. A disposable main-branch worktree A/B comparison was attempted for extra rigor but abandoned before running any test in it (worktree created, MIX_BUILD_PATH/MIX_DEPS_PATH env-var redirection to the main checkout's shared _build/deps was found to risk overwriting the feature branch's own compiled test artifacts with main's; aborted, worktree removed via `git worktree remove --force`, feature-branch build integrity re-verified afterward via `mix compile --force` + a clean re-run of the ISS-0480 regression test, `Result: 1 passed`). The isolated-single-process re-run of the 10 failing files (step 4 above) serves the same attribution purpose without that risk and is the evidence this FAIL rests on.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "test/support/tenant_fixture.ex's provisioned_tenant!/1, in removing the Sandbox.mode(Letflow.Repo, :auto) call as designed (ISS-0480 §10), leaves async:false/shared-mode callers' own Letflow.Repo connection inside its pre-existing sandbox transaction for the whole test -- so a Registration/Tenant row written via the new, separate Letflow.Test.ProvisioningRepo connection is structurally invisible to that caller's own subsequent Letflow.Repo queries. Reproduced deterministically (18/19 identical failures across two independent full-suite runs, and all 18 reproduce with zero concurrency in a single synchronous mix test process). Root-caused in full for test/letflow/tenant_provisioning/backfill_test.exs (Letflow.TenantProvisioning.Backfill.run/1 sees 0 registrations for a tenant TenantFixture.provisioned_tenant!/1 just created, 'assert updated >= 1' fails with left: 0). The other 17 reproduced failures (OnboardingTest, Scheduler.PollerTest, Engine.ReconstructionTest, Req077PromotionPipelineTest, Req078SupportingRoutesTest, Api.ContextTest, IdentityTest, EventStore.PlatformEventsTest, SandboxPoolTest) were not individually root-caused but match the same shape (each calls provisioned_tenant!/1 or a fixture wrapping it, then asserts via the caller's own Letflow.Repo/HTTP path). Needs ISSUE-FIXER re-diagnosis and a CODE-DESIGNER rework of design §10's mechanism -- the fix must make the provisioning write visible to the caller's own transaction for async:false/shared-mode callers (e.g. having the caller's own Repo see it via the shared-mode connection being the SAME one, or committing provisioning through the caller's own checked-out connection rather than a separate pool) without reintroducing the original ISS-0480 hazard for unrelated async:true callers. The existing regression test (test/letflow/iss0480_provisioning_repo_isolation_test.exs) does not exercise this new hazard class at all and needs an added case.",
+        "affected_requirement": null
+      },
+      {
+        "severity": "MINOR",
+        "description": "docs/issues/ISS-0480.yaml's title/description describe the ORIGINAL discovery symptom (RowApprovalTest/PackUpdateMigrationTest load-dependent Sandbox checkout race, WF03-ISS0423-20260905) rather than the final root-cause framing this run's design doc and dispatching task both use (the Sandbox.mode/2 global mode-flip hazard, fixed via a dedicated ProvisioningRepo). Not corrected here since ISS-0480 is not being resolved by this handoff -- flagged so whoever re-diagnoses next reads the design doc (§10) as the authority on root cause, not the issue file's original filing text.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ISSUE-FIXER for re-diagnosis of the cross-connection-visibility hazard named above, then back through CODE-DESIGNER (design §10 rework) -> CODE-DESIGN-VALIDATOR -> ELIXIR-DEV -> SECURITY-REVIEWER/REVIEWER -> TEST-DESIGNER (extend the regression test to cover async:false/shared-mode visibility, not just the original async:true mode-flip hazard) -> TEST-DESIGN-VALIDATOR -> TEST-RUNNER (this step, re-run). Do NOT merge feature/WF03-ISS0480-20260905 in its current state. ISS-0480 stays status: open."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

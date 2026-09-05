@@ -15558,7 +15558,7 @@ requirements:
   - id: REQ-265
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-b: req017-claim-mapping.md through req029-node-attribute-edge-condition-validators.md (closes ISS-0424 part 3c-12)"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

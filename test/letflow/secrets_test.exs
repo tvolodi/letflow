@@ -12,15 +12,29 @@ defmodule Letflow.SecretsTest do
   one via `Letflow.TenantFixture.provisioned_tenant!/1`, mirroring
   `test/letflow/webhooks_test.exs`'s own established pattern.
 
-  `async: true` (ISS-0113 / ISS-0423,
-  `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md`) -- this file
-  was independently verified, by direct read, against that design's §3 three-mechanism
-  classification procedure (no self-checkout, no concurrent multi-process DB access, no
-  second provisioning call per test) and cleared safe to convert from the
-  `async: false` every other `TenantFixture`-calling test file in this codebase still
-  uses today. No opt-in flag is needed on the `provisioned_tenant!/1` call itself --
-  see that function's own moduledoc for why its existing, unconditional
-  `Sandbox.mode(Letflow.Repo, :auto)` is already sufficient.
+  `async: false` (reverted by ISS-0480, previously `async: true` per ISS-0113 / ISS-0423,
+  `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md`) -- this file's
+  own ISS-0113 three-mechanism classification (no self-checkout, no concurrent
+  multi-process DB access, no second provisioning call per test) was correct and
+  remains true; the revert is not a retraction of that classification. ISS-0480
+  (`lib/letflow/design/iss0480-sandbox-checkout-race-remedy.md`) found a *fourth*,
+  systemic mechanism neither this file's own code nor ISS-0113's analysis considered:
+  `provisioned_tenant!/1`'s unconditional first line, `Sandbox.mode(Letflow.Repo,
+  :auto)`, does not merely affect its own caller -- when it actually changes the
+  pool's mode, `DBConnection.Ownership.Manager`'s empty-except-list check-in
+  (`deps/db_connection/lib/db_connection/ownership/manager.ex:169-172`) discards the
+  checked-out connection of *every* process in the pool, including any other
+  concurrently-running `async: true` test that never itself calls `Sandbox.mode/2`
+  and holds no relation to this file (e.g. `Letflow.RowApprovalTest`). Because
+  `Letflow.DataCase.setup/1` checks out a connection unconditionally for every test
+  regardless of `async`, every `async: true` file in the suite was an exposed
+  bystander for as long as this file (or `test/letflow/webhooks_test.exs`) ran
+  concurrently with it under `async: true`. Reverting to `async: false` removes the
+  disruptive call from the async scheduling phase entirely (ExUnit runs every
+  `async: true` module to completion before any `async: false` module starts), which
+  is sufficient by construction, not by continued reasoning about timing. See
+  ISS-0480's design doc §6 for the legitimate longer-term fix (a `setup_all`-boundary
+  redesign of `provisioned_tenant!/1` itself) that was deliberately not attempted here.
 
   `Letflow.Secrets` requires `LETFLOW_SECRETS_MASTER_KEY` to be set (0016 §B) --
   `config/test.exs` already injects a real test-only value before this suite boots, so
@@ -28,7 +42,7 @@ defmodule Letflow.SecretsTest do
   as production would.
   """
 
-  use Letflow.DataCase, async: true
+  use Letflow.DataCase, async: false
   use ExUnitProperties
 
   alias Letflow.Repo

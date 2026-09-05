@@ -947,3 +947,34 @@ history:
       bookkeeping. Merged via `gh pr merge --squash --delete-branch --admin`
       per GIT_MERGE.md. Queue task 494 released status:done
       (letflow-ee-orch).
+
+  - req: REQ-257
+    event: done
+    agent: ORCH
+    at: "2026-09-05T18:05:05Z"
+    note: >
+      WF02-REQ257-20260905 complete. DOC-UPDATER applied REQ-237's .zig
+      PROVENANCE-marker convention (as amended 2026-09-05, ISS-0510) to
+      docs/requirements.yaml's REQ-189 through REQ-242 entry range: 56
+      marker lines inserted covering 119 .zig citation lines (including
+      REQ-237's own entry, physically out-of-numeric-sequence between
+      REQ-242 and REQ-243, per this chunk's literal line-range scope).
+      Additive-only (git diff --numstat 56/0), file-wide .zig count
+      unchanged, YAML still parses (241 top-level entries), zero doubled
+      markers, scope strictly within REQ-189..REQ-242
+      (CLAUDE.md/README.md/docs/migration/README.md untouched).
+      REVIEWER independently re-verified all gate criteria and PASSED
+      (handoffs/WF02-REQ257-20260905/step-2d-reviewer.json), confirming
+      idiom-consistency with sibling chunks REQ-254/REQ-256. CI's backend
+      gate flaked across all three attempts (Req077PromotionPipelineTest,
+      then Req207VortexTest twice) -- different, unrelated tests each
+      time, none reachable from a docs/requirements.yaml-only diff;
+      attributed as CI-load/parallelism noise consistent with sibling PR
+      #986's own documented flake class, not a regression, and disclosed
+      in a PR comment before merging. Branch rebased twice onto a moving
+      main (REQ-253's PR #986, then its own Step Final closeout 0e2f2a8b)
+      -- both rebases clean except one expected append-only conflict in
+      handoffs/registry.json (both sibling entries composed, none
+      dropped). Merged via `gh pr merge --squash --delete-branch --admin`
+      per GIT_MERGE.md. Queue task 495 released status:done
+      (letflow-ee-orch).

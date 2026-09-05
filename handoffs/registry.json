@@ -4948,16 +4948,16 @@
       "issue_id": "ISS-0424",
       "queue_task_id": 495,
       "queue_agent_id": "letflow-ee-orch",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/requirements.yaml (REQ-189 through REQ-242 entry range only)"
       ],
       "started_at": "2026-09-05T00:00:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T18:04:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 (git setup) COMPLETED PASS -- branch feature/WF02-REQ257-20260905 created from main at c9329a11.",
-      "note": "WF-02 run for REQ-257 (queue task 495), chunk 239d of REQ-239 10-way split (ISS-0424 part 3c-4): applies REQ-237 .zig provenance-marking convention to docs/requirements.yaml, the REQ-189 through REQ-242 entry range. Sibling of WF02-REQ254 (chunk 239a, COMPLETED) and WF02-REQ256 (chunk 239c, IN_PROGRESS, disjoint range) -- same pattern, owner DOC-UPDATER then REVIEWER, no ELIXIR-DEV/CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER (docs/requirements.yaml only, no executable surface). Pre-start check: registry scanned, no existing WF02-REQ257-* entry, no collision with REQ-256 (disjoint entry range). Will apply REQ-237 design doc as amended 2026-09-05 (ISS-0510, merged PR #994) including the fourth YAML comment-line/sequence-item citation-unit shape. Will rebase onto main immediately before merge since sibling chunks may land concurrently touching the same file at different line ranges."
+      "last_known_step": "Step Final COMPLETED PASS -- PR #995 squash-merged (ac9ad440) after two rebases onto sibling/concurrent chunks (REQ-253's PR #986, then its own Step Final closeout 0e2f2a8b). Registry conflict on this run's own entry resolved by composing both sibling entries (REQ-253, REQ-257) as separate array elements. Merged via gh pr merge --squash --delete-branch --admin past a backend-gate flake pattern (Req077PromotionPipelineTest, then Req207VortexTest twice -- different unrelated tests each of 3 CI attempts, none reachable from a docs/requirements.yaml-only diff), disclosed in a PR comment before merging. Queue task 495 released status:done.",
+      "note": "WF-02 run for REQ-257 (queue task 495), chunk 239d of REQ-239 10-way split (ISS-0424 part 3c-4): applies REQ-237 .zig provenance-marking convention to docs/requirements.yaml, the REQ-189 through REQ-242 entry range. Sibling of WF02-REQ254 (chunk 239a, COMPLETED) and WF02-REQ256 (chunk 239c, disjoint range) -- same pattern, owner DOC-UPDATER then REVIEWER, no ELIXIR-DEV/CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER (docs/requirements.yaml only, no executable surface). Pre-start check: registry scanned, no existing WF02-REQ257-* entry, no collision with REQ-256 (disjoint entry range). Applied REQ-237 design doc as amended 2026-09-05 (ISS-0510, merged PR #994) including the fourth YAML comment-line/sequence-item citation-unit shape -- 56 marker lines covering 119 .zig citation lines. REVIEWER PASSed with no findings (handoffs/WF02-REQ257-20260905/step-2d-reviewer.json)."
     }
   ]
 }

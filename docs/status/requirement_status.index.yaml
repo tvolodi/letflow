@@ -1701,8 +1701,12 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 23
+    entries: 24
     note: >
+      Incremented to 24 by DOC-UPDATER's REQ-248 done-event append
+      (WF02-REQ248-20260905) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 24 on-disk entries, no
+      rebase conflict on this file.
       Incremented to 23 by DOC-UPDATER's REQ-247 done-event append
       (WF02-REQ247-20260905) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 23 on-disk entries, no

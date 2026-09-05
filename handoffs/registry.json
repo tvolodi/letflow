@@ -4867,16 +4867,16 @@
       "issue_id": "ISS-0424",
       "queue_task_id": 492,
       "queue_agent_id": "letflow-ee-orch",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/requirements.yaml (REQ-011 through REQ-050 entry range only)"
       ],
       "started_at": "2026-09-05T15:31:17Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T16:23:54Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ254-20260905 created off main @ 0a982766 and pushed. Next: dispatch DOC-UPDATER (Step 6 equivalent -- mechanical apply, no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER needed, same pattern as REQ-245).",
-      "note": "WF-02 run for REQ-254 (queue task 492), chunk 239a of REQ-239's 10-way split (ISS-0424 part 3c-1): applying REQ-237's .zig provenance-marking convention to docs/requirements.yaml, the REQ-011 through REQ-050 entry range. UNUSUAL vs. sibling chunks 238a-h/239e-i: owner is DOC-UPDATER, not ELIXIR-DEV, since the edited file is docs/requirements.yaml itself, not a lib/ module -- no mix compile/test executable surface, so TEST-DESIGNER's WF-02 Step 3 scope test is expected to route straight to RELEASE-VALIDATOR. Sibling chunks REQ-255 through REQ-263 (239b-i) cover disjoint entry ranges/files in the same run of ten and may be in flight concurrently on other hosts."
+      "last_known_step": "Step Final COMPLETED PASS -- PR #988 squash-merged (04930c9f) via gh pr merge --admin (one of two duplicate backend-gate CI runs hit the already-open ISS-0418 wasm_hang recurrence flake, test/letflow/engine/wasm/call_timeout_test.exs and host_api_write_test.exs, structurally cleared -- this branch touches zero files under lib/letflow/engine/wasm/ or test/letflow/engine/wasm/; the other duplicate run and both frontend gates passed clean). Queue task 492 released status:done. REQ-254 flipped to done in docs/requirements.yaml, run-history done-event appended to requirement_status.v9.yaml (31 entries).",
+      "note": "WF-02 run for REQ-254 (queue task 492), chunk 239a of REQ-239's 10-way split (ISS-0424 part 3c-1): applied REQ-237's .zig provenance-marking convention to docs/requirements.yaml, the REQ-011 through REQ-050 entry range. UNUSUAL vs. sibling chunks 238a-h/239e-i: owner is DOC-UPDATER, not ELIXIR-DEV, since the edited file is docs/requirements.yaml itself, not a lib/ module -- no mix compile/test executable surface, so no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER ran; straight to DOC-UPDATER then REVIEWER, both PASS. DOC-UPDATER: 70 PROVENANCE markers inserted, 0 deletions beyond this run's own status-flip line, 152 .zig lines preserved before/after. REVIEWER: independently re-verified marker text, additive-only diff, scope boundaries, divergence-note byte-identity, and YAML validity -- PASS, with one MINOR non-blocking finding (recommend REQ-237's design doc enumerate the YAML-comment-line marker case as a fourth citation-unit shape before REQ-255/256/257 hit the same contexts). Also fixed same-branch: CI's own A9 invariant test caught Step 00's started-event append had not been mirrored into requirement_status.index.yaml's declared entries: count -- corrected before merge. Sibling chunks REQ-255 through REQ-263 (239b-i) cover disjoint entry ranges/files in the same run of ten and may be in flight concurrently on other hosts; also observed a genuinely unrelated concurrent ORCH-role session sharing this same working tree during this run's CI wait (its own ad-hoc ISS-0418 recurrence-logging task, branch chore/ISS0418-recurrence-20260905, PR #989) -- left alone per ORCHESTRATOR.md section 7.1, not folded into this run."
     }
   ]
 }

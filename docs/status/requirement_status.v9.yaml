@@ -815,3 +815,17 @@ history:
       merged via gh pr merge --squash --delete-branch after two further
       rebases onto sibling REQ-250/251/252 chunks that landed concurrently
       (all non-overlapping file scope). Queue task 483 released status:done.
+
+  - req: REQ-254
+    event: started
+    agent: ORCH
+    at: "2026-09-05T15:31:17Z"
+    note: >
+      WF-02 run WF02-REQ254-20260905 (queue task 492, agent_id
+      letflow-ee-orch), applying REQ-237's .zig provenance-marking
+      convention to docs/requirements.yaml, the REQ-011 through REQ-050
+      entry range (chunk 239a, closes ISS-0424 part 3c-1). Branch
+      feature/WF02-REQ254-20260905 created off main @ 0a982766. This is the
+      1st of ten REQ-239-replacement chunks (REQ-254..REQ-263) applying the
+      convention to docs/requirements.yaml itself; owner is DOC-UPDATER, not
+      ELIXIR-DEV, since the edited file is docs/requirements.yaml, not lib/.

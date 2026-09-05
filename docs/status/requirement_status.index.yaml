@@ -1701,8 +1701,15 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 29
+    entries: 30
     note: >
+      Incremented to 30 by ORCH's own REQ-254 started-event append
+      (WF02-REQ254-20260905, Step 00) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 30 on-disk entries, no
+      rebase conflict on this file. Caught by CI's own A9 invariant test
+      (test/docs/requirement_status_invariants_test.exs) failing on PR #988
+      after the started-event append landed without its own index-note
+      increment; corrected here in the same branch before merge.
       Incremented to 28 by DOC-UPDATER's REQ-252 done-event append
       (WF02-REQ252-20260905) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 28 on-disk entries, no

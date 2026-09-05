@@ -1,0 +1,60 @@
+id: ISS-0513
+title: "test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs: Windows tmp-dir path bug + file-selection mutation-testing gap"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0512-20260905
+discovered_at: "2026-09-06T00:35:00Z"
+severity: MINOR
+tags: [testing, lint, sandbox, windows, ci, s6]
+description: >
+  Follow-on from ISS-0481/ISS-0512 (mix letflow.check_async_sandbox_reachability,
+  merged to main at 1eb0b14f/#1003). ORCH set out to run WF-03 fresh for
+  ISS-0481, found the work already substantially built on a stalled sibling
+  branch (PR #1003), and dispatched SECURITY-REVIEWER and a dedicated
+  TEST-DESIGN-VALIDATOR (with the WF-03-mandated mutation-testing addendum for
+  wholly-new detection logic) to fill gates that run had skipped. That
+  TEST-DESIGN-VALIDATOR gate FAILED on first pass with two real, independently
+  reproduced findings against the 16-test regression suite:
+
+  1. Both `--dir` scratch-fixture `setup` blocks build a tmp path via
+     `System.tmp_dir!()` + `Path.join` without `Path.expand()`. On native
+     Windows, `System.tmp_dir!()` returns a backslash path, and
+     `Path.wildcard` silently returns `[]` for any backslash-containing path
+     -- 4/16 tests fail on a Windows dev host as a direct result. Invisible to
+     Linux CI, but a real portability/self-sufficiency defect --
+     `test/mix/tasks/letflow.lint_handoffs_test.exs` already carries the fix
+     for this exact ISS-0440-era problem.
+
+  2. Mandatory mutation-testing addendum: widening the checker's
+     file-selection glob from `**/*_test.exs` to `**/*.ex*` (which would let
+     it scan `tenant_schema_reaper.ex`/`tenant_template.ex`-shaped files) is
+     NOT caught by the "support-module-shaped files are excluded by file
+     selection" test, because that test's fixtures carry no real `async: true`
+     line -- content-based classification alone excludes them regardless of
+     the glob, so the test is vacuously passing rather than pinning the
+     file-selection mechanism it claims to test.
+
+  Both findings were fixed and independently re-verified (TEST-DESIGNER
+  rework, then a TEST-DESIGN-VALIDATOR re-gate that reproduced 16/16 and the
+  mutant-catch itself) on the feature/WF03-ISS0512-20260905 branch -- but a
+  concurrent sibling session merged its own, earlier, unfixed version of the
+  same work directly to main (PR #1003, 1eb0b14f) while this session's gates
+  were still running, making the fixed branch's own merge redundant. Rather
+  than losing the already-verified fix, it is re-applied here against current
+  main.
+affected_files:
+  - test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs
+related:
+  - ISS-0481
+  - ISS-0512
+  - ISS-0480
+  - ISS-0113
+  - ISS-0440
+source: >
+  ORCH's own TEST-DESIGN-VALIDATOR dispatch during WF03-ISS0512-20260905,
+  running on a native Windows host, found both defects directly rather than
+  by report. The fix was verified (16/16, mutant caught at 15/16 with the
+  correct test failing, clean revert confirmed) before main's own concurrent
+  merge made that branch's continuation moot.
+queue_task_id: 513
+github_issue: 1008
+status: open

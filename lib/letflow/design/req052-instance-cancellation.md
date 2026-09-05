@@ -603,9 +603,15 @@ one CANCELLED by a direct caller request must reach the same persisted state… 
 explicitly"). Flagged for REVIEWER/RELEASE-VALIDATOR to confirm this reading — verifying
 that "the same status atom, and no second exercised persistence path exists to diverge from
 it" satisfies the AC — is the intended one, versus requiring `cancel_instance/3` to
-literally call `Transition.transition(graph, state, {:cancel_branch, branch_id})` per branch
-(which §4 explains would today always hit the "no cohort tracked" no-op given the
-join-counters persistence gap `req048`'s own OQ-3 already discloses).
+literally call `Transition.transition(graph, state, {:cancel_branch, branch_id})` per branch.
+At design time this would have always hit the "no cohort tracked" no-op given the
+join-counters persistence gap `req048`'s own OQ-3 disclosed; ISS-0397 (2026-09-03) has
+since closed that persistence gap, but §0's Access-gap finding (R-Co's own `cancelInstance`
+never drives per-branch transition events either) is an independent, still-standing reason
+this design's whole-instance-only approach is correct, not merely a stopgap — see ISS-0402
+(resolved 2026-09-05), which investigated exactly this question after ISS-0397 landed and
+found no current caller, UAT scenario, or scheduled requirement needs branch-level
+cancellation.
 
 **OQ-3 (MINOR).** §5 step 2 pre-validates `actor_id`/`idempotency_key` before the
 transaction opens, diverging from `complete_task/3`'s own "no pre-check, let `append/2`
@@ -669,7 +675,7 @@ whoever resolves `req045`'s OQ-3a resolves this one identically.
 | `Letflow.EventStore.InstanceProjection` (req023/043, shipped) | This code → that | `terminal?/1` (§6), `update_changeset/2` (§7 M7), both reused unchanged |
 | `Letflow.EventStore` (req025, shipped) | This code → that | `append/2` for `INSTANCE_CANCELLED` (§9) — the concrete mechanism this run's own text asks to be "verified… rather than duplicated" |
 | `Letflow.TenantProvisioning` (req022, shipped) | This code → that | `tenant_id_for_schema_name/1`, pre-transaction (§5) |
-| `Letflow.Engine.Transition`, `InstanceState`, `Token`, `JoinCounter` (req044/050/051, shipped) | **Not called** by this design | §4 explains why — the join-counters persistence gap makes driving `{:cancel_branch, _}` here a no-op today; `req051`'s own `:cancel_join` pure logic remains untested by any real caller until a future requirement closes that gap |
+| `Letflow.Engine.Transition`, `InstanceState`, `Token`, `JoinCounter` (req044/050/051, shipped) | **Not called** by this design | §4/§0's Access-gap finding explains why: R-Co's own `cancelInstance` (EE-08) never drives per-branch events through transition/graph machinery either — plain unconditional SQL UPDATEs — so this is architectural parity, not a stopgap for a missing table. ISS-0397 (2026-09-03) later closed the join_counters persistence gap this cell used to cite as the blocker; that fix does not change this conclusion (see ISS-0402, resolved 2026-09-05). `req051`'s own `:cancel_join` pure logic remains untested by any real caller until a future requirement adds branch-level cancellation as a deliberate product decision |
 | `lib/letflow/parallel_approval.ex`, `lib/letflow/approval_supervisor.ex` (pre-existing) | This requirement deletes both | §2 |
 | `lib/letflow/application.ex` | This requirement edits | Removes `Letflow.ApprovalSupervisor`'s child-spec entry (§0, §2) |
 | `lib/letflow/sandbox_pool.ex` | This requirement edits (moduledoc text only) | Removes the stale `Letflow.ApprovalSupervisor` cross-reference (§2 point 3) |

@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF03-ISS0402-20260905-step-01",
+  "run_id": "WF03-ISS0402-20260905",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-diagnosis.json",
+  "created_at": "2026-09-05T03:10:00Z",
+  "started_at": "2026-09-05T02:45:00Z",
+  "completed_at": "2026-09-05T03:10:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S3",
+    "requirement_ids": ["REQ-052"],
+    "issue_ids": ["ISS-0402", "ISS-0397", "ISS-0098"],
+    "related_handoff_ids": ["handoffs/WF03-ISS0402-20260902/step-01-issue-fixer-diagnosis.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0402.yaml (full read, including its scoping_note from the 20260902 run)",
+      "docs/issues/ISS-0098.yaml (full read)",
+      "docs/issues/ISS-0397.yaml (full read, including its false_alarm_note)",
+      "lib/letflow/design/req052-instance-cancellation.md (section 0, section 4, OQ-2 in section 11)",
+      "lib/letflow/engine.ex (grep for cancel_instance, join_counters; confirmed no {:cancel_branch,_} dispatch anywhere in cancel_instance/3 or its helpers)"
+    ],
+    "branch_name": "feature/WF03-ISS0402-20260905",
+    "base_commit": "1d8ee6cc"
+  },
+  "task": {
+    "description": "Re-diagnose ISS-0402: confirm whether the join-counters persistence gap OQ-2 cited is really the sole reason cancel_instance/3 never drives {:cancel_branch, branch_id} through Transition, now that ISS-0397 closed that persistence gap, and decide whether branch-level cancellation needs CODE-DESIGNER, is mechanical enough for ELIXIR-DEV directly, or is a doc-only correction.",
+    "acceptance_criteria": [
+      "Confirm ISS-0397 genuinely closed OQ-2's cited persistence blocker by reading current lib/letflow/engine.ex, not by trusting a prior report",
+      "Determine whether OQ-2's text names a second, independent reason beyond join-counters persistence, or only the persistence gap",
+      "Check whether durable join_counters persistence alone removes every technical obstacle, or whether new product/semantic decisions are still needed",
+      "Make a real routing verdict (CODE-DESIGNER / ELIXIR-DEV / ORCH-doc-only) with reasoning"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "VERDICT: doc-only correction, route to ORCH -- not new design or implementation work. This re-confirms, from a fresh read of all primary sources (not by trusting the prior run's report alone), the same conclusion ISSUE-FIXER already reached in WF03-ISS0402-20260902 (recorded in ISS-0402.yaml's own scoping_note): the originally-cited blocker is genuinely gone, but an independent, already-on-record, stronger reason survives untouched, so no code change is warranted.\n\n(1) CONFIRMED join_counters persistence gap is closed. Fresh grep of lib/letflow/engine.ex (current HEAD 1d8ee6cc, fetched/verified against origin/main -- not a stale checkout, learning explicitly applied from ISS-0397's own false_alarm_note about exactly this trap) shows join_counters is now persisted unconditionally on every write path: insert_instance_projection/8 (~line 1274, create/2's own M1 insert) and the shared post-transition write site (~line 1502, 'join_counters is persisted unconditionally on every call (ISS-0397 fix...)'), and correctly deserialized on read (~line 2167, build_instance_state/3, SnapshotWriter.deserialize_join_counters/1). No hardcoded join_counters: %{} remains anywhere in cancel_instance/3's call graph.\n\n(2) OQ-2's text does NOT name join-counters persistence as its sole reason once section 4 (not just the one summary line at line 608) is read in full. Section 4 (req052-instance-cancellation.md:273-347) gives the persistence gap as the PROXIMATE reason wiring {:cancel_branch,_} would be a no-op today, but section 0's 2026-08-22 update (lines 111-134, citing ISS-0098/GH#326) independently verified against R-Co's actual shipped source (R-Co/src/engine/instance.zig, cancelInstance, EE-08, lines 2513-2634) that R-Co's own reference cancellation algorithm (its own doc-commented 8-step sequence, steps d/e) issues plain unconditional SQL UPDATEs on tasks/timers directly inside one transaction -- it never drives per-branch events through R-Co's own transition/graph machinery AT ALL, persistence gap or not. This is architectural PARITY with the reference system, not a stopgap for a missing table. ISS-0098 predates ISS-0397 by over a week and was never touched by it.\n\n(3) Confirmed via grep across lib/letflow_web/, docs/uat/, docs/requirements.yaml (re-run fresh, same as the 20260902 pass) that no route, controller, or UAT scenario needs branch-level cancellation as a caller-facing feature today; requirements REQ-051/052/053/054 are all status: done with no deferred follow-up naming it. dispatch_cancel_branch/3 (lib/letflow/engine/transition.ex) is exercised only by direct unit tests of Transition itself, never by any real caller path.\n\n(4) Two non-trivial semantic questions remain genuinely unresolved with zero reference-implementation precedent to draw from (R-Co has no branch-scoped cancel mode to consult): how already-completed sibling branches of the same split should be handled when one branch is cancelled (does the join fire short, or get suppressed), and whether cancelling a branch that spawned a REQ-062 SUB_PROCESS child should cascade to that child (req062's own EE-08 no-cascade answer is reasoned for whole-instance cancel only and does not transfer). These require a product decision via a new requirement (REQ-ANALYST/REQ-VALIDATOR), not something ISSUE-FIXER or CODE-DESIGNER can improvise inside a bugfix issue.\n\nCONCLUSION: this is case (a) from the task framing -- OQ-2's own text (specifically its section-0 update) already states the real, independent, still-valid reason (R-Co parity, ISS-0098), so the actual fix here is small and doc-only: correct req052-instance-cancellation.md's section-4/section-11 OQ-2 framing so it leads with the R-Co-parity reason rather than reading as if join-counters persistence were the sole/primary blocker (it visibly still does at line 608's summary phrasing and the table row at line 672, even though section 0 above it already supersedes that framing) -- and correct ISS-0402.yaml's own status to reflect this is a deliberate not-now scoping decision, not an unresolved code defect. No CODE-DESIGNER design work and no ELIXIR-DEV code change is warranted; branch-level cancellation as a caller-facing feature would need a brand-new requirement (out of WF-03's scope) once the two semantic questions above get a product answer.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-diagnosis.json"
+    ],
+    "issues": [
+      "req052-instance-cancellation.md's section-4 prose (line 608 summary) and its cross-reference table (line 672) still read as if join-counters persistence were OQ-2's whole/primary reason, even though section 0's own 2026-08-22 update already supersedes that framing with the stronger R-Co-parity finding (ISS-0098). This internal inconsistency is what let ISS-0402 be filed against a stale framing in the first place, and would let a third re-litigation happen again unless corrected.",
+      "docs/issues/ISS-0402.yaml's own scoping_note (from the 20260902 run) already reached this identical conclusion and recommended closing the queue task; this run independently re-confirms it from a fresh read of current HEAD. Recommend ORCH close this out rather than dispatching a third re-diagnosis pass if it resurfaces again -- add an explicit cross-reference from ISS-0402 to ISS-0098 in the design doc itself (not just in issue YAML) so future readers of OQ-2 see the superseding reason without needing to trace through issue history."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "not_agent_attested": false,
+  "gate_history": [
+    {
+      "gate": "ISSUE-FIXER",
+      "result": "PASS",
+      "timestamp": "2026-09-05T03:10:00Z",
+      "notes": "Re-diagnosis from fresh reads of design doc, engine.ex, and ISS-0098/ISS-0397 confirms the prior 20260902 conclusion: join-counters persistence gap is genuinely closed, but an independent, already-on-record R-Co-parity reason (ISS-0098) makes whole-instance-only cancellation intentional, not a stopgap. Verdict: doc-only correction (update OQ-2's framing in req052-instance-cancellation.md and ISS-0402.yaml's status), not new design or implementation work. Routed to ORCH."
+    }
+  ]
+}

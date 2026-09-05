@@ -1701,13 +1701,46 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 41
+    entries: 43
     note: >
+      Recounted to 43 by WF03-ISS0512-20260905's second Step Final rebase,
+      which found main further advanced by WF02-REQ260-20260905's own
+      started+done event pair (landed while this branch's own recount to
+      41 was already committed). Composed cleanly in
+      requirement_status.v9.yaml (no conflict beyond the two already-
+      composed entries described below -- this run's own ISS-0481
+      done-event sorts before REQ-260's started/done pair by `at:`, no
+      reordering needed). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 43 on-disk entries, rather
+      than carrying forward either side's independently-computed 41, per
+      this note's own recount-every-time rule.
+      Recounted to 41 by WF03-ISS0512-20260905's first Step Final rebase, which
+      found main further advanced by WF03-ISS0511-20260905's own
+      closeout-bookkeeping commit (landed while this branch's own append,
+      independently computing 39 -- itself already including a
+      previously-missed ISS-0511 done-event this run had added -- was
+      already committed). Composed both sides' distinct ISS-0511
+      started/done entries alongside this run's own ISS-0511/ISS-0512
+      done-events in chronological `at:` order in
+      requirement_status.v9.yaml itself (a genuine conflict there,
+      resolved by keeping both sides' entries, none dropped or
+      rewritten). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 41 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      39, per this note's own recount-every-time rule.
+      Incremented to 39 by ORCH's own ISS-0512 SCOPE-CHANGE done-event
+      append (WF03-ISS0512-20260905) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 39 on-disk entries, no
+      rebase conflict on this file (this run's own append also included
+      a previously-missed ISS-0511 SCOPE-CHANGE done-event, bringing 37
+      -> 39 in the same append). (Superseded by the recount to 43 above.)
       Incremented to 41 by WF02-REQ260-20260905's own done-event append
       (ORCH) -- `grep -c "^  - req:" docs/status/requirement_status.v9.yaml`
       = 41 on-disk entries, no rebase conflict on this file. 1130 lines,
       66066 bytes measured this append, well under the
-      1200-line/120000-byte roll ceiling, so no roll triggered.
+      1200-line/120000-byte roll ceiling, so no roll triggered. (Separate,
+      concurrently-landed count of 41; also superseded by the recount to
+      43 above.)
       Recounted to 40 by WF02-REQ260-20260905's own Step 00, appending one
       `started` event for REQ-260 (grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml = 40 on-disk entries).
@@ -1722,7 +1755,8 @@ volumes:
       than carrying forward either side's independently-computed 37/38,
       per this note's own recount-every-time rule. 1080 lines, 63213
       bytes measured this append, well under the 1200-line/120000-byte
-      roll ceiling.
+      roll ceiling. (Separate, concurrently-landed count of 39; also
+      superseded by the recount to 41 above.)
       Recounted to 37 by WF02-REQ258-20260905's second Step Final rebase,
       which found main further advanced by WF02-REQ259-20260905's own
       REQ-259 done-event append (landed via PR #997 while this branch's

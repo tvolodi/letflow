@@ -76,4 +76,55 @@ source: >
   left as stated intent.
 queue_task_id: 512
 github_issue: 1000
-status: open
+numbering_note: >
+  GH#1000's own title reads "ISS-0512: enforce no async:true test file may
+  reach Sandbox.mode/2" -- a pre-filing numbering slip (the issue was
+  registered against the queue/GH before this file was actually created by
+  CODE-DESIGNER during WF03-ISS0480-20260905). A separate WF-03 run
+  (WF03-ISS0512-20260905) independently claimed queue task 512 without
+  seeing this file yet and created a duplicate docs/issues/ISS-0512.yaml
+  for the same underlying issue -- reconciled at merge time: this file
+  (ISS-0481, created first, already on main) is the canonical record; the
+  duplicate ISS-0512.yaml was deleted and every code/design/test citation
+  in that run's branch was updated to reference ISS-0481 instead. The run
+  id, its handoffs/ directory name, and its design doc's own citations of
+  "WF03-ISS0512-20260905" were left unchanged as historical identifiers of
+  that dispatch, per this project's append-only-history convention.
+status: resolved
+resolved_in_run: WF03-ISS0512-20260905
+resolved_at: "2026-09-05T21:34:26Z"
+resolution_note: >
+  Added lib/mix/tasks/letflow.check_async_sandbox_reachability.ex, a static
+  mix task wired into mix.exs's "letflow.check": alias (immediately after
+  letflow.lint_handoffs). Scans test/**/*_test.exs for real `use ...,
+  async: true` declarations (anchored, rejecting moduledoc/comment prose)
+  and flags any such file with a real call site (not inside a moduledoc or
+  comment) reaching provisioned_tenant!/1 or a bare Sandbox.mode/2 call --
+  ISSUE-FIXER's diagnosis confirmed provisioned_tenant!/1's own first
+  statement is an unconditional Sandbox.mode call, so detecting either
+  call directly is sufficient without modeling the second hop into
+  TenantTemplate.ensure_template!/0. A closed, individually-cited
+  allowlist (mirroring lint_handoffs.ex's @grandfathered idiom) was built
+  to permit the two files this issue's own description named as verified
+  safe (secrets_test.exs, webhooks_test.exs) -- those two were
+  independently reverted to async: false by ISS-0480's own remedy (merged
+  as #1002/c6987864) before this fix landed, so the allowlist is currently
+  vacuous in practice (0 files need it) but is kept as the mechanically
+  correct, closed-list shape rather than removed, since a future verified
+  exception should have the same explicit-citation treatment.
+  tenant_schema_reaper.ex/tenant_template.ex are excluded structurally by
+  the test/**/*_test.exs file-selection step, never scanned as subjects.
+  16 regression tests (test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs)
+  prove: a genuine violation fails the build, moduledoc-only mentions are
+  not false-flagged, the allowlist mechanism exempts named files
+  correctly, non-async:true mode/2-caller fixtures are excluded by file
+  selection, and a reintroduction of the ISS-0480 shape is caught.
+  CODE-DESIGN-VALIDATOR independently re-verified the design's
+  regex/allowlist/graph-resolution claims against the real files (PASS,
+  handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json);
+  REVIEWER independently re-ran compile/format/test/the real-tree scan
+  and traced the self-referential test-file snag's fix (PASS,
+  handoffs/WF03-ISS0512-20260905/step-03d-reviewer.json). ORCH
+  independently confirmed compile --warnings-as-errors, format
+  --check-formatted, the 16-test regression suite, and a clean real-tree
+  scan before merge.

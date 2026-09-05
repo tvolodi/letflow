@@ -103,6 +103,13 @@ defmodule Letflow.MixProject do
         # currently in-flight branch. See HANDOFF_PROTOCOL.md's Enforcement note for
         # what "hard" and "advisory" mean for this task's own findings.
         "letflow.lint_handoffs",
+        # ISS-0481: a pure static/textual scan over test/**/*_test.exs, like
+        # lint_handoffs above and check_requirements_registration -- no
+        # compile step, no shared parse target with any neighbor, so it has
+        # no ordering dependency either direction. Placed with the other
+        # fast, non-compiling checks so a violation surfaces in seconds, not
+        # after a full compile+test cycle.
+        "letflow.check_async_sandbox_reachability",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

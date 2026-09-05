@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0512-20260905-step-02",
+  "run_id": "WF03-ISS0512-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0512-20260905/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-05T21:21:02Z",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0512"],
+    "related_handoff_ids": ["WF03-ISS0512-20260905-step-01"],
+    "artifacts_in": ["docs/issues/ISS-0512.yaml", "handoffs/WF03-ISS0512-20260905/step-01-issue-fixer.json"],
+    "branch_name": "feature/WF03-ISS0512-20260905",
+    "base_commit": "c5ec3fbc"
+  },
+  "task": {
+    "description": "Design a static check for mix letflow.check that detects async:true test files transitively reaching Sandbox.mode/2."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Design written to lib/letflow/design/iss0512-async-sandbox-mode-check.md. Independently re-verified ISSUE-FIXER's boundary claim (66 real async:true files via anchored `^\\s*use\\s+[A-Za-z0-9_.]+\\s*,.*async:\\s*true\\b`; exactly 2 -- secrets_test.exs, webhooks_test.exs -- reach Sandbox.mode/2, both via a real provisioned_tenant!/1 call, zero via a bare Sandbox.mode call; zero async:true files call ensure_template!/0 directly). Detection rule: (1) file-selection anchor for real async:true declarations (first-token-is-`use`, rejects all moduledoc/comment prose false positives found in this codebase without needing heredoc-span tracking); (2) two call-site patterns scoped to real async:true files only -- `provisioned_tenant!\\(` and `(Ecto.Adapters.SQL.)?Sandbox\\.mode\\(` -- each excluding @moduledoc heredoc spans and #-comment lines. Resolved graph decision: presence of either pattern in a real async:true file is sufficient to flag (provisioned_tenant!/1's own unconditional first statement already reaches mode/2 regardless of the template: option, so the checker never needs to model the conditional second hop to ensure_template!/0 or parse call opts). A closed, individually-named allowlist (mirroring lint_handoffs.ex's @grandfathered idiom, not a wildcard) holds exactly the 2 currently-verified files with their ISS-0113/ISS-0423 citation; any other match is a new violation and fails the build via Mix.raise/1. New task: Mix.Tasks.Letflow.CheckAsyncSandboxReachability at lib/mix/tasks/letflow.check_async_sandbox_reachability.ex, wired into mix.exs's \"letflow.check\": alias immediately after \"letflow.lint_handoffs\" and before \"format --check-formatted\" (pure static/textual scan, no compile dependency, same slot class as lint_handoffs/check_deferral_staleness). Includes a --dir flag (ISS-0440 lint_handoffs precedent) so scratch fixtures never need to live under the real test/ tree. tenant_schema_reaper.ex and tenant_template.ex are excluded structurally by the test/**/*_test.exs file-selection step (neither matches the filename pattern, and neither declares async:true even if scanned) -- never allowlist-based. Regression-test design: (a) pure in-memory-string classification-function unit tests (moduledoc-prose-only mention -> no match; genuine use+async:true plus genuine call -> match; commented-out call -> no match; async:false plus real call -> not a subject at all); (b) --dir-scoped integration test against synthetic scratch fixtures proving fail-then-clean without touching the real test/ tree; (c) a real-tree smoke assertion that today's boundary (2 permitted exceptions, 0 new violations) holds. Every ISS-0512 acceptance criterion is mapped to a concrete section in the design doc's closing traceability table (section 10). Five open questions/limitations named explicitly in section 9 (multi-line use declarations, a hypothetical bare moduledoc use-example line, a hypothetical direct ensure_template!/0-only caller, future non-allowlisted support modules calling mode/2, and whether @verified_safe should also mechanically require its citation string to appear in the file). No implementation code was written; design doc reviewed for stray Elixir code and only regex patterns, a plain data table, and illustrative CLI text remain.",
+    "artifacts_out": ["lib/letflow/design/iss0512-async-sandbox-mode-check.md"]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0512-20260905-step-03",
+  "run_id": "WF03-ISS0512-20260905",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0512-20260905/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-05T21:30:29Z",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0512"],
+    "related_handoff_ids": ["WF03-ISS0512-20260905-step-02b"],
+    "artifacts_in": ["lib/letflow/design/iss0512-async-sandbox-mode-check.md"],
+    "branch_name": "feature/WF03-ISS0512-20260905",
+    "base_commit": "7dbbbba2"
+  },
+  "task": {
+    "description": "Implemented the ISS-0512 design exactly as validated: a new mix task Mix.Tasks.Letflow.CheckAsyncSandboxReachability (lib/mix/tasks/letflow.check_async_sandbox_reachability.ex) that scans test/**/*_test.exs for files with a real `use ..., async: true` declaration (anchored regex, excluding moduledoc/comment prose), then within each such file checks for a real (non-moduledoc, non-comment) call site of provisioned_tenant!( or bare/qualified Sandbox.mode(. Any candidate not on the closed @verified_safe allowlist (exactly test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs, citing ISS-0113/ISS-0423) fails the build via Mix.raise/1; allowlisted matches are reported informationally. Supports --dir <path> (mirroring letflow.lint_handoffs.ex's ISS-0440 precedent) with a hard usage error on an explicitly-scoped empty result. Wired into mix.exs's \"letflow.check\": alias immediately after \"letflow.lint_handoffs\" and before \"format --check-formatted\", with an inline comment stating the placement rationale. Added a regression test suite (test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs, 16 tests) covering: pure-function classification of synthetic in-memory fixtures (real async:true+call-site detection, moduledoc-prose exclusion, #-comment exclusion, async:false non-matching), a --dir-scoped scratch-fixture integration layer (clean fixture passes, violating fixture fails with file/line named, async:false callers never flagged, empty --dir is a hard usage error), a support-module-shaped (tenant_schema_reaper.ex/tenant_template.ex-style) mode/2-caller fixture proving file-selection excludes non-*_test.exs files structurally, and a real-tree smoke assertion. Test fixtures are built via a fixture/1 helper (joins a list of line-strings with real \\n at runtime) rather than triple-quoted heredocs, specifically so this test file's own source lines never literally match the checker's anchor/call-site regexes (which would otherwise self-flag this file when it's scanned as part of the real test/ tree, since the checker's moduledoc-span exclusion does not extend to arbitrary heredocs)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "All verification run for real, toolchain available (asdf-managed Elixir/Mix, added to PATH). `mix compile --warnings-as-errors`: clean, zero warnings/errors. `mix format --check-formatted`: clean (ran `mix format` once first to normalize the two new files, then confirmed check-formatted passes with no output). `mix test test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs`: `Finished in 0.4 seconds ... Result: 16 passed`, zero failures. `mix letflow.check_async_sandbox_reachability` against the real, unscoped test/ tree: `letflow.check_async_sandbox_reachability: OK -- 66 async:true test file(s) scanned under \"test\", 2 reach Sandbox.mode/2 (2 permitted, verified exceptions), 0 new violations.` -- exactly matching the design's own independently-re-verified boundary (66 async:true files, exactly test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs as the two permitted exceptions, zero new violations). One implementation snag found and fixed during self-verification: the first version of the regression test used triple-quoted heredocs for its synthetic fixtures, which put real `use ..., async: true` and call-site lines as physical source lines inside the test file itself -- since that file matches test/**/*_test.exs, the checker (correctly, if self-referentially) flagged it as a new violation against the real tree. Fixed by switching all fixture construction in the test file to a fixture/1 helper (list of line-strings joined with runtime \\n), and by declaring the test module itself async: false (it does no concurrency-sensitive DB I/O, so there is no coverage cost). Committed as a4ff28be9e4601e76b6b7238f7e3182e72e1d924 (\"fix(ISS-0512): add mix letflow.check_async_sandbox_reachability task\") on feature/WF03-ISS0512-20260905. Not pushed, no PR opened, ISS-0512.yaml status left untouched, per instructions."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

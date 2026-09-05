@@ -1,0 +1,389 @@
+defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
+  @moduledoc """
+  Regression coverage for ISS-0512 -- `mix letflow.check_async_sandbox_reachability`
+  (`lib/mix/tasks/letflow.check_async_sandbox_reachability.ex`).
+
+  Design authority: `lib/letflow/design/iss0512-async-sandbox-mode-check.md` §8,
+  independently validated
+  (`handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json`).
+
+  Three layers, matching the design's §8 split:
+
+    * §8.1 -- pure classification functions (`async_true_file?/1`,
+      `real_call_sites/1`) exercised against synthetic in-memory strings. No
+      filesystem, no `Sandbox.mode` ever touched by these tests themselves.
+    * §8.2 -- `--dir` against a `System.tmp_dir!/0`-rooted scratch fixture
+      directory, never under the real `test/` tree (so `mix test` never
+      discovers or executes the synthetic fixture files created here).
+    * A real-tree smoke assertion -- the real, unscoped task, with no `--dir`,
+      passes green today with exactly the two known permitted exceptions.
+
+  ## Why fixtures below are built with `fixture/1`, not `\"\"\"` heredocs
+
+  This file itself matches `test/**/*_test.exs` -- the very glob the checker
+  under test scans. A literal heredoc physical line reading
+  `  use Letflow.DataCase, async: true` (or a real, uncommented
+  `provisioned_tenant!(`/`Sandbox.mode(` call line) sitting directly in this
+  source file would make the checker classify THIS file as a genuine
+  async:true violation when it scans the real tree -- self-referentially,
+  since the checker's moduledoc-span exclusion (design §3) does not extend to
+  arbitrary heredocs. `fixture/1` joins a list of line-strings at runtime
+  with real `\\n` characters, so the classification functions under test see
+  an identical multi-line string, but no single PHYSICAL line in this .exs
+  file itself starts with the bare token `use` or contains an uncommented
+  call -- each fixture line is one list element, so the character
+  immediately preceding it on disk is always `"` or `,`, never leading
+  whitespace-then-`use`.
+  """
+
+  use ExUnit.Case, async: false
+
+  import ExUnit.CaptureIO
+
+  alias Mix.Tasks.Letflow.CheckAsyncSandboxReachability, as: Checker
+
+  defp fixture(lines), do: Enum.join(lines, "\n") <> "\n"
+
+  # ==========================================================================
+  # §8.1 -- pure classification, synthetic in-memory strings only
+  # ==========================================================================
+
+  describe "async_true_file?/1" do
+    test "a genuine `use Letflow.DataCase, async: true` line is real" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "end"
+        ])
+
+      assert Checker.async_true_file?(content)
+    end
+
+    test "a moduledoc-only mention of async: true is NOT a real declaration" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  @moduledoc \"\"\"",
+          "  This module uses `use ExUnit.Case, async: true` for isolation.",
+          "  \"\"\"",
+          "",
+          "  use ExUnit.Case, async: false",
+          "end"
+        ])
+
+      refute Checker.async_true_file?(content)
+    end
+
+    test "a `#`-comment mentioning async: true is NOT a real declaration" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  # use ExUnit.Case, async: true",
+          "  use ExUnit.Case, async: false",
+          "end"
+        ])
+
+      refute Checker.async_true_file?(content)
+    end
+
+    test "async: false is never a match" do
+      content = fixture(["use Letflow.DataCase, async: false"])
+      refute Checker.async_true_file?(content)
+    end
+  end
+
+  describe "real_call_sites/1" do
+    test "a genuine provisioned_tenant!( call outside any moduledoc is a real §3(a) match" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  defp tenant do",
+          "    Letflow.TenantFixture.provisioned_tenant!(slug_prefix: \"foo\")",
+          "  end",
+          "end"
+        ])
+
+      assert [%{pattern: :provisioned_tenant}] = Checker.real_call_sites(content)
+    end
+
+    test "a bare Sandbox.mode( call is a real §3(b) match" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  setup do",
+          "    Sandbox.mode(Letflow.Repo, :auto)",
+          "  end",
+          "end"
+        ])
+
+      assert [%{pattern: :sandbox_mode}] = Checker.real_call_sites(content)
+    end
+
+    test "a fully-qualified Ecto.Adapters.SQL.Sandbox.mode( call is a real §3(b) match" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  setup do",
+          "    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)",
+          "  end",
+          "end"
+        ])
+
+      assert [%{pattern: :sandbox_mode}] = Checker.real_call_sites(content)
+    end
+
+    test "async:true with no call of either kind has no matches" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  test \"does nothing special\" do",
+          "    assert 1 == 1",
+          "  end",
+          "end"
+        ])
+
+      assert Checker.real_call_sites(content) == []
+    end
+
+    test "a moduledoc mention of provisioned_tenant!/1 in prose is excluded" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  @moduledoc \"\"\"",
+          "  Each test that needs a real tenant provisions one via",
+          "  `Letflow.TenantFixture.provisioned_tenant!/1`.",
+          "  \"\"\"",
+          "",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  test \"does nothing special\" do",
+          "    assert 1 == 1",
+          "  end",
+          "end"
+        ])
+
+      assert Checker.real_call_sites(content) == []
+    end
+
+    test "a commented-out provisioned_tenant!( line is excluded" do
+      content =
+        fixture([
+          "defmodule Letflow.FooTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  defp tenant do",
+          "    # Letflow.TenantFixture.provisioned_tenant!(slug_prefix: \"foo\")",
+          "    :ok",
+          "  end",
+          "end"
+        ])
+
+      assert Checker.real_call_sites(content) == []
+    end
+  end
+
+  # ==========================================================================
+  # §8.2 -- integration: --dir against a scratch fixture directory
+  # ==========================================================================
+
+  describe "run/1 against a scratch --dir fixture" do
+    setup do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "letflow-check-async-sandbox-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      %{dir: dir}
+    end
+
+    test "a clean async:true fixture (no call site) reports zero violations", %{dir: dir} do
+      File.write!(
+        Path.join(dir, "clean_test.exs"),
+        fixture([
+          "defmodule Letflow.CleanTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  test \"does nothing special\" do",
+          "    assert 1 == 1",
+          "  end",
+          "end"
+        ])
+      )
+
+      output =
+        capture_io(fn ->
+          assert Checker.run(["--dir", dir]) == :ok
+        end)
+
+      assert output =~ "OK --"
+      assert output =~ "0 new violations"
+    end
+
+    test "a violating fixture (async:true + real provisioned_tenant!( call) fails the build", %{
+      dir: dir
+    } do
+      fixture_path = Path.join(dir, "regression_test.exs")
+
+      File.write!(
+        fixture_path,
+        fixture([
+          "defmodule Letflow.RegressionTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  defp tenant do",
+          "    Letflow.TenantFixture.provisioned_tenant!(slug_prefix: \"regression\")",
+          "  end",
+          "end"
+        ])
+      )
+
+      output =
+        capture_io(fn ->
+          assert_raise Mix.Error, ~r/found 1 new violation/, fn ->
+            Checker.run(["--dir", dir])
+          end
+        end)
+
+      assert output =~ "NEW VIOLATIONS"
+      assert output =~ fixture_path
+      assert output =~ "provisioned_tenant"
+    end
+
+    test "an async:false file with a real provisioned_tenant!( call is never flagged", %{
+      dir: dir
+    } do
+      File.write!(
+        Path.join(dir, "async_false_test.exs"),
+        fixture([
+          "defmodule Letflow.AsyncFalseTest do",
+          "  use Letflow.DataCase, async: false",
+          "",
+          "  defp tenant do",
+          "    Letflow.TenantFixture.provisioned_tenant!(slug_prefix: \"foo\")",
+          "  end",
+          "end"
+        ])
+      )
+
+      output =
+        capture_io(fn ->
+          assert Checker.run(["--dir", dir]) == :ok
+        end)
+
+      assert output =~ "OK --"
+    end
+
+    test "an explicit --dir that discovers zero files is a hard usage error", %{dir: dir} do
+      empty_dir = Path.join(dir, "empty")
+      File.mkdir_p!(empty_dir)
+
+      assert_raise Mix.Error, ~r/discovered 0 files/, fn ->
+        capture_io(fn -> Checker.run(["--dir", empty_dir]) end)
+      end
+    end
+  end
+
+  # ==========================================================================
+  # tenant_schema_reaper.ex / tenant_template.ex-shaped fixtures are excluded
+  # by the file-selection step itself (design §7) -- proven here by pointing
+  # --dir at a scratch dir containing a mode/2-calling support-module-shaped
+  # file that is NOT named `*_test.exs`.
+  # ==========================================================================
+
+  describe "run/1 -- support-module-shaped files are excluded by file selection" do
+    setup do
+      dir =
+        Path.join(
+          System.tmp_dir!(),
+          "letflow-check-async-sandbox-support-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(dir)
+      on_exit(fn -> File.rm_rf!(dir) end)
+
+      %{dir: dir}
+    end
+
+    test "a tenant_schema_reaper.ex-shaped mode/2 caller (not *_test.exs) is never scanned", %{
+      dir: dir
+    } do
+      File.write!(
+        Path.join(dir, "tenant_schema_reaper.ex"),
+        fixture([
+          "defmodule Letflow.TenantSchemaReaperFixture do",
+          "  def sweep_orphans do",
+          "    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)",
+          "  end",
+          "end"
+        ])
+      )
+
+      File.write!(
+        Path.join(dir, "tenant_template.ex"),
+        fixture([
+          "defmodule Letflow.TenantTemplateFixture do",
+          "  def ensure_template! do",
+          "    Sandbox.mode(Letflow.Repo, :auto)",
+          "  end",
+          "end"
+        ])
+      )
+
+      # A real *_test.exs file must still be present, or --dir with zero
+      # discovered files would raise the empty-scope usage error instead of
+      # exercising the exclusion this test is actually about.
+      File.write!(
+        Path.join(dir, "harmless_test.exs"),
+        fixture([
+          "defmodule Letflow.HarmlessTest do",
+          "  use Letflow.DataCase, async: true",
+          "",
+          "  test \"does nothing special\" do",
+          "    assert 1 == 1",
+          "  end",
+          "end"
+        ])
+      )
+
+      output =
+        capture_io(fn ->
+          assert Checker.run(["--dir", dir]) == :ok
+        end)
+
+      assert output =~ "1 async:true test file(s) scanned"
+      assert output =~ "0 new violations"
+    end
+  end
+
+  # ==========================================================================
+  # Real-tree smoke assertion -- proves §1's current boundary holds today
+  # ==========================================================================
+
+  describe "run/1 against the real test/ tree (no --dir)" do
+    test "passes green with exactly the two known permitted exceptions" do
+      output =
+        capture_io(fn ->
+          assert Checker.run([]) == :ok
+        end)
+
+      assert output =~ "OK --"
+      assert output =~ "0 new violations"
+      assert output =~ "test/letflow/secrets_test.exs"
+      assert output =~ "test/letflow/webhooks_test.exs"
+      assert output =~ "2 permitted, verified exceptions"
+    end
+  end
+end

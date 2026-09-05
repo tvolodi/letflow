@@ -1,0 +1,46 @@
+{
+  "handoff_id": "da1e6f82-7b4c-4d1e-cf5a-6b7c8d9e0f19",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0423-20260905/step-04-test-runner.json",
+  "created_at": "2026-09-05T02:26:00Z",
+  "started_at": "2026-09-05T02:26:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c9d5e7f1-6a3b-4c0d-be4f-5a6b7c8d9e18"],
+    "artifacts_in": [
+      "docs/issues/ISS-0423.yaml",
+      "handoffs/WF03-ISS0423-20260905/step-01-issue-fixer-diagnose.json"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "ISS-0423's acceptance criteria require: (AC2) a before/after mix test timing quoted verbatim from real runs (not estimated); (AC4) zero tests deleted/skipped/excluded, and passing count >= 3060 after the change; (AC5) the full suite run at least TWICE end-to-end with both results quoted, to demonstrate no order-dependent or cross-schema flake was introduced by converting test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs to async: true.\n\nThe BEFORE baseline is already established and does not need to be re-run by you -- ISSUE-FIXER's own step-01 diagnosis (handoffs/WF03-ISS0423-20260905/step-01-issue-fixer-diagnose.json) already measured it fresh on this exact host/commit lineage: plain serial `mix test` = 'Finished in 1316.3 seconds (18.2s async, 1298.1s sync)', 'Result: 3227 passed (6 properties, 3221 tests), 21 excluded', 0 failures. Quote this exact line as the BEFORE figure in your own report -- do not re-run a third baseline measurement, that would not be a meaningfully different number and wastes a very long run.\n\nYOUR JOB: run a full, plain, un-partitioned `mix test` (the same invocation as the BEFORE baseline -- no scripts/test_parallel.sh this time, since that path is currently known-broken at this host's default N per ISSUE-FIXER's own diagnosis, and a plain `mix test` is the directly-comparable apples-to-apples AFTER figure against the quoted BEFORE) TWICE, END TO END, IN THIS SESSION, BLOCKING (per core-directives.md's 'No Background Wait For A Cross-Turn Notification' -- do not background this and do not end your turn expecting to be resumed; each run will take on the order of 20+ minutes and that is expected, run it as a normal synchronous foreground command and let your turn simply take as long as it takes). Quote both real 'Finished in ... (Xs async, Ys sync)' lines verbatim, plus both real 'Result: N passed (...), M excluded' lines, plus 0 failures both times (or the real failure count if any -- do not paper over a failure).\n\nAfter both runs:\n1. Confirm passing count >= 3060 both times (AC4). State the actual passing count both times, and compare it to the BEFORE figure's 3227 -- they should be the same or very close (no tests were added or removed by this change beyond the two files' own async: line flip, so the total test count should be essentially unchanged from the BEFORE run, modulo the normal drift of what else has landed on main since ISS-0423 was filed).\n2. Confirm zero tests were deleted, skipped, or excluded to achieve this (AC4) -- compare the excluded count to the BEFORE figure's 21; if it changed unexpectedly, investigate and report why.\n3. State the new async percentage (Xs async / total seconds) for each of your two runs, and compare explicitly against the BEFORE run's 18.2s/1316.3s = 1.4%. Given only 2 files were converted this run, the improvement will be MODEST, not dramatic -- report the real number honestly either way, do not inflate or downplay it.\n4. If BOTH runs show 0 failures and consistent passing counts (demonstrating no order-dependent or cross-schema flake from the async conversion), this satisfies AC5. If either run shows a failure NOT present in the other, or any failure involving test/letflow/secrets_test.exs, test/letflow/webhooks_test.exs, or test/support/tenant_fixture.ex specifically, treat this as a BLOCKER -- do not attribute it away, this is exactly the flake class AC5 exists to catch, and the fix's own verification history (3 clean scoped runs across 3 different parties/seeds) makes a full-suite-only flake a real, specific, load-bearing finding if it occurs.\n5. If either run shows a failure that is CLEARLY unrelated to this branch (a pre-existing, structurally-attributable failure per core-directives.md's 'Failure Attribution Is Structural, Never By Count-Matching' -- name the specific evidence, route 1/2/3), you may note it and still report AC4/AC5 as satisfied for THIS run's own scope, but you must state the attribution explicitly, citing the specific evidence per that section's own bar -- a bare 'looks pre-existing' is not sufficient.",
+    "acceptance_criteria": [
+      "Both full mix test runs executed synchronously in this session, blocking, to completion -- no backgrounding",
+      "Both real 'Finished in ... (Xs async, Ys sync)' lines quoted verbatim, plus both real 'Result: N passed...' lines",
+      "Passing count >= 3060 confirmed both times, and compared explicitly against the BEFORE figure's 3227",
+      "Excluded count compared against BEFORE figure's 21 -- confirmed unchanged or explained if not",
+      "New async percentage stated and compared honestly against the BEFORE figure's 1.4% -- no inflation, no downplaying",
+      "Any failure in either run is either attributed with specific structural evidence (per core-directives.md) or reported as a BLOCKER if it touches the converted files or shows inconsistency between the two runs"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

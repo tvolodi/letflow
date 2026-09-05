@@ -14,7 +14,11 @@
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0480", "ISS-0423", "ISS-0113"],
+    "issue_ids": [
+      "ISS-0480",
+      "ISS-0423",
+      "ISS-0113"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0480-sandbox-checkout-race-remedy.md",
       "handoffs/WF03-ISS0480-20260905/step-01-issue-fixer-diagnosis.json",
@@ -41,9 +45,9 @@
         "severity": "MINOR",
         "description": "Restating, for visibility, ELIXIR-DEV's own already-disclosed MINOR finding rather than a new one of my own: PackUpdateMigrationTest's FK-constraint symptom has zero empirical reproduction on either side of the fix (0/4 at Step 1, 0/1 at ELIXIR-DEV's baseline). Its coverage by this remedy rests entirely on a mechanism-level argument (identical per-connection-discard shape, table-touched is irrelevant), which I independently re-checked and find sound, but it should be worded downstream as 'covered by mechanism, not confirmed by repro' rather than folded into RowApprovalTest's stronger, repro-backed claim. Per the design's own §5 disposition (b), this is accepted as a legitimate verdict, not a gap requiring rework."
       }
-    ]
+    ],
+    "next_action": "TEST-DESIGNER may proceed. Word the fix's evidentiary basis as 'closed by construction (INV-1 verified: zero async:true files call Sandbox.mode/2, confirmed against DBConnection/ExUnit source), corroborated by a real same-host before/after seed comparison' -- not as '4 clean seeds' alone, which understates the actual strength of the argument. Treat PackUpdateMigrationTest's coverage as mechanism-based, not repro-confirmed, in any test report. ORCH should ensure the INV-1 lint follow-on (MINOR finding above) is actually registered via register_task before this run closes, not left as stated-but-unfiled intent."
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "TEST-DESIGNER may proceed. Word the fix's evidentiary basis as 'closed by construction (INV-1 verified: zero async:true files call Sandbox.mode/2, confirmed against DBConnection/ExUnit source), corroborated by a real same-host before/after seed comparison' -- not as '4 clean seeds' alone, which understates the actual strength of the argument. Treat PackUpdateMigrationTest's coverage as mechanism-based, not repro-confirmed, in any test report. ORCH should ensure the INV-1 lint follow-on (MINOR finding above) is actually registered via register_task before this run closes, not left as stated-but-unfiled intent."
+  "max_rework": 3
 }

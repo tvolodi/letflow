@@ -14,7 +14,9 @@
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0480"],
+    "issue_ids": [
+      "ISS-0480"
+    ],
     "artifacts_in": [
       "docs/issues/ISS-0480.yaml",
       "docs/issues/ISS-0113.yaml",
@@ -52,9 +54,9 @@
         "severity": "MINOR",
         "description": "INV-1 (the invariant this fix relies on -- zero async:true files may call Sandbox.mode/2) has no compile-time or test-time enforcement, only prose (this design doc plus provisioned_tenant!/1's own moduledoc). A future agent converting a new file or TenantFixture call site to async:true could silently violate it and reintroduce this exact class of intermittent defect. Recommended in design section 6 as a small, separately-sized follow-on (wire the section 4.1 grep into mix letflow.check the way the ISS-0069 substring check already works) -- not filed as its own issue by me since CODE-DESIGNER does not call the issue queue; flagging for ORCH to file per ISSUE_QUEUE.md if it agrees this is worth tracking."
       }
-    ]
+    ],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to independently gate this design before ELIXIR-DEV implements the two-file async:false revert and moduledoc update."
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "Route to CODE-DESIGN-VALIDATOR to independently gate this design before ELIXIR-DEV implements the two-file async:false revert and moduledoc update."
+  "max_rework": 3
 }

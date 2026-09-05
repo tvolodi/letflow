@@ -14,7 +14,9 @@
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0480"],
+    "issue_ids": [
+      "ISS-0480"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0480-sandbox-checkout-race-remedy.md",
       "handoffs/WF03-ISS0480-20260905/step-01-issue-fixer-diagnosis.json",
@@ -42,9 +44,9 @@
         "severity": "MINOR",
         "description": "Encountered and had to clean up significant environment contamination (stale tenant_template_build_* schemas across all 16 test databases) that caused a fully spurious 110-failure scripts/test_parallel.sh run, unrelated to this change. Root cause: tool-call-timeout kills of earlier stress-verification runs during this same session left template-clone builds interrupted mid-transaction. Not a new issue class (adjacent to ISS-0107's known Windows orphaned-process pattern) but this specific stale-build-schema flavor of it is not yet separately documented; ORCH/REVIEWER may want to fold a `tenant_template_build_*` sweep into the mandated pre-suite cleanup step alongside the existing `tenant_template` sweep, since the current mandated cleanup command in this run's own task brief only targets the bare `tenant_template` schema name, not its `_build_<hash>` transient variants."
       }
-    ]
+    ],
+    "next_action": "Route to SECURITY-REVIEWER (test-only change touching tenant-fixture-adjacent test files, no lib/ or tenant-data-path code changed, but routed per this workflow's standard gate) then REVIEWER for OTP-idiom/scope/decision-record sign-off, per WF-02 Steps 2b-2d. Both MINOR issues above are disclosed for their awareness, not rework triggers."
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "Route to SECURITY-REVIEWER (test-only change touching tenant-fixture-adjacent test files, no lib/ or tenant-data-path code changed, but routed per this workflow's standard gate) then REVIEWER for OTP-idiom/scope/decision-record sign-off, per WF-02 Steps 2b-2d. Both MINOR issues above are disclosed for their awareness, not rework triggers."
+  "max_rework": 3
 }

@@ -14,7 +14,9 @@
   "context": {
     "stage": "S6",
     "requirement_ids": [],
-    "issue_ids": ["ISS-0480"],
+    "issue_ids": [
+      "ISS-0480"
+    ],
     "artifacts_in": [
       "docs/issues/ISS-0480.yaml",
       "docs/issues/ISS-0113.yaml",
@@ -44,9 +46,9 @@
         "severity": "MINOR",
         "description": "This host had 4 (later 6, counting two more that appeared mid-session) orphaned mix test/erl.exe processes surviving past their own tool-call timeout (ISS-0107's known Windows recursion pattern), holding real Postgres connections and producing one misleading 'too many connections' failure during an ecto.create attempt before I identified and killed them. Not a new issue -- ISS-0107 already covers this class -- flagging only because it directly interfered with this run's own reproduction attempts and cost real time; no new issue filed since ISS-0107 already exists and core-directives.md's 'No Background Wait' section already names the exact tool-call shape (Bash with an implicit/exceeded timeout) that caused it."
       }
-    ]
+    ],
+    "next_action": "Route to CODE-DESIGNER for fix design. Recommend evaluating option 1 (revert test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs to async: false) as the primary candidate, per this handoff's 'CANDIDATE REMEDIES' section, with the ISS-0423/ISS-0113 tension named explicitly for REVIEWER sign-off rather than resolved silently either way."
   },
   "rework_count": 0,
-  "max_rework": 3,
-  "next_action": "Route to CODE-DESIGNER for fix design. Recommend evaluating option 1 (revert test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs to async: false) as the primary candidate, per this handoff's 'CANDIDATE REMEDIES' section, with the ISS-0423/ISS-0113 tension named explicitly for REVIEWER sign-off rather than resolved silently either way."
+  "max_rework": 3
 }

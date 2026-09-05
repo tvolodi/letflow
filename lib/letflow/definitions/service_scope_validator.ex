@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.ServiceScopeValidator do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   SVC-03 — service/plugin scope activation validator. Ports
   `src/definition/service_scope_validator.zig`'s
   `ServiceScopeValidator.validateServiceTaskReferences` (R-Co,
@@ -34,10 +35,12 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
 
   ## Two deliberate, faithfully-ported R-Co asymmetries — not bugs
 
+  PROVENANCE (historical, not current decision authority):
   1. **`plugin_handler` "not registered" is a pass, `service_id` "not registered" is a
      violation** (INV-SSV-5). Ports `checkPluginHandler`'s "no tenant-scoped entry at
      all: PD-05 already validates handler existence; skip" branch (`.zig` line 220-222)
      verbatim — this validator does not duplicate handler-existence checking.
+  PROVENANCE (historical, not current decision authority):
   2. **A resolved `:tenant`-scope lookup with a `nil` `owner_tenant_id` is a violation
      on the service side (INV-SSV-7) but a silent pass on the plugin side (INV-SSV-9)**
      — the exact inverse of each other for the identically-shaped malformed-lookup
@@ -56,9 +59,11 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
   an injectable `Lookup` (two functions the caller supplies). It does NOT implement, and does
   not itself depend on, either of R-Co's two real dependencies:
 
+    PROVENANCE (historical, not current decision authority):
     * a `ServiceCatalog` -- a tenant-scoped, DB-backed service registry
       (R-Co: `src/repository/service_catalog.zig`) -- belongs to **stage S6**
       (operational cross-cutting / repository layer), not yet ported as of this module.
+    PROVENANCE (historical, not current decision authority):
     * a `PluginRegistry` -- an in-process plugin dispatch table
       (R-Co: `src/engine/plugin_registry.zig`) -- belongs to **stage S3**
       (instance-engine), not yet ported as of this module.
@@ -125,6 +130,7 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
 
   defmodule Violation do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     One scope-check failure returned by `validate/3` (ports `.zig`'s `ScopeViolation`).
     `reason` is a closed-set atom (machine-matchable) and `message` a human-readable
     string filled in with the specific `ref_id` — mirrors
@@ -188,6 +194,7 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
     |> Enum.reduce_while(:ok, fn node, :ok -> check_node(node, tenant_id, lookup) end)
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # A node with no attributes contributes nothing (ports `.zig`'s
   # `const attrs_json = node.attributes orelse continue;`, line 65).
   defp check_node(%Graph.Node{attributes: nil}, _tenant_id, _lookup), do: {:cont, :ok}
@@ -303,6 +310,7 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
 
   # --- Plugin branch table (design doc §5, "Plugin branch table") ----------------
 
+  # PROVENANCE (historical, not current decision authority):
   # INV-SSV-5 — first asymmetry: no tenant-scoped entry at all is a pass, not a
   # violation (ports `.zig`'s `checkPluginHandler`, line 220-222).
   defp evaluate_plugin_lookup({:error, :not_registered}, _node_id, _plugin_handler, _tenant_id) do
@@ -323,6 +331,7 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
     :ok
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # INV-SSV-9 — second asymmetry: a nil owner on a resolved tenant-scoped entry is a
   # pass here, the exact inverse of the service side's INV-SSV-7 (ports `.zig`'s
   # `const owner = reg.owner_tenant_id orelse return;`, line 187 — a bare `return`

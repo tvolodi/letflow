@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.SnapshotStore do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for `Store.create`/`Store.get` (PD-08, `snapshot.zig`) — the
   definition-snapshot store. See `lib/letflow/design/req033-snapshot-store.md`
   for the full design this module implements; this moduledoc restates the

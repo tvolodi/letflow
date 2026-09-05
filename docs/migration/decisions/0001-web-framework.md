@@ -7,6 +7,7 @@ Status: decided (REQ-010). Owner: ELIXIR-DEV.
 Letflow currently uses plain Plug + Bandit for 3 routes
 (`lib/letflow/router.ex`). R-Co's `src/api/routes/` has 24 route modules:
 
+PROVENANCE (historical, not current decision authority):
 ```
 audit.zig  definitions.zig  definition_rollback.zig  dlq.zig
 entities.zig  health.zig  identity.zig  instances.zig  metrics.zig
@@ -18,6 +19,7 @@ solution_packs.zig  tasks.zig  tenant_config.zig  webhooks.zig
 
 plus `src/api/middleware/`:
 
+PROVENANCE (historical, not current decision authority):
 ```
 auth.zig  content_type.zig  quota_enforcement.zig  rate_limit.zig
 tenant_status.zig  trace.zig  validate.zig
@@ -33,6 +35,7 @@ continuing to hand-roll on plain Plug/Bandit, effective at S4 (`docs/migration/s
 owns the actual execution — this record does not touch `lib/letflow/router.ex` or
 `mix.exs`).
 
+PROVENANCE (historical, not current decision authority):
 Note on the route count this decision is reasoned against: R-Co's `src/api/routes/`
 contains **24** route modules. That count was verified directly against disk twice
 during design (`lib/letflow/design/0001-web-framework-decision.md` §2.1) and includes
@@ -88,26 +91,33 @@ applied to every route in that scope, versus hand-rolling the same grouping via 
 `Plug.Router`. Each of the 7 modules maps 1:1 onto a single `plug` entry either way, and
 each is addressed individually below per acceptance criterion 2:
 
+PROVENANCE (historical, not current decision authority):
 1. **`trace.zig`** → a single `plug Letflow.Plugs.Trace` entry, placed first in the
    pipeline (Phoenix) or first in the plug sequence (hand-rolled) — both mechanisms give
    the same "runs before everything else" guarantee, since both execute plugs in
    declaration order.
+PROVENANCE (historical, not current decision authority):
 2. **`auth.zig`** → a single `plug Letflow.Plugs.Auth` entry, immediately after trace in
    either mechanism. Bearer-token validation and role resolution short-circuiting with
    401/403 is a standard plug halt (`conn |> send_resp() |> halt()`) under both options —
    no framework-specific behavior needed here.
+PROVENANCE (historical, not current decision authority):
 3. **`content_type.zig`** → a single `plug Letflow.Plugs.ContentType` entry (or Phoenix's
    own `Plug.Parsers` configuration could absorb part of this, but the design treats it
    as its own discrete module to preserve the 1:1 mapping R-Co uses); applies to
    POST/PUT/PATCH only under both mechanisms via the same per-route/pipeline scoping.
+PROVENANCE (historical, not current decision authority):
 4. **`validate.zig`** → a single `plug Letflow.Plugs.Validate` entry, running after
    `content_type` and before business logic in both options; per-route JSON-schema
    validation is equally expressible as a plug under either mechanism.
+PROVENANCE (historical, not current decision authority):
 5. **`tenant_status.zig`** → a single `plug Letflow.Plugs.TenantStatus` entry; needs
    `auth`'s resolved tenant identity first under both mechanisms, so it is ordered after
    `auth` either way.
+PROVENANCE (historical, not current decision authority):
 6. **`quota_enforcement.zig`** → a single `plug Letflow.Plugs.QuotaEnforcement` entry;
    same ordering dependency on `auth` as `tenant_status`.
+PROVENANCE (historical, not current decision authority):
 7. **`rate_limit.zig`** → a single `plug Letflow.Plugs.RateLimit` entry; same ordering
    dependency on `auth`.
 
@@ -172,6 +182,7 @@ place (`0003-ecto-schema-strategy.md`'s 2026-08-17 addendum, `0006-identity-tabl
 schema-per-tenant.md`'s "exactly what this supersedes" section) rather than deleting or
 rewriting them.
 
+PROVENANCE (historical, not current decision authority):
 **Corrected counts.** R-Co's `src/api/routes/` now holds **31** route modules (up from
 the 24 this file's Decision section already corrected once, via `ISS-0001`), and
 `src/api/middleware/` holds **9** (up from 7) — reverified directly against R-Co's live

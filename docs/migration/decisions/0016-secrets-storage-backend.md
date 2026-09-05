@@ -38,24 +38,29 @@ dispatch, HMAC signing) both build on it:
   wrapped_data_key, nonce, auth_tag, aad, wrapping_key_ref, wrapping_key_version,
   created_at, created_by, disabled_at, deleted_at`, `UNIQUE (tenant_id, namespace,
   name, key_id)`.
+PROVENANCE (historical, not current decision authority):
 - `src/secrets/crypto.zig`: a fresh random 32-byte data key per write, AES-256-GCM
   over the plaintext with AAD bound to `"{tenant_id}:{namespace}:{name}:{purpose}"`,
   and the data key wrapped by a **second** AES-256-GCM pass under the master key. The
   file's own comment states Zig has no AES-KW primitive, which is *why* the second
   AEAD pass exists in place of real key-wrapping.
+PROVENANCE (historical, not current decision authority):
 - `src/secrets/reference.zig`: reference syntax is literally
   `sec://tenant/<tenant>/<namespace>/<name>#<key_id>`, `#<key_id>` optional (omitted
   = latest). Segments are lowercase `[a-z0-9_-]` only.
+PROVENANCE (historical, not current decision authority):
 - `src/secrets/store.zig`'s `resolveSecret`: cross-checks the reference's tenant
   against the caller's tenant before anything else, enforces a purpose/consumer
   matrix (e.g. a `webhook_dispatcher` consumer may only unwrap `webhook_hmac` or
   generic secrets), and zeroes the plaintext buffer after use.
+PROVENANCE (historical, not current decision authority):
 - **Defect (a) — hardcoded master key.** Every call site passes the literal
   64-zero hex string: `src/api/routes/webhooks.zig:375`,
   `src/webhook/dispatcher.zig:537`, `src/webhook/subscription_store.zig:224`, and
   `src/effects/worker.zig:42`'s struct default. `grep -rniE "MASTER_KEY|WRAPPING_KEY"
   src/` across R-Co's whole tree returns **zero matches** — the env-var wiring
   EXP-501's prose describes was never actually built.
+PROVENANCE (historical, not current decision authority):
 - **Defect (b) — dishonest algorithm metadata.** Rows are written with
   `wrapped_key_algorithm = "aes_kw_256"` (AES Key Wrap, RFC 3394) while `crypto.zig`
   performs a second AES-256-GCM pass instead, because Zig has no AES-KW primitive

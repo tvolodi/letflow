@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ258-20260905-step-02",
+  "run_id": "WF02-REQ258-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ258-20260905/step-02-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T17:59:17Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-258"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ258-20260905-step-00"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-258)", "lib/letflow/design/req237-zig-provenance-marking-convention.md"],
+    "branch_name": "feature/WF02-REQ258-20260905",
+    "base_commit": "0e2f2a8b"
+  },
+  "task": {
+    "description": "Applied REQ-237's .zig provenance-marking convention (design doc lib/letflow/design/req237-zig-provenance-marking-convention.md, section 2's placement rule and all four citation-unit shapes including the ISS-0510 YAML-comment amendment, plus section 2(a)'s single-regex marker text) to the 8-file chunk 239e1: docs/migration/decisions/{0001-web-framework,0002-oidc-integration,0003-ecto-schema-strategy,0007-variable-merge-validates-new-keys,0010-openapi-spec-strategy,0013-authorization-role-set,0014-scripting-plugin-runtime-strategy,0016-secrets-storage-backend}.md. For each file, identified every smallest enclosing citation unit containing a '.zig' substring (single citation line, whole paragraph, whole fenced code block treated the same way the design's table rule specifies -- one marker above the block not per line, or an individual bullet/list item, each marked separately and never merged) and inserted the fixed literal marker line 'PROVENANCE (historical, not current decision authority):' immediately above each unit, with zero alteration to any existing text. No table-shaped citation units existed in this chunk. Verified via before/after grep counts, git diff --numstat (0 deletions across all 8 files), and sampled diffs across 4+ files that only marker lines were added."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "BEFORE: `grep -c '\\.zig'` per file = 0001:19, 0002:16, 0003:2, 0007:2, 0010:13, 0013:3, 0014:13, 0016:7 (total 75); `grep -rc 'PROVENANCE (historical, not current decision authority):'` on all 8 files = 0 for every file (confirmed genuine before-state, no pre-existing markers). AFTER: same per-file `.zig` counts unchanged (0001:19, 0002:16, 0003:2, 0007:2, 0010:13, 0013:3, 0014:13, 0016:7, total 75 -- zero citation text lost); marker counts per file = 0001:11, 0002:7, 0003:2, 0007:2, 0010:5, 0013:2, 0014:9, 0016:5 (total 43 marker lines, one per distinct citation unit -- units included whole fenced code blocks marked once each in 0001 and 0010, and 7 individually-marked numbered-list bullets in 0001's Dimension B section, per the 'each bullet gets its own marker, never merged' rule). `git diff --numstat docs/migration/decisions/` confirms 0 deletions in all 8 files (only additions, matching the 43 marker count exactly). Sampled diff: 11 citations sampled across 4 files (0001, 0002, 0007, 0016, plus spot-checked 0010) -- every diff hunk shows only a '+PROVENANCE (historical, not current decision authority):' line added immediately above the citation unit, with the original R-Co path/citation text byte-identical before and after (exceeds the 7-citation/4-file minimum). Divergence-line check: `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` across all 8 files returns the same single match in 0007-variable-merge-validates-new-keys.md both before and after (text 'codebase diverges from R-Co on a validation or fail-closed question does so with an' unchanged; only its line number shifted from 66 to 68 due to 2 markers inserted earlier in that same file -- text itself is byte-identical). `git diff --stat CLAUDE.md README.md docs/migration/README.md` returns empty -- all three confirmed untouched. Files touched: the 8 in-scope docs/migration/decisions/*.md files only. All REQ-258 acceptance criteria satisfied."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

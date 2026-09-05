@@ -85,3 +85,33 @@ queue_task_id: 424
 github_issue: 828
 
 status: open
+orch_routing_note: >
+  ORCH (2026-09-05): ISSUE-FIXER's sizing pass
+  (handoffs/WF03-ISS0424-20260904/step-01-issue-fixer-diagnosis.json)
+  independently re-verified the issue's own counts (close in scale,
+  not exact -- consistent with both documents' own drift caveat) and
+  recommended a three-way split. Part 1 (framing: CLAUDE.md, README.md,
+  docs/migration/README.md) passed all six checks of
+  ORCHESTRATOR.md Sec10's sizing rule as three independent single-file
+  edits and was done directly by ORCH, merged via PR #916 alongside
+  this note.
+
+  Parts 2 and 3 were routed to REQ-ANALYST, which drafted 10
+  requirements into docs/requirements.yaml (stage S6, status: pending):
+  REQ-232 (routers), REQ-233 (engine/wasm/lua), REQ-234 (definitions),
+  REQ-235 (event_store), REQ-240/241/242 (the api/plugs, identity-
+  cluster, and repository/sandbox/webhooks/mix-tasks thirds of the
+  original heterogeneous "remainder" chunk, split out after
+  REQ-VALIDATOR ruled the single remainder requirement too large/
+  heterogeneous for one turn) -- together closing Part 2. REQ-237
+  (design the .zig historical-provenance marking convention),
+  REQ-238 (apply it in lib/, depends on REQ-232-242 landing first to
+  avoid touching the same lines twice), REQ-239 (apply it in docs/)
+  close Part 3. REQ-VALIDATOR failed the first draft once (REQ-234's
+  count was miscounted 26 vs the real 17; the original REQ-236 was
+  too heterogeneous), REQ-ANALYST fixed both in one rework cycle,
+  REQ-VALIDATOR passed the re-check.
+
+  This record stays open, status unchanged, pending those 10
+  requirements' completion -- closing it directly would misrepresent
+  Parts 2 and 3 as done when only Part 1 has landed.

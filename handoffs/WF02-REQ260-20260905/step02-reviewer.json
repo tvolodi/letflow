@@ -1,0 +1,71 @@
+{
+  "handoff_id": "WF02-REQ260-20260905-step-02",
+  "run_id": "WF02-REQ260-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ260-20260905/step02-reviewer.json",
+  "created_at": "2026-09-05T21:52:04Z",
+  "started_at": null,
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-260"],
+    "requirement_text": {
+      "REQ-260": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239f = docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference). This is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk. Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits. MEASURED SCOPE AT DRAFT TIME: 11 files in this chunk carry a .zig reference (ISS-0001, ISS-0002, ISS-0005, ISS-0014, ISS-0045, ISS-0063, ISS-0075, ISS-0076, ISS-0077, ISS-0078, ISS-0079)."
+    },
+    "related_handoff_ids": ["WF02-REQ260-20260905-step-01"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ260-20260905/step01-doc-updater.json",
+      "docs/issues/ISS-0001.yaml",
+      "docs/issues/ISS-0002.yaml",
+      "docs/issues/ISS-0005.yaml",
+      "docs/issues/ISS-0014.yaml",
+      "docs/issues/ISS-0045.yaml",
+      "docs/issues/ISS-0063.yaml",
+      "docs/issues/ISS-0075.yaml",
+      "docs/issues/ISS-0076.yaml",
+      "docs/issues/ISS-0077.yaml",
+      "docs/issues/ISS-0078.yaml",
+      "docs/issues/ISS-0079.yaml"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0001.yaml",
+      "docs/issues/ISS-0002.yaml",
+      "docs/issues/ISS-0005.yaml",
+      "docs/issues/ISS-0014.yaml",
+      "docs/issues/ISS-0045.yaml",
+      "docs/issues/ISS-0063.yaml",
+      "docs/issues/ISS-0075.yaml",
+      "docs/issues/ISS-0076.yaml",
+      "docs/issues/ISS-0077.yaml",
+      "docs/issues/ISS-0078.yaml",
+      "docs/issues/ISS-0079.yaml"
+    ]
+  },
+  "task": {
+    "description": "Claim this handoff (status -> IN_PROGRESS). You are on branch feature/WF02-REQ260-20260905 (verify with `git branch --show-current`; STOP and report FAIL if not). DOC-UPDATER (step-01, handoffs/WF02-REQ260-20260905/step01-doc-updater.json) claims to have applied REQ-237's PROVENANCE marking convention to exactly 11 named docs/issues/ISS-*.yaml files, inserting 53 markers covering 71 pre-existing .zig citation lines, additive-only. This is a docs-only mechanical marking pass (no CODE-DESIGNER precedes it -- the convention itself is already CODE-DESIGN-VALIDATOR-passed under REQ-237). Gate this independently -- do not trust step-01's result.summary or verification block at face value; re-derive the key checks yourself from the actual diff. Specifically confirm: (1) scope is limited to exactly the 11 named files (docs/issues/ISS-0001, 0002, 0005, 0014, 0045, 0063, 0075, 0076, 0077, 0078, 0079.yaml) and no other file changed except this run's handoff/requirements-status bookkeeping -- run `git diff --stat` against the branch point yourself; (2) the marker insertions are additive-only, with zero .zig-bearing lines altered, added-as-changed, or removed -- run `git diff -U0 -- <11 files> | grep -c '^[+-].*\\.zig'` yourself and confirm it is 0; (3) the YAML comment-line/sequence-item shape (4a) application to r_co_evidence:/letflow_evidence: sequence items (flagged by DOC-UPDATER as a MINOR judgement-call issue, not literally named as an example in REQ-237's design doc but structurally identical to the documented acceptance_criteria-bullet sequence-item case) is a defensible mechanical extension consistent with ISS-0510's precedent, not a scope problem or an invented fifth shape; (4) no other field in these 11 issue files (status, resolution_note, severity, id, or any other key) was altered -- spot check a sample of the diffs yourself beyond trusting DOC-UPDATER's own grep-based verification; (5) YAML still parses for all 11 files. On completion, set status to PASS or FAIL, fill result fully per HANDOFF_PROTOCOL.md, commit any review notes if applicable, and set next_action accordingly (PASS -> 'Route to ORCH for merge'; FAIL -> 'Return to DOC-UPDATER for rework, rework_count+1').",
+    "acceptance_criteria": [
+      "git diff --stat confirms only the 11 named docs/issues/ISS-*.yaml files (plus this run's own handoff/requirements.yaml bookkeeping files) changed since the branch point",
+      "git diff -U0 on the 11 files shows zero added or removed lines containing '.zig' -- only PROVENANCE marker lines added",
+      "the 4(a) shape extension to r_co_evidence:/letflow_evidence: sequence items is explicitly assessed and either accepted as consistent with ISS-0510 precedent or rejected with a concrete reason",
+      "a sampled check confirms no non-marker field (status/resolution_note/severity/id/etc) changed in any of the 11 files",
+      "all 11 files parse as valid YAML after the change"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": null,
+    "verification": null,
+    "deviations_and_issues": [],
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": null
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

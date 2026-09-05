@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF03-ISS0480-20260905-step-02",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-02-code-designer.json",
+  "created_at": "2026-09-05T08:31:46Z",
+  "started_at": "2026-09-05T08:31:46Z",
+  "completed_at": "2026-09-05T08:31:46Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "docs/issues/ISS-0480.yaml",
+      "docs/issues/ISS-0113.yaml",
+      "docs/issues/ISS-0423.yaml",
+      "handoffs/WF03-ISS0480-20260905/step-00-git-setup.json",
+      "handoffs/WF03-ISS0480-20260905/step-01-issue-fixer-diagnosis.json",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "deps/db_connection/lib/db_connection/ownership/manager.ex"
+    ],
+    "owned_modules": [
+      "test/letflow/row_approval_test.exs",
+      "test/letflow/definitions/pack_update_migration_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Step 2 design for ISS-0480: choose and justify a remedy for the load-dependent Sandbox checkout race (Step 1's confirmed root cause: DBConnection.Ownership.Manager's empty-except-list mass check-in, triggered by secrets_test.exs/webhooks_test.exs's Sandbox.mode(:auto) call, discarding unrelated async:true bystander tests' connections), name the ISS-0423 speed-win tension explicitly, state exact blast radius, specify load-bearing (not green-run) verification, and give an honest answer on the unconfirmed PackUpdateMigrationTest FK symptom.",
+    "acceptance_criteria": [
+      "Design doc exists at lib/letflow/design/ named for ISS-0480, contains no implementation code (signatures/shapes/before-after declarations only)",
+      "Chosen remedy stated and justified against the fixture-source alternative and the conditional/idempotent-mode-call alternative",
+      "ISS-0423 tension named explicitly with quantified/honestly-bounded cost, not avoided",
+      "Exact blast radius stated: which files change, which 46 TenantFixture call sites are affected vs untouched",
+      "Verification procedure specified that does not rely on a single green run, using Step 1's own proven reproduction recipe",
+      "Explicit, honest disposition on the unconfirmed PackUpdateMigrationTest FK symptom (covered by mechanism vs. directly confirmed)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design written to lib/letflow/design/iss0480-sandbox-checkout-race-remedy.md.\n\nCHOSEN REMEDY: revert test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs from `async: true` back to `async: false` (Step 1's option 1, adopted as-is). Rejected the fixture-source alternative (changing provisioned_tenant!/1 itself) for this record specifically -- not as wrong in principle, but because (a) the 'make the Sandbox.mode/2 call conditional/idempotent so it never actually changes mode' option the task asked me to weigh does NOT work: the disruptive check-in fires on the FIRST call that actually transitions the pool from :manual to :auto, which is unavoidable structurally regardless of how many call sites exist -- one call site is already enough, so conditionality on 'is it already :auto' cannot help; (b) a real fixture-source fix (e.g. Sandbox.allow/3-based sharing, or moving the transition to a setup_all-level once-per-run hook) is real new runtime logic across all 46 TenantFixture call sites, and ISS-0113's own record shows this exact fixture has already been attempted and reverted TWICE for two different reasons -- a third attempt needs the same full-source-trace-plus-multi-seed-stress rigor those two used, against the WHOLE 46-site population, which is materially bigger than this issue's own scope; (c) the revert is the only candidate independently verifiable with Step 1's own already-proven reproduction recipe without first building new mechanism. The larger fixture-source redesign is named as a legitimate follow-on (design section 6), not dismissed.\n\nISS-0423 TENSION (section 2), named explicitly per the task's own instruction: this fully reverses ISS-0423's own 2-file async conversion for these two files. Quantified honestly: the isolable wall-clock cost of un-converting exactly 2 files is NOT separately measurable against this suite's own already-large run-to-run jitter (ISS-0423's own AC5 numbers span 1316s-1670s across nominally-identical runs) -- stated as such rather than fabricating a precise number I cannot support. What IS quantifiable directly: the async-share metric reverts fully for these 2 files (66 genuinely-`async: true` files today, by my own freshly re-derived anchored grep count -- not Step 1's or ISS-0423's looser prose figures, which I checked and found imprecise -- becomes 64). ISS-0423's other two levers (test_parallel.sh wiring, template-schema clone) are untouched and keep their own much larger gains (2.9x measured). Made the case for accepting the cost: a MAJOR, 75%-hit-rate intermittent in innocent-bystander tests costs more in pipeline rework/trust than a low-single-digit-percent share of one already-small lever. Named the reversible alternative (section 6's redesign) for anyone who judges the trade-off differently.\n\nBLAST RADIUS (section 3): only the 2 named files change (their moduledoc's async-justification section also needs updating by ELIXIR-DEV, since it currently asserts async:true is correct and safe). provisioned_tenant!/1 itself is explicitly NOT modified -- all 46 TenantFixture call sites are named: 2 reverting here, 44 already async:false and untouched, none newly affected either direction. Also state precisely why RowApprovalTest/PackUpdateMigrationTest/data_case.ex need no changes (empty-diffed, mechanism is about the DISRUPTION SOURCE not the victims).\n\nVERIFICATION (section 4): explicitly rejects a single green run as evidence. Requires BOTH (a) a static grep proving zero async:true files call Sandbox.mode/2 after the revert (I ran this grep myself during drafting and verified its exact current output: 75 files call Sandbox.mode/2, exactly 2 show async:true today, confirming the mechanism precisely) and (b) re-running Step 1's own exact reproduction recipe (the full async-cohort file set, 4+ varying seeds) against the FIXED branch, expecting 0 failures in the two named tests every time. Named the required full-suite run as necessary for regression-safety but explicitly NOT sufficient as fix evidence on its own.\n\nUNCONFIRMED SECOND SYMPTOM (section 5): honest answer -- the remedy covers PackUpdateMigrationTest BY MECHANISM (identical connection-discard mechanism, table-sharing theory explicitly ruled a red herring by Step 1), but this was never directly reproduced (0/4 attempts). Recommended NOT holding the fix hostage to reproducing an already-rare symptom, but explicitly told RELEASE-VALIDATOR/ORCH to record this as a mechanism-level inference, not a repro-confirmed closure, and named what would actually overturn that (a future repro against the FIXED branch reopens the issue).\n\nSELF-CORRECTION DURING DRAFTING, disclosed rather than hidden: my first pass inherited three numeric claims (93, 95, 149 'async:true files') uncritically from Step 1's/ISS-0423's own prose without re-deriving them. Caught this before finalizing, ran my own anchored grep (`grep -rl \"^\\s*use.*async: true\"`), got 66, and corrected every affected passage in the design doc to use the freshly-verified count, while keeping Step 1's own looser 95-file figure only where it correctly describes what Step 1 itself actually ran (its reproduction command's file-argument list, where the looser match is harmless).\n\nOPEN QUESTIONS: none block this fix. One forward-looking item recorded (section 7): whether a future TenantFixture async-conversion tranche should invest in the section-6 setup_all-boundary redesign, or continue under this record's manual INV-1 discipline -- left for that future tranche to decide with fresh measurement.\n\nNo lib/ or test/ files modified by this step (design-doc-only, per role). No probes run against the live suite this step needed only static grep checks, not a mix test invocation.",
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "INV-1 (the invariant this fix relies on -- zero async:true files may call Sandbox.mode/2) has no compile-time or test-time enforcement, only prose (this design doc plus provisioned_tenant!/1's own moduledoc). A future agent converting a new file or TenantFixture call site to async:true could silently violate it and reintroduce this exact class of intermittent defect. Recommended in design section 6 as a small, separately-sized follow-on (wire the section 4.1 grep into mix letflow.check the way the ISS-0069 substring check already works) -- not filed as its own issue by me since CODE-DESIGNER does not call the issue queue; flagging for ORCH to file per ISSUE_QUEUE.md if it agrees this is worth tracking."
+      }
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "next_action": "Route to CODE-DESIGN-VALIDATOR to independently gate this design before ELIXIR-DEV implements the two-file async:false revert and moduledoc update."
+}

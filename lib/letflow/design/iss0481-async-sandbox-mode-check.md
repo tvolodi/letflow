@@ -1,6 +1,9 @@
-# Design: ISS-0512 — `mix letflow.check_async_sandbox_reachability` (async:true files must not reach `Sandbox.mode/2`)
+# Design: ISS-0481 — `mix letflow.check_async_sandbox_reachability` (async:true files must not reach `Sandbox.mode/2`)
 
-**Issue:** ISS-0512, severity MAJOR, filed by TEST-RUNNER during `WF03-ISS0480-20260905`
+**Issue:** ISS-0481, severity MINOR, filed by CODE-DESIGNER during `WF03-ISS0480-20260905`.
+Queue task 512 / GH#1000 dispatched under this run before the ISS-0481/ISS-0512
+numbering collision was discovered (the GH issue's own title says "ISS-0512";
+`docs/issues/ISS-0481.yaml` is the canonical record -- see its own header note).
 **Run:** `WF03-ISS0512-20260905`, WF-03 Step 2 (design)
 **Diagnosis authority:** `handoffs/WF03-ISS0512-20260905/step-01-issue-fixer.json` (ISSUE-FIXER)
 **This document produces:** the exact anchoring rules for "real async:true declaration" and
@@ -12,7 +15,7 @@ approach. **Design only — no implementation code.**
 
 ## 0. Sources read for this design
 
-- `docs/issues/ISS-0512.yaml` (full) and its two `related` issues, `ISS-0480.yaml`/`ISS-0113.yaml`
+- `docs/issues/ISS-0481.yaml` (full) and its two `related` issues, `ISS-0480.yaml`/`ISS-0113.yaml`
   (read for cross-reference only, not re-diagnosed — ISSUE-FIXER already did that).
 - `handoffs/WF03-ISS0512-20260905/step-01-issue-fixer.json` (full) — the diagnosis this design
   is built directly on. Every factual claim below about call sites, file counts, and the
@@ -133,7 +136,7 @@ didn't run (bare `Sandbox.mode` call sites across all of `test/`, not just `test
 Two independent per-line patterns, each evaluated only within a file already classified as a
 real async:true file per §2 (the check never needs to evaluate call sites in a file that isn't
 async:true, since a non-async:true file reaching mode/2 is not this defect class — see
-`ISS-0512.yaml`'s own framing: the defect is *an async:true file* reaching it):
+`ISS-0481.yaml`'s own framing: the defect is *an async:true file* reaching it):
 
 ### 3(a) — `provisioned_tenant!/1` call
 
@@ -289,7 +292,7 @@ specified here), holding exactly these two rows:
 ### 6.1 Moduledoc contract (what it must state, matching sibling tasks' convention)
 
 Following `check_deferral_staleness.ex`/`lint_handoffs.ex`'s established moduledoc shape:
-which issue it implements (ISS-0512), the root-cause framing (a missing mechanical invariant
+which issue it implements (ISS-0481), the root-cause framing (a missing mechanical invariant
 where only discipline held before), the exact anchor rules from §2/§3 restated in prose, the
 `@verified_safe` allowlist's meaning and update procedure (§5), and an explicit "what this task
 deliberately does NOT check" section covering: general Elixir call-graph analysis, macro
@@ -406,7 +409,7 @@ allowlist or special-case rule:
   both are plain support modules. So even a hypothetically broader file-selection rule (e.g.
   "scan everything under `test/`") would still not flag them, because the §2 anchor is what
   determines *subject-hood*, and they never satisfy it.
-- **Why this is correct, not a loophole**: the defect class ISS-0512 exists to guard against is
+- **Why this is correct, not a loophole**: the defect class ISS-0481 exists to guard against is
   "an `async: true` **test file** transitively reaches `Sandbox.mode/2`" — the issue's own
   wording is explicit that the hazard is a *bystander test file*, not the existence of a mode/2
   caller per se (`tenant_schema_reaper.ex`'s four call sites and `tenant_template.ex`'s one call
@@ -447,7 +450,7 @@ guards against) then feeds in **synthetic in-memory strings**, e.g.:
 
 - a moduledoc-only mention of `async: true` and of `provisioned_tenant!/1` in prose → expect
   "not a real async:true file" / "no real call site" (proves the anchor rejects prose — directly
-  satisfies ISS-0512's second acceptance criterion, "anchored to real async:true declarations,
+  satisfies ISS-0481's second acceptance criterion, "anchored to real async:true declarations,
   not moduledoc prose... with a test proving this").
 - a genuine `use Letflow.DataCase, async: true` line plus a genuine
   `Letflow.TenantFixture.provisioned_tenant!(` call outside any moduledoc → expect "real
@@ -486,7 +489,7 @@ directory, and asserts:
   §1's current boundary holds and stays enforced going forward).
 
 This threefold split (pure-function unit tests in 8.1, scratch-dir integration test in 8.2, and
-a real-tree smoke assertion) is the concrete mechanism that satisfies ISS-0512's fourth
+a real-tree smoke assertion) is the concrete mechanism that satisfies ISS-0481's fourth
 acceptance criterion ("The check catches a reintroduction... a regression test proves this")
 without ever writing a genuinely broken file into the real, executed `test/` tree.
 
@@ -522,7 +525,7 @@ without ever writing a genuinely broken file into the real, executed `test/` tre
    contain the issue number it's verified under (e.g. cross-check `"ISS-0113"` appears in the
    file text)?** Not designed as a hard requirement here — both current entries already do this
    by convention, but making it a mechanically-enforced second rule was judged out of this
-   issue's scope (ISS-0512's acceptance criteria ask for the reachability check, not a
+   issue's scope (ISS-0481's acceptance criteria ask for the reachability check, not a
    moduledoc-citation-format check, which is a distinct concern `lib/letflow/design/req237-zig-provenance-marking-convention.md`
    already exists for, for a different citation shape). Left as a possible future tightening,
    not adopted now.

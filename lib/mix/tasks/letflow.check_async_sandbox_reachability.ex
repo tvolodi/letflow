@@ -2,9 +2,12 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachability do
   @shortdoc "Fails when an async:true test file reaches Ecto.Adapters.SQL.Sandbox.mode/2"
 
   @moduledoc """
-  Implements ISS-0512: mechanically enforces the invariant that only discipline
-  protected before -- an `async: true` ExUnit test file must never (directly or
-  transitively, via `Letflow.TenantFixture.provisioned_tenant!/1`) reach
+  Implements ISS-0481 (queue task 512, GH#1000 -- the GH issue's own title says
+  "ISS-0512", a pre-filing numbering slip; docs/issues/ISS-0481.yaml is the
+  canonical record, see its own header note): mechanically enforces the
+  invariant that only discipline protected before -- an `async: true` ExUnit
+  test file must never (directly or transitively, via
+  `Letflow.TenantFixture.provisioned_tenant!/1`) reach
   `Ecto.Adapters.SQL.Sandbox.mode/2`. `Sandbox.mode/2` checks in every connection
   in the pool when the mode changes, so a bystander `async: true` file reaching
   it corrupts concurrently-running async tests. This is the third recurrence in
@@ -12,8 +15,11 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachability do
   that itself calls `mode/2` directly, never a bystander file reached
   transitively; ISS-0480 restored the invariant by construction for two files
   but nothing prevented recurrence). Design authority:
-  `lib/letflow/design/iss0512-async-sandbox-mode-check.md`, independently
-  validated (`handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json`).
+  `lib/letflow/design/iss0481-async-sandbox-mode-check.md`, independently
+  validated (`handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json`
+  -- that run's own id, WF03-ISS0512-20260905, was dispatched under queue task
+  512 before the ISS-0481/ISS-0512 numbering collision was discovered; left
+  unchanged as a historical identifier).
 
   Mirrors `lib/mix/tasks/letflow.lint_handoffs.ex`'s own shape: a plain static
   textual scan over files already on disk, with a small, closed, named

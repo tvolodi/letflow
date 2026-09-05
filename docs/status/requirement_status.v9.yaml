@@ -1107,9 +1107,23 @@ history:
     agent: ORCH
     at: "2026-09-05T21:34:26Z"
     note: >
-      ISS-0512 resolved (GH#1000, queue task 512, third recurrence in the
-      async:true-reaches-Sandbox.mode/2 family after ISS-0113/ISS-0480):
-      added lib/mix/tasks/letflow.check_async_sandbox_reachability.ex, a
+      ISS-0481 resolved (GH#1000, queue task 512, third recurrence in the
+      async:true-reaches-Sandbox.mode/2 family after ISS-0113/ISS-0480).
+      NAMING NOTE: this run was dispatched under queue task 512, whose own
+      GH issue title reads "ISS-0512" -- a pre-filing numbering slip.
+      docs/issues/ISS-0481.yaml, created earlier by CODE-DESIGNER during
+      WF03-ISS0480-20260905, is the canonical record for the same
+      underlying defect; this run's own docs/issues/ISS-0512.yaml
+      duplicate was deleted at merge time and every code/design/test
+      citation updated to reference ISS-0481 -- the run id and handoffs/
+      directory name (WF03-ISS0512-20260905) were left unchanged as
+      historical identifiers. Also discovered at merge time: ISS-0480's
+      own remedy (#1002/c6987864, landed concurrently) reverted the two
+      files this fix's allowlist names (secrets_test.exs, webhooks_test.exs)
+      back to async: false, so the allowlist is correct but currently
+      vacuous (0 files need it) -- kept as the mechanically correct,
+      closed-list shape rather than removed. Added
+      lib/mix/tasks/letflow.check_async_sandbox_reachability.ex, a
       static check wired into mix.exs's "letflow.check": alias (after
       letflow.lint_handoffs), plus 16 regression tests. ISSUE-FIXER
       diagnosed the exact closed 2-level call graph (a test file reaching
@@ -1117,8 +1131,8 @@ history:
       flag, since provisioned_tenant!/1's own first statement is an
       unconditional Sandbox.mode call). CODE-DESIGNER designed an
       anchored-regex detector with a closed, individually-cited allowlist
-      for the two already-verified-safe files (secrets_test.exs,
-      webhooks_test.exs); CODE-DESIGN-VALIDATOR independently re-verified
+      for the two files this issue's own description named as verified
+      safe; CODE-DESIGN-VALIDATOR independently re-verified
       every regex/allowlist/graph claim against the real files, PASS
       (handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json).
       ELIXIR-DEV implemented per design; REVIEWER independently re-ran
@@ -1126,6 +1140,9 @@ history:
       self-referential test-file-exclusion fix, PASS
       (handoffs/WF03-ISS0512-20260905/step-03d-reviewer.json). ORCH
       independently confirmed mix compile --warnings-as-errors, mix
-      format --check-formatted, the 16-test regression suite, and a
-      clean real-tree scan (0 new violations, 66 async:true files
-      scanned, 2 permitted exceptions) before this status flip.
+      format --check-formatted, the 16-test regression suite (one test
+      updated post-review to assert against the current real-tree state
+      after ISS-0480's concurrent revert, rather than hardcoding the two
+      now-stale filenames), and a clean real-tree scan (0 new violations,
+      64 async:true files scanned, 0 permitted exceptions currently
+      exercised) before this status flip.

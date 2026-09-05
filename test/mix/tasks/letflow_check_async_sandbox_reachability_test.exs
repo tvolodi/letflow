@@ -1,9 +1,11 @@
 defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
   @moduledoc """
-  Regression coverage for ISS-0512 -- `mix letflow.check_async_sandbox_reachability`
+  Regression coverage for ISS-0481 (queue task 512, GH#1000 -- see
+  `docs/issues/ISS-0481.yaml`'s own header note on the numbering collision
+  with the GH issue's title) -- `mix letflow.check_async_sandbox_reachability`
   (`lib/mix/tasks/letflow.check_async_sandbox_reachability.ex`).
 
-  Design authority: `lib/letflow/design/iss0512-async-sandbox-mode-check.md` §8,
+  Design authority: `lib/letflow/design/iss0481-async-sandbox-mode-check.md` §8,
   independently validated
   (`handoffs/WF03-ISS0512-20260905/step-02b-code-design-validator.json`).
 
@@ -373,7 +375,17 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
   # ==========================================================================
 
   describe "run/1 against the real test/ tree (no --dir)" do
-    test "passes green with exactly the two known permitted exceptions" do
+    test "passes green against the current real tree" do
+      # ISS-0480's own remedy (#1002/c6987864) reverted the two files this
+      # task's @verified_safe allowlist names -- secrets_test.exs and
+      # webhooks_test.exs -- back to `async: false`, so the real tree
+      # currently has zero files that need the allowlist. This asserts the
+      # check still passes clean either way: 0 violations, whether or not
+      # the allowlist happens to be exercised right now. It does NOT assert
+      # a specific permitted-exception count, since that count is a fact
+      # about the real tree's current content, not about this task's own
+      # correctness -- the allowlist mechanism itself is proven separately
+      # by the --dir fixture tests above.
       output =
         capture_io(fn ->
           assert Checker.run([]) == :ok
@@ -381,9 +393,6 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
 
       assert output =~ "OK --"
       assert output =~ "0 new violations"
-      assert output =~ "test/letflow/secrets_test.exs"
-      assert output =~ "test/letflow/webhooks_test.exs"
-      assert output =~ "2 permitted, verified exceptions"
     end
   end
 end

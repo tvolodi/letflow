@@ -13,8 +13,15 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0406", "ISS-0456"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0406",
+      "ISS-0456"
+    ],
     "artifacts_in": [
       "docs/issues/ISS-0418.yaml",
       "docs/issues/ISS-0352.yaml",
@@ -28,7 +35,9 @@
       "deps/wasmex/native/wasmex/src/instance.rs"
     ],
     "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
-    "owned_modules": ["lib/letflow/engine/wasm/"]
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
   },
   "task": {
     "description": "Step 1 (diagnose) of WF-03 for ISS-0418. Confirm or refute req170's mechanism against wasmex's real Rust source (installed wasmex ~> 0.15.1); enumerate where a concurrency cap can actually be enforced and assess each against whether it bounds LEAKED THREADS vs. merely concurrent CALLERS; determine whether the leak is bounded or unbounded in practice; reproduce cheaply if possible; state scope/routing. Do not implement a fix -- route to CODE-DESIGNER."
@@ -39,9 +48,9 @@
     "artifacts_out": [
       "handoffs/WF03-ISS0418-20260905/step-01-issue-fixer-diagnosis.json"
     ],
-    "issues": []
+    "issues": [],
+    "next_action": "Route to CODE-DESIGNER for fix design per WF-03 Step 2. Design must resolve the five explicit decision points in result.summary section 5, particularly the never-released-Admission-ref-on-brutal-kill problem before reusing Letflow.Admission unmodified."
   },
-  "next_action": "Route to CODE-DESIGNER for fix design per WF-03 Step 2. Design must resolve the five explicit decision points in result.summary section 5, particularly the never-released-Admission-ref-on-brutal-kill problem before reusing Letflow.Admission unmodified.",
   "rework_count": 0,
   "max_rework": 3
 }

@@ -13,8 +13,14 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
       "docs/issues/ISS-0418.yaml",
@@ -24,7 +30,9 @@
       "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator.json"
     ],
     "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
-    "owned_modules": ["lib/letflow/engine/wasm/"]
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
   },
   "task": {
     "description": "Step 2b re-gate (rework 2 of 3) of WF-03 for ISS-0418, per ORCH's dispatch: verify the rework-2 design against five points -- the rewritten determinism claim (§6.3) under all three call shapes and on_exit placement, the eight-vs-seven dispatch count, the three call-shape treatments (§6.2), the production-uncapped limitation's four required locations, and confirm the prior PASS items were not disturbed."
@@ -53,12 +61,12 @@
         "location": "lib/letflow/design/iss0418-wasm-concurrency-cap.md §6.1 table, row 5",
         "finding": "Row 5 (plugin_handler_test.exs:353, REQ-170 AC1) was not quoted verbatim from the test body in this validation's direct read (only its sibling AC3/AC4 tests were read in full to confirm shapes); its call shape (single PluginInterface.invoke/2 call) was inferred from the design's own consistent table pattern and the file's own describe-block structure rather than independently re-quoted line-by-line. This is a lower-confidence spot versus the other six rows, which were read and confirmed directly against real source. Recorded as MINOR rather than left silent, per this project's own audit-trail discipline -- does not block this gate since nothing about this row's design treatment (Shape A, same as rows 2/4/7) is unusual or novel enough to carry material risk if the exact line contents differ slightly from the table."
       }
+    ],
+    "next_action": "Route back to CODE-DESIGNER (rework 3 of 3) to resolve the BLOCKER: either reduce the wasm_hang suite's total hang-dispatch footprint to at or below the smallest real CI runner's pool size, or obtain and cite an actual measurement of available_parallelism() inside a real GitHub Actions ubuntu-latest wasm_hang subprocess rather than relying on an inferred vCPU-count analogy. This is the final rework iteration (max_rework: 3) -- if this cannot be resolved within scope, escalate to ORCH per docs/agents/ORCHESTRATOR.md §5 rather than attempting a fourth rework.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate.json"
     ]
   },
-  "next_action": "Route back to CODE-DESIGNER (rework 3 of 3) to resolve the BLOCKER: either reduce the wasm_hang suite's total hang-dispatch footprint to at or below the smallest real CI runner's pool size, or obtain and cite an actual measurement of available_parallelism() inside a real GitHub Actions ubuntu-latest wasm_hang subprocess rather than relying on an inferred vCPU-count analogy. This is the final rework iteration (max_rework: 3) -- if this cannot be resolved within scope, escalate to ORCH per docs/agents/ORCHESTRATOR.md §5 rather than attempting a fourth rework.",
-  "artifacts_out": [
-    "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate.json"
-  ],
   "rework_count": 2,
   "max_rework": 3
 }

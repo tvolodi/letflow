@@ -13,8 +13,14 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
       "handoffs/WF03-ISS0418-20260905/step-03-elixir-dev.json",
@@ -55,12 +61,12 @@
         "location": "test/letflow/engine/wasm/invocation_lease_test.exs (no production code location -- test-file-only observation)",
         "finding": "Confirmed the file's own docstring is accurate ('does NOT prove the lease's PLACEMENT is correct against a real hang') -- not a defect, recorded only because it is exactly the kind of honest self-scoping this project's audit discipline rewards and a future reader benefits from seeing it re-affirmed independently rather than only self-asserted. No action needed."
       }
+    ],
+    "next_action": "PASS. Route to TEST-DESIGNER per WF-03's normal Step 2d->3 sequencing (this run's own step numbering already used 'Step 3' for ELIXIR-DEV, so the next producing step is TEST-DESIGNER's own coverage-adequacy pass over the already-shipped tests, per the standard pipeline shape) or, if ORCH judges the existing TEST-DESIGNER-equivalent coverage in this run (test/letflow/engine/wasm/invocation_lease_test.exs, already written by ELIXIR-DEV per design S6.5's own instruction) sufficient, proceed directly to TEST-RUNNER's Step 4 real-CI verification -- which is now the step that must carry out S6.3.1's own 'required verification' obligation for any FUTURE re-measurement (already discharged once for this run via the three CI runs ELIXIR-DEV and ORCH already cited) and, per S10's own falsifiable prediction, must record the post-merge wasm_hang failure rate for comparison against the pre-change baseline (3 failures in 6 attempts). Also route the MAJOR finding (dispatch-count ambiguity) to whoever next touches this design doc as a docs-only follow-up -- it does not block this gate or require new code/test changes.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0418-20260905/step-03c-reviewer.json"
     ]
   },
-  "next_action": "PASS. Route to TEST-DESIGNER per WF-03's normal Step 2d->3 sequencing (this run's own step numbering already used 'Step 3' for ELIXIR-DEV, so the next producing step is TEST-DESIGNER's own coverage-adequacy pass over the already-shipped tests, per the standard pipeline shape) or, if ORCH judges the existing TEST-DESIGNER-equivalent coverage in this run (test/letflow/engine/wasm/invocation_lease_test.exs, already written by ELIXIR-DEV per design S6.5's own instruction) sufficient, proceed directly to TEST-RUNNER's Step 4 real-CI verification -- which is now the step that must carry out S6.3.1's own 'required verification' obligation for any FUTURE re-measurement (already discharged once for this run via the three CI runs ELIXIR-DEV and ORCH already cited) and, per S10's own falsifiable prediction, must record the post-merge wasm_hang failure rate for comparison against the pre-change baseline (3 failures in 6 attempts). Also route the MAJOR finding (dispatch-count ambiguity) to whoever next touches this design doc as a docs-only follow-up -- it does not block this gate or require new code/test changes.",
-  "artifacts_out": [
-    "handoffs/WF03-ISS0418-20260905/step-03c-reviewer.json"
-  ],
   "rework_count": 0,
   "max_rework": 3
 }

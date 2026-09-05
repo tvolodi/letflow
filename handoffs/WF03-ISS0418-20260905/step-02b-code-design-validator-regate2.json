@@ -13,8 +13,14 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
       "docs/issues/ISS-0418.yaml",
@@ -26,7 +32,9 @@
       "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate.json"
     ],
     "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
-    "owned_modules": ["lib/letflow/engine/wasm/"]
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
   },
   "task": {
     "description": "Final re-gate (rework 3 of 3, budget exhausted) of WF-03 for ISS-0418, per ORCH's dispatch: attack the AC1->AC4 merge and the AC5 string-replay conversion for coverage loss, spot-check two of the six irreducible dispatches, verify the OQ-E measurement gate is concretely enforceable, and confirm S0/S6/S6.1/S6.3.1 tell one consistent conditional story."
@@ -55,12 +63,12 @@
         "location": "lib/letflow/design/iss0418-wasm-concurrency-cap.md §8 (stale pre-§8.1 code-shape sketch)",
         "finding": "Carried forward, unchanged, from the two prior gates: the original §8 code-shape sketch (wiring try_acquire/release inside handle_node/1) remains present verbatim, marked superseded by §8.1 rather than removed. Still not blocking -- the document itself clearly flags the supersession -- but recorded again per this project's audit-trail discipline since it was never actually cleaned up across three reworks."
       }
+    ],
+    "next_action": "PASS. Route to ELIXIR-DEV for implementation per WF-03 Step 3, carrying forward: (1) the design's own OQ-E measurement gate as a hard precondition before the implementation's PR/CI-verification report may claim this design 'closes ISS-0418's CI flake' -- if available_parallelism() measured inside a real ubuntu-latest mix test --only wasm_hang subprocess is <= 6, escalate to ORCH per the design's own two named fallback paths rather than merging silently; (2) this validator's four MINOR findings, which do not block implementation but should be corrected in the design doc's own text (or accepted as documented residual imprecision) at ORCH's discretion, since the rework budget for this design gate is now exhausted.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate2.json"
     ]
   },
-  "next_action": "PASS. Route to ELIXIR-DEV for implementation per WF-03 Step 3, carrying forward: (1) the design's own OQ-E measurement gate as a hard precondition before the implementation's PR/CI-verification report may claim this design 'closes ISS-0418's CI flake' -- if available_parallelism() measured inside a real ubuntu-latest mix test --only wasm_hang subprocess is <= 6, escalate to ORCH per the design's own two named fallback paths rather than merging silently; (2) this validator's four MINOR findings, which do not block implementation but should be corrected in the design doc's own text (or accepted as documented residual imprecision) at ORCH's discretion, since the rework budget for this design gate is now exhausted.",
-  "artifacts_out": [
-    "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate2.json"
-  ],
   "rework_count": 3,
   "max_rework": 3
 }

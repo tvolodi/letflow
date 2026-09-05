@@ -13,8 +13,14 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
       "handoffs/WF03-ISS0418-20260905/step-01-issue-fixer-diagnosis.json",
@@ -28,7 +34,9 @@
       "test/letflow/engine/wasm/host_api_write_test.exs"
     ],
     "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
-    "owned_modules": ["lib/letflow/engine/wasm/"]
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
   },
   "task": {
     "description": "Step 2b (design gate) of WF-03 for ISS-0418. Independently verify CODE-DESIGNER's design against the six numbered checks in this run's dispatch (lease placement outside the kill boundary, monitor backstop correctness, default-cap protectiveness, wasm_hang determinism claim, new-primitive justification, honesty audit)."
@@ -47,12 +55,12 @@
         "location": "lib/letflow/design/iss0418-wasm-concurrency-cap.md §5.5",
         "finding": "The recommended default cap, max(System.schedulers_online() - 2, 1), computed against the design's own cited figures (available_parallelism()=8, schedulers_online()=16, both quoted in this same section from REQ-170 §1.5 and re-confirmed live this session via `nproc`=16) yields a default of 14 -- which exceeds the actual native pool size (8) on that exact host. Per the design's own stated rule earlier in the identical section ('a cap at or above the actual native pool size permits exactly the same worst case as no cap'), the recommended default is a no-op on the host the design itself uses as its worked numeric example, contradicting its own closing claim that the formula 'guarantees the cap is strictly below the proxy count on every host this formula runs on' (true only if 'the proxy count' silently means schedulers_online() itself rather than the actual pool size the guarantee needs to bind). On a smaller CI runner (~4 vCPU) the same formula does protect (cap 2 vs pool ~4), so this is not uniformly broken, but the design ships an OQ (OQ-B) leaving the exact formula to ELIXIR-DEV without flagging that its OWN recommended starting point fails on a real, already-measured host. Required fix: either derive the default from available_parallelism() itself (if reachable from Elixir via :erlang.system_info or a similar BEAM-side call -- not investigated by this design) or state explicitly, next to the formula, that operators on hosts where schedulers_online() significantly exceeds the actual wasmex pool size (BEAM scheduler count set higher than physical/logical cores, e.g. via +S) must override the default manually, since the formula's own proxy assumption can silently fail to protect -- currently only a soft caveat exists ('not because the two are guaranteed equal') without stating the concrete consequence (a non-protective default) plainly."
       }
+    ],
+    "next_action": "Route back to CODE-DESIGNER (rework) to fix the BLOCKER (§6 determinism claim vs. §1/§8.1 scope boundary) and the MAJOR (§5.5 default-cap formula's own worked example showing non-protection). Re-submit to CODE-DESIGN-VALIDATOR for a fresh gate pass once revised -- do not re-approve without re-reading the revised §5.5/§6 in full.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator.json"
     ]
   },
-  "next_action": "Route back to CODE-DESIGNER (rework) to fix the BLOCKER (§6 determinism claim vs. §1/§8.1 scope boundary) and the MAJOR (§5.5 default-cap formula's own worked example showing non-protection). Re-submit to CODE-DESIGN-VALIDATOR for a fresh gate pass once revised -- do not re-approve without re-reading the revised §5.5/§6 in full.",
-  "artifacts_out": [
-    "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator.json"
-  ],
   "rework_count": 0,
   "max_rework": 3
 }

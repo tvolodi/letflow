@@ -13,8 +13,14 @@
   "priority": "HIGH",
   "context": {
     "stage": "S6",
-    "requirement_ids": ["REQ-170"],
-    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0437"],
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
     "artifacts_in": [
       "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
       "docs/issues/ISS-0418.yaml",
@@ -23,7 +29,10 @@
       "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate2.json"
     ],
     "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
-    "owned_modules": ["lib/letflow/engine/wasm/", "priv/repo/migrations/"]
+    "owned_modules": [
+      "lib/letflow/engine/wasm/",
+      "priv/repo/migrations/"
+    ]
   },
   "task": {
     "description": "WF-03 Step 3: implement the gate-approved design (lib/letflow/design/iss0418-wasm-concurrency-cap.md, PASS with 4 MINOR findings). Build Letflow.Engine.Wasm.InvocationLease (the counting-semaphore primitive per design §5), wire it into the :wasm_hang test suite per §6.2's three call shapes (reducing 8 hang dispatches to 6 per §6.3.1), write unit tests for the primitive, and execute the design's own OQ-E measurement gate (§6.3.1's required verification) before making any 'closes the CI flake' claim."
@@ -37,18 +46,18 @@
         "location": "design doc §6.3.1 OQ-E measurement gate outcome",
         "finding": "Measured available_parallelism()/nproc INSIDE a real ubuntu-latest mix test --only wasm_hang-shaped CI job (three independent recent runs cross-checked: 33905940608, 33906933563, 33875941734, all reading 'test_parallel: N=4 (source: nproc)' immediately preceding that same job's own 'Including tags: [:wasm_hang]' step) is N=4, which is NOT strictly greater than 6 (this implementation's own dispatch count after §6.3.1's reduction). Per the design's own explicit instruction, this means lever (a) alone is insufficient and TEST-RUNNER/ELIXIR-DEV must escalate to ORCH rather than merge with an unqualified 'closes the flake' claim, choosing between (A) further footprint reduction at an explicit, now-unavoidable coverage cost the design's own analysis already found no way around at the current requirement set, or (B) the rework-1 fallback: ship the primitive and the genuine concurrent-contention fix, state the sequential-exhaustion risk remains open, let ORCH decide if that is shippable as a partial fix. This is not a defect in the implementation -- the design itself named this exact contingency and reserved the choice for ORCH."
       }
+    ],
+    "next_action": "ESCALATE to ORCH: choose between design §6.3.1's two named fallback paths (A: further footprint reduction, incurring an explicit new coverage cost the design's own §6.3.1 item 3 analysis already found unavoidable at the current requirement set -- would need a fresh design-doc revision identifying exactly which dispatch(es) to cut; or B: accept the rework-1 fallback position -- merge this implementation as a genuine, verified fix for the CONCURRENT-contention failure mode only, with the moduledoc/test comments already stating the sequential-exhaustion risk remains open on small runners, per the design's own honesty-clause requirement, §6.6). If ORCH chooses (B), no further code change is needed -- this handoff's own deliverables are already complete and merge-ready under that interpretation, gated only on SECURITY-REVIEWER/REVIEWER's own passes per the normal WF-03 Step 2c/2d gates. If ORCH chooses (A), route back to CODE-DESIGNER for a fourth design revision despite the stated 3-rework ceiling, since the ceiling was reached on a different question (the 8-vs-6 reduction) than this new, measurement-driven one, and ORCH's own escalation path (docs/agents/ORCHESTRATOR.md §5) is the correct next step per the design's own text rather than a mechanical fourth rework cycle.",
+    "artifacts_out": [
+      "lib/letflow/engine/wasm/invocation_lease.ex",
+      "lib/letflow/supervisor/infrastructure.ex",
+      "test/letflow/engine/wasm/invocation_lease_test.exs",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/host_api_write_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "handoffs/WF03-ISS0418-20260905/step-03-elixir-dev.json"
     ]
   },
-  "next_action": "ESCALATE to ORCH: choose between design §6.3.1's two named fallback paths (A: further footprint reduction, incurring an explicit new coverage cost the design's own §6.3.1 item 3 analysis already found unavoidable at the current requirement set -- would need a fresh design-doc revision identifying exactly which dispatch(es) to cut; or B: accept the rework-1 fallback position -- merge this implementation as a genuine, verified fix for the CONCURRENT-contention failure mode only, with the moduledoc/test comments already stating the sequential-exhaustion risk remains open on small runners, per the design's own honesty-clause requirement, §6.6). If ORCH chooses (B), no further code change is needed -- this handoff's own deliverables are already complete and merge-ready under that interpretation, gated only on SECURITY-REVIEWER/REVIEWER's own passes per the normal WF-03 Step 2c/2d gates. If ORCH chooses (A), route back to CODE-DESIGNER for a fourth design revision despite the stated 3-rework ceiling, since the ceiling was reached on a different question (the 8-vs-6 reduction) than this new, measurement-driven one, and ORCH's own escalation path (docs/agents/ORCHESTRATOR.md §5) is the correct next step per the design's own text rather than a mechanical fourth rework cycle.",
-  "artifacts_out": [
-    "lib/letflow/engine/wasm/invocation_lease.ex",
-    "lib/letflow/supervisor/infrastructure.ex",
-    "test/letflow/engine/wasm/invocation_lease_test.exs",
-    "test/letflow/engine/wasm/call_timeout_test.exs",
-    "test/letflow/engine/wasm/host_api_write_test.exs",
-    "test/letflow/engine/wasm/plugin_handler_test.exs",
-    "handoffs/WF03-ISS0418-20260905/step-03-elixir-dev.json"
-  ],
   "rework_count": 0,
   "max_rework": 3
 }

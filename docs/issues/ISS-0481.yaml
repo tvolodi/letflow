@@ -1,0 +1,79 @@
+id: ISS-0481
+title: "INV-1 (no async:true test file may reach Sandbox.mode/2) has prose only and no automated enforcement"
+discovered_by: CODE-DESIGNER
+discovered_in_run: WF03-ISS0480-20260905
+discovered_at: "2026-09-05T21:30:00Z"
+severity: MINOR
+tags: [testing, lint, sandbox, ci, s6]
+description: >
+  Filed as the follow-on ISS-0480's design named and both its design gate and
+  REVIEWER independently agreed should be tracked rather than left as intent.
+
+  THE INVARIANT: no test file declaring `async: true` may reach
+  `Ecto.Adapters.SQL.Sandbox.mode/2`, directly or transitively.
+
+  WHY IT MATTERS, established by ISS-0480 at source rather than assumed:
+  `Sandbox.mode/2` delegates to
+  `DBConnection.Ownership.Manager.handle_call({:mode, mode}, {caller, _}, state)`
+  (deps/db_connection/lib/db_connection/ownership/manager.ex), which calls
+  `proxy_checkin_all_except(state, [], caller)` -- an EMPTY except-list --
+  whenever the requested mode differs from the pool's current mode. That checks
+  in every checked-out connection for every process in the pool, not just the
+  caller's. Any concurrently-running `async: true` test silently loses its
+  connection and continues against a fresh, empty transaction.
+
+  Note the mode genuinely changes in practice: `test/support/data_case.ex` sets
+  `{:shared, self()}` only `unless tags[:async]`, so an async cohort leaves the
+  pool in `:manual`, and `TenantFixture.provisioned_tenant!/1`'s unconditional
+  `Sandbox.mode(Letflow.Repo, :auto)` is a real transition every time. Making
+  the call idempotent therefore does NOT fix it -- the first transition still
+  fires the mass check-in.
+
+  WHY THIS NEEDS ENFORCEMENT RATHER THAN DOCUMENTATION. ISS-0480's remedy
+  restores the invariant by construction (zero async:true files now reach the
+  fixture), but nothing prevents the next person from adding `async: true` to a
+  TenantFixture-using file, or adding a fixture call to an existing async file.
+  The failure mode is exactly what ISS-0480 documents: INTERMITTENT failures in
+  UNRELATED BYSTANDER TESTS that never touch `Sandbox.mode/2` themselves --
+  measured at a 3-of-4 hit rate, and costing a full diagnostic run to attribute.
+  This is also the third recurrence in this family: ISS-0113 flagged the same
+  fragility as its own OQ-5 but only reasoned about a future file that ALSO
+  calls `Sandbox.mode/2`, never about a bystander, which is precisely the gap
+  ISS-0480 fell into.
+
+  A CAUTION FOR WHOEVER BUILDS THIS, learned the expensive way during ISS-0480:
+  the naive check is wrong. An unanchored `grep -rln "async: true"` matches
+  MODULEDOC PROSE, not declarations -- several files' docs discuss `async: true`
+  while themselves being `async: false`, and one explicitly says so. ORCH ran
+  that grep, got 95 files and 9 apparent violations, and nearly reported a
+  false BLOCKER. The anchored form (`^  use .*async: true`) gives the real
+  answer: 66 files, and the two genuine culprits. The count has now been got
+  wrong three separate times on this issue family from inherited or loose
+  greps; the lint must anchor properly and should carry a test proving it does
+  not match prose.
+
+  SUGGESTED SHAPE, not prescribed: a check in the `mix letflow.check` chain
+  (alongside `lint_handoffs`, which has repeatedly caught real defects this
+  way) that fails when any file with an anchored `async: true` declaration
+  transitively reaches `Sandbox.mode/2`. Transitivity matters: the two ISS-0480
+  culprits reached it through `TenantFixture.provisioned_tenant!/1`, not
+  directly. Note also that `test/support/tenant_schema_reaper.ex` and
+  `test/support/tenant_template.ex` call `Sandbox.mode/2` legitimately (the
+  reaper only at guaranteed-empty suite boundaries; the template's call
+  re-requests the already-current mode and hits the no-op guard) -- a naive
+  transitive walk will flag these and must not.
+affected_files:
+  - lib/mix/tasks/
+  - test/support/tenant_fixture.ex
+related:
+  - ISS-0480
+  - ISS-0113
+  - ISS-0423
+source: >
+  Named by CODE-DESIGNER in lib/letflow/design/iss0480-sandbox-checkout-race-remedy.md
+  as a follow-on; CODE-DESIGN-VALIDATOR confirmed no lint or compile-time guard
+  exists; REVIEWER recorded a MINOR that it must actually be filed rather than
+  left as stated intent.
+queue_task_id: 512
+github_issue: 1000
+status: open

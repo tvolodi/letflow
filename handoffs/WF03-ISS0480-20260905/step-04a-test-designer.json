@@ -1,0 +1,65 @@
+{
+  "handoff_id": "e43242e3-bce4-4aab-a7c7-9050d6c494d2",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "04a",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-04a-test-designer.json",
+  "created_at": "2026-09-05T07:23:48Z",
+  "started_at": "2026-09-05T07:23:48Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "07f65cc6-b3db-48c1-8cea-6c0f43994ba3",
+      "c5d30117-7880-44c0-9447-ff05abc7beff"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0480-20260905/step-03a-elixir-dev.json",
+      "handoffs/WF03-ISS0480-20260905/step-03c-reviewer.json",
+      "test/support/tenant_fixture.ex",
+      "test/support/provisioning_repo.ex",
+      "test/support/data_case.ex",
+      "test/letflow/row_approval_test.exs",
+      "test/letflow/definitions/pack_update_migration_test.exs"
+    ],
+    "owned_modules": [
+      "test/support/tenant_fixture_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Write the regression test WF-03 Step 4 requires for ISS-0480, per design section 10.6's own specified mechanism (read it in full first -- lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, §10.6). Per WF-03's own rule, this test must be shown to FAIL against the pre-fix code and PASS against the post-fix code (checked out the pre-fix commit, ran the new test, confirmed it failed; then confirmed it passes on the fix branch) -- do not write a test that only ever runs against already-fixed code.\n\nTHE MECHANISM (per §10.6, do not re-derive from scratch -- it is already specified): a plain `async: true` DataCase-only test process inserts a row (or otherwise establishes an in-flight sandboxed transaction against Letflow.Repo), spawns a Task.async that directly calls Letflow.TenantFixture.provisioned_tenant!/1 (manufacturing the exact adversarial concurrent-TenantFixture-caller scenario ISS-0480 needs, rather than waiting for ExUnit's own scheduler to land it by luck -- mirroring ISS-0110's own targeted-reproduction technique of simulating the race directly), awaits the Task, then asserts the outer test's own earlier row/transaction is still intact. Pre-fix, this deterministically fails because provisioned_tenant!/1's old Sandbox.mode(Letflow.Repo, :auto) call forcibly checks in the outer test's own connection (Ecto's own sandbox.ex mode/2 documented behavior, already traced by ISSUE-FIXER's diagnosis at handoffs/WF03-ISS0480-20260905/step-0.5-1-issue-fixer-diagnose.json). Post-fix, it passes because provisioned_tenant!/1's Sandbox.mode/2 call now targets Letflow.Test.ProvisioningRepo, a structurally separate DBConnection.Ownership.Manager (independently confirmed twice by CODE-DESIGN-VALIDATOR against real Ecto/DBConnection source), so it cannot reach the outer test's own Letflow.Repo connection.\n\nWHERE TO PUT IT: a new test file, or a new describe block in an existing suitable location -- your call, but it must run as `async: true` under plain `Letflow.DataCase` (NOT via TenantFixture itself, since the whole point is to be a victim file with zero TenantFixture involvement in its OWN test body, mirroring the shape of the two real ISS-0480 victims row_approval_test.exs/pack_update_migration_test.exs) and it must not depend on suite-wide timing (the Task.async construction is what makes it deterministic).\n\nALSO WRITE COVERAGE for the two §10.8 exception-case edits, since ELIXIR-DEV's own verification for those was a manual scoped mix test run (14/14, 12/12), not a purpose-built assertion that the fix mechanism specifically works: at minimum, confirm hard_cleanup/1's on_exit-run schema-drop actually succeeds (not merely that the surrounding test passes) when called from a context with no ambient checkout, and confirm promotion_assertion_rerun_test.exs's AC1 scenario (a real second provisioning call needing Letflow.Repo in :auto mode) is covered by an assertion that would fail if the leading Sandbox.mode(Letflow.Repo, :auto) statement were removed or misplaced -- read the existing test files first; you may find suitable existing tests already cover this adequately once the mechanism is understood, in which case say so explicitly rather than adding redundant coverage. Do NOT modify test/support/provisioning_repo.ex or test/support/tenant_fixture.ex yourself -- those are ELIXIR-DEV's owned files and are done.\n\nFollow this project's own mutant-probe discipline if you use any temporary instrumentation to prove the fail-first property (WF-03's own workflow doc, 'A mutant is a TEMPORARY PROBE' section) -- revert and verify before completing.",
+    "acceptance_criteria": [
+      "A new regression test exists demonstrating design §10.6's mechanism, using Task.async to manufacture the adversarial concurrent-TenantFixture-caller scenario deterministically, not suite-timing luck",
+      "The test is shown to FAIL when run against the pre-fix code (checked out at or reconstructed from the commit before ELIXIR-DEV's first implementation, e.g. via git stash/worktree/checkout of the parent of the ProvisioningRepo commits) and PASS against the current fix branch -- both runs' real output quoted",
+      "The test runs as async: true under plain Letflow.DataCase with zero TenantFixture involvement in its own test body, mirroring the real ISS-0480 victims' shape",
+      "Explicit statement of whether the two §10.8 exception-case edits already have adequate coverage from existing tests, or new/strengthened assertions were added, with reasoning either way",
+      "No modification to test/support/provisioning_repo.ex or test/support/tenant_fixture.ex",
+      "Any temporary instrumentation used to prove the fail-first property is reverted and the revert verified (git status clean, re-run green) before completing"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

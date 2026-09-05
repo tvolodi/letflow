@@ -4958,6 +4958,28 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED PASS -- PR #995 squash-merged (ac9ad440) after two rebases onto sibling/concurrent chunks (REQ-253's PR #986, then its own Step Final closeout 0e2f2a8b). Registry conflict on this run's own entry resolved by composing both sibling entries (REQ-253, REQ-257) as separate array elements. Merged via gh pr merge --squash --delete-branch --admin past a backend-gate flake pattern (Req077PromotionPipelineTest, then Req207VortexTest twice -- different unrelated tests each of 3 CI attempts, none reachable from a docs/requirements.yaml-only diff), disclosed in a PR comment before merging. Queue task 495 released status:done.",
       "note": "WF-02 run for REQ-257 (queue task 495), chunk 239d of REQ-239 10-way split (ISS-0424 part 3c-4): applies REQ-237 .zig provenance-marking convention to docs/requirements.yaml, the REQ-189 through REQ-242 entry range. Sibling of WF02-REQ254 (chunk 239a, COMPLETED) and WF02-REQ256 (chunk 239c, disjoint range) -- same pattern, owner DOC-UPDATER then REVIEWER, no ELIXIR-DEV/CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER (docs/requirements.yaml only, no executable surface). Pre-start check: registry scanned, no existing WF02-REQ257-* entry, no collision with REQ-256 (disjoint entry range). Applied REQ-237 design doc as amended 2026-09-05 (ISS-0510, merged PR #994) including the fourth YAML comment-line/sequence-item citation-unit shape -- 56 marker lines covering 119 .zig citation lines. REVIEWER PASSed with no findings (handoffs/WF02-REQ257-20260905/step-2d-reviewer.json)."
+    },
+    {
+      "run_id": "WF02-REQ259-20260905",
+      "workflow_id": "WF-02",
+      "requirement_ids": ["REQ-259"],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/migration/stage-1-identity.md",
+        "docs/migration/stage-2-event-store-definitions.md",
+        "docs/migration/stage-3-instance-engine.md",
+        "docs/migration/stage-4-api-surface.md",
+        "docs/migration/stage-5-scripting-plugins.md",
+        "docs/migration/stage-6-operational-cross-cutting.md",
+        "docs/migration/stage-7-simulation-uat-parity.md"
+      ],
+      "lock_acquired_at": "2026-09-05T00:00:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00",
+      "backfilled": false,
+      "note": "letflow-ee-orch, queue task 497. Applying REQ-237's .zig provenance-marking convention (chunk 239e2) to the 7 named docs/migration/stage-*.md files only. Disjoint scope from concurrent sibling WF02-REQ258-20260905 (chunk 239e1, docs/migration/decisions/*.md)."
     }
   ]
 }

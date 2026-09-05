@@ -1701,8 +1701,13 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 40
+    entries: 41
     note: >
+      Incremented to 41 by WF02-REQ260-20260905's own done-event append
+      (ORCH) -- `grep -c "^  - req:" docs/status/requirement_status.v9.yaml`
+      = 41 on-disk entries, no rebase conflict on this file. 1130 lines,
+      66066 bytes measured this append, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
       Recounted to 40 by WF02-REQ260-20260905's own Step 00, appending one
       `started` event for REQ-260 (grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml = 40 on-disk entries).

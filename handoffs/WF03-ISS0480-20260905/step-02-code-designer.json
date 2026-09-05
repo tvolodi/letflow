@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0480-20260905/step-02-code-designer.json",
   "created_at": "2026-09-05T06:17:41Z",
   "started_at": "2026-09-05T06:17:41Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-05T06:24:05Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": null,
@@ -48,9 +48,11 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "STRUCTURAL FIX CHOSEN (not narrow, not hybrid): a second, dedicated, non-sandboxed-from-Letflow.Repo's-perspective Ecto.Repo, Letflow.Test.ProvisioningRepo, added as §10 to lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md (same design lineage as ISS-0113/ISS-0423 -- appended, not a new file, since this is ISS-0113's own mechanism recurring, per the dispatching diagnosis's own framing; §§0-9 left untouched and still normative for the already-shipped 2-file tranche and the §3/§4.2 classification procedure). TenantFixture.provisioned_tenant!/1 is changed to run TenantProvisioning's calls under Ecto.Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo) instead of calling Sandbox.mode(Letflow.Repo, :auto) directly -- so its own Sandbox.mode/2 call targets a wholly separate DBConnection.Ownership.Manager/pool than the one every plain DataCase test (RowApprovalTest, PackUpdateMigrationTest included) checks its own connection out of. TenantProvisioning/TenantTemplate/SandboxPool production and test-support source is NOT modified; provisioned_tenant!/1's public @spec, opts() type, return shape, and error taxonomy are all byte-for-byte unchanged, and all 46 existing call sites (2 converted + 44 unconverted) need zero source edits.\n\nEXPLICIT ANSWER TO THE ACCEPTANCE-CRITERION QUESTION (design §10.0): a narrow per-call-site conversion tranche CANNOT ever fully protect a file with zero TenantFixture involvement, at any tranche size short of reverting ISS-0423's own already-shipped 2-file conversion entirely. Traced why: the hazard is not proportional to how many of the 44 remaining files get converted -- it already exists at full severity today, live on main, because the 2 ALREADY-converted files (secrets_test.exs, webhooks_test.exs) are what ISSUE-FIXER's own diagnosis caught actually firing (3 live incidents across 2 runs, one directly against RowApprovalTest). §9.4's own safety proof for that 2-file tranche only established MUTUAL safety among TenantFixture callers (no two async:true TenantFixture callers collide with each other); it never established, and could not have tested, safety against an unrelated async:true plain-DataCase file, because ISS-0423's own scope had none to test against. ISS-0480 is that file, discovered after the fact. Therefore ISS-0480 can be marked resolved only if a structural fix ships (this design); anything narrower (more of the 44 converted, or none) can only leave it instrumented.\n\nDID NOT re-propose ISS-0113's reverted restore_sandbox mechanism: this design adds no second Sandbox.mode/2 call on Letflow.Repo at all -- the entire point is that provisioned_tenant!/1 stops calling Sandbox.mode/2 on Letflow.Repo in the first place, redirecting to a different repo's own ownership manager instead. Reconciled explicitly against decision 0009: added one new, disclosed, fixed (=2, not schedulers_online()-derived) pool-size term to the budget formula (design §10.2.2), verified it still fits with wide margin at both plain `mix test` (34 total connections vs measured max_connections=100) and scripts/test_parallel.sh at N=16 (extended computed'=3 vs today's computed=5, aggregate worst case 80 vs usable ceiling 97 -- 17 connections of slack), and named the exact N at which decision 0009's own existing WARN/clamp escape hatch would need to fire (no new mechanism required). Evaluated Letflow.SandboxPool for reuse per the handoff's own explicit ask and rejected it (design §10.1): its own moduledoc confirms its DB worker still issues ordinary Repo (= Letflow.Repo) calls, so reusing it would not remove the shared-pool hazard at all -- it solves a different problem (bounding concurrent DDL under one pool) and would need its own separate Ecto.Repo behind it to help here, at which point standing up that second repo directly is simpler.\n\nDesign §10.6 gives TEST-DESIGNER a concrete, deterministic (not suite-timing-dependent) mechanism for a fail-then-pass regression test: a plain async:true DataCase-only test inserts a row, spawns a Task.async that calls provisioned_tenant!/1 directly (manufacturing the adversarial concurrent-TenantFixture-caller scenario ISS-0480 needs rather than waiting for ExUnit's own scheduler to land it by luck, mirroring ISS-0110's own targeted-reproduction technique), awaits it, then asserts the first row is still visible -- deterministically fails pre-fix (Sandbox.mode(Letflow.Repo,:auto) checks in the outer test's connection) and deterministically passes post-fix (the spawned call now targets ProvisioningRepo's own separate ownership manager, which has never held the outer test's checkout).\n\nNo implementation code written -- @spec/@type/config-block-level signatures only (design §10.3.1-10.3.4), matching this project's design/implementation split. Open questions left explicit rather than silently resolved: OQ-6 (application_name tag interaction with the ISS-0110 TenantSchemaReaper liveness guard -- needs ELIXIR-DEV to check the reaper's own source before implementing), OQ-7 (put_dynamic_repo/1 must be wrapped exception-safe at each of 3 wrap points), OQ-8 (bash/Elixir pool-size-constant sync, implementer's choice, no behavior difference), OQ-9 (this design does not itself run mix test -- that is CODE-DESIGN-VALIDATOR/TEST-DESIGNER/TEST-RUNNER's job per this pipeline's normal division of labor, explicitly including the double full-suite run this project's redundancy principle requires before a shared-test-infrastructure change of this shape can be trusted).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"
+    ],
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0480-20260905",
@@ -60,7 +62,7 @@
       "pr_url": null,
       "pr_create_error": null
     },
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate design §10 (the ISS-0480 structural fix) against this handoff's own acceptance criteria before ELIXIR-DEV implements: Letflow.Test.ProvisioningRepo (new test-only Ecto.Repo module), TenantFixture.provisioned_tenant!/1's internal put_dynamic_repo/1 seam (public API unchanged), config/test.exs's new sibling config block, and scripts/test_parallel.sh's TEST_POOL_SIZE formula extension by the fixed PROVISIONING_POOL_SIZE=2 term."
   },
   "rework_count": 0,
   "max_rework": 3

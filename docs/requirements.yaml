@@ -13893,7 +13893,7 @@ requirements:
       - "for at least 3 of the touched occurrences, the commit message or an inline comment names the specific technical reason kept (not merely 'rephrased'), spot-checkable by REVIEWER"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-233
     title: Retire parity-justification phrasing in lib/letflow/engine.ex, lib/letflow/engine/*, engine/wasm/*, engine/lua/* -- restate on merit or delete (closes ISS-0424 part 2b)
@@ -13938,7 +13938,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-234
     title: Retire parity-justification phrasing in lib/letflow/definitions.ex, lib/letflow/definitions/*, and lib/letflow/routers/definitions.ex -- restate on merit or delete (closes ISS-0424 part 2c)
@@ -13974,7 +13974,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-235
     title: Retire parity-justification phrasing in lib/letflow/event_store.ex and lib/letflow/event_store/* -- restate on merit or delete (closes ISS-0424 part 2d)
@@ -14007,7 +14007,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-240
     title: Retire parity-justification phrasing in lib/letflow/api/ and lib/letflow/plugs/ -- restate on merit or delete (closes ISS-0424 part 2e-1)
@@ -14042,7 +14042,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-241
     title: Retire parity-justification phrasing in lib/letflow/identity(.ex, /group.ex), instances.ex, tasks.ex, tenant_provisioning.ex, audit.ex -- restate on merit or delete (closes ISS-0424 part 2e-2)
@@ -14073,7 +14073,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-242
     title: Retire parity-justification phrasing in lib/letflow/repository/artifact.ex, sandbox_pool/fixture_loader.ex, webhooks/subscription.ex, and lib/mix/tasks/ -- restate on merit or delete (closes ISS-0424 part 2e-3)
@@ -14107,7 +14107,7 @@ requirements:
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-237
     title: Define the .zig provenance-citation marking convention -- demote from decision-authority framing to clearly-marked historical provenance (closes ISS-0424 part 3a, design)
@@ -14170,7 +14170,7 @@ requirements:
       - "the design states a concrete chunking recommendation (by directory or subsystem) for REQ-238 and REQ-239's apply steps, sized so no single recommended chunk exceeds what REQ-232 through REQ-236 each treated as one ELIXIR-DEV turn (comparable file count)"
       - "CODE-DESIGN-VALIDATOR signs off per its normal gate: no implementation code in the artefact, every constraint in this requirement's description addressed, unambiguous enough for REQ-238/239 to apply without further design judgement calls"
     depends_on: []
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-238
     title: Apply the .zig provenance-marking convention across lib/ (excluding lib/letflow/design/) (closes ISS-0424 part 3b)
@@ -14212,7 +14212,7 @@ requirements:
       - "the deliberate-divergence lines re-verified in REQ-232 through REQ-236 (e.g. engine/execution_error.ex:7, definitions/process_definition.ex:34, event_store/registry/validation_failure.ex:21, sandbox_pool/fixture_loader.ex:11, repository/artifact.ex:13, api/response.ex:27, routers/promotions.ex:409, routers/metrics_exposition.ex:67, engine/pin_resolver.ex:141) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/` before and after and diffing (byte-identical expected), quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing
 
   - id: REQ-239
     title: Apply the .zig provenance-marking convention across docs/ (including docs/migration/ and lib/letflow/design/) (closes ISS-0424 part 3c)
@@ -14257,4 +14257,4 @@ requirements:
       - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
       - "the 38-49 deliberate-divergence notes repo-wide (per ISS-0424's own count and ISSUE-FIXER's re-verification) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
     depends_on: [REQ-237]
-    impl_order:
+    # impl_order: UNREGISTERED -- not yet registered via letflow-queue's register_task; drafted directly per ISS-0424's routing

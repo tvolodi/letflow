@@ -13984,7 +13984,7 @@ requirements:
   - id: REQ-235
     title: Retire parity-justification phrasing in lib/letflow/event_store.ex and lib/letflow/event_store/* -- restate on merit or delete (closes ISS-0424 part 2d)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the event_store slice of ISS-0424/GH#828 part 2, same

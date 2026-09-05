@@ -29,8 +29,8 @@ defmodule Letflow.EventStore.IdempotencyRecord do
 
   ## Table naming
 
-  `event_idempotency`, not R-Co's `plat_event_idempotency`: the `plat_` prefix
-  denotes a platform/cross-tenant table, and R-Co's own
+  `event_idempotency`, not `plat_event_idempotency`: the `plat_` prefix
+  denotes a platform/cross-tenant table, and
   `src/design/par-01-monthly-range-partitioning.md:203-209` flags this specific
   table as an exception to that convention ("one new `plat_`-prefixed table that
   is *itself* per-tenant"). Letflow's sidecar is unambiguously per-tenant — 0003

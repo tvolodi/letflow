@@ -575,3 +575,15 @@ history:
       ORCH independently confirmed mix compile --warnings-as-errors, mix
       format --check-formatted, and mix test test/letflow/definitions*.exs
       test/letflow/definitions/ (377 passed) before this status flip.
+  - req: REQ-235
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T07:46:02Z"
+    note: >
+      Retired parity-justification phrasing in lib/letflow/event_store.ex,
+      lib/letflow/event_store/* (closes ISS-0424 part 2d, queue task 473,
+      GH#920, PR #941, feature/WF02-REQ235-20260905). REVIEWER passed the
+      implementation (handoffs/WF02-REQ235-20260905/step-02d-reviewer.json);
+      ORCH independently confirmed mix compile --warnings-as-errors, mix
+      format --check-formatted, and mix test test/letflow/event_store*.exs
+      test/letflow/event_store/ (178 passed) before this status flip.

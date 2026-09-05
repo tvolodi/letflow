@@ -68,8 +68,7 @@ defmodule Letflow.EventStore.StoredPayload do
   ## No `tenant_id` (design §2.5)
 
   Unlike `Letflow.EventStore.Event`/`ArchivedEvent`/`InstanceProjection`, this
-  table carries no `tenant_id` column — matching R-Co's own `adp-0x`
-  migrations, which never add one here. This table's own Postgres schema is
+  table carries no `tenant_id` column: this table's own Postgres schema is
   already tenant-scoped, and every row is reached only via the composite FK
   to a specific `events` row, so a redundant `tenant_id` column would add no
   real guarantee. See the design doc §2.5 for the full asymmetry rationale.

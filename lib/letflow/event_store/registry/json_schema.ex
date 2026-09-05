@@ -1,7 +1,7 @@
 defmodule Letflow.EventStore.Registry.JsonSchema do
   @moduledoc """
   Pure JSON Schema validator — no I/O, no `Repo` — implementing exactly the
-  keyword subset R-Co's own hand-rolled `src/tools/json_schema.zig` supports:
+  keyword subset `src/tools/json_schema.zig` specifies:
   `type`, `minimum`/`maximum`, `minLength`/`maxLength`, `enum`, `required`,
   `properties`, `items`, `additionalProperties` (only the literal `false`
   form — the subschema form is not implemented, matching R-Co exactly, and
@@ -35,9 +35,10 @@ defmodule Letflow.EventStore.Registry.JsonSchema do
 
   # Recursive worker over (pointer, value, schema). A `type` mismatch at a
   # given level short-circuits every other keyword check at that same level
-  # (matches R-Co's collectInto cascade-avoidance behavior exactly) but does
-  # not stop sibling subtrees from being checked, since each recursive call
-  # only ever returns its own local violation list.
+  # (avoiding a cascade of additional, misleading violations against a value
+  # that already failed its basic type check) but does not stop sibling
+  # subtrees from being checked, since each recursive call only ever returns
+  # its own local violation list.
   defp collect(pointer, value, schema) do
     case type_violation(pointer, value, schema) do
       {:violation, violation} ->
@@ -216,9 +217,10 @@ defmodule Letflow.EventStore.Registry.JsonSchema do
     }
   end
 
-  # The document root's own pointer is "" inside the recursion; rendered as
-  # "/" at the point a violation is actually constructed (matches R-Co's
-  # appendFailureRaw's `if (v.path.len == 0) "/" else v.path` convention).
+  # The document root's own pointer is "" per RFC 6901 inside the recursion;
+  # rendered as "/" at the point a violation is actually constructed, since
+  # an empty `field_path` in a validation-failure report would read as
+  # blank/missing rather than "the whole document".
   # Joined child pointers (required/properties/items/additionalProperties)
   # never hit this — join_pointer/2 always produces a non-empty string.
   defp render_pointer(""), do: "/"

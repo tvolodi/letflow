@@ -1,7 +1,7 @@
 defmodule Letflow.EventStore do
   @moduledoc """
-  Context module for `Store.append()` (ES-01/02/03/05/08/DB-03) — port of R-Co's
-  `src/event_store/store.zig`'s `append`. See
+  Context module for `Store.append()` (ES-01/02/03/05/08/DB-03), implementing the
+  append semantics specified in `src/event_store/store.zig`. See
   `lib/letflow/design/req025-event-append.md` for the full design this module
   implements; this moduledoc restates the four points that design's §7 requires
   to be stated here verbatim in substance.
@@ -60,11 +60,10 @@ defmodule Letflow.EventStore do
   — and therefore the same `FOR UPDATE` lock `lock_and_increment_sequence/3`
   takes on it (M2, reused verbatim from `append/2`). This is a real per-tenant
   serialization point across **every** platform write in that tenant's schema,
-  not just the three promotion event types REQ-140 wires up — correct, matches
-  R-Co's own design, and fine at current traffic volumes (a handful of
-  low-frequency promotion-pipeline event types), but a capacity property worth
-  having on record here rather than rediscovered the first time platform-event
-  volume grows.
+  not just the three promotion event types REQ-140 wires up — correct, and fine
+  at current traffic volumes (a handful of low-frequency promotion-pipeline
+  event types), but a capacity property worth having on record here rather
+  than rediscovered the first time platform-event volume grows.
 
   ## Scope
 
@@ -778,10 +777,11 @@ defmodule Letflow.EventStore do
   # VALUES FLAGGED, per the design doc's own §3/§12 OQ-1: `platform.zig` is
   # unreachable from this host (confirmed fresh for this run, same result as
   # the design doc's own §0 check). These are placeholder UUIDs -- pairwise
-  # distinct, syntactically valid (Ecto.UUID.cast/1 accepts them) -- NOT a
-  # verified port of R-Co's literal values. Substitute the real values if/when
-  # platform.zig becomes reachable; nothing in this codebase reads these back
-  # yet (requirements.yaml:1119-1121: "this requirement only needs the
+  # distinct, syntactically valid (Ecto.UUID.cast/1 accepts them) -- not
+  # verified against the real values these are meant to stand in for.
+  # Substitute the real values if/when platform.zig becomes reachable;
+  # nothing in this codebase reads these back yet
+  # (requirements.yaml:1119-1121: "this requirement only needs the
   # constants to exist"), so the placeholder values carry no behavioral risk
   # today.
   @platform_instance_id "00000000-0000-0000-0000-000000000001"
@@ -924,8 +924,8 @@ defmodule Letflow.EventStore do
       `:after_global_seq`.
     * `:from` / `:to` are **inclusive** bounds on `events.created_at`. The
       `from > to` case is deliberately **not** checked here -- it is the
-      route's, matching R-Co's own handler-level check
-      (`src/api/routes/audit.zig:26-30`, `invalid_time_range`).
+      route's responsibility, per the handler-level check in
+      `src/api/routes/audit.zig:26-30` (`invalid_time_range`).
     * `:actor_id` / `:instance_id` are validated with `Ecto.UUID.cast/1`
       **before any query is constructed**; a malformed value returns
       `{:error, :invalid_actor_id}` / `{:error, :invalid_instance_id}` with

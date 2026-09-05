@@ -40,8 +40,8 @@ defmodule Letflow.Definitions.PromotionReview do
      it is open-ended text, extensible without a schema migration, per prm-04's
      own Open Question 1 (as cited by this table's owning requirement,
      REQ-035, in docs/requirements.yaml -- this module has no direct access to
-     R-Co's own src/design/prm-04-promotion-review-state-machine.md, which
-     lives outside this repository). Whether a CHECK constraint restricting
+     the source document, src/design/prm-04-promotion-review-state-machine.md,
+     which lives outside this repository). Whether a CHECK constraint restricting
      the value set should be added once the set of legal def_types is known
      is left open.
 

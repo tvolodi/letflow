@@ -706,9 +706,9 @@ defmodule Letflow.Definitions.SolutionPack do
 
   # Read-only and advisory: no role is created, none is bound, and the
   # checklist never affects whether the install succeeds. This is a NARROWED
-  # port of R-Co's `checkRoleGate` (`src/solution/store.zig:589`), whose gate
-  # can reject an install; Letflow's reports and proceeds. "Checklist" must
-  # not be read as an enforced precondition.
+  # analogue of R-Co's `checkRoleGate` (`src/solution/store.zig:589`): that
+  # gate can reject an install, but this implementation only reports and
+  # proceeds. "Checklist" must not be read as an enforced precondition.
   defp role_mapping_checklist(required_roles) do
     known = MapSet.new(Authorization.roles(), &Atom.to_string/1)
 

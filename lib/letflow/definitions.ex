@@ -994,8 +994,9 @@ defmodule Letflow.Definitions do
           event_appender: event_appender_fun(),
           # Optional; defaults to default_assertion_evaluator/2 when omitted or nil --
           # a deliberate divergence from the permission_checker/event_appender
-          # no-default precedent (design §3), justified because R-Co's own canonical
-          # implementation ships a working (if placeholder) default.
+          # no-default precedent (design §3): unlike those two, there is a sensible
+          # placeholder behavior to fall back to here, so a hard KeyError would only
+          # force every caller to pass the same default explicitly.
           assertion_evaluator: assertion_evaluator_fun() | nil
         ]
 
@@ -1065,8 +1066,9 @@ defmodule Letflow.Definitions do
   built-in default, raises `KeyError` if omitted, same no-default stance
   `rollback_definition_version/4` already established. `opts[:assertion_evaluator]` DOES
   have a built-in default (`default_assertion_evaluator/2`, design §3/§6) -- a deliberate
-  divergence, since R-Co's own canonical implementation ships a working placeholder rather
-  than having no data path to a real one.
+  divergence, since there is a sensible placeholder to fall back to here, unlike
+  `event_appender`, which has no data path to a real implementation without
+  caller-supplied plumbing.
   """
   @spec apply_promotion_assertion_rerun(
           review_id :: Ecto.UUID.t(),
@@ -2497,9 +2499,9 @@ defmodule Letflow.Definitions do
 
   # Design §5 step 2: locks every version row for process_key FOR UPDATE in one
   # statement (generalizes run_activate_transaction/4's single-row lock to the whole
-  # set), then the three guard cases in R-Co's own literal order (already_active checked
-  # before the target-row lookup -- §5 step 2c's note on why this ordering can never
-  # disagree with checking version_never_active first).
+  # set), then the three guard cases in the order §5 step 2c requires (already_active
+  # checked before the target-row lookup -- see that section's note on why this
+  # ordering can never disagree with checking version_never_active first).
   #
   # Post-Decision-0006-D2 (REQ-064): the row-selection predicate below was
   # `d.tenant_id == ^tenant_id and d.name == ^process_key`; process_definitions.tenant_id
@@ -2744,8 +2746,9 @@ defmodule Letflow.Definitions do
   # returns these two named error atoms (traced directly, sandbox_pool.ex); no
   # sandbox was ever claimed on either, so no release is needed or possible --
   # write a fail-closed final UPDATE directly (no try needed, nothing here can
-  # leak a sandbox), then return the error unchanged (design §7.2, a deliberate
-  # improvement over R-Co's own literal stuck-`running` behavior, §7.4).
+  # leak a sandbox), then return the error unchanged (design §7.2 -- see §7.4 for
+  # why leaving the row stuck at `running` forever would be a correctness hazard
+  # this implementation deliberately avoids).
   defp claim_sandbox_and_proceed(
          run,
          artifact,
@@ -2854,8 +2857,9 @@ defmodule Letflow.Definitions do
   # covered by that try's rescue if release or the write itself unexpectedly
   # raises). The underlying FixtureLoader error is deliberately not surfaced
   # verbatim -- :fixture_load_failed is this function's own, coarser, stable
-  # error tag, matching R-Co's own FixtureLoadFailed collapsing all three
-  # FixtureLoadError variants into one.
+  # error tag: the three underlying FixtureLoadError variants collapse into one
+  # so callers can pattern-match on a stable tag instead of an error-type
+  # taxonomy that could grow.
   defp handle_fixture_load_failure(
          run,
          artifact,
@@ -3066,11 +3070,12 @@ defmodule Letflow.Definitions do
     end
   end
 
-  # Design §7.4 -- a deliberate, disclosed improvement over R-Co's own traced
-  # behavior (which leaves a claim/fixture-load-failure row stuck at :running
-  # forever, so a naive future reader checking assertions_failed == 0 without also
-  # checking status would misread an infrastructure failure as a green gate).
-  # Every assertion is conservatively treated as failed; max(assertions_total, 1)
+  # Design §7.4 -- every assertion is conservatively treated as failed on an
+  # infrastructure failure. Leaving a claim/fixture-load-failure row's
+  # assertions_failed at 0 (with no assertions ever attempted) would let a
+  # naive future reader checking assertions_failed == 0 without also checking
+  # status misread an infrastructure failure as a green gate.
+  # max(assertions_total, 1)
   # guarantees assertions_failed is never 0 even for a zero-assertion artifact
   # (INV-AR-7).
   defp fail_closed_counts(%PromotionArtifact{assertions: assertions}) do
@@ -3147,8 +3152,8 @@ defmodule Letflow.Definitions do
 
   # Design §6 -- frozen_clock_ms is derived once per call (not per assertion, not
   # per replay-run), as the upper 32 bits of rng_seed treated as Unix epoch-seconds
-  # multiplied to milliseconds (prm-batch1's FrozenClockProvider note, R-Co's own
-  # Open question 1, restated in this design's §11 OQ-3 -- not resolved here).
+  # multiplied to milliseconds (prm-batch1's FrozenClockProvider note, restated as
+  # this design's §11 OQ-3 -- not resolved here).
   defp frozen_clock_ms(rng_seed) do
     (rng_seed >>> 32) * 1000
   end
@@ -3223,7 +3228,7 @@ defmodule Letflow.Definitions do
   # arguably more robust than a literal text diff, since it is insensitive to the
   # two results' original key ordering). A mismatch means this assertion is
   # non-deterministic (AC3's own idempotency check); on a match, assertion.payload's
-  # own emptiness decides pass/fail (R-Co's own placeholder rule).
+  # own emptiness decides pass/fail.
   defp compare_replay_results(assertion, result1_json, result2_json, non_deterministic_fields) do
     stripped1 = strip_non_deterministic_fields(result1_json, non_deterministic_fields)
     stripped2 = strip_non_deterministic_fields(result2_json, non_deterministic_fields)
@@ -3270,10 +3275,11 @@ defmodule Letflow.Definitions do
   defp strip_dot_path(value, _segments), do: value
 
   # Design §6.1 -- default assertion_evaluator when opts[:assertion_evaluator] is
-  # omitted or nil: a direct, literal port of R-Co's own placeholder
-  # (assertion_rerun.zig:500-501, 513-514), not a richer "real" evaluator this
-  # codebase has no engine to justify. frozen_clock_ms/rng_seed are accepted but
-  # unused, exactly as Zig's own placeholder computes and discards them.
+  # omitted or nil: a placeholder evaluator, not a richer "real" one this
+  # codebase has no engine to justify yet (behavior matches
+  # assertion_rerun.zig:500-501, 513-514). frozen_clock_ms/rng_seed are accepted
+  # but unused, matching that placeholder's own behavior of computing and
+  # discarding them.
   defp default_assertion_evaluator(%PromotionArtifact.Assertion{payload: payload}, _injection) do
     if byte_size(payload) > 0 do
       {:ok, payload}

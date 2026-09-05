@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF02-REQ265-20260905-step-02",
+  "run_id": "WF02-REQ265-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ265-20260905/step-02-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T22:45:38Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-265"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ265-20260905-step-00"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-265)",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "branch_name": "feature/WF02-REQ265-20260905",
+    "base_commit": "1eb0b14f"
+  },
+  "task": {
+    "description": "Applied REQ-237's PROVENANCE marker convention (line/paragraph/table/list-item/heading unit rule, section 2 of req237-zig-provenance-marking-convention.md) to chunk 239-design-b: the 13 consecutive files lib/letflow/design/req017-claim-mapping.md through req029-node-attribute-edge-condition-validators.md. For each file, located every smallest enclosing citation unit containing a '.zig' substring (single citation line with wrapped continuation, whole paragraph, whole table from header row, whole list/bullet item, or heading when the heading itself names a .zig file) and inserted the fixed literal marker line 'PROVENANCE (historical, not current decision authority):' immediately above it, without altering any existing text. None of these 13 files use YAML frontmatter or embedded YAML, so the ISS-0510 YAML comment-line/sequence-item shape did not apply. Did not touch any file outside this exact 13-file list (no CLAUDE.md, README.md, docs/migration/README.md, or sibling lib/letflow/design/ chunk files)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "BEFORE (grep -c '\\.zig' per file, confirming zero pre-existing markers via grep -c 'PROVENANCE (historical, not current decision authority):' on all 13 files = 0 for every file): req017=13, req018=37, req019=9, req020=21, req021=25, req022=4, req023=29, req024=22, req025=4, req026=12, req027=11, req028=36, req029=9 (sum=232). AFTER: identical per-file .zig counts (sum=232 unchanged, zero citation lines lost or altered). Markers inserted per file: req017=10, req018=29, req019=8, req020=15, req021=22, req022=2, req023=21, req024=12, req025=4, req026=9, req027=8, req028=29, req029=7 (sum=176), matching git diff --stat's '176 insertions(+), 0 deletions' exactly across all 13 files -- confirms purely additive change. Sample-diffed citations across all 5+ required files (req017, req018, req024, req026, req027 shown in detail, plus req019/020/021/022/023/025/028/029 spot-checked) -- in every case the original citation text (R-Co paths, .zig filenames, line-number refs) is byte-identical before/after, only the marker line was added above it; table units (e.g. req017 section 10's acceptance-criteria table, req027's column table) got exactly one marker above the header row despite multiple .zig-citing rows, per the table-unit rule. Divergence-note check: `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against all 13 files before (git show HEAD) and after this commit produced the same 4 matching lines (in req021 and req024 x2 and req027 x2 -- 4 total lines across req021/req024/req027) with text stripped of line numbers byte-identical; only line numbers shifted (expected, since marker insertions elsewhere in the same files shift line numbers) -- confirmed via diff of line-number-stripped output, output was empty (no textual difference). git diff --stat confirms only the 13 in-scope files were modified anywhere in the repo -- CLAUDE.md, README.md, docs/migration/README.md, and every other lib/letflow/design/ file are untouched. Did not flip REQ-265's status in docs/requirements.yaml and did not append a run-history event -- both are ORCH's job after REVIEWER passes, per this run's own instructions. Files touched: lib/letflow/design/req017-claim-mapping.md, lib/letflow/design/req018-jit-provisioning.md, lib/letflow/design/req019-tenant-realm-binding.md, lib/letflow/design/req020-role-registry.md, lib/letflow/design/req021-auth-plug-pipeline.md, lib/letflow/design/req022-tenant-schema-provisioning.md, lib/letflow/design/req023-event-store-schema.md, lib/letflow/design/req024-event-type-registry.md, lib/letflow/design/req025-event-append.md, lib/letflow/design/req026-event-read-archive-platform-sentinels.md, lib/letflow/design/req027-definition-core-schema.md, lib/letflow/design/req028-graph-structural-validator.md, lib/letflow/design/req029-node-attribute-edge-condition-validators.md. Commit: 93ef5ea8461ccaed65013b8eaba877b505b4a780 on branch feature/WF02-REQ265-20260905 (not pushed, not merged, no PR opened, per instructions)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

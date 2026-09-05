@@ -57,4 +57,24 @@ source: >
   merge made that branch's continuation moot.
 queue_task_id: 513
 github_issue: 1008
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0513-20260906
+resolved_at: "2026-09-06T01:10:00Z"
+resolution_note: >
+  Both --dir scratch-fixture setup blocks in
+  test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs now pipe
+  their tmp dir through Path.expand() (matching the identical idiom already
+  established in test/mix/tasks/letflow.lint_handoffs_test.exs for the same
+  ISS-0440-era Windows backslash-path problem, confirmed by direct
+  comparison of six equivalent setup blocks there). The two
+  support-module-shaped fixtures (tenant_schema_reaper.ex/tenant_template.ex)
+  now carry a real anchored `use Letflow.DataCase, async: true` line so the
+  "excluded by file selection" test discriminates glob-based exclusion from
+  content-based exclusion rather than being vacuously satisfied by the
+  latter. REVIEWER independently reproduced 16/16 passing, independently
+  re-applied the file-selection-glob-widening mutant and confirmed the
+  correct test now fails (15/16), and confirmed a clean revert
+  (handoffs/WF03-ISS0513-20260906/step-03-reviewer.json equivalent
+  evidence recorded in this run's dispatch). TEST-RUNNER confirmed the full
+  mix letflow.check backend gate clean: 3260 tests + 6 properties, 0
+  failures (3266/3266), plus clean isolated flake-class re-runs.

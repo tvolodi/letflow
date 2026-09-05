@@ -42,9 +42,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF03-ISS0511-20260905",
-      "commit_sha_list": ["PENDING_FILL_AFTER_COMMIT"],
+      "commit_sha_list": ["013a0303a9d996da343de1945c71b9839298407f"],
       "remote_branch": "origin/feature/WF03-ISS0511-20260905",
-      "push_status": "PENDING_FILL_AFTER_PUSH",
+      "push_status": "pushed",
       "pr_url": null,
       "pr_create_error": null
     },

@@ -1,0 +1,69 @@
+{
+  "handoff_id": "a7b3c5d9-4e1f-4a8b-9c2d-3e4f5a6b7c16",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "02b-regate1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0423-20260905/step-02b-code-design-validator-regate1.json",
+  "created_at": "2026-09-05T02:06:30Z",
+  "started_at": "2026-09-05T02:06:30Z",
+  "completed_at": "2026-09-05T07:15:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "f4d0a6c3-2b5e-4f9d-ac1b-8d9e0f1a2b15"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0423-20260905/step-02-code-designer-rework1.json",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs",
+      "docs/issues/ISS-0113.yaml"
+    ],
+    "owned_modules": [
+      "test/support/",
+      "config/test.exs"
+    ]
+  },
+  "task": {
+    "description": "REGATE 1 of the design at lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, following its rework (handoffs/WF03-ISS0423-20260905/step-02-code-designer-rework1.json, result PASS). The FIRST version of this design (pre-rework) passed your own gate once already, then FAILED at implementation because its restore_sandbox opt-in branch caused a genuine 4th failure mechanism. This rework's conclusion is materially different and simpler: it deletes the restore_sandbox mechanism entirely rather than fixing it, on the theory that provisioned_tenant!/1's OWN PRE-EXISTING, unconditional Sandbox.mode(Letflow.Repo, :auto) call is already sufficient for async:true safety once the erroneous second mid-test mode-flip is removed.\n\nRe-derive independently, do not accept CODE-DESIGNER's own result.summary claims at face value (this is the same discipline that caught the first version's defect, and it is exactly this project's redundancy principle -- a gate that rubber-stamps a producer's SECOND attempt after finding a real defect in the first is a worse gate than the one that caught the first defect, not a lighter one):\n\n1. Read lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md's new section 9 in full. Confirm it correctly and completely explains WHY the original restore_sandbox branch broke things (the second mid-test Sandbox.mode/2 call discarding a data-holding connection) and WHY leaving the pre-existing :auto line as the only mode-affecting call is safe. Read the ACTUAL current content of test/support/tenant_fixture.ex yourself (the real, current diff, not the design doc's prose) and confirm no restore_sandbox code remains anywhere -- confirm the opts() type has no restore_sandbox key, and there is no post-provisioning branch calling Sandbox.mode/2 a second time.\n2. Read test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs's ACTUAL current diffs yourself. Confirm they are exactly: (a) a moduledoc note explaining the async:true classification, and (b) `async: false` -> `async: true`, with NO other change to test body/assertions/setup.\n3. INDEPENDENTLY VERIFY THE FIX WORKS -- run mix test test/letflow/secrets_test.exs test/letflow/webhooks_test.exs yourself, for real, at least twice (different random seeds -- pass --seed with two different values, or rely on ExUnit's own default randomized seed twice in a row) and confirm 0 failures both times. Do not accept CODE-DESIGNER's own reported '10 clean runs' as sufficient -- that is the producer's own claim; this gate exists specifically to re-derive it. If you get any failure, this is an immediate BLOCKER regardless of how many times CODE-DESIGNER claims it passed.\n4. Confirm, by reading Letflow.Test.TenantTemplate (clone path) and TenantProvisioning.replay_migrations (replay path) yourself, that the design's claim -- both paths structurally require :auto mode and are unaffected by this change -- is correct. You do not need to re-derive the full Ecto/DBConnection internals CODE-DESIGNER traced (deps/ code is third-party and stable), but confirm the specific claim that provisioned_tenant!/1's own :auto line is untouched by this design (i.e., this design changed nothing about the provisioning sequence itself, only removed a branch that used to run AFTER it).\n5. Re-confirm (same check as the original gate) that decision 0009/ISS-0287's peak-concurrent-checkout reconciliation from the ORIGINAL design's section 5 still applies unchanged -- this rework did not touch that arithmetic, but confirm that claim rather than assume it, since the SCOPE (2 files, same as before) is unchanged.\n6. Confirm zero test assertions were deleted, skipped, or weakened -- the diff should show ONLY moduledoc/comment additions and the async: line flip.\n\nThis handoff's gate_history should reflect that a prior FAIL-equivalent event occurred at implementation (not at this gate itself, technically, but functionally the same design's first form was rejected and reworked) -- ORCH will record this appropriately in the run log regardless of your own verdict; your job is the independent re-derivation above.",
+    "acceptance_criteria": [
+      "Independently confirmed, by reading current tenant_fixture.ex directly, that no restore_sandbox code remains anywhere",
+      "Independently confirmed, by reading current secrets_test.exs/webhooks_test.exs diffs directly, that only moduledoc notes and the async: true flip were changed -- no assertion changes",
+      "Personally ran mix test test/letflow/secrets_test.exs test/letflow/webhooks_test.exs at least twice with different seeds and got 0 failures both times -- BLOCKER if not",
+      "Confirmed the :clone/:replay provisioning paths are unaffected by this design (same claim as the design doc, independently checked)",
+      "Confirmed decision 0009/ISS-0287 reconciliation still applies (scope unchanged from original design)",
+      "Confirmed zero test assertions deleted/skipped/weakened",
+      "PASS or FAIL verdict stated with specific evidence per point"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independent re-derivation of all 7 checks, PASS. (1) Read design section 9 in full: correctly traces Mechanism 4 to DBConnection.Ownership.Manager source (proxy_checkin_all_except no-op guard on same-mode calls) and explains why the original restore_sandbox:true branch's second mid-test Sandbox.mode(:manual) call discarded a data-holding connection while the pre-existing unconditional :auto line (fires once, before any test-body query) does not. Read test/support/tenant_fixture.ex directly: opts() type (lines 74-81) has no restore_sandbox key; provisioned_tenant!/1 body (lines 220-250) has no post-provisioning branch and no second Sandbox.mode/2 call -- only the pre-existing line 222 :auto call remains. grep -rni restore_sandbox test/ finds only the moduledoc's own explanatory prose (\"since removed\"), no code. (2) Read git diff 8187d4bb..HEAD for both test files directly: each diff is exactly a moduledoc paragraph plus async: false -> async: true; no assertion/setup/helper changes. (3) REAL mix test runs, personally executed twice with distinct explicit seeds: --seed 12345 -> Result: 38 passed (1 property, 37 tests), 0 failures; --seed 98765 -> Result: 38 passed (1 property, 37 tests), 0 failures. No BLOCKER. (4/5) Confirmed by direct read: TenantProvisioning.replay_migrations/2 (lib/letflow/tenant_provisioning.ex:323-349) calls Ecto.Migrator.run/4 directly, categorically requiring :auto, untouched by this design; Letflow.Test.TenantTemplate.ensure_template!/0 (test/support/tenant_template.ex:82) has its own independent unconditional :auto call, also untouched. git diff scope confirms only tenant_fixture.ex + the 2 test files changed. (6) Scope unchanged (still exactly these 2 files); no diff to config/test.exs or scripts/test_parallel.sh, so decision 0009/ISS-0287 pool-sizing arithmetic is unaffected. (7) Confirmed via the diffs in check 2: strictly additive moduledoc prose plus the async: flip, zero assertions touched. mix format --check-formatted clean on all 3 changed files.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV for final confirmation/sign-off (code already implemented and verified in this session per rework1 handoff), then REVIEWER/TEST-DESIGNER per WF-03 normal sequence. No SECURITY-REVIEWER needed (test infrastructure only)."
+  },
+  "rework_count": 0,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 0,
+      "gated_at": "2026-09-05T01:27:15Z",
+      "status": "PASS",
+      "summary": "Original design (restore_sandbox opt-in branch) passed this gate's independent re-derivation on all 6 checks, but its underlying mechanism was later falsified at implementation time (ELIXIR-DEV step-03, result FAIL) when the restore_sandbox branch's own second mid-test Sandbox.mode/2 call was shown to discard a data-holding connection under async:true. This gate's original PASS was not wrong about what it checked (the design was internally consistent and matched the stated mechanisms) -- the defect was in a mechanism neither this gate nor the design anticipated (a 4th failure mode), discovered only by real execution. Recorded here per HANDOFF_PROTOCOL.md's gate_history convention.",
+      "issues": [
+        "4th mechanism: Sandbox.mode/2 called mid-test discards ALL pool connections including the caller's own DataCase.setup/1 checkout, not scoped to the original 3 mechanisms this design's section 2 anticipated."
+      ],
+      "next_action": "CODE-DESIGNER rework 1 (completed, PASS) removed the restore_sandbox branch entirely rather than fixing it -- this regate re-derives that simpler conclusion."
+    }
+  ]
+}

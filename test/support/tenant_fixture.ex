@@ -200,6 +200,22 @@ defmodule Letflow.TenantFixture do
   `template: :replay` for a test with a concrete reason to want a real,
   freshly-migrated-from-scratch schema — in particular any test that also passes a
   non-default `migration_source` downstream, which the clone path cannot serve at all.
+
+  ## `async: true` callers (ISS-0113 / ISS-0423 — no opt-in flag, no `restore_sandbox`)
+
+  This function's own unconditional first line, `Sandbox.mode(Letflow.Repo, :auto)`, is
+  sufficient by itself to make a calling test file safe to declare `async: true`,
+  *provided* the call site is independently classified safe by
+  `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md` §3's three-
+  mechanism procedure (self-checkout, concurrent multi-process DB access, a second
+  provisioning call). **No additional flag, checkout, or restore step is needed, and
+  none is provided** — a prior design revision (`restore_sandbox: true`, since removed)
+  tried to additionally flip the sandbox back to `:manual` with a fresh checkout after
+  provisioning, and that made things *worse*, not better: see the design doc's §9 for
+  the full trace of why a second mid-test `Sandbox.mode/2` call is actively harmful
+  (it discards the connection this function's own provisioning work just established),
+  whereas leaving `:auto` mode in effect for the rest of the test (today's original,
+  unchanged behavior) is exactly what makes `async: true` work, not what blocks it.
   """
   @spec provisioned_tenant!(opts()) :: tenant_fixture()
   def provisioned_tenant!(opts \\ []) do

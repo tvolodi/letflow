@@ -90,4 +90,54 @@ investigation_note: >
   regresses silently. This is a real, scoped follow-on -- not filed as a new issue here
   since it is squarely ISS-0112's territory (per-caller migration) rather than a new
   defect; whoever picks up ISS-0112 should read this record first.
-status: open
+
+resolved_in_run: WF03-ISS0423-20260905
+resolved_at: "2026-09-05T04:00:00Z"
+resolution_note: >
+  RESOLVED WITH A DIFFERENT MECHANISM THAN THIS RECORD'S OWN "what would
+  actually fix this" PROPOSAL -- worth stating plainly since that proposal
+  (a per-caller `opts[:restore_sandbox]` opt-in doing an explicit
+  Sandbox.mode(:manual) + fresh checkout restore) is EXACTLY what
+  WF03-ISS0423-20260905 tried FIRST, and it was TRIED FOR REAL A SECOND
+  TIME and FAILED A SECOND TIME, for a reason distinct from all three
+  mechanisms this record already names: Ecto's Sandbox.mode/2 checks in
+  ALL pool connections whenever the requested mode differs from the pool's
+  current one, so a second mid-test mode flip (the opt-in restore itself)
+  discards the connection the fixture's own provisioning had just
+  populated -- a 4th mechanism, traced through actual Ecto/DBConnection
+  source, not merely observed.
+
+  THE ACTUAL FIX IS SIMPLER: no opt-in flag, no restore step, no new code
+  at all. `provisioned_tenant!/1`'s OWN PRE-EXISTING, unconditional
+  `Sandbox.mode(Letflow.Repo, :auto)` first line -- the very call this
+  record originally filed as the "leak" -- is ALREADY SUFFICIENT for
+  `async: true` safety by itself, PROVIDED the call site is independently
+  verified against this record's own three named failure mechanisms
+  (self-checkout, concurrent multi-process DB access, second provisioning
+  call). No restoration to `:manual` is needed or wanted; the "leak" this
+  record named is not a defect to be plugged, it is the load-bearing
+  behaviour that makes `async: true` work once nothing ELSE also calls
+  `Sandbox.mode/2` mid-test.
+
+  Fixed for 2 of the 46 real `TenantFixture` call sites
+  (`test/letflow/secrets_test.exs`, `test/letflow/webhooks_test.exs`),
+  verified clean by FOUR independent parties/seeds (CODE-DESIGNER's own
+  13 runs, CODE-DESIGN-VALIDATOR's regate at 2 distinct seeds,
+  ELIXIR-DEV's sign-off at a third seed, and the required double
+  full-suite run) -- full detail and the corrected mechanism's source-level
+  trace in `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md`
+  section 9 (normative; sections 2/3/8 marked superseded and preserved as
+  the record of the falsified first mechanism, not deleted). The remaining
+  44 call sites are unconverted -- see `docs/issues/ISS-0423.yaml`'s own
+  resolution note for the full disclosure of what is and is not covered.
+  This record's own severity (MINOR) and its "no observed failure
+  attributed to it" framing both stand corrected in hindsight: the leak
+  was genuinely inert for correctness under `async: false` (the
+  `{:shared, self()}` mode DataCase sets there routes every pool
+  connection through one owner regardless of mode switches, masking it
+  completely) and is exactly what makes `async: true` safe once the
+  three-mechanism procedure clears a call site -- it was never a
+  correctness hazard requiring removal, only a hazard the record's own
+  ISS-0112 cross-reference correctly anticipated needed per-caller
+  verification before relying on it either way.
+status: resolved

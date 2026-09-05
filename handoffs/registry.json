@@ -4793,6 +4793,27 @@
       "backfilled": false,
       "last_known_step": "TEST-RUNNER confirmed real full-suite aggregate (mix letflow.check.test's 8-way parallel partition results summed manually: 3243 tests, 3241 passed, 2 pre-existing rustc-toolchain-gap failures unrelated to this branch) after TEST-DESIGN-VALIDATOR's re-check PASSed a rework cycle (AC3's PLATFORM_ADMIN/AGENT_RUNNER role coverage was missing on the first pass; TEST-DESIGNER added direct assertions for all four AC3 roles). Full chain: ISSUE-FIXER sized (new API surface, CODE-DESIGNER needed) -> CODE-DESIGNER designed POST /instances/:id/advance-timer (targeting semantics, new :InstancesAdvanceTimer permission, production-route decision) -> CODE-DESIGN-VALIDATOR PASSed (independently verified all cited file/line claims) -> ELIXIR-DEV implemented (Letflow.Scheduler.resolve_advance_target/3 + router handler + full authz wiring, plus 2 incidental stale-test fixes) -> SECURITY-REVIEWER PASSed (tenant isolation, authz-before-mutation, INV-RT-1, same-404 discipline, no injection surface, no force-fire ordering hazard) -> REVIEWER PASSed (idiom, no scope creep, the 2 incidental stale-test fixes judged genuine not scope creep) -> TEST-DESIGNER added coverage + un-skipped REQ-206's shipment-ops-timeout-escalation scenario step 2 (also fixed 2 pre-existing fixture bugs blocking that dispatch) -> TEST-DESIGN-VALIDATOR rework cycle 1 (AC3 gap) -> re-check PASS -> TEST-RUNNER confirmed. Ready for Step Final merge.",
       "note": "WF-03 issue-resolving run for ISS-0389: no POST /api/v1/instances/:id/advance-timer endpoint existed, blocking REQ-206/207/208's own simulation scenarios from exercising timer-escalation paths for real. Full 8-step pipeline run, one real rework cycle at the test-design-validation gate."
+    },
+    {
+      "run_id": "WF03-ISS0423-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0423",
+      "queue_task_id": 423,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 827,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/support/",
+        "config/test.exs",
+        "lib/letflow/sandbox_pool.ex"
+      ],
+      "started_at": "2026-09-05T00:06:41Z",
+      "lock_released_at": "2026-09-05T04:23:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #934 squash-merged to main (commit 51223d17) via gh pr merge --admin, sanctioned per GIT_MERGE.md step 8 FAILURE-with-structural-attribution path (both backend-gate CI failures on the final commit structurally cleared: wasm_hang class timing out on req172_write_then_hang.wat in test/letflow/engine/wasm/host_api_write_test.exs, zero wasm files in this branch diff, already-documented open ISS-0418). GH#827 closed with an evidence comment. ISS-0113 also closed resolved (GH#367, already closed 2026-08-26 for unrelated reasons predating this run -- evidence comment added). ISS-0480 filed (GH#933) for a newly-discovered flake (RowApprovalTest/PackUpdateMigrationTest inter-run inconsistency) found during the required double full-suite verification; ISS-0445 (GH#860) cited for the LintHandoffsTest failure already on record. Queue task 423 released status:done. Run complete.",
+      "note": "Task pre-claimed/locked in letflow-queue before this run (task 423, agent_id tvolodi-orch, locked 2026-09-05T00:06:41Z, github_issue 827) per dispatching instruction. IMPORTANT CORRECTION recorded in-run: docs/issues/ISS-0423.yaml already existed (filed ORCH-adhoc-20260902-arch-review, six commits of measurement, two scope-splits to ISS-0427/ISS-0428) -- the dispatching instruction's premise that it did not exist yet was wrong (HANDOFF_PROTOCOL.md section 1.1). ORCH's own first pass overwrote it; caught before any further step ran, reverted to original content, and a dated reopen note appended reconciling that ISS-0427/ISS-0428/ISS-0426 are now all resolved and ISS-0113 (Sandbox.mode(:auto) global leak) is the one still-open blocker on this issue's own original causal chain. mix letflow.check itself changed since the 2026-09-02 filing too (ISS-0428 landed: it now shells to scripts/test_parallel.sh, not plain serial mix test) -- the queue task's own \"30 min gate\" framing needs re-verification against current main, not assumption. RUN OUTCOME: fixed ISS-0113 (global Sandbox.mode(:auto) leak) enabling real async: true for 2 of 46 TenantFixture call sites (secrets_test.exs, webhooks_test.exs). Design cycle self-corrected once (rework 1 of 3): first design (restore_sandbox opt-in) passed its own gate then genuinely FAILED at implementation (26/38), tracing a real 4th Sandbox.mode/2 mechanism; rework removed the mechanism entirely, relying on the pre-existing :auto call, verified clean by 4 independent parties/seeds. Full-suite AFTER: 2.2% async share vs 1.4% before, passing count unchanged >=3060 floor. One own-bookkeeping defect caught by CI (a REVIEWER handoff completed_at preceding started_at) and corrected transparently before merge."
     }
   ]
 }

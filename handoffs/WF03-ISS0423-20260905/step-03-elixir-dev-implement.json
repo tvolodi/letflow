@@ -1,0 +1,55 @@
+{
+  "handoff_id": "e3c9f5b2-1a4d-4e8c-9b0a-7c8d9e0f1a04",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0423-20260905/step-03-elixir-dev-implement.json",
+  "created_at": "2026-09-05T01:28:00Z",
+  "started_at": "2026-09-05T01:28:00Z",
+  "completed_at": "2026-09-05T01:34:21Z",
+  "status": "FAILED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c1a9d3f7-2b4e-4a8c-9d1f-6e7a8b9c0d12", "d2b8e4a1-9f3c-4e7d-8a2b-5c6d7e8f9a03"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs"
+    ],
+    "owned_modules": ["test/support/", "test/letflow/secrets_test.exs", "test/letflow/webhooks_test.exs"]
+  },
+  "task": {
+    "description": "Implement lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md section 8's three deliverables exactly, in full, with no scope beyond them. This design has already passed CODE-DESIGN-VALIDATOR's independent re-derivation gate (all 6 checks confirmed against real file reads) -- your job is faithful implementation, not re-design.\n\n1. test/support/tenant_fixture.ex: add `restore_sandbox: boolean()` to the `opts()` @type (design section 3.1). Implement the post-provisioning branch (design section 3.2) guarded by `Keyword.get(opts, :restore_sandbox, false)`: when true, after the existing steps 1-6 complete exactly as today, do `Sandbox.mode(Letflow.Repo, :manual)`, then `:ok = Sandbox.checkout(Letflow.Repo)`, then register a SECOND on_exit/1 callback (in addition to the teardown on_exit/1 already registered earlier) that restores `Sandbox.mode(Letflow.Repo, :auto)`. The ordering must rely on ExUnit's LIFO on_exit semantics exactly as the design specifies in section 3.2 step 5 -- register this new callback LAST (after the branch's own checkout), so it runs BEFORE the pre-existing teardown callback (registered earlier in the function) when ExUnit unwinds on_exit callbacks LIFO, meaning the schema-drop teardown still executes under :auto mode, unchanged from today. Touch NO other line of the existing 1-6 sequence. Default MUST remain false with byte-for-byte-unchanged behavior for every other call site.\n2. test/letflow/secrets_test.exs: flip `use Letflow.DataCase, async: false` to `async: true`; add `restore_sandbox: true` to its provisioned_tenant! call site(s) (design section 4.1 -- confirm from the design whether this is one or more call sites in the file; the design's own section 4.1 has a noted, non-blocking phrasing ambiguity about 'both call sites... in each file' but sections 4.2/4.3 correctly describe ONE call site per file -- read the actual file yourself to confirm the true call-site count before editing, don't guess from the ambiguous sentence).\n3. test/letflow/webhooks_test.exs: same two edits, same shape.\n4. No other file changes. No assertion text changes anywhere in any file.\n\nAfter implementing: run `mix format --check-formatted` and `mix compile --warnings-as-errors`, both must pass clean. Then run `mix test test/support/tenant_fixture.ex test/letflow/secrets_test.exs test/letflow/webhooks_test.exs` (a scoped run) and confirm 0 failures for these three files specifically -- this is your own fast sanity check, not the full-suite verification (that is a later, separate step run by TEST-RUNNER). If either secrets_test.exs or webhooks_test.exs fails under async: true, do NOT force a fix by weakening or skipping a test -- report it as a FAIL with the specific failure, since ISS-0423 AC4/AC6 forbid weakening or skipping tests to achieve the speedup, and it may mean the design's by-inspection classification missed something (design section 3.4 anticipates exactly this: a 4th mechanism not yet catalogued). SECURITY-REVIEWER is NOT required for this change (it touches no tenant-data path in a new way -- this is test infrastructure only, adding an opt-in sandbox-mode restore path that changes no production code and no tenant-facing behavior); state this explicitly in your result so ORCH can confirm the scope test itself rather than skip the check silently.",
+    "acceptance_criteria": [
+      "test/support/tenant_fixture.ex's opts() type gains restore_sandbox: boolean(), default false, with the post-provisioning branch implemented exactly per design section 3.2",
+      "Every one of the other 44 TenantFixture call sites (i.e. every file except secrets_test.exs/webhooks_test.exs) has byte-for-byte unchanged behavior -- confirm via git diff that no other test file is touched",
+      "secrets_test.exs and webhooks_test.exs both flip to async: true and restore_sandbox: true at their real call site(s), confirmed by reading the actual file, not assumed from the design's ambiguous section 4.1 wording",
+      "mix format --check-formatted and mix compile --warnings-as-errors both pass clean",
+      "A scoped mix test run against tenant_fixture.ex/secrets_test.exs/webhooks_test.exs passes with 0 failures",
+      "Zero test assertions deleted, skipped, or weakened anywhere",
+      "SECURITY-REVIEWER applicability is stated explicitly (in-scope or out-of-scope, with the one-clause reason) rather than silently assumed"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Implemented all three deliverables exactly as designed (test/support/tenant_fixture.ex opts()+post-provisioning branch, secrets_test.exs and webhooks_test.exs async:true + restore_sandbox:true flips at their one real call site each -- confirmed by direct read, not grep: `grep -n provisioned_tenant!\\( test/letflow/secrets_test.exs test/letflow/webhooks_test.exs` each returns exactly 1 real call, inside a private provisioned_tenant/1 helper; the design's own section 4.1 ambiguity about 'both call sites' does not apply -- there is one per file). mix format --check-formatted: clean. mix compile --warnings-as-errors --force: clean, 190 files, zero warnings. Scoped mix test test/support/tenant_fixture.ex test/letflow/secrets_test.exs test/letflow/webhooks_test.exs: FAILED -- 26 of 38 examples failed (25 tests + 1 property), all in secrets_test.exs/webhooks_test.exs, zero in tenant_fixture.ex (no tests there). Root cause, traced to lib/letflow/secrets.ex:456 tenant_slug!/1 raising 'tenant_id ... does not correspond to any known tenant': this is a genuine 4th failure mechanism the design's section 3.4 explicitly anticipated and is NOT mechanism (a)/(b)/(c) from section 2. test/support/data_case.ex's own setup/1 already does Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo) unconditionally for every test before the test body runs (line 16), and only sets {:shared, self()} mode when NOT async (line 18-20) -- so under async:true that per-test sandboxed checkout is never shared/relaxed. provisioned_tenant!/1's own unconditional first line, Sandbox.mode(Letflow.Repo, :auto), then per deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex's own documented contract ('Whenever you change the mode to :manual or :auto, all existing connections are checked in'), checks in that pre-existing per-test sandbox connection globally for the whole pool, not just for this test's process. This is the module's existing, unconditional behavior (line 221) predating this design entirely, unrelated to the new restore_sandbox branch's own diff. Under async:false (today) this apparently does not surface as an observable failure; under async:true it reproducibly does, for every test in both files that inserts data scoped to the tenant created by provisioned_tenant!/1 and then reads it back through a fresh connection/transaction context. Per the task's explicit instruction, this was NOT forced to pass by weakening or skipping any test -- reporting FAIL with the real failure and the traced root cause for design rework instead.",
+    "artifacts_out": [
+      "test/support/tenant_fixture.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs"
+    ],
+    "issues": [
+      {"severity": "BLOCKER", "description": "secrets_test.exs and webhooks_test.exs fail under async:true + restore_sandbox:true -- 26/38 examples fail with 'Letflow.Secrets.put/2: tenant_id ... does not correspond to any known tenant' (lib/letflow/secrets.ex:456 tenant_slug!/1, Repo.get returns nil). Traced to test/support/tenant_fixture.ex:221's pre-existing unconditional Sandbox.mode(Letflow.Repo, :auto) call at the top of provisioned_tenant!/1 interacting with test/support/data_case.ex:16's own unconditional per-test Sandbox.checkout(Letflow.Repo) in setup/1: per Ecto's own sandbox.ex moduledoc, changing mode to :auto or :manual checks in ALL existing pool connections, not just the caller's -- this is a 4th mechanism, not (a) self-checkout, (b) concurrent multi-process access, or (c) second provisioning call from design section 2/3.4. Not fixable by this ELIXIR-DEV step without exceeding its faithful-implementation scope; needs a CODE-DESIGNER rework pass against this specific interaction.", "affected_requirement": "ISS-0423"}
+    ],
+    "next_action": "Route back to CODE-DESIGNER for a design update covering this 4th mechanism (data_case.ex setup/1's own per-test checkout vs. provisioned_tenant!/1's unconditional Sandbox.mode(:auto) checking in all pool connections per Ecto sandbox.ex's documented contract), per design section 3.4's own stated fallback -- do not route to SECURITY-REVIEWER or REVIEWER; this handoff's code changes are held on this branch pending that rework, not merged forward."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

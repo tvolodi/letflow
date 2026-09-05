@@ -1,0 +1,101 @@
+{
+  "handoff_id": "WF02-REQ257-20260905-step-01",
+  "run_id": "WF02-REQ257-20260905",
+  "workflow_id": "WF-02",
+  "step": "1",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ257-20260905/step01-doc-updater.json",
+  "status": "COMPLETED",
+  "completed_at": "2026-09-05T17:41:26Z",
+  "context": {
+    "commit_sha": "57626908"
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied REQ-237's .zig provenance-marking convention to docs/requirements.yaml's REQ-189..REQ-242 entry range (REQ-257, closes ISS-0424 part 3a / REQ-239 chunk 239d). Range boundaries determined by grep against the current file: REQ-189 started at line 10039, REQ-242 started at line 14213, REQ-237 (numerically out-of-sequence but physically inside the range) started at line 14247, and REQ-243 (first entry after the range, excluded) started at line 14310 -- i.e. the scoped block was lines 10039-14309 inclusive before any edit. Enumerated every .zig-containing line in that block with `grep -n '\\.zig' docs/requirements.yaml` filtered to those line numbers: 119 matching lines across REQ-189 through REQ-237 (REQ-238/REQ-239/REQ-221/REQ-236 do not exist as entries; REQ-237 physically sits between REQ-242's and REQ-243's entries in file order and its own .zig citations fall inside this run's literal line range). Classified each into its enclosing citation unit per the design's structural rule using a scratch Python script (scratch/apply_req257_markers.py, not committed) that walked backward from each .zig line to the nearest of: a `description: >` block start (marker inserted as the block's first content line, no '#', per pattern (a)), a `title:` field (marker inserted as a '#'-prefixed comment line between the entry's `- id:` line and its `title:` line, per pattern (b) and the REQ-021/REQ-237-design-doc precedent -- verified in every case that `- id:` immediately precedes `title:`), or an `acceptance_criteria:` bullet (marker inserted as a '#'-prefixed comment line immediately above that one bullet, per pattern (c)). No markdown-table citation unit and no commented-out '# ---' section-header block (pattern (d)) occurred anywhere in this range -- confirmed by inspection before applying, so pattern (d) was not exercised in this chunk. A first pass found all 119 .zig lines resolved cleanly into one of the three shapes present (zero 'unhandled' lines). RESULT: 56 marker lines inserted (fewer than 119 because most .zig mentions share an enclosing description-block unit -- e.g. a single description block citing several distinct .zig files gets one marker, per the design's unit-not-mention granularity). Zero markers were skipped as already-present (this range had never been marked before this run).",
+    "verification": {
+      "marker_count_inserted": 56,
+      "range_boundaries_pre_edit": {
+        "REQ-189_start_line": 10039,
+        "REQ-242_start_line": 14213,
+        "REQ-237_start_line_in_range": 14247,
+        "REQ-243_start_line_excluded": 14310,
+        "scoped_range_pre_edit": "lines 10039-14309 inclusive"
+      },
+      "acceptance_criteria_evidence": [
+        {
+          "ac": "AC1 -- pre-change count of OLD (unmarked) .zig citations in range",
+          "command": "grep -n '\\.zig' docs/requirements.yaml | filtered to lines 10039-14309 (pre-edit)",
+          "result": "119 matching lines -- matches AC1's required quoted count, re-derived fresh this session, not carried from the draft-time ~132-line estimate"
+        },
+        {
+          "ac": "AC2 -- post-change: zero unmarked citations remain in range",
+          "command": "grep -n 'PROVENANCE (historical' docs/requirements.yaml restricted to the post-edit range, cross-checked against every one of the 119 original .zig lines via the script's own insertion-point derivation",
+          "result": "56 marker insertion points computed for the 119 .zig lines (grouped by shared enclosing unit); all 56 applied (0 already-marked/skipped); re-verification after the edit found 0 'unhandled' .zig lines and 0 remaining .zig citations lacking an immediately-preceding marker for their unit"
+        },
+        {
+          "ac": "AC2 -- before/after quoted counts",
+          "command": "git diff --numstat docs/requirements.yaml",
+          "result": "56\t0\tdocs/requirements.yaml -- 56 insertions, 0 deletions"
+        },
+        {
+          "ac": "AC3 -- sampled diff, path text preserved verbatim",
+          "command": "git diff docs/requirements.yaml | grep -A2 -B1 '^+.*PROVENANCE'",
+          "result": "Sampled across REQ-189 (description marker), REQ-190 (description marker), REQ-191 (description marker), REQ-192 (title marker between id:/title:), REQ-193 (description marker), REQ-194 (description marker) -- 6 distinct REQ entries, well over the required 5 citations / 3 entries -- every hunk shows only a '+' marker line added; no '-' line and no alteration to any surrounding citation text"
+        },
+        {
+          "ac": "AC3 -- stronger proof, no .zig line touched at all",
+          "command": "git diff -U0 docs/requirements.yaml | grep -c '^[+-].*\\.zig'",
+          "result": "0 -- confirms zero .zig-bearing lines appear on either side of the diff anywhere in the whole commit; every citation line survives as pure diff context, only marker lines (which never contain the substring '.zig') were inserted"
+        },
+        {
+          "ac": "AC4 -- CLAUDE.md / README.md / docs/migration/README.md untouched",
+          "command": "git diff --stat -- CLAUDE.md README.md docs/migration/README.md",
+          "result": "empty output -- confirmed untouched. Also ran `grep -n '\\.zig' CLAUDE.md README.md docs/migration/README.md` before starting per the task's own instruction: zero matches in all three, confirming none carried a raw .zig citation to begin with"
+        },
+        {
+          "ac": "AC5 -- divergence-note grep byte-identical before/after",
+          "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml (run against git show HEAD~1:docs/requirements.yaml for 'before' and the working tree for 'after', text content compared with line-number prefixes stripped since insertions shift line numbers)",
+          "result": "52 matches before, 52 matches after; the 52 lines of matched text are byte-identical between before and after (diff empty)"
+        },
+        {
+          "ac": "file-wide .zig line count unchanged (no citation deleted)",
+          "command": "grep -c '\\.zig' docs/requirements.yaml (before via git show HEAD~1, after via working tree)",
+          "result": "728 before, 728 after -- unchanged"
+        },
+        {
+          "ac": "YAML still parses",
+          "command": "python -c \"import yaml; d=yaml.safe_load(open('docs/requirements.yaml', encoding='utf-8'))\"",
+          "result": "parsed successfully, 241 top-level requirement entries"
+        },
+        {
+          "ac": "idempotency -- no doubled/duplicate consecutive markers introduced, file-wide",
+          "command": "awk one-liner scanning for two consecutive 'PROVENANCE (historical' lines across the whole file",
+          "result": "no output -- zero doubled markers found anywhere in the file (not just the edited range)"
+        },
+        {
+          "ac": "no edit landed outside the REQ-189..REQ-242 span",
+          "command": "git diff -U0 docs/requirements.yaml | grep '^@@'",
+          "result": "all 56 hunks' pre-edit line numbers fall between 10045 and 14252, strictly inside the pre-edit REQ-189 (10039) .. REQ-243 (10039-14309 span, excludes 14310+); none touch REQ-001..REQ-188 (lines 1-10038, untouched, sibling-owned chunks) or REQ-243 onward (untouched, sibling-owned chunks)"
+        },
+        {
+          "ac": "only docs/requirements.yaml changed",
+          "command": "git diff --stat",
+          "result": "docs/requirements.yaml | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++ ; 1 file changed, 56 insertions(+)"
+        }
+      ]
+    },
+    "deviations_and_issues": [
+      "REQ-237 (this design's own owning requirement, depends_on for this run and already status: done) sits physically between REQ-242's and REQ-243's entries in the file (numerically out of sequence -- line 14247, after REQ-242 at 14213). Its own description text contains .zig citations (including a literal quote of the marker string itself, at line 14277, which is prose ABOUT the convention, not an actual applied marker, and was correctly left untouched since it is not one of the 119 lines requiring a new marker -- it already reads as designed). Since the task defines the range purely by line position ('REQ-189 through REQ-242 entry range... through the line immediately before REQ-243's `- id:` line'), REQ-237's physically-in-range .zig citations (8 of the 119 lines: 14248, 14254, 14256, 14274) were marked under this run rather than left to a different chunk, since no sibling chunk's range would otherwise cover them. Flagged here for ORCH/REVIEWER awareness in case the numeric-vs-physical range distinction should be called out explicitly in a future chunking design revision -- not treated as a blocker, since the literal task instruction (line-range based, 'or end of REQ-242's block if REQ-243 doesn't exist/is out of numeric sequence -- check what actually exists') anticipated exactly this kind of ordering irregularity and told this run to resolve it from what actually exists in the file.",
+      "No markdown-table citation unit (pattern from design §2's third shape) and no commented-out '# ---' section-header block (the fourth shape's sub-case (b), ISS-0510 amendment) occurred anywhere in the REQ-189..REQ-242 range -- confirmed by inspection (grep for table-row-shaped '.zig' lines and for '#'-prefixed comment blocks in range) before applying. Only three of the four documented unit shapes were exercised in this chunk (description-block, title, acceptance-criteria bullet); this is expected variation across chunks, not a gap in this run's coverage.",
+      "REQ-221, REQ-236, REQ-238, REQ-239 do not exist as entries in docs/requirements.yaml (REQ-239 deleted per this run's own task context; REQ-221/REQ-236/REQ-238 evidently never existed or were renumbered away in this file) -- their absence was confirmed before deriving the range boundaries so no entry was silently skipped or misattributed."
+    ],
+    "artifacts_out": [
+      "docs/requirements.yaml"
+    ],
+    "next_action": "Route to ORCH for Step 6 bookkeeping (flip REQ-257's own status to done, append run-history event) once this scope-implementation step is accepted by REVIEWER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

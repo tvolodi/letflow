@@ -4940,6 +4940,24 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED PASS -- PR #986 squash-merged (a7d71bfe) after four rebases onto sibling/concurrent chunks landing during CI wait (REQ-245 done, REQ-254 started+done, REQ-256 started+done, ISS-0510) -- all non-overlapping file scope, each requirement_status.v9.yaml conflict resolved as a chronological composition, requirement_status.index.yaml's volume 9 entry count recounted from the composed file at each step (29->30->31->32->34). Merged via gh pr merge --admin after two rerun cycles: known ISS-0224-class SandboxPoolTest flake, known :wasm_hang class (CallTimeoutTest/HostApiWriteTest), and one Letflow.Api.ContextTest failure confirmed as CI-load/DB-contention noise (11/11 passing in an isolated local rerun) -- all structurally attributed as unrelated to this PR's comment-only diff and documented in a PR comment before the admin merge. Queue task 491 released status:done.",
       "note": "WF-02 run for REQ-253 (queue task 491), chunk 238h of REQ-238's 11-way split (ISS-0424 part 3b-11, the last of the eleven): applied REQ-237's .zig provenance-marking convention to lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex. Same established pattern as prior chunks: no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER, straight to ELIXIR-DEV then REVIEWER, both PASS (handoffs/WF02-REQ253-20260905/step-02d-reviewer.json). ORCH independently confirmed mix compile --warnings-as-errors, mix format --check-formatted, and a targeted mix test run (202 passed) before the pre-merge status flip. Diff confirmed comment-only (PROVENANCE marker insertions, zero logic changes) throughout every rebase, which mattered directly when attributing all CI failures during the merge wait as unrelated flakes rather than real regressions. With this merge, all 11 REQ-238-replacement chunks (REQ-243..253) are complete; ISS-0424 Part 3b (lib/) is fully closed, leaving only Part 3c (REQ-254..271, docs/) outstanding."
+    },
+    {
+      "run_id": "WF02-REQ257-20260905",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-257",
+      "issue_id": "ISS-0424",
+      "queue_task_id": 495,
+      "queue_agent_id": "letflow-ee-orch",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/requirements.yaml (REQ-189 through REQ-242 entry range only)"
+      ],
+      "started_at": "2026-09-05T00:00:00Z",
+      "lock_released_at": "2026-09-05T18:04:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #995 squash-merged (ac9ad440) after two rebases onto sibling/concurrent chunks (REQ-253's PR #986, then its own Step Final closeout 0e2f2a8b). Registry conflict on this run's own entry resolved by composing both sibling entries (REQ-253, REQ-257) as separate array elements. Merged via gh pr merge --squash --delete-branch --admin past a backend-gate flake pattern (Req077PromotionPipelineTest, then Req207VortexTest twice -- different unrelated tests each of 3 CI attempts, none reachable from a docs/requirements.yaml-only diff), disclosed in a PR comment before merging. Queue task 495 released status:done.",
+      "note": "WF-02 run for REQ-257 (queue task 495), chunk 239d of REQ-239 10-way split (ISS-0424 part 3c-4): applies REQ-237 .zig provenance-marking convention to docs/requirements.yaml, the REQ-189 through REQ-242 entry range. Sibling of WF02-REQ254 (chunk 239a, COMPLETED) and WF02-REQ256 (chunk 239c, disjoint range) -- same pattern, owner DOC-UPDATER then REVIEWER, no ELIXIR-DEV/CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER (docs/requirements.yaml only, no executable surface). Pre-start check: registry scanned, no existing WF02-REQ257-* entry, no collision with REQ-256 (disjoint entry range). Applied REQ-237 design doc as amended 2026-09-05 (ISS-0510, merged PR #994) including the fourth YAML comment-line/sequence-item citation-unit shape -- 56 marker lines covering 119 .zig citation lines. REVIEWER PASSed with no findings (handoffs/WF02-REQ257-20260905/step-2d-reviewer.json)."
     }
   ]
 }

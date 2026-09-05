@@ -614,3 +614,17 @@ history:
       ORCH independently confirmed mix compile --warnings-as-errors, mix
       format --check-formatted, and mix test test/letflow/api/ test/letflow/plugs/
       (289 passed) before this status flip.
+  - req: REQ-241
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T09:22:30Z"
+    note: >
+      Retired parity-justification phrasing in lib/letflow/identity.ex,
+      lib/letflow/identity/group.ex, lib/letflow/instances.ex,
+      lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex,
+      lib/letflow/audit.ex (closes ISS-0424 part 2e-2, queue task 476,
+      GH#923, PR #944, feature/WF02-REQ241-20260905). REVIEWER passed the
+      implementation (handoffs/WF02-REQ241-20260905/step-02d-reviewer.json);
+      ORCH independently confirmed mix compile --warnings-as-errors, mix
+      format --check-formatted, and a targeted mix test run (249 passed)
+      before this status flip.

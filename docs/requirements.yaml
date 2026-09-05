@@ -14052,7 +14052,7 @@ requirements:
   - id: REQ-241
     title: Retire parity-justification phrasing in lib/letflow/identity(.ex, /group.ex), instances.ex, tasks.ex, tenant_provisioning.ex, audit.ex -- restate on merit or delete (closes ISS-0424 part 2e-2)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the identity+instances+tasks+tenant_provisioning+audit slice

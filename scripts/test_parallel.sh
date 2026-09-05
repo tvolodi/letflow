@@ -125,6 +125,22 @@ fi
 #
 # TEST_POOL_SIZE, if the caller already set it, is never overridden here --
 # an explicit choice always wins over this clamp.
+#
+# ISS-0480 (design lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md
+# §10.2.2/§10.3.4): each partition also starts its own, independent
+# Letflow.Test.ProvisioningRepo pool (a second Ecto.Repo used only by
+# Letflow.TenantFixture.provisioned_tenant!/1 for tenant-schema provisioning, kept off
+# Letflow.Repo's own pool entirely -- see that module's moduledoc). Its pool_size is a
+# FIXED constant, not derived from schedulers_online()/N, so PROVISIONING_POOL_SIZE
+# here is a literal, not a further env override -- keep it in sync with
+# config/test.exs's own `pool_size: 2` for Letflow.Test.ProvisioningRepo (design §10.2.2
+# closing bullet, OQ-8: two-language sync is an implementer's choice with no behavior
+# difference, resolved here as duplicated literals rather than a shared exported var).
+# Subtracted as `N * PROVISIONING_POOL_SIZE` from the budget below, since every one of
+# the N independently-launched `mix test` OS processes (step 2) has its own BEAM VM and
+# therefore its own, independent ProvisioningRepo pool of this size.
+PROVISIONING_POOL_SIZE=2
+
 if [ -z "${TEST_POOL_SIZE:-}" ]; then
   max_conn="${TEST_MAX_CONNECTIONS:-100}"
   headroom="${TEST_CONNECTION_HEADROOM:-10}"
@@ -148,20 +164,20 @@ if [ -z "${TEST_POOL_SIZE:-}" ]; then
   fi
 
   usable_ceiling=$((max_conn - superuser_reserved))
-  budget=$((usable_ceiling - headroom - nonpool_reserve))
+  budget=$((usable_ceiling - headroom - nonpool_reserve - (N * PROVISIONING_POOL_SIZE)))
   if [ "$budget" -lt "$min_pool" ]; then
-    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS=$max_conn minus TEST_SUPERUSER_RESERVED=$superuser_reserved minus TEST_CONNECTION_HEADROOM=$headroom minus TEST_NONPOOL_CONNECTION_RESERVE=$nonpool_reserve leaves no room for even the TEST_MIN_POOL_SIZE=$min_pool floor" >&2
+    echo "test_parallel: ERROR TEST_MAX_CONNECTIONS=$max_conn minus TEST_SUPERUSER_RESERVED=$superuser_reserved minus TEST_CONNECTION_HEADROOM=$headroom minus TEST_NONPOOL_CONNECTION_RESERVE=$nonpool_reserve minus (N=$N * PROVISIONING_POOL_SIZE=$PROVISIONING_POOL_SIZE) leaves no room for even the TEST_MIN_POOL_SIZE=$min_pool floor" >&2
     exit 1
   fi
 
   computed_pool=$((budget / N))
   if [ "$computed_pool" -lt "$min_pool" ]; then
-    echo "test_parallel: WARN N=$N partitions would need pool_size=$computed_pool to fit within $budget connections (max_connections=$max_conn - superuser_reserved=$superuser_reserved - headroom=$headroom - nonpool_reserve=$nonpool_reserve); clamping to the TEST_MIN_POOL_SIZE floor of $min_pool instead. This means N*pool_size ($((N * min_pool))) may still exceed the connection budget -- reduce N (TEST_PARALLEL_N=<n>) if you hit too_many_connections." >&2
+    echo "test_parallel: WARN N=$N partitions would need pool_size=$computed_pool to fit within $budget connections (max_connections=$max_conn - superuser_reserved=$superuser_reserved - headroom=$headroom - nonpool_reserve=$nonpool_reserve - N*provisioning_pool_size=$((N * PROVISIONING_POOL_SIZE))); clamping to the TEST_MIN_POOL_SIZE floor of $min_pool instead. This means N*pool_size ($((N * min_pool))) may still exceed the connection budget -- reduce N (TEST_PARALLEL_N=<n>) if you hit too_many_connections." >&2
     export TEST_POOL_SIZE="$min_pool"
   else
     export TEST_POOL_SIZE="$computed_pool"
   fi
-  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (computed: N=$N, max_connections=$max_conn, superuser_reserved=$superuser_reserved, headroom=$headroom, nonpool_reserve=$nonpool_reserve)"
+  echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (computed: N=$N, max_connections=$max_conn, superuser_reserved=$superuser_reserved, headroom=$headroom, nonpool_reserve=$nonpool_reserve, provisioning_pool_size=$PROVISIONING_POOL_SIZE)"
 else
   echo "test_parallel: TEST_POOL_SIZE=$TEST_POOL_SIZE (caller override, not computed)"
 fi

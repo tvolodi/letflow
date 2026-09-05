@@ -203,24 +203,32 @@ defmodule Letflow.TenantFixture do
 
   ## `async: true` callers (ISS-0113 / ISS-0423 — no opt-in flag, no `restore_sandbox`)
 
-  This function's own unconditional first line, `Sandbox.mode(Letflow.Repo, :auto)`, is
-  sufficient by itself to make a calling test file safe to declare `async: true`,
-  *provided* the call site is independently classified safe by
+  A calling test file is safe to declare `async: true`, *provided* the call site is
+  independently classified safe by
   `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md` §3's three-
   mechanism procedure (self-checkout, concurrent multi-process DB access, a second
-  provisioning call). **No additional flag, checkout, or restore step is needed, and
+  provisioning call). **No opt-in flag, extra checkout, or restore step is needed, and
   none is provided** — a prior design revision (`restore_sandbox: true`, since removed)
   tried to additionally flip the sandbox back to `:manual` with a fresh checkout after
   provisioning, and that made things *worse*, not better: see the design doc's §9 for
-  the full trace of why a second mid-test `Sandbox.mode/2` call is actively harmful
-  (it discards the connection this function's own provisioning work just established),
-  whereas leaving `:auto` mode in effect for the rest of the test (today's original,
-  unchanged behavior) is exactly what makes `async: true` work, not what blocks it.
+  the full trace of why a second mid-test `Sandbox.mode/2` call on the SAME repo the
+  caller already checked a connection out of is actively harmful.
+
+  ## Provisioning runs on a separate repo (ISS-0480 — design §10)
+
+  Every step of provisioning (schema clone/replay, `assert_schema_complete!/2`,
+  teardown) now runs against `Letflow.Test.ProvisioningRepo` — a second, dedicated
+  `Ecto.Repo` with its own pool and `DBConnection.Ownership.Manager` — instead of
+  against `Letflow.Repo` directly. This function no longer calls
+  `Sandbox.mode(Letflow.Repo, :auto)` at all: `Letflow.Repo`'s pool is never touched by
+  provisioning, in either mode or connection terms, so nothing here can check in a
+  connection belonging to some other, unrelated test (including one with zero
+  `TenantFixture` involvement) concurrently checked out from `Letflow.Repo`'s pool —
+  the exact hazard ISS-0480 named. See the design doc's §10 for the full mechanism and
+  the connection-budget reconciliation against decision 0009.
   """
   @spec provisioned_tenant!(opts()) :: tenant_fixture()
   def provisioned_tenant!(opts \\ []) do
-    Sandbox.mode(Letflow.Repo, :auto)
-
     slug_prefix = Keyword.get(opts, :slug_prefix, "tenant-fixture")
     display_name = Keyword.get(opts, :display_name, "Tenant Fixture")
     oidc_mode = Keyword.get(opts, :oidc_mode, :disabled)
@@ -228,25 +236,68 @@ defmodule Letflow.TenantFixture do
     template = Keyword.get(opts, :template, :clone)
     owner = owning_test()
 
-    tenant =
-      %Tenant{}
-      |> Tenant.create_changeset(
-        %{
-          slug: Letflow.TenantSlugFixture.unique_slug(slug_prefix),
-          display_name: display_name
-        },
-        oidc_mode
-      )
-      |> Repo.insert!()
+    {tenant, schema_name} =
+      with_provisioning_repo(fn ->
+        # The Tenant row must be inserted on THIS same connection, not the caller's own
+        # (ambient, sandboxed) one: TenantProvisioning/TenantTemplate's own INSERTs into
+        # tenant_schemas carry a `tenant_id` FK to `tenants`, and provisioning runs on
+        # Letflow.Test.ProvisioningRepo's own, separate, non-sandboxed connection from
+        # this point on. An uncommitted insert on the caller's own sandboxed
+        # Letflow.Repo connection would be invisible to that FK check -- committing it
+        # here, on ProvisioningRepo, is what makes it visible (real, cross-connection
+        # visible data, exactly like every other write this fixture already makes under
+        # :auto mode -- see the moduledoc's note on why this is not a new leak).
+        tenant =
+          %Tenant{}
+          |> Tenant.create_changeset(
+            %{
+              slug: Letflow.TenantSlugFixture.unique_slug(slug_prefix),
+              display_name: display_name
+            },
+            oidc_mode
+          )
+          |> Repo.insert!()
 
-    if Keyword.get(opts, :teardown, true) do
-      on_exit(fn -> teardown(tenant.id, owner) end)
-    end
+        if Keyword.get(opts, :teardown, true) do
+          on_exit(fn -> with_provisioning_repo(fn -> teardown(tenant.id, owner) end) end)
+        end
 
-    schema_name = provision_schema!(template, tenant.id)
-    assert_schema_complete!(tenant.id, expected)
+        schema_name = provision_schema!(template, tenant.id)
+        assert_schema_complete!(tenant.id, expected)
+        {tenant, schema_name}
+      end)
 
     %{tenant_id: tenant.id, schema_name: schema_name, tenant: tenant}
+  end
+
+  # -----------------------------------------------------------------------------------
+  # The ISS-0480 seam (design §10.3.2): every Repo. call TenantProvisioning/
+  # TenantTemplate/assert_schema_complete!/2/teardown/2 make internally is an
+  # unqualified call against the `Repo = Letflow.Repo` alias -- Repo.put_dynamic_repo/1
+  # (Ecto's own documented per-repo dynamic-repo facility, generated by `use Ecto.Repo`)
+  # redirects those SAME, unmodified calls to Letflow.Test.ProvisioningRepo's connection
+  # for the duration of `fun`, then always restores whatever was previously the dynamic
+  # repo (ordinarily Letflow.Repo itself) in an `after` block (OQ-7) so a raise from
+  # inside `fun` (e.g. assert_schema_complete!/2's own ExUnit.AssertionError) never
+  # leaves the calling process's dynamic-repo binding pointed at ProvisioningRepo.
+  # Repo.put_dynamic_repo/1 is process-scoped (`Process.put/2` under a
+  # `{Letflow.Repo, :dynamic_repo}` key), so this cannot affect any other
+  # concurrently-running process's own view of which repo `Letflow.Repo.` calls target.
+  #
+  # Sandbox.mode(Letflow.Test.ProvisioningRepo, :auto) is set once per call; per
+  # Sandbox.mode/2's own no-op-on-same-mode guard, a later call in the same process
+  # (e.g. teardown/2's own wrapped call) is a no-op once the first has run.
+  # -----------------------------------------------------------------------------------
+  defp with_provisioning_repo(fun) do
+    Sandbox.mode(Letflow.Test.ProvisioningRepo, :auto)
+    previous = Repo.get_dynamic_repo()
+
+    try do
+      Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo)
+      fun.()
+    after
+      Repo.put_dynamic_repo(previous)
+    end
   end
 
   @doc """

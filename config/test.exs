@@ -104,6 +104,55 @@ config :letflow, Letflow.Repo,
         end
   ]
 
+# ISS-0480 (design iss0113-tenant-fixture-sandbox-restore-opt-in.md §10.3.4): a
+# second, dedicated Ecto.Repo used only by
+# Letflow.TenantFixture.provisioned_tenant!/1 for tenant-schema provisioning,
+# on its own pool/DBConnection.Ownership.Manager entirely separate from
+# Letflow.Repo's own -- so a Sandbox.mode/2 call made during provisioning can
+# never check in a connection belonging to some other, unrelated async test
+# that never calls TenantFixture at all (the structural fix for ISS-0480's
+# blast radius). Same physical database as Letflow.Repo (same
+# database:/hostname:/port:, same MIX_TEST_PARTITION scoping) -- provisioning
+# still needs to see and be seen by the same per-partition database
+# Letflow.Repo connections use, only through a different connection/pool.
+#
+# pool_size is a FIXED constant (2), not schedulers_online()-derived --
+# design §10.2.2: TenantProvisioning.provision_tenant_schema/1 already
+# serializes concurrent provisioning attempts at the Postgres advisory-lock
+# level, so this pool does not need scheduler-wide concurrency, only enough
+# headroom (one in-flight provisioning call plus one spare) that a second
+# concurrent TenantFixture caller queues rather than blocking on a pool of
+# exactly 1. Kept in sync with scripts/test_parallel.sh's own
+# PROVISIONING_POOL_SIZE bash constant (design §10.2.2's closing bullet,
+# OQ-8) -- update both if this ever changes.
+#
+# ISS-0110/ISS-0217: application_name carries the exact same tag-derivation
+# logic as Letflow.Repo's own block above (same System.pid()/
+# TEST_PARALLEL_GROUP inputs), so every connection this repo opens reports
+# the SAME application_name as this invocation's Letflow.Repo connections --
+# Letflow.TenantSchemaReaper's pg_stat_activity-based liveness guard
+# (test/support/tenant_schema_reaper.ex) matches connections by tag, not by
+# a one-connection-per-test-process assumption, so this repo's connections
+# are correctly recognised as belonging to the same invocation/partition-group,
+# never counted as an unexpected external one (design §10.7 OQ-6, checked
+# directly against that module's real source, not assumed).
+config :letflow, Letflow.Test.ProvisioningRepo,
+  username: "letflow",
+  password: "letflow",
+  database: "letflow_test#{System.get_env("MIX_TEST_PARTITION")}",
+  hostname: "localhost",
+  port: db_port,
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 2,
+  parameters: [
+    application_name:
+      "letflow_mixtest_#{System.pid()}" <>
+        case System.get_env("TEST_PARALLEL_GROUP") do
+          nil -> ""
+          group -> "_grp#{group}"
+        end
+  ]
+
 # REQ-128: real local Keycloak issuer, same as config/dev.exs (see that
 # file's comment for the full rationale and docker-compose.yml's keycloak
 # service). Duplicated from config/dev.exs: this repo's config files don't

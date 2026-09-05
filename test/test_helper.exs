@@ -1,3 +1,15 @@
+# ISS-0480 (design iss0113-tenant-fixture-sandbox-restore-opt-in.md §10.3.3):
+# Letflow.Test.ProvisioningRepo is a second, test-only Ecto.Repo used by
+# Letflow.TenantFixture.provisioned_tenant!/1 for tenant-schema provisioning,
+# deliberately NOT part of lib/letflow/application.ex's supervision tree (the
+# design forbids touching production supervision for this). It needs its own
+# start_link/1 somewhere in the test boot sequence -- here, before
+# ExUnit.start(), alongside the sandbox-mode setup this file already performs
+# for Letflow.Repo via TenantSchemaReaper.sweep_orphans/0 below. Started
+# exactly once per BEAM VM / mix test invocation, same lifetime as
+# Letflow.Repo's own supervised connection.
+{:ok, _pid} = Letflow.Test.ProvisioningRepo.start_link()
+
 Letflow.TenantSchemaReaper.sweep_orphans()
 
 # ISS-0414: suite-boundary safety net against leftover `service_catalog` rows -- see

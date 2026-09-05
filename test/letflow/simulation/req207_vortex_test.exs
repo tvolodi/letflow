@@ -505,6 +505,27 @@ defmodule Letflow.Simulation.Req207VortexTest do
     |> Repo.one(prefix: schema_name)
   end
 
+  # Bounded walk-back for Signal 2 (entity/entity-query title: -> id: adjacency check).
+  # REQ-257 inserted a `# PROVENANCE (...)` comment line between id: and title: for
+  # several requirements.yaml entries, breaking the old exact idx - 1 adjacency
+  # assumption. This walks upward from `idx`, skipping only blank or comment lines
+  # (trimmed of trailing \r and whitespace, matching /^#/), and stops at the first
+  # real content line. It deliberately does NOT keep searching past a real content
+  # line for an id: further up -- a genuinely wrong or missing id: line must still
+  # be returned here so the caller's assertion fails on it, exactly as before.
+  defp nearest_preceding_id_line(title_lines, idx) when idx >= 0 do
+    line = Enum.at(title_lines, idx)
+    trimmed = line |> to_string() |> String.trim_trailing("\r") |> String.trim()
+
+    if trimmed == "" or Regex.match?(~r/^#/, trimmed) do
+      nearest_preceding_id_line(title_lines, idx - 1)
+    else
+      line
+    end
+  end
+
+  defp nearest_preceding_id_line(_title_lines, idx) when idx < 0, do: nil
+
   # ─── AC1: vortex-production-order-above-threshold ───────────────────────
 
   describe "vortex-production-order-above-threshold" do
@@ -905,7 +926,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
 
       matched_ids =
         Enum.map(entity_title_matches, fn {_line, idx} ->
-          Enum.at(title_lines, idx - 1)
+          nearest_preceding_id_line(title_lines, idx - 1)
         end)
 
       Enum.each(matched_ids, fn preceding_line ->

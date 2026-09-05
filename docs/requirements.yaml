@@ -14708,7 +14708,7 @@ requirements:
   - id: REQ-252
     title: Apply the .zig provenance-marking convention to lib/letflow/event_store.ex and lib/letflow/event_store/* (closes ISS-0424 part 3b-10)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

@@ -1,5 +1,6 @@
 defmodule Letflow.EventStore.Registry do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for the event type registry (ES-05), implementing the
   interface specified in `src/event_store/registry.zig`: `register_type/2`, `validate_payload/3`,
   `get_type/2`, backed by the tenant-scoped `event_type_registry` table
@@ -116,6 +117,7 @@ defmodule Letflow.EventStore.Registry do
   always targets the most recently registered version, resolved via
   `getType`'s `ORDER BY schema_version DESC LIMIT 1` result).
 
+  PROVENANCE (historical, not current decision authority):
   `payload` is a raw, not-yet-decoded JSON string, matching this function's
   realistic caller — an HTTP request body before any decoding happens.
   Decoding failure, or a

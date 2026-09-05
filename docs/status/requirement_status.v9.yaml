@@ -773,3 +773,18 @@ history:
       independently confirmed mix compile --warnings-as-errors, mix format
       --check-formatted, and a targeted mix test run (133 passed) before
       this status flip.
+  - req: REQ-252
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T14:49:29Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/event_store.ex and lib/letflow/event_store/* (closes
+      ISS-0424 part 3b-10, queue task 490, GH#955, PR #984,
+      feature/WF02-REQ252-20260905). This is chunk 238g of eleven
+      REQ-238-replacement chunks (REQ-243..REQ-253) applying that convention.
+      REVIEWER passed the implementation
+      (handoffs/WF02-REQ252-20260905/step-02d-reviewer.json). ORCH
+      independently confirmed mix compile --warnings-as-errors, mix format
+      --check-formatted, and a targeted mix test run (178 passed) before
+      this status flip.

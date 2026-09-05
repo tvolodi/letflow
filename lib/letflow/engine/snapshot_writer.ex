@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.SnapshotWriter do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   EE-01x (REQ-054) — periodic execution-state snapshots. Ports
   `snapshot_writer.zig` (R-Co's ISS-601, design artefact
   `src/design/iss601_state_snapshots.md`). See
@@ -151,6 +152,7 @@ defmodule Letflow.Engine.SnapshotWriter do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Cadence check: writes a snapshot (delegating to `take_snapshot/4`) when
   `current_sequence_number` has advanced at least `interval` (default
   #{@default_interval}, `snapshot_writer.zig`'s `DEFAULT_SNAPSHOT_INTERVAL`)

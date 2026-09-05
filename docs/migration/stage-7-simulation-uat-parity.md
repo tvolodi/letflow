@@ -54,6 +54,7 @@ explicit decisions elsewhere in this project rather than left implicit
 assigned to this follow-up as of this entry — a future REQ-ANALYST pass should size it
 as its own batch when S7 is revisited or extended.
 
+PROVENANCE (historical, not current decision authority):
 **REQ-205's harness is not `Letflow.Routers.SimulationTest`.** R-Co's
 `src/api/routes/simulation_test.zig` / `src/simulation/scenario_runner.zig`
 (the source `Letflow.Router`'s own "Deferred routes" table names against
@@ -95,6 +96,7 @@ files are ported** from a host with `c:\Users\tvolo\dev\ai-dala\R-Co\` access
 ("Port REQ-205's 12 simulation fixture files from real R-Co source (blocks
 REQ-206)"), registered by ORCH at Step Final.
 
+PROVENANCE (historical, not current decision authority):
 **`tests/differential/`'s corpus is ported as a regression suite, not a
 differential one** (REQ-209). R-Co's `differential_test.zig` diffed a
 vendored CEL library against `src/expr` as its own now-completed EXP-102

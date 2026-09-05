@@ -999,3 +999,34 @@ history:
       dropped). Merged via `gh pr merge --squash --delete-branch --admin`
       per GIT_MERGE.md. Queue task 495 released status:done
       (letflow-ee-orch).
+  - req: REQ-259
+    event: done
+    agent: ORCH
+    at: "2026-09-05T18:20:30Z"
+    note: >
+      WF02-REQ259-20260905 complete. DOC-UPDATER applied REQ-237's .zig
+      PROVENANCE-marker convention to docs/migration/stage-{1..7}-*.md
+      (chunk 239e2, the 7 named stage docs): 51 marker lines inserted
+      covering 148 .zig citation lines total. Per-file markers/.zig-lines:
+      stage-1 8/9, stage-2 1/11, stage-3 6/20, stage-4 18/68, stage-5
+      1/1, stage-6 15/37, stage-7 2/2. Only three of the four design-doc
+      unit shapes were exercised (single line/bullet, paragraph, table)
+      -- no fourth/novel citation shape found, so no new issue was
+      raised. DOC-UPDATER treated non-blank-line-separated list items
+      (e.g. per-requirement bullets in stage-1/4/6) as individually
+      paragraph-shaped units rather than marking the whole enclosing
+      list once; REVIEWER independently spot-checked this against the
+      pre-image and confirmed it a defensible, conservative mechanical
+      extension of the paragraph rule (same precedent class as
+      ISS-0510's YAML-bullet shape and REQ-257's acceptance_criteria-
+      bullet shape), not a scope problem -- verified precise (an
+      unrelated no-.zig bullet between two marked ones correctly
+      received no marker). Additive-only, zero .zig lines altered or
+      deleted (git diff -U0 | grep -c '^[+-].*\.zig' == 0), zero doubled
+      markers, scope strictly the 7 named files
+      (CLAUDE.md/README.md/docs/migration/README.md untouched, confirmed
+      empty via git diff --stat). REVIEWER independently re-verified all
+      8 gate criteria and PASSED
+      (handoffs/WF02-REQ259-20260905/step-2d-reviewer.json). No rebase
+      was needed (main unchanged at 04590fb6 since branch point). Queue
+      task 497 released status:done (letflow-ee-orch).

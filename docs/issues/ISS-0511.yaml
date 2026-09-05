@@ -1,0 +1,35 @@
+id: ISS-0511
+title: "Req207VortexTest fails: REQ-257 inserted PROVENANCE marker breaks id:/title: adjacency assumption for REQ-225/227/228/229/230/231"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ259-20260905
+discovered_at: "2026-09-05T18:28:00Z"
+severity: MAJOR
+description: >
+  docs/requirements.yaml REQ-257 (merged main @ ac9ad440) inserted a `#
+  PROVENANCE (historical, not current decision authority):` comment line
+  between `- id: REQ-2NN` and `title:` for REQ-225, REQ-227, REQ-228,
+  REQ-229, REQ-230, and REQ-231 (the entity-subsystem scoping requirements),
+  per REQ-237's design doc / ISS-0510's amendment (this placement is
+  correct and intentional). test/letflow/simulation/req207_vortex_test.exs
+  line 911 (`vortex-entity-list-filter-and-page`) asserts that the line
+  immediately preceding any docs/requirements.yaml `title:` matching
+  `/entit(y|ies)/i` is always an `id:` line naming one of a fixed
+  allowed-id set (REQ-207, REQ-225..231). This assumption is now false for
+  6 of those 7 entries, breaking the test on every main CI run since
+  ac9ad440 -- confirmed via `gh run list --branch main`: three consecutive
+  red CI runs (04590fb6, ac9ad440, 0e2f2a8b) before WF02-REQ259-20260905
+  even branched. Reproduced identically on WF02-REQ259-20260905's own PR
+  #997, which does not touch docs/requirements.yaml's id:/title: structure
+  at all (only a one-line status: pending -> done flip) -- the failure is
+  structurally unreachable from that diff, confirmed via `git diff --stat`
+  and by the failure already being present on main's own tip. Root cause
+  is the test's assumption, not the requirements.yaml content: the
+  PROVENANCE marker placement is the correct, already-reviewed convention
+  (REQ-237/ISS-0510), so the fix belongs in the test, not a reversion of
+  REQ-257's markers.
+affected_files:
+  - test/letflow/simulation/req207_vortex_test.exs
+  - docs/requirements.yaml
+queue_task_id: 511
+github_issue: 998
+status: open

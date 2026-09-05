@@ -13,13 +13,18 @@ real implementation before S2 starts, not a stub.
 
 Key R-Co files to read before expanding this stage into requirements:
 
+PROVENANCE (historical, not current decision authority):
 - `src/oidc/jit_provisioning.zig` (orchestration) + `src/identity/registry.zig`'s
   `createOrGetJitOidcUser` (the actual upsert) — JIT provisioning
+PROVENANCE (historical, not current decision authority):
 - `src/identity/provider/oidc/jwks_cache.zig`
+PROVENANCE (historical, not current decision authority):
 - `src/identity/role_registry.zig`
+PROVENANCE (historical, not current decision authority):
 - `src/identity/provider/` — Keycloak-specific adapter (nested `adapters/`, `oidc/`
   subdirs; 18 `.zig` files total under `src/identity/`)
 - `src/oidc/` (13 files) — OIDC protocol handling
+PROVENANCE (historical, not current decision authority):
 - `src/api/middleware/auth.zig`, `tenant_status.zig` — how identity
   plugs into the request pipeline today
 
@@ -49,6 +54,7 @@ history narration. Full detail in
 **Per-requirement verdicts** (evidence re-derived from source, not copied
 from prior handoffs):
 
+PROVENANCE (historical, not current decision authority):
 - **REQ-015** (Ecto schema/migrations) — met. `20260816000001_create_tenants.exs`
   through `..000004_create_users.exs` all apply cleanly (confirmed indirectly:
   `mix test`'s `ecto.migrate --quiet` step succeeded). `tenants`/`users`/`groups`/
@@ -76,6 +82,7 @@ from prior handoffs):
   `application.ex`. `test/letflow/application_test.exs` asserts the worker is
   alive, supervised as a real child, and config-sourced; this test passed in
   my own run.
+PROVENANCE (historical, not current decision authority):
 - **REQ-017** (pure claim-mapping) — met. `lib/letflow/oidc/claim_mapping.ex`
   inspected line by line: `map_verified_claims/3`, `resolve_claim_path/2`,
   `resolve_optional_string_claim/3`, `resolve_roles/2` — no `Repo`, `HTTP`,
@@ -84,6 +91,7 @@ from prior handoffs):
   preferred_username→subject, roles→[], display_name→nil, tenant_id→nil);
   `subject in [nil, ""]` is the sole `{:error, :sub_claim_missing}` path.
   Moduledoc cites `src/oidc/claim_mapping.zig`.
+PROVENANCE (historical, not current decision authority):
 - **REQ-018** (JIT provisioning) — met. `lib/letflow/identity.ex`'s
   `provision_oidc_user/3` implements select-first →
   `Repo.insert(on_conflict: :nothing, conflict_target: {:unsafe_fragment, ...})`

@@ -10,6 +10,7 @@ Port `src/lua/` (29 files, including `host_api/` — the service-task
 scripting host) and `src/wasm/` (19 files, including `host_api/` — the
 plugin host API).
 
+PROVENANCE (historical, not current decision authority):
 Verified against the live R-Co tree 2026-08-23: the two directories are
 9,761 lines of Zig, but the split is **8,365 Lua / 1,396 WASM**, and
 that asymmetry is not a measure of relative complexity — it is a

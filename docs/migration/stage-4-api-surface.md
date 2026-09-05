@@ -37,6 +37,8 @@ The earlier draft of this file said "22 route modules / 7 middleware",
 carried over from `decisions/0001-web-framework.md`'s list as of
 2026-08-14. That is now stale — R-Co has grown since. The real counts:
 
+PROVENANCE (historical, not current decision authority):
+
 | Group | Path | Modules | Lines |
 |---|---|---|---|
 | Routes | `src/api/routes/` | 31 | 15,083 |
@@ -51,6 +53,7 @@ agent turn each without splitting per route group. Requirements are
 sized per route module (or per handler group inside the largest three),
 not per directory.
 
+PROVENANCE (historical, not current decision authority):
 The OpenAPI row was corrected during the 2026-08-19 requirement
 expansion (see REQ-084): `src/api/openapi/` holds **7** modules
 totalling **992** lines (`builder.zig` 235, `mod.zig` 6, `model.zig`
@@ -65,6 +68,8 @@ the time you read this, that's drift to reconcile, not a typo.
 ### Route modules, grouped by the Letflow subsystem they front
 
 **(a) Fronting subsystems S1–S3 already built — the real S4 work.**
+
+PROVENANCE (historical, not current decision authority):
 
 | R-Co route | Lines | Handlers | Letflow backing (built) |
 |---|---|---|---|
@@ -95,6 +100,8 @@ requirement — state the boundary explicitly, exactly as REQ-056's
 SCOPE BOUNDARY paragraph does, and defer the route (or build it against
 an injectable/stub port) until the owning stage lands.
 
+PROVENANCE (historical, not current decision authority):
+
 | R-Co route | Lines | Missing backing | Owning stage |
 |---|---|---|---|
 | `dlq.zig` | 337 | `src/dlq/` OBS-05 dead-letter queue | S6 |
@@ -110,6 +117,7 @@ an injectable/stub port) until the owning stage lands.
 | `agent_artifacts.zig` | 562 | runtime-agent subsystem | post-S6 |
 | `sandbox_access.zig` | 181 | runtime-agent subsystem (guard module extracted from `agent_sandboxes.zig`, which is its only consumer; exports no `handle*`, so there is no route to port without it) | post-S6 |
 
+PROVENANCE (historical, not current decision authority):
 **Update (2026-08-30, REQ-191 and REQ-192 done):** the `services.zig` row is
 now fully ported. `service_catalog` (REPO-07/SVC-01/SVC-03) shipped as
 `Letflow.ServiceCatalog` — schema, migration and context module (REQ-191) —
@@ -120,6 +128,7 @@ and its HTTP route layer (SVC-04) shipped as `Letflow.Routers.Services` and
 unported now. See `requirement_status.v6.yaml`'s REQ-191 and REQ-192 `done`
 entries for gate results.
 
+PROVENANCE (historical, not current decision authority):
 The three `agent_*.zig` routes (and `sandbox_access.zig`, a guard module
 extracted from `agent_sandboxes.zig` and imported by nothing else) are
 R-Co's implementation of the
@@ -131,6 +140,8 @@ them forward would be exactly the scope creep that section warns
 against.
 
 ### Middleware
+
+PROVENANCE (historical, not current decision authority):
 
 | R-Co middleware | Lines | Letflow status |
 |---|---|---|
@@ -153,6 +164,7 @@ requirement; re-porting them is not.
 
 ### Shared conventions (`src/api/*.zig`)
 
+PROVENANCE (historical, not current decision authority):
 `errors.zig` (272), `response.zig` (69), `pagination.zig` (406),
 `validation.zig` (592), `authorization.zig` (280), `tenant_context.zig`
 (104), `trace_context.zig` (55), `pipeline_context.zig` (45),
@@ -163,6 +175,7 @@ route depends on. They must land **before** the route requirements that
 consume them — the same ordering S2 used for REQ-024's event-type
 registry ahead of REQ-025's append.
 
+PROVENANCE (historical, not current decision authority):
 The first two landed under REQ-066 as `Letflow.Api.Error`
 (`lib/letflow/api/error.ex`) and `Letflow.Api.Response`
 (`lib/letflow/api/response.ex`). Two translation notes for the
@@ -176,6 +189,7 @@ HTTP-status constructors were ported; the 9 domain-specific ones in
 `errors.zig` are deferred to their owning PIN-01/PIN-05/PRM-01/PAR-01
 requirements rather than guessed at in advance.
 
+PROVENANCE (historical, not current decision authority):
 Note `pipeline_context.zig` and `trace_context.zig` use Zig
 `threadlocal` storage for per-request correlation IDs. That is not the
 Elixir/OTP shape — the equivalent is the process dictionary via
@@ -257,6 +271,7 @@ Two open questions this stage may need to escalate into a
   without a decision record. It becomes one if the resolution pulls in
   a routing library (which would contradict 0001's no-Phoenix framing).
   **Resolved by REQ-070 (2026-08-21):** Decomposed via `Plug.Router.forward/2` to 10 per-subsystem sub-router stubs; no decision record needed.
+PROVENANCE (historical, not current decision authority):
 - **OQ-2 — OpenAPI spec generation.** R-Co hand-builds its spec
   (`openapi/builder.zig` + `schema_registry.zig`, 1,286 lines). Whether
   Letflow hand-builds, adopts `open_api_spex`, or defers the spec to S6
@@ -320,15 +335,18 @@ and all six of REQ-084's acceptance criteria:
   concretely why `open_api_spex`'s Phoenix-macro-driven value proposition doesn't
   transfer to a Plug/Bandit router, rather than asserting the two are simply
   incompatible without reasoning through it.
+PROVENANCE (historical, not current decision authority):
 - **AC3 (correct R-Co counts + table correction noted):** re-verified independently
   against the live R-Co tree (`wc -l` on all 7 files plus `routes/openapi.zig`) rather
   than trusting the requirement filing's numbers — they matched exactly (992/158). The
   record correctly notes the table correction (line 45 of this file) was already
   applied by an earlier pass, rather than claiming credit for a duplicate fix.
+PROVENANCE (historical, not current decision authority):
 - **AC4 (drift risk addressed):** names `path_registry.zig`'s existence as evidence of
   what the drift failure mode looks like in R-Co, and states the constraint a future S6
   mechanism must satisfy (route-derived, not hand-transcribed) — a real constraint
   handed forward, not a vague caution.
+PROVENANCE (historical, not current decision authority):
 - **AC5 (owner named):** "S6" is named as the owning stage. No specific requirement ID
   is invented, since S6 has not been expanded into requirements yet — checked this
   against this repo's own precedent (REQ-068's identical treatment of
@@ -356,6 +374,7 @@ sub-router — reviewed against idiom/scope/supervision plus this run's own load
 deliverable, **OQ-14's fail-open-vs-fail-closed confirmation**
 (`lib/letflow/design/req021-auth-plug-pipeline.md` §6.4/§10).
 
+PROVENANCE (historical, not current decision authority):
 - **OQ-14 — independently confirmed, PASS on fail-closed.** Read
   `lib/letflow/plugs/tenant_status.ex` in full: `check_write_pause/2`'s `Repo.get(Tenant,
   tenant_id)` call (line 59) is wrapped in no `try`/`rescue`/`with {:ok, _} <-` anywhere in
@@ -427,6 +446,7 @@ a case a struct/type change would newly make unrepresentable.
 (`Letflow.Api.Context`) against REQ-072's seven acceptance criteria and this
 file's own threadlocal-translation note above.
 
+PROVENANCE (historical, not current decision authority):
 - **Idiom translation confirmed.** `tenant_context.zig`/`trace_context.zig`/
   `pipeline_context.zig`'s Zig `threadlocal` per-request storage becomes an
   explicit `conn.assigns` field (`:trace_id`), mirrored into `Logger.metadata/1`
@@ -467,6 +487,7 @@ idiom/scope/decision-record consistency, plus this run's two load-bearing
 deliverables — **OQ-1 and OQ-3 sign-off**, both explicitly deferred to this
 gate rather than to CODE-DESIGN-VALIDATOR or SECURITY-REVIEWER.
 
+PROVENANCE (historical, not current decision authority):
 - **OQ-1 (§1b/§10) — PASS, single-member removal at `DELETE
   /groups/:id/members/:user_id` is the right port target; no code change
   requested.** The requirement's own text names `handleRemoveGroupMember`
@@ -488,6 +509,7 @@ gate rather than to CODE-DESIGN-VALIDATOR or SECURITY-REVIEWER.
   binds to that handler, not merely a pagination-shape choice — an honest
   finding, matching AC6. Verdict: ship single-member removal only; bulk-remove
   stays unported and unrequested.
+PROVENANCE (historical, not current decision authority):
 - **OQ-3 (§3.5/§10) — PASS, uniform `:GroupsManage` policy is correct; no code
   change requested.** `handleListGroupMembers`'s `PLATFORM_ADMIN`-exclusive
   gate (`identity.zig:533`) is itself dead code in R-Co — `grep -n

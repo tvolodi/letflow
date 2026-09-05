@@ -145,6 +145,7 @@ REQ-109; REQ-110 was added to this stage afterwards and is still open.
 
 ## Scope
 
+PROVENANCE (historical, not current decision authority):
 Port `src/engine/` (11 files: `instance.zig` 5550 lines,
 `transition.zig` 3323, `reconstruction.zig` 1646, `pin_resolver.zig`
 967, `service_task.zig` 420, `pin_rebind.zig` 388,
@@ -152,6 +153,7 @@ Port `src/engine/` (11 files: `instance.zig` 5550 lines,
 `lua_script_audit.zig` 201, `plugin_interface.zig` 79,
 `transition_source_embed.zig` 24).
 
+PROVENANCE (historical, not current decision authority):
 The 20 requirements above decompose this along R-Co's own EE-01..EE-12
 behavioural seams rather than one-requirement-per-file — `instance.zig`
 and `transition.zig` each span many EE-\* requirements and cannot be a
@@ -181,6 +183,7 @@ join share the Token/JoinCounter model and EE-07's
 cancelled-branch-exclusion rule cannot be stated without the split half
 present.
 
+PROVENANCE (historical, not current decision authority):
 **SPC-01's runtime half is in scope here (REQ-062).** Shipped REQ-032
 ported only SPC-02's definition-time half and states in both its
 description and its acceptance criteria that SPC-01 "belongs to S3
@@ -195,6 +198,7 @@ requirements in this batch presuppose it: REQ-044 ports
 pin inheritance — neither has a child-creation path to hang off
 without REQ-062.
 
+PROVENANCE (historical, not current decision authority):
 **`transition_source_embed.zig` is deliberately not ported and has no
 requirement.** Its own header states it exists solely because Zig's
 `@embedFile` cannot escape a module root, so
@@ -204,6 +208,7 @@ compile time. Elixir has no equivalent constraint, so an Elixir port
 would be a file with no purpose. Recorded here explicitly rather than
 silently dropped from the 11-file count.
 
+PROVENANCE (historical, not current decision authority):
 Two dependencies this stage's engine writes into come from directories
 outside `src/engine/` and are only partially in scope: `tasks`/`tokens`
 tables (R-Co `migrations/005_instances.sql`) are created by REQ-043
@@ -290,6 +295,7 @@ silently overrides either:
   additionally inherit REQ-040's crash-safety note: `try/after` does
   not cover a process exit.
 
+PROVENANCE (historical, not current decision authority):
 **Gateway condition evaluation is not an open question** (REQ-050).
 R-Co has a real, working implementation to port:
 `src/engine/transition.zig`'s `evaluateGatewayCondition()` (~L1118)

@@ -1,0 +1,53 @@
+{
+  "handoff_id": "WF02-REQ259-20260905-step-2d",
+  "run_id": "WF02-REQ259-20260905",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ259-20260905/step-2d-reviewer.json",
+  "created_at": "2026-09-05T18:20:00Z",
+  "started_at": "2026-09-05T18:20:00Z",
+  "completed_at": "2026-09-05T18:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-259"],
+    "requirement_text": {
+      "REQ-259": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, including both 2026-09-05 amendments) to chunk 239e2 of REQ-239's original scope: docs/migration/stage-{1,2,3,4,5,6,7}-*.md."
+    },
+    "artifacts_in": [
+      "handoffs/WF02-REQ259-20260905/step01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ257-20260905/step-2d-reviewer.json"
+    ],
+    "owned_modules": [
+      "docs/migration/stage-1-identity.md",
+      "docs/migration/stage-2-event-store-definitions.md",
+      "docs/migration/stage-3-instance-engine.md",
+      "docs/migration/stage-4-api-surface.md",
+      "docs/migration/stage-5-scripting-plugins.md",
+      "docs/migration/stage-6-operational-cross-cutting.md",
+      "docs/migration/stage-7-simulation-uat-parity.md"
+    ]
+  },
+  "task": {
+    "description": "Gate this run's diff (git diff main..HEAD -- the 7 named stage docs) against REQ-237's design doc (both 2026-09-05 amendments), against REQ-257's REVIEWER precedent for gate-criteria shape and idiom consistency, and against DOC-UPDATER's own claimed judgment call (treating non-blank-line-separated list items as individually paragraph-shaped citation units). Eight gate criteria, none trusted from DOC-UPDATER's own summary -- every count and placement independently re-derived against the real diff and working tree."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified DOC-UPDATER's REQ-259 apply against REQ-237's design doc (both amendments read in full) and REQ-257's precedent, re-deriving every number myself rather than trusting the handoff. (1) Marker text: `git diff main..HEAD -- <7 files> | grep '^+' | grep -i provenance | sort -u` returns exactly one distinct line, `+PROVENANCE (historical, not current decision authority):` -- zero variant wording anywhere across all 51 inserted marker lines. (2) No .zig line touched: `git diff -U0 main..HEAD -- <7 files> | grep -c '^[+-].*\\.zig'` = 0, confirming every one of the 148 pre-existing .zig citation lines survives as unchanged context. (3) Placement: spot-checked all three unit shapes actually present. Single-line/bullet units (stage-1 lines 16-29, e.g. REQ-015/REQ-017/REQ-018 verdict bullets) -- confirmed markers appear only above bullets that actually carry a .zig reference, and correctly skip REQ-016's bullet in between, which cites no .zig path; this is more precise than blanket-marking the whole tight list, not less. Paragraph units (stage-2's Scope paragraph, stage-3's SPC-01/transition_source_embed/gateway-condition paragraphs, stage-7's REQ-205/REQ-209 paragraphs) -- markers sit immediately above the paragraph's first line, matching the design's own worked example in section 4 structurally. Table units -- see (4). DOC-UPDATER's list-item judgment call (stage-1's per-requirement verdict bullets, stage-4's per-AC/per-OQ bullets, stage-6's five-item numbered 'Deliberately not covered' list) was independently checked against the pre-image (`git show main:docs/migration/stage-6-operational-cross-cutting.md`): items 1-5 form one continuous list with no blank line between items, i.e. one blank-line-bounded 'paragraph' under the design's literal rule, yet each item was marked individually rather than once above the whole list. This is judged a DEFENSIBLE mechanical extension, not a scope problem, for the same reason ISS-0510's YAML-bullet amendment and REQ-257's own acceptance_criteria-bullet precedent were accepted: each list item here is itself a distinct, independently-verifiable citation of a different .zig file, the list-item boundary (`1.`/`2.`/`-`) is a real unambiguous structural marker (not an invented sentence boundary), and the design's own stated rationale for the paragraph rule -- avoiding the judgement call of finding a sentence boundary inside dense prose -- is satisfied, arguably better, at this finer granularity. Verified this was applied precisely, not sloppily: non-.zig-bearing items in a tight list (stage-1's REQ-016 bullet) correctly received no marker, so the extension is conservative (marks the true minimal citation unit) rather than a blanket overmark. (4) Tables: all 5 markdown tables in stage-4 (route-groups, fronting-subsystems, not-yet-backed, middleware, OpenAPI-count where applicable) each get exactly one marker immediately above the header row, confirmed via targeted diff inspection -- never one per row, and the required blank-line insertion before 4 of the 5 tables (for valid Markdown rendering) does not touch any citation text. (5) `git diff --stat main..HEAD -- CLAUDE.md README.md docs/migration/README.md` is empty -- confirmed untouched. (6) Scope: `git diff --stat main..HEAD` touches exactly the 7 named files plus this run's own handoffs/WF02-REQ259-20260905/{step00-git-setup.json,step01-doc-updater.json} and handoffs/registry.json bookkeeping -- nothing in docs/migration/decisions/*.md or docs/requirements.yaml (both explicitly re-checked empty via `git diff --stat main..HEAD -- docs/migration/decisions/ docs/requirements.yaml`). (7) Idempotency: an awk scan for two consecutive 'PROVENANCE (historical' lines across all 7 files found zero duplicates. (8) Checked docs/anti-patterns.md (grepped for PROVENANCE/.zig/REQ-237/238/239/254/256/257/ISS-0510): no entry bears on this class of change beyond what's already been applied. Per-file marker counts independently re-derived (`grep -c 'PROVENANCE (historical' <file>`): stage-1: 8, stage-2: 1, stage-3: 6, stage-4: 18, stage-5: 1, stage-6: 15, stage-7: 2 -- sum 51, matching DOC-UPDATER's reported total exactly and consistent with git diff --numstat (8/1/6/22/1/15/2 insertions, where stage-4's 22 = 18 markers + 4 blank-line-before-table insertions). No idiomatic-OTP, supervision, or type-safety concerns apply -- this is a docs-only, purely mechanical annotation change with no code, no new abstractions, and no scope creep beyond the 7 named files.",
+    "list_item_judgment_call": {
+      "verdict": "ACCEPTABLE, no rework needed",
+      "reasoning": "Structurally identical in kind to the already-accepted ISS-0510 YAML-comment-bullet extension and to REQ-257's own acceptance_criteria-bullet precedent: applying the paragraph rule's rationale (avoid an invented sentence-boundary judgement call) at the smallest natural structural boundary a tight list actually offers (the list-item marker itself), rather than at the whole-list boundary the literal blank-line rule would otherwise force. Verified as applied precisely (only .zig-bearing items marked, non-.zig items skipped even mid-list), not as a blanket overmark. This is a mechanical extension of an existing rule, not a new convention or per-citation semantic judgement call -- OQ-3 of the design doc already anticipated and accepted uniform, non-selective marking of every unit containing a .zig substring; DOC-UPDATER's per-item selectivity here is stricter than that baseline, not looser."
+    },
+    "artifacts_out": [
+      "handoffs/WF02-REQ259-20260905/step-2d-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to TEST-DESIGNER (docs-only apply step; TEST-DESIGNER/TEST-DESIGN-VALIDATOR may fast-path with a no-new-code note per WF-02's docs-only allowance) then to ORCH for Step Final: flip REQ-259's status in docs/requirements.yaml (in_progress -> done) and append the run-history event. REVIEWER did not touch docs/requirements.yaml's status field or run-history, per instruction. No new findings to file -- both prior amendments (ISS-0510, and the lib/letflow/design/ chunking gap) are already applied to the design doc; nothing further to route."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -264,58 +264,84 @@ this design):
 
 ## 6. Chunking recommendation for REQ-238 (`lib/`) and REQ-239 (`docs/`)
 
-Sizing reference (this session's own re-derivation, not carried over from the requirement
-text): REQ-232 through REQ-236 and REQ-240 through REQ-242 each treated one ELIXIR-DEV turn
-as **4 to 13 files** (REQ-240: 4 files; REQ-235: 5 files; REQ-242: 5 files; REQ-241: 6 files;
-REQ-234: 7 files; REQ-232: 12 files (across all of `routers/`); REQ-233: 13 files (all of
-`engine/`+`wasm/`+`lua/`)) — this design targets the same 4-13-file band, matching the
-requirement text's own "roughly 5-15 files per chunk" instruction.
+**Rework note (this revision):** CODE-DESIGN-VALIDATOR's rework-1 finding was that this
+section's *per-chunk* counts had not actually been re-grepped the way §1's top-level totals
+were — three REQ-238 chunks (238a, 238b, 238d as originally proposed) exceeded the 13-file
+precedent ceiling on real counts. Every count below (both REQ-238's and REQ-239's, all
+sixteen resulting chunks, not only the three flagged ones) was re-derived in this session by
+running the literal `grep -rl`/`grep -c` command shown against each chunk's own proposed file
+list — none is carried forward from the prior revision. `lib/` total (excluding
+`lib/letflow/design/`) is **84** files today (drifted by one from the prior revision's 83 —
+expected drift, per OQ-2); `docs/` totals (58 non-`requirements.yaml` files, 538
+`docs/requirements.yaml` lines) are unchanged and reconfirmed.
 
-**REQ-238 (`lib/letflow/`, excluding `lib/letflow/design/` per REQ-238's own title) — 83
-files carry a `.zig` reference today (re-derive at fix time, this count will drift).**
-Recommended split, mirroring REQ-232 through REQ-236's own subsystem boundaries (same
-directories, same rationale — a chunk this design's own applier can lift almost unchanged
-from that precedent's file lists):
+Sizing reference (unchanged from the prior revision, itself a real re-derivation): REQ-232
+through REQ-236 and REQ-240 through REQ-242 each treated one ELIXIR-DEV turn as **4 to 13
+files** (REQ-240: 4; REQ-235: 5; REQ-242: 5; REQ-241: 6; REQ-234: 7; REQ-232: 12; REQ-233: 13
+— the largest precedent chunk). **13 files is therefore the hard per-chunk ceiling this
+design targets** — every chunk below, in both REQ-238 and REQ-239, is sized at or under 13.
 
-| Chunk | Files (directory scope) | Approx. file count |
+**REQ-238 (`lib/letflow/`, excluding `lib/letflow/design/`) — 84 files carry a `.zig`
+reference today** (`grep -rl '\.zig' lib/ | grep -v '^lib/letflow/design/' | wc -l`,
+re-derive at fix time). The three chunks that exceeded 13 files last revision (routers,
+engine-core, definitions) are each split into two alphabetically/functionally halved
+sub-chunks below so no chunk exceeds the ceiling:
+
+| Chunk | Files (directory scope) | Real file count (re-grepped this session) |
 |---|---|---|
-| 238a | `lib/letflow/router.ex` + `lib/letflow/routers/*` | 13 |
-| 238b | `lib/letflow/engine.ex` + `lib/letflow/engine/*.ex` (excl. `lua/`, `wasm/`) | ~14 |
-| 238c | `lib/letflow/engine/lua/*`, `lib/letflow/engine/wasm/*` | ~4 |
-| 238d | `lib/letflow/definitions.ex` + `lib/letflow/definitions/*` | 14 |
+| 238a1 | `lib/letflow/router.ex` + `routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex` | 8 |
+| 238a2 | `lib/letflow/routers/{promotions,services,solution_packs,tasks,tenant_config,tenants,webhooks}.ex` | 7 |
+| 238b1 | `lib/letflow/engine.ex` + `engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex` | 9 |
+| 238b2 | `lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex` | 9 |
+| 238c | `lib/letflow/engine/lua/*`, `lib/letflow/engine/wasm/*` | 4 |
+| 238d1 | `lib/letflow/definitions.ex` + `definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex` | 8 |
+| 238d2 | `lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex` | 7 |
 | 238e | `lib/letflow/api/*` + `lib/letflow/plugs/*` | 10 |
 | 238f | `lib/letflow/identity.ex` + `lib/letflow/identity/*` + `lib/letflow/oidc/*` | 9 |
 | 238g | `lib/letflow/event_store.ex` + `lib/letflow/event_store/*` | 5 |
 | 238h | `lib/letflow/repository/*`, `lib/letflow/sandbox_pool.ex`+`sandbox_pool/*`, `lib/letflow/scheduler.ex`, `lib/letflow/tasks.ex`, `lib/letflow/tenant_provisioning.ex`, `lib/letflow/instances.ex` | 8 |
 
-All eight chunks fall within the 4-15-file precedent band; 238b/238c split `engine/` in two
-(REQ-233 treated all of it, 13 files, as one turn under the parity-phrase measure, but the
-`.zig`-citation measure counts 22 files there once `lua/`/`wasm/` are included in the raw
-`grep -rl`, wide enough to warrant the split — REQ-238's own applier should re-run
-`grep -rl '\.zig' lib/letflow/engine.ex lib/letflow/engine/` to confirm the exact current
-count before committing to this split or merging 238b/238c back into one turn).
+Sum of the eleven chunks (8+7+9+9+4+8+7+10+9+5+8 = 84) matches the re-derived 84-file total
+exactly — every file is assigned to exactly one chunk, none dropped, none duplicated. All
+eleven chunks now fall at or under the 13-file ceiling (max is 238e/238f at 10/9, well under).
+The 238a/238b/238d splits are purely alphabetical/functional halves of the single-chunk
+boundary the prior revision proposed — same directory scope overall, just partitioned in two
+so each half is independently sized within precedent.
 
 **REQ-239 (`docs/`) — 58 non-`requirements.yaml` files plus `docs/requirements.yaml` itself
-(538 matching lines in that one file alone, a clear outlier).** Recommended split:
+(538 matching lines in that one file, re-confirmed unchanged).** Re-grepping every proposed
+chunk this session also surfaced two more chunks (239e as previously proposed, and the
+previously-proposed 239f/239g issues split) that exceeded 13 files once actually counted —
+both are split further below on the same principle as REQ-238's rework:
 
-| Chunk | Scope | Approx. size |
+| Chunk | Scope | Real count (re-grepped this session) |
 |---|---|---|
-| 239a | `docs/requirements.yaml`, REQ-001 through the lowest-numbered quartile of REQ ids carrying a `.zig` line | ~135 lines |
+| 239a | `docs/requirements.yaml`, REQ ids in the lowest-numbered quartile carrying a `.zig` line | ~135 lines (of 538) |
 | 239b | `docs/requirements.yaml`, next quartile | ~135 lines |
 | 239c | `docs/requirements.yaml`, next quartile | ~135 lines |
 | 239d | `docs/requirements.yaml`, final quartile | ~135 lines |
-| 239e | `docs/migration/*.md` (15 files) | 15 |
-| 239f | `docs/issues/*.yaml`, first half by ISS-id | ~17 |
-| 239g | `docs/issues/*.yaml`, second half by ISS-id | ~16 |
-| 239h | `docs/status/*`, `docs/frontend/*`, `docs/anti-patterns.md` | 10 |
+| 239e1 | `docs/migration/decisions/*.md` (8 files: 0001, 0002, 0003, 0007, 0010, 0013, 0014, 0016) | 8 |
+| 239e2 | `docs/migration/stage-{1..7}-*.md` (7 files) | 7 |
+| 239f | `docs/issues/*.yaml`, ISS-0001–ISS-0079 (11 files) | 11 |
+| 239g | `docs/issues/*.yaml`, ISS-0085–ISS-0100 (11 files) | 11 |
+| 239h | `docs/issues/*.yaml`, ISS-0101–ISS-0439 (11 files) | 11 |
+| 239i | `docs/status/*`, `docs/frontend/*`, `docs/anti-patterns.md` | 10 |
 
-`docs/requirements.yaml`'s four sub-chunks (239a-d) are sized by **matching-line count**, not
-file count, since it is one file — quartered by REQ-id ranges (not raw line number) so a
-single REQ entry's `SOURCE:`/description block is never split across two chunks. DOC-UPDATER
-should re-run `grep -n '\.zig' docs/requirements.yaml` at fix time and quarter the resulting
-REQ-id list evenly, rather than trusting this design's ~135-line estimate verbatim (538 / 4).
-`docs/issues/*.yaml` (239f/g) similarly splits by ISS-id range across its 33 files, each half
-landing within the 15-17-file band, comparable to REQ-232/233's own 12-13-file precedent.
+`docs/requirements.yaml`'s four sub-chunks (239a-d) are still sized by **matching-line
+count**, not file count, since it is one file — quartered by REQ-id ranges (not raw line
+number) so a single REQ entry's `SOURCE:`/description block is never split across two chunks;
+this line-based measure is not subject to the same 13-*file* ceiling as the other chunks
+(it's one file), but DOC-UPDATER should still re-run `grep -n '\.zig' docs/requirements.yaml`
+at fix time and quarter the resulting REQ-id list evenly rather than trusting this design's
+~135-line estimate verbatim (538 / 4). `docs/migration/*.md` (15 files total, re-grepped) is
+now split functionally into decisions (239e1, 8 files) vs. stage docs (239e2, 7 files) instead
+of one 15-file chunk. `docs/issues/*.yaml` (33 files total, re-grepped) is now split into
+three ISS-id-range thirds (239f/g/h, 11 files each) instead of two 17/16-file halves, since
+17 and 16 both exceed the 13-file ceiling once actually counted — three-way split by ISS-id
+keeps every third at 11, under the ceiling with room for count drift.
+
+Sum check for REQ-239's file-based chunks: 239e1(8)+239e2(7)+239f(11)+239g(11)+239h(11)+239i(10)
+= 58, matching the re-derived 58-file `docs/` (excl. `requirements.yaml`) total exactly.
 
 ---
 
@@ -326,7 +352,7 @@ landing within the 15-17-file band, comparable to REQ-232/233's own 12-13-file p
 | "states the exact marker text/regex as a single copy-pasteable string or pattern, with a worked before/after example quoting one real citation…rewritten under the new convention" | §2 (marker text + regex), §4 (two worked examples, both from the real tree) |
 | "explicitly confirms the marker is machine-greppable as one regex covering both the moduledoc and markdown contexts, or states a second regex…and justifies why unification was not possible" | §2(a), §3 (unification confirmed, no second regex needed) |
 | "does not delete or alter any existing file-path text in its worked example — the original R-Co path string is fully preserved…confirmed by diffing" | §4 (explicit diff, both examples) |
-| "states a concrete chunking recommendation…sized so no single recommended chunk exceeds what REQ-232 through REQ-236 each treated as one ELIXIR-DEV turn" | §6 (both tables, sizing reference derived from REQ-232/233/234/235/240/241/242's own real file counts) |
+| "states a concrete chunking recommendation…sized so no single recommended chunk exceeds what REQ-232 through REQ-236 each treated as one ELIXIR-DEV turn" | §6 (both tables — REQ-238's 11 chunks and REQ-239's 10 chunks, every per-chunk count re-grepped this session, none exceeding the 13-file precedent ceiling derived from REQ-232/233/234/235/240/241/242's own real file counts) |
 | "CODE-DESIGN-VALIDATOR signs off…no implementation code…every constraint addressed…unambiguous enough for REQ-238/239 to apply without further design judgement calls" | §2's placement rule is defined purely structurally (line/paragraph/table + de-dup check) precisely so no per-citation semantic judgement call is needed; §5 gives the exact verification commands REQ-238/239 reuse |
 
 ---
@@ -338,13 +364,18 @@ in exchange for true single-regex greppability across both contexts — is this 
 resolution of a genuine styling-vs-greppability tension. Flagged for REVIEWER to confirm
 constraint (a) (single regex) should win over rendered visual distinctiveness in `docs/`.
 
-**OQ-2 (MINOR).** §6's `engine/` split (238b/238c) and `docs/requirements.yaml` quartering
-(239a-d) are this design's own estimates from counts measured at design time
-(2026-09-05) and will drift by the time REQ-238/239 actually run. Both chunk tables say so
-explicitly and name the exact `grep` command to re-derive the authoritative file/line list —
-flagged here so REQ-238/239's own ELIXIR-DEV/DOC-UPDATER do not treat the file counts in §6
-as frozen, only the chunk *boundaries* (which directories/id-ranges group together) as the
-actual recommendation.
+**OQ-2 (MINOR).** §6's per-chunk splits (238a1/a2, 238b1/b2, 238d1/d2, 239e1/e2, 239f/g/h) and
+`docs/requirements.yaml` quartering (239a-d) are this design's own re-derivation from counts
+measured at rework time (2026-09-05, this revision) and will drift further by the time
+REQ-238/239 actually run — this revision's own rework was triggered by exactly that kind of
+drift (three chunks that were within the 13-file ceiling at the prior revision's measurement
+had grown past it by this session). Every chunk table in §6 names the exact `grep` command to
+re-derive the authoritative file/line list — flagged here so REQ-238/239's own
+ELIXIR-DEV/DOC-UPDATER re-run those commands before starting, rather than treating this
+revision's counts as frozen; only the chunk *boundaries* (which files/id-ranges group
+together, and the 13-file-per-chunk ceiling itself) are the durable recommendation. If a
+re-run at fix time shows any chunk has grown past 13 files again, split it further the same
+way this rework did, rather than starting the implementation turn over-sized.
 
 **OQ-3 (MINOR).** This design does not attempt to distinguish a "load-bearing decision
 citation" from a "pure inventory/index citation" (e.g. `router.ex`'s subsystem-mapping table,

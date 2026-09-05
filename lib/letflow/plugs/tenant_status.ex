@@ -22,8 +22,11 @@ defmodule Letflow.Plugs.TenantStatus do
      (`POST`/`PUT`/`PATCH`/`DELETE`) against a tenant whose `status` is
      `:migrating` is rejected with `503` and a `Retry-After` header.
      `GET`/`HEAD` (and any other non-write method) pass through this second
-     check unchanged. No PLATFORM_ADMIN exemption on this check (R-Co's own
-     write-pause has none either).
+     check unchanged. No PLATFORM_ADMIN exemption on this check: an
+     in-progress migration is a data-integrity window, not an authorization
+     decision, so no role overrides it (unlike check 1's deactivation gate
+     above, which is a policy/authorization decision PLATFORM_ADMIN can
+     legitimately override).
 
   Both checks reuse the **same** `Repo.get(Tenant, tenant_id)` lookup — one
   query per request, not two. Call this **after** `Letflow.Plugs.AuthPipeline`

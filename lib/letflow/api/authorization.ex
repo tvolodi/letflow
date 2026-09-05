@@ -222,8 +222,8 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("PATCH", "/definitions/:id"), do: :DefinitionsPatch
   def endpoint_policy_key("POST", "/definitions/:id/activate"), do: :DefinitionsActivate
 
-  # REQ-082 -- deprecate/archive/delete/import. R-Co's own authorization.zig has NO
-  # entries for these four (confirmed by grep against R-Co's source, zero hits) --
+  # REQ-082 -- deprecate/archive/delete/import. authorization.zig has NO
+  # entries for these four (confirmed by grep against that source, zero hits) --
   # same "no endpoint_policy_key clause, not permission-gated" pattern REQ-078/079
   # already established for rebind-pins/reconstruct. REQ-082's own acceptance
   # criterion 7 ("a caller without DefinitionsWrite receives 403 on all eight
@@ -276,11 +276,11 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/tasks"), do: :TasksList
 
   # REQ-083 (OQ-8) -- GET /tasks/inbox maps to the same :TasksList policy key
-  # as GET /tasks. Direct, narrow port of R-Co's own delegation:
-  # handleInbox (tasks.zig L960-982) builds a ListTasksParams and calls
-  # handleList itself, which is where the ONLY evaluateAccess call for this
-  # whole flow happens -- handleInbox performs no authorization call of its
-  # own. Additive-only: changes no existing clause's behavior, since every
+  # as GET /tasks, because there is only one evaluateAccess call site for
+  # this whole flow: handleInbox (tasks.zig L960-982) builds a
+  # ListTasksParams and calls handleList itself, which is where that ONLY
+  # evaluateAccess call happens -- handleInbox performs no authorization
+  # call of its own. Additive-only: changes no existing clause's behavior, since every
   # endpoint_policy_key/2 call site is matched by exact string.
   def endpoint_policy_key("GET", "/tasks/inbox"), do: :TasksList
 
@@ -288,8 +288,8 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/tasks/:id/complete"), do: :TasksComplete
 
   # REQ-085 (design doc §2) -- claim is gated by the SAME :TasksComplete
-  # permission /complete uses, not :TasksAssign, matching R-Co's own
-  # handleClaim (evaluateAccess(..., .TasksComplete)): TASK_WORKER holds
+  # permission /complete uses, not :TasksAssign (same as handleClaim's own
+  # evaluateAccess(..., .TasksComplete) call): TASK_WORKER holds
   # :TasksComplete but not :TasksAssign, and a task worker claiming a
   # group/role-assigned task before completing it is exactly the caller this
   # endpoint exists for. Additive-only, no existing clause's behavior changes.

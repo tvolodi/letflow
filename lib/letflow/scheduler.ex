@@ -54,6 +54,7 @@ defmodule Letflow.Scheduler do
   prerequisite this codebase does not yet have is missing, not because it
   was overlooked:
 
+  PROVENANCE (historical, not current decision authority):
   1. **R-Co's `src/scheduler/partition_maintenance.zig` and
      `partition_retention.zig` are NOT ported.** Both operate on a
      `PARTITION BY RANGE` events table via `DETACH`/`ATTACH`/`DROP`.

@@ -17,6 +17,7 @@ defmodule Letflow.Repository.Canonicaliser do
   output for every plan whose digest is already stored, breaking
   `verify_digest/2` (INV-PRM-5) against those stored values.
 
+  PROVENANCE (historical, not current decision authority):
   Concretely: `PromotionDigest.canonicalize/1`'s final clause passes every
   non-map, non-list, non-atom value through completely unchanged, so `2.0`
   and `2` canonicalize and hash differently there today. REPO-04 requires the
@@ -74,6 +75,7 @@ defmodule Letflow.Repository.Canonicaliser do
 
   ## Byte identity for non-JSON content (§3.5)
 
+  PROVENANCE (historical, not current decision authority):
   For any `content_type` other than the exact string `"application/json"`,
   `canonicalize_content/2` performs no transformation whatsoever -- the
   canonical form is the submitted bytes, verbatim, so `content_hash/1`'s

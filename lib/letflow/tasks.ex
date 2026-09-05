@@ -71,8 +71,10 @@ defmodule Letflow.Tasks do
   build. `get_form_version/2` below is a single scalar read of an
   already-pinned column, nothing more.
 
+  PROVENANCE (historical, not current decision authority):
   ## `src/tasks/store.zig` boundary — ported vs. not ported (AC6)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's task query/filter/list logic lives in `src/tasks/store.zig` (1,202
   lines), outside `src/api/`. This module ports only the query operations the
   three read-path route handlers (`handleList`/`handleGetById`/`handleInbox`)
@@ -92,6 +94,7 @@ defmodule Letflow.Tasks do
   | `TaskStore.assign` (L851-908) | `assign_task/4` (REQ-085) | Same `WHERE ... assignee_ref IS NULL` precondition: an assign only succeeds against a task with no current assignee, so two concurrent assigns can't silently overwrite each other's effect |
   | `TaskStore.reassign`/`reassignInTx` (L910-1002) | `reassign_task/4` (REQ-085) | Same `WHERE ... assignee_ref IS NOT NULL` precondition: a reassign requires an existing assignee to reassign away from, distinguishing it from a first-time assign |
 
+  PROVENANCE (historical, not current decision authority):
   **Not ported by this module** (every other `pub fn`/error set in
   `store.zig`):
 

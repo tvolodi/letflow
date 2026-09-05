@@ -1,5 +1,6 @@
 defmodule Letflow.TenantProvisioning do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for schema-per-tenant provisioning — the mechanism
   `docs/migration/decisions/0003-ecto-schema-strategy.md` Decision B named but
   explicitly deferred out of REQ-015's scope (see

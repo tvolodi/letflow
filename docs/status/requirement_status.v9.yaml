@@ -815,6 +815,29 @@ history:
       merged via gh pr merge --squash --delete-branch after two further
       rebases onto sibling REQ-250/251/252 chunks that landed concurrently
       (all non-overlapping file scope). Queue task 483 released status:done.
+  - req: REQ-253
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T15:18:45Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and
+      lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex,
+      lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex (closes
+      ISS-0424 part 3b-11, queue task 491, GH#956, PR #986,
+      feature/WF02-REQ253-20260905). This is chunk 238h of eleven
+      REQ-238-replacement chunks (REQ-243..REQ-253) applying that convention --
+      the last of the eleven. REVIEWER passed the implementation
+      (handoffs/WF02-REQ253-20260905/step-02d-reviewer.json), flagging in its
+      own closing sanity check (run before REQ-245 had landed) that REQ-245
+      remained status: pending at the time -- REQ-245 landed concurrently via
+      a sibling session and is recorded in the entry immediately above. With
+      both REQ-245 and REQ-253 now done, all 11 REQ-238-replacement chunks
+      (REQ-243..253) are complete; ISS-0424 Part 3b (lib/) is fully closed,
+      leaving only Part 3c (REQ-254..271, docs/) outstanding. ORCH
+      independently confirmed mix compile --warnings-as-errors, mix format
+      --check-formatted, and a targeted mix test run (202 passed) before this
+      status flip.
 
   - req: REQ-254
     event: started

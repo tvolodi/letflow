@@ -1,5 +1,6 @@
 defmodule Letflow.SandboxPool do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Ephemeral Postgres-schema sandbox pool (ports R-Co's `src/definition/sandbox_pool.zig`
   per PRM-06/PRM-07 — see `src/design/prm-batch1-promotion-assertion-rerun.md`).
 
@@ -12,6 +13,7 @@ defmodule Letflow.SandboxPool do
 
   ## Process-per-instance vs. row-based state (REQ-039's open question, resolved here)
 
+  PROVENANCE (historical, not current decision authority):
   REQ-039 explicitly flagged this as an open question rather than assuming an answer,
   citing `docs/migration/stage-2-event-store-definitions.md`'s "Early findings" section
   (process-vs-row) and `sandbox_pool.zig`'s own moduledoc ("The pool records every active

@@ -111,6 +111,14 @@ defmodule Letflow.Definitions.PromotionAssertionRerunTest do
   # opaque 42P01) and emits one greppable `LETFLOW_TENANT_FIXTURE phase=teardown` line,
   # so a post-test drop can never again be mistaken for a mid-test one.
   defp provisioned_tenant do
+    # Design §10.8.2.2: this file's own AC1 test drives a real second
+    # `SandboxPool.claim/2` (line ~462) whose migrator work needs `Letflow.Repo` in
+    # `:auto` mode -- a window `provisioned_tenant!/1` no longer opens ambiently since
+    # §10.3.2 step 1. Safe here, and only here, because this module is `async: false`
+    # (line 81): ExUnit never schedules it concurrently with an `async: true` file, so
+    # this deliberate, un-restored mode call cannot reach an ISS-0480-style victim.
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: "req040-assertion-rerun",
       display_name: "REQ-040 Assertion Rerun Test Tenant"

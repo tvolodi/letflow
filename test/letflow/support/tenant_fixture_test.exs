@@ -423,14 +423,29 @@ defmodule Letflow.Support.TenantFixtureTest do
     fixture
   end
 
+  # Design §10.8.2.1: this helper runs from `on_exit/1` (registered by
+  # `broken_state_tenant!/1` above, which opts OUT of the fixture's own teardown via
+  # `teardown: false`), a process with no ambient `Letflow.Repo` checkout of its own.
+  # Mirrors `with_provisioning_repo/1`'s own 4-step shape (test/support/tenant_fixture.ex)
+  # so these 3 pre-existing calls (unchanged in content, order, and target) get a real
+  # connection instead of racing `Letflow.Repo`'s now-`:manual`-mode pool.
   defp hard_cleanup(tenant_id) do
-    case TenantProvisioning.schema_name_for_tenant(tenant_id) do
-      {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
-      {:error, _reason} -> :ok
-    end
+    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Test.ProvisioningRepo, :auto)
+    previous = Repo.get_dynamic_repo()
 
-    Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
-    Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+    try do
+      Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo)
+
+      case TenantProvisioning.schema_name_for_tenant(tenant_id) do
+        {:ok, schema_name} -> Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        {:error, _reason} -> :ok
+      end
+
+      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant_id))
+      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
+    after
+      Repo.put_dynamic_repo(previous)
+    end
   end
 
   defp drop_table!(schema_name, table) do

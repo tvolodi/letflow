@@ -1701,8 +1701,14 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 37
+    entries: 39
     note: >
+      Incremented to 39 by ORCH's own ISS-0512 SCOPE-CHANGE done-event
+      append (WF03-ISS0512-20260905) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 39 on-disk entries, no
+      rebase conflict on this file (this run's own append also included
+      a previously-missed ISS-0511 SCOPE-CHANGE done-event, bringing 37
+      -> 39 in the same append).
       Recounted to 37 by WF02-REQ258-20260905's second Step Final rebase,
       which found main further advanced by WF02-REQ259-20260905's own
       REQ-259 done-event append (landed via PR #997 while this branch's

@@ -11,6 +11,7 @@ defmodule Letflow.Routers.Dlq do
 
   ## Contract source
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `dlq.zig` (337 lines, catalogued in
   `docs/migration/stage-4-api-surface.md`'s fronting-subsystem table) was
   **not inspected** while drafting this route layer — R-Co is at a Windows

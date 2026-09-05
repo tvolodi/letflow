@@ -14,6 +14,7 @@ defmodule Letflow.Routers.MetricsExposition do
 
   ## REQ-078's three recorded divergences from R-Co, decided explicitly (AC1)
 
+  PROVENANCE (historical, not current decision authority):
   | Axis | R-Co (`metrics.zig`) | REQ-078 (retired) | **This requirement's decision** | Reason |
   |---|---|---|---|---|
   | **Format** | Prometheus exposition text | JSON | **Prometheus exposition text**, `Content-Type: "text/plain; version=0.0.4"` | `web/src/api/metrics.ts`'s `parsePrometheusText/1` and `metricsApi.prometheusText/0 = client.getText('/metrics')` are already-committed SPA code that parses Prometheus text, not JSON, from an unversioned `GET /metrics`. Serving JSON would break that already-shipped consumer (design §1 Axis 1). |

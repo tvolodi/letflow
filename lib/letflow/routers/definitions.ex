@@ -3,6 +3,7 @@ defmodule Letflow.Routers.Definitions do
   Process-definition sub-router, mounted at `/definitions` by
   `Letflow.Plugs.ApiPipeline`.
 
+  PROVENANCE (historical, not current decision authority):
   REQ-078 adds **exactly one** route to it — the definition-graph validation
   endpoint. REQ-081 adds the five read routes below. REQ-082 adds the eight
   write/lifecycle routes below that. REQ-077 adds **exactly one** route —
@@ -41,6 +42,7 @@ defmodule Letflow.Routers.Definitions do
 
   ## REQ-082 — write/lifecycle routes: a permission-gate divergence from R-Co
 
+  PROVENANCE (historical, not current decision authority):
   These four routes have no pre-existing permission-gate precedent to
   inherit — confirmed by grepping R-Co's `authorization.zig` for
   `endpoint_policy_key` entries covering deprecate/archive/delete/import,
@@ -63,6 +65,7 @@ defmodule Letflow.Routers.Definitions do
 
   ### Route ordering
 
+  PROVENANCE (historical, not current decision authority):
   `/active/:name`, `/search`, `/:id/export`, and (REQ-125) `/delta` are
   declared **above** `/:id`, which is declared above `/` (this registration
   order also appears in `main.zig`), for the same
@@ -109,12 +112,15 @@ defmodule Letflow.Routers.Definitions do
   flagged in the design doc for REVIEWER sign-off rather than silently
   decided.
 
+  PROVENANCE (historical, not current decision authority):
   ## Two different R-Co files are called `validation.zig`. They are unrelated.
 
+    PROVENANCE (historical, not current decision authority):
     * `src/api/routes/validation.zig` (173 lines) is the **definition-graph
       validation endpoint** — `POST /api/v1/definitions/:id/validate`,
       VLD-01/02/03, which runs validators over a *stored process-definition
       graph*. **That is what is ported here, by REQ-078.**
+    PROVENANCE (historical, not current decision authority):
     * `src/api/validation.zig` (592 lines) is the **request-body validator** —
       API-07, which checks an *incoming JSON request payload* against a
       field-constraint schema and returns RFC 9457 field errors. It has
@@ -130,6 +136,7 @@ defmodule Letflow.Routers.Definitions do
 
   ## The `/validation` sub-router stub was DELETED, not left unused
 
+  PROVENANCE (historical, not current decision authority):
   REQ-070 reserved a `Letflow.Routers.Validation` at `/validation`, grouping
   by Zig **filename** (`routes/validation.zig`) rather than by URL. **R-Co has
   no `/validation` URL prefix anywhere**; the real path is
@@ -157,6 +164,7 @@ defmodule Letflow.Routers.Definitions do
 
   ## `"valid"`, not `"semantically_valid"` — a deliberate divergence
 
+  PROVENANCE (historical, not current decision authority):
   R-Co emits `"status":"semantically_valid"` plus `"compiler_version"`
   (`validation.zig:115-118`), because its VLD-01/02/03 pipeline performs
   expression type-checking and its VLD-04 gate persists a verdict with a
@@ -177,6 +185,7 @@ defmodule Letflow.Routers.Definitions do
 
   ## INV-5 — cross-tenant is 404, and it is the same 404
 
+  PROVENANCE (historical, not current decision authority):
   An `:id` belonging to another tenant is invisible in the caller's
   prefix-scoped schema, so `get_by_id/2` returns `{:error, :not_found}` — the
   **same call, same code path, same query count and same response bytes** as a
@@ -188,6 +197,7 @@ defmodule Letflow.Routers.Definitions do
 
   ## Authorization gap — REQ-131 closes it
 
+  PROVENANCE (historical, not current decision authority):
   This route does not call `Letflow.Api.Authorization.evaluate_access/2`.
   `endpoint_policy_key/2` has no clause for
   `POST /definitions/:id/validate` — there is no existing policy clause to
@@ -328,6 +338,7 @@ defmodule Letflow.Routers.Definitions do
     Response.not_found(conn)
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # ── POST /definitions/:id/validate (design §7) ────────────────────────────
   #
   # Bodyless, like Letflow.Routers.Tenants's deactivate/reactivate:
@@ -1164,6 +1175,7 @@ defmodule Letflow.Routers.Definitions do
   defp render_rollback(conn, {:error, :invalid_schema_name}), do: Response.internal_error(conn)
   defp render_rollback(conn, {:error, _other}), do: Response.internal_error(conn)
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 5 keys (REQ-077 design §7.6), ported from
   # definition_rollback.zig:96-114. `version`/`rolled_back_from_version` are
   # STRINGS, not JSON numbers like R-Co -- process_definitions.version is
@@ -1184,6 +1196,7 @@ defmodule Letflow.Routers.Definitions do
 
   # ── Helpers ───────────────────────────────────────────────────────────────
 
+  # PROVENANCE (historical, not current decision authority):
   # Checked in the route before any call, matching validation.zig:83-85.
   defp cast_id(raw_id) do
     case Ecto.UUID.cast(raw_id) do

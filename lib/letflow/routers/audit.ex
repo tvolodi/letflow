@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Audit do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Audit-list sub-router (REQ-078, design
   `lib/letflow/design/req078-supporting-routes.md` §6). Ports
   `src/api/routes/audit.zig`'s `handleList` (L21). Mounted at `/audit` by
@@ -48,6 +49,7 @@ defmodule Letflow.Routers.Audit do
 
   ## Filter disposition — what has backing, and what does not
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `ListAuditParams` (`audit.zig:10-19`) carries eight query params.
   None is silently dropped:
 
@@ -61,22 +63,26 @@ defmodule Letflow.Routers.Audit do
   | `resource_type` | **supported — a real, index-backed equality filter** | `list_entries/1`'s `:resource_type`, `WHERE resource_type = $1` when present, unfiltered when absent — backed by REQ-195's index #3 (`resource_type, resource_id, timestamp DESC, id DESC`). Before REQ-196, `events` had exactly one resource type and this filter was a no-op (a truthful empty page for anything but `"instance"`, no query issued); against `audit_entries` it genuinely discriminates. |
   | `pipeline_run_id` | **not supported — 422 if supplied non-empty** | `audit_entries` has no such column at all (see above) — an explicit 422 is honest; a silent empty page is not. |
 
+  PROVENANCE (historical, not current decision authority):
   `from > to` is checked **in this route**, before any query, returning 422 —
   a syntactic-validity check that belongs at the route boundary, not the
   store layer, so a bad range never even reaches a query (`audit.zig:26-30`).
 
   ## Two deliberate cursor divergences from R-Co, and one non-port
 
+    PROVENANCE (historical, not current decision authority):
     * R-Co maps `InvalidCursor` -> **422** (`audit.zig:42`); **Letflow returns
       400.** Uniform cursor-error handling across the whole Letflow API beats
       per-endpoint R-Co fidelity: `lib/letflow/routers/tenants.ex:276`,
       `lib/letflow/routers/identity.ex:295` and `identity.ex:550` are all
       `Response.bad_request(conn, "invalid cursor")`, and `/audit` matches
       them.
+    PROVENANCE (historical, not current decision authority):
     * R-Co maps `CursorExpired` -> **410** (`audit.zig:43`); **Letflow returns
       the same 400.** Expiry is already inside the
       `Letflow.Api.Pagination.decode_cursor/4` collapse, and `/audit` must not
       become the only Letflow endpoint that emits 410.
+    PROVENANCE (historical, not current decision authority):
     * **503 `PoolExhausted`** (`audit.zig:45`) is a deliberate **non-port**,
       not an omission. Ecto/DBConnection surfaces pool exhaustion as a raised
       `DBConnection.ConnectionError`, not an `{:error, :pool_exhausted}`
@@ -305,6 +311,7 @@ defmodule Letflow.Routers.Audit do
     %{
       "items" => items,
       "next_cursor" => next_cursor,
+      # PROVENANCE (historical, not current decision authority):
       # length(items), NOT a total -- matching audit.zig:54-77 and
       # web/src/api/audit.ts:36-40.
       "count" => length(items)

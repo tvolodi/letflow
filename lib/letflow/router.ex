@@ -18,6 +18,7 @@ defmodule Letflow.Router do
   tenant-scoped middleware pipeline. Contract preserved exactly for
   `deploy/redeploy-test.sh`'s post-deploy health check.
 
+  PROVENANCE (historical, not current decision authority):
   `GET /api/tenant-config` (REQ-078) is forwarded here, **not** from
   `Letflow.Plugs.ApiPipeline`, for the same class of reason: it is R-Co's
   explicitly public login-bootstrap endpoint (`tenant_config.zig:3`), and
@@ -46,6 +47,7 @@ defmodule Letflow.Router do
   full design (allowed-origin config, credentials decision, preflight
   handling).
 
+  PROVENANCE (historical, not current decision authority):
   Readiness endpoint (R-Co routes/health.zig handleReady, backed by
   src/api/health/readiness.zig + subsystems.zig) is deliberately not ported — it
   requires S6 observability subsystem probes that do not yet exist. Only the liveness
@@ -68,6 +70,7 @@ defmodule Letflow.Router do
 
   ## Deferred routes (not yet mounted — added by owning stage)
 
+  PROVENANCE (historical, not current decision authority):
   | Letflow module (pending)            | R-Co source               | Owning stage                          |
   |-------------------------------------|---------------------------|---------------------------------------|
   | `Letflow.Routers.Dlq`               | `dlq.zig`                 | S6 (dead-letter queue subsystem)      |

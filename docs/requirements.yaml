@@ -14180,7 +14180,7 @@ requirements:
   - id: REQ-243
     title: Apply the .zig provenance-marking convention to lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex (closes ISS-0424 part 3b-1)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

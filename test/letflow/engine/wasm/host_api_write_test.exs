@@ -36,6 +36,7 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
   alias Letflow.Engine.Lua.Platform
   alias Letflow.Engine.Wasm.CapabilityGate
   alias Letflow.Engine.Wasm.HostApi
+  alias Letflow.Engine.Wasm.InvocationLease
   alias Letflow.Engine.Wasm.ResourceLimits
   alias Letflow.Test.HostApiParity
 
@@ -458,6 +459,15 @@ defmodule Letflow.Engine.Wasm.HostApiWriteTest do
     @tag :wasm_hang
     @tag timeout: 180_000
     test "REQ-170's wall-clock timeout abandons the staged write -- unreachable to any future caller, not process death (design §2.3/§9.1)" do
+      # ISS-0418 (design iss0418-wasm-concurrency-cap.md §6.2 Shape C): this lease is
+      # TEST-SIDE ONLY -- production dispatch does not acquire one yet (design doc
+      # §0/§7). Acquired here, before start_instance/2, since this shape has no
+      # Task.shutdown(:brutal_kill) anywhere in its call graph (this test process's
+      # own try/catch observes its own exit directly). Released via on_exit/1, not a
+      # bare try/after, so a later assertion failure cannot skip the release.
+      {:ok, lease} = InvocationLease.try_acquire()
+      on_exit(fn -> InvocationLease.release(lease) end)
+
       {pid, store, memory} = start_instance("req172_write_then_hang.wat", ["var:write"])
 
       write_bytes(store, memory, 0, "hang_var")

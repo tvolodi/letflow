@@ -1,6 +1,6 @@
 defmodule Letflow.Supervisor.Infrastructure do
   @moduledoc """
-  REQ-219 (design `req219-supervision-layering.md` §1.1): owns the 17
+  REQ-219 (design `req219-supervision-layering.md` §1.1): owns the
   infrastructure children that used to be the first 17 entries of
   `Letflow.Application`'s own flat 20-child list, in EXACTLY the same
   relative order, under `strategy: :one_for_one` with the OTP default
@@ -8,6 +8,11 @@ defmodule Letflow.Supervisor.Infrastructure do
   documented incident motivates loosening it here: a crash-looping infra
   child (e.g. `Letflow.Repo` itself) indicates a fault severe enough that
   taking the whole application down is still the correct behavior.
+
+  ISS-0418 (design `iss0418-wasm-concurrency-cap.md` §5.1) adds one further
+  child, `Letflow.Engine.Wasm.InvocationLease`, bringing the total to 18 --
+  see that item's own note below for placement/ordering (no dependency
+  either direction, same as `Letflow.Admission`).
 
   ## Children, in order
 
@@ -21,13 +26,14 @@ defmodule Letflow.Supervisor.Infrastructure do
   8. `Letflow.SandboxPool.TaskSupervisor`
   9. `Letflow.SandboxPool`
   10. `Letflow.Engine.PluginTaskSupervisor`
-  11. `Letflow.Engine.PluginRegistry`
-  12. `Letflow.Engine.Lua.TaskSupervisor`
-  13. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
-  14. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
-  15. `Letflow.Engine.Wasm.ModuleVersionRegistry`
-  16. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
-  17. `Letflow.Obs.Alerts.TaskSupervisor`
+  11. `Letflow.Engine.Wasm.InvocationLease`
+  12. `Letflow.Engine.PluginRegistry`
+  13. `Letflow.Engine.Lua.TaskSupervisor`
+  14. `Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor`
+  15. `Letflow.Engine.Wasm.CapabilityGateTaskSupervisor`
+  16. `Letflow.Engine.Wasm.ModuleVersionRegistry`
+  17. `Letflow.Engine.Wasm.ModuleVersionRegistryTaskSupervisor`
+  18. `Letflow.Obs.Alerts.TaskSupervisor`
 
   ## Ordering guarantees preserved (both load-bearing, unchanged from
   `Letflow.Application`'s own prior flat list)
@@ -38,17 +44,25 @@ defmodule Letflow.Supervisor.Infrastructure do
       `Task.Supervisor.async_nolink/3`; registering it after its dependant
       would leave a window in which a `claim/2` call exits `:noproc` inside
       a pool callback and kills the pool.
-    * ISS-0429: child 17 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
+    * ISS-0429: child 18 (`Obs.Alerts.TaskSupervisor`) is the LAST child of
       this supervisor. Its "must precede either Poller's first tick"
       guarantee is now a SUPERVISOR-BOUNDARY guarantee, not merely a
       list-position fact: `Letflow.Supervisor.Pollers` is started only
       after this entire module's own `Supervisor.start_link/3` call (from
       `Letflow.Application.start/2`) has returned `{:ok, pid}`, which
-      happens only once every one of these 17 children -- including this
+      happens only once every one of these 18 children -- including this
       last one -- has itself finished starting. No interleaving is
       possible between this supervisor's last child starting and
       `Letflow.Supervisor.Pollers`' first child starting, since an entire
       supervisor boundary sits between them.
+    * ISS-0418: child 11 (`Engine.Wasm.InvocationLease`) has no ordering
+      dependency in either direction, mirroring `Letflow.Admission`'s own
+      "no ordering dependency" precedent (see that module's moduledoc) --
+      its `init/1` reads only static application config, makes no `Repo`
+      call, no `Registry` lookup, and no call to any other supervised
+      process. Placed directly after `PluginTaskSupervisor` as a
+      readability choice (both are WASM/plugin-dispatch infrastructure),
+      not a correctness requirement.
 
   ## `Letflow.InstanceSupervisor` placement
 
@@ -59,7 +73,9 @@ defmodule Letflow.Supervisor.Infrastructure do
 
   ## Task.Supervisor sprawl review (REQ-220, closes ISS-0425 part 3)
 
-  This supervisor owns 7 separate `Task.Supervisor`s. RECOMMENDATION: KEEP
+  This supervisor owns 7 separate `Task.Supervisor`s (unaffected by ISS-0418's
+  `InvocationLease` addition, which is an ordinary `GenServer`, not a
+  `Task.Supervisor`). RECOMMENDATION: KEEP
   ALL 7 SEPARATE. None share a crash domain or a resource-contention
   profile that would make consolidation meaningfully safer or cheaper, and
   each pairing a reader might plausibly propose merging already has a
@@ -171,6 +187,19 @@ defmodule Letflow.Supervisor.Infrastructure do
       {Task.Supervisor, name: Letflow.SandboxPool.TaskSupervisor},
       {Letflow.SandboxPool, []},
       {Task.Supervisor, name: Letflow.Engine.PluginTaskSupervisor},
+      # ISS-0418 (design iss0418-wasm-concurrency-cap.md §5.1): the global
+      # counting-semaphore primitive bounding simultaneously in-flight WASM
+      # invocations. NO ordering dependency in either direction -- see
+      # Letflow.Engine.Wasm.InvocationLease's own moduledoc ("Supervision-tree
+      # placement") for the full reasoning, mirroring Letflow.Admission's own
+      # precedent above. Placed here as a readability choice, grouped with
+      # PluginTaskSupervisor (both WASM/plugin-dispatch infrastructure), not a
+      # correctness requirement. NOTE: as of this addition, NOTHING in
+      # production dispatch calls try_acquire/0 yet -- only the :wasm_hang
+      # test suite does (see the design doc §0/§7); this child exists so that
+      # test wiring, and a future dispatch-integration requirement, have a
+      # supervised instance to call into.
+      {Letflow.Engine.Wasm.InvocationLease, []},
       {Letflow.Engine.PluginRegistry, plugin_registrations_from_config()},
       # REQ-155: dedicated Task.Supervisor for host-enforced wall-clock kill of Lua
       # script execution (LUA-10 layer 2). Deliberately separate from
@@ -222,7 +251,8 @@ defmodule Letflow.Supervisor.Infrastructure do
       # first :tick runs with ZERO delay (`Process.send_after(self(), :tick, 0)` in
       # poller.ex's init/1) and, from that very first tick, can dispatch to this
       # supervisor via fire_hooks/4 -- since Letflow.Supervisor.Pollers only starts
-      # after this ENTIRE supervisor (all 17 children) has finished starting, this
+      # after this ENTIRE supervisor (all 18 children, ISS-0418's InvocationLease
+      # addition included) has finished starting, this
       # name is guaranteed registered before any Poller's first tick can run,
       # matching the ISS-0429 guarantee restated in this module's own moduledoc.
       {Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}

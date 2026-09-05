@@ -1,0 +1,60 @@
+{
+  "handoff_id": "WF02-REQ254-20260905-step-00",
+  "run_id": "WF02-REQ254-20260905",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ254-20260905/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T15:31:17Z",
+  "started_at": "2026-09-05T15:31:17Z",
+  "completed_at": "2026-09-05T15:33:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-254"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ245-20260905"],
+    "owned_modules": [
+      "docs/requirements.yaml (REQ-011 through REQ-050 entry range only)"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (sections 2, 2a, 4, 6 -- the marker text, structural placement rule, regex, and worked before/after examples, incl. the REQ-231 cursor.zig example that lives in docs/requirements.yaml itself)"
+    ],
+    "branch_name": "feature/WF02-REQ254-20260905",
+    "base_commit": "0a982766",
+    "queue_task_id": 492,
+    "queue_agent_id": "letflow-ee-orch",
+    "requirement_text": {
+      "REQ-254": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239a = docs/requirements.yaml, the REQ-011 through REQ-050 entry range. This is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/requirements.yaml, the REQ-011 through REQ-050 entry range under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk. Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits -- carried forward unchanged from REQ-239's own out-of-scope note; confirm with a grep first if either file also contains a raw .zig citation, but none is expected. MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): ~144 matching lines (of 538 total in the whole file) fell inside the REQ-011..REQ-050 entry range. If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "acceptance_criteria": [
+      "before starting, run REQ-237's finalized marker-detection regex against docs/requirements.yaml, restricted to the REQ-011 through REQ-050 entry block for the OLD (unmarked) citation form and quote the count (draft-time proxy: grep -n '\\.zig' docs/requirements.yaml restricted to lines belonging to entries REQ-011 through REQ-050)",
+      "after the change, every .zig source-path citation in docs/requirements.yaml, restricted to the REQ-011 through REQ-050 entry block matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts",
+      "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 5 citations across at least 3 distinct REQ- entries inside the REQ-011..REQ-050 range) shows only the marker added, no path text altered or removed",
+      "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat",
+      "the deliberate-divergence notes inside this chunk's scope (docs/requirements.yaml (scoped to the REQ-011..REQ-050 entry range)) are unmodified -- confirmed by re-running grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 00->6: claimed queue task 492 (REQ-254), the 1st of ten chunk-level requirements applying REQ-237's .zig provenance-marking convention to docs/requirements.yaml (chunk 239a, the REQ-011 through REQ-050 entry range). No CODE-DESIGNER step -- the convention is already designed and CODE-DESIGN-VALIDATOR-passed (lib/letflow/design/req237-zig-provenance-marking-convention.md); this is a mechanical apply-step, not a judgement-call rewrite, matching the established pattern from REQ-233/234/235/240/241/242/243/245. UNUSUAL for this pattern: the edited file is docs/requirements.yaml itself, and the implementing role is DOC-UPDATER, not ELIXIR-DEV -- there is no mix compile/mix test surface for this change (docs-only requirement), so TEST-DESIGNER's own scope test in WF-02 Step 3 is expected to route straight to RELEASE-VALIDATOR. docs/requirements.yaml is large and actively multi-session-edited (other sibling ORCH sessions may be editing REQ-255 through REQ-263's DIFFERENT entry ranges in it concurrently right now) -- before editing, re-read the current REQ-011..REQ-050 range fresh from disk (do not rely on any cached view), make ONLY the scoped marker-insertion edits, and before committing confirm via a targeted diff of your own edit's line ranges (not a full-file diff) that no other session's concurrent edit to a different part of the file was clobbered. Dispatching straight to DOC-UPDATER. Do not touch any file or entry range outside docs/requirements.yaml's REQ-011 through REQ-050 block."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Confirmed local main == origin/main @ 0a982766 before branching (git fetch origin main + git pull --ff-only, already up to date, no divergence). Confirmed REQ-254's sole dependency, REQ-237, is status: done in docs/requirements.yaml (line 14117 region). Checked handoffs/registry.json tail and orchestrator.log tail: most recent completed run is WF02-REQ245-20260905 (RUN_DONE, lock released, PR #987 merged) -- no active/unreleased lock recorded against docs/requirements.yaml's REQ-011..REQ-050 range. Re-measured draft-time scope directly: grep -c '\\.zig' over docs/requirements.yaml lines 200-2686 (the REQ-011 through REQ-050 entry block, REQ-011 at line 200, REQ-051 at line 2687) returned 152 matching lines today (drift of +8 from the design doc's ~144 estimate, expected per REQ-237 design's OQ-2 on count drift -- DOC-UPDATER must re-derive this itself before editing, not trust this figure either). Git branch feature/WF02-REQ254-20260905 created off main @ 0a982766, pushed to origin. No SECURITY-REVIEWER needed (no tenant-data path -- pure requirements-doc citation-marker edit, same reasoning as sibling chunks). No CODE-DESIGNER/CODE-DESIGN-VALIDATOR needed (design already exists and is validated).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ254-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ254-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH flips REQ-254 status pending->in_progress, logs started event, dispatches DOC-UPDATER (Step 6, no design/test steps needed for this docs-only mechanical apply) then REVIEWER (Step 2d equivalent -- idiom/scope gate) then Step Final git merge."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

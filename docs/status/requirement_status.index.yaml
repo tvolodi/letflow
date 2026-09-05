@@ -1701,9 +1701,21 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 30
+    entries: 31
     note: >
-      Recounted to 30 by WF02-REQ253-20260905's Step Final rebase, which
+      Recounted to 31 by WF02-REQ253-20260905's second Step Final rebase,
+      which found main further advanced by WF02-REQ254-20260905's own
+      REQ-254 started-event append (landed via PR #988 while this branch's
+      first rebase attempt, recounting to 30 below, was still in flight).
+      No conflict on requirement_status.v9.yaml itself beyond the two
+      already-composed entries described below -- REQ-254's started-event
+      appends cleanly at the tail after REQ-254 (started 15:31:17Z, sorts
+      after REQ-253 done 15:18:45Z). Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v9.yaml` = 31 on-disk
+      entries, rather than carrying forward either side's
+      independently-computed 30, per this note's own recount-every-time
+      rule.
+      Recounted to 30 by WF02-REQ253-20260905's first Step Final rebase, which
       conflicted at this volume's tail against a concurrent sibling
       session's own REQ-245 done-event append (PR #985, landed on main
       after this branch's own REQ-253 done-event was written against a
@@ -1722,6 +1734,16 @@ volumes:
       rebase conflict on this file (superseded above; this run's own
       pre-rebase count did not yet know of the concurrently-landed
       REQ-245 done-event).
+      Incremented to 30 by ORCH's own REQ-254 started-event append
+      (WF02-REQ254-20260905, Step 00) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 30 on-disk entries, no
+      rebase conflict on this file. Caught by CI's own A9 invariant test
+      (test/docs/requirement_status_invariants_test.exs) failing on PR #988
+      after the started-event append landed without its own index-note
+      increment; corrected here in the same branch before merge. (This is
+      a separate, concurrently-landed count of 30 from the one immediately
+      above -- both are superseded by the recount to 31 at the top of this
+      note.)
       Incremented to 28 by DOC-UPDATER's REQ-252 done-event append
       (WF02-REQ252-20260905) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 28 on-disk entries, no

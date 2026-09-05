@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Promotions do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Promotion-pipeline sub-router (REQ-077), mounted at `/promotions` by
   `Letflow.Plugs.ApiPipeline`. Ports six R-Co route modules
   (`promotion_review.zig`, `promotions.zig`, `promotion_read.zig`,
@@ -25,6 +26,7 @@ defmodule Letflow.Routers.Promotions do
 
   ## The `POST /promotions` collision, resolved (F-2, a deliberate divergence from R-Co)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co has two handlers claiming this path: `promotions.zig`'s
   `handleCreatePromotionPlan` (a read-only diff preview, wired at
   `main.zig:1577`) and `promotion_review.zig`'s `handleSubmitPromotion`
@@ -40,6 +42,7 @@ defmodule Letflow.Routers.Promotions do
 
   ## The `:Unknown` authorization decision (design §4) — deliberate, not an omission
 
+  PROVENANCE (historical, not current decision authority):
   Every route in this module is declared with `Letflow.Api.AuthorizedRouter`'s
   plain `get`/`post` macros (NOT `authz_get`/`authz_post`), so none carries a
   `:policy_key` — `Letflow.Plugs.Authorize` (mounted for every request by
@@ -92,6 +95,7 @@ defmodule Letflow.Routers.Promotions do
 
   ## Assertion-run idempotency is preserved by omission (design §8.1, AC2)
 
+  PROVENANCE (historical, not current decision authority):
   `Definitions.apply_promotion_assertion_rerun/6` already derives its own
   idempotency key from `(review_id, plan_digest)` and returns the cached row
   unchanged on a repeat. This module's only obligations are omissions: no
@@ -114,6 +118,7 @@ defmodule Letflow.Routers.Promotions do
 
   ## The unknown-field note (design §4.4)
 
+  PROVENANCE (historical, not current decision authority):
   `Letflow.Api.Validation.validate/2` returns `Map.take(body,
   declared_field_names)`, so a caller-injected field not in a route's schema
   (e.g. an `approved_by` trying to override `actor_id`) cannot reach the
@@ -405,6 +410,7 @@ defmodule Letflow.Routers.Promotions do
         "source_tenant_id or target_tenant_id does not name a provisioned tenant"
       )
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 5 keys (design §7.2), ported from promotions.zig:145-163.
   # `before`/`after` emitted as-is (object/string/nil) -- not stringified,
   # unlike R-Co (a considered improvement, not a port defect).
@@ -440,6 +446,7 @@ defmodule Letflow.Routers.Promotions do
   defp render_assertion_run(conn, {:ok, run}),
     do: Response.ok(conn, %{"assertion_run" => assertion_run_map(run)})
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 7 keys (design §7.4), ported from promotion_read.zig:102-149.
   # `plan_digest` is deliberately excluded -- see design §7.4/§8.3: emitting
   # it here would hand a reader of an assertion run the exact token needed
@@ -470,6 +477,7 @@ defmodule Letflow.Routers.Promotions do
   defp render_context(conn, {:ok, %PromotionReview{} = review}),
     do: Response.ok(conn, review_context_map(review))
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 9 keys (design §7.3), ported from promotion_review.zig:321-337.
   # `serialised_plan` is decoded (real object, not a spliced raw string).
   # `created_at` is real (`iso8601/1` of `inserted_at`) -- R-Co hardcodes
@@ -717,6 +725,7 @@ defmodule Letflow.Routers.Promotions do
 
   defp render_run_assertions(conn, {:error, _other}), do: Response.internal_error(conn)
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 6 keys (design §7.5), ported from promotion_assertion.zig:145-170.
   # `idempotent_hit` is deliberately NOT a key -- see moduledoc, AC2.
   @doc false

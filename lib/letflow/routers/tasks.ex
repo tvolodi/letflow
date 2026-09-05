@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Tasks do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Task read+write sub-router, mounted at `/tasks` by
   `Letflow.Plugs.ApiPipeline`. REQ-083 built the read path (`handleList`
   L89, `handleGetById` L290, `handleInbox` L960 of `src/api/routes/tasks.zig`,
@@ -41,6 +42,7 @@ defmodule Letflow.Routers.Tasks do
 
   ## Route-match ordering — `/inbox` before `/:id`
 
+  PROVENANCE (historical, not current decision authority):
   `Plug.Router`'s `get "/:id"` would otherwise also match the literal path
   segment `"inbox"` as `id = "inbox"`, which would then fail
   `Ecto.UUID.cast/1` and misreport as `{:error, :invalid_id}` (400) instead of
@@ -52,6 +54,7 @@ defmodule Letflow.Routers.Tasks do
 
   ## `endpoint_policy_key/2` — one new clause on `Letflow.Api.Authorization` (OQ-8)
 
+  PROVENANCE (historical, not current decision authority):
   `Letflow.Api.Authorization.endpoint_policy_key/2` had no `("GET",
   "/tasks/inbox")` clause before this requirement — one was added, mapping to
   the same `:TasksList` policy key `GET /tasks` already uses, since inbox
@@ -231,6 +234,7 @@ defmodule Letflow.Routers.Tasks do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # `status`/`instance_id`/`assignee_id` query params, if present, are
   # silently ignored for this endpoint -- inbox's assignee scope is always
   # forced (per-principal or unfiltered, see INV-2 above), so a

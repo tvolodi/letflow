@@ -13,10 +13,17 @@ defmodule Letflow.WebhooksTest do
   `Letflow.TenantFixture.provisioned_tenant!/1` (real `CREATE SCHEMA` +
   `TenantProvisioning.replay_migrations/1`), mirroring
   `test/letflow/dlq_test.exs`'s own established pattern for this class of
-  context-module test (REQ-181 mirrors REQ-176's shape). `async: false` for
-  the same reason every other tenant-fixture-using test file in this
-  codebase sets it (real schema creation/teardown against one shared
-  Postgres instance).
+  context-module test (REQ-181 mirrors REQ-176's shape).
+
+  `async: true` (ISS-0113 / ISS-0423,
+  `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md`) -- this file
+  was independently verified, by direct read, against that design's §3 three-mechanism
+  classification procedure (no self-checkout, no concurrent multi-process DB access, no
+  second provisioning call per test) and cleared safe to convert from the
+  `async: false` every other `TenantFixture`-calling test file in this codebase still
+  uses today. No opt-in flag is needed on the `provisioned_tenant!/1` call itself --
+  see that function's own moduledoc for why its existing, unconditional
+  `Sandbox.mode(Letflow.Repo, :auto)` is already sufficient.
 
   `lib/letflow/routers/webhooks.ex` (REQ-182) now fronts this context module
   with the route/controller layer, but every test below still calls the
@@ -39,8 +46,7 @@ defmodule Letflow.WebhooksTest do
   defp provisioned_tenant(slug_prefix \\ "req181-webhooks") do
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
-      display_name: "REQ-181 Webhooks Test Tenant",
-      restore_sandbox: true
+      display_name: "REQ-181 Webhooks Test Tenant"
     )
   end
 

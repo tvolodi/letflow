@@ -8,8 +8,8 @@
   "file": "handoffs/WF03-ISS0423-20260905/step-02-code-designer-rework1.json",
   "created_at": "2026-09-05T01:37:00Z",
   "started_at": "2026-09-05T01:37:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-05T06:52:00Z",
+  "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
     "stage": "S6",
@@ -39,11 +39,16 @@
     ]
   },
   "result": {
-    "status": "BLOCKED",
-    "summary": "",
-    "artifacts_out": [],
+    "status": "PASS",
+    "summary": "Took option (a): a working mechanism exists, verified against real mix test runs, and requires LESS code than the original design, not more. Root-caused Mechanism 4 precisely by reading test/support/data_case.ex, deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex, and deps/db_connection/lib/db_connection/ownership/manager.ex source directly (not just the moduledoc prose): Sandbox.mode/2's whole-pool check-in (manager.ex's proxy_checkin_all_except(state, [], caller)) only actually discards connections when the requested mode DIFFERS from the pool's current mode (a no-op guard exists for same-mode calls) -- and DBConnection.Ownership.Manager's :auto-mode auto-checkout path (handle_info's :not_found when mode == :auto clause) permanently registers the calling test process as owner of whatever fresh proxy connection its next query establishes, so every later query from that same process reuses that same proxy/transaction for the rest of the test. Net effect: provisioned_tenant!/1's OWN PRE-EXISTING, unconditional Sandbox.mode(Letflow.Repo, :auto) first line is NOT the problem -- it is sufficient BY ITSELF to make async:true safe for a correctly-classified call site, discarding only the DataCase.setup/1 checkout from BEFORE any test code ran (nothing lost) and then re-establishing one continuous connection for the rest of the test via the very next query (the Tenant insert). The original design's actual defect was the restore_sandbox:true branch's OWN ADDITIONAL Sandbox.mode(:manual)+checkout call placed AFTER provisioning -- that second mid-test mode flip is what discarded the just-established, data-holding connection and opened a second, empty one, producing the traced 26/38 failures. Fix: deleted the restore_sandbox branch and the opts() key entirely; zero new code added to provisioned_tenant!/1 -- the pre-existing :auto line already does the whole job once the erroneous second flip is removed. Verified empirically, not just reasoned: reproduced the original failure (mix test test/letflow/secrets_test.exs against committed code: 4/11 passed, matches ELIXIR-DEV's trace exactly), then 10 clean scoped runs of the prototype fix (5 default-seed + 5 randomized-seed, both files together, 38/38 examples passing every time, 0 flakes), then 3 more clean runs against the final non-prototype code, plus mix format --check-formatted and mix compile --warnings-as-errors --force both clean (190 files, 0 warnings). Also confirmed via direct source read that :clone (Letflow.Test.TenantTemplate.ensure_template!/0, unconditional Sandbox.mode(:auto) as ITS OWN first line, every call) and :replay (Ecto.Migrator.run/4, whose own moduledoc states migrations need 2 real independent connections and categorically cannot run under one sandboxed connection) both structurally require :auto mode to stay in effect -- confirming this mechanism works WITH that requirement rather than against it, and that neither template path needed or received any change. Also confirmed empirically that the ~70 other Sandbox.mode(:auto)-calling files in the suite are all async:false (re-verified by reading each file's own async: line), so no other async:true file races against these two during the async scheduling phase. Design doc lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md updated in place: original sections 0/4/5/6 preserved verbatim and re-affirmed as still-normative; sections 2/3/8 marked SUPERSEDED (kept, not deleted, as the record of the falsified mechanism); new section 9 added with the full corrected mechanism, source-level evidence, the concurrency-safety argument, the verification log, and the :clone/:replay structural-dependency confirmation. A full untargeted mix test run was started in the background as an extra check but not awaited to completion (would exceed this rework's reasonable turn latency and is TEST-RUNNER's own separate responsibility per this pipeline's division of labor, per design doc section 9.5) -- the scoped verification directly matches ELIXIR-DEV's own required scope from the original implementation handoff and is what the rework's acceptance criteria call for.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs"
+    ],
     "issues": [],
-    "next_action": ""
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for independent re-derivation of this rework's mechanism (section 9), then to ELIXIR-DEV only for final confirmation/sign-off since the code changes are already implemented and verified in this session -- ELIXIR-DEV's own step should re-run the scoped mix test itself rather than trusting this report, per the project's redundancy principle, before routing onward to REVIEWER/TEST-DESIGNER per WF-03's normal sequence. No SECURITY-REVIEWER needed (test infrastructure only, no production code path touched, unchanged from the original design's own scope statement)."
   },
   "rework_count": 1,
   "max_rework": 3

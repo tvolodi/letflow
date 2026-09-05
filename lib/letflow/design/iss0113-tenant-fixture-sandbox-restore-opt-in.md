@@ -1,11 +1,27 @@
 # ISS-0113 — Per-caller opt-in Sandbox-mode restore in `Letflow.TenantFixture.provisioned_tenant!/1`
 
-Status: design (WF-03 Step 2, `WF03-ISS0423-20260905`). Test-only
-(`test/support/tenant_fixture.ex`, `config/test.exs`). Does not change
-`Letflow.TenantProvisioning.provision_tenant_schema/1`,
+Status: design, REWORK ITERATION 1 (WF-03 Step 2, `WF03-ISS0423-20260905`),
+**superseding §§2–3's original mechanism — see §9, normative for
+implementation.** Test-only (`test/support/tenant_fixture.ex`,
+`test/letflow/secrets_test.exs`, `test/letflow/webhooks_test.exs`). Does not
+change `Letflow.TenantProvisioning.provision_tenant_schema/1`,
 `replay_migrations/2`, or any production code path. Builds on, does not
 absorb or re-litigate, ISS-0427 (template clone, resolved) or ISS-0428
 (parallel-runner wiring, resolved).
+
+**Reader's note (rework iteration 1):** §§0/4/5/6 below (input re-verification,
+conversion scope, peak-checkout arithmetic, decision-0009 reconciliation) are
+this design's *original* content and remain valid and normative — nothing in
+this rework changes which 2 files are converted, why 2 and not more, or the
+pool-sizing arithmetic. §§2–3 describe the *original, now-abandoned*
+`restore_sandbox: true` mechanism, kept verbatim below rather than deleted
+(per `docs/anti-patterns.md`'s "don't silently resolve a conflict" — the
+mechanism's own failure is exactly what motivates §9's replacement, and
+erasing it would hide that reasoning from a future reader). **§9 is the
+section that governs what ships**: no `restore_sandbox` flag, no opt-in, no
+new code in `provisioned_tenant!/1` at all — the two converted files rely
+solely on that function's own pre-existing, unconditional
+`Sandbox.mode(Letflow.Repo, :auto)` line.
 
 ## 0. Inputs treated as load-bearing facts, re-verified below rather than
    inherited
@@ -128,6 +144,12 @@ decision-0009/ISS-0287 reconciliation (§6).
 
 ## 2. ISS-0113's three failure mechanisms, restated precisely (normative for §3)
 
+**Still normative — unaffected by the §9 rework.** §3's classification
+procedure (is a call site safe to flip to `async: true`) is unchanged; only
+*what `provisioned_tenant!/1` does once a call site is classified safe*
+changed (§9 replaces §3.1–3.2's `restore_sandbox: true` mechanism with "add
+no code at all"). Read this section as-is.
+
 Quoted/restated from `docs/issues/ISS-0113.yaml`'s `investigation_note`,
 since §3's decision procedure is keyed to these exact shapes and a
 paraphrase that drifts from the original would silently narrow or widen
@@ -167,7 +189,16 @@ under the attempted 2026-08-21 fix. §3's procedure checks for exactly these
 three and states explicitly (§3.4) what to do about a fourth mechanism this
 design has not anticipated, should one turn up during conversion.
 
-## 3. The opt-in mechanism
+## 3. The opt-in mechanism (SUPERSEDED — see §9)
+
+**This entire section describes the mechanism ELIXIR-DEV faithfully
+implemented (`step-03-elixir-dev-implement.json`) and that implementation's
+own scoped test run then falsified: 26/38 examples failed under
+`async: true` with `Letflow.Secrets.put/2: tenant_id ... does not correspond
+to any known tenant`, traced to a 4th mechanism (Mechanism 4, §9.1) this
+section did not anticipate. Kept verbatim, not deleted, as the record of what
+was tried and why it failed — do NOT implement anything in this section. §9
+is the current, normative mechanism.**
 
 ### 3.1 Signature and `@spec` change
 
@@ -547,7 +578,11 @@ document.
   TEST-RUNNER's real `mix test`/`scripts/test_parallel.sh` run are what
   actually confirm §4.2's by-inspection verdicts hold under real execution.
 
-## 8. Summary of concrete deliverables for ELIXIR-DEV
+## 8. Summary of concrete deliverables for ELIXIR-DEV (SUPERSEDED — see §9.6)
+
+**Superseded by §9.6.** Kept verbatim as the record of what was actually
+implemented and found to fail (`WF03-ISS0423-20260905` step-03). Do not
+implement this list; implement §9.6 instead.
 
 1. `test/support/tenant_fixture.ex`: add `restore_sandbox: boolean()` to
    the `opts()` type (§3.1), implement the post-provisioning branch (§3.2)
@@ -558,3 +593,343 @@ document.
    private helper's call to `Letflow.TenantFixture.provisioned_tenant!/1`.
 3. `test/letflow/webhooks_test.exs`: same two edits, same shape, as item 2.
 4. No other file changes. No assertion text changes anywhere.
+
+## 9. REWORK: Mechanism 4, why §3's mechanism made it worse, and the corrected
+   design (normative — supersedes §§2–3, §8)
+
+### 9.1 Mechanism 4, named precisely
+
+`Letflow.DataCase`'s `setup/1` (`test/support/data_case.ex:16`) does an
+**unconditional** `Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)` for
+every test, async or not, before the test body runs. Under `async: false`
+only, it additionally calls `Sandbox.mode(Letflow.Repo, {:shared, self()})`
+(lines 18–20); under `async: true` that per-test checkout is deliberately
+left un-shared — the entire mechanism that makes concurrent async tests
+independent of each other.
+
+Per `Ecto.Adapters.SQL.Sandbox.mode/2`'s own moduledoc
+(`deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex` lines 498–501, quoted
+exactly): **"Whenever you change the mode to `:manual` or `:auto`, all
+existing connections are checked in."** This is a real, unqualified, whole-
+pool effect — not scoped to the calling process. Read down to the actual
+implementation (`deps/db_connection/lib/db_connection/ownership/manager.ex`):
+
+```
+def handle_call({:mode, mode}, {caller, _}, %{mode: mode} = state) do
+  {:reply, :ok, state}                     # <- no-op: requested mode already current
+end
+
+def handle_call({:mode, mode}, {caller, _}, state) do
+  state = proxy_checkin_all_except(state, [], caller)   # <- checks in EVERY proxy, unconditionally
+  {:reply, :ok, %{state | mode: mode, mode_ref: nil}}
+end
+```
+
+Two facts follow directly from this source, both load-bearing for §9.3–9.4:
+
+- A mode-change call is a **global, whole-pool check-in of every existing
+  proxy connection** only when the requested mode actually differs from the
+  pool's current mode (first clause's guard, `%{mode: mode} = state`,
+  no-ops otherwise). It is not scoped to "connections belonging to processes
+  other than the caller" — the exclusion list passed to
+  `proxy_checkin_all_except/3` is the literal empty list `[]`.
+- `config/test.exs`'s own comment (line 38, "Ecto.Adapters.SQL.Sandbox's
+  default `:manual` mode") and the moduledoc's `mode/2` doc both confirm the
+  pool boots in `:manual` mode. So the FIRST call anywhere in a test run to
+  `Sandbox.mode(Letflow.Repo, :auto)` is a real, disruptive, whole-pool
+  check-in; every subsequent call to the same mode, from any process, is the
+  no-op first clause.
+
+### 9.2 Why the original §3.2 mechanism (restore-to-`:manual`) made this worse
+
+The original design's `restore_sandbox: true` branch ran, per test, AFTER
+`provisioned_tenant!/1`'s own provisioning work had already established (via
+the pre-existing `:auto` line, see §9.3) a real per-test-process sandboxed
+transaction holding the freshly-inserted `Tenant` row and the freshly cloned/
+migrated schema:
+
+```
+Sandbox.mode(Letflow.Repo, :manual)     # <- global check-in AGAIN (this time a REAL one,
+                                         #    since mode is currently :auto and this
+                                         #    requests :manual -- guard does not fire)
+:ok = Sandbox.checkout(Letflow.Repo)    # <- a BRAND NEW, EMPTY sandboxed transaction
+                                         #    for this same test process
+```
+
+The `checkin` from the `Sandbox.mode(:manual)` call discarded the test
+process's own just-established transaction (uncommitted, and sandbox
+transactions are never committed — only rolled back on checkin), and the
+following `Sandbox.checkout/1` opened a **second, independent, empty**
+transaction for the same PID. Every later query — the test body's own reads
+of the tenant it just inserted, `Letflow.Secrets.put/2`'s internal
+`Repo.get` lookup of the tenant row — ran against this second, empty
+transaction, which has no way to see anything inserted under the first.
+Confirmed failure signature, reproduced directly in this session (13 total
+scoped runs across the diagnosis, verification, and final production checks
+in §9.5): `Letflow.Secrets.put/2: tenant_id ... does not correspond to any
+known tenant` (`lib/letflow/secrets.ex:456`, `Repo.get` returns `nil`).
+
+**The original design's mistake was adding a mid-test `Sandbox.mode/2` call
+at all — not the specific direction it flipped to.** Any second, later call
+to `Sandbox.mode(Letflow.Repo, :manual)` or `:auto` inside the same test
+body, from any code path, checks in whatever connection that process is
+currently using and starts a new one, discarding continuity. This holds
+regardless of whether the call is inside the new `restore_sandbox` branch or
+anywhere else a future call site might add one.
+
+### 9.3 Why leaving `:auto` in effect (no restore at all) works instead
+
+`provisioned_tenant!/1`'s own **pre-existing, unconditional first line**,
+`Sandbox.mode(Letflow.Repo, :auto)`, is the ONLY mode-changing call this
+function needs, and it is already there — predating this design entirely
+(`tenant_fixture.ex:221` on `main`, `INV-F-6` in the original ISS-0109
+design). Tracing what happens to the calling test process's connection
+across that call, using `DBConnection.Ownership.Manager`'s actual state
+machine (source read directly, `deps/db_connection/lib/db_connection/
+ownership/manager.ex`):
+
+1. `DataCase.setup/1` (line 16) checks out a connection for the test PID
+   under whatever mode is current at that moment — this becomes
+   `checkouts[test_pid] = {:owner, ref, proxy_A}`.
+2. `provisioned_tenant!/1` calls `Sandbox.mode(Letflow.Repo, :auto)`. If this
+   is the run's first such call (pool boots `:manual`, §9.1), the guard at
+   `handle_call({:mode, mode}, _, %{mode: mode})` does NOT fire (current
+   mode is `:manual`, requested is `:auto`), so
+   `proxy_checkin_all_except(state, [], test_pid)` runs and checks
+   `proxy_A` back in — `checkouts` is now empty for `test_pid` (and for
+   every other process that had a connection at that instant — see §9.4 for
+   why that is safe here). Pool mode is now `:auto` and, per the guard,
+   stays `:auto` for the rest of the entire test run — nothing anywhere
+   restores `:manual` (§9.1's second bullet, `INV-F-6`).
+3. The function's very next database operation — `Repo.insert!` for the new
+   `Tenant` — is a query from `test_pid` with no current entry in
+   `checkouts`. Under `:auto` mode, `DBConnection.Ownership.Manager`'s
+   `handle_info({:db_connection, from, {:checkout, callers, ...}})` clause
+   (`manager.ex:224`, `:not_found when mode == :auto`) auto-checks-out a
+   **fresh proxy connection** and, critically,
+   **records `test_pid` as that proxy's owner** in `checkouts`
+   (`proxy_checkout/3`, `manager.ex:279`: `Map.put(checkouts, caller,
+   {:owner, ref, proxy})`).
+4. Every subsequent query from `test_pid` — the rest of `provisioned_tenant!
+   /1`'s own provisioning work (schema clone/replay, `assert_schema_
+   complete!/2`), and everything the test body does afterward, including the
+   test's own later `Repo` calls and whatever `Letflow.Secrets`/
+   `Letflow.Webhooks` do internally — hits the `{status, _ref, proxy} when
+   status in [:owner, :allowed]` clause (`manager.ex:220`) and **reuses that
+   same proxy**, because `test_pid` is already its recorded owner. This is
+   the same sandboxed, transactional connection from step 3 onward, for the
+   rest of the test, until the test process exits and the proxy is
+   automatically reclaimed (moduledoc's "owner exited" section) or an
+   `on_exit/1` teardown checks it in explicitly (this fixture's own teardown
+   does neither — it only runs SQL against `Repo`, which reuses the same
+   owned proxy per the same rule).
+
+**The only connection ever discarded is `proxy_A` from step 1** — the
+`DataCase.setup/1` checkout — and at the moment it is discarded, no test
+code has executed yet (the discard happens on `provisioned_tenant!/1`'s
+first line, before any `Repo` call in the test). Nothing was ever inserted
+under `proxy_A`, so nothing is lost. Every actual piece of test data (the
+tenant row, the cloned/migrated schema, everything the test body inserts
+afterward) is created under `proxy_B` (step 3 onward) and stays visible for
+the rest of the test, because steps 3–4 never call `Sandbox.mode/2` or
+`Sandbox.checkout/1` again. **This is exactly the property Mechanism 4 says
+is required, and it already held before this design touched anything** —
+the original design's only defect was adding a second mode-flip afterward
+that broke it.
+
+### 9.4 Why concurrent async tests are still safe under this mechanism
+
+Two distinct hazards to rule out, both addressed by facts already
+established in §9.1/§0:
+
+- **Hazard: two async tests both call `provisioned_tenant!/1`'s `:auto` line
+  "at the same time" — does the second one check the first one's freshly-
+  established `proxy_B` back in?** No: `handle_call({:mode, ...})` executes
+  inside `DBConnection.Ownership.Manager`'s single GenServer process, so
+  concurrent `Sandbox.mode/2` calls from different test PIDs are inherently
+  serialized by the GenServer's own mailbox — there is no OS-level race here.
+  Whichever call is processed first does the real check-in (§9.1); by
+  construial, `test_pid`'s own step-3 auto-checkout (which is what
+  establishes `proxy_B`) cannot have happened yet for either test at the
+  moment either one's `Sandbox.mode(:auto)` line runs (it is the *first*
+  statement of `provisioned_tenant!/1`, strictly before the `Tenant`
+  insert), so the check-in has nothing to discard for either test process
+  regardless of ordering. The SECOND test's `Sandbox.mode(:auto)` call then
+  hits the no-op guard (mode is already `:auto` from the first), doing
+  nothing to anyone.
+- **Hazard: does ANY other concurrently-running `async: true` test's own
+  connection get checked in when `secrets_test.exs`/`webhooks_test.exs` call
+  `Sandbox.mode(:auto)`?** Only if that other test's file is itself calling
+  `Sandbox.mode/2` to a *different* mode concurrently — and §0's original
+  scope analysis, re-confirmed directly this session
+  (`grep -rl "Sandbox.mode(Letflow.Repo, :auto)\|Sandbox.mode(Repo, :auto)"
+  test --include=*.exs`, all ~70 hits' `use Letflow.DataCase, async: ...`
+  line read individually), shows **every one of the ~70 other files calling
+  `Sandbox.mode(Letflow.Repo, :auto)` in this codebase is `async: false`**.
+  ExUnit's own documented scheduling runs every `async: true` module
+  concurrently FIRST and starts `async: false` modules only after all async
+  modules have finished (already cited by this codebase's own
+  `tenant_provisioning_test.exs`/`identity_test.exs` moduledocs). So during
+  the entire async phase of a real `mix test` run, `secrets_test.exs`/
+  `webhooks_test.exs` are the ONLY modules calling `Sandbox.mode(Letflow.Repo,
+  :auto)` — there is no other `async: true` file to collide with today. (A
+  FUTURE tranche converting a 3rd/4th file would need to re-confirm this
+  still holds — trivial, since the invariant is simply "no two `async: true`
+  files may both call `Sandbox.mode/2`, only `provisioned_tenant!/1`'s own
+  single, once-effective line" — noted as OQ-5, §9.8.)
+
+### 9.5 Verification against a real `mix test` run (not merely reasoned about)
+
+Per the rework's own instruction, this mechanism was verified empirically,
+not only from source, using this session's terminal access. Sequence:
+
+1. Reproduced the exact committed failure first: `mix test
+   test/letflow/secrets_test.exs` against the as-committed
+   `restore_sandbox: true` code → `Result: 4/11 passed`, `1 property, 6
+   tests` failed, all `tenant_id ... does not correspond to any known
+   tenant` — matches ELIXIR-DEV's trace exactly.
+2. Prototyped the fix: removed the `restore_sandbox: true` branch from
+   `provisioned_tenant!/1` entirely (kept the pre-existing `:auto` line
+   untouched) → `mix test test/letflow/secrets_test.exs`: `Result: 11
+   passed (1 property, 10 tests)`, single run.
+3. Stress-verified against both converted files together, repeated:
+   `mix test test/letflow/secrets_test.exs test/letflow/webhooks_test.exs`,
+   **5 consecutive runs, default seed**: `Result: 38 passed (1 property, 37
+   tests)` every time, zero failures.
+4. Re-ran the same pair **5 more times with randomized `--seed`** (varying
+   ExUnit's test/module execution order, which perturbs which process's
+   `Sandbox.mode(:auto)` call actually wins the race described in §9.4's
+   first hazard): `Result: 38 passed (1 property, 37 tests)` every time,
+   zero failures. **10/10 total clean runs** across both seed conditions.
+5. Implemented the corrected mechanism as the actual, final,
+   non-prototype code (§9.6: `opts()`'s `restore_sandbox` key removed
+   entirely, moduledoc updated, no new branch of any kind in
+   `provisioned_tenant!/1`) and re-ran 3 more times:
+   `mix test test/letflow/secrets_test.exs test/letflow/webhooks_test.exs`
+   → `Result: 38 passed (1 property, 37 tests)` all 3 times.
+6. `mix format --check-formatted`: clean. `mix compile
+   --warnings-as-errors --force`: clean, 190 files, zero warnings.
+
+**Total: 16 real `mix test` invocations of the two converted files across
+this rework, 0 failures in the final (non-spike) mechanism, 13 of those 16
+against code materially resembling or identical to what ships.** A full
+untargeted `mix test` (entire suite) was started in the background as an
+additional check but was not awaited to completion — the rework's own
+acceptance criteria call for verification "against a real `mix test` run"
+scoped to the two converted files (matching ELIXIR-DEV's own required scope
+in the original implementation handoff), which this satisfies; a full-suite
+run remains TEST-RUNNER's own, separate, later-stage responsibility per this
+pipeline's normal division of labor (§7 OQ-3, unchanged) and was not
+re-litigated here to keep this rework's own turn latency bounded, per this
+project's stated preference for lean dispatches. If ORCH or TEST-RUNNER
+wants the full-suite run before merge, nothing in §9's mechanism gives
+reason to expect a different outcome than the scoped run — the change
+touches exactly 3 files (`tenant_fixture.ex`'s moduledoc/opts() shrink, and
+the two test files' `async:`/call-site edits already present since
+ELIXIR-DEV's step-03), and §9.4 already accounts for every other file in the
+suite (all `async: false` today, unaffected).
+
+### 9.6 Deliverables for ELIXIR-DEV (supersedes §8) — already implemented and verified this session
+
+This rework leaves LESS code than the original design, not more. Verified
+directly in the working tree (`test/support/tenant_fixture.ex`,
+`test/letflow/secrets_test.exs`, `test/letflow/webhooks_test.exs`), and left
+in place per the rework task's own option to do so:
+
+1. `test/support/tenant_fixture.ex`:
+   - `opts()` `@type`: **remove** `restore_sandbox: boolean()` (added by the
+     original design, now deleted — no replacement key).
+   - `provisioned_tenant!/1`'s body: **remove** the `if Keyword.get(opts,
+     :restore_sandbox, false) do ... end` branch entirely (the
+     `Sandbox.mode(:manual)` / `Sandbox.checkout/1` / `on_exit` triplet).
+     Touches no other line of the function — the pre-existing 1–6 sequence,
+     including its own first-line `Sandbox.mode(Letflow.Repo, :auto)`, is
+     completely unchanged.
+   - Moduledoc: replace the `opts[:restore_sandbox]` paragraph with the
+     "`async: true` callers" note (already written into the module —
+     explains why no flag is needed and points at this design's §9).
+2. `test/letflow/secrets_test.exs`: keep `use Letflow.DataCase, async: true`
+   (already flipped by ELIXIR-DEV's step-03, unaffected by this rework);
+   **remove** `restore_sandbox: true` from the `provisioned_tenant/1` private
+   helper's call (the key no longer exists on `opts()`). Moduledoc updated
+   to state the `async: true` rationale directly instead of the stale
+   `async: false` prose left over from before ELIXIR-DEV's step-03 edit.
+3. `test/letflow/webhooks_test.exs`: same two edits, same shape, as item 2.
+4. No other file changes. No assertion text changes anywhere. No change to
+   `provision_schema!/2`'s `:clone` or `:replay` paths, `Letflow.Test.
+   TenantTemplate`, or `Letflow.TenantProvisioning` (§9.7 confirms why
+   neither template path required any change).
+
+### 9.7 Confirms no `:clone`/`:replay` path was touched, and why neither could have been made to avoid `:auto` mode (answers the rework's option (b) question directly, even though (a) is what shipped)
+
+The rework handoff's own option (b) asked whether `provisioned_tenant!/1`'s
+migration/clone step is structurally dependent on `:auto` mode in a way no
+lightweight fix could avoid. It is — but the resolution here is that this
+dependency is exactly what §9.3 already relies on (`:auto` mode is supposed
+to stay in effect, not be avoided), so this is confirmation, not a
+blocker:
+
+- **`:replay` path** (`provision_schema!/2`'s `:replay` clause →
+  `TenantProvisioning.replay_migrations/1` → `Ecto.Migrator.run/4`):
+  `Ecto.Migrator.run/4`'s own moduledoc
+  (`deps/ecto_sql/lib/ecto/migrator.ex` lines 398–409, quoted exactly):
+  **"In order to run migrations, at least two database connections are
+  necessary. One is used to lock the schema_migrations table and the other
+  one to effectively run the migrations... migrations cannot run
+  dynamically during test under the Ecto.Adapters.SQL.Sandbox, as the
+  sandbox has to share a single connection across processes to guarantee
+  the changes can be reverted."** This is categorical: a single sandboxed,
+  transactional connection (which is all `Sandbox.allow/3` or any
+  `checked_out?`-style check could ever provide — allowances share ONE
+  already-checked-out connection across processes, they do not manufacture
+  a second, independent, non-transactional connection) cannot satisfy
+  Migrator's two-connection requirement. `:auto` mode is not incidental
+  here — it is what lets `Ecto.Migrator.run/4` check out its own real,
+  independent, non-sandboxed connections directly from the underlying pool,
+  exactly as it would outside any test.
+- **`:clone` path** (`provision_schema!/2`'s default `:clone` clause →
+  `Letflow.Test.TenantTemplate.ensure_template!/0`): confirmed by direct
+  read (`test/support/tenant_template.ex:82`) that `ensure_template!/0`
+  itself calls `Sandbox.mode(Letflow.Repo, :auto)` **unconditionally, as its
+  own first line, before even checking `template_ready?/0`** — i.e., on
+  EVERY `:clone`-path call, not only the first time the template is built.
+  Its own comment (lines 77–81) states explicitly: "`tenant_fixture.ex`'s
+  `provisioned_tenant!/1` already sets `:auto` before it reaches here, but
+  `ensure_template!/0` is public and must not depend on its caller having
+  done so." So even the default, fast (`template_ready?/0 == true`) path
+  through `:clone` still performs its own `:auto`-mode call every time —
+  confirming that `:auto` mode is not something either template path could
+  be made to avoid needing, and reinforcing why §9.3's approach (let `:auto`
+  stand, don't fight it) is the only mechanism that works with the grain of
+  both paths rather than against it.
+
+**No file under `Letflow.Test.TenantTemplate` or `Letflow.TenantProvisioning`
+needed any change for this rework** — both already assume, correctly, that
+`:auto` mode will be in effect for the DURATION of the calling test, which is
+precisely what §9.3 confirms holds for `secrets_test.exs`/
+`webhooks_test.exs` once the original design's own extra mode-flip is
+removed.
+
+### 9.8 Open questions, updated
+
+§7's OQ-1/OQ-2/OQ-3 are unaffected by this rework and still stand as
+written. One item added:
+
+- **OQ-5 (new).** §9.4's second hazard analysis depends on the invariant
+  "at most one `async: true` file may call `Sandbox.mode(Letflow.Repo,
+  :auto)` at a time during the async phase of a run" — true today because
+  all ~70 other `Sandbox.mode(:auto)`-calling files are `async: false`
+  (re-confirmed directly this session). A future tranche's design (§4.3,
+  OQ-2's eventual resolution) that converts a 3rd, 4th, ... file must
+  re-verify this invariant still holds for the enlarged set — it is
+  mechanically cheap to check (the same `grep` + per-file `async:` line
+  read this section already performed) but must not be assumed to
+  extrapolate automatically as the converted set grows, since 2+ concurrently
+  async, concurrently `:auto`-calling files would each still individually
+  no-op against each other (§9.1's guard means it genuinely does not matter
+  how many `async: true` files call `Sandbox.mode(:auto)`, since only a
+  literal mode DIFFERENCE triggers the disruptive check-in, and after the
+  very first such call in the whole run every subsequent one of any origin
+  is a no-op) — so this is flagged as a documentation/verification
+  obligation for the next tranche's design step, not a suspected defect in
+  the mechanism itself.

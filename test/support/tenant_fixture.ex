@@ -77,8 +77,7 @@ defmodule Letflow.TenantFixture do
           oidc_mode: :enabled | :disabled,
           expected_tables: [String.t()] | :default,
           teardown: boolean(),
-          template: :clone | :replay,
-          restore_sandbox: boolean()
+          template: :clone | :replay
         ]
 
   @typedoc """
@@ -202,19 +201,21 @@ defmodule Letflow.TenantFixture do
   freshly-migrated-from-scratch schema — in particular any test that also passes a
   non-default `migration_source` downstream, which the clone path cannot serve at all.
 
-  `opts[:restore_sandbox]` defaults to `false` — today's exact, unchanged behavior
-  (`Sandbox.mode(Letflow.Repo, :auto)` left in effect for the rest of the test, never
-  restored). Pass `restore_sandbox: true`
-  (`lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md` §3.2) only for a
-  call site independently verified, by direct read, against that design's three failure
-  mechanisms (self-checkout, concurrent multi-process DB access, a second provisioning
-  call). When true, after steps 1–6 above complete exactly as they do today, this
-  additionally puts `Letflow.Repo`'s sandbox back into `:manual` mode with a fresh
-  checkout for the calling test process, and registers a second `on_exit/1` callback (in
-  addition to the teardown callback already registered earlier in this function) that
-  restores `:auto` mode. ExUnit runs `on_exit/1` callbacks LIFO, so that restore fires
-  *before* the earlier-registered schema-drop teardown callback, which therefore still
-  runs under `:auto`, unchanged from today.
+  ## `async: true` callers (ISS-0113 / ISS-0423 — no opt-in flag, no `restore_sandbox`)
+
+  This function's own unconditional first line, `Sandbox.mode(Letflow.Repo, :auto)`, is
+  sufficient by itself to make a calling test file safe to declare `async: true`,
+  *provided* the call site is independently classified safe by
+  `lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md` §3's three-
+  mechanism procedure (self-checkout, concurrent multi-process DB access, a second
+  provisioning call). **No additional flag, checkout, or restore step is needed, and
+  none is provided** — a prior design revision (`restore_sandbox: true`, since removed)
+  tried to additionally flip the sandbox back to `:manual` with a fresh checkout after
+  provisioning, and that made things *worse*, not better: see the design doc's §9 for
+  the full trace of why a second mid-test `Sandbox.mode/2` call is actively harmful
+  (it discards the connection this function's own provisioning work just established),
+  whereas leaving `:auto` mode in effect for the rest of the test (today's original,
+  unchanged behavior) is exactly what makes `async: true` work, not what blocks it.
   """
   @spec provisioned_tenant!(opts()) :: tenant_fixture()
   def provisioned_tenant!(opts \\ []) do
@@ -244,13 +245,6 @@ defmodule Letflow.TenantFixture do
 
     schema_name = provision_schema!(template, tenant.id)
     assert_schema_complete!(tenant.id, expected)
-
-    if Keyword.get(opts, :restore_sandbox, false) do
-      Sandbox.mode(Letflow.Repo, :manual)
-      :ok = Sandbox.checkout(Letflow.Repo)
-
-      on_exit(fn -> Sandbox.mode(Letflow.Repo, :auto) end)
-    end
 
     %{tenant_id: tenant.id, schema_name: schema_name, tenant: tenant}
   end

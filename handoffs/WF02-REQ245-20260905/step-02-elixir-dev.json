@@ -1,0 +1,106 @@
+{
+  "run_id": "WF02-REQ245-20260905",
+  "step": "step-02-elixir-dev",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "status": "COMPLETED",
+  "task": {
+    "description": "Apply REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md) to lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex (REQ-245, chunk 238b1 of the REQ-238 split, ISS-0424 part 3b-1, queue task 483)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Mechanically inserted the fixed marker line 'PROVENANCE (historical, not current decision authority):' immediately above every .zig-citing citation unit (line/paragraph/table/bullet per design doc section 2) in the 9 in-scope files. No .zig citation's own text was altered. Commit e67cd689 on branch feature/WF02-REQ245-20260905, off main@44c12fe2.",
+    "acceptance_criteria_evidence": [
+      {
+        "criterion": "AC1: before starting, run the marker-detection regex against all 9 files for the NEW marker, confirm zero pre-existing instances",
+        "command": "grep -c 'PROVENANCE (historical, not current decision authority):' <file> for each of the 9 files",
+        "result": "0 for every one of the 9 files, confirmed before any edit was made (genuine before-state)."
+      },
+      {
+        "criterion": "AC2: after the change, every .zig citation matches the new marker convention -- zero remain unmarked; quote grep command and before/after counts",
+        "before_after_zig_counts": {
+          "lib/letflow/engine.ex": 2,
+          "lib/letflow/engine/execution_error.ex": 3,
+          "lib/letflow/engine/expr.ex": 8,
+          "lib/letflow/engine/instance_state.ex": 2,
+          "lib/letflow/engine/join_counter.ex": 2,
+          "lib/letflow/engine/pin_rebind.ex": 2,
+          "lib/letflow/engine/pin_resolver.ex": 7,
+          "lib/letflow/engine/plugin_interface.ex": 1,
+          "lib/letflow/engine/plugin_registry.ex": 1,
+          "total_before": 28,
+          "total_after": 28,
+          "note": "grep -c '\\.zig' <file>; identical before and after in every file -- no citation line lost."
+        },
+        "marker_lines_inserted_after": {
+          "lib/letflow/engine.ex": 1,
+          "lib/letflow/engine/execution_error.ex": 1,
+          "lib/letflow/engine/expr.ex": 6,
+          "lib/letflow/engine/instance_state.ex": 2,
+          "lib/letflow/engine/join_counter.ex": 1,
+          "lib/letflow/engine/pin_rebind.ex": 1,
+          "lib/letflow/engine/pin_resolver.ex": 5,
+          "lib/letflow/engine/plugin_interface.ex": 1,
+          "lib/letflow/engine/plugin_registry.ex": 1,
+          "total": 20
+        },
+        "residual_unmarked_scan": "awk script (marker sets tracking true, blank line resets it, .zig line flags UNMARKED if tracking false -- same method as REQ-243's own verification) run against all 9 files after every edit: zero UNMARKED lines remain in the final pass. Two residuals were found and fixed during a mid-verification pass (expr.ex:105 and :112-area @typedoc blocks, pin_resolver.ex:200 @typedoc block) -- each was its own blank-line-bounded paragraph carrying a .zig citation that the first insertion pass missed; markers were added and the scan re-run clean."
+      },
+      {
+        "criterion": "AC3: every citation's original file-path text preserved verbatim -- sampled diff across >=8 citations, >=4 files",
+        "git_diff_stat": "9 files changed, 20 insertions(+), 0 deletions, 0 modifications -- pure additive diff, no existing line touched.",
+        "sample_diffs": [
+          "lib/letflow/engine.ex: +marker before the 'REQ-059 (PIN-01/PIN-03) freezes...' paragraph (cites instance.zig:2318, pin_resolver.zig:428/:490) -- surrounding lines byte-identical",
+          "lib/letflow/engine/join_counter.ex: +marker as first moduledoc line, before 'Tracks one outstanding PARALLEL_GATEWAY...' (cites transition.zig) -- surrounding lines byte-identical",
+          "lib/letflow/engine/pin_rebind.ex: +marker as first moduledoc line, before 'PIN-05 (REQ-060)...' opening paragraph (cites src/engine/pin_rebind.zig twice) -- surrounding lines byte-identical",
+          "lib/letflow/engine/plugin_interface.ex: +marker as first moduledoc line, before 'REQ-057 (EXT-03)...' (cites plugin_interface.zig) -- surrounding lines byte-identical",
+          "lib/letflow/engine/plugin_registry.ex: +marker as first moduledoc line, before 'REQ-057 (EXT-03)...' (cites plugin_registry.zig) -- surrounding lines byte-identical",
+          "lib/letflow/engine/expr.ex: 6 markers -- opening moduledoc paragraph (transition.zig/7 files listed), 'now()' section paragraph (lexer.zig/evaluator.zig), REQ-198 section paragraph, purity section paragraph (transition.zig header quote), @typedoc 'Sentinel result...' block (evaluator.zig, first sub-paragraph), @typedoc 'REVIEWER GATE' second sub-paragraph inside the same @typedoc (evaluator.zig) -- all 8 .zig mentions preserved verbatim; one inline `#` comment citation (Rules 2/3, transition.zig:1177/:1183) got a '# '-prefixed marker",
+          "lib/letflow/engine/pin_resolver.ex: 5 markers -- opening two-paragraph moduledoc block (pin_resolver.zig, Sourcing paragraph), SCOPE GAP section paragraph (service_catalog.zig), OQ-1 RESOLVED paragraph (3 pin_resolver.zig line-range citations), @typedoc override_entry block (pin_resolver.zig:206) -- all 7 .zig mentions preserved verbatim; the two known divergence-line paragraphs (OQ-1's second sub-paragraph and the override_entry @typedoc's own continuation) were confirmed NOT to carry a .zig substring themselves and were correctly left unmarked",
+          "lib/letflow/engine/instance_state.ex: 2 markers -- opening moduledoc paragraph (transition.zig's InstanceState) and 'Variable storage' section paragraph (transition.zig's ObjectMap) -- both .zig mentions preserved verbatim",
+          "lib/letflow/engine/execution_error.ex: 1 marker -- opening moduledoc paragraph (instance.zig x3, including the deliberate-divergence sentence at what is now line 8) -- all 3 .zig mentions preserved verbatim"
+        ]
+      },
+      {
+        "criterion": "AC4: deliberate-divergence lines (execution_error.ex:7, pin_resolver.ex:141) unmodified; re-run grep before/after and diff; also re-run with no line-list assumption",
+        "before": {
+          "lib/letflow/engine/execution_error.ex:7": "  `error_type()` union here is deliberately **open**, unlike R-Co's own",
+          "lib/letflow/engine/pin_resolver.ex:141": "  Letflow's `Lookup.module_lookup` is a real injectable field, unlike R-Co's"
+        },
+        "after_no_line_list_assumption": {
+          "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <all 9 files>",
+          "lib/letflow/engine/execution_error.ex:8": "  `error_type()` union here is deliberately **open**, unlike R-Co's own",
+          "lib/letflow/engine/pin_resolver.ex:145": "  Letflow's `Lookup.module_lookup` is a real injectable field, unlike R-Co's",
+          "no_other_divergence_line_found": true
+        },
+        "diff_result": "Both lines shifted (+1 and +4 respectively, matching the count of markers inserted earlier in the same moduledoc before each line) but are byte-identical text -- confirmed by direct sed extraction of the exact line from git show main:<file> vs. the current working tree line, both printed and visually identical. git diff over the two files shows no +/- hunk touching either line's own text, only the unrelated marker-insertion hunks above them."
+      },
+      {
+        "criterion": "AC5: mix test and mix compile --warnings-as-errors both pass, real output quoted",
+        "toolchain": {
+          "available": true,
+          "detail": "mix/elixir/erl all found on PATH (/c/Program Files/Elixir/bin/mix, /c/Program Files/Elixir/bin/elixir, /c/Program Files/Erlang OTP/bin/erl)."
+        },
+        "mix_compile": {
+          "command": "mix compile --warnings-as-errors",
+          "output": "Compiling 63 files (.ex)\nGenerated letflow app",
+          "result": "PASS, zero warnings, zero errors."
+        },
+        "mix_test": {
+          "command": "MIX_ENV=test mix test --exclude wasm --max-cases 4",
+          "note": "Ran to a clean, single, non-concurrent completion after killing two earlier duplicate mix test invocations that had raced against the same DB (verified via docker compose postgres, port 5462, already up and healthy).",
+          "output_tail": "Finished in 3118.8 seconds (122.3s async, 2996.5s sync)\n\nResult: 3252/3253 passed (6/6 properties, 3246/3247 tests), 19 excluded\nFailed: 1 test",
+          "failure_detail": "1) test two tenants with the same slug: the second raises a constraint error (Letflow.Identity.TenantTest) at test/letflow/identity/tenant_test.exs:47 -- 'Expected exception Ecto.ConstraintError but nothing was raised'.",
+          "failure_disposition": "Confirmed NOT a regression from this change: (1) git status shows only the 9 in-scope lib/letflow/engine* files modified -- zero touch to lib/letflow/identity.ex, Tenant schema, or any migration; (2) re-ran `mix test test/letflow/identity/tenant_test.exs` in isolation immediately after -- Result: 9 passed, 0 failures. This is a pre-existing async-suite ordering flake in a unique-constraint race test, unrelated to a pure moduledoc-comment-text change in engine/ files that share no code path with tenant slug uniqueness."
+        }
+      }
+    ],
+    "judgment_calls_flagged_for_reviewer": [
+      "expr.ex line ~221 (Rules 2/3 rewrite comment inside a `cond do` branch, citing transition.zig:1177/:1183) sits inside a bare Elixir `#` comment block, not a @moduledoc heredoc or .md file. Following REQ-243's established precedent exactly, the marker there is prefixed '# ' to keep the file syntactically valid, while remaining substring-greppable by the design's own regex.",
+      "expr.ex's 'Sentinel result...' @typedoc (originally 1 paragraph read as unit) actually contains two blank-line-separated sub-paragraphs, the second (REVIEWER GATE / OQ-1 RESOLVED text) also citing evaluator.zig. Initially only the first sub-paragraph got a marker; a residual-scan pass (mirroring REQ-243's own awk verification method) caught this and a second marker was added to the second sub-paragraph. Flagging because it's a reminder that a @typedoc/@moduledoc heredoc can contain multiple citation units separated by internal blank lines, same as ordinary prose -- the design doc's paragraph-unit rule applies per-blank-line-bounded-paragraph even inside one heredoc, not once per heredoc.",
+      "pin_resolver.ex: two paragraphs sit between marked citation units and do NOT themselves carry a .zig substring even though they discuss the same OQ-1/override topic and are physically adjacent to marked paragraphs (the OQ-1 second sub-paragraph, lines 131-151 in the final file, which is where the pin_resolver.ex:141->145 divergence line 'unlike R-Co's structural inability...' lives, and the override_entry @typedoc's own body after its first line). These were deliberately left unmarked since they cite only .md paths (ISS-0079/0078 design docs), not .zig -- confirmed by direct grep, not by inference from proximity.",
+      "pin_resolver.ex and expr.ex both needed a second/third marker beyond what an initial single read-through of the file located, purely because a moduledoc/typedoc heredoc's internal blank-line-separated sub-paragraphs are easy to under-count on a first pass. Recommend REVIEWER (or a doc-completeness follow-up to req237's own design doc, same idea as REQ-243's reviewer noted for the bare-#-comment case) call out explicitly that a heredoc is not one citation unit merely because it's one string -- each of its blank-line-bounded paragraphs is its own unit, same as plain Markdown."
+    ],
+    "out_of_scope_untouched": "No files outside the 9 named in REQ-245's scope were modified, including files that also carry a .zig citation belonging to sibling chunks REQ-243/244/246-253 (e.g. lib/letflow/engine/token.ex, lib/letflow/engine/transition.ex, and every routers/definitions/*.ex file were not touched). git status confirms exactly and only the 9 in-scope files changed."
+  }
+}

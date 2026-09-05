@@ -1,8 +1,10 @@
 defmodule Letflow.Engine.PinResolver do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   PIN-01..PIN-04 (REQ-059) — dependency pin resolution, recording, and
   inheritance. Ports `src/engine/pin_resolver.zig` (R-Co, 967 lines).
 
+  PROVENANCE (historical, not current decision authority):
   **Sourcing.** At design and implementation time no read of
   `pin_resolver.zig` was made, and every behavioural claim here traced to
   REQ-059's own requirement text or to already-shipped Letflow code, cited by
@@ -26,6 +28,7 @@ defmodule Letflow.Engine.PinResolver do
 
   ## SCOPE GAP — service_catalog (S6) and PLC-01 (unscoped) are not built
 
+  PROVENANCE (historical, not current decision authority):
   PIN-01 AC1 (`service_catalog` version resolution) and PIN-01 AC2
   (`module_ref` resolution against PLC-01) are **not satisfiable in Letflow
   today**: this module resolves `catalog_entry` and `module` references only
@@ -113,6 +116,7 @@ defmodule Letflow.Engine.PinResolver do
   `:parent_instance_id` key name guess against not-yet-built REQ-062;
   `variable_schema_lookup` totality; override vs. inheritance precedence).
 
+  PROVENANCE (historical, not current decision authority):
   **OQ-1 is RESOLVED as of 2026-08-19** (REQ-110 audit, run
   `WF03-REQ110-20260819`) and no longer open. R-Co's `pin_resolver.zig` was
   read directly and its `source: :override` mechanism **differed materially**
@@ -194,6 +198,7 @@ defmodule Letflow.Engine.PinResolver do
         }
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   One caller-supplied override entry (§4.1/§4.2 of the design doc). No
   `resolved_id` field: since `resolve/4` now verifies every override
   against `Lookup` rather than trusting it (GH#298 / ISS-0079,

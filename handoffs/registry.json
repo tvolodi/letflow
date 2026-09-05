@@ -4833,6 +4833,31 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED -- PR #927 squash-merged (e5d07019). Queue task 418 released back to OPEN (no status), not done: the primitive shipped but ISS-0418 is not resolved.",
       "note": "WF-03 run for ISS-0418 (MAJOR): implement OQ-5's cap on concurrently in-flight WASM invocations. Selected because ORCH measured the CI gate at a 44% pass rate (14 fail / 11 pass across 25 runs) with EVERY classifiable failure being this exact flake. NOT MERELY A TEST FLAKE: per req170's live-verified findings against wasmex's Rust source, each timed-out invocation permanently leaks an uncancellable native thread in a Tokio pool shared by every tenant on the node -- a production availability defect currently manifesting as CI noise. STALE-LOCK RECOVERY DISCLOSED: task 418 was locked by a dead session (branch 3 days stale, one Step 00 commit, no registry entry, no handoffs dir); ORCH declined to force it initially, the user reported nobody was working it, ORCH re-verified with evidence and force-released per the dead-sibling-session discretion rule. | OUTCOME: primitive + test wiring shipped, footprint 8->6 with zero coverage lost, concurrent-contention race closed by construction and gate-verified. ISSUE DELIBERATELY LEFT OPEN: production dispatch is still uncapped (the actual multi-tenant hazard), and post-merge CI on the merging PR itself still showed the flake (4/5, AC2 timing out) -- 4 passes/2 failures in 6 attempts against a 3-in-6 baseline, inside noise, NOT claimed as improvement. The design gate's sequential-exhaustion BLOCKER, which ORCH overrode on model-vs-measurement grounds, gained weak corroboration since the failure landed on AC2, the only double-dispatch test. Design section 10's falsifiable prediction stands unresolved."
+    },
+    {
+      "run_id": "WF02-REQ245-20260905",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-245",
+      "issue_id": "ISS-0424",
+      "queue_task_id": 483,
+      "queue_agent_id": "letflow-ee-orch",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/engine.ex",
+        "lib/letflow/engine/execution_error.ex",
+        "lib/letflow/engine/expr.ex",
+        "lib/letflow/engine/instance_state.ex",
+        "lib/letflow/engine/join_counter.ex",
+        "lib/letflow/engine/pin_rebind.ex",
+        "lib/letflow/engine/pin_resolver.ex",
+        "lib/letflow/engine/plugin_interface.ex",
+        "lib/letflow/engine/plugin_registry.ex"
+      ],
+      "started_at": "2026-09-05T12:03:29Z",
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 COMPLETED PASS -- branch feature/WF02-REQ245-20260905 created off main@44c12fe2, no divergence from origin/main, all 8 depends_on requirements confirmed done, no registry lock conflict on the 9 owned_modules paths.",
+      "note": "WF-02 run for REQ-245 (queue task 483), chunk 238b1 of REQ-238's 11-way split (ISS-0424 part 3b-3): apply REQ-237's .zig provenance-marking convention to lib/letflow/engine.ex and 8 sibling lib/letflow/engine/*.ex files. Same established pattern as REQ-233/234/235/240/241/242/243: no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER, straight to ELIXIR-DEV then REVIEWER."
     }
   ]
 }

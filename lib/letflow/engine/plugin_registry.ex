@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.PluginRegistry do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   REQ-057 (EXT-03) — the plugin registration/freeze/resolution table. Ports
   `plugin_registry.zig`'s registration/resolution contract — see
   `lib/letflow/design/req057-plugin-interface-registry.md` §3-§6 for the full

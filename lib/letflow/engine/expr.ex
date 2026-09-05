@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.Expr do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure CEL-subset expression evaluator — ports the subset of R-Co's
   `src/expr/` surface that `transition.zig`'s `evaluateGatewayCondition()`
   (~L1118, R-Co's EXP-102 adapter) actually needs for `:EXCLUSIVE_GATEWAY`
@@ -35,6 +36,7 @@ defmodule Letflow.Engine.Expr do
 
   ## `now()` / `date_add()` / `date_diff()` are deliberately not added (AC9)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's real builtin whitelist (`src/expr/lexer.zig` L17-32) has 11
   entries: `length`, `lower`, `upper`, `trim`, `contains`, `startsWith`,
   `endsWith`, `coalesce`, `now`, `date_add`, `date_diff`. R-Co's
@@ -57,6 +59,7 @@ defmodule Letflow.Engine.Expr do
 
   ## REQ-198: 8 pure builtin functions, ASCII-only case conversion (AC6)
 
+  PROVENANCE (historical, not current decision authority):
   `length`, `lower`, `upper`, `trim`, `contains`, `startsWith`, `endsWith`,
   `coalesce` are R-Co's other 8 builtin-whitelist entries (of its real
   11 — `now`/`date_add`/`date_diff` excluded, see above) — all pure, added
@@ -75,6 +78,7 @@ defmodule Letflow.Engine.Expr do
 
   ## Purity and determinism (AC8)
 
+  PROVENANCE (historical, not current decision authority):
   Every function here is a pure function of its typed arguments alone — no
   `Letflow.Repo`, no `Logger` call, no clock read, no `:rand`/`:crypto`, no
   `File` call/HTTP/process-mailbox call anywhere in `translate_cel_to_expr/1`,
@@ -99,12 +103,14 @@ defmodule Letflow.Engine.Expr do
   """
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   Sentinel result for a float arithmetic outcome that IEEE 754 represents
   as a non-finite float but the BEAM cannot construct via native `/`
   without raising `ArithmeticError` (§4.3 of the REQ-197 design doc) —
   never produced by a literal or a variable, only by `eval/2`'s own
   float-division clause.
 
+  PROVENANCE (historical, not current decision authority):
   **REVIEWER GATE (OQ-1, design §4.3/§4.6) RESOLVED (rework iteration 2):**
   REVIEWER confirmed IEEE 754 division-by-zero sign/NaN rules are a fixed
   mathematical standard, not an R-Co-specific implementation choice, so no
@@ -217,6 +223,7 @@ defmodule Letflow.Engine.Expr do
         {:error, :unsupported_cel_feature}
 
       true ->
+        # PROVENANCE (historical, not current decision authority):
         # Rules 2/3: `&&`/`||` -> `" and "`/`" or "`, WITH surrounding spaces
         # (ISS-0085/GH#302 fix; transition.zig:1177/:1183 emit the same
         # padded literals). CEL itself doesn't require whitespace around

@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF02-REQ245-20260905-step-00",
+  "run_id": "WF02-REQ245-20260905",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF02-REQ245-20260905/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T12:03:29Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-245"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ232-20260905", "WF02-REQ243-20260905"],
+    "owned_modules": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/execution_error.ex",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/instance_state.ex",
+      "lib/letflow/engine/join_counter.ex",
+      "lib/letflow/engine/pin_rebind.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine/plugin_interface.ex",
+      "lib/letflow/engine/plugin_registry.ex"
+    ],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-245 entry, full read)",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (the marker convention/regex/worked examples, section 2/2a/4/6)",
+      "lib/letflow/engine.ex, lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex"
+    ],
+    "branch_name": "feature/WF02-REQ245-20260905",
+    "base_commit": "44c12fe2",
+    "queue_task_id": 483,
+    "queue_agent_id": "letflow-ee-orch",
+    "requirement_text": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4) to this chunk of REQ-238's original scope, per that design's section 6 chunking recommendation: chunk 238b1 = lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex. This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's original split and this chunk -- design docs are covered, where they are covered at all, by REQ-239's replacement chunks, not this one; see this report's own flagged gap if lib/letflow/design/ is not yet covered by any live requirement). This is one of eleven requirements replacing REQ-238 (deleted, too wide for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2), REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1), REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253 (238h). Each sibling covers a disjoint file list; do not touch files outside lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk. SEQUENCING (carried forward from REQ-238's own depends_on): files in this chunk may overlap with files touched by REQ-232 through REQ-235 and REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc paragraph can carry both a parity-justification sentence and a .zig citation. This requirement must run after REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a provenance-marker insertion does not collide with, or get silently overwritten by, a concurrent parity-phrase edit to the same paragraph. MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 9 files in this chunk's scope carry a .zig reference today (grep -l '\\.zig' lib/letflow/engine.ex lib/letflow/engine/execution_error.ex lib/letflow/engine/expr.ex lib/letflow/engine/instance_state.ex lib/letflow/engine/join_counter.ex lib/letflow/engine/pin_rebind.ex lib/letflow/engine/pin_resolver.ex lib/letflow/engine/plugin_interface.ex lib/letflow/engine/plugin_registry.ex), matching REQ-237's design doc section 6 table exactly. If this still proves too wide for one ELIXIR-DEV turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.",
+    "acceptance_criteria": [
+      "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count",
+      "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts",
+      "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 8 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed",
+      "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/engine/execution_error.ex:7, lib/letflow/engine/pin_resolver.ex:141) are unmodified by this requirement's commits -- confirmed by re-running grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine.ex lib/letflow/engine/execution_error.ex lib/letflow/engine/expr.ex lib/letflow/engine/instance_state.ex lib/letflow/engine/join_counter.ex lib/letflow/engine/pin_rebind.ex lib/letflow/engine/pin_resolver.ex lib/letflow/engine/plugin_interface.ex lib/letflow/engine/plugin_registry.ex before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time",
+      "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    ]
+  },
+  "task": {
+    "description": "WF-02 Step 00->2: claimed queue task 483 (REQ-245), the 3rd of 11 chunk-level requirements applying REQ-237's .zig provenance-marking convention to lib/ (chunk 238b1). No CODE-DESIGNER step -- the convention itself is already designed and CODE-DESIGN-VALIDATOR-passed (lib/letflow/design/req237-zig-provenance-marking-convention.md); this is a mechanical apply-step, not a judgement-call rewrite, matching the established pattern from REQ-233/234/235/240/241/242/243. Dispatching straight to ELIXIR-DEV. Do not touch any file outside lib/letflow/engine.ex and the 8 named lib/letflow/engine/*.ex files."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Confirmed local main == origin/main @ 44c12fe2 before branching (git fetch + rev-parse, no divergence, no pull needed). Confirmed all 8 depends_on requirements (REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242) are status: done in docs/requirements.yaml. Checked handoffs/registry.json tail and found no active/unreleased lock on lib/letflow/engine.ex or any of the 8 sibling engine files (nearest related entry, WF03-ISS0418-20260905, owns lib/letflow/engine/wasm/ only, and is COMPLETED with released_lock: true). Git branch feature/WF02-REQ245-20260905 created off main @ 44c12fe2. No SECURITY-REVIEWER needed (no tenant-data path touched -- comments/moduledocs only, same reasoning as sibling chunks)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

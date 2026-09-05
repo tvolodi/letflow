@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.ExecutionError do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   EE-10 (REQ-061) — execution error handling. Ports `instance.zig`'s
   `setInstanceError()` (R-Co `instance.zig:3078`, `SetInstanceErrorArgs`
   `instance.zig:289`). Verified directly against R-Co's source (GH#328,

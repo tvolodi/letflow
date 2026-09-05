@@ -194,6 +194,7 @@ defmodule Letflow.Engine do
 
   ### OPEN QUESTION for REVIEWER — REQ-059's pin vs. this live read
 
+  PROVENANCE (historical, not current decision authority):
   REQ-059 (PIN-01/PIN-03) freezes exactly one `:variable_schema` pin per
   instance at start and forbids substituting a current version for a pinned
   one, so that "a newer catalog version published mid-flight does not affect

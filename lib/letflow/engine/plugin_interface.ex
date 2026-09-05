@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.PluginInterface do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   REQ-057 (EXT-03) — the plugin handler contract: a `@behaviour` every
   in-process plugin handler module implements, plus `invoke/2,3`, the single
   crash-safe entry point every future caller must use instead of calling a

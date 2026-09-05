@@ -1,0 +1,55 @@
+{
+  "handoff_id": "WF02-REQ264-20260905-step-01",
+  "run_id": "WF02-REQ264-20260905",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ264-20260905/step01-doc-updater.json",
+  "status": "PENDING",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T22:29:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-264"],
+    "requirement_text": {
+      "REQ-264": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-a = lib/letflow/design/, the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs and non-reqNNN-named files that sort before req017).\n\nThis is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch files outside this chunk's file list under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nlib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/ chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly); do not touch any file outside lib/letflow/design/ under this requirement, even if it also carries a .zig citation -- that belongs to one of REQ-243 through REQ-253.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 13 files in this chunk carry a .zig reference today. If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "source_text": {
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md": "§2 defines the marker text (fixed literal: `PROVENANCE (historical, not current decision authority):`) and the placement rule with FOUR citation-unit shapes as of the 2026-09-05 ISS-0510 amendment: (1) single citation line -- insert the marker on its own line immediately above a SOURCE:/CONTRACT SOURCE:-style line or lone bullet (and any hard-wrapped continuation lines of the same sentence); (2) paragraph -- for a .zig filename embedded in prose, the marker precedes the WHOLE paragraph (bounded by blank lines), not just the sentence/token; (3) table -- one marker above the table's header row, never per-row; (4) YAML comment-line/sequence-item (ISS-0510 addition, applies only inside YAML files) -- not expected to apply here since these 13 files are Markdown, not YAML, but check for embedded YAML code fences just in case. De-duplication: if a marker already immediately precedes a unit (grep -B1 check), do not insert a second one -- this makes the rule idempotent. §2(a) gives the exact regex: `PROVENANCE \\(historical, not current decision authority\\):` (also matches with plain `grep -F`). §4 gives two worked before/after examples showing the original path text is preserved byte-identical, only one new line added -- note the second worked example is specifically about a moduledoc/prose paragraph unit and about inserting the marker as the FIRST line inside a `@moduledoc \"\"\"` body immediately after the opening `\"\"\"` when the citation is the module's opening paragraph; these 13 files are standalone .md design docs, not moduledocs, so the analogous case here is inserting the marker as the first line of the document/section if the citation paragraph is a document's or section's opening paragraph. §5 gives the verification method: (i) total-marked-count grep before/after must increase by exactly the number of citation units marked; (ii) `grep -c '\\.zig' <file>` before/after must be EQUAL per file (no path text lost); (iii) idempotency -- re-running the pass a second time produces zero new markers. If a genuinely new citation-unit shape is found that does not match ANY of the four documented shapes (e.g. something specific to Markdown code-fence blocks, nested lists, or section headers unique to design-doc structure), do NOT invent a fifth ad-hoc convention: flag it as a new issue for CODE-DESIGNER (the same process ISS-0510 was raised through -- describe the shape, cite the file/line, and note it in this handoff's result.issues at MAJOR or MINOR per your judgement of how many citations it affects) and apply the CLOSEST-MATCHING existing shape in the meantime with a clear note in your result.summary, per REVIEWER's own established precedent this session for exactly this situation (ISS-0510)."
+    },
+    "related_handoff_ids": ["WF02-REQ264-20260905-step-00"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ264-20260905/step00-git-setup.json",
+      "handoffs/WF02-REQ260-20260905/step01-doc-updater.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/0001-web-framework-addendum-req065.md",
+      "lib/letflow/design/0001-web-framework-decision.md",
+      "lib/letflow/design/0002-oidc-integration-decision.md",
+      "lib/letflow/design/0003-ecto-schema-strategy-decision.md",
+      "lib/letflow/design/api-pagination.md",
+      "lib/letflow/design/export_import.md",
+      "lib/letflow/design/identity-schema.md",
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/design/iss-0078-pin-rebind-provenance.md",
+      "lib/letflow/design/iss-0079-pin-override-verification.md",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "lib/letflow/design/promotion_plan.md",
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ]
+  },
+  "task": {
+    "description": "Claim this handoff (status -> IN_PROGRESS only). You are on branch feature/WF02-REQ264-20260905 already (verify with `git branch --show-current`; STOP and report FAIL if it is not this branch). Implement REQ-264 exactly per its acceptance_criteria below, applying REQ-237's PROVENANCE marking convention (context.source_text above) to EXACTLY these 13 files and no others: lib/letflow/design/0001-web-framework-addendum-req065.md, lib/letflow/design/0001-web-framework-decision.md, lib/letflow/design/0002-oidc-integration-decision.md, lib/letflow/design/0003-ecto-schema-strategy-decision.md, lib/letflow/design/api-pagination.md, lib/letflow/design/export_import.md, lib/letflow/design/identity-schema.md, lib/letflow/design/iss-0047-username-race-conflict-target.md, lib/letflow/design/iss-0078-pin-rebind-provenance.md, lib/letflow/design/iss-0079-pin-override-verification.md, lib/letflow/design/iss0438-entity-subsystem-scoping.md, lib/letflow/design/promotion_plan.md, lib/letflow/design/promotion_review_state_machine.md. Scope is additive marker insertion ONLY -- do not alter any other content in these files, do not touch CLAUDE.md/README.md/docs/migration/README.md, and do not touch any other lib/letflow/design/ file even if it also carries a .zig reference (those belong to sibling chunks REQ-265..271). This is a mechanical apply-step -- no CODE-DESIGNER step precedes this, the convention is already CODE-DESIGN-VALIDATOR-passed. No mix compile/test is applicable (docs-only Markdown files) -- your verification is grep-based per the acceptance criteria's own commands. On completion, set status to COMPLETED (or FAILED), fill result fully per HANDOFF_PROTOCOL.md, commit your changes on this branch, and set next_action to 'Route to REVIEWER'.",
+    "acceptance_criteria": [
+      "before starting, run REQ-237's finalized marker-detection regex against this chunk's 13 files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' <13 files>`, summed) -- expect 181 per ORCH's own pre-flight check, but re-derive independently, do not trust that number blindly",
+      "after the change, every .zig source-path citation in this chunk's 13 files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts",
+      "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed",
+      "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat",
+      "the deliberate-divergence notes inside this chunk's scope (the 13 named files) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <13 files>` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

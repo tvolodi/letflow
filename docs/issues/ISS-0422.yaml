@@ -60,4 +60,35 @@ source: >
 queue_task_id: 422
 github_issue: 826
 
-status: open
+status: resolved
+resolved_in_run: ORCH-direct-20260905-ISS0422
+resolved_at: "2026-09-05T02:20:00Z"
+resolution: >
+  Rewrote CLAUDE.md's "web/mobile" paragraph and docs/requirements.yaml's
+  opening comment block, both of which folded "process-per-instance
+  design" into the stage-2/3 migration docs without noting REQ-045 later
+  decided against it. Corrected text states the actual shipped shape
+  (Letflow.Engine.create/2, a transactional context module with Postgres
+  row-lock concurrency, not a supervised process) and cites REQ-045 /
+  Letflow.Engine's own moduledoc ("Process-vs-row decision").
+
+  Re-verified against current code, not copied from this issue's
+  2026-09-02 filing: `grep -rl "use GenServer\|use DynamicSupervisor"
+  lib/ --include="*.ex"` now returns 10 modules (admission.ex, engine.ex,
+  engine/plugin_registry.ex, engine/service_task_dispatcher/poller.ex,
+  engine/wasm/module_version_registry.ex, instance_supervisor.ex,
+  metrics/registry.ex, sandbox_pool.ex, scheduler/poller.ex,
+  supervisor/pollers_breaker.ex) -- up from the issue's own filed count
+  of 6, since REQ-218/ISS-0451/REQ-219 added admission.ex,
+  service_task_dispatcher/poller.ex, and pollers_breaker.ex afterward.
+  instance_supervisor.ex still supervises zero children, confirmed by
+  reading its own moduledoc; not deleted.
+
+  Docs-only, no lib/ behavior change. Sized as two independent
+  single-file edits (CLAUDE.md, docs/requirements.yaml) per
+  ORCHESTRATOR.md Sec10 and done directly by ORCH. PR #929 squash-merged
+  to main (0da103ff) via --admin (structural attribution: known
+  wasm_hang-class flake recurred on one duplicate CI run twice while the
+  other duplicate passed cleanly; PR touches only the two named doc
+  files). Queue task 422 released status:done, GH#826 best-effort
+  closed.

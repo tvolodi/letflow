@@ -531,3 +531,22 @@ history:
       (handoffs/WF02-REQ232-20260905/step-02d-reviewer.json); ORCH
       independently confirmed mix compile --warnings-as-errors and the
       routers test suite pass before this status flip.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: 2026-09-05T02:20:00Z
+    note: >
+      ISS-0422 (queue task 422, GH#826) resolved directly by ORCH.
+      CLAUDE.md and docs/requirements.yaml both implied Letflow runs a
+      supervised process per workflow instance; corrected both to state
+      the actual shipped shape (Letflow.Engine.create/2, a transactional
+      context module with Postgres row-lock concurrency, per REQ-045) and
+      cite the decision. Re-verified against current code: 10
+      use GenServer/DynamicSupervisor modules under lib/ today (issue's
+      own 2026-09-02 count of 6 is stale), InstanceSupervisor still
+      supervises zero children. Docs-only, sized as two independent
+      single-file edits per ORCHESTRATOR.md Sec10. PR #929
+      squash-merged to main (0da103ff) via --admin (structural
+      attribution: wasm_hang-class flake, unrelated to this docs-only
+      diff). Queue task 422 released status:done, GH#826 best-effort
+      closed.

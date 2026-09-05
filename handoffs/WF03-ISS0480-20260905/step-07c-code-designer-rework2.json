@@ -1,0 +1,70 @@
+{
+  "handoff_id": "b3f7a1e2-4c8d-4a6b-9e2f-1d5c7a9b0e34",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "07c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-07c-code-designer-rework2.json",
+  "created_at": "2026-09-05T09:36:24Z",
+  "started_at": null,
+  "completed_at": "2026-09-05T09:36:24Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-07b-code-design-validator.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture_dispatch_test.exs",
+      "test/support/data_case.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Apply the single BLOCKER fix from step-07b's FAIL verdict: correct §11.2's and §11.4's stated safety-property text in lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md so it is true for every async:false caller regardless of ambient Sandbox mode, and explicitly name test/support/tenant_fixture_dispatch_test.exs as the concrete :auto-mode instance, citing §9.3's trace. Text-only, no mechanism change.",
+    "acceptance_criteria": [
+      "§11.2's safety-property claim no longer asserts unconditionally that '{shared, self()} mode is left completely alone' as the reason the path is safe; it states the property mode-agnostically (no Sandbox.mode/2 call issued by this path, so whichever mode is already ambient — {shared, self()} or :auto — is left undisturbed)",
+      "§11.2 explicitly names tenant_fixture_dispatch_test.exs as the concrete instance whose ambient mode is :auto (not {shared, self()}) at the point this path runs, and states why (its own local setup at line 60 runs after DataCase.setup/1's {shared, self()} call and before provisioned_tenant!/1 executes)",
+      "§11.4's re-derivation restates the same mode-agnostic property and additionally cites §9.3's single-owner-under-:auto trace as the reason tenant_fixture_dispatch_test.exs's read-correctness holds, rather than resting on {shared, self()} alone",
+      "§11.1 (dispatch mechanism), §11.6 (deliverables), and §11.7 (regression coverage plan) are untouched",
+      "No implementation code introduced anywhere in the edited sections",
+      "No other section of the file is touched"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Corrected §11.2 and §11.4 of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md per step-07b's single BLOCKER. Re-read step-07b's FAIL verdict in full plus the current §11.2 (lines 2175-2327) and §11.4 (lines 2375-2434) before editing.\n\n§11.2 changes: (1) the section's opening 'Purpose' paragraph no longer states the mechanism's goal only in terms of '{shared, self()} mode' — it now states the goal as reusing whatever connection/mode the caller's test process is already using, naming both {shared, self()} (the common case) and :auto (the tenant_fixture_dispatch_test.exs case) up front. (2) The load-bearing 'Concrete mechanism' step 3 paragraph (previously: 'the caller's own {shared, self()} mode... is left completely alone') now states the property mode-agnostically: since this path issues no Sandbox.mode/2 call, whichever mode is ALREADY ambient at call time is left undisturbed — and explicitly walks through why tenant_fixture_dispatch_test.exs's own local `setup do Sandbox.mode(Letflow.Repo, :auto) end` (line 60) means the ambient mode for that file is :auto by the time this path runs, per ExUnit's documented ordering (DataCase's injected setup runs before a module's own locally-declared setup). The DBConnection.Ownership.Manager owner-tracking sentence was extended to cover both the {shared, self()}-established-ownership case and the :auto-auto-checkout-established-ownership case (citing §9.3), rather than asserting only the former.\n\n§11.4 changes: added a new bullet, positioned after the existing process-dictionary bullet, that names tenant_fixture_dispatch_test.exs directly, states the same ambient-mode fact as §11.2's correction, and explains that this file's read-correctness rests on §9.3's single-owner-under-:auto trace (fresh auto-checkout on first use, then reused as the same recorded owner for the rest of the test) rather than on the {shared, self()}-preserved property the rest of §11.4 relies on for the common case. The section's closing 'Conclusion' paragraph was extended to state both properties side by side (serialization argument for {shared, self()}; §9.3's single-owner trace for :auto) instead of citing only the first.\n\nAlso updated the file's top status line (originally just announcing '§11 ADDED') to record that §11.2/§11.4 were corrected in this same rework iteration and state the one-sentence nature of the fix, so a future reader opening the file cold sees the correction was made without needing to diff against step-07b.\n\nVerification performed before finishing: (1) re-read both edited sections in full after editing to confirm the mode-agnostic property is stated as the PRIMARY claim, not appended as a caveat, and that tenant_fixture_dispatch_test.exs is named as a concrete instance in both sections, matching §11.2.1's own precedent for naming that file as the concrete instance of the template::replay override. (2) Grepped the file for fenced code blocks (```) after editing: same 10 blocks at the same pre-existing line clusters (~256/268, 668/677, 702/708, 1308/1314, 1459/1468), all inside §3/§9/§10 (superseded or quoted-for-evidence sections) as step-07b already confirmed — no new code block was introduced by this edit, and none exists inside §11. (3) Confirmed §11.1, §11.3, §11.5, §11.6, §11.7, §11.8 were not touched (only §11.2, §11.4, and the top-of-file status header were edited). (4) No OQ markers were added or resolved silently — this is a text restatement of an already-true conclusion (step-07b's own words: 'the conclusion... is still correct'), not a new finding requiring a new OQ.\n\nScope discipline: did not touch §11.1's dispatch rule, §11.6's deliverable signatures, or §11.7's regression-coverage plan, per step-07b's explicit instruction that those are correct and unaffected. Did not re-open §9, §10, or any other prior section.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a focused re-gate scoped to this specific correction (§11.2/§11.4's restated safety property and the tenant_fixture_dispatch_test.exs :auto-mode citation) rather than a full re-review of §11 — step-07b already confirmed §11.0, §11.1, §11.2.1, §11.3, §11.5, §11.6, §11.7, §11.8 pass and are unaffected by this text-only change."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-05T09:33:35Z",
+      "status": "FAIL",
+      "summary": "§11.2/§11.4's stated safety premise ('the caller's own {shared, self()} mode... is left completely alone') is false for test/support/tenant_fixture_dispatch_test.exs, the exact file §11.7 names as required regression evidence: that file's own local setup issues Sandbox.mode(Letflow.Repo, :auto) after DataCase.setup/1's {shared, self()} call and before provisioned_tenant!/1 runs, so the ambient mode at call time is :auto, not {shared, self()}. Conclusion (no cross-connection visibility problem) still correct, but via §9.3's single-owner-under-:auto mechanism, uncited by §11.2/§11.4. Everything else in the rework (§11.0, §11.1, §11.2.1, §11.3, §11.5, §11.6, §11.7, §11.8) passes.",
+      "issues": [
+        "BLOCKER: §11.2/§11.4's stated safety premise is false for tenant_fixture_dispatch_test.exs; restate mode-agnostically and name that file as the concrete :auto instance, citing §9.3."
+      ],
+      "next_action": "Rework CODE-DESIGNER: correct §11.2's and §11.4's stated safety-property text (text-only, no mechanism change), then re-route to CODE-DESIGN-VALIDATOR for a focused re-gate."
+    }
+  ]
+}

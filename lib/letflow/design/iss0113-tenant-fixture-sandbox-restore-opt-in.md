@@ -1,7 +1,16 @@
 # ISS-0113 — Per-caller opt-in Sandbox-mode restore in `Letflow.TenantFixture.provisioned_tenant!/1`
 
 Status: design, **§11 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905` REWORK
-ITERATION 2) — SUPERSEDES §10.2/§10.3/§10.3.2 for `async: false` callers.**
+ITERATION 2), §11.2/§11.4 CORRECTED (same run, REWORK ITERATION 2 re-gate) —
+SUPERSEDES §10.2/§10.3/§10.3.2 for `async: false` callers.** The correction:
+§11.2/§11.4 originally stated their safety property only in terms of
+`{:shared, self()}` mode being left alone; CODE-DESIGN-VALIDATOR found that
+premise false for `test/support/tenant_fixture_dispatch_test.exs` (ambient
+mode is `:auto` there, per that file's own local `setup`), so both sections
+now state the property mode-agnostically (no `Sandbox.mode/2` call issued,
+so whichever mode is ambient — `{:shared, self()}` or `:auto` — is
+undisturbed) and cite §9.3's single-owner-under-`:auto` trace for the
+`:auto` sub-case. No mechanism change.
 §10's structural fix (route ALL provisioning through a second, dedicated
 `Ecto.Repo`, `Letflow.Test.ProvisioningRepo`) was implemented, and a
 full-suite `mix test` run (not the 172-test scoped run §10.7's OQ-9 status
@@ -2175,12 +2184,16 @@ not a third supported mode.**
 ### 11.2 `provision_via_shared_connection/1` — the `async: false` path
 
 **Purpose:** run provisioning's `Repo.` calls directly against
-`Letflow.Repo`, on the SAME connection/transaction the caller's own test
-process already holds via `DataCase.setup/1`'s `{:shared, self()}` mode —
-i.e., restore the pre-§10 behavior for this population specifically, without
-reintroducing the pre-§10 code's OWN defect (§9's Mechanism 4 — a stray
-`Sandbox.mode(Letflow.Repo, ...)` call disrupting the caller's connection)
-or the ORIGINAL ISS-0113/ISS-0480 defect (an unconditional `Sandbox.mode
+`Letflow.Repo`, on the SAME connection the caller's own test process is
+already using at the moment this function runs — whatever mode that
+connection is under (`{:shared, self()}`, established by `DataCase.setup/1`
+for the common case; or `:auto`, if some other `setup` callback in the same
+module changed it afterward, as `tenant_fixture_dispatch_test.exs`'s own
+local setup does — see the third bullet below and §11.4) — i.e., restore the
+pre-§10 behavior for this population specifically, without reintroducing the
+pre-§10 code's OWN defect (§9's Mechanism 4 — a stray `Sandbox.mode
+(Letflow.Repo, ...)` call disrupting the caller's connection) or the
+ORIGINAL ISS-0113/ISS-0480 defect (an unconditional `Sandbox.mode
 (Letflow.Repo, :auto)` reaching into the shared pool at all).
 
 **Concrete mechanism — no `Sandbox.mode/2` call on `Letflow.Repo` at all,
@@ -2203,16 +2216,28 @@ by this path, ever:**
 3. **No `Sandbox.mode(Letflow.Repo, ...)` call of any kind, anywhere in this
    function.** This is the single load-bearing property distinguishing
    §11.2 from both the original (pre-ISS-0113) code and the reverted §3.2
-   mechanism (§9.2): the caller's own `{:shared, self()}` mode, established
-   once by `DataCase.setup/1` before this function ever runs, is left
-   completely alone. Every `Repo.insert!/1`/`Repo.query!/2` call this
-   function's own provisioning sequence makes is an ordinary query from the
-   SAME already-checked-out, already-shared-mode connection — reusing it,
-   never checking it in or replacing it, by the same `DBConnection.
-   Ownership.Manager` rule §9.3 already traced (`{status, _ref, proxy} when
-   status in [:owner, :allowed]` — this test process is already the proxy's
-   recorded owner from `DataCase.setup/1`'s own checkout, so every
-   subsequent call just reuses it). **`Ecto.Migrator.run/4`'s own
+   mechanism (§9.2): since this path issues no `Sandbox.mode/2` call itself,
+   whichever mode/connection the caller's test process is ALREADY using at
+   the moment this function runs is left completely undisturbed — that is
+   normally `{:shared, self()}`, established once by `DataCase.setup/1`
+   before this function ever runs, but it is not always: if a later `setup`
+   callback declared in the same test module changes the mode again before
+   `provisioned_tenant!/1` runs — as `tenant_fixture_dispatch_test.exs`'s own
+   local `setup do Sandbox.mode(Letflow.Repo, :auto) end` (line 60) does,
+   which ExUnit runs after `Letflow.DataCase`'s injected `setup` callback —
+   the ambient mode at call time is `:auto` instead, and this path leaves
+   THAT undisturbed just the same, for the identical reason (it issues no
+   `Sandbox.mode/2` call to disturb it with). Either way, every
+   `Repo.insert!/1`/`Repo.query!/2` call this function's own provisioning
+   sequence makes is an ordinary query from the SAME already-checked-out
+   connection — reusing it, never checking it in or replacing it, by the
+   same `DBConnection.Ownership.Manager` rule §9.3 already traced
+   (`{status, _ref, proxy} when status in [:owner, :allowed]` — this test
+   process is already the proxy's recorded owner, whether that ownership was
+   established by `DataCase.setup/1`'s own checkout under `{:shared,
+   self()}`, or, for `tenant_fixture_dispatch_test.exs`'s own `:auto`-mode
+   case, by the auto-checkout-and-record-owner step §9.3 itself traces —
+   so every subsequent call just reuses it). **`Ecto.Migrator.run/4`'s own
    documented two-connection requirement (§9.7, quoted there) is why the
    pre-§9-rework, pre-§10 code needed `:auto` mode in the first place — does
    this path need it too?** Answered in §11.2.1: no, because of WHICH
@@ -2422,16 +2447,49 @@ conclusion:
   `owning_test/0` already uses defensively) — it has no interaction with
   `Ecto.Adapters.SQL.Sandbox` or `DBConnection.Ownership.Manager` at all, and
   cannot be observed or affected by any other process, concurrent or not.
+- **Does §11.2's safety hold for a caller whose ambient mode is `:auto`
+  rather than `{:shared, self()}` at the moment this path runs — concretely,
+  `test/support/tenant_fixture_dispatch_test.exs`, the file §11.7 names as
+  required regression evidence?** Yes, but not via the `{:shared, self()}`
+  property invoked above — that file's own local `setup do Sandbox.mode
+  (Letflow.Repo, :auto) end` (line 60) runs, per ExUnit's documented
+  callback ordering, AFTER `Letflow.DataCase`'s injected `setup` (which is
+  where `{:shared, self()}` gets established) and BEFORE
+  `provisioned_tenant!/1` executes inside that file's tests — so by the time
+  §11.2's function runs for this file, the ambient mode is already `:auto`,
+  not `{:shared, self()}`. §11.2's zero-`Sandbox.mode/2`-calls property still
+  makes this safe, exactly as it does for the `{:shared, self()}` case,
+  because the property that actually matters is mode-agnostic: this path
+  disturbs nothing, so whichever mode/connection was already ambient stays
+  ambient. What makes the RESULT correct (not just undisturbed) for THIS
+  file specifically is §9.3's own trace, not the serialization argument
+  above — §9.3 already establishes that under `:auto` mode a single test
+  process's queries auto-checkout a fresh connection on first use and then
+  keep reusing that same connection, recorded as that process's own, for
+  the rest of the test (§9.3 steps 3-4, `DBConnection.Ownership.Manager`'s
+  real owner-tracking rule) — which is exactly the read-your-own-write
+  property this path needs, reached here by "single owner reusing one
+  connection under `:auto`" rather than by "`{:shared, self()}` mode left
+  intact." Both mechanisms are real and both are already established
+  elsewhere in this design (§9.3 for `:auto`, this section's earlier
+  bullets for `{:shared, self()}`); tenant_fixture_dispatch_test.exs is the
+  concrete, currently-shipped instance of the `:auto` sub-case, the same way
+  §11.2.1 already names it as the concrete instance of the `template:
+  :replay` dispatch override.
 
 **Conclusion: §11.2's own path cannot trigger the ORIGINAL hazard because it
 issues no `Sandbox.mode/2` call on `Letflow.Repo` at all — a stronger,
-simpler guarantee than "safe because of serialization," though that
+simpler guarantee than "safe because of serialization," though the
 serialization guarantee (§11.0 Claim 3) is what makes the path's OWN reads
-correct (no concurrent writer could be racing the caller's shared
-connection).** Both properties hold independently and neither depends on
+correct under `{:shared, self()}` (no concurrent writer could be racing the
+caller's shared connection), and §9.3's single-owner-under-`:auto` trace is
+what makes the path's OWN reads correct on the occasions the ambient mode is
+`:auto` instead (§9.3-cited bullet above, tenant_fixture_dispatch_test.exs's
+own case).** All of these properties hold independently and none depends on
 inheriting ISSUE-FIXER's own conclusion without re-derivation — re-derived
 above from source (`data_case.ex`, `sandbox.ex`, ExUnit's documented
-scheduling) already read for §§9-10.
+scheduling, and `tenant_fixture_dispatch_test.exs`'s own setup ordering)
+already read for §§9-10 and this section.
 
 ### 11.5 What §10's existing subsections must be read as revised to say
 

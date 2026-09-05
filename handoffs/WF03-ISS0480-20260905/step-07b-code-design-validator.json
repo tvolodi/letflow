@@ -1,0 +1,65 @@
+{
+  "handoff_id": "9a1e5f2c-6d4b-48a1-9c3e-7b0f2d1a8c55",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "07b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-07b-code-design-validator.json",
+  "created_at": "2026-09-05T09:33:35Z",
+  "started_at": "2026-09-05T09:33:35Z",
+  "completed_at": "2026-09-05T09:33:35Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-07-code-designer-rework.json",
+      "handoffs/WF03-ISS0480-20260905/step-06-issue-fixer-rediagnosis.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/data_case.ex",
+      "test/support/tenant_fixture.ex",
+      "test/support/tenant_fixture_dispatch_test.exs",
+      "deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Gate CODE-DESIGNER's rework iteration 2 (step-07, new section 11 of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md) as an independent hard gate before ELIXIR-DEV resumes implementation.",
+    "acceptance_criteria": [
+      "Every acceptance criterion from step-06's rediagnosis is covered, including independently re-scrutinizing §11.4's proof",
+      "No implementation code present in the design",
+      "The template: :replay / tenant_fixture_dispatch_test.exs edge case is fully specified",
+      "§11.7's regression coverage plan is concrete enough for TEST-DESIGNER to execute without judgement calls",
+      "No unresolved OQ markers block implementation"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "REWORK REQUIRED on §11.2/§11.4 only — everything else in the rework passes. Independently re-read lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md §11 in full (lines 1985-2654), plus test/support/data_case.ex, test/support/tenant_fixture.ex, test/support/tenant_fixture_dispatch_test.exs, and deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex directly (not taken from CODE-DESIGNER's or ISSUE-FIXER's summaries).\n\nCHECKS THAT PASS:\n\n1. Dispatch mechanism (§11.1): confirmed correct against source. data_case.ex:15-23 today does exactly `Sandbox.checkout(Letflow.Repo)` then, `unless tags[:async]`, `Sandbox.mode(Letflow.Repo, {:shared, self()})` — matches the design's own quoted baseline exactly. Adding `Process.put(:letflow_data_case_shared_mode?, !tags[:async])` after that block is a correct, zero-call-site-edit signal: every one of the 47 callers already `use`s Letflow.DataCase, and `tags[:async]` is ExUnit's own literal boolean, not inferred.\n\n2. async:true path preservation: confirmed unchanged. tenant_fixture.ex's current `with_provisioning_repo/1` (lines 291-301) is byte-for-byte what §10.3.2/§11.1 both describe as untouched, and §11.1's `false`-branch dispatch routes to it exactly as today.\n\n3. No Sandbox get-mode/introspection API exists: independently re-confirmed by grepping deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex directly — `mode/2` returns `:ok` (write-only, line 509-511), `checkout/2` returns `:ok | {:already, :owner | :allowed}` (line 543-544, an ownership status, not a mode). No get-mode function exists. The design's claim (§11.1, §11.0 Claim 2) is accurate, not inherited without checking.\n\n4. template: :replay dispatch override (§11.2.1): correctly and completely specified. Re-read test/support/tenant_fixture_dispatch_test.exs directly — confirmed line 51 `use Letflow.DataCase, async: false` and line 116 `TenantFixture.provisioned_tenant!(slug_prefix: \"dispatch-replay-test\", template: :replay)` exactly as the design states. The dispatch rule (`template: :replay` always routes to `with_provisioning_repo/1` regardless of the shared-mode flag) is unconditional on the correct variable (`opts[:template]`, not ambient Sandbox mode) and is unaffected by any other setup ordering concern — this edge case is genuinely fully specified, including the self-correction being disclosed rather than hidden (§11.8 OQ-11).\n\n5. §11.7 regression coverage: concrete and executable without further judgement — names the exact files (backfill_test.exs's existing ISS-0332 test, one of OnboardingTest/ContextTest as a second instance, tenant_fixture_dispatch_test.exs's two tests by name), the exact procedure (red pre-fix, green post-fix, re-run twice), and explicitly rules out inventing a new synthetic test with a stated reason. No judgement call left to TEST-DESIGNER beyond picking OnboardingTest vs ContextTest, which the design explicitly leaves open as either/or with a stated selection criterion (simpler to isolate).\n\n6. No implementation code: confirmed by grepping every fenced code block in the file (lines 247,259,659,668,693,699,1299,1305,1450,1459) — all fall in §3/§9/§10.3.1/§10.3.4 (superseded sections or quoted-for-evidence source excerpts), none inside §11. §11 itself is prose/signature-only throughout §11.6, matching its own claim.\n\nWHAT FAILS THE GATE:\n\n§11.2's and §11.4's re-derivation of why the async:false path is safe rests on a premise that is factually wrong for the exact file §11.7 names as a required, currently-shipped regression instance — test/support/tenant_fixture_dispatch_test.exs — and the design never notices or reconciles this, despite this being precisely the file it singles out as load-bearing evidence.\n\nConcretely: §11.2's stated safety property is 'reusing the SAME connection/transaction the caller's own test process already holds via DataCase.setup/1's {:shared, self()} mode' and §11.4 restates this as 'the caller's own {:shared, self()} mode ... is left completely alone.' But I read test/support/tenant_fixture_dispatch_test.exs directly: it has its OWN local `setup do Sandbox.mode(Letflow.Repo, :auto) end` (line 60), declared textually after `use Letflow.DataCase, async: false` (line 51). ExUnit runs CaseTemplate-injected setup callbacks (DataCase's own `setup tags do ... end`) before a test module's own locally-declared `setup do ... end` blocks in the same module — standard, well-established ExUnit semantics, not something in dispute. So by the time `provisioned_tenant!/1` runs inside either of this file's two tests, `Letflow.Repo` is NOT in `{:shared, self()}` mode — it has already been unconditionally flipped to `:auto` by this file's own setup. §11.2/§11.4's stated premise ('the {:shared, self()} mode ... is left completely alone') is simply not true here: there is no {:shared, self()} mode in effect to leave alone at that point; it was already replaced by :auto before §11.2's function ever runs.\n\nThis does NOT mean the mechanism is unsafe — I re-derived it myself rather than stopping at 'the stated premise is wrong': the design's OWN §9.3 trace (already normative, re-read directly) independently proves that under :auto mode a single test process's subsequent queries auto-checkout a fresh connection on first use and then keep reusing it for the rest of the test (steps 3-4, DBConnection.Ownership.Manager's real owner-tracking rule) — which is exactly the read-your-own-write property §11.2 needs, just reached by a DIFFERENT mechanism (single-owner reuse under :auto) than the one §11.2/§11.4 actually cite ({:shared, self()} mode preserved). Both mechanisms happen to produce the same correct outcome for this file, but the design text asserts the wrong one as its reasoning for the file it calls its own required proof instance, without noticing the mismatch. Per core-directives.md's 'Re-derive under the conditions the property is actually about': a proof that cites a condition (\"{:shared, self()} mode is preserved\") which does not actually hold for the specific instance being verified is not evidence for that instance, even when the conclusion happens to be true by a different route — exactly the failure mode that section's ISS-0106 worked example warns against (a passing check under the wrong conditions proves nothing about the real case). This is not a hypothetical edge case CODE-DESIGNER could not have found: the file is already read and quoted at length elsewhere in §11.2.1, so the gap is a specific missed cross-check, not a missing input.\n\nWHY THIS BLOCKS THE GATE (not a MINOR note): §11.4 is the section whose entire job is 're-verifying this does not reopen the ORIGINAL hazard' with the explicit instruction to re-derive rather than restate. An incorrect premise inside that specific re-derivation, going uncaught for the one file the design itself treats as its strongest, currently-shipped regression evidence, is exactly the class of unverified assumption ISSUE-FIXER's own rediagnosis was dispatched to correct in the first place (step-06's closing line: 'exactly the class of unverified assumption this Step 5 failure itself came from'). Letting it stand risks ELIXIR-DEV or a future reader trusting the wrong mechanism as the reason the fix is safe, which is fragile: it happens to hold today only because §9.3's single-owner-under-:auto property is ALSO true, a fact §11.2/§11.4 do not even invoke.\n\nREQUIRED FIX (scoped narrowly — do not reopen any other part of §11, which passes as written): §11.2 and §11.4 must state the safety property in terms that are actually true for every async:false caller regardless of which Sandbox mode (`{:shared, self()}` or `:auto`, if some other setup callback changes it as tenant_fixture_dispatch_test.exs's own does) is ambient at the moment `provision_via_shared_connection/1` runs — i.e., restate the property as 'this path issues no Sandbox.mode/2 call, so whichever connection/mode the caller's test process is already using (whether {:shared, self()} from DataCase.setup/1, or :auto if a later setup callback in the same module changed it, as tenant_fixture_dispatch_test.exs's own local setup does) is left undisturbed, and §9.3's own single-owner-under-:auto trace already establishes that a lone test process's queries keep reusing one connection under EITHER mode once no further Sandbox.mode/2 call intervenes' — and explicitly name tenant_fixture_dispatch_test.exs as the concrete instance of the :auto sub-case, the same way §11.2.1 already names it for the template: :replay branch. This is a text-only correction (no mechanism change, no ELIXIR-DEV-visible behavior change) — §11.6's implementation deliverables are unaffected and do not need rework once §11.2/§11.4's prose is corrected.\n\nEverything else in this rework iteration (§11.0, §11.1, §11.2.1, §11.3, §11.5, §11.6, §11.7, §11.8) independently checks out and does not need to be touched.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0480-20260905/step-07b-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "§11.2/§11.4's stated safety premise ('the caller's own {:shared, self()} mode ... is left completely alone') is false for test/support/tenant_fixture_dispatch_test.exs, the exact file §11.7 names as required regression evidence: that file's own local `setup do Sandbox.mode(Letflow.Repo, :auto) end` (line 60) runs after DataCase.setup/1's {:shared, self()} call and before provisioned_tenant!/1 executes, so the ambient mode at call time is :auto, not {:shared, self()}. The conclusion (no cross-connection visibility problem) is still correct, but via §9.3's single-owner-under-:auto mechanism, which §11.2/§11.4 do not cite. Fix: restate §11.2/§11.4's safety property mode-agnostically (no Sandbox.mode/2 call issued, so whichever mode/connection is already ambient — {:shared, self()} or :auto — is undisturbed, citing §9.3's trace for the :auto sub-case) and name tenant_fixture_dispatch_test.exs as the concrete :auto instance."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: correct §11.2's and §11.4's stated safety-property text per the BLOCKER issue above (text-only, no mechanism change). Once corrected, re-route to CODE-DESIGN-VALIDATOR for a re-gate focused on that specific correction before ELIXIR-DEV resumes §11.6's implementation. Do not route to ELIXIR-DEV yet."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

@@ -1969,8 +1969,13 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by ORCH's own REQ-264 done-event append
+      (WF02-REQ264-20260905 closeout) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 1 on-disk entry, no rebase
+      conflict on this file. 188 lines / 11133 bytes, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
       Opened by ORCH at feature/WF02-REQ265-20260905's Step Final, successor
       to volume 9. Created with volume 9's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty

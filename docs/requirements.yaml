@@ -15519,7 +15519,7 @@ requirements:
   - id: REQ-264
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-a: the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (closes ISS-0424 part 3c-11)"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

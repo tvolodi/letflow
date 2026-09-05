@@ -191,3 +191,22 @@ history:
       no mix compile/format/test applicable. ORCH will merge and release
       queue task 504 status:done. First entry in this volume (opened by
       WF02-REQ265-20260905's roll).
+  - req: REQ-264
+    event: done
+    agent: ORCH
+    at: "2026-09-05T23:13:25Z"
+    note: >
+      Applied REQ-237's PROVENANCE marker convention (chunk 239-design-a,
+      the alphabetically-first 13 lib/letflow/design/ files carrying a .zig
+      reference) via WF-02 (DOC-UPDATER Step 01, REVIEWER PASS Step 02).
+      REVIEWER independently re-verified scope (git diff --stat: exactly
+      the 13 named files), additive-only-ness (0 .zig-bearing lines
+      altered), both flagged edge-case placements (heading-above-fenced-
+      code-block, marker-as-literal-first-line-above-H1-title), and
+      divergence-note byte-identity. Merged via PR #1006 (commit b64d832f)
+      after two rebases onto a fast-moving main (REQ-260, REQ-265, ISS-0512
+      landed concurrently) and one CI rerun of a duplicate push-triggered
+      job that hit an unrelated pre-existing test flake (Letflow.Routers.
+      InstancesTest, REQ-200 actor-display-name test) -- structurally
+      confirmed non-overlapping with this PR's docs-only diff before
+      rerunning. Queue task 502 released.

@@ -102,6 +102,7 @@ prior claim (per `docs/anti-patterns.md`'s "Inheriting a claim from a record ins
 re-deriving it from the source" entry — the exact failure mode this step exists to avoid
 repeating).
 
+PROVENANCE (historical, not current decision authority):
 ### 2.1 Routes — `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\routes\*.zig`: **31** files, verified by direct glob
 
 ```
@@ -121,6 +122,7 @@ that do NOT exist yet," 12 rows = 31) — cross-checked exhaustively, no name pr
 one list and absent from the other. **31 is confirmed correct, independently, against
 both the live R-Co tree and the already-recounted stage-4 table.**
 
+PROVENANCE (historical, not current decision authority):
 ### 2.2 Middleware — `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\middleware\*.zig`: **9** files, verified by direct glob
 
 ```
@@ -134,6 +136,7 @@ exactly the two REQ-065's brief names: `agent_auth.zig` and `outbox_cap.zig`.
 
 ### 2.3 A nuance the addendum should not silently flatten: not all 9 middleware are in S4's practical scope right now
 
+PROVENANCE (historical, not current decision authority):
 `stage-4-api-surface.md`'s middleware table's own "Letflow status" column already draws
 this line: `auth.zig` and `tenant_status.zig` are **already ported** (REQ-021,
 `Letflow.Plugs.AuthPipeline`/`Letflow.Plugs.TenantStatus`, see §3.3); `content_type.zig`,

@@ -54,6 +54,7 @@ the file's 65 lines.
 Three sources disagree on the route count, and two sources disagree on the middleware
 list:
 
+PROVENANCE (historical, not current decision authority):
 | Source | Route count claimed | Middleware list claimed |
 |---|---|---|
 | `docs/requirements.yaml` REQ-010 `description` | "22 route modules" | 6 modules: auth, rate_limit, quota_enforcement, tenant_status, trace, validate (no `content_type`) |
@@ -63,6 +64,7 @@ list:
 | **Actual `ls src/api/routes/`** (verified this session) | **24** real `.zig` modules (24 entries; no `.gitkeep` present) | — |
 | **Actual `ls src/api/middleware/`** (verified this session) | — | **7** real `.zig` modules: `auth.zig`, `content_type.zig`, `quota_enforcement.zig`, `rate_limit.zig`, `tenant_status.zig`, `trace.zig`, `validate.zig` |
 
+PROVENANCE (historical, not current decision authority):
 The actual route directory contains 24 modules, two more than every written source's
 stated prose count (22): `audit`, `definition_rollback`, `definitions`, `dlq`, `entities`,
 `health`, `identity`, `instances`, `metrics`, `onboarding`, `openapi`, `pin_rebind`,
@@ -98,6 +100,7 @@ overwrite silently, per Core Directives' "No Speculation."
 
 ### 2.2 The 7 middleware modules, purpose and composition point (read from source headers)
 
+PROVENANCE (historical, not current decision authority):
 Each below is read from the module's own doc-comment header in
 `src/api/middleware/*.zig`:
 
@@ -231,6 +234,7 @@ What the Reasoning section must state:
 
 ## 5. Open questions / discrepancies to register, not silently resolve
 
+PROVENANCE (historical, not current decision authority):
 1. **Route count mismatch (22 vs. 24) — a two-short undercount, not one-short.**
    `docs/requirements.yaml` REQ-010's `description` and `acceptance_criteria[2]`, and
    the existing `0001-web-framework.md` skeleton's prose, all say 22. The skeleton's own

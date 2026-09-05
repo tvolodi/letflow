@@ -108,6 +108,7 @@ Domain logic only, per the task briefing: no HTTP/Plug layer here (S4 scope).
   `tenants`** — relevant to Open Question 2 (§9.2): a "test tenant" in R-Co's sense
   is structurally disjoint from a sandbox-pool schema in Letflow's port.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source (`src/definition/promotion_plan.zig` PRM-01,
 `src/definition/promotion_conflict.zig` PRM-02, `src/definition/promotion_digest.zig`
 PRM-03, and their `src/design/prm-0{1,2,3}-*.md` design docs): genuinely unreachable on
@@ -132,6 +133,7 @@ rather than guessed silently.
 
 **In scope:** three new sibling submodules under `lib/letflow/definitions/`:
 
+PROVENANCE (historical, not current decision authority):
 | File | Module | Ported from |
 |---|---|---|
 | `lib/letflow/definitions/promotion_plan.ex` | `Letflow.Definitions.PromotionPlan` | `promotion_plan.zig`, PRM-01 |
@@ -435,6 +437,7 @@ on a permission check — the requirement text names a permission gate for
 function. Read as deliberate: `reject_if_conflicts/4` is a preflight re-check REQ-037's
 already-permission-gated approve/apply flow calls internally, not a fresh entry point.
 
+PROVENANCE (historical, not current decision authority):
 **Confirmed against R-Co source (GH#321, ISS-0093):** `R-Co/src/definition/promotion_plan.zig:99-102`
 runs the permission check — `checkPermission(allocator, pool, actor_id, "promotion", "submit")`
 — as "Step 1" of `computePromotionPlan()` (PRM-01, the `compute_promotion_plan/5` counterpart),
@@ -683,6 +686,7 @@ correct and `"10" > "9"`) or is genuinely free text (in which case only lexicogr
 R-Co tree is reachable at `c:\Users\tvolo\dev\ai-dala\R-Co`. Both ends of R-Co's own
 `version` handling were read directly:
 
+PROVENANCE (historical, not current decision authority):
 - **Write path** — `R-Co/src/definition/promotion.zig` L286-318 (`computePromotionPlan`'s
   next-version step): the next version is computed as `SELECT COALESCE(MAX(version::int),
   0)::text AS max_ver` (L295) — a Postgres integer cast/aggregate — then formatted back

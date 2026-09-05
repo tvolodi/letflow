@@ -1,0 +1,54 @@
+{
+  "handoff_id": "1c8e5f2a-4d6b-4f91-9a3e-7b02d5c6f814",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "17",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-17-code-designer-rework7.json",
+  "created_at": "2026-09-05T11:51:57Z",
+  "started_at": "2026-09-05T11:51:57Z",
+  "completed_at": "2026-09-05T12:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-16-elixir-dev.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_template.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Rework #7: correct §11.9.2's mechanism in lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md per step-16's BLOCKER. ensure_template!/0's Sandbox.mode(Letflow.Repo, :auto) call is gated on template_ready?() (a VM-local persistent_term flag), not on whether the template actually needs building (template_built_in_db?(), checked later, after the disruptive call already fired). This discards an async:false caller's in-flight Tenant insert on every VM-first call, even when the template already exists in the database and no build is about to happen -- broader than §11.9.3's disclosed trade-off. Design a fix that checks template_built_in_db?() BEFORE any Sandbox.mode/2 call, gates the mode-switch on that (not on template_ready?()), and verify it preserves the existing inner re-check (line 114) inside the advisory lock that protects against two concurrent builders racing. Reassess OQ-13's status given the fix.",
+    "acceptance_criteria": [
+      "Corrected design element states ensure_template!/0's restructured three-way decision precisely: template_ready?()==true -> :ok (unchanged); template_ready?()==false and template_built_in_db?()==true -> prime persistent_term, return :ok, issue NO Sandbox.mode/2 call; template_ready?()==false and template_built_in_db?()==false -> existing mode-switch+advisory-lock+build tail, unchanged",
+      "Design explicitly confirms the existing inner template_built_in_db?() re-check at (current) line 114, run inside the advisory lock, is preserved unchanged and explains why the new outer check does not create a new race relative to it",
+      "OQ-13 explicitly reassessed: stated whether it is now resolved, narrowed, or unchanged, with reasoning distinguishing the population this fix closes from the population §11.9.3's residual gap still covers",
+      "Correction lands as a new subsection (§11.11) or clearly-marked correction to §11.9, not a silent rewrite of the superseded text",
+      "No implementation code (.ex/.exs bodies) written -- signatures/structure only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Read step-16-elixir-dev.json's BLOCKER in full, plus test/support/tenant_template.ex's ensure_template!/0 (lines 67-141), template_ready?/0 (148-151), and template_built_in_db?/0 (243-251) directly (not taken on the handoff's line numbers alone -- independently confirmed against the actual file, which matched). Re-read design §11.9.1-§11.9.5 (lines 2818-3137) in full to confirm exactly what §11.9.2 specified, what it actually authorized ELIXIR-DEV to implement (§11.9.4), and what OQ-13 (§11.9.5) already disclosed as the KNOWN residual gap -- confirmed step-16's finding is a DIFFERENT, BROADER gap than OQ-13 covers: OQ-13 is about the first call in a VM that ALSO triggers a genuine build (accepted trade-off, build-path safety already argued in §11.9.2's own 'why this is sufficient' paragraph); step-16 reproduced the first call in a VM regardless of whether a build follows -- i.e. even when template_built_in_db?() is already true, meaning no build was ever going to happen, the disruptive Sandbox.mode(:auto) call still fired because the code literally gates on template_ready?() (VM-local), not template_built_in_db?() (DB-real).\n\nAdded lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md's new §11.11 (five subsections: 11.11.0 re-diagnosis re-verified against source, 11.11.1 the corrected three-way fix with the concurrency-safety walk-through, 11.11.2 what does not change stated explicitly, 11.11.3 OQ-13's disposition -- NARROWED not resolved, with the population distinction spelled out precisely, 11.11.4 ELIXIR-DEV's implementation instructions signatures-only, 11.11.5 the restated OQ-13). Corrected mechanism: template_ready?() is checked first (unchanged, fast path). If false, template_built_in_db?() is now checked NEXT, BEFORE any Sandbox.mode/2 call, on the caller's own ambient connection (a plain read-only query needs no mode-switch to run). If that DB check is true (template exists, no build needed), :persistent_term is primed from it and :ok is returned WITHOUT ever touching Sandbox.mode/2 -- this is the entire fix, and it is what makes §11.9.2's own original prose ('only on the path that is about to actually build the template') literally true instead of only true in the common case. If the DB check is false (genuine, first-ever build needed), the existing §11.9.2 mode-switch+advisory-lock+build tail runs completely unchanged, including its own EXISTING inner template_built_in_db?() re-check inside the lock (line 114) -- explicitly confirmed UNCHANGED and walked through against the two-concurrent-callers race directly: the new outer check can only ever produce a false negative relative to a build finishing between the outer check and lock acquisition, and that exact false-negative case is what the pre-existing inner re-check already handled before this rework (it already had to, since a concurrent caller could race ahead between template_ready?() and the lock under §11.9.2's own fix too) -- no new race introduced, the outer check only changes where the disruptive call sits relative to a DB read, not which decision governs whether a build actually runs.\n\nOQ-13 reassessed in §11.11.3, not silently closed: distinguished the two populations precisely. §11.9.3's disclosed residual gap (first call in a VM that ALSO triggers the build) is UNCHANGED and STILL OPEN -- this rework does not touch the build path, so a genuine first-ever-per-database build still discards its own triggering caller's insert, exactly as §11.9.2 always accepted. What changes is which calls REACH that branch at all: before this rework, every VM-first call reached the disruptive path regardless of DB state (the bug); after, only a VM-first call against a database that has genuinely never built the template reaches it. So OQ-13's own empirical question (does §11.9.3's 'currently unobserved' expectation hold) is NARROWED to a smaller, now-correctly-scoped population (a database whose template was never built at all -- e.g. fresh CI, or truly first invocation) rather than fully resolved, since the underlying build-path trade-off itself is untouched. Flagged that TEST-RUNNER's regression run should specifically include the case step-16 used to reproduce -- a standalone single-file invocation run against a database where the template ALREADY exists from a prior invocation -- since that is the exact condition that must now pass cleanly for the fix's central claim to hold.\n\nExplicitly stated what does NOT change (§11.11.2): template_ready?/0's and template_built_in_db?/0's own bodies (both unchanged, still pure/cheap), the inner re-check at line 114 (unchanged, not deduplicated with the new outer check -- two calls to the same pure function in one function body is the accepted cost of correctness, not a cleanup opportunity), the entire build path (build_template!/0, do_build_template!/1, advisory lock acquire/release, unboxed_run/3 -- byte-for-byte unchanged), tenant_fixture.ex/data_case.ex (untouched, same boundary §11.9.4 item 3 already stated), and §11.10's teardown-routing fix and its own §11.10.4a correction (untouched, no shared call site). @spec ensure_template!() :: :ok unchanged.\n\n§11.11.4 gives ELIXIR-DEV signatures-only implementation instructions: restructure the existing if/else into the three-branch decision (exact control-flow construct left to ELIXIR-DEV's idiomatic judgement -- the three-branch DECISION STRUCTURE is mandated, not a specific if/cond shape), update the existing comment block (moved again per §11.9.4 item 1) to state the corrected condition and cite §11.11, and re-run the full regression plan including the standalone single-file invocations against a pre-existing-template database that step-16 used to reproduce the bug.\n\nNo implementation code written -- verified by re-reading the added text: every code-shaped reference is either an inline-backtick function/variable name or prose describing control flow ('the existing if template_ready?() do :ok else <body> end becomes...'), no fenced .ex/.exs code block was added (grepped the whole file for triple-backtick fences after editing: count unchanged from before this edit, confirming no new fence was introduced by this rework's own text).",
+    "artifacts_out": ["lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a gate of new §11.11 (§11.9-§11.10's own already-gated text is unaffected and does not need re-walking, except to confirm §11.11 does not silently contradict them -- it does not: §11.11.2 states explicitly what stays unchanged from both). Once PASS, route to ELIXIR-DEV to implement §11.11.4's three-branch restructuring in test/support/tenant_template.ex and re-run the full regression suite per §11.11.4 item 4, including the standalone single-file invocations against a database where the template already exists (the exact condition step-16 reproduced under). This handoff's own two already-applied corrections (tenant_fixture_test.exs C5 assertion, tenant_fixture.ex docstring) remain uncommitted alongside the rest of this branch's work, per step-16's own instruction not to guess past an unreconciled failure -- carry them forward unchanged."
+  },
+  "rework_count": 7,
+  "max_rework": 3
+}

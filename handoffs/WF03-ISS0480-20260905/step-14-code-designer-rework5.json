@@ -1,0 +1,59 @@
+{
+  "handoff_id": "e4a2c6f1-7d3b-4c9a-9f1e-8b6d3a4c7e52",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "14",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-14-code-designer-rework5.json",
+  "created_at": "2026-09-05T11:16:40Z",
+  "started_at": "2026-09-05T11:16:40Z",
+  "completed_at": "2026-09-05T11:16:40Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/support/tenant_fixture.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Correct §11.10.2's premise, confirmed FALSE by ISSUE-FIXER's mechanical reassessment (step-13): the shared connection's sandbox transaction is NOT ordinarily-committing -- it is always rolled back at checkin regardless of {:shared, self()}/:auto/:manual mode, so the ambient Sandbox rollback, not teardown_wrap's DROP/DELETE, is the real cleanup mechanism for the async:false + template::clone default path. Also correct test/letflow/support/tenant_fixture_test.exs's C5 test (line 343/556), which asserts schema_present_before_drop=true as the expected/only case -- ISSUE-FIXER's direct run showed false is actually the majority-path outcome. Re-check §11.7/§11.10.4 for any other place assuming the old false premise.",
+    "acceptance_criteria": [
+      "§11.10.2's premise corrected to state the true mechanism (ambient Sandbox rollback-at-checkin, unconditional on checkout, independent of mode), citing ISSUE-FIXER's mechanical confirmation (checkout.ex/manager.ex line references) rather than restating the old claim with a caveat bolted on",
+      "Design states explicitly that teardown_wrap's DROP/DELETE is retained as harmless, already-idempotent defense-in-depth for this path (not the operative cleanup) and states concretely why it is still needed for a different caller shape (with_provisioning_repo/1-provisioned callers per §10's original mechanism, whose writes ARE durable)",
+      "Design confirms no new cross-test concurrency hazard is introduced (reconciled from ISSUE-FIXER's Item 4 tracing of manager.ex's sharing/unshare mechanism)",
+      "Design gives ELIXIR-DEV/TEST-DESIGNER an unambiguous corrected assertion or restructuring for tenant_fixture_test.exs's C5 test (line 343, assert_teardown_line/1 at line 541, the schema_present_before_drop=true assertion at line 556), not merely 'fix it however'",
+      "§11.7's and §11.10.4's regression/verification plans re-checked for any other place assuming the old false premise; any needed correction stated or an explicit finding of none",
+      "Design/spec only -- no implementation or test code written by this step",
+      "Handoff routes to CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Corrected lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md's §11.10.2 premise in place (struck the false claim explicitly per docs/anti-patterns.md's 'supersede rather than overwrite' precedent, rather than bolting a caveat onto it), citing ISSUE-FIXER's step-13 mechanical confirmation verbatim: Ecto.Adapters.SQL.Sandbox.checkout/2 (sandbox.ex:543-571) installs post_checkout/pre_checkin hooks unconditionally before any Sandbox.mode/2 call can run; post_checkout (db_connection/manager.ex:658-675) always opens a transaction; pre_checkin (manager.ex:677-701) always ROLLS BACK, never commits; neither reads or branches on :auto/:manual/{:shared,pid} mode. Traced {:shared,pid}'s own death path (handle_info DOWN -> proxy_checkin/3 -> owner_down/2 -> unshare/2) and confirmed it is orthogonal to checkin-time rollback -- it only widens which processes may use the connection during the test. The corrected premise: a Letflow.Repo connection checked out via DataCase.setup/1 is ALWAYS wrapped in a rollback-at-checkin transaction, for every mode, so provision_via_shared_connection/1's writes are never durable past the owning test process's exit -- the ambient Sandbox rollback IS the cleanup for this path, not teardown_wrap's DROP/DELETE.\n\nReconciled against §10's original mechanism (unchanged in this correction, stated precisely): with_provisioning_repo/1's Sandbox.mode(ProvisioningRepo, :auto) call targets a repo DataCase.setup/1 never checks out via Sandbox.checkout/2 at all -- its writes are ordinary, real, auto-committing statements with no wrapping transaction to roll back, which is exactly why that mechanism genuinely needs real explicit teardown. The two mechanisms have fundamentally different persistence semantics; the correction is explicitly scoped to the shared-connection (Letflow.Repo) path only and states this must not be read as 'teardown is never needed' for every caller.\n\nAdded new §11.10.2a ('teardown_wrap's DROP/DELETE is defense-in-depth, not the operative cleanup mechanism, for the shared-connection path') stating: the real cleanup for this path is the ambient rollback; teardown_wrap's own statements run against already-vanished state (cited ISSUE-FIXER's direct reproduction: schema_present_before_drop=false on both the C5 test and backfill_test.exs's ISS-0480 verification tests); this makes teardown_wrap's statements a harmless no-op for this path, NOT a defect requiring a code fix (teardown/2's own case-clause/IF EXISTS/delete_all-on-zero-rows already degrade gracefully, confirmed against the actual implementation at tenant_fixture.ex:538-550 -- ELIXIR-DEV must NOT add speculative existence-guards); teardown_wrap is retained for two concrete reasons (load-bearing for with_provisioning_repo/1-provisioned callers; costs nothing extra per §11.10.5 item 5's unchanged connection-budget analysis) rather than branching teardown behavior by dispatch path; and no new cross-test hazard exists, citing ISSUE-FIXER's Item 4 trace of manager.ex's sharing/unshare mechanism (affects only the one owning connection; two async tests hold entirely separate checkouts/connections; ordinary Postgres MVCC isolation applies regardless of Sandbox mode) -- closing the exact question step-13 was dispatched to check.\n\nAdded new §11.10.4a correcting test/letflow/support/tenant_fixture_test.exs's C5 test ('emits one marked teardown line...', line 343, assert_teardown_line/1 at line 541): its line-556 assertion `assert String.contains?(line, \"schema_present_before_drop=true\")` encodes the now-corrected false premise as a test expectation, not merely as prose -- it asserts the schema is STILL present pre-DROP, which ISSUE-FIXER's own run of this exact test showed is false on the majority path. Prescribed the exact corrected assertion (accept either schema_present_before_drop=false OR =true, since false is the EXPECTED value for this test's own provision_via_shared_connection/1 dispatch path, not an anomaly -- not a bare presence-only check, which would silently accept a typo'd field name), with a required one-line comment explaining why false is expected here. Explicitly decided NOT to rename/re-scope the schema_present_before_drop field (one of ISSUE-FIXER's open items for CODE-DESIGNER to decide) -- its now-demonstrated per-path difference is diagnostically useful, not a defect to hide. Also flagged and specified the fix for tenant_fixture.ex's own docstring comment (lines 552-556, above log_teardown/3's computation) which independently encodes the identical false premise ('distinguishes... normal... from... the ISS-0109 shape') -- added as new §11.10.5 item 4a (comment-only, no code/behavior change).\n\nRe-checked §11.7 and §11.10.4 in full for any other place assuming the old premise: §11.7 items 1-6 are about pass/fail counts and file coverage for §11.9's own (unrelated) fix -- no false premise present, no correction needed. §11.10.4 item 2 (the 'new, explicit post-teardown state check') remains required and correct as written -- explicitly stated in §11.10.4a that this item is REFRAMED, not retracted: the observable outcome it checks for (schema/rows gone) is unchanged, only the reason WHY they are expected to be gone is corrected. No other location in §11.7/§11.10.4 referenced the false premise.\n\nAdded a rework-#5 status line at the top of the design doc (matching this doc's own established convention of stacking corrected-status headers rather than silently editing history), stating the correction is documentation-only with no implementation-code change following from it -- §11.10.5's implementation list gains only the new comment-text item 4a. No .ex/.exs code written or edited by this step; only lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md was modified.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR: re-gate the design doc's corrected §11.10.2, new §11.10.2a, and new §11.10.4a (plus §11.10.5 item 4a) against every item in this handoff's task.acceptance_criteria, independently -- do not read this result.summary as a substitute for reading the sections themselves; in particular confirm the corrected §11.10.2 no longer contains the false claim in any form (not merely caveated) and that §11.10.4a's prescribed C5 assertion is unambiguous enough for TEST-DESIGNER/ELIXIR-DEV to implement without further interpretation. On PASS, route to ELIXIR-DEV to make the two comment-only edits this rework specifies (tenant_fixture.ex's schema_present_before_drop docstring, §11.10.5 item 4a) and to TEST-DESIGNER/ELIXIR-DEV to correct tenant_fixture_test.exs's C5 assertion per §11.10.4a, then re-run the C5 test and backfill_test.exs with real quoted output to confirm the corrected assertion passes against actual (not assumed) behavior, before resuming the SECURITY-REVIEWER/REVIEWER routing this rework chain was blocked before reaching."
+  },
+  "rework_count": 5,
+  "max_rework": 3
+}

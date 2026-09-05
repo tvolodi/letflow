@@ -1,0 +1,63 @@
+{
+  "handoff_id": "3a7e1f2d-9c4b-4e8a-b1d6-5f0c8a2e6b91",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "15b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0480-20260905/step-15b-code-design-validator.json",
+  "created_at": "2026-09-05T11:23:44Z",
+  "started_at": null,
+  "completed_at": "2026-09-05T11:23:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-15-code-designer-rework6.json",
+      "handoffs/WF03-ISS0480-20260905/step-14b-code-design-validator.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Focused re-gate of rework #6, citation-text-only: verify §11.10.2 in lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md now cites deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701 (not deps/db_connection/lib/db_connection/ownership/manager.ex) for post_checkout/pre_checkin, read that exact file/line range directly to confirm defp post_checkout/3 and defp pre_checkin's ordinary-checkin clause actually appear there, and confirm no other text in the surrounding paragraph was altered beyond the file path swap.",
+    "acceptance_criteria": [
+      "§11.10.2's citation for post_checkout/pre_checkin names deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex, not manager.ex",
+      "Cited line ranges independently re-verified against the actual source file",
+      "No other text in the surrounding paragraph changed beyond the file-path swap"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified the single corrected citation rather than trusting step-15's claim that it was fixed. Read lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md lines 3270-3314 directly: line 3282 now reads 'deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675 (post_checkout)' and line 3286 reads 'deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:677-701 (pre_checkin)' -- both name sandbox.ex, not manager.ex. Read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex lines 655-704 directly myself: confirmed `defp post_checkout(conn_mod, conn_state, opts)` is defined exactly at lines 658-675, and `defp pre_checkin(:checkin, Connection, {conn_mod, conn_state, _in_transaction?}, opts)` -- the ordinary-checkin clause -- is defined exactly at lines 677-701 (a second pre_checkin/4 clause for the non-:checkin case follows at 703-704, outside the cited range, correctly excluded). Both citations are accurate against source, first-hand.\n\nGrepped the whole design doc for any remaining 'manager.ex:658', 'manager.ex:677', or 'manager.ex:701' -- zero matches anywhere in the file, so no stray mis-citation survives elsewhere.\n\nConfirmed no other text in the surrounding paragraph changed beyond the two file-path swaps: re-read lines 3270-3314 in full. The checkout/2 citation (sandbox.ex:543-571, line 3275), the mechanism claims for post_checkout/pre_checkin (unconditional handle_begin / unconditional handle_rollback, lines 3282-3289), the 'neither reads or branches on mode' claim (lines 3290-3292), and all four {:shared, pid} death-path citations to manager.ex (:241-242, :285-297, :364-386, :402-408, lines 3293-3297) are present and textually intact, matching exactly what step-14b's gate already independently verified as accurate against source. Git history for this file is squashed across rework iterations 3-6 into a single commit (8b443d38), so a clean isolated diff for rework #6 alone is not reconstructable from git log -- verification was therefore done directly against the current working-tree content plus source, which is the authoritative check regardless.\n\nAll three of this re-gate's acceptance criteria are met. No re-walk of checks 2-5 performed, per step-14b's own next_action scoping this re-gate to the citation fix only; those were already PASS and are structurally unaffected by a citation-text-only change.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV to apply the two remaining doc/comment/assertion corrections specified in step-14's original next_action: (1) §11.10.4a's corrected C5 assertion fix in test/letflow/support/tenant_fixture_test.exs (currently the hardcoded assert String.contains?(line, \"schema_present_before_drop=true\") at line 556 must accept schema_present_before_drop=false OR =true per §11.10.4a, with the required one-line comment, per step-14b's Check 3 verification), and (2) the tenant_fixture.ex docstring fix at test/support/tenant_fixture.ex:552-556 per §11.10.5 item 4a. ELIXIR-DEV must then run the FULL final regression suite (§11.7 + §11.10.4, all items, including the corrected C5 assertion) before this goes to SECURITY-REVIEWER/REVIEWER and the TEST-RUNNER full-suite gate. ORCH may also still want to file the MINOR finding step-15 raised (step-13 ISSUE-FIXER's reassessment handoff carries the same source mis-citation at its own result.summary Item 1) via ISSUE_QUEUE.md -- not blocking, noted for the record."
+  },
+  "rework_count": 6,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 5,
+      "gated_at": "2026-09-05T11:19:07Z",
+      "status": "FAIL",
+      "summary": "Checks 2-5 PASS. Check 1 FAIL: §11.10.2's post_checkout/pre_checkin citation named deps/db_connection/lib/db_connection/ownership/manager.ex:658-701, but that file is only 454 lines long and never defines either function. The functions are actually defined in deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701.",
+      "issues": ["BLOCKER: §11.10.2 cites the wrong file/module for post_checkout/pre_checkin (manager.ex instead of sandbox.ex)"],
+      "next_action": "Rework CODE-DESIGNER: correct the citation to name deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675 (post_checkout) and :677-701 (pre_checkin). Citation-text-only fix; no other section needs to change."
+    }
+  ]
+}

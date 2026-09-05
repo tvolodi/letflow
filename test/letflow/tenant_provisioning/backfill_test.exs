@@ -293,4 +293,65 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
     # "Registration present, schema absent" window rather than :tenant_not_provisioned.
     assert %Registration{} = Repo.get_by(Registration, tenant_id: vanished_tenant_id)
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0480 design §11.10.4 item 2: post-teardown state verification.
+  #
+  # Every other test above provisions via `provisioned_tenant!/1` on its default
+  # `template: :clone` + this file's `async: false` -- exactly the
+  # `provision_via_shared_connection/1` dispatch path §11.10 fixes teardown for. A
+  # green run of those tests only proves ExUnit did not observe a raised `exit`; it
+  # does not by itself prove `teardown/2`'s on_exit/1 callback actually ran its DROP
+  # SCHEMA/delete_all statements to completion (a swallowed exit could, in principle,
+  # produce the same green result while leaking state). These two tests close that gap
+  # empirically: the first provisions and records the tenant_id/schema_name in
+  # `:persistent_term` (surviving past its own test process's exit, unlike a module
+  # attribute or `on_exit`'s own closure); the second, which ExUnit runs strictly
+  # afterward in this `async: false` module's own sync queue, asserts the schema and
+  # tracking rows are actually gone.
+  #
+  # Safe to assert without a race: ExUnit's own documented ordering runs a given test's
+  # on_exit/1 callbacks to completion before the NEXT test in the same `async: false`
+  # module starts -- so by the time the second test's body runs, the first test's
+  # `TenantFixture`-registered on_exit/1 teardown has already either completed or raised
+  # (in which case ExUnit would already report the FIRST test as failed, independent of
+  # this second test's own assertions).
+  @iss0480_teardown_verify_key {__MODULE__, :iss0480_teardown_verify}
+
+  test "regression: ISS-0480 §11.10 -- provisions a tenant whose teardown state the next test verifies" do
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      TenantFixture.provisioned_tenant!(slug_prefix: "iss0480-teardown-verify")
+
+    # Sanity check before teardown: the schema and tracking rows really do exist while
+    # this test is still running.
+    assert %{rows: [_ | _]} =
+             Repo.query!(
+               "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
+               [schema_name]
+             )
+
+    assert %Registration{} = Repo.get_by(Registration, tenant_id: tenant_id)
+    assert %Tenant{} = Repo.get(Tenant, tenant_id)
+
+    :persistent_term.put(@iss0480_teardown_verify_key, %{
+      tenant_id: tenant_id,
+      schema_name: schema_name
+    })
+  end
+
+  test "regression: ISS-0480 §11.10 -- the previous test's on_exit/1 teardown actually dropped the schema and rows, not merely 'no exit observed'" do
+    %{tenant_id: tenant_id, schema_name: schema_name} =
+      :persistent_term.get(@iss0480_teardown_verify_key)
+
+    assert %{rows: []} =
+             Repo.query!(
+               "SELECT 1 FROM information_schema.schemata WHERE schema_name = $1",
+               [schema_name]
+             )
+
+    refute Repo.get_by(Registration, tenant_id: tenant_id)
+    refute Repo.get(Tenant, tenant_id)
+  after
+    :persistent_term.erase(@iss0480_teardown_verify_key)
+  end
 end

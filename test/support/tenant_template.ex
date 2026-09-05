@@ -66,24 +66,36 @@ defmodule Letflow.Test.TenantTemplate do
   """
   @spec ensure_template!() :: :ok
   def ensure_template! do
-    # The template schema is SHARED, long-lived state -- it must survive the
-    # calling test's own sandbox transaction, or its DDL is rolled back and
-    # the next caller finds a half-built schema. Measured symptom when this
-    # was left to the caller: partition databases ended up with a
-    # tenant_template holding 1 table instead of ~39, and every dependent
-    # test failed TENANT_TEMPLATE_SELF_CHECK_FAILED with the full table set
-    # reported missing.
-    #
-    # tenant_fixture.ex's provisioned_tenant!/1 already sets :auto before it
-    # reaches here, but ensure_template!/0 is public and must not depend on
-    # its caller having done so. Setting it here is idempotent and matches
-    # what tenant_fixture.ex itself does (and deliberately does not restore,
-    # for the same reason -- see its own note at line 171).
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
-
     if template_ready?() do
       :ok
     else
+      # The template schema is SHARED, long-lived state -- it must survive the
+      # calling test's own sandbox transaction, or its DDL is rolled back and
+      # the next caller finds a half-built schema. Measured symptom when this
+      # was left to the caller: partition databases ended up with a
+      # tenant_template holding 1 table instead of ~39, and every dependent
+      # test failed TENANT_TEMPLATE_SELF_CHECK_FAILED with the full table set
+      # reported missing.
+      #
+      # tenant_fixture.ex's provisioned_tenant!/1 already sets :auto before it
+      # reaches here, but ensure_template!/0 is public and must not depend on
+      # its caller having done so. Setting it here is idempotent and matches
+      # what tenant_fixture.ex itself does (and deliberately does not restore,
+      # for the same reason -- see its own note at line 171).
+      #
+      # CONDITIONAL as of design §11.9: this call only fires when
+      # template_ready?() is false (i.e. at most once per partition, on the
+      # path that is about to build the template below). It used to be this
+      # function's unconditional first statement, which meant EVERY call --
+      # including the steady-state case where the template already exists --
+      # forced the pool to :auto and discarded whatever connection the
+      # calling test already held, including its own in-flight, uncommitted
+      # work (e.g. a Tenant insert under provision_via_shared_connection/1's
+      # {shared, self()}/:auto mode). See design §11.9.1-§11.9.2 for the full
+      # diagnosis and why moving it here (immediately before the advisory
+      # lock, only on the build path) closes that regression.
+      Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+
       # SESSION-level advisory lock (pg_advisory_lock/pg_advisory_unlock), not
       # the transaction-scoped pg_advisory_xact_lock provision_tenant_schema/1
       # uses -- deliberately, because build_template!/0 below calls

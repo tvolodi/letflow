@@ -1,0 +1,62 @@
+{
+  "handoff_id": "c4a8f2e1-6d5b-4f3a-9e1c-7b2d4a6f8c93",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "11b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0480-20260905/step-11b-code-design-validator.json",
+  "created_at": "2026-09-05T10:21:03Z",
+  "started_at": "2026-09-05T10:21:03Z",
+  "completed_at": "2026-09-05T10:21:03Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-11-code-designer-rework4.json",
+      "handoffs/WF03-ISS0480-20260905/step-10-elixir-dev.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"
+    ],
+    "owned_modules": ["test/support/tenant_fixture.ex"],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Independently gate §11.10 (six subsections, §11.10.0-§11.10.6) of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md against step-11's own task.acceptance_criteria, re-deriving every claim from source rather than trusting CODE-DESIGNER's result.summary.",
+    "acceptance_criteria": [
+      "Re-derive from ExUnit's and DBConnection.Ownership's actual documented/source semantics that on_exit runs after the owning process exits, and that with_provisioning_repo/1 called from the on_exit process has no problematic interaction with the original test's gone {:shared, self()} registration",
+      "Confirm teardown/2's actual body only needs tenant_id/schema_name plus a live, permissioned connection -- not the same connection provisioning used",
+      "Confirm the :exit-catching hardening in guarded/2/log_teardown/3 is correctly scoped as defense-in-depth, not a mask for the fix not working",
+      "Confirm the post-teardown verification requirement is concrete enough for ELIXIR-DEV to implement without guessing",
+      "No implementation code present in the design"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "PASS on all five checks. Re-derived, not inherited:\n\n1. ON_EXIT TIMING/OWNERSHIP -- confirmed against the actually-installed toolchain's own compiled docs, not the design's narrative: `Code.fetch_docs(ExUnit.Callbacks)` for `on_exit/2` states verbatim 'executed in a blocking fashion after the test exits' and 'executed in a different process than the test process' -- exactly the premise §11.10.0 rests its diagnosis on. Cross-checked against deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex's own 'owner exited' FAQ section (lines 167-227, read in full): confirms the symptom is specifically 'the test process has finished... [the owner] no longer exists... Ecto will check the connection back in and notify the client process' -- matches the BLOCKER's exact stack trace shape. Checked DBConnection.Ownership.Manager (deps/db_connection/lib/db_connection/ownership/manager.ex): it is a GenServer started once per pool inside its own `init/1` (`DBConnection.start_link(module, pool_opts)`), confirming the design's 'one manager per pool, one pool per Ecto.Repo' claim from source rather than from ProvisioningRepo's own moduledoc alone -- so with_provisioning_repo/1's Sandbox.mode(ProvisioningRepo, :auto) call structurally cannot touch Letflow.Repo's owners, and running it from the on_exit process (a different process from the original owner) is not a problem because :auto mode is not owner-scoped the way {:shared, pid} is -- it performs a per-query auto-checkout regardless of caller identity, confirmed by reading with_provisioning_repo/1's own body (tenant_fixture.ex:332-342): no explicit checkout/allow call, no dependency on any specific process being alive. Fully orthogonal to the original test's now-invalid {:shared, self()} registration, as claimed.\n\n2. TEARDOWN/2 CONNECTION INDEPENDENCE -- read teardown/2's actual body (tenant_fixture.ex:522-534): TenantProvisioning.schema_name_for_tenant/1 (checked further -- lib/letflow/tenant_provisioning.ex:166-171 -- is PURE, `Ecto.UUID.cast/1` plus string concatenation, zero I/O, even stronger than the design's claim of 'a Repo.get_by read'; the design's own prose at §11.10.2 slightly overstates this by calling it a query, but this only strengthens the conclusion, it does not weaken it), then `Repo.query!(DROP SCHEMA ... CASCADE)` and two `Repo.delete_all` calls, all keyed by tenant_id/schema_name already closed over in the on_exit closure. Nothing reads in-transaction/uncommitted state from a specific connection. Confirms design's conclusion: teardown needs a live, permissioned connection to the same database, not the specific connection provisioning used -- verified against the actual code, not asserted.\n\n3. :EXIT HARDENING SCOPE -- confirmed correctly scoped as defense-in-depth. §11.10.1 explicitly separates the two defects (connection unusable = root cause; rescue-only boundary = independently real but insufficient alone) and §11.10.3 states plainly that §11.10.2 alone closes the BLOCKER under normal operation, with the :exit catch guarding a 'currently-hypothetical' future scenario. Critically, §11.10.5 item 4 and §11.10.3's closing paragraph explicitly keep teardown/2's own DROP SCHEMA/delete_all statements UNWRAPPED by any guarded/2-style boundary, with a stated reason (load-bearing cleanup must fail loudly, silently swallowing it would orphan schemas/rows -- worse than today). This is the correct discipline: the hardening cannot mask the fix not working, because the fix's success criterion (§11.10.4 item 2) is verified by direct post-condition queries, not by the absence of a raised exit.\n\n4. POST-TEARDOWN VERIFICATION CONCRETENESS -- §11.10.4 item 2 names exact, executable checks: a SELECT-equivalent against information_schema.schemata (or the existing schema_present?/1 oracle) for schema absence, plus Repo.get_by(Registration, tenant_id: ...) and Repo.get(Tenant, tenant_id) both returning nil for row absence -- and correctly sequences this as a SEPARATE test running after the teardown-exercising test in the same file, citing ExUnit's own sync-queue ordering (on_exit for test N fires before test N+1 starts) as why this is safe to assert without a race. Item 3 additionally requires confirming the widened boundary doesn't swallow a genuine cleanup failure. This is unambiguous and directly implementable without further judgement calls.\n\n5. NO IMPLEMENTATION CODE -- grepped the full design file for fenced code blocks (```elixir/```ex): zero matches. All shape descriptions (the on_exit closure shape, the try/rescue/catch expansion) are inline prose fragments describing signatures/structure, consistent with every other gated section in this same file (§11.6, §10.3.2, etc.), not pasted implementation bodies.\n\nNon-blocking note recorded, not a failure: §11.10.2's inline 'Concretely:' example omits the `teardown_wrap` binding name that §11.10.5 (the authoritative implementation subsection) correctly specifies -- harmless, since §11.10.5 is unambiguous on its own and ELIXIR-DEV implements from it.\n\nAlso verified the rework_count/max_rework overage step-11 itself flagged (rework_count 4 > max_rework 3) is ORCH's/ORCHESTRATOR.md §5's call, not this gate's -- correctly not resolved unilaterally by CODE-DESIGNER, and not this validator's checklist item either (design-content gate only). Restating it here so it is not lost between handoffs.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0480-20260905/step-11b-code-design-validator.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Carried forward from step-11 (not newly found here): this run's rework_count (4) exceeds its own max_rework (3). Unresolved by design -- routes to ORCH per ORCHESTRATOR.md §5 for a ruling on whether this new-defect design pass counts against the ceiling or is a distinct blocker chain, same as step-11 already flagged. Not re-litigated here; simply not silently dropped between handoffs per core-directives.md's 'Never resolve a conflict silently.'",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "PASS. Route to ELIXIR-DEV: implement §11.10.5's three signature-level changes to test/support/tenant_fixture.ex (provisioned_tenant!/1's connection_wrap split into provision_wrap/teardown_wrap; guarded/2's explicit try/rescue/catch :exit widening; log_teardown/3's trailing rescue clause's identical :exit widening) on top of the existing uncommitted local changes already on this branch (tenant_template.ex's §11.9.4 ensure_template!/0 reorder, and the earlier §11/§11.2 provision_via_shared_connection/1 implementation from commit c38dfa9b) -- do not revert either. Then re-run the FULL §11.7 regression plan (items 1-6) plus §11.10.4's three new verification items (post-teardown state check for schema/registration/tenant row absence; confirmation the widened boundary doesn't mask a genuine cleanup failure; mix compile --warnings-as-errors --force and mix format --check-formatted) with real quoted output. On green, resume the SECURITY-REVIEWER/REVIEWER routing step-10 was blocked before reaching."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

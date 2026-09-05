@@ -1,0 +1,61 @@
+{
+  "handoff_id": "b3f2a7d4-6e1c-4a92-8f3d-7c1e9a5b2d40",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "09",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-09-code-designer-rework3.json",
+  "created_at": "2026-09-05T00:00:00Z",
+  "started_at": "2026-09-05T00:00:00Z",
+  "completed_at": "2026-09-05T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-08-elixir-dev.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_template.ex",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex"
+    ],
+    "owned_modules": ["lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Rework §11 (design iteration 3) to resolve the contradiction ELIXIR-DEV's step-08 BLOCKER found: §11.2/§11.4's claim that provision_via_shared_connection/1's path issues 'zero Sandbox.mode/2 calls of any kind' is false, because Letflow.Test.TenantTemplate.ensure_template!/0 (test/support/tenant_template.ex:82) issues its own unconditional Sandbox.mode(Letflow.Repo, :auto) on every :clone-path call, disrupting the caller's own in-flight Tenant insert before clone_tenant_schema!/1's FK check runs -- reproduced as a regression from 4/5 to 0/5 passing on backfill_test.exs. Diagnose whether ensure_template!/0's Sandbox.mode(:auto) call needs to run at all under the shared-connection path, needs to target a different repo, or can be made conditional so repeat calls skip it once the template exists -- and write a concrete, unambiguous fix ELIXIR-DEV can implement without further guessing.",
+    "acceptance_criteria": [
+      "The contradiction between §11.2/§11.4's 'zero Sandbox.mode/2 calls' claim and ensure_template!/0's actual unconditional call is named explicitly and traced to source, not silently patched around",
+      "A concrete mechanism is specified for test/support/tenant_template.ex's ensure_template!/0 that removes the disruptive call from the steady-state (template already built) path reachable from provision_via_shared_connection/1",
+      "§11.2 and §11.4's absolute 'zero calls' claims are corrected in place to state the property precisely (qualified by template_ready?/0), not merely appended to without fixing the original false statement",
+      "Any residual gap the fix does not fully close (the first-ever template-build call per partition) is disclosed explicitly as a trade-off, with rejected alternatives stated and reasons given, not silently accepted or silently hidden",
+      "§11.7's regression coverage plan is updated to require re-verification of the exact backfill_test.exs fail-then-pass sequence that caught this, plus tenant_template_test.exs's continued passing",
+      "No implementation code written -- signatures/mechanism description only",
+      "A new open question is recorded if the fix does not eliminate the hazard completely (OQ-13)"
+    ]
+  },
+  "result": {
+    "status": "COMPLETED",
+    "summary": "Read ELIXIR-DEV's step-08 BLOCKER in full, plus test/support/tenant_template.ex in full (ensure_template!/0, template_ready?/0, clone_tenant_schema!/1, build_template!/0) and design §9.7/§11.1-§11.8. Confirmed the root cause exactly as ELIXIR-DEV traced it: ensure_template!/0's own unconditional Sandbox.mode(Letflow.Repo, :auto) call (line 82, its own first statement, issued before even checking template_ready?/0) is reachable from provision_schema!/2's :clone clause, which provision_via_shared_connection/1 (§11.2) drives for every async:false + template::clone caller (44 of 47 real call sites) -- and this call fires AFTER the caller's own Tenant insert has already run (§11.2 step 2's sequencing), so its real (non-no-op) mode-difference check-in (per §9.1's DBConnection.Ownership.Manager trace, proxy_checkin_all_except with an empty exclusion list) discards the caller's own in-flight, uncommitted Tenant row before clone_tenant_schema!/1's Registration insert can see it -- reproducing Mechanism 4 (§9.2) via a call site §11 never audited, exactly matching ELIXIR-DEV's reproduced 4/5->0/5 regression on backfill_test.exs with the exact FK-does-not-exist symptom.\n\nWrote design §11.9 (new, normative) into lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, corrected §11.2 step 3 and §11.4's first bullet in place (they previously asserted 'zero Sandbox.mode/2 calls' as an unconditional claim over the whole call tree; corrected to state the true, qualified property: zero calls once template_ready?/0 is true, which is every call after a partition's first), and extended §11.7's regression-coverage plan with two new required items.\n\nTHE FIX (§11.9.2): move ensure_template!/0's existing Sandbox.mode(Letflow.Repo, :auto) statement from being the function's unconditional first line to being the first statement INSIDE the existing `if template_ready?() do :ok else ... end` conditional's `else` branch -- i.e. only issue it on the path that is actually about to build the template (advisory lock + unboxed_run/3 DDL), never on the already-built fast path. This is a single statement reordering: no new branch, no new function, no new module attribute, no change to template_ready?/0, clone_tenant_schema!/1, build_template!/0, or any other function's body. template_ready?/0's own persistent_term-backed idempotency (§4.2, already in the design) means this fast path is the steady-state case for every call after a partition's first -- which is what makes §11.2/§11.4's corrected, qualified claim true for the overwhelming majority of real calls.\n\nTHE DISCLOSED RESIDUAL GAP (§11.9.3), not silently swept under the fix: the very first :clone-path + async:false call in a given partition, IF it also happens to be the call that triggers the template build (no async:true caller already built it first), still has its own Tenant insert discarded by ensure_template!/0's now-conditional-but-still-real :auto call, because that build genuinely needs :auto mode (unboxed_run/3's DDL must survive the caller's own sandboxed transaction ending -- already established by §9.7/the function's own existing comment) and no mechanism this rework's scope covers can give the build path :auto mode without disrupting a co-resident in-flight transaction on the same connection. Explained why this is expected to be currently unobserved in practice (ExUnit's own 'sync modules run after all async modules complete' scheduling, §5.1, means at least one async:true TenantFixture caller -- secrets_test.exs/webhooks_test.exs, §9's own 2-file tranche -- already builds the template during the async phase, before any async:false test's sync-queue turn arrives), stated as an empirical expectation for TEST-RUNNER's full-suite run to confirm or refute, not asserted as proven. Three alternative mechanisms that would close this gap completely (routing the build's :auto call through ProvisioningRepo instead; eager pre-build from test_helper.exs; having provision_via_shared_connection/1 ensure the template is built before its own Tenant insert) were considered and explicitly rejected for this rework's bounded scope, each with the specific reason stated (§11.9.3's three numbered items) -- deferred to a future design as OQ-13 if TEST-RUNNER's run shows the gap is real rather than already avoided.\n\n§11.7 EXTENDED (items 5-6, both required, not optional): item 5 requires TEST-RUNNER to re-run test/support/tenant_template_test.exs unmodified and confirm it stays green against the §11.9 change (the change does not alter ensure_template!/0's observable contract, only when it calls Sandbox.mode/2 internally -- that file has zero Sandbox.mode references today, confirmed by grep). Item 6 restates the exact backfill_test.exs command as a permanent named regression check: pre-§11.9 it is 0/5 (the newly-introduced regression), and post-§11.9 it must return to at minimum the pre-§11-work 4/5 baseline with the ISS-0332 test now also passing (5/5) -- TEST-RUNNER must quote the actual mix test result line for this specific file, not infer it from a broader suite summary, since a broader summary could mask a partial (not fully closed) recurrence of the residual gap disclosed in §11.9.3.\n\nELIXIR-DEV's already-implemented §11.1/§11.2/§11.3/§11.6 work (data_case.ex, tenant_fixture.ex edits from step-08) stays valid and unchanged by this rework -- §11.9's fix is entirely inside test/support/tenant_template.ex's ensure_template!/0, a file outside those two owned_modules but explicitly authorized for this one, narrow change by this design (§11.9.2's own note), since ELIXIR-DEV's step-08 handoff correctly declined to touch a file outside its owned_modules on its own initiative and escalated instead.\n\nNo implementation code written into the design document -- §11.9.4 states the fix as a signature-level/structural description (which statement moves, to which branch, with what precondition) with no Elixir code blocks, matching every other ELIXIR-DEV-facing subsection in this design (§9.6, §11.6).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0480-20260905/step-09-code-designer-rework3.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "not_applicable",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to re-gate §11.9 (and the in-place corrections to §11.2/§11.4/§11.7) before returning to ELIXIR-DEV to implement the single-statement reorder in test/support/tenant_template.ex's ensure_template!/0 (§11.9.4), re-run the full §11.7 regression plan including its two new items, and complete the outstanding full-suite verification per §11.8 OQ-12."
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

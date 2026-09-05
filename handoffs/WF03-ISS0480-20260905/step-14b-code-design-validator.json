@@ -1,0 +1,66 @@
+{
+  "handoff_id": "f1c8b2a4-6e9d-4a3f-8b1c-2d7e5f9a0c31",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "14b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0480-20260905/step-14b-code-design-validator.json",
+  "created_at": "2026-09-05T11:19:07Z",
+  "started_at": "2026-09-05T11:19:07Z",
+  "completed_at": "2026-09-05T11:19:07Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-14-code-designer-rework5.json",
+      "handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/support/tenant_fixture.ex",
+      "deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex",
+      "deps/db_connection/lib/db_connection/ownership/manager.ex",
+      "deps/db_connection/lib/db_connection/ownership/proxy.ex",
+      "deps/db_connection/lib/db_connection/ownership.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Re-gate CODE-DESIGNER's rework #5 correction to §11.10.2/§11.10.2a/§11.10.4a of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md against step-14's own task.acceptance_criteria, independently re-deriving the verdict rather than trusting result.summary, and re-reading the cited source lines directly rather than trusting their presence.",
+    "acceptance_criteria": [
+      "§11.10.2's correction accurately reflects ISSUE-FIXER's mechanical finding, verified against the actual cited source lines",
+      "§11.10.2a correctly frames teardown_wrap's DROP/DELETE as harmless defense-in-depth and instructs against speculative existence-guards",
+      "§11.10.4a's corrected C5 assertion and tenant_fixture.ex docstring fix are unambiguous",
+      "No other location in §11.7/§11.10.4 still assumes the false premise",
+      "No implementation/test code written by CODE-DESIGNER"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "FAIL on check 1 -- citation accuracy. Independently re-read every cited source line rather than trusting the handoff's claim that a citation exists. Checks 2, 3, 4, and 5 individually PASS on their own terms (detailed below), but this gate is no-partial-credit per WF-02 Step 1b, so the overall verdict is FAIL and the design returns to CODE-DESIGNER.\n\n--- Check 1: FAIL ---\n\n§11.10.2's corrected premise (design doc lines ~3282-3300) and the step-13 ISSUE-FIXER handoff it quotes verbatim both cite:\n  - `deps/db_connection/lib/db_connection/ownership/manager.ex:658-675` for `post_checkout`\n  - `deps/db_connection/lib/db_connection/ownership/manager.ex:677-701` for `pre_checkin`\n\nI read `deps/db_connection/lib/db_connection/ownership/manager.ex` directly. It is 454 lines long in total -- lines 658-701 do not exist in the file at all, and grepping the whole `deps/db_connection` tree for `def post_checkout` / `defp post_checkout` / `def pre_checkin` / `defp pre_checkin` returns zero matches anywhere in `db_connection`. `manager.ex` and `proxy.ex` (`deps/db_connection/lib/db_connection/ownership/proxy.ex`, 334 lines) only reference `post_checkout`/`pre_checkin` as opaque keys threaded through pool opts (`ownership.ex:35-52`) and invoked generically at `proxy.ex` lines ~99-104 and ~270-275 -- they never define the closures.\n\nThe actual functions are `defp post_checkout/3` and `defp pre_checkin/4`, defined in **`deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701`** -- Ecto's own module, the SAME file already correctly cited elsewhere in this same paragraph for `checkout/2`/`checkin/2` (lines 543-571/586-593). I read sandbox.ex:655-704 directly: `post_checkout/3` (658-675) does call `conn_mod.handle_begin([mode: :transaction] ++ opts, conn_state)` unconditionally, and `pre_checkin/4`'s ordinary-checkin clause (677-701) does call `conn_mod.handle_rollback(...)` unconditionally, matching the design's substantive claim -- and neither branches on `:auto`/`:manual`/`{:shared, pid}` mode, also matching. So the MECHANISM claim is correct. But the citation naming `db_connection/manager.ex` for these two functions is not merely imprecise, it names a file where the cited line range (658-701) doesn't exist and a module that never defines them -- this is exactly the class of error the task explicitly warned against ('re-read the actual cited source lines yourself to confirm the citation is accurate, not just present'), and it fails silently: a future reader (ELIXIR-DEV, or a later validator) who opens `manager.ex:658-701` to re-verify this claim will find nothing resembling the described behavior there, in a file that is only 454 lines long. The {:shared,pid} death-path citations in the SAME paragraph -- manager.ex:241-242 (handle_info DOWN), :285-297 (proxy_checkin), :364-386 (owner_down), :402-408 (unshare) -- ARE accurate; I read all four and they match exactly. So the defect is scoped precisely to the post_checkout/pre_checkin attribution, not the whole paragraph.\n\nThis is not a new defect introduced by rework #5's edit -- the mis-citation originates in step-13's ISSUE-FIXER reassessment handoff (result.summary Item 1), and CODE-DESIGNER's rework #5 copied it verbatim into the design doc without independently re-verifying it, despite this being the single load-bearing citation for the entire corrected premise the whole rework turns on. Per core-directives.md's Instruction Precedence closing rule ('This chain governs what you are told to DO, not what you are told IS TRUE... a handoff's factual premises are checkable, and may be wrong'), CODE-DESIGNER was not entitled to inherit this claim uncritically, and CODE-DESIGN-VALIDATOR is not entitled to pass it uncritically either -- which is exactly why this check exists as its own explicit item in this gate's task.\n\n--- Checks 2-5, evaluated independently for the record (not curing the Check 1 FAIL) ---\n\nCheck 2 PASS: §11.10.2a (lines 3381-3453) correctly frames teardown_wrap's DROP/DELETE as harmless, already-idempotent defense-in-depth for the shared-connection path (not operative cleanup), gives two concrete reasons for retaining it (load-bearing for with_provisioning_repo/1 callers; costs nothing extra per unchanged §11.10.5 item 5 budget analysis), and explicitly states 'ELIXIR-DEV must not add speculative existence-guards around any of its three statements; they are already safe.' Verified teardown/2's actual body at test/support/tenant_fixture.ex:538-550 directly -- matches the design's description exactly (case-clause on schema_name_for_tenant/1's {:error, :invalid_tenant_id}, IF EXISTS DROP, delete_all on possibly-zero rows).\n\nCheck 3 PASS: §11.10.4a (lines 3623-3712) prescribes the exact corrected C5 assertion (accept schema_present_before_drop=false OR =true, with a required one-line comment, explicit instruction not to regress to a bare presence-only check) unambiguously enough to implement without guessing -- verified against the actual test file at test/letflow/support/tenant_fixture_test.exs:556, which currently reads exactly the hardcoded `assert String.contains?(line, \"schema_present_before_drop=true\")` the design describes. The tenant_fixture.ex docstring fix (§11.10.5 item 4a) is specified clearly and verified against the actual docstring at test/support/tenant_fixture.ex:552-556, which reads exactly as quoted in the design ('ISS-0109 shape' framing false=anomalous).\n\nCheck 4 PASS: read §11.7 in full (lines 2665-2816) -- entirely about test-file coverage, pass/fail counts, and dispatch-path regression checks for §11.9's unrelated ensure_template!/0 fix; no reference to the old false premise anywhere in it, confirming CODE-DESIGNER's own finding of 'no correction needed' there. §11.10.4 item 2 (lines 3578-3602, the post-teardown state check) is correctly reframed by §11.10.4a as unretracted -- the observable outcome (schema/rows gone) is unchanged, only the reason is corrected, and this reframing is stated explicitly and correctly.\n\nCheck 5 PASS: read every corrected/added section (§11.10.2, §11.10.2a, §11.10.4a, §11.10.5 item 4a) in full -- no .ex/.exs implementation code blocks present. The two quoted snippets (the struck old assertion and the prescribed new assertion, lines 3643 and 3669-3672) are test-assertion text being specified as a design instruction, in the same style already established elsewhere in this same document for prescribing exact expected test content -- not implementation bodies being written by the designer.",
+    "artifacts_out": [],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "description": "§11.10.2's corrected premise (lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, ~lines 3282-3300) cites `deps/db_connection/lib/db_connection/ownership/manager.ex:658-675` (post_checkout) and `:677-701` (pre_checkin) as the source of the load-bearing mechanical claim. manager.ex is only 454 lines long; lines 658-701 do not exist in it, and neither post_checkout nor pre_checkin is defined anywhere in db_connection (grepped the whole deps/db_connection tree -- zero matches for their def/defp). The actual functions live in `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701` (defp post_checkout/3, defp pre_checkin/4) -- the same file already correctly cited two lines earlier in the same paragraph for checkout/2 (543-571). The substantive mechanism claim (unconditional handle_begin at checkout, unconditional handle_rollback at ordinary checkin, no mode branching) IS accurate -- confirmed by reading sandbox.ex:655-704 directly -- so this is a citation-attribution defect, not a wrong conclusion. It originates in step-13 ISSUE-FIXER's reassessment handoff (copied verbatim by CODE-DESIGNER into rework #5) and was not independently re-verified before being written into the design as the corrected, authoritative premise. This is exactly the failure mode the dispatching task asked this gate to catch ('re-read the actual cited source lines yourself to confirm the citation is accurate, not just present') and exactly why a validator re-derives rather than trusts a producer's citation.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Rework CODE-DESIGNER: correct §11.10.2's (and, if step-13's own handoff is ever quoted again elsewhere, any other verbatim copy of) the post_checkout/pre_checkin citation to name `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675` (post_checkout) and `:677-701` (pre_checkin) instead of `deps/db_connection/lib/db_connection/ownership/manager.ex`. This is a citation-text-only fix -- the substantive premise, §11.10.2a's framing, and §11.10.4a's C5 assertion/docstring corrections do not need to change, since the underlying mechanism claim they all rest on is independently confirmed accurate against the correct file. Also recommend CODE-DESIGNER flag step-13's ISSUE-FIXER handoff itself as carrying the same mis-citation at its source (result.summary Item 1 and issues[0].description), since ORCH may want this noted for ISSUE-FIXER's own record per core-directives.md's 'Never resolve a conflict silently' -- file as a MINOR finding via ISSUE_QUEUE.md if ORCH agrees, not required to block this rework's own re-submission. Once corrected, re-submit directly to CODE-DESIGN-VALIDATOR for a re-gate scoped to the citation fix (no need to re-walk checks 2-5, already PASS and unaffected by this correction) before resuming the ELIXIR-DEV comment-fix / full-regression routing step-14's own next_action specified."
+  },
+  "rework_count": 5,
+  "max_rework": 3
+}

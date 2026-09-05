@@ -267,21 +267,38 @@ defmodule Letflow.TenantFixture do
     # design §11.1/§11.2.1: template: :replay always needs ProvisioningRepo's own :auto
     # connection (Ecto.Migrator.run/4's real two-connection requirement); otherwise an
     # async: false caller (DataCase.setup/1 set the flag) reuses its own connection.
-    connection_wrap =
+    #
+    # design §11.10.2/§11.10.5 item 1: provisioning and teardown are no longer forced to
+    # share the SAME dispatch decision. `provision_wrap` is exactly today's
+    # `connection_wrap` -- unchanged, still used only for the provisioning call.
+    # `teardown_wrap` is ALWAYS `with_provisioning_repo/1`, regardless of what
+    # `provision_wrap` resolved to: by the time `on_exit/1` fires, the test process that
+    # held provisioning's own connection has already exited (a precondition for
+    # `on_exit/1` running at all), so `{:shared, self()}`'s registration for that PID is
+    # already gone and the ambient connection is unusable from the on_exit process. What
+    # teardown actually needs is a live, permissioned connection to the SAME database,
+    # not the specific connection provisioning used (teardown/2's own body reads/deletes
+    # only by tenant_id/schema_name, never by anything requiring the same in-flight
+    # transaction) -- ProvisioningRepo already supplies that, unconditionally, and is
+    # never itself subject to the ORIGINAL ISS-0113/ISS-0480 hazard since it never issues
+    # Sandbox.mode/2 against Letflow.Repo.
+    provision_wrap =
       if template == :clone and Process.get(:letflow_data_case_shared_mode?, false) do
         &provision_via_shared_connection/1
       else
         &with_provisioning_repo/1
       end
 
+    teardown_wrap = &with_provisioning_repo/1
+
     {tenant, schema_name} =
-      connection_wrap.(fn ->
+      provision_wrap.(fn ->
         # The Tenant row must be inserted on THIS same connection, not necessarily the
         # caller's own: TenantProvisioning/TenantTemplate's own INSERTs into
         # tenant_schemas carry a `tenant_id` FK to `tenants`, and provisioning runs on
-        # whichever connection `connection_wrap` selected for the rest of this call. An
+        # whichever connection `provision_wrap` selected for the rest of this call. An
         # uncommitted insert on a DIFFERENT connection than the one provisioning uses
-        # would be invisible to that FK check -- inserting here, under `connection_wrap`,
+        # would be invisible to that FK check -- inserting here, under `provision_wrap`,
         # is what makes it visible on whichever connection provisioning subsequently
         # runs on.
         tenant =
@@ -296,11 +313,10 @@ defmodule Letflow.TenantFixture do
           |> Repo.insert!()
 
         if Keyword.get(opts, :teardown, true) do
-          # design §11.3: teardown must close over the SAME dispatch decision made for
-          # this call's provisioning above -- they must never diverge, or teardown's
-          # DROP SCHEMA/DELETE would run against a different connection than the one
-          # provisioning committed to.
-          on_exit(fn -> connection_wrap.(fn -> teardown(tenant.id, owner) end) end)
+          # design §11.10.2/§11.10.5 item 1: teardown always routes through
+          # ProvisioningRepo, independent of provisioning's own dispatch decision -- see
+          # the moduledoc's "on_exit/1 teardown outlives its own connection" section.
+          on_exit(fn -> teardown_wrap.(fn -> teardown(tenant.id, owner) end) end)
         end
 
         schema_name = provision_schema!(template, tenant.id)
@@ -533,10 +549,13 @@ defmodule Letflow.TenantFixture do
     Repo.delete_all(from(t in Tenant, where: t.id == ^tenant_id))
   end
 
-  # `schema_present_before_drop` distinguishes "we tore down a schema that was still
-  # there" (normal) from "we tore down a schema that had already vanished" -- the
-  # ISS-0109 shape, which `DROP SCHEMA IF EXISTS ... CASCADE` silently succeeds against,
-  # telling nobody.
+  # `schema_present_before_drop` distinguishes the two provisioning dispatch paths'
+  # persistence semantics (design §11.10.2a/§11.10.4a): `false` is the expected/normal
+  # outcome for a `provision_via_shared_connection/1`-provisioned tenant, because the
+  # ambient Sandbox rollback has already removed the schema before this teardown ever
+  # runs; `true` is expected for a `with_provisioning_repo/1`-provisioned tenant, whose
+  # writes are durable until this DROP actually runs. Neither value is anomalous on its
+  # own -- which one appears depends only on which path provisioned this tenant.
   #
   # OQ-4, settled by measurement rather than assumption: this repo has no `config
   # :logger` in any config file, so under MIX_ENV=test `Logger.level()` is `:debug`,
@@ -556,6 +575,12 @@ defmodule Letflow.TenantFixture do
   rescue
     # INV-F-10: a failing log call must never turn a passing test red.
     _exception -> :ok
+  catch
+    # design §11.10.3/§11.10.5 item 3: widened the identical way as guarded/2, for the
+    # identical reason -- this is the outer safety net around guarded/2's own call
+    # above, and both must widen together or the inner one is redundant. Hardening only;
+    # see guarded/2's own comment for why this cannot mask a genuine teardown failure.
+    :exit, _reason -> :ok
   end
 
   # -----------------------------------------------------------------------------------
@@ -712,12 +737,24 @@ defmodule Letflow.TenantFixture do
     exception -> {:error, {:capture_failed, exception}}
   end
 
-  # Per-field guard: `fun` either returns its value, or raises and that ONE field
+  # Per-field guard: `fun` either returns its value, or raises/exits and that ONE field
   # degrades to `degraded` while every other field is still gathered.
+  #
+  # design §11.10.3/§11.10.5 item 2: widened to also catch `:exit`, not only a `raise`d
+  # exception. Hardening only, defense-in-depth for a currently-hypothetical scenario
+  # (e.g. a future connection-unavailable exit from a diagnostic read) -- the ROOT CAUSE
+  # this rework actually fixes is §11.10.2's teardown_wrap change, which makes the
+  # connection this function's callers check out from valid in the first place. This
+  # widening must never be mistaken for the fix itself: teardown/2's own load-bearing
+  # DROP SCHEMA/delete_all statements are deliberately NOT wrapped by this or any
+  # guarded/2-style boundary (see teardown/2's own comment) -- only diagnostic reads run
+  # through here, so widening this boundary cannot mask a genuine cleanup failure.
   defp guarded(fun, degraded) do
     fun.()
   rescue
     _exception -> degraded
+  catch
+    :exit, _reason -> degraded
   end
 
   defp observed?({:observed, _value}), do: true

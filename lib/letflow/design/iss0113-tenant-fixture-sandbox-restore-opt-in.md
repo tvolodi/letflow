@@ -3811,3 +3811,354 @@ field itself follows from it.
   this rework since INV-F-10's own precedent (`rescue _exception`, not a
   narrower exception-type match) already established "broad, narrowly-
   scoped-by-call-site" as this module's own chosen idiom.
+
+## 11.11 REWORK ITERATION 7 — §11.9.2's fix gated on the wrong condition
+     (`template_ready?()` instead of `template_built_in_db?()`); corrects
+     §11.9.2/§11.9.3/§11.9.4/§11.9.5 (OQ-13), does not reopen §11.10 or
+     earlier sections for further debate
+
+### 11.11.0 What ELIXIR-DEV found, re-verified against source rather than inherited
+
+Per `handoffs/WF03-ISS0480-20260905/step-16-elixir-dev.json`'s BLOCKER
+(read in full; not restated here beyond what this section's own diagnosis
+depends on) — re-derived directly against
+`test/support/tenant_template.ex` lines 67-141, 148-151, and 243-251
+(read first-hand for this rework, not taken on the handoff's line numbers
+alone):
+
+- `ensure_template!/0` (lines 67-141) opens with `if template_ready?() do
+  :ok else ... end` (line 69). `template_ready?/0` (lines 148-151) is a
+  **pure `:persistent_term` read, scoped to this BEAM VM/process** — it
+  answers "did THIS VM already run a successful `ensure_template!/0]` to
+  completion," never "does the template physically exist in the
+  database."
+- Per §11.9.2's fix (rework #3, unchanged by this rework — see §11.11.1
+  below for exactly what changes and what does not), `Sandbox.mode
+  (Letflow.Repo, :auto)` (line 97) sits as the `else` branch's own first
+  statement — i.e. it fires whenever `template_ready?()` is `false`,
+  which is **every call, in every VM, that has not itself personally
+  observed a prior successful build** — regardless of whether the
+  template already exists in the real database from an earlier `mix
+  test` invocation or a different partition sharing the same steady-state
+  database.
+- `template_built_in_db?/0` (lines 243-251) is the function that actually
+  answers "does the template exist in the database" — a single
+  `information_schema.schemata` query, no VM-local state. It is called at
+  line 114, **after** the `Sandbox.mode(:auto)` call (line 97) and the
+  advisory-lock acquisition (line 109) have already run, purely to decide
+  whether `build_template!/0` needs to run at all (`unless
+  template_built_in_db?() do ... end`).
+- **§11.9.2's own text already named the intended condition in prose**
+  ("issue the `Sandbox.mode/2` call only on the path that is about to
+  actually build the template") **but implemented it against the wrong
+  proxy.** `template_ready?() == false` and "a build is about to happen"
+  coincide only when the template has genuinely never been built anywhere
+  against this database. They diverge exactly when the template
+  physically exists (built by an earlier `mix test` invocation, or by a
+  sibling partition sharing the same steady-state database) but this
+  particular VM has not itself, in its own lifetime, called
+  `ensure_template!/0` before — which is precisely "this VM's first call,"
+  the common case for any single-file `mix test <path>` invocation.
+- ELIXIR-DEV's own reproduction (step-16's `_fk_probe_test.exs`, not
+  committed) is accepted as the operative evidence for this diagnosis,
+  per `HANDOFF_PROTOCOL.md` §1.1: a fresh VM, `template_ready?()` reading
+  `false` on first call while `template_built_in_db?()` reads `true`
+  (schema already exists from a prior invocation), reproduces the exact
+  `tenant_schemas_tenant_id_fkey does not exist` symptom this whole
+  design exists to eliminate — via the same Mechanism 4 discard §11.9.1
+  already diagnosed (a mode-switch to a genuinely different mode discards
+  the calling connection's own in-flight, uncommitted `Tenant` insert),
+  just reached through a broader trigger condition than §11.9.3 disclosed.
+
+**Why this is a correction to §11.9.2's mechanism, not a new mechanism.**
+No new failure class is introduced by this finding. It is the SAME
+Mechanism 4 discard §11.9.1/§11.9.2 already fully diagnosed, firing on a
+LARGER trigger population than §11.9.2's own fix believed it had reduced
+it to. §11.9.3's disclosed residual gap ("the first call in a VM, IF it
+also happens to be the call that triggers the build") is not what
+ELIXIR-DEV reproduced; what was reproduced is broader — "the first call
+in a VM, full stop, whether or not a build follows" — exactly as
+step-16's BLOCKER states under its own
+`why_this_exceeds_11.9.3s_disclosed_trade-off` heading.
+
+### 11.11.1 The corrected fix: check `template_built_in_db?()` BEFORE any `Sandbox.mode/2` call; gate the mode-switch on that, not on `template_ready?()`
+
+**Mechanism, stated exactly for `test/support/tenant_template.ex`
+(same file §11.9.2 already authorized changing; no new file is touched):**
+
+Restructure `ensure_template!/0` into a three-way sequence instead of the
+current two-way `if template_ready?() do :ok else <mode-switch + build>
+end`:
+
+1. **`template_ready?()` check, UNCHANGED, evaluated first, no I/O.** If
+   `true`: return `:ok` immediately, exactly as today — this is the
+   already-correct steady-state fast path for a VM that has itself
+   already built or observed the template, and §11.9.2's fix already
+   established it issues zero `Sandbox.mode/2` calls. Nothing about this
+   branch changes.
+2. **If `template_ready?()` is `false`: call `template_built_in_db?()`
+   NEXT, still with no `Sandbox.mode/2` call issued anywhere yet.** This
+   is a single `information_schema.schemata` query on whatever connection
+   is already ambient for the caller (no mode-switch needed to run a
+   plain read-only `SELECT` on the caller's own current connection/mode —
+   `Repo.query!/2` does not require `:auto` mode to execute; it runs on
+   the connection the caller's current sandbox mode already provides,
+   exactly as `template_built_in_db?/0`'s own existing callers at line
+   114 already rely on, just moved earlier).
+   - **If `template_built_in_db?()` is `true`** (the template physically
+     exists already — built by an earlier invocation, or a sibling
+     partition sharing this database — but this VM has not personally
+     observed it): `:persistent_term.put(@built_marker_key, true)`
+     immediately (priming this VM's own cache from the DB read, so every
+     SUBSEQUENT call in this VM hits step 1's fast path with zero DB
+     round-trips, exactly the caching behavior `template_ready?/0`'s own
+     moduledoc already promises), then return `:ok`. **No
+     `Sandbox.mode/2` call is issued on this path at all** — this is the
+     entire fix: the caller's own ambient connection/mode is never
+     touched, so its in-flight, uncommitted work (e.g. a `Tenant` insert
+     under `provision_via_shared_connection/1`'s `{shared, self()}`/
+     `:auto` mode) survives untouched, closing the gap ELIXIR-DEV
+     reproduced.
+   - **If `template_built_in_db?()` is `false`** (no prior build exists
+     anywhere against this database — the genuine, once-per-database
+     build path): THEN, and only then, proceed to exactly what §11.9.2
+     already specified — `Sandbox.mode(Letflow.Repo, :auto)`, then the
+     advisory lock, then the re-check-inside-the-lock
+     (`unless template_built_in_db?() do ... end`, UNCHANGED, see
+     §11.11.2 below for why it stays), then `build_template!/0` via
+     `unboxed_run/3`, then `:persistent_term.put/2`, then `:ok` — this
+     whole tail is copied forward from §11.9.2's fix verbatim; nothing in
+     it changes.
+
+Concretely (structure, not implementation — ELIXIR-DEV writes the actual
+diff): the existing `if template_ready?() do :ok else <body> end` becomes
+`if template_ready?() do :ok else if template_built_in_db?() do
+<prime-cache-and-return-ok> else <mode-switch + advisory-lock + build,
+body unchanged from §11.9.2> end end` — or equivalently a `cond`/pattern
+worth of the same three branches; ELIXIR-DEV chooses the idiomatic
+Elixir shape, the three-branch DECISION STRUCTURE is what this design
+mandates, not the specific control-flow construct.
+
+**Why this closes the gap without reintroducing the very hazard §4.3's
+advisory lock exists to prevent — the concurrency check.** The
+outer, pre-lock `template_built_in_db?()` call this section adds is
+NEW, but it is read-only and does not gate whether a build happens if
+it (wrongly, under a race) says `false` — the build path's own EXISTING
+re-check at (current) line 114, `unless template_built_in_db?() do
+build_template!() end`, run **inside** the advisory lock, is UNCHANGED
+by this rework and remains the sole authority for "does a build
+actually run." Concretely, walk the two-concurrent-callers race:
+
+- Caller A and caller B both observe `template_ready?() == false`
+  (neither VM has built it yet — e.g. two partitions' first calls) and
+  both then observe the new pre-lock `template_built_in_db?() == false`
+  (genuinely not yet built anywhere). Both proceed to `Sandbox.mode
+  (:auto)` + advisory lock acquisition. Postgres's `pg_advisory_lock`
+  serializes them: whichever acquires first re-checks
+  `template_built_in_db?()` inside the lock (line 114, unchanged) — still
+  `false` for the first caller, so it builds; the second caller, once it
+  acquires the lock after the first releases it, re-checks and now finds
+  `true` (the first caller's build already renamed the staging schema
+  into place — §0.7's atomic build-then-rename, unaffected by this
+  rework), so it skips `build_template!/0` and falls through to
+  `:persistent_term.put/2` + `:ok`, exactly as the pre-existing code
+  already handles this race today. **Nothing about this rework changes
+  that inner re-check or its role** — it is the single mechanism that
+  has always protected against two concurrent builds, and this rework
+  does not touch it.
+- The only new possible interleaving is at the OUTER, pre-lock
+  `template_built_in_db?()` check this rework adds: if it happens to run
+  while ANOTHER caller's build is already complete but that other
+  caller hasn't yet run, this caller's outer check correctly reads `true`
+  and takes the priming fast path — correct and desired, since no
+  advisory lock is needed to safely read a fact that is already durably
+  true in the database (a completed rename is atomic and visible to any
+  connection per §0.7/INV-8). If it runs while another caller's build is
+  **in progress** (mid-way through `do_build_template!/1`'s staging-schema
+  sequence, before the final `RENAME TO "tenant_template"`), the outer
+  check reads `false` (the literal name `"tenant_template"` does not
+  exist yet — INV-8's own guarantee: the name only ever appears
+  post-rename), so this caller falls through to the mode-switch +
+  advisory-lock path exactly as it does today, and the existing inner
+  re-check (line 114) is what correctly discovers the build completed
+  while this caller waited on the lock. **No new race is introduced: the
+  outer check can only ever produce a FALSE NEGATIVE relative to a
+  build that finishes between the outer check and the lock acquisition,
+  and that false negative is exactly what the pre-existing inner
+  re-check already exists to catch — it was already handling this
+  before this rework, for the identical reason (a concurrent caller could
+  have raced ahead between `template_ready?()` and the lock, under
+  §11.9.2's own fix too).** The outer check changes only where the
+  disruptive `Sandbox.mode/2` call sits relative to a DB read that used
+  to happen only after it — it adds no new decision that determines
+  whether a build runs; that decision stays exactly where §4.3 and
+  §11.9.2 already placed it, inside the lock.
+
+### 11.11.2 What does NOT change, stated explicitly
+
+- **The inner re-check at (current) line 114,
+  `unless template_built_in_db?() do build_template!() end`, run inside
+  the advisory lock — UNCHANGED, verbatim.** This is not "the same check
+  moved" — it is a SECOND, independent call to the same pure function,
+  kept exactly where it is for exactly the reason §11.9.1's own comment
+  already states (a concurrent first-caller may have built the template
+  while this call waited on the lock). §11.11.1 ADDS a new, earlier call
+  to `template_built_in_db?()`; it does not remove, relocate, or dedupe
+  the existing one. Two calls to the same pure, cheap
+  (`information_schema.schemata`, one row lookup) query in one function
+  body is the accepted cost of correctness here — not a "clean it up to
+  one call" opportunity for ELIXIR-DEV to take.
+- **`template_ready?/0`'s own body — UNCHANGED.** Still a bare
+  `:persistent_term.get/2`, still pure, still VM-local. This rework does
+  not turn it into a DB-backed check; it keeps it as the fast,
+  intra-VM cache it already is, and adds the one missing link (priming
+  that cache from a DB-confirmed `true`, on the branch that previously
+  fell through to the disruptive mode-switch instead).
+- **`template_built_in_db?/0`'s own body — UNCHANGED.** Still the plain
+  existence check §0.7/INV-8 already established as correct and
+  sufficient (no defensive self-check re-run "just in case", per that
+  function's own existing comment, lines 234-242) — this rework calls it
+  from one additional call site; it does not change what it does or
+  means.
+- **The build path itself (`build_template!/0`,
+  `do_build_template!/1`, the advisory-lock acquire/release, the
+  `unboxed_run/3` wrap) — UNCHANGED, byte-for-byte.** §11.9.2's own
+  argument for why the build path's `:auto` call is safe (§4.3's
+  advisory-lock protection, §11.9.2's own "why this is sufficient"
+  paragraph) is untouched by this rework and still applies verbatim to
+  the one case that still reaches it: a genuine, first-ever,
+  once-per-database build.
+- **No change to `test/support/tenant_fixture.ex` or
+  `test/support/data_case.ex`** — same boundary §11.9.4 item 3 already
+  stated; this rework, like §11.9, is entirely inside
+  `ensure_template!/0`'s own body (now also touching its immediate
+  private-function neighbor call graph, not its signature).
+  `@spec ensure_template!() :: :ok` is unchanged.
+- **§11.10's teardown-routing fix (rework #4) and its own §11.10.4a
+  correction (rework #5) — untouched, not reopened.** This section is
+  purely a §11.9-lineage correction; it shares no call site or code path
+  with §11.10's `on_exit/1`/`teardown_wrap` mechanism.
+
+### 11.11.3 Why the residual gap §11.9.3 disclosed (OQ-13) is now CLOSED, not merely narrowed
+
+§11.9.3's disclosed residual case was: "the very first `template::clone`
+`async: false` call in a partition, IF it also happens to be the call
+that triggers the template BUILD, still has its own `Tenant` insert
+discarded — because that one call necessarily fires before the build,
+and the build's own precondition (DDL must run unboxed) is incompatible
+with preserving an in-flight sibling transaction on the same connection."
+
+**That residual case is real and is NOT closed by this rework — it is
+the one case §11.11.1's third bullet still routes through the mode-switch
++ advisory-lock + build sequence, by construction, because a build IS
+about to happen and the existing §11.9.2 argument for why that is an
+accepted, disclosed trade-off still applies unchanged (§11.11.2's fourth
+bullet).**
+
+**What IS closed is the DIFFERENT, BROADER gap step-16 found**, which is
+the population §11.9.3's own framing implicitly assumed did not exist:
+calls where `template_ready?()` is `false` (this VM's first call) but
+`template_built_in_db?()` is `true` (no build is actually about to
+happen — the template already exists, built by a prior invocation or a
+sibling partition). §11.9.2's fix, as literally implemented, routed that
+whole population through the disruptive mode-switch anyway, because it
+gated on the wrong condition; §11.11.1 routes it through the
+zero-`Sandbox.mode/2`-calls priming path instead, matching what
+§11.9.2's own prose already claimed the fix would do
+("only on the path that is about to actually build the template").
+
+**OQ-13's disposition: NARROWED, not fully resolved — restated precisely
+so a future reader does not conflate the two populations.** OQ-13, as
+written in §11.9.5, asks whether the residual "first call IN A BUILD"
+gap needs alternative 2 or 3 from §11.9.3 adopted in a future tranche if
+TEST-RUNNER's full-suite run finds it firing in practice. That question
+is UNCHANGED and STILL OPEN after this rework — §11.11 does not touch
+the build path, so a genuine first-ever-per-database build still
+discards its own triggering caller's in-flight insert exactly as before.
+What changes is the OBSERVABLE FREQUENCY OQ-13's own resolution depends
+on: §11.9.3's empirical argument for "currently unobserved" rested on
+"an `async: true` `TenantFixture` caller already builds the template
+before the sync queue's first `async: false` caller runs" — an argument
+about SCHEDULING ORDER within one run. That argument was never about,
+and does not protect against, a STANDALONE single-file invocation (`mix
+test test/letflow/support/tenant_fixture_test.exs` alone) where no
+`async: true` builder ever runs in the same VM at all — before this
+rework, EVERY such standalone invocation hit the disruptive mode-switch
+regardless of DB state, per step-16's reproduction; after this rework, a
+standalone invocation only hits the genuine-build branch (and therefore
+only remains exposed to OQ-13's still-open residual gap) on a database
+that has never had the template built before — e.g. a fresh CI database,
+or the very first `mix test` invocation ever run against a given
+partition database. **Practically, this rework converts OQ-13's
+population from "every standalone invocation, every time" (unconditional
+on DB state) to "only a standalone invocation against a database whose
+template has genuinely never been built" (conditional on DB state,
+matching what §11.9.2 always intended)** — a materially smaller and
+now-correctly-scoped population, worth re-running §11.9.3's own
+empirical check against once this rework ships, but not something this
+design asserts is empirically zero without that run. TEST-RUNNER's
+regression run (§11.11.4 below) is what confirms or narrows this
+further, per this design's own established discipline of not asserting
+an empirical claim without the run that checks it (§11.9.3, §11.10.4a's
+own precedent).
+
+### 11.11.4 What ELIXIR-DEV implements for §11.11 (signatures only, no bodies)
+
+1. `test/support/tenant_template.ex`, `ensure_template!/0`: restructure
+   the existing `if template_ready?() do :ok else <body> end` into the
+   three-branch decision §11.11.1 specifies — `template_ready?() == true`
+   returns `:ok` (unchanged); `template_ready?() == false` AND
+   `template_built_in_db?() == true` primes `:persistent_term` and
+   returns `:ok`, issuing NO `Sandbox.mode/2` call; `template_ready?() ==
+   false` AND `template_built_in_db?() == false` runs the existing
+   mode-switch + advisory-lock + build tail from §11.9.2/§11.9.4,
+   UNCHANGED in its own internal body (including its own inner
+   `template_built_in_db?()` re-check inside the lock, per §11.11.2's
+   first bullet — do not remove or merge it with the new outer check).
+   `@spec ensure_template!() :: :ok` unchanged.
+2. The comment block §11.9.4 item 1 required to move alongside the
+   (now further-conditioned) `Sandbox.mode/2` call must be updated again,
+   in place, to state the corrected condition (gated on
+   `template_built_in_db?()`, checked before the mode-switch — not on
+   `template_ready?()` alone) and to cite this section (§11.11) for why,
+   the same way §11.9's own comment cited §11.9 over the pre-§11.9 text
+   it replaced — a reader must not find a comment that still describes
+   only §11.9.2's superseded two-way branch.
+3. No change to `template_ready?/0`, `template_built_in_db?/0`,
+   `clone_tenant_schema!/1`, `build_template!/0`, `do_build_template!/1`,
+   or any other function in this module beyond `ensure_template!/0`'s own
+   body — matching §11.9.4 item 2's discipline, extended to this rework.
+4. Re-run, in full, the same regression plan §11.9.4 item 4 and §11.7
+   already specify (including the standalone single-file invocations
+   ELIXIR-DEV used to reproduce this BLOCKER —
+   `mix test test/letflow/tenant_provisioning/backfill_test.exs` alone
+   and `mix test test/letflow/support/tenant_fixture_test.exs` alone,
+   both run against a database where the template ALREADY exists from a
+   prior invocation, since that is the exact condition step-16 reproduced
+   under and the corrected code's central claim is that this condition no
+   longer discards the caller's insert) — this is what confirms the fix
+   actually closes the broader gap, not merely that it compiles. Also
+   re-run this handoff's own two already-applied, already-verified
+   corrections' tests (`tenant_fixture_test.exs`'s C5 case,
+   `tenant_fixture.ex`'s docstring — both unaffected by this section and
+   must remain green) to confirm they still pass unchanged.
+
+### 11.11.5 Open questions
+
+- **OQ-13, restated (see §11.11.3 for the full reasoning) — STILL OPEN,
+  narrower scope.** Whether a genuine first-ever-per-database build's own
+  triggering caller still needs alternative 2 or 3 from §11.9.3 adopted
+  in a future tranche remains unresolved, exactly as §11.9.5 left it. What
+  changed is the population this now protects: only a caller whose
+  database has never had the template built at all is still exposed
+  (never a caller running against a database that already has it,
+  regardless of this VM's own build history) — re-run §11.9.3's own
+  empirical expectation against THIS corrected code once TEST-RUNNER's
+  §11.11.4 regression plan lands, rather than assuming zero without that
+  run.
+- No new open question beyond OQ-13's restatement is introduced by this
+  section — §11.11.1's three-branch restructuring is a strictly more
+  precise gating condition over the same two functions
+  (`template_ready?/0`, `template_built_in_db?/0`) §11.9 already
+  established as this module's own vocabulary; it adds no new state, no
+  new module attribute, no new cross-module dependency.

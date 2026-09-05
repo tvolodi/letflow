@@ -1,0 +1,67 @@
+{
+  "handoff_id": "3a7f9c0e-2b6d-4e5a-9c31-8d4f2b1a6e70",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "17b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0480-20260905/step-17b-code-design-validator.json",
+  "created_at": "2026-09-05T11:56:11Z",
+  "started_at": "2026-09-05T11:56:11Z",
+  "completed_at": "2026-09-05T11:56:11Z",
+  "status": "ESCALATED",
+  "priority": "HIGH",
+  "escalation_note": "ORCH escalated per ORCHESTRATOR.md section 5 at 2026-09-05T11:57:51Z: rework_count=7 >= max_rework=3 (already exceeded since step-14b, rework_count=5, with no escalation applied at that or any later crossing -- an ORCH process gap, not a discovery failure). See handoffs/escalations.yaml's WF03-ISS0480-20260905 entry for full diagnosis and recommended next step. Workflow STOPPED per section 5 step 3 -- no further rework dispatched on this run until a fresh session or explicit resumption picks it up per the escalation record.",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-17-code-designer-rework7.json",
+      "handoffs/WF03-ISS0480-20260905/step-16-elixir-dev.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_template.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Independent gate of CODE-DESIGNER's rework #7 (§11.11) correcting §11.9.2's Sandbox.mode/2 gating condition, per step-16's BLOCKER.",
+    "acceptance_criteria": [
+      "Re-derive the fix's correctness against the actual current ensure_template!/0 code",
+      "Confirm the advisory-lock race protection (inner re-check at line 114) is preserved, not moved/duplicated incorrectly",
+      "Confirm OQ-13's reassessment is honest -- narrowed, not falsely marked resolved",
+      "No implementation code present in the design",
+      "Sanity-check and clearly flag the rework_count/max_rework bookkeeping (max_rework=3 exceeded since step-15) without silently resolving it"
+    ]
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Read test/support/tenant_template.ex lines 1-260 directly (ensure_template!/0 67-141, template_ready?/0 148-151, template_built_in_db?/0 243-251) and the new §11.11 (lines 3815-4165) of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md in full, plus step-16's BLOCKER and §11.9.3/§11.9.5's original OQ-13 statement (lines 2997-3092, 3124-3128) for comparison -- not taken from CODE-DESIGNER's step-17 result.summary.\n\nCHECK 1 (fix correctness) -- PASS. Current code matches §11.11.0's description exactly: line 69 opens `if template_ready?() do :ok else ... end`, line 97 issues Sandbox.mode(Letflow.Repo, :auto) unconditionally inside that else-branch, line 114 checks template_built_in_db?() only AFTER the mode-switch and advisory lock. §11.11.1's three-way restructure (template_ready?()==true -> :ok; ==false and template_built_in_db?()==true -> prime persistent_term + :ok + zero Sandbox.mode/2 calls; ==false and template_built_in_db?()==false -> existing mode-switch+lock+build tail unchanged) genuinely closes ELIXIR-DEV's exact reproduction: a caller in a VM that has not personally observed the template, but where the template already exists in the DB, no longer touches Sandbox.mode/2 at all.\n\nCHECK 2 (race preservation) -- PASS. Independently walked the two-concurrent-callers race against §11.11.1's own walk-through and reached the same conclusion: the inner re-check at line 114 (`unless template_built_in_db?() do build_template!() end`, inside the advisory lock) is untouched, remains the sole authority for whether a build actually runs, and is not moved, duplicated-with-different-semantics, or deduplicated with the new outer check -- §11.11.2's first bullet explicitly mandates keeping both as two independent calls to the same pure function. The new outer, pre-lock check can only produce a false negative relative to a build finishing between the outer check and lock acquisition; that exact false-negative case is what the pre-existing inner re-check already had to handle before this rework (a concurrent caller could already race ahead between template_ready?() and the lock under §11.9.2's fix). No new race introduced. Correct and sufficiently precise.\n\nCHECK 4 (no implementation code) -- PASS. Grepped the whole file for triple-backtick fences: none fall within §11.11's range (3815-4165); the nearest fences (3642-3672) belong to the earlier, already-gated §11.10.4a section and are one-line test-assertion fragments, not implementation bodies of this rework's own subject module. §11.11 itself is prose/signatures only, consistent with §11.11.4's 'signatures only, no bodies' framing.\n\nCHECK 5 (rework bookkeeping) -- CONFIRMED AND FLAGGED, not resolved here. Read rework_count directly off the raw handoff JSON rather than trusting any narrative: step-14b-code-design-validator.json rework_count=5, step-15b-code-design-validator.json rework_count=6, step-17-code-designer-rework7.json rework_count=7 -- all three already exceed max_rework=3 recorded on the same handoffs, and the count has continued climbing across at least three further steps with no visible escalation action taken at any crossing. This is squarely ORCHESTRATOR.md §5's rework/escalation territory, not this validator's call to adjudicate -- flagged here as a BLOCKER-severity process finding for ORCH, per this task's explicit instruction not to silently resolve it myself.\n\nCHECK 3 (OQ-13 honesty) -- FAIL. This is a real, single, sufficient failure under core-directives.md's 'FAIL immediately and completely on any single failed check -- no partial credit.' Section 11.11.3's own HEADING reads: '### 11.11.3 Why the residual gap §11.9.3 disclosed (OQ-13) is now CLOSED, not merely narrowed' (line 4042). This is factually false and is contradicted by the section's OWN BODY three separate times: (a) line 4051, 'That residual case is real and is NOT closed by this rework'; (b) line 4070, 'OQ-13's disposition: NARROWED, not fully resolved -- restated precisely so a future reader does not conflate the two populations'; (c) §11.11.5 (line 4148), 'OQ-13, restated ... STILL OPEN, narrower scope.' The body's reasoning is itself correct and honest -- it correctly distinguishes the population this rework closes (VM-first calls against a DB that already has the template) from the population that remains open (a genuine first-ever-per-database build's own triggering caller, i.e. §11.9.3's original disclosed gap, untouched). CODE-DESIGNER's own step-17 result.summary (read for comparison only, not as a substitute for the artefact) also states the narrowed framing correctly and never claims closure -- meaning the summary and the section body agree with each other and only the section HEADING disagrees with both. That makes this a drafting defect in the artefact itself, not a misunderstanding on CODE-DESIGNER's part, but it is exactly the kind of ambiguity this gate exists to catch: a document at 4000+ lines, already on its 7th rework, where a future reader (ELIXIR-DEV re-reading this section months later, or skimming section headings to navigate the document, which is a realistic reading pattern for a doc this long) could take the heading at face value and conclude OQ-13 no longer needs tracking -- silently dropping a still-open, disclosed trade-off that a later empirical run (per §11.11.4's own regression plan) is supposed to keep re-checking. Per this run's own explicit acceptance criterion ('OQ-13 explicitly reassessed... with reasoning distinguishing the population this fix closes from the population §11.9.3's residual gap still covers' and this validator's own instruction to confirm the reassessment is 'honest -- narrowed, not falsely marked resolved'), a heading asserting the opposite of the body's own conclusion does not satisfy that criterion, regardless of the body being correct.",
+    "artifacts_out": ["handoffs/WF03-ISS0480-20260905/step-17b-code-design-validator.json"],
+    "issues": [
+      {
+        "severity": "BLOCKER",
+        "title": "§11.11.3's section heading ('...is now CLOSED, not merely narrowed') directly contradicts its own section body and §11.11.5, both of which correctly conclude OQ-13 is NARROWED, STILL OPEN -- not closed",
+        "recommendation": "CODE-DESIGNER: rename the §11.11.3 heading to match the body's actual conclusion (e.g. 'Why the residual gap §11.9.3 disclosed (OQ-13) is NARROWED, not closed, by this rework') and re-scan the rest of §11.11 for any other heading/body mismatch introduced during this rework's editing. No change to the section body's reasoning is needed -- it is correct as written. This is a minimal, mechanical correction, not a re-open of the mechanism itself (Checks 1, 2, 4 all PASS as designed)."
+      },
+      {
+        "severity": "BLOCKER",
+        "title": "rework_count has exceeded max_rework=3 since at least step-14b (5) and is now 7 (step-17), with no visible escalation per ORCHESTRATOR.md §5 at any of those crossings",
+        "recommendation": "Route to ORCH for an explicit §5 escalation decision (continue under a documented exception, or escalate per that section's own procedure) before any further rework cycle on this design artefact is dispatched. This validator is not making that call -- flagging per this task's explicit instruction and per core-directives.md's Instruction Precedence (a safety/gate rule such as an escalation threshold is never silently resolved by the agent that merely observes it)."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "not_attempted",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "STOP. Rework CODE-DESIGNER (rework #8): fix ONLY §11.11.3's heading text to state NARROWED/STILL OPEN, consistent with its own body and §11.11.5 -- do not touch §11.11.1/§11.11.2/§11.11.4/§11.11.5's substance, all of which passed this gate on their merits. Simultaneously, ORCH must resolve the rework_count vs. max_rework=3 escalation (flagged above) before dispatching that or any further rework -- this handoff does not authorize another silent rework cycle past the threshold. Once both are resolved and CODE-DESIGN-VALIDATOR re-gates the corrected heading (expected to be a fast, single-issue re-check, not a full re-walk of Checks 1/2/4 which already passed), route to ELIXIR-DEV to implement §11.11.4's three-branch restructuring in test/support/tenant_template.ex and then run the COMPLETE final regression suite one more time (all of §11.7 + §11.10.4 + §11.11.4's own new verification items, including the standalone single-file invocations against a database where the template already exists) before SECURITY-REVIEWER/REVIEWER and the TEST-RUNNER full-suite gate."
+  },
+  "rework_count": 7,
+  "max_rework": 3
+}

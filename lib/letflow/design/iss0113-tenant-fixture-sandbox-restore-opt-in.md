@@ -1,25 +1,46 @@
 # ISS-0113 — Per-caller opt-in Sandbox-mode restore in `Letflow.TenantFixture.provisioned_tenant!/1`
 
-Status: design, **§10 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905`), §10.8
-ADDED (WF-03 Step 2 REWORK ITERATION 1, same run)** — a structural fix for
-ISS-0480's own recurrence of this record's disclosed-open scope, plus a
-narrow, 2-file exception-handling addendum found only by real execution
-(ELIXIR-DEV's own scoped test run, not a static read). §10 (through §10.7)
-is additive and normative for its own scope (a second, dedicated `Ecto.Repo`
-for `TenantFixture`-mediated provisioning) and is UNCHANGED by this rework
-except for §10.4's "zero call-site edits" claim, which is revised to name
-its true, narrowed scope (44 of 46, not 46 of 46) rather than stand as a
-false blanket claim. §10.8 is additive and normative for exactly the 2 named
-files (`test/letflow/support/tenant_fixture_test.exs`,
-`test/letflow/definitions/promotion_assertion_rerun_test.exs`); it does not
-revise or re-open §10.0–§10.7's own mechanism, which real execution already
-proved correct (172 tests, zero unexpected failures, both actual ISS-0480
-victims included), nor §§0–9, which remain normative for the 2-file tranche
-already shipped (`secrets_test.exs`, `webhooks_test.exs`) and for the
-mechanical classification procedure (§3/§4.2) a future per-call-site tranche
-would still use for any file this run does not touch. Read §10 (all of it,
-including §10.8) first if you are here for ISS-0480; §§0–9 below are prior
-art it builds on and must not silently re-attempt.
+Status: design, **§11 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905` REWORK
+ITERATION 2) — SUPERSEDES §10.2/§10.3/§10.3.2 for `async: false` callers.**
+§10's structural fix (route ALL provisioning through a second, dedicated
+`Ecto.Repo`, `Letflow.Test.ProvisioningRepo`) was implemented, and a
+full-suite `mix test` run (not the 172-test scoped run §10.7's OQ-9 status
+line reported clean) found 18-19 reproducible failures — every one of them
+an `async: false` caller of `provisioned_tenant!/1` whose OWN later
+`Letflow.Repo` reads (e.g. `backfill_test.exs`'s `Repo.all(Registration)`)
+could no longer see the fixture's own provisioning writes, because those
+writes now commit on `ProvisioningRepo`'s separate connection while the
+caller's own shared-mode `Letflow.Repo` connection, opened earlier by
+`DataCase.setup/1` and never touched since, has no way to see a different
+connection's commit — ordinary Postgres MVCC, not a sandbox defect. See
+§11.0 for the full re-diagnosis and why this population (44 of 47 real call
+sites, confirmed by `ISSUE-FIXER`'s rediagnosis,
+`handoffs/WF03-ISS0480-20260905/step-06-issue-fixer-rediagnosis.json`) was
+never the vector for the ORIGINAL ISS-0113/ISS-0480 hazard in the first
+place, and therefore needs — and can safely use — a different code path than
+`async: true` callers.
+
+**§11 is normative for `provisioned_tenant!/1`'s own dispatch between two
+paths, superseding §10.3.2 steps 1-6's "every call always goes through
+`ProvisioningRepo`" framing.** §10.0/§10.1/§10.2 (why a structural,
+separate-pool fix is needed at all, why `SandboxPool` is not a shortcut, the
+connection-budget reconciliation) remain fully valid and are UNCHANGED —
+`ProvisioningRepo` still exists, is still the correct and only mechanism for
+`async: true` callers, and closes ISS-0480's original zero-`TenantFixture`-
+involvement hazard exactly as designed. §10.3.1 (`ProvisioningRepo` module
+itself), §10.3.3 (supervision), §10.3.4 (config) are UNCHANGED. §10.4-§10.8
+are revised only where §11 explicitly says so (§11.5). Read §11 in full if
+you are here for this rework; §10 (all of it, including §10.8) is prior art
+it builds on, not a mechanism it discards wholesale — most of §10 is still
+exactly what ships.
+
+Earlier status line, superseded by the above but kept for the historical
+record: "§10 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905`), §10.8 ADDED (WF-03
+Step 2 REWORK ITERATION 1, same run) — a structural fix for ISS-0480's own
+recurrence of this record's disclosed-open scope, plus a narrow, 2-file
+exception-handling addendum found only by real execution (ELIXIR-DEV's own
+scoped test run, not a static read)." §§0–9 below are prior art both §10 and
+§11 build on and must not silently re-attempt.
 
 Prior status line (WF-03 Step 2, `WF03-ISS0423-20260905`),
 **superseding §§2–3's original mechanism — see §9, normative for
@@ -1960,3 +1981,673 @@ acceptance criteria already require:
    `TenantFixture`-calling files) to confirm this rework's 2 local edits
    introduce no new regression outside the 2 named files.
 4. `mix compile --warnings-as-errors --force` — clean, as before.
+
+## 11. REWORK ITERATION 2 — dual-path dispatch in `provisioned_tenant!/1`:
+    `ProvisioningRepo` for `async: true`, `Letflow.Repo` directly for
+    `async: false` (normative, supersedes §10.3.2 steps 1-6 and §10.4's
+    "every call routes through ProvisioningRepo" framing)
+
+### 11.0 Re-diagnosis, re-verified rather than inherited
+
+Per `docs/anti-patterns.md`'s "don't inherit a claim instead of re-deriving
+it" and `HANDOFF_PROTOCOL.md` §1.1: ISSUE-FIXER's rediagnosis
+(`handoffs/WF03-ISS0480-20260905/step-06-issue-fixer-rediagnosis.json`) is
+read in full; its two load-bearing claims are re-checked here against
+source already read for §§9-10 above, not merely quoted.
+
+**Claim 1 — population size and shape.** 44 of 47 files calling
+`Letflow.TenantFixture.provisioned_tenant!/1` (47 = 46 real call sites per
+§0's own original count, plus this design's own §10.6 regression test,
+`test/letflow/iss0480_provisioning_repo_isolation_test.exs`, added since —
+confirmed by direct re-read of that file, line 55: `use Letflow.DataCase,
+async: true`, so it is one of the 3 `async: true` files, not one of the 44)
+are `async: false`. Re-verified this session by reading
+`test/letflow/tenant_provisioning/backfill_test.exs` directly (line 20: `use
+Letflow.DataCase, async: false`) — TEST-RUNNER's own root-caused failing
+example — and spot-checking `test/letflow/secrets_test.exs`/
+`test/letflow/webhooks_test.exs` (both `async: true`, confirmed, the only 2
+real callers in that state, matching §0/§9's own original count exactly).
+**This is the default shape of the call population, not an edge case** — any
+mechanism §11 specifies for `async: false` callers is specifying the
+mechanism for the overwhelming majority of `provisioned_tenant!/1`'s real
+callers, not a narrow addendum the way §10.8's 2-file exception was.
+
+**Claim 2 — the failure mechanism is ordinary cross-connection MVCC
+isolation, not a sandbox defect.** Re-derived directly from `test/support/
+data_case.ex:15-23` (already read in full, §9.1 above) plus `test/support/
+tenant_fixture.ex`'s current `with_provisioning_repo/1` (lines 291-301,
+already read in full above): for an `async: false` test, `DataCase.setup/1`
+does `Sandbox.checkout(Letflow.Repo)` then `Sandbox.mode(Letflow.Repo,
+{:shared, self()})` — ONE connection, opened once, held for the test's
+entire body. `provisioned_tenant!/1`'s current (post-§10) body never touches
+that connection at all: it calls `Repo.put_dynamic_repo(Letflow.Test.
+ProvisioningRepo)`, does its `Tenant` insert and schema provisioning there,
+and restores the dynamic-repo binding — the Tenant row is genuinely
+committed, but on `ProvisioningRepo`'s own separate physical connection.
+`backfill_test.exs`'s later `Repo.all(Registration)`
+(`lib/letflow/tenant_provisioning/backfill.ex:20`, confirmed by the
+rediagnosis's own citation) runs on the caller's ORIGINAL `Letflow.Repo`
+connection from `DataCase.setup/1` — a connection that began its
+transaction before `ProvisioningRepo`'s insert committed, and Postgres's own
+MVCC snapshot semantics mean an already-open transaction on one connection
+never sees a different connection's later commit, sandboxed or not. **This
+is not a bug in `Ecto.Adapters.SQL.Sandbox` and not something any Sandbox
+API can bridge** — re-confirmed directly against `deps/ecto_sql/lib/ecto/
+adapters/sql/sandbox.ex`'s own `mode/2`/`checkout/2`/`allow/3` specs (lines
+480-620, already read for §9.1): `{:shared, pid}` and `allow/3` both operate
+WITHIN one repo's one already-checked-out connection — broadening WHO may
+use it, never WHICH connection is in play — and neither has any parameter or
+mode that spans two different `Ecto.Repo` modules' pools. There is no
+`Sandbox.share_connection_across_repos/2`-shaped API and none is possible
+within the library's own architecture (a connection belongs to exactly one
+pool; "sharing a connection across two `Ecto.Repo`s" is not a concept
+`DBConnection.Ownership` or `Ecto.Adapters.SQL.Sandbox` expresses anywhere).
+**Confirmed, not merely inherited from the rediagnosis's own claim to the
+same effect.**
+
+**Claim 3 — `async: false` callers were never exposed to the ORIGINAL
+ISS-0113/ISS-0480 hazard, and this is the asymmetry §11's dispatch relies
+on.** Re-derived from `docs/agents/instructions/core-directives.md`-cited
+ExUnit scheduling behavior already established at §5.1/§9.4 above ("ExUnit
+runs every `async: false` module strictly serially, one test process at a
+time, after all `async: true` modules have started/completed") plus
+`data_case.ex:18`'s own `unless tags[:async]` guard: `{:shared, pid}` mode is
+set ONLY for `async: false` tests, and ExUnit's own documented scheduling
+guarantees at most one `async: false` test process is running (hence, at
+most one `{:shared, pid}` mode is live on `Letflow.Repo`'s pool) at any
+instant. The ORIGINAL ISS-0113/ISS-0480 hazard (`Sandbox.mode(Letflow.Repo,
+:auto)`'s global, empty-exclusion-list check-in of every OTHER checked-out
+connection, `proxy_checkin_all_except(state, [], caller)`, §9.1/§10.0 above)
+is a hazard specifically about *concurrently scheduled* connections
+colliding — `RowApprovalTest`'s own victimization required it to be running
+CONCURRENTLY with `SecretsTest`'s `:auto` call, both `async: true`, both
+scheduled into ExUnit's shared concurrent pool at the same moment. An
+`async: false` caller's own `Sandbox.mode/2`-adjacent activity, by contrast,
+runs during a phase of the suite (or a serialized slot within the async
+phase's aftermath) where it is — by ExUnit's own documented scheduling
+guarantee, not by luck — the ONLY test process that could be affected,
+because no other test is running concurrently with it at all. **Restated
+plainly: the ORIGINAL hazard's blast radius is "whoever else happens to be
+concurrently checked out," and `async: false` execution structurally
+guarantees nobody else is.** This holds regardless of which repo's pool an
+`async: false` caller's own connection work touches — the property that
+matters is "is anything else concurrently checked out to be collateral
+damage," and for a serially-scheduled `async: false` test process, the
+answer is structurally no. This is independently re-derived here, not
+inherited from ISSUE-FIXER's rediagnosis text, though it reaches the
+identical conclusion.
+
+### 11.1 The dispatch: how `provisioned_tenant!/1` picks its path, with zero
+    call-site edits
+
+**Mechanism chosen: runtime detection via a value `Letflow.DataCase.setup/1`
+already deterministically knows and can pass along a channel every one of
+the 47 call sites already goes through — not a new `opts` key.** This
+satisfies the "prefer runtime detection over asking 47 call sites to know
+about this plumbing" instruction directly: no call site's own
+`provisioned_tenant!(...)` invocation is edited, because `Letflow.DataCase`
+is a fixed, shared dependency EVERY one of the 47 files already `use`s, and
+it already receives the exact signal needed (`tags[:async]`, the literal
+boolean ExUnit itself passes into `setup/1` — not inferred, not guessed).
+
+**Why this is reliable where a Sandbox-introspection call is not.**
+`Ecto.Adapters.SQL.Sandbox` exposes no function that reports a repo's
+current mode back to the caller (confirmed: `sandbox.ex`'s only
+mode-related exports are `mode/2` (write-only, returns `:ok`) and
+`checkout/2` (returns `:ok | {:already, :owner | :allowed}`, not the mode) —
+grepped the module's full export list this session, no `get_mode/1` or
+equivalent exists). So "detect the mode `Letflow.Repo` is currently in" is
+not an available primitive — confirming the rediagnosis's own framing that
+the real candidates are (i) an explicit signal threaded through from the
+caller's own test context, or (ii) a Sandbox-native bridge, which §11.0
+Claim 2 already ruled out. **§11 chooses (i), routed through `DataCase`
+rather than through each of the 47 call sites**, because `tags[:async]` is
+already exactly the fact this dispatch needs, is already computed by ExUnit
+itself (not derived or guessed by this design), and `DataCase.setup/1` is
+the one place already common to all 47 callers.
+
+**Concrete mechanism — process dictionary, set once per test process by
+`DataCase.setup/1`, read once per call by `provisioned_tenant!/1`:**
+
+- `Letflow.DataCase.setup/1` (`test/support/data_case.ex`) gains one new
+  statement: after its existing `Sandbox.checkout(Letflow.Repo)` and the
+  existing `unless tags[:async] do Sandbox.mode(Letflow.Repo, {:shared,
+  self()}) end` block (both untouched, same order), set
+  `Process.put(:letflow_data_case_shared_mode?, !tags[:async])` — a plain
+  boolean, computed the exact same way the existing `unless tags[:async]`
+  guard already is, stored in the calling TEST process's own dictionary
+  (not a global, not an ETS table — process-scoped, exactly like `Ecto.Repo.
+  put_dynamic_repo/1`'s own `{Letflow.Repo, :dynamic_repo}` process
+  dictionary key that `with_provisioning_repo/1` already relies on, §10.3.2
+  — this design reuses that exact idiom rather than introducing a new
+  storage mechanism).
+  - `@spec` addition to `Letflow.DataCase` (a `using`-macro module, no
+    existing `@spec`-bearing public function of its own to extend): none —
+    `setup/1` is an ExUnit callback, not a function this design's own
+    callers invoke directly. Nothing about `Letflow.DataCase`'s own public
+    surface (the `using do ... end` block, `alias Letflow.Repo`) changes.
+- `Letflow.TenantFixture.provisioned_tenant!/1`'s dispatch point (replacing
+  the unconditional `with_provisioning_repo/1` wrap around the `{tenant,
+  schema_name}` block, §10.3.2's current shape) becomes: read
+  `Process.get(:letflow_data_case_shared_mode?, false)` (default `false` —
+  see §11.1.1 for why defaulting to the `ProvisioningRepo`/`async: true`
+  path when the key is absent is the correct, safe default) and dispatch to
+  one of two private functions:
+  - `true` (an `async: false` caller, `DataCase` set the flag) →
+    `provision_via_shared_connection(fn -> ... end)` (§11.2).
+  - `false` (an `async: true` caller, or — defensively — any caller whose
+    test process did not go through `Letflow.DataCase.setup/1` at all, e.g.
+    a hypothetical future call site using a different `ExUnit.CaseTemplate`)
+    → `with_provisioning_repo(fn -> ... end)` (§10.3.2, UNCHANGED, already
+    shipped).
+- **No `opts()` key is added.** `provisioned_tenant!/1`'s public `@spec`,
+  `opts()` type, and return shape (`tenant_fixture()`) are BYTE-FOR-BYTE
+  unchanged from §10.4's own already-normative statement — this dispatch is
+  entirely internal, invisible at every one of the 47 call sites' own
+  source. Re-affirms the "zero call-site edits" property for all 44
+  `async: false` callers AND the existing 3 `async: true` files (2 shipped
+  callers plus this design's own §10.6 regression test) simultaneously — a
+  stronger claim than §10.4's own (which only covered the 44).
+
+#### 11.1.1 Why defaulting the flag's absence to the `ProvisioningRepo` path
+    (not the shared-connection path) is the safe choice
+
+`Process.get(:letflow_data_case_shared_mode?, false)`'s default matters only
+for a test process that calls `provisioned_tenant!/1` without ever having
+run through `Letflow.DataCase.setup/1` — today, no such call site exists
+(every one of the 47 files `use`s `Letflow.DataCase`, confirmed by the
+original §0 count's own methodology), but a design must state the
+degenerate case rather than leave it silently underspecified. Defaulting to
+`false` (the `ProvisioningRepo` path, §10's original, already-proven-correct
+mechanism) rather than `true` (the shared-connection path, §11.2) is the
+conservative choice: an unrecognized/未-established caller falling through
+to `ProvisioningRepo` reproduces exactly today's shipped, verified-safe §10
+behavior (correct for `async: true`, and merely loses read-your-own-write
+visibility for a hypothetical unclassified `async: false`-shaped caller —
+a visible, debuggable test failure, not a silent cross-test corruption).
+Defaulting the other way would risk executing §11.2's shared-connection path
+for a caller this design has no evidence is actually running serially,
+re-opening exactly the blast-radius question §11.0 Claim 3 depends on
+`{:shared, pid}`'s own serialization guarantee to answer. **The default is a
+safety fallback for an situation §11 does not believe can currently occur,
+not a third supported mode.**
+
+### 11.2 `provision_via_shared_connection/1` — the `async: false` path
+
+**Purpose:** run provisioning's `Repo.` calls directly against
+`Letflow.Repo`, on the SAME connection/transaction the caller's own test
+process already holds via `DataCase.setup/1`'s `{:shared, self()}` mode —
+i.e., restore the pre-§10 behavior for this population specifically, without
+reintroducing the pre-§10 code's OWN defect (§9's Mechanism 4 — a stray
+`Sandbox.mode(Letflow.Repo, ...)` call disrupting the caller's connection)
+or the ORIGINAL ISS-0113/ISS-0480 defect (an unconditional `Sandbox.mode
+(Letflow.Repo, :auto)` reaching into the shared pool at all).
+
+**Concrete mechanism — no `Sandbox.mode/2` call on `Letflow.Repo` at all,
+by this path, ever:**
+
+1. `Ecto.Repo.put_dynamic_repo(Letflow.Repo)` — a no-op in the ordinary case
+   (the calling process's dynamic repo is already `Letflow.Repo`, since
+   nothing has redirected it), but stated explicitly rather than assumed,
+   so this path's own behavior does not depend on what a PRIOR call in the
+   same test process may have left the dynamic-repo binding pointed at (the
+   same defensive-explicitness discipline §10.3.2's own `after` block
+   already applies in the other direction).
+2. Run the caller's existing 3-6 step provisioning sequence (`Tenant`
+   insert, `provision_schema!/2`'s `:clone`/`:replay` branch,
+   `assert_schema_complete!/2`) EXACTLY as `with_provisioning_repo/1`'s own
+   body already sequences them (§10.3.2 steps 3-4, same functions, same
+   arguments, same order) — the only difference is which connection these
+   `Repo.` calls resolve to, which is now `Letflow.Repo` itself (the dynamic
+   repo binding step 1 just confirmed), not `ProvisioningRepo`.
+3. **No `Sandbox.mode(Letflow.Repo, ...)` call of any kind, anywhere in this
+   function.** This is the single load-bearing property distinguishing
+   §11.2 from both the original (pre-ISS-0113) code and the reverted §3.2
+   mechanism (§9.2): the caller's own `{:shared, self()}` mode, established
+   once by `DataCase.setup/1` before this function ever runs, is left
+   completely alone. Every `Repo.insert!/1`/`Repo.query!/2` call this
+   function's own provisioning sequence makes is an ordinary query from the
+   SAME already-checked-out, already-shared-mode connection — reusing it,
+   never checking it in or replacing it, by the same `DBConnection.
+   Ownership.Manager` rule §9.3 already traced (`{status, _ref, proxy} when
+   status in [:owner, :allowed]` — this test process is already the proxy's
+   recorded owner from `DataCase.setup/1`'s own checkout, so every
+   subsequent call just reuses it). **`Ecto.Migrator.run/4`'s own
+   documented two-connection requirement (§9.7, quoted there) is why the
+   pre-§9-rework, pre-§10 code needed `:auto` mode in the first place — does
+   this path need it too?** Answered in §11.2.1: no, because of WHICH
+   provisioning path (`:clone` vs `:replay`) is actually exercised by
+   `async: false` callers today, and what happens if a future caller needs
+   `:replay` under this path.
+
+4. The function's own return value — `{tenant, schema_name}` — is identical
+   in shape to `with_provisioning_repo/1`'s own return (§10.3.2's existing
+   body), so `provisioned_tenant!/1`'s own final `%{tenant_id: ..., ...}`
+   construction is unchanged regardless of which of the two dispatch
+   branches ran.
+
+**Teardown.** The `on_exit/1` callback registered for this path (mirroring
+§10.3.2 step 6's shape, but for THIS path) must likewise run its 3
+statements (`DROP SCHEMA`, 2x `Repo.delete_all`) via
+`provision_via_shared_connection/1`'s own connection-targeting, i.e. against
+`Letflow.Repo` with `Ecto.Repo.put_dynamic_repo(Letflow.Repo)` (a no-op,
+stated for the same explicitness reason as step 1) — **not** wrapped in
+`with_provisioning_repo/1`. This is a real, disclosed difference from
+today's shipped code (§10.3.2 step 6 currently wraps teardown in
+`with_provisioning_repo/1` unconditionally for every caller) — §11.3 states
+precisely how `teardown/2`'s own single implementation dispatches the same
+way `provisioned_tenant!/1` itself does, rather than duplicating `teardown/2`
+into two copies.
+
+#### 11.2.1 Why `Ecto.Migrator.run/4`'s two-connection requirement does not
+     block this path — confirmed for `:clone`, flagged as a real constraint
+     for `:replay`
+
+§9.7 (already normative, re-confirmed here rather than re-litigated) quotes
+`Ecto.Migrator.run/4`'s own moduledoc: migrations "cannot run dynamically
+during test under the Ecto.Adapters.SQL.Sandbox, as the sandbox has to share
+a single connection across processes." This is categorical for the
+`:replay` path (`provision_schema!/2`'s `:replay` clause →
+`TenantProvisioning.replay_migrations/1` → `Ecto.Migrator.run/4` directly) —
+a single sandboxed connection, shared-mode or not, cannot satisfy
+Migrator's real two-connection requirement.
+
+**This does not block §11.2 for the overwhelming majority of the `async:
+false` population, but it is NOT a zero-count case — corrected here after
+this design's own first-pass grep missed a real file.** Re-grepped directly:
+`grep -rl "template: :replay" test --include=*.exs` finds exactly ONE real
+caller, `test/support/tenant_fixture_dispatch_test.exs` (line 116,
+`TenantFixture.provisioned_tenant!(slug_prefix: "dispatch-replay-test",
+template: :replay)`, inside a test declared `use Letflow.DataCase, async:
+false`, confirmed by direct read of that file, line 51) — a REVIEWER-added
+regression guard (ISS-0427 finding-8(c)) whose own purpose is specifically
+to keep exercising the `:replay` escape hatch so a future edit cannot
+silently remove it. **This is precisely the combination §11.2.1's dispatch
+rule below must route correctly, and it is not hypothetical or
+forward-looking — it exists on `main` today and must keep passing.** Every
+OTHER `async: false` caller (43 of the 44, re-confirmed: `grep -rl
+"provisioned_tenant!(" test --include=*.exs | grep -v tenant_fixture.ex |
+xargs grep -L "template: :replay"`, then each `async:` line re-read) uses
+the default `opts[:template] == :clone`.** The `:clone` path
+(`Letflow.Test.TenantTemplate.clone_tenant_schema!/1`) does not call
+`Ecto.Migrator.run/4` at all — it copies an already-migrated template
+schema via `CREATE SCHEMA ... CREATE TABLE ... (LIKE ...)`-style DDL/data
+copy (confirmed by `test/support/tenant_template.ex`'s own moduledoc,
+already read for §9.7), which is ordinary transactional DDL/DML, not
+`Ecto.Migrator`'s own multi-connection machinery, and runs correctly on a
+single shared/sandboxed connection the same way any other `Repo.query!/2`
+call does.
+
+**Real, disclosed constraint: if any `async: false` caller passes `template:
+:replay`, that call would fail under §11.2** exactly as it would under
+`{:shared, self()}` mode generally (Migrator's own two-connection
+requirement is unconditional, independent of this design). Two things make
+this a documented constraint rather than a silent gap:
+
+- **It is not a regression.** Before ANY of §9/§10/§11's changes, on
+  `main`, an `async: false && template: :replay` caller already depended on
+  `provisioned_tenant!/1`'s own then-unconditional `Sandbox.mode(Letflow.
+  Repo, :auto)` line to make `:replay` work at all — i.e. this combination
+  has ALWAYS required `:auto` mode, never worked under a shared/manual
+  connection, and §11.2 does not change that; it only makes the
+  ALREADY-real requirement visible/enforced for the shared-connection path,
+  where it was previously invisible because `:auto` mode papered over it
+  for every caller uniformly.
+- **§11.1's dispatch must therefore special-case this exact combination**,
+  stated as a hard requirement, not an open question: if
+  `Keyword.get(opts, :template, :clone) == :replay`, `provisioned_tenant!/1`
+  dispatches to `with_provisioning_repo/1` (the `ProvisioningRepo` path)
+  REGARDLESS of the `letflow_data_case_shared_mode?` flag's value — because
+  `:replay`'s own `Ecto.Migrator.run/4` call needs a real, independent,
+  non-shared connection to exist at all, and `ProvisioningRepo`'s own `:auto`
+  mode (§10.2) is exactly what supplies one, on a pool that (per §10.2's own
+  already-proven safety argument) cannot disrupt the caller's own
+  `Letflow.Repo` connection regardless of the caller's own `async:`
+  declaration. This is not a new mechanism — it reuses §10's own
+  already-correct path — it is a precise statement of WHEN each path is
+  chosen: **`template: :replay` always uses `ProvisioningRepo`; `template:
+  :clone` (the default) uses `ProvisioningRepo` for `async: true` callers and
+  the shared connection for `async: false` callers.** Re-checked against the
+  current 44-file `async: false` population: this fallback is needed TODAY,
+  not only hypothetically — `test/support/tenant_fixture_dispatch_test.exs`
+  (`grep -rl "template: :replay" test --include=*.exs`, exactly one hit,
+  confirmed by direct read: `use Letflow.DataCase, async: false` at line 51,
+  `TenantFixture.provisioned_tenant!(slug_prefix: "dispatch-replay-test",
+  template: :replay)` at line 116) is a real, currently-shipped `async:
+  false` + `template: :replay` caller, one of the 44 — a REVIEWER-added
+  ISS-0427 regression guard whose own purpose is specifically to keep
+  exercising the `:replay` escape hatch. **This is a currently-exercised
+  branch, not a forward-looking one** — CODE-DESIGN-VALIDATOR and
+  TEST-DESIGNER must treat "`tenant_fixture_dispatch_test.exs`'s own
+  `template: :replay` test still passes, and still genuinely exercises
+  `Ecto.Migrator.run/4` (not silently falling back to `:clone`, which its own
+  `refute replay_migration_timestamps == template_migration_timestamps`
+  assertion is specifically built to catch)" as a required regression check
+  for this rework, not an optional forward-looking one (§11.7 restates this
+  as a required TEST-RUNNER check).
+
+### 11.3 `teardown/2` — single implementation, same dispatch as
+    `provisioned_tenant!/1`'s own provisioning call
+
+**Not a second copy of `teardown/2`.** The existing function
+(`test/support/tenant_fixture.ex` lines 449-461, §10.3.2 item 6's own
+already-normative content) keeps its exact 3-statement body (`DROP SCHEMA`
+via `TenantProvisioning.schema_name_for_tenant/1` lookup, 2x
+`Repo.delete_all`), UNCHANGED in content and order (INV-F-5, restated).
+What changes: the `on_exit/1` callback registered by `provisioned_tenant!/1`
+(§10.3.2's own registration point, inside the provisioning-sequence block)
+must close over the SAME dispatch decision `provisioned_tenant!/1` itself
+made for the provisioning call — i.e., `on_exit(fn -> connection_wrap.(fn ->
+teardown(tenant.id, owner) end) end)` where `connection_wrap` is whichever of
+`with_provisioning_repo/1` or a `Letflow.Repo`-targeting equivalent (§11.2's
+own step 1/no-op `put_dynamic_repo(Letflow.Repo)`, wrapped the same
+`try/after` shape for symmetry even though it is a no-op today) was chosen
+for that SAME call's provisioning work. This is a closure-capture detail,
+not a new decision point: the SAME boolean (`letflow_data_case_shared_mode?`,
+or the `template: :replay` override from §11.2.1) read once at the top of
+`provisioned_tenant!/1` determines BOTH the provisioning path and the
+teardown path for that one call — they must never diverge for the same
+`provisioned_tenant!/1` invocation, since diverging would mean provisioning
+happened on one connection and teardown's `DROP SCHEMA`/`DELETE` runs
+against a different one, which is exactly the cross-connection-visibility
+defect this whole rework exists to close, just relocated to teardown instead
+of the test body's own reads.
+
+**Why this does not need a NEW `Process.get`/`Process.put` at teardown
+time.** `on_exit/1` callbacks run in a separate process from the test body
+(already established, §10.3.4's own note, unaffected) — so
+`letflow_data_case_shared_mode?`'s value, stored in the TEST process's own
+dictionary, is not directly readable from the `on_exit/1` callback's
+process. This is not a new problem this design introduces: the SAME
+constraint already applies to `owning_test/0`'s own dictionary-walking logic
+(`test/support/tenant_fixture.ex` lines 711-723, already reads the ExUnit
+runner's dictionary via ancestor-walking specifically because `on_exit/1`
+runs in a different process) and to `Ecto.Repo.get_dynamic_repo()`'s own
+per-process semantics (§10.3.2's own `previous = Repo.get_dynamic_repo()`
+line, captured in the TEST process, before `on_exit/1` is even registered).
+**Resolution: capture the dispatch decision as a plain closed-over Elixir
+value at the point `provisioned_tenant!/1` makes it (the same "read once,
+close over it" shape `owner = owning_test()` already uses one line above),
+not as a second dictionary read inside the `on_exit/1` callback.** No new
+cross-process data-passing mechanism is needed — this is standard Elixir
+closure capture, the same idiom this module already uses for `owner`.
+
+### 11.4 Re-verifying this does not reopen the ORIGINAL ISS-0113/ISS-0480
+    hazard for `async: true`/`RowApprovalTest`-shaped victims
+
+Per the dispatching handoff's own instruction ("verify independently rather
+than inherit ISSUE-FIXER's claim") and `core-directives.md`'s "re-derive
+under the conditions the property is actually about" — checking the actual
+new code path §11.2 introduces, not merely re-asserting §11.0 Claim 3's
+conclusion:
+
+- **§11.2's own body issues zero `Sandbox.mode/2` calls of any kind** (§11.2
+  step 3, stated as the section's single load-bearing property). The
+  ORIGINAL hazard's entire mechanism (§9.1/§10.0) is `Sandbox.mode/2`'s
+  own global, empty-exclusion-list check-in effect — a code path that never
+  calls `Sandbox.mode/2` at all cannot trigger that effect, structurally,
+  regardless of how many times it runs or how many processes call it
+  concurrently. This is a stronger property than "safe because callers are
+  serialized" (§11.0 Claim 3's own argument) — §11.2 does not even need
+  Claim 3's serialization guarantee to be safe against the ORIGINAL hazard,
+  because it simply never performs the action (`Sandbox.mode/2` on
+  `Letflow.Repo`) that hazard requires. Claim 3's serialization argument is
+  still true and still relevant (it is what makes reusing the caller's own
+  connection READ-CORRECT — see next bullet — not merely what makes it
+  hazard-free), but the hazard-freedom itself rests on the simpler,
+  structural fact that this path makes no mode-changing call at all.
+- **Does §11.2 reintroduce visibility risk for OTHER concurrently-running
+  `async: false` tests?** No such tests exist by construction — ExUnit's
+  own documented scheduling (§5.1/§9.4, re-confirmed §11.0 Claim 3) runs at
+  most one `async: false` test process at a time, so "other concurrently
+  running `async: false` callers" is not a real population to protect
+  against; the only real concurrent population during an `async: false`
+  test's execution is `async: true` tests that already completed their own
+  concurrent phase (ExUnit's "sync modules run after all async modules
+  complete" ordering, already cited at §5.1) — none of which is still
+  holding a live connection this path could disturb, since they have
+  already finished.
+- **Does dispatching on `template: :replay` (§11.2.1) reopen anything?**
+  No: that branch routes to `with_provisioning_repo/1` — §10's own
+  already-verified-safe mechanism, unchanged, reused exactly as-is. §11
+  adds no new `Sandbox.mode/2`-calling code path beyond the two already
+  analyzed (§10.3.2's existing `ProvisioningRepo` path, and §11.2's new
+  zero-`Sandbox.mode/2` path) — there is no third mechanism to separately
+  verify.
+- **Does the `letflow_data_case_shared_mode?` process-dictionary write
+  itself (in `DataCase.setup/1`) introduce any risk?** No: `Process.put/2`
+  writes only to the calling process's OWN dictionary (Elixir/Erlang
+  process dictionaries are never shared or visible across processes without
+  an explicit read via `Process.info(pid, :dictionary)`, the same mechanism
+  `owning_test/0` already uses defensively) — it has no interaction with
+  `Ecto.Adapters.SQL.Sandbox` or `DBConnection.Ownership.Manager` at all, and
+  cannot be observed or affected by any other process, concurrent or not.
+
+**Conclusion: §11.2's own path cannot trigger the ORIGINAL hazard because it
+issues no `Sandbox.mode/2` call on `Letflow.Repo` at all — a stronger,
+simpler guarantee than "safe because of serialization," though that
+serialization guarantee (§11.0 Claim 3) is what makes the path's OWN reads
+correct (no concurrent writer could be racing the caller's shared
+connection).** Both properties hold independently and neither depends on
+inheriting ISSUE-FIXER's own conclusion without re-derivation — re-derived
+above from source (`data_case.ex`, `sandbox.ex`, ExUnit's documented
+scheduling) already read for §§9-10.
+
+### 11.5 What §10's existing subsections must be read as revised to say
+
+- **§10.3.2 (the `ProvisioningRepo` seam)** — its steps 1-6 remain the
+  EXACT mechanism used whenever `provisioned_tenant!/1` dispatches to the
+  `ProvisioningRepo` path (§11.1's `false` branch, plus the `template:
+  :replay` override, §11.2.1) — nothing in that section's own content is
+  wrong or changed; it is now read as "the `ProvisioningRepo`-path
+  mechanism," one of two paths, rather than "the only mechanism." Its own
+  item 1 ("the existing first line, `Sandbox.mode(Letflow.Repo, :auto)`, is
+  removed") still holds exactly as written — that removal is unconditional
+  and applies regardless of which of §11's two paths a given call takes,
+  since NEITHER path ever calls `Sandbox.mode(Letflow.Repo, :auto)` again
+  (the `ProvisioningRepo` path calls `Sandbox.mode(Letflow.Test.
+  ProvisioningRepo, :auto)` instead; §11.2's path calls no `Sandbox.mode/2`
+  at all).
+- **§10.4's "every existing call site... requires zero source changes"
+  bullet** — still true, and now true for a LARGER guarantee than
+  originally stated: §10.4 (as revised by §10.8) claimed this for 44 of 46
+  files; §11's dispatch mechanism (process-dictionary-based, read from
+  `DataCase`, no `opts` key) makes it true for all 47 (46 original + this
+  design's own §10.6 regression test file) without exception — no call site
+  needs to know which of §11's two paths it will take. §10.8's own 2 named
+  exception files (`tenant_fixture_test.exs`, `promotion_assertion_rerun_
+  test.exs`) are UNCHANGED by §11 — both are `async: false` (confirmed:
+  `tenant_fixture_test.exs`'s own `broken_state_tenant!/1` caller and
+  `promotion_assertion_rerun_test.exs`'s own moduledoc line 26, both already
+  read for §10.8.1), so both now take §11.2's shared-connection path for
+  their OWN `provisioned_tenant!/1` calls — §10.8's own separate, local
+  fixes (wrapping `hard_cleanup/1` in `with_provisioning_repo/1`-shaped
+  code; adding an explicit `Sandbox.mode(Letflow.Repo, :auto)` call to
+  `promotion_assertion_rerun_test.exs`'s own `provisioned_tenant/0` wrapper)
+  are ABOUT THOSE FILES' OWN LOCAL HELPERS bypassing `TenantFixture`
+  entirely (§10.8.1's own finding), not about `provisioned_tenant!/1`'s
+  internal dispatch — §11 does not touch either file and does not need to:
+  §10.8.2.2's own explicit `Sandbox.mode(Letflow.Repo, :auto)` call in
+  `promotion_assertion_rerun_test.exs` still runs, still establishes the
+  window that file's own `SandboxPool`-driven second migrator call needs,
+  and is unaffected by whether `provisioned_tenant!/1` itself used §11.2's
+  path or §10.3.2's path for ITS OWN provisioning work earlier in the same
+  test (§9.1's no-op-on-same-mode guard covers the interaction either way:
+  if §11.2's path ran, `Letflow.Repo`'s mode was never touched by
+  provisioning, so `promotion_assertion_rerun_test.exs`'s own explicit
+  `:auto` call is the run's first real one and behaves exactly as §10.8.2.2
+  already analyzes).
+- **§10.5's "the §3/§4.2 classification procedure... becomes unnecessary for
+  mechanisms (a)/(c)" claim** — still holds, unaffected: mechanisms (a)/(c)
+  were about `Sandbox.mode/2` calls reaching `Letflow.Repo`'s shared pool
+  from a SECOND, later, mid-test call — §11.2's path adds no such call
+  (§11.4), so a call site otherwise safe by mechanism (a)/(c)'s own
+  standards (§3's procedure) is unaffected by which of §11's two paths its
+  own `provisioned_tenant!/1` invocation takes.
+
+### 11.6 What ELIXIR-DEV implements (signatures only, no bodies)
+
+1. `test/support/data_case.ex` — `setup/1`'s existing body gains one
+   additional statement after its existing `unless tags[:async] do ... end`
+   block: `Process.put(:letflow_data_case_shared_mode?, !tags[:async])`.
+   Return value of `setup/1` (`:ok`) unchanged. No new `@spec` (ExUnit
+   callback, none exists today).
+2. `test/support/tenant_fixture.ex`:
+   - New private function `provision_via_shared_connection/1`, same
+     `(fun :: (-> result)) :: result` shape as the existing
+     `with_provisioning_repo/1` (§10.3.2), implementing §11.2's 4 steps.
+     No `@spec` (private, matching `with_provisioning_repo/1`'s own
+     unspecced precedent).
+   - `provisioned_tenant!/1`'s body: replace the current unconditional
+     `with_provisioning_repo(fn -> ... end)` wrap with a dispatch —
+     `template = Keyword.get(opts, :template, :clone)`; choose
+     `provision_via_shared_connection/1` when `template == :clone and
+     Process.get(:letflow_data_case_shared_mode?, false)`, else
+     `with_provisioning_repo/1` — around the SAME inner function body
+     (unchanged: `Tenant` insert, `on_exit/1` registration, `provision_schema!/2`,
+     `assert_schema_complete!/2`, per §11.2 step 2/§11.3). Public `@spec`
+     unchanged (§10.4, re-affirmed §11.5).
+   - The `on_exit/1` registration inside that inner body (currently
+     `on_exit(fn -> with_provisioning_repo(fn -> teardown(tenant.id, owner)
+     end) end)`) becomes closure-parameterized on the SAME dispatch decision
+     (§11.3) — e.g. bind the chosen wrapper function to a local variable
+     once, before the `on_exit/1` registration, and reference that variable
+     in both the provisioning call and the teardown closure, rather than
+     re-deciding inside the closure.
+   - Moduledoc: the existing "## Provisioning runs on a separate repo
+     (ISS-0480 — design §10)" section is revised to state the dual-path
+     dispatch and point at design §11, not only §10.
+3. No other file changes. `opts()` type, `tenant_fixture()` return shape,
+   error/raise taxonomy: all unchanged (§10.4/§11.1, re-affirmed).
+4. No change to `Letflow.Test.ProvisioningRepo`, `Letflow.TenantProvisioning`,
+   `Letflow.Test.TenantTemplate`, `config/test.exs`, or
+   `scripts/test_parallel.sh` — §10.2's connection-budget reconciliation is
+   unaffected: `ProvisioningRepo`'s own pool is now used by FEWER calls in
+   practice (only `async: true` callers plus any `template: :replay`
+   `async: false` caller, a strict subset of what §10 alone would have
+   routed through it), never more, so §10.2.2's own arithmetic (already
+   verified to fit with margin) remains a safe over-estimate, not an
+   under-estimate needing re-verification.
+
+### 11.7 Regression-test coverage TEST-DESIGNER must add
+
+**Unchanged, must keep passing exactly as-is, and REQUIRED as an explicit
+TEST-RUNNER check for this rework (not merely "the suite happens to include
+it"):** `test/support/tenant_fixture_dispatch_test.exs` — both its tests
+(`:clone`-is-default, `template: :replay`-escape-hatch-still-works), since
+this file is the one real, currently-shipped `async: false` +
+`template: :replay` caller (§11.2.1) whose own dispatch depends on §11.1's
+`template == :replay` override firing correctly REGARDLESS of
+`letflow_data_case_shared_mode?`'s value. A run of just this file
+(`mix test test/support/tenant_fixture_dispatch_test.exs`) both before
+(sanity: passes today, pre-§11) and after ELIXIR-DEV's implementation is a
+required, named check — not folded anonymously into "run the full suite" —
+because it is the one file exercising the `§11.2.1` override branch that
+every other real call site does not.
+
+**Unchanged, must keep passing exactly as-is:**
+`test/letflow/iss0480_provisioning_repo_isolation_test.exs` (§10.6's own
+deterministic `async: true`/`Task.async`-mediated test) — this test's own
+`use Letflow.DataCase, async: true` means `letflow_data_case_shared_mode?`
+is `false` for its own test process, so its own direct call to
+`Letflow.TenantFixture.provisioned_tenant!(teardown: false)` (inside the
+spawned `Task`, itself also `async: true`-context since `Task.async/1`
+inherits no ExUnit tag state relevant here — the spawned Task's own call is
+what is under test, and `provisioned_tenant!/1`'s dispatch reads its OWN
+calling process's `letflow_data_case_shared_mode?`, which for a bare
+`Task.async/1`-spawned process — not itself run through `DataCase.setup/1`
+— is unset, defaulting to `false` per §11.1.1, i.e. the `ProvisioningRepo`
+path, exactly the path this test exists to exercise) continues to exercise
+`with_provisioning_repo/1` exactly as before. **No change needed to this
+test file.**
+
+**New coverage needed — the `async: false`/shared-mode restoration, proving
+a representative caller's own read-after-provision visibility now passes.**
+Per ISSUE-FIXER's own scope note (rediagnosis, closing paragraph):
+`backfill_test.exs`'s existing "ISS-0332 -- backfill updates pre-existing
+tenant to schema_version 2" test (lines 125-141, already read above) is
+ALREADY a real instance of this exact failure mode under current (pre-§11)
+code — its own `Backfill.run(v2_attrs())` call
+(`lib/letflow/tenant_provisioning/backfill.ex:20`'s `Repo.all(Registration)`)
+runs on the test's own `Letflow.Repo` shared connection and currently cannot
+see the `Tenant`/`Registration` rows `provisioned_tenant!/1` committed via
+`ProvisioningRepo` moments earlier. TEST-DESIGNER does not need to invent a
+new fixture — it needs to:
+
+1. **Confirm this existing test goes red against current (pre-§11, §10-only)
+   code and green once §11 ships** — a real `mix test
+   test/letflow/tenant_provisioning/backfill_test.exs` run before and after
+   ELIXIR-DEV's implementation, per this project's fail-then-pass rule
+   (already required by the dispatching handoff's own instruction and this
+   project's "No Speculation" directive) — not asserted here without that
+   run, same discipline §10.6's own closing paragraph and §9.5 already
+   modeled.
+2. **Add at least one independently-verified second instance of the same
+   class**, per ISSUE-FIXER's own explicit request not to rest the whole
+   regression proof on one file — `OnboardingTest`
+   (`test/letflow/routers/onboarding_test.exs`) or `ContextTest`
+   (`test/letflow/api/context_test.exs`) are both named by ISSUE-FIXER as
+   simple HTTP-round-trip-through-`Letflow.Repo` shapes among the 17
+   not-individually-root-caused failures from TEST-RUNNER's step-05 report
+   — TEST-DESIGNER should read whichever of the two is simpler to isolate
+   (a single assertion reading data `provisioned_tenant!/1` wrote, via
+   `Letflow.Repo`, in the same test body) and confirm it independently
+   red-then-green under the same before/after `mix test <file>` discipline,
+   rather than assuming both fail for the identical reason without
+   individually confirming at least one beyond `backfill_test.exs`.
+3. **A new, small, purpose-built regression test is NOT required** in
+   addition to 1-2 above — unlike §10.6 (which needed a manufactured,
+   deterministic trigger because the ORIGINAL hazard was probabilistic,
+   scheduling-order-dependent), this failure mode is DETERMINISTIC and
+   ALREADY reproducible on demand via any existing `async: false` caller
+   that reads its own fixture's writes — `backfill_test.exs` already does
+   this without any modification. Manufacturing a new minimal test in
+   addition would be redundant coverage of the identical mechanism §11.2
+   exists to fix, not additional protection — TEST-DESIGN-VALIDATOR should
+   treat "reuses an existing, already-real failing test rather than
+   inventing a synthetic one" as correct here, the mirror image of §10.6's
+   own reasoning for why THAT hazard needed a manufactured trigger (it was
+   non-deterministic; this one is not).
+4. Both files chosen (or confirmed) for coverage must be re-run at least
+   twice consecutively post-fix (matching §9.5's own "repeated run, not a
+   single lucky pass" discipline) to confirm the fix is deterministic, not
+   itself accidentally timing-sensitive — a lighter version of §9.5's own
+   verification depth (2 runs, not 10+), since §11.2's own mechanism is
+   structural (no `Sandbox.mode/2` call at all, §11.4) rather than a
+   guard-ordering property that could plausibly be timing-sensitive the way
+   §9's original discovery was.
+
+### 11.8 Open questions (explicit, not silently resolved)
+
+- **OQ-10.** §11.1's `Process.get(:letflow_data_case_shared_mode?, false)`
+  default (§11.1.1) is a safety fallback for a call-site shape this design
+  believes does not currently exist (a `provisioned_tenant!/1` caller not
+  routed through `Letflow.DataCase.setup/1`). If ELIXIR-DEV's own
+  implementation-time grep finds such a caller, that is a MINOR finding to
+  report, not a silent accommodation — the default's own safety argument
+  (§11.1.1) assumes today's confirmed-zero count; a real such caller
+  existing would need its own individual classification, not an assumption
+  that the conservative default is automatically correct for it too.
+- **OQ-11 — RESOLVED, not open.** Originally drafted (in an earlier pass of
+  this same design edit) assuming zero current `template: :replay` +
+  `async: false` callers exist; corrected once `test/support/
+  tenant_fixture_dispatch_test.exs` was found by re-grep to be exactly one
+  (§11.2.1). Coverage is not a future obligation — it is `test/support/
+  tenant_fixture_dispatch_test.exs`'s own existing two tests, re-run as part
+  of this rework's required verification (§11.7). No new test needs to be
+  written for this combination; TEST-RUNNER re-running the existing suite
+  (full, not scoped) is what confirms the dispatch routes it correctly.
+  Left here, struck through in substance rather than deleted, per
+  `docs/anti-patterns.md`'s "don't silently resolve a conflict" — so a
+  future reader sees that this design's own first pass got the count wrong
+  and how it was caught (a targeted re-grep before handoff, not a validator
+  catching it later).
+- **OQ-12.** This design does not itself run `mix test` to empirically
+  confirm §11's mechanism (matching §7 OQ-3/§10.7 OQ-9's own already-stated
+  division of labor). ELIXIR-DEV's implementation, TEST-DESIGNER's added/
+  confirmed coverage (§11.7), and TEST-RUNNER's full-suite
+  `scripts/test_parallel.sh` re-run (explicitly required by the dispatching
+  handoff — not a scoped subset run, per the lesson this exact rework
+  exists to teach: the scoped 172-test run at §10.7's OQ-9 status line
+  reported clean while a full-suite run found 18-19 failures) are what
+  actually confirm this. Do not merge until that full-suite run is PASS.

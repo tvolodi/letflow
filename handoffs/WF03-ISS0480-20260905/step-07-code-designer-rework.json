@@ -1,0 +1,64 @@
+{
+  "handoff_id": "3f7c1a2e-9d5b-4a6f-8e0c-1b2d3e4f5a6b",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "07",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-07-code-designer-rework.json",
+  "created_at": "2026-09-05T09:29:43Z",
+  "started_at": "2026-09-05T09:29:43Z",
+  "completed_at": "2026-09-05T10:05:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-06-issue-fixer-rediagnosis.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex",
+      "test/support/provisioning_repo.ex",
+      "test/letflow/tenant_provisioning/backfill_test.exs",
+      "test/letflow/iss0480_provisioning_repo_isolation_test.exs",
+      "test/support/tenant_fixture_dispatch_test.exs",
+      "deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "REWORK ITERATION 2 of design section 10 (this run's Step 07, following ISSUE-FIXER's rediagnosis at step-06): TEST-RUNNER's full-suite run found 18-19 reproducible failures against §10's shipped ProvisioningRepo-for-everyone mechanism. ISSUE-FIXER's rediagnosis confirmed the gap is structural (44 of 47 real call sites of provisioned_tenant!/1 are async: false, sharing Letflow.Repo's own {:shared, self()} connection with their own later reads) and that async:false callers were never exposed to the ORIGINAL ISS-0113/ISS-0480 hazard (ExUnit serializes async:false tests, so :shared mode is held by at most one such test at a time -- no concurrent victim to check in). Task: rework design section 10 (new section 11, additive, superseding §10.2/§10.3.2 for the async:false population specifically) to specify a dual-path dispatch inside provisioned_tenant!/1: async:true callers keep using Letflow.Test.ProvisioningRepo exactly as today; async:false callers get their provisioning writes routed directly onto Letflow.Repo's own already-checked-out shared connection instead, with zero call-site edits (all 47 files continue calling provisioned_tenant!/1 exactly as they do today, no new opts key). Re-derive, not inherit, why this does not reopen the original global-checkin hazard for async:true/RowApprovalTest-shaped victims, and confirm no Sandbox/DBConnection API can bridge two separate Ecto.Repo pools (both independently re-checked against deps/ecto_sql source this session, not merely trusted from ISSUE-FIXER's own claim).",
+    "acceptance_criteria": [
+      "New section 11 (or equivalent) in lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md specifies a concrete runtime-detection mechanism (not a new opts key) for provisioned_tenant!/1 to distinguish async:true from async:false callers, using a signal Letflow.DataCase.setup/1 already deterministically knows (ExUnit's own tags[:async]) and threads through via a process-dictionary value -- not a Sandbox-mode introspection call, since none exists (confirmed against sandbox.ex's own export list: mode/2 is write-only, checkout/2 returns an ownership status, not a mode)",
+      "async:true path is unchanged (Letflow.Test.ProvisioningRepo/with_provisioning_repo/1, §10.3.2, byte-for-byte as shipped) and the existing test/letflow/iss0480_provisioning_repo_isolation_test.exs is confirmed to keep exercising it correctly under the new dispatch",
+      "async:false path specified precisely enough for ELIXIR-DEV to implement without judgement calls: no Sandbox.mode/2 call of any kind on Letflow.Repo, reusing the caller's own already-checked-out {:shared, self()} connection for the Tenant insert/schema provisioning/assert_schema_complete!/2, with teardown dispatching the same way",
+      "Independently re-derives (not inherits) why the async:false path cannot reopen the original ISS-0113/ISS-0480 global-checkin hazard, and separately re-confirms no Sandbox/DBConnection API bridges two Ecto.Repo pools",
+      "Handles the real template: :replay + async:false combination correctly -- corrected mid-task after an initial pass mistakenly assumed zero such callers exist; test/support/tenant_fixture_dispatch_test.exs (a REVIEWER-added ISS-0427 regression guard) is a real, currently-shipped instance and the design's dispatch rule (template: :replay always routes to ProvisioningRepo regardless of async:false) must keep it passing",
+      "Regression-test coverage section identifies what TEST-DESIGNER must add: no new synthetic test needed (unlike §10.6's manufactured race, this failure is deterministic and already reproduced by an existing test), instead confirm test/letflow/tenant_provisioning/backfill_test.exs's existing ISS-0332 AC1 test goes red pre-fix/green post-fix, plus one more independently-verified instance (OnboardingTest or ContextTest) per ISSUE-FIXER's own instruction not to rest the proof on one file, plus a required, named re-run of test/support/tenant_fixture_dispatch_test.exs for the :replay-override branch",
+      "No implementation code in the design artefact -- signatures/dispatch logic described in prose only"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "REWORK ITERATION 2: added section 11 to lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, superseding §10.2/§10.3.2's 'every call routes through ProvisioningRepo' framing for the async:false population while leaving §10.0/§10.1/§10.2/§10.3.1/§10.3.3/§10.3.4/§10.8 fully in place and unmodified (ProvisioningRepo still exists, still the correct and only mechanism for async:true callers and for the template: :replay override).\n\nMECHANISM (§11.1): Letflow.DataCase.setup/1 (test/support/data_case.ex) gains one statement after its existing `unless tags[:async] do Sandbox.mode(Letflow.Repo, {:shared, self()}) end` block: `Process.put(:letflow_data_case_shared_mode?, !tags[:async])` -- reusing the exact `!tags[:async]` boolean ExUnit itself already computes, stored process-locally via the same Process-dictionary idiom `Repo.put_dynamic_repo/1` and `owning_test/0` already use in this same file. provisioned_tenant!/1 reads `Process.get(:letflow_data_case_shared_mode?, false)` once and dispatches to one of two private functions around its unchanged inner provisioning sequence (Tenant insert, provision_schema!/2, assert_schema_complete!/2): with_provisioning_repo/1 (§10.3.2, unchanged, byte-for-byte) when false, or the new provision_via_shared_connection/1 (§11.2) when true AND opts[:template] != :replay. Zero opts() changes, zero call-site edits across all 47 files -- confirmed this is a STRONGER zero-edit guarantee than §10.4/§10.8's own (which covered only 44 of 46); this covers all 47 (46 + the §10.6 regression test file) with no exception needed at the call-site level.\n\nasync:false PATH (§11.2): provision_via_shared_connection/1 issues NO Sandbox.mode/2 call of any kind -- the single load-bearing property. It calls Ecto.Repo.put_dynamic_repo(Letflow.Repo) (a no-op in the ordinary case, stated explicitly for defensiveness) and runs the identical inner provisioning sequence directly against Letflow.Repo, reusing the SAME connection/transaction DataCase.setup/1 already checked out and put in {:shared, self()} mode before provisioned_tenant!/1 ever runs -- restoring the pre-ISS-0480 read-your-own-write property without restoring the pre-ISS-0480 defect (the unconditional, pool-wide :auto call) or the reverted §9.2 defect (a second mid-test Sandbox.mode/2 flip). Teardown closes over the SAME dispatch decision made for provisioning (§11.3), read once and captured as a local closure value (mirroring the existing `owner = owning_test()` pattern one line above in the same function) rather than re-read inside the on_exit/1 callback's own process, since process-dictionary state does not cross into that process.\n\nRE-DERIVED SAFETY (§11.4, independently re-checked against source this session, not inherited from ISSUE-FIXER's rediagnosis though it reaches the same conclusion): the async:false path cannot reopen the ORIGINAL hazard because it issues zero Sandbox.mode/2 calls on Letflow.Repo at all -- a structural guarantee stronger than 'safe because ExUnit serializes async:false tests' (though that serialization claim, re-derived independently from data_case.ex:18's `unless tags[:async]` guard plus ExUnit's own documented scheduling already cited at §5.1/§9.4, is what makes the path's OWN reads correct, i.e. no concurrent writer could be racing the shared connection). Re-confirmed directly against deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex this session that no get-mode/introspection function exists (mode/2 is write-only, checkout/2 returns an ownership status not a mode) -- confirming runtimes detection must come from ExUnit's own tag data via DataCase, not a Sandbox call, exactly the direction the rediagnosis flagged as the one with actual API support.\n\nCORRECTION MADE MID-TASK, DISCLOSED RATHER THAN HIDDEN: my own first pass of §11.2.1 claimed zero async:false callers pass template: :replay. Before finalizing, re-grepped `template: :replay` project-wide and found test/support/tenant_fixture_dispatch_test.exs (async: false, line 116, a REVIEWER-added ISS-0427 regression guard specifically testing the :replay escape hatch) IS exactly such a caller today -- corrected §11.2.1, the dispatch-override text, OQ-11, and §11.7's coverage list to state this as a currently-exercised branch requiring an explicit, named TEST-RUNNER check, not a hypothetical future one. Recorded in the design doc itself (per docs/anti-patterns.md's 'don't silently resolve a conflict') so a future reader sees the mistake and how it was caught.\n\nREGRESSION COVERAGE SPECIFIED (§11.7): test/letflow/iss0480_provisioning_repo_isolation_test.exs (§10.6's async:true/Task.async-mediated test) needs no change -- its spawned Task's own call defaults to the ProvisioningRepo path per §11.1.1's safe-default reasoning (a bare Task.async process never ran through DataCase.setup/1, so the flag is absent, defaulting to false/ProvisioningRepo). New coverage needed: confirm backfill_test.exs's existing 'ISS-0332 backfill updates pre-existing tenant to schema_version 2' test goes red against current (§10-only) code and green post-§11 -- no new synthetic test required, since (unlike §10.6's manufactured race) this failure is deterministic and already reproduced by an unmodified existing test; plus one independently-verified second instance (OnboardingTest or ContextTest, per ISSUE-FIXER's own instruction not to rest the proof on one file); plus a required, explicitly-named re-run of tenant_fixture_dispatch_test.exs's own two tests (not folded anonymously into 'run the suite') since it is the one file exercising the template: :replay override branch.\n\nNo implementation code written -- §11 is dispatch logic and call ordering in prose only, matching the existing §10.3.2/§10.8.2 style (verified: zero fenced code blocks in the new section).",
+    "artifacts_out": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR to gate the new §11 (and its corrections to §10.2.1/OQ-11/§11.7) before ELIXIR-DEV resumes implementation. Validator must independently verify: (1) §11.1's dispatch mechanism (Process.put in DataCase.setup/1, Process.get in provisioned_tenant!/1) requires zero call-site edits across all 47 files, (2) §11.2's async:false path issues no Sandbox.mode/2 call on Letflow.Repo, (3) §11.2.1's template: :replay override is correctly specified against the real tenant_fixture_dispatch_test.exs caller, (4) §11.4's re-derivation of hazard-safety is independent reasoning, not a restated inherited claim, (5) no implementation code appears in the new section. Then ELIXIR-DEV implements §11.6's deliverables, TEST-DESIGNER adds/confirms §11.7's coverage, SECURITY-REVIEWER/REVIEWER re-gate, and TEST-RUNNER runs the FULL suite (scripts/test_parallel.sh, not a scoped subset -- the scoped 172-test run is exactly what missed the original 18-19 failures). Do not merge feature/WF03-ISS0480-20260905 until a full-suite TEST-RUNNER PASS is obtained. ISS-0480 stays status: open."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

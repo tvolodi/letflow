@@ -25,7 +25,7 @@ defmodule Letflow.Engine.TokenRecord do
   FK-referenceable row (a JSONB array element inside
   `instance_projections.current_nodes` cannot serve as a foreign-key target),
   not because `current_nodes` was found insufficient for split/join computation
-  on its own terms — R-Co's own `src/design/engine.md` computes split/join
+  on its own terms — R-Co's `src/design/engine.md` computes split/join
   purely from the in-memory `Token{node_id, branch_id}` list and states
   explicitly that no new fields are needed on that struct for EE-06/EE-07.
   `instance_projections.current_nodes` remains the engine's authoritative
@@ -50,7 +50,9 @@ defmodule Letflow.Engine.TokenRecord do
   ## `status` dumps lowercase (design §3.2, INV-EE43-4)
 
   `status` is stored lowercase (`"active"`/`"waiting"`/`"completed"`/
-  `"cancelled"`), matching R-Co's own `tokens.status` strings exactly. This is
+  `"cancelled"`), a fixed convention per design §3.2/INV-EE43-4 — not one
+  free to be "corrected" later, since this codebase already has a
+  same-shaped table using the opposite casing. This is
   the opposite convention from `Letflow.Engine.Task.status`, which dumps
   uppercase — R-Co itself uses different casing for the two tables in the same
   source file (`migrations/005_instances.sql`), confirmed by direct read, so

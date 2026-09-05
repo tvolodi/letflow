@@ -1,0 +1,70 @@
+{
+  "handoff_id": "WF02-REQ233-20260905-step-02",
+  "run_id": "WF02-REQ233-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ233-20260905/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T06:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-233"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ232-20260905", "WF02-REQ233-20260905"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-233 entry)",
+      "handoffs/WF02-REQ233-20260905/step-00-git-setup.json"
+    ],
+    "artifacts_out": [
+      "lib/letflow/engine.ex",
+      "lib/letflow/engine/wasm/resource_limits.ex",
+      "lib/letflow/engine/snapshot_writer.ex",
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/engine/execution_error.ex",
+      "lib/letflow/engine/token_record.ex",
+      "lib/letflow/engine/pin_resolver.ex",
+      "lib/letflow/engine/lua/platform.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/engine/wasm/host_api.ex",
+      "lib/letflow/engine/lua/sandbox.ex",
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/engine/wasm/capability_gate.ex",
+      "test/letflow/engine/schemas_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ233-20260905",
+    "base_commit": "f17134a9"
+  },
+  "task": {
+    "description": "REQ-233: retire R-Co parity-justification phrasing ('matches R-Co'/'mirrors R-Co'/'same as R-Co'/\"R-Co's own\"/'R-Co own'/'parity'/'port of R-Co') from comments and moduledocs across the 13 flagged files under lib/letflow/engine.ex, lib/letflow/engine/, engine/wasm/, engine/lua/. Per occurrence, either restated on Letflow's own technical merit (the real invariant, N+1-avoidance reason, extensibility reason, scope boundary, etc.) or trimmed a purely stylistic 'own'/'parity' word where the surrounding sentence was a citation, not a justification. Also fixed one pre-existing incidental test-name typo/leftover artifact ('doc flags.') found mid-edit in pin_resolver.ex. Updated one literal moduledoc-substring test (test/letflow/engine/schemas_test.exs) whose assertion string was itself the exact phrase being retired."
+  },
+  "result": {
+    "status": "PASS",
+    "occurrence_count_before": 32,
+    "occurrence_count_after": 2,
+    "note_on_count": "grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/engine.ex lib/letflow/engine/ -r | wc -l -- re-derived directly (not trusted from the requirement draft): 32 before, matching the draft-time estimate exactly. After: 2, both deliberate, justified exceptions, not oversights: (1) engine/execution_error.ex:7 -- the divergence sentence 'unlike R-Co's own closed 10-variant ErrorType enum' itself contains the substring 'R-Co's own', so it is simultaneously a required-verbatim divergence line (explicitly named in REQ-233's own text) and a phrase-regex hit; it cannot satisfy both a byte-identical-preservation requirement and a zero-count requirement, so it was left untouched per the divergence-preservation instruction, which takes precedence. (2) engine/wasm/capability_gate.ex:97 -- a real file path citation, `lib/letflow/design/req172-wasm-host-api-write-path-and-parity-suite.md`, which is the file's actual on-disk name (confirmed via `ls`); renaming the citation text would break a real cross-reference to an existing design doc, so it was left untouched. Both exceptions are called out explicitly rather than silently claimed as zero.",
+    "occurrences_rewritten_or_trimmed": 30,
+    "occurrences_left_untouched_and_why": 2,
+    "divergence_lines_diff": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' before: 2 lines (engine/execution_error.ex:7, engine/pin_resolver.ex:141). After: same 2 lines, byte-identical content and line numbers (verified directly, no line-number drift in either file).",
+    "zig_citation_sum": {
+      "before": 41,
+      "after": 41,
+      "note": "grep -c '\\.zig' summed across the 13 target files. One self-correction during editing: an early draft of the variable_schema.ex INV-7 rewrite accidentally introduced a new '`instance.zig`'s own' citation where none existed before (the original said 'R-Co's own ... comment', no .zig reference) -- caught by this exact before/after check, and reworded again to reference 'the corresponding R-Co source comment' with no .zig citation, restoring the 41/41 balance."
+    },
+    "pin_rebind_untouched": "confirmed via git diff --stat -- lib/letflow/engine/pin_rebind.ex (no output, zero changes).",
+    "technical_reasons_named_examples": [
+      "execution_error.ex's error_type() open union (@typedoc, line ~88): restated 'mirrors R-Co's own error-code table being a mapping' as 'kept open ... so a future calling path can add its own error atom without needing every existing case/cond over error_type() updated for exhaustiveness first' -- the real extensibility contract, not a copy of R-Co's shape.",
+      "variable_schema.ex fetch_schemas/3 (One query, never one per key): restated 'matching R-Co's own doc comment at instance.zig:2318' as 'avoiding an N+1 read pattern here', demoting the instance.zig comment to a supporting parenthetical -- the actual reason is query-count discipline, independent of R-Co.",
+      "pin_resolver.ex override_entry typedoc (no resolved_id field): reordered the sentence so the real reason leads -- 'a caller-supplied resolved_id would never be read for anything since resolve/4 now verifies every override against Lookup rather than trusting it ... keeping it would be exactly the misleading-unused-field anti-pattern that design doc §4.2 forbids' -- with the pin_resolver.zig wire-shape coincidence demoted to a trailing observation.",
+      "lua/platform.ex capability matrix (REQ-157 moduledoc): restated 'exactly 8 functions R-Co's own capability matrix names' as 'exactly 8 functions this module's own @capability_matrix below names' -- the actual source of truth is the constant defined in this very module, not an R-Co table."
+    ],
+    "test_fix_note": "test/letflow/engine/schemas_test.exs's 'states status dumps lowercase, matching R-Co's own tokens.status strings exactly' test asserted the literal retired phrase as a substring of TokenRecord's moduledoc; updated the assertion to check the new phrasing ('a fixed convention per design', 'this codebase already has a same-shaped table using the opposite casing') instead of weakening or deleting the test's intent (that the casing choice is documented and deliberate). test/letflow/engine/wasm/host_api_test.exs's regex-based uuid moduledoc test (`~r/documented\\s+WASM-side addition/`) was satisfied without modification by keeping the literal substring 'documented WASM-side addition' intact in host_api.ex's rewrite.",
+    "compile_output": "mix compile --warnings-as-errors: `Compiling 17 files (.ex)` / `Generated letflow app` -- zero warnings, zero errors, exit 0.",
+    "test_output": "mix test test/letflow/engine/ (scoped, covers all 13 touched modules): `Result: 977 passed (1 property, 976 tests), 16 excluded`, 0 failures, exit 0. Full mix test suite was attempted but exceeds this environment's 10-minute single-call ceiling (REQ-232's own precedent full-suite run took ~1301s / ~21.7 minutes) -- not run to completion; the scoped engine-directory run is the verification actually completed and quoted here, per the acceptance criteria's own 'plus the fuller suite if time allows' allowance. Two tests initially failed on the first scoped run for exactly the reason a literal-doc-substring assertion would: schemas_test.exs's TokenRecord test (fixed, see test_fix_note) and host_api_test.exs's uuid test (fixed by preserving the exact 'documented WASM-side addition' substring in the rewrite rather than by touching the test) -- second scoped run is 977/977 clean.",
+    "self_review": "No state-transition/@spec/schema/response-shape change -- README.md's state diagram and process_instance_test.exs's property test are unaffected (process_instance.ex was not touched by this requirement). No migration added. No tenant-data path touched (comments/moduledocs plus one test-assertion string only)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -51,7 +51,8 @@ defmodule Letflow.Engine.Lua.Platform do
   ## REQ-157 (LUA-05, LUA-06 restated) — the capability matrix
 
   This requirement extends `platform` from the single `now` function (REQ-152) to the
-  full, CLOSED set of exactly 8 functions R-Co's own capability matrix names. Every
+  full, CLOSED set of exactly 8 functions this module's own `@capability_matrix`
+  below names — the closed set of what `platform.*` exposes, and nothing else. Every
   `platform.*` global this module ever installs comes from `@capability_matrix` below,
   via a single fold in `install/2` — there is no other place in this module, or anywhere
   else under `lib/`, that installs a `platform.*` global via `Lua.set!/3` (INV-CAP-1).

@@ -299,9 +299,9 @@ defmodule Letflow.Engine.Wasm.CapabilityGate do
   dispatches to a real `Letflow.Engine.Wasm.HostApi` implementation for, plus
   `:call_service`'s still-real dispatch since REQ-172 widens it), mirroring
   `Letflow.Engine.Lua.Platform.capability_matrix/0`'s own existing
-  "exposed for introspection/testing" pattern. Used by the shared parity harness's
-  exhaustiveness guard so a future 8th `@known_imports` row without a matching parity
-  scenario is caught by construction, never by a second hand-written literal list.
+  "exposed for introspection/testing" pattern. Used by `Letflow.Test.HostApiParity`'s
+  own exhaustiveness guard so a future 8th `@known_imports` row lacking a matching
+  scenario there is caught by construction, never by a second hand-written literal list.
   """
   @spec known_host_functions() :: [host_fn_spec()]
   def known_host_functions do

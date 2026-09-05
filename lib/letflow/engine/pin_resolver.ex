@@ -195,14 +195,13 @@ defmodule Letflow.Engine.PinResolver do
 
   @typedoc """
   One caller-supplied override entry (§4.1/§4.2 of the design doc). No
-  `resolved_id` field — matches R-Co's actual wire shape
-  (`pin_resolver.zig:206`, `{kind, ref, version}`, no fourth field). Since
-  `resolve/4` now verifies every override against `Lookup` rather than
-  trusting it (GH#298 / ISS-0079,
+  `resolved_id` field: since `resolve/4` now verifies every override
+  against `Lookup` rather than trusting it (GH#298 / ISS-0079,
   `lib/letflow/design/iss-0079-pin-override-verification.md`), a
   caller-supplied `resolved_id` would never be read for anything — keeping
   it would be exactly the misleading-unused-field anti-pattern that design
-  doc flags.
+  doc §4.2 forbids. The resulting `{kind, ref, version}` shape (no fourth
+  field) happens to line up with `pin_resolver.zig:206`'s own wire shape.
   """
   @type override_entry :: %{
           kind: :catalog_entry | :module | :variable_schema,

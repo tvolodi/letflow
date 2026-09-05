@@ -50,10 +50,11 @@ defmodule Letflow.Engine.Wasm.HostApi do
 
   ## `uuid` has no Lua counterpart (AC5)
 
-  `uuid` does not appear in `platform.ex`'s 8-row `@capability_matrix` — R-Co's own
+  `uuid` does not appear in `platform.ex`'s 8-row `@capability_matrix` — R-Co's
   `src/wasm/host_api/uuid.zig` had no Lua-side sibling either, an asymmetry that
   predates Letflow's migration. This requirement implements `uuid` as a **documented
-  WASM-side addition, not parity**: it shares `now`'s own capability rationale (a pure
+  WASM-side addition, with no Lua-side counterpart introduced**: it shares `now`'s own
+  capability rationale (a pure
   computation with no state reach, no tenant-data touch, no side effect), requires no
   Lua-side file edit, and reuses the existing `:none` gating mechanism. Whether Lua
   scripts should also gain a `platform.uuid()` is flagged as a candidate finding for
@@ -85,7 +86,8 @@ defmodule Letflow.Engine.Wasm.HostApi do
       `out_cap < n`, the host has written nothing — the guest must call again with a
       buffer of at least `n` bytes.
     * `-1` — **`read_variable`-only.** The variable is not present in
-      `execution_context.variables` (parity with Lua's `nil` for an unset variable).
+      `execution_context.variables` (the same convention Lua's own `nil` represents
+      for an unset variable).
       Never returned by `now`/`uuid` (both always have a value).
     * `-2` — invalid argument: an input or output pointer/length pair failed
       `MemoryGuard`'s bounds check, or (`read_variable` only) the name bytes read back
@@ -222,8 +224,8 @@ defmodule Letflow.Engine.Wasm.HostApi do
   @type staged_writes :: %{optional(String.t()) => term()}
 
   # ── REQ-172 §2.2/§5.2 -- the out-of-band distinguishability signal do_fail/5
-  # stashes immediately before exit/1, read by PluginHandler.call_export/3 (and the
-  # parity harness's own run_wasm/0 closure for the fail scenario) via
+  # stashes immediately before exit/1, read by PluginHandler.call_export/3 (and
+  # Letflow.Test.HostApiParity's own run_wasm/0 closure for the fail scenario) via
   # Process.info(pid, :dictionary) strictly BEFORE that pid is stopped. A SEPARATE
   # key from staged writes, written only by do_fail/5.
   @fail_signal_pdict_key {Letflow.Engine.Wasm.HostApi, :fail_signal}
@@ -231,7 +233,8 @@ defmodule Letflow.Engine.Wasm.HostApi do
 
   # ── read_variable (design §5.3) ───────────────────────────────────────────────────
   #
-  # Restates platform.ex's do_read_variable/3 (lines 596-607) at ABI parity: a plain
+  # Restates platform.ex's do_read_variable/3 (lines 596-607) under the same ABI
+  # contract: a plain
   # lookup on the closed-over, already-resolved execution_context.variables -- no
   # Letflow.Repo call, ever.
   @spec do_read_variable(
@@ -264,7 +267,7 @@ defmodule Letflow.Engine.Wasm.HostApi do
 
   # ── log (design §5.4) ─────────────────────────────────────────────────────────────
   #
-  # Restates platform.ex's do_log/3 (lines 681-727) at ABI parity. Identity fields are
+  # Restates platform.ex's do_log/3 (lines 681-727) under the same ABI contract. Identity fields are
   # sourced EXCLUSIVELY from execution_context, never from guest-supplied bytes. Never
   # raises, on any input (results: [] -- log has no return-value channel to report a
   # failure through, so degrading gracefully is the only option that keeps "never
@@ -321,7 +324,7 @@ defmodule Letflow.Engine.Wasm.HostApi do
   # Calls Letflow.Engine.Lua.Platform.now/0 directly -- not a reimplementation, not a
   # second TimeSource resolution. This guarantees byte-for-byte identical output
   # between the Lua and WASM call paths under the same injected clock double, the
-  # strongest possible form of parity. Does not modify platform.ex (a new caller, not
+  # strongest possible guarantee that the two call paths agree. Does not modify platform.ex (a new caller, not
   # a change to the function) and does not violate decision 0014's "neither runtime is
   # given database access" boundary.
   @spec do_now(
@@ -350,7 +353,8 @@ defmodule Letflow.Engine.Wasm.HostApi do
 
   # ── write_variable (REQ-172 design §3) ────────────────────────────────────────────
   #
-  # Restates platform.ex's do_write_variable/2 (lines 736-755) at ABI parity: stages
+  # Restates platform.ex's do_write_variable/2 (lines 736-755) under the same ABI
+  # contract: stages
   # into a process-dictionary buffer private to the Wasmex instance process running
   # this callback (design §2) -- never into any shared/VM state. Both buffers are read
   # via MemoryGuard.read/4 (INV-HOSTAPI-3); any bounds failure on either, invalid UTF-8
@@ -580,7 +584,7 @@ defmodule Letflow.Engine.Wasm.HostApi do
   # design §2.2/§5.2 -- the fail-uninterceptability mechanism itself: a positive,
   # deliberate signal left in this process's OWN dictionary, under a key nothing else
   # in this module ever writes, immediately before exit/1. Read by
-  # PluginHandler.call_export/3 (and the parity harness) via
+  # PluginHandler.call_export/3 (and Letflow.Test.HostApiParity) via
   # Process.info(pid, :dictionary), strictly BEFORE that pid is stopped.
   @spec stash_fail_signal(String.t(), term()) :: :ok
   defp stash_fail_signal(reason, details) do

@@ -67,8 +67,9 @@ defmodule Letflow.Engine.Wasm.ResourceLimits do
   @typedoc "Caller-supplied, per-guest-invocation resource configuration --
   AC4's required configurability. `fuel_budget` and `memory_cap_bytes` are
   the two configurable knobs this requirement names; `table_elements_cap`
-  is included for StoreLimits parity (decision 0014's own evidence names
-  it alongside memory_size) but is untested by this requirement's own
+  is included to keep this config's shape complete alongside StoreLimits'
+  own field set (decision 0014's own evidence names it alongside
+  memory_size) but is untested by this requirement's own
   acceptance criteria."
   @type config :: %{
           required(:fuel_budget) => pos_integer(),
@@ -84,8 +85,9 @@ defmodule Letflow.Engine.Wasm.ResourceLimits do
   -- that crash shape belongs to whatever later calls Wasmex.start_link/1
   with the store this module builds (a future wiring requirement's
   concern), not to build_store/1 itself, which per §1's probes only ever
-  fails with a clean {:error, binary()}; the variant is named here for
-  documentation parity with that future caller's responsibility."
+  fails with a clean {:error, binary()}; the variant is named here so this
+  module's own documentation stays consistent with that future caller's
+  responsibility."
   @type build_defect ::
           {:engine_build_failed, raw_reason :: term()}
           | {:store_build_failed, raw_reason :: term()}

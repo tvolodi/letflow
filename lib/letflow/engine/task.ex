@@ -7,7 +7,7 @@ defmodule Letflow.Engine.Task do
 
   This module is the Ecto schema for the `tasks` table only — the table
   `EE-03` (`src/engine/instance.zig`'s task-activation path) and `EE-04` (task
-  completion) write into. R-Co's own `src/tasks/store.zig` (1202 lines)
+  completion) write into. R-Co's `src/tasks/store.zig` (1202 lines)
   additionally builds a standalone task query/list/filter surface
   (`TaskStore.list/6`-equivalent: `instance_id`/`status`/`assignee_ref`
   filters, pagination) — **that surface is not ported by this module or by
@@ -25,8 +25,10 @@ defmodule Letflow.Engine.Task do
   ## `status` dumps uppercase (design §4.3 point 3, INV-EE43-4)
 
   `status`'s `Ecto.Enum` dumps **uppercase** (`"PENDING"`/`"COMPLETED"`/
-  `"CANCELLED"`), matching R-Co's own stored strings exactly — unlike
-  `Letflow.Engine.TokenRecord.status`, which dumps lowercase. Both moduledocs state
+  `"CANCELLED"`), a fixed convention per design §4.3 point 3/INV-EE43-4 — unlike
+  `Letflow.Engine.TokenRecord.status`, which dumps lowercase (R-Co itself stores
+  these two tables' status columns with different casing too, so this split is
+  not a Letflow-introduced inconsistency). Both moduledocs state
   this so neither reader "fixes" the two tables into matching casings.
 
   ## No `@schema_prefix`

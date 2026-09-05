@@ -247,9 +247,10 @@ defmodule Letflow.Engine.VariableSchema do
     2. Compute the validation candidates: every key in `incoming_variables`,
        new or overwrite alike.
     3. If that set is empty (i.e. `incoming_variables` is empty), return
-       `{:ok, %{}}` without issuing a query (R-Co's own
-       `if (output_variables.count() == 0)` fast path, `instance.zig:2331`,
-       generalised to "nothing to validate"). This runs *after* step 1, so a
+       `{:ok, %{}}` without issuing a query — no candidates means no schema
+       lookup could possibly be needed (the same fast-path shape as
+       `instance.zig:2331`'s `if (output_variables.count() == 0)`,
+       generalised here to "nothing to validate"). This runs *after* step 1, so a
        missing prefix still fails closed even when there is nothing to look
        up.
     4. `fetch_schemas/3`. Any `{:error, reason}` propagates unchanged.
@@ -301,8 +302,9 @@ defmodule Letflow.Engine.VariableSchema do
   function — taking it here keeps the read on the enclosing transaction's
   connection alongside the already-locked `instance_projections` row.
 
-  One query, never one per key, matching R-Co's own doc comment at
-  `instance.zig:2318`. The query is deliberately **not** filtered by candidate
+  One query, never one per key — avoiding an N+1 read pattern here (the same
+  one-query shape `instance.zig:2318`'s own doc comment documents). The query
+  is deliberately **not** filtered by candidate
   key: R-Co selects every row for the definition and filters in memory
   (`instance.zig:2345-2358`), the row count per definition is small and bounded
   by the definition's declared variables, and one stable query plan is easier
@@ -311,8 +313,8 @@ defmodule Letflow.Engine.VariableSchema do
   showed it mattered.
 
   Composed with `Ecto.Query` and bound parameters only — no SQL string
-  interpolation anywhere (INV-7), matching R-Co's own "$1 = definition_id hex"
-  comment.
+  interpolation anywhere (INV-7; the same parameterization discipline the
+  corresponding R-Co source comment, "$1 = definition_id hex", documents).
 
   Order of operations is load-bearing: `opts[:prefix]` is validated first, then
   `definition_id`, and only then is a query constructed. Both failures issue

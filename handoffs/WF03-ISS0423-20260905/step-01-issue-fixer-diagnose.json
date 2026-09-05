@@ -1,0 +1,57 @@
+{
+  "handoff_id": "b3e1f5a2-6c1d-4e9a-9b7f-1a2c3d4e5f61",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0423-20260905/step-01-issue-fixer-diagnose.json",
+  "created_at": "2026-09-05T00:12:00Z",
+  "started_at": "2026-09-05T00:12:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0423.yaml",
+      "docs/issues/ISS-0113.yaml",
+      "docs/issues/ISS-0224.yaml",
+      "docs/issues/ISS-0419.yaml",
+      "docs/issues/ISS-0427.yaml",
+      "docs/issues/ISS-0428.yaml",
+      "docs/issues/ISS-0426.yaml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "test/support/tenant_fixture.ex",
+      "test/support/tenant_template.ex",
+      "lib/letflow/sandbox_pool.ex",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": ["test/support/", "config/test.exs", "lib/letflow/sandbox_pool.ex"]
+  },
+  "task": {
+    "description": "This combines WF-03 Step 0.5 (registry lookup) and Step 1 (diagnose) for ISS-0423. Read docs/issues/ISS-0423.yaml in full, including its 'Re-opened for a second pass' note at the bottom -- it already reconciles most of this for you: ISS-0427 (template-schema clone), ISS-0428 (wire scripts/test_parallel.sh into mix letflow.check) and ISS-0426 (parallel wall-clock flake) are all status: resolved; ISS-0113 (Letflow.TenantFixture.provisioned_tenant!/1 calling Sandbox.mode(Letflow.Repo, :auto) globally) is still status: open and is this record's own named root cause of why 86+ already-async:-true test files still ran serially.\n\nDo NOT re-derive the historical measurement work already in the file (measured_causes, adoption_notes) -- treat it as Step 0.5's registry-lookup match, already found for you. Your job is:\n\n1. RE-VERIFY THE CURRENT BASELINE FIRST-HAND. Run the actual current gate command a real WF-02/WF-03 run would hit: `mix letflow.check` (this now shells to scripts/test_parallel.sh per ISS-0428 -- confirm this yourself by reading lib/mix/tasks/letflow.check.test.ex, don't take the note's word for it) and ALSO a plain, un-partitioned `mix test` for a true serial baseline comparable to the original 2026-09-02 filing. Quote both 'Finished in ... (Xs async, Ys sync)' lines verbatim, real output, not estimated. This is the single most load-bearing thing this step produces: the queue task's own '~30 min gate on every requirement' framing may already be stale now that mix letflow.check parallelizes by default -- state plainly whether it still is or isn't a ~30 min gate today.\n2. Confirm the CURRENT shape of the tenant fixture against ISS-0423's original description: is TenantFixture.provisioned_tenant!/1 still defaulting to template:clone (ISS-0427)? Count current async:true test files and current serial async:Xs from the real run in step 1 (not the stale '86 files / 14.8s' figures) -- has ISS-0113's defeat of async actually changed since 2026-09-02, or does the same global Sandbox.mode(:auto) call still block it? Read test/support/tenant_fixture.ex yourself to confirm the call site and line.\n3. Read docs/issues/ISS-0113.yaml in full -- what does IT already scope as the fix (restoring :manual, or scoping :auto per-test)? Does fixing ISS-0113 first change the async picture, or does it just fix ISS-0113's own named correctness hazard without unlocking speed?\n4. Root-cause diagnosis, written into result.summary: given the CURRENT state (ISS-0427/0428/0426 resolved, ISS-0113 open, mix letflow.check already parallelized), what is the real remaining opportunity for ISS-0423, if any? Is it: (a) fixing ISS-0113 to unlock the already-declared async:true files, (b) a SandboxPool-backed fixture rework to let MORE files go async (the pool-of-pre-provisioned-schemas idea the issue originally suggested), (c) something else, or (d) a reasoned finding that the remaining gap is not worth closing given what's already landed? State which, with the fresh measurement backing it. You are NOT implementing anything -- this is diagnosis for CODE-DESIGNER.\n5. Read docs/migration/decisions/0009-test-parallel-pool-sizing.md in full (its addendum too) before finishing -- your diagnosis must state explicitly whether whatever you're recommending CODE-DESIGNER design interacts with the pool_size arithmetic that decision governs (peak concurrent DBConnection checkouts vs pool_size), even if only to say 'not applicable because X'.\n\nComplete this handoff with next_action pointing at CODE-DESIGNER for fix/improvement design, UNLESS your finding is itself a complete, evidence-backed 'nothing further worth doing' verdict -- in which case say so plainly and route back to ORCH for a no-code-change closure discussion (AC6 of the queue task's own acceptance criteria explicitly allows this outcome).",
+    "acceptance_criteria": [
+      "Both a fresh mix letflow.check run and a fresh plain mix test run are executed for real in this session and their exact 'Finished in ... (Xs async, Ys sync)' lines are quoted verbatim in result.summary",
+      "The current line number and exact call in test/support/tenant_fixture.ex responsible for the global Sandbox.mode(:auto) call is re-confirmed by reading the file, not assumed from ISS-0113's filing text",
+      "ISS-0113.yaml is read in full and its own proposed fix (if any) is summarized",
+      "A root-cause diagnosis is written stating which of (a)/(b)/(c)/(d) above this run should pursue, with the fresh measurement as evidence",
+      "Decision 0009 (plus its ISS-0287 addendum) is read in full and explicitly addressed in the diagnosis, even if only to state non-applicability with a reason",
+      "No fix is implemented in this step -- diagnosis only"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

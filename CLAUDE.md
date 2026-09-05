@@ -1,18 +1,21 @@
 # CLAUDE.md — Letflow
 
 Read automatically by Claude Code at session start. Letflow (working
-name during early development: RoCo) is the full migration target for
-R-Co (see `README.md`) — this file stays short on purpose; it is a
-pointer, not a rulebook.
+name during early development: RoCo) is a multi-tenant BPM platform in
+its own right — this file stays short on purpose; it is a pointer, not
+a rulebook.
 
 ## What this project is
 
-The staged Elixir/OTP rewrite of R-Co
-(`c:\Users\tvolo\dev\ai-dala\R-Co\`), a multi-tenant BPM platform. See
-`README.md` in full before doing anything, especially "Migration
-status." `docs/migration/README.md` has the full stage breakdown
-(S0–S9) and the R-Co source paths each stage ports — read the relevant
-stage file before starting work in that stage.
+An Elixir/OTP multi-tenant BPM platform. See `README.md` in full
+before doing anything, especially "Migration status." Letflow began as
+a staged rewrite of a predecessor system, R-Co
+(`c:\Users\tvolo\dev\ai-dala\R-Co\`); that migration is effectively
+complete (see `docs/migration/README.md`'s stage breakdown, S0–S9),
+so `docs/migration/` is retained as the historical build record —
+read the relevant stage file when its rationale still matters for a
+change, but do not treat it as live instructions for how the project
+should be shaped going forward.
 
 Letflow is not backend-only. As of 2026-08-21 it also owns **`web/`**,
 the React/TypeScript SPA migrated out of R-Co (spec in
@@ -27,16 +30,18 @@ they're still relevant, rather than tracked separately.
 
 ## Agent roster
 
-This project runs R-Co's full agent-pipeline shape
-(`c:\Users\tvolo\dev\ai-dala\R-Co\`), not a trimmed subset — every producing
-role is paired with an independent validating role, the pipeline runs
-commit→push→merge→CI→local-repo-update with no human gate, and every
-role/workflow/guide is written explicitly enough for a weak or
-inexpensive model to execute reliably. See
+This project runs a full agent-pipeline shape, not a trimmed subset —
+every producing role is paired with an independent validating role,
+the pipeline runs commit→push→merge→CI→local-repo-update with no
+human gate, and every role/workflow/guide is written explicitly
+enough for a weak or inexpensive model to execute reliably. The shape
+originates from the same pipeline used to build R-Co
+(`c:\Users\tvolo\dev\ai-dala\R-Co\`), kept here as provenance, not as
+the reason to run it this way — see
 `docs/migration/decisions/0004-humanless-pipeline.md` for the full
-rationale (this supersedes an earlier, smaller 4-agent framing this
-file used to describe). Full roster, capability matrix, and artifact
-locations: [`docs/agents/AGENT_SYSTEM.md`](docs/agents/AGENT_SYSTEM.md).
+rationale on its own merits (this supersedes an earlier, smaller
+4-agent framing this file used to describe). Full roster, capability
+matrix, and artifact locations: [`docs/agents/AGENT_SYSTEM.md`](docs/agents/AGENT_SYSTEM.md).
 Routing logic, gates, rework/escalation rules, stage-gate enforcement:
 [`docs/agents/ORCHESTRATOR.md`](docs/agents/ORCHESTRATOR.md).
 

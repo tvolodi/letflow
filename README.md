@@ -1,11 +1,13 @@
 # Letflow
 
-Letflow is the Elixir/OTP rewrite target for
-[R-Co](../R-Co) (Robotized Company), a multi-tenant BPM platform.
-Letflow is a **full, staged migration** of R-Co to Elixir. The name
-plays on the double meaning of "let it flow" — a workflow engine, and
-one meant to run itself via AI agents rather than needing a human to
-drive each step.
+Letflow is an Elixir/OTP multi-tenant BPM platform. The name plays on
+the double meaning of "let it flow" — a workflow engine, and one meant
+to run itself via AI agents rather than needing a human to drive each
+step. Letflow began as a full, staged migration of a predecessor
+system, [R-Co](../R-Co) (Robotized Company); that migration is now
+essentially complete (see "Migration status" below), and R-Co's design
+and source now serve as historical provenance for why Letflow behaves
+the way it does, not as the reason to keep building it that way.
 
 > The project directory on disk is still `ro-co` (a live session had
 > it open and couldn't rename it); the code, mix app, and modules are
@@ -14,18 +16,18 @@ drive each step.
 
 ## Migration status
 
-The migration is staged (S0–S9); see `docs/requirements.yaml`'s
-`stages:` list and `docs/migration/README.md` for the full breakdown
-and the R-Co source paths each stage ports. As of 2026-08-17: Stage 0
-(foundation-and-scaffolding) and Stage 1 (identity/multi-tenancy) are
-both fully expanded into requirements **and done** — S1's stage gate
-was formally cleared 2026-08-16. Stage 2 (event store + definitions)
-is expanded into requirements and in progress. Later stages are
-expanded as the stage before them lands. `docs/requirements.yaml` and
-`docs/migration/README.md`'s "Requirement expansion" section are the
-live source of truth for exact per-requirement status — this section
+The R-Co migration that originally shaped this project is effectively
+complete — the large majority of `docs/requirements.yaml`'s
+requirements are `status: done`, with only a small pending tail and a
+handful formally cancelled. `docs/migration/` is retained as the
+historical build record: it explains why Letflow's stages (S0–S9) and
+much of its design look the way they do, including the R-Co source
+paths each stage ported from, but it is documentation of how Letflow
+was built, not live instructions for how it should be shaped from
+here. `docs/requirements.yaml`'s `stages:` list and
+`docs/migration/README.md` have the full breakdown. This section
 intentionally doesn't restate a snapshot count here, since that's
-exactly the kind of number that goes stale (see `ISS-0022`). Check
+exactly the kind of number that goes stale (see `ISS-0022`) — check
 `docs/requirements.yaml` for the next `pending` requirement before
 starting unscoped work, same as always.
 

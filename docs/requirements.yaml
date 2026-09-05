@@ -13839,3 +13839,422 @@ requirements:
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-230]
     impl_order: 466  # letflow-queue task id
+
+  - id: REQ-232
+    title: Retire parity-justification phrasing in lib/letflow/routers/* -- restate each decision on Letflow's own merit or delete it (closes ISS-0424 part 2a)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the routers slice of ISS-0424/GH#828 part 2 (queue task 424),
+      sized per ISSUE-FIXER's diagnosis
+      (handoffs/WF03-ISS0424-20260904/step-01-issue-fixer-diagnosis.json)
+      and REQ-ANALYST's own re-verification on 2026-09-04. ISS-0424's
+      framing: Letflow is meant to live its own independent life rather
+      than being justified by lineage to R-Co; decisions in production
+      code that are defended SOLELY by "this matches/mirrors R-Co" rather
+      than by their own technical merit are the real debt this issue
+      targets.
+      MEASURED SCOPE (re-verified 2026-09-04, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co'
+      lib/letflow/routers/): 35 occurrences across all 12 files in
+      lib/letflow/routers/ -- solution_packs.ex, identity.ex,
+      metrics_exposition.ex, tasks.ex, audit.ex, tenants.ex,
+      tenant_config.ex, definitions.ex, instances.ex, dlq.ex, onboarding.ex,
+      promotions.ex.
+      WHAT TO DO, per occurrence (this is a judgement call, NOT a
+      find-and-replace): read the surrounding paragraph/comment; if the
+      sentence's ONLY content is "this exists/behaves this way because
+      R-Co does it this way," either (a) restate it in terms of why the
+      behavior is correct for Letflow on its own terms (e.g. the actual
+      invariant it protects, the actual caller contract it satisfies), or
+      (b) delete the sentence entirely if the surrounding code is
+      self-evident without it. Where the sentence ALSO carries information
+      that is not restatable as pure R-Co lineage (e.g. a real constraint,
+      a cross-reference to another REQ, a schema detail), keep that part
+      and only excise the lineage-as-justification framing.
+      EXPLICITLY OUT OF SCOPE, MUST BE PRESERVED VERBATIM: any line
+      matching the deliberate-divergence phrase family ('unlike R-Co',
+      'deliberately diverges', 'diverges from R-Co') -- these document
+      independent judgement, not lineage-justification, and ISS-0424 is
+      explicit they are the most valuable references in the tree. Re-run
+      `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'
+      lib/letflow/routers/` before starting and diff it against the same
+      grep after finishing: the set of matching lines (by content, not
+      line number) must be identical.
+      Also out of scope: any .zig source-path provenance citation in these
+      files (kept as-is; ISS-0424 part 3 / REQ-238 handles demoting their
+      framing, not this requirement).
+    acceptance_criteria:
+      - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/routers/ | wc -l` and quote the count (measured 35 at draft time, 2026-09-04 -- re-derive, do not trust this number verbatim if the tree has moved)"
+      - "after the change, the same grep against lib/letflow/routers/ returns zero occurrences -- quote the before and after counts side by side"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/routers/` and save the full output; after the change, re-run the identical grep and diff the two outputs -- the set of matching lines, by content, must be byte-identical (same divergence notes preserved verbatim); quote both outputs and the diff (empty diff expected)"
+      - "no .zig source-path citation line in lib/letflow/routers/ is deleted -- `grep -c '\\.zig' lib/letflow/routers/*.ex` summed before and after are equal; quote both sums"
+      - "for at least 3 of the touched occurrences, the commit message or an inline comment names the specific technical reason kept (not merely 'rephrased'), spot-checkable by REVIEWER"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 470  # letflow-queue task id
+
+  - id: REQ-233
+    title: Retire parity-justification phrasing in lib/letflow/engine.ex, lib/letflow/engine/*, engine/wasm/*, engine/lua/* -- restate on merit or delete (closes ISS-0424 part 2b)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the engine+wasm+lua slice of ISS-0424/GH#828 part 2, same
+      rationale and method as REQ-232 (read REQ-232's description for the
+      full judgement-call criteria; not restated here in full).
+      MEASURED SCOPE (re-verified 2026-09-04, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across
+      lib/letflow/engine.ex and lib/letflow/engine/ recursively): 32
+      occurrences across 13 files -- lib/letflow/engine.ex,
+      engine/wasm/resource_limits.ex, engine/snapshot_writer.ex,
+      engine/expr.ex, engine/execution_error.ex, engine/token_record.ex,
+      engine/pin_resolver.ex, engine/lua/platform.ex,
+      engine/variable_schema.ex, engine/wasm/host_api.ex,
+      engine/lua/sandbox.ex, engine/task.ex, engine/wasm/capability_gate.ex.
+      Note lib/letflow/engine/pin_rebind.ex's hardcoded R-Co filesystem
+      path (moduledoc line 8, flagged separately in ISS-0424's own text)
+      is NOT a parity-justification phrase match and is NOT touched by
+      this requirement -- it is a different problem (a literal path, not
+      a lineage-justification sentence) left for whichever requirement
+      picks up ISS-0424's `affected_files` note on that file, if any.
+      WHAT TO DO: same per-occurrence judgement call as REQ-232 -- restate
+      on Letflow's own technical merit (e.g. the actual invariant
+      resource_limits.ex enforces, the actual crash-isolation contract
+      capability_gate.ex provides) or delete if self-evident.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: the deliberate-divergence
+      lines already confirmed in this subsystem at draft time --
+      engine/execution_error.ex:7 ("deliberately **open**, unlike R-Co's
+      own") and engine/pin_resolver.ex:141 ("unlike R-Co's") -- and any
+      other line matching 'unlike R-Co|deliberately diverges|diverges from
+      R-Co' found by a fresh grep at fix time. Also out of scope: .zig
+      provenance citations (REQ-238).
+    acceptance_criteria:
+      - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/engine.ex lib/letflow/engine/ -r | wc -l` and quote the count (measured 32 at draft time, 2026-09-04 -- re-derive)"
+      - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine.ex lib/letflow/engine/` and save the output; after the change, re-run and diff -- byte-identical set of matching lines required, including engine/execution_error.ex:7 and engine/pin_resolver.ex:141's own text surviving verbatim; quote both outputs and the diff"
+      - "lib/letflow/engine/pin_rebind.ex is untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 471  # letflow-queue task id
+
+  - id: REQ-234
+    title: Retire parity-justification phrasing in lib/letflow/definitions.ex, lib/letflow/definitions/*, and lib/letflow/routers/definitions.ex -- restate on merit or delete (closes ISS-0424 part 2c)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the definitions slice of ISS-0424/GH#828 part 2, same
+      rationale and method as REQ-232 (read REQ-232's description for the
+      full judgement-call criteria; not restated here).
+      MEASURED SCOPE (re-verified 2026-09-05, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across
+      lib/letflow/definitions.ex, lib/letflow/definitions/ recursively, and
+      lib/letflow/routers/definitions.ex): 17 occurrences across 7 files --
+      definitions.ex, definitions/process_definition.ex,
+      definitions/promotion_artifact.ex,
+      definitions/service_scope_validator.ex, definitions/solution_pack.ex,
+      definitions/promotion_review.ex,
+      definitions/solution_pack_install.ex. NOTE: lib/letflow/routers/definitions.ex
+      is already covered by REQ-232 (routers slice) -- do not double-count
+      or re-touch it here; this requirement's file list is the 7 files
+      above only.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: definitions/process_definition.ex:34
+      ("This deliberately diverges from ...") confirmed at draft time, and
+      any other line matching 'unlike R-Co|deliberately diverges|diverges
+      from R-Co' found by a fresh grep at fix time. Also out of scope:
+      .zig provenance citations (REQ-238).
+    acceptance_criteria:
+      - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/definitions.ex lib/letflow/definitions/ -r | wc -l` and quote the count (measured 17 at draft time, 2026-09-05, across the 7 files listed above, excluding routers/definitions.ex -- re-derive)"
+      - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/definitions.ex lib/letflow/definitions/` and save the output, including definitions/process_definition.ex:34; after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      - "lib/letflow/routers/definitions.ex is untouched by this requirement's commits (it belongs to REQ-232) -- confirmed by git diff --stat"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 472  # letflow-queue task id
+
+  - id: REQ-235
+    title: Retire parity-justification phrasing in lib/letflow/event_store.ex and lib/letflow/event_store/* -- restate on merit or delete (closes ISS-0424 part 2d)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the event_store slice of ISS-0424/GH#828 part 2, same
+      rationale and method as REQ-232 (read REQ-232's description for the
+      full judgement-call criteria; not restated here).
+      MEASURED SCOPE (re-verified 2026-09-04, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across
+      lib/letflow/event_store.ex and lib/letflow/event_store/ recursively):
+      15 occurrences across 5 files -- event_store.ex,
+      event_store/stored_payload.ex, event_store/registry/json_schema.ex,
+      event_store/idempotency_record.ex, event_store/registry.ex.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: event_store/registry/validation_failure.ex:21
+      ("unlike R-Co's allocator-owned ...") confirmed at draft time --
+      note this file is NOT in this requirement's 5-file scope above (it
+      is a sibling file under event_store/registry/ not matching the
+      parity-phrase grep), so it should not be touched by this requirement
+      at all; if a fresh grep at fix time surfaces it as an in-scope file
+      too, treat any divergence line inside it per the same
+      preserve-verbatim rule. Also out of scope: .zig provenance citations
+      (REQ-238).
+    acceptance_criteria:
+      - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/event_store.ex lib/letflow/event_store/ -r | wc -l` and quote the count (measured 15 at draft time, 2026-09-04 -- re-derive)"
+      - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/event_store.ex lib/letflow/event_store/` and save the output; after the change, re-run and diff -- byte-identical set of matching lines required; quote both outputs and the diff"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 473  # letflow-queue task id
+
+  - id: REQ-240
+    title: Retire parity-justification phrasing in lib/letflow/api/ and lib/letflow/plugs/ -- restate on merit or delete (closes ISS-0424 part 2e-1)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the api/+plugs/ slice of ISS-0424/GH#828 part 2 (the first of
+      three sub-slices REQ-236 was split into, because REQ-236's original
+      15-file span was too heterogeneous for one turn -- 5 unrelated
+      subsystems in one requirement -- see REQ-VALIDATOR's gate finding on
+      REQ-236). Same rationale and per-occurrence judgement-call method as
+      REQ-232 (read REQ-232's description for the full criteria; not
+      restated here).
+      MEASURED SCOPE (re-verified 2026-09-05, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across the
+      4 files below): 7 occurrences across exactly these 4 files --
+      lib/letflow/api/authorization.ex, lib/letflow/api/context.ex,
+      lib/letflow/plugs/api_pipeline.ex, lib/letflow/plugs/tenant_status.ex.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: lib/letflow/api/response.ex:27
+      ("diverges from R-Co" -- note api/response.ex itself is NOT in this
+      requirement's 4-file parity-phrase scope, only its divergence line is
+      called out here for awareness; no other deliberate-divergence lines
+      were found in this requirement's own 4 files at draft time). Re-run
+      `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <the
+      4 files>` at fix time and preserve whatever it finds verbatim. Also
+      out of scope: .zig provenance citations (REQ-238).
+    acceptance_criteria:
+      - "before starting, run the parity-phrase grep against exactly the 4 files listed in this requirement's description and quote the count (measured 7 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 4 by diffing against REQ-232/233/234/235/241/242's own file lists to rule out double-coverage or gaps)"
+      - "after the change, the identical grep against the same 4 files returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 4 files and save the output (expected empty at draft time); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 475  # letflow-queue task id
+
+  - id: REQ-241
+    title: Retire parity-justification phrasing in lib/letflow/identity(.ex, /group.ex), instances.ex, tasks.ex, tenant_provisioning.ex, audit.ex -- restate on merit or delete (closes ISS-0424 part 2e-2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the identity+instances+tasks+tenant_provisioning+audit slice
+      of ISS-0424/GH#828 part 2 (the second of three sub-slices REQ-236 was
+      split into -- see REQ-240's description for why). Same rationale and
+      per-occurrence judgement-call method as REQ-232 (read REQ-232's
+      description for the full criteria; not restated here).
+      MEASURED SCOPE (re-verified 2026-09-05, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across the
+      6 files below): 34 occurrences across exactly these 6 files --
+      lib/letflow/identity.ex, lib/letflow/identity/group.ex,
+      lib/letflow/instances.ex, lib/letflow/tasks.ex,
+      lib/letflow/tenant_provisioning.ex, lib/letflow/audit.ex.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: no deliberate-divergence
+      line ('unlike R-Co|deliberately diverges|diverges from R-Co') was
+      found in this requirement's 6 files at draft time -- re-run the grep
+      at fix time and preserve verbatim whatever it finds. Also out of
+      scope: .zig provenance citations (REQ-238).
+    acceptance_criteria:
+      - "before starting, run the parity-phrase grep against exactly the 6 files listed in this requirement's description and quote the count (measured 34 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 6 by diffing against REQ-232/233/234/235/240/242's own file lists to rule out double-coverage or gaps)"
+      - "after the change, the identical grep against the same 6 files returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 6 files and save the output (expected empty at draft time); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 476  # letflow-queue task id
+
+  - id: REQ-242
+    title: Retire parity-justification phrasing in lib/letflow/repository/artifact.ex, sandbox_pool/fixture_loader.ex, webhooks/subscription.ex, and lib/mix/tasks/ -- restate on merit or delete (closes ISS-0424 part 2e-3)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Closes the repository+sandbox_pool+webhooks+lib/mix/tasks slice of
+      ISS-0424/GH#828 part 2 (the third of three sub-slices REQ-236 was
+      split into -- see REQ-240's description for why). Same rationale and
+      per-occurrence judgement-call method as REQ-232 (read REQ-232's
+      description for the full criteria; not restated here).
+      MEASURED SCOPE (re-verified 2026-09-05, grep -roE 'matches R-Co|mirrors
+      R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' across the
+      5 files below): 8 occurrences across exactly these 5 files --
+      lib/letflow/repository/artifact.ex,
+      lib/letflow/sandbox_pool/fixture_loader.ex,
+      lib/letflow/webhooks/subscription.ex,
+      lib/mix/tasks/letflow.check.test.ex,
+      lib/mix/tasks/letflow.lint_handoffs.ex.
+      EXPLICITLY OUT OF SCOPE, PRESERVE VERBATIM: lib/letflow/sandbox_pool/fixture_loader.ex:11
+      ("diverges from R-Co's own"), lib/letflow/repository/artifact.ex:13
+      ("unlike R-Co's own schema") -- both confirmed at draft time. Re-run
+      `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <the
+      5 files>` at fix time and preserve whatever it finds verbatim. Also
+      out of scope: .zig provenance citations (REQ-238).
+    acceptance_criteria:
+      - "before starting, run the parity-phrase grep against exactly the 5 files listed in this requirement's description and quote the count (measured 8 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 5 by diffing against REQ-232/233/234/235/240/241's own file lists to rule out double-coverage or gaps)"
+      - "after the change, the identical grep against the same 5 files returns zero occurrences -- quote before and after counts"
+      - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 5 files and save the output (expected: lib/letflow/sandbox_pool/fixture_loader.ex:11 and lib/letflow/repository/artifact.ex:13 at minimum); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: []
+    impl_order: 477  # letflow-queue task id
+
+  - id: REQ-237
+    title: Define the .zig provenance-citation marking convention -- demote from decision-authority framing to clearly-marked historical provenance (closes ISS-0424 part 3a, design)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S6
+    description: >
+      Closes the design-decision portion of ISS-0424/GH#828 part 3.
+      ISS-0424's own text: the ~1235 .zig source-path citations scattered
+      through lib/ moduledocs and docs/ (re-verified 2026-09-04: 200 files,
+      ~3051 raw '.zig' substring occurrences across lib/+docs/ by one
+      grep proxy -- ISSUE-FIXER's own diagnosis already found this count is
+      sensitive to counting method, from ~906 to ~4316 depending on
+      proxy; do not treat any single number as exact, the point is scale)
+      are the audit trail explaining why 179+ completed requirements
+      behave as they currently do, and must be KEPT -- but they currently
+      read as live decision authority ("this is why we do X") rather than
+      historical provenance ("this is why X was originally built this
+      way; X's current justification, if any, is elsewhere or is the code
+      itself"). ISS-0424 explicitly frames this as "the same failure class
+      as ISS-0422's doc drift, x100" if left ambiguous at scale.
+      THIS REQUIREMENT PRODUCES A DESIGN ARTEFACT ONLY (in
+      lib/letflow/design/, per this project's normal CODE-DESIGNER
+      convention) -- no citation is edited by this requirement. The design
+      must decide and document, concretely enough for REQ-238/REQ-239's
+      ELIXIR-DEV/DOC-UPDATER turns to apply mechanically without further
+      judgement calls per-citation:
+      1. THE MARKER ITSELF: a consistent, greppable prefix/heading/comment
+      convention that a citation like "SOURCE: c:\Users\tvolo\dev\ai-dala\R-Co\...\cursor.zig"
+      (the exact phrasing already used throughout, e.g. REQ-231's own
+      description above) gets rewritten into, e.g. a fixed heading like
+      "PROVENANCE (historical, not current decision authority):" prepended
+      before the existing SOURCE: line, or an equivalent convention -- the
+      design must pick one and justify it against at least these
+      constraints: (a) must remain trivially greppable as a single regex
+      so REQ-238/239 and any future audit can find every instance
+      mechanically; (b) must not require deleting or altering the existing
+      file-path text itself (the path is the valuable part); (c) must read
+      naturally in both moduledoc (@moduledoc \"\"\") and markdown
+      (docs/, lib/letflow/design/*.md) contexts without two divergent
+      conventions.
+      2. WHERE IT APPLIES: confirm the convention covers both lib/
+      moduledoc citations and docs/ (including docs/migration/) citations,
+      or explicitly says why they need different markers if unifying them
+      is not possible.
+      3. CHUNKING PLAN for the apply step: given the scale (hundreds to
+      low-thousands of lines depending on counting method), the design
+      must recommend how REQ-238 (lib/) and REQ-239 (docs/) split further
+      if either proves too wide for one ELIXIR-DEV/DOC-UPDATER turn --
+      e.g. by top-level lib/letflow/ subdirectory, mirroring REQ-232
+      through REQ-236's subsystem split.
+      NOT IN THIS REQUIREMENT: applying the convention to any file (REQ-238,
+      REQ-239); touching any parity-justification sentence (REQ-232
+      through REQ-236); touching any deliberate-divergence note (out of
+      scope for all of ISS-0424, per the issue's own text).
+    acceptance_criteria:
+      - "the design artefact (lib/letflow/design/req237-*.md, per this project's existing naming convention) states the exact marker text/regex as a single copy-pasteable string or pattern, with a worked before/after example quoting one real citation from the current tree (e.g. REQ-231's own SOURCE: line above, or any other real citation the designer picks) rewritten under the new convention"
+      - "the design explicitly confirms the marker is machine-greppable as one regex covering both the moduledoc and markdown contexts, or states a second regex for the markdown context and justifies why unification was not possible"
+      - "the design does not delete or alter any existing file-path text in its worked example -- the original R-Co path string is fully preserved inside the new marker, confirmed by diffing the before/after example"
+      - "the design states a concrete chunking recommendation (by directory or subsystem) for REQ-238 and REQ-239's apply steps, sized so no single recommended chunk exceeds what REQ-232 through REQ-236 each treated as one ELIXIR-DEV turn (comparable file count)"
+      - "CODE-DESIGN-VALIDATOR signs off per its normal gate: no implementation code in the artefact, every constraint in this requirement's description addressed, unambiguous enough for REQ-238/239 to apply without further design judgement calls"
+    depends_on: []
+    impl_order: 474  # letflow-queue task id
+
+  - id: REQ-238
+    title: Apply the .zig provenance-marking convention across lib/ (excluding lib/letflow/design/) (closes ISS-0424 part 3b)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision (the provenance-marking convention
+      and its exact regex) to every .zig source-path citation in lib/,
+      excluding lib/letflow/design/ (design docs are REQ-239's scope, kept
+      separate because they are markdown, not moduledoc, and REQ-237 may
+      have recommended a different chunking once the actual convention is
+      fixed -- follow REQ-237's own chunking recommendation over this
+      requirement's file list if the two conflict, and flag the conflict
+      rather than silently picking one).
+      SEQUENCING: files touched by REQ-232 through REQ-236 (parity-phrase
+      rewrites) may overlap with files touched here (a file can carry both
+      a parity-justification sentence AND a .zig citation). This
+      requirement must run AFTER REQ-232 through REQ-236 land, so a
+      provenance-marker edit does not collide with or get silently
+      overwritten by a concurrent parity-phrase edit to the same
+      moduledoc paragraph.
+      MEASURED SCOPE AT DRAFT TIME (2026-09-04, re-derive at fix time using
+      REQ-237's actual finalized regex, not this placeholder count): a
+      rough proxy grep (`grep -rl '\.zig' lib/ | grep -v '^lib/letflow/design/'`)
+      found .zig citations present in roughly 180-190 lib/ files outside
+      lib/letflow/design/ (exact count is sensitive to the proxy pattern;
+      re-derive with REQ-237's real regex before starting, and quote that
+      count as this requirement's actual "before").
+      If this proves too wide for one ELIXIR-DEV turn once REQ-237's
+      chunking recommendation is known, split further per that
+      recommendation (e.g. by lib/letflow/ subdirectory) and record the
+      split as a follow-on REQ-ANALYST pass rather than doing a partial,
+      unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/ (excluding lib/letflow/design/) for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in lib/ (excluding lib/letflow/design/) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence lines re-verified in REQ-232 through REQ-236 (e.g. engine/execution_error.ex:7, definitions/process_definition.ex:34, event_store/registry/validation_failure.ex:21, sandbox_pool/fixture_loader.ex:11, repository/artifact.ex:13, api/response.ex:27, routers/promotions.ex:409, routers/metrics_exposition.ex:67, engine/pin_resolver.ex:141) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/` before and after and diffing (byte-identical expected), quoted"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 478  # letflow-queue task id
+
+  - id: REQ-239
+    title: Apply the .zig provenance-marking convention across docs/ (including docs/migration/ and lib/letflow/design/) (closes ISS-0424 part 3c)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision (the provenance-marking convention
+      and its exact regex, or its markdown-specific variant if REQ-237's
+      design states the two contexts need different markers) to every
+      .zig source-path citation under docs/ -- including
+      docs/migration/*.md (explicitly in scope: these are the historical
+      migration record ISS-0424 part 1 already reframed as non-live, and
+      their .zig citations are exactly the provenance content that record
+      exists to preserve) and lib/letflow/design/*.md (the per-requirement
+      design artefacts, excluded from REQ-232 through REQ-236's
+      parity-phrase sweep because that sweep is scoped to production
+      lib/ code, not design docs -- but .zig citations inside design docs
+      are still provenance and still in this requirement's scope).
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits (ORCH's direct-action commit
+      on this branch) -- if either of those three files also contains a
+      raw .zig citation, confirm with a grep first; ISS-0424 Part 1's own
+      measured scope (7+8+9 mentions) did not call one out, so none is
+      expected, but do not assume.
+      MEASURED SCOPE AT DRAFT TIME (2026-09-04): a rough proxy grep found
+      .zig citations across roughly 20 files under docs/ outside
+      lib/letflow/design/, plus the ~200-file lib/+docs/ combined figure
+      cited in REQ-237/REQ-238 includes an unknown split between the two
+      -- re-derive the real docs/-only count at fix time with REQ-237's
+      finalized regex before starting, and quote it as this requirement's
+      actual "before" (do not trust this placeholder).
+      If this proves too wide for one DOC-UPDATER turn, split further
+      per REQ-237's chunking recommendation (e.g. docs/migration/ vs
+      lib/letflow/design/ as two separate requirements) and record the
+      split as a follow-on REQ-ANALYST pass rather than doing a partial,
+      unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/ (including lib/letflow/design/) for the OLD (unmarked) citation form and quote the count"
+      - "after the change, every .zig source-path citation under docs/ (including lib/letflow/design/) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, including at least one from docs/migration/ and one from lib/letflow/design/) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the 38-49 deliberate-divergence notes repo-wide (per ISS-0424's own count and ISSUE-FIXER's re-verification) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 479  # letflow-queue task id

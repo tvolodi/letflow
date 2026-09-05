@@ -1,0 +1,66 @@
+{
+  "run_id": "WF02-REQ243-20260905",
+  "step": "step-02-elixir-dev",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "status": "COMPLETED",
+  "task": {
+    "description": "Apply REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md) to lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex (REQ-243, chunk 238a1 of the REQ-238 split, ISS-0424 part 3b-1, queue task 481)."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Mechanically inserted the fixed marker line 'PROVENANCE (historical, not current decision authority):' immediately above every .zig-citing citation unit (line/paragraph/table/bullet per design doc section 2) in the 8 in-scope files. No .zig citation's own text was altered. Commit 8c48f359 on branch feature/WF02-REQ243-20260905.",
+    "before_after_counts": {
+      "files_in_scope": 8,
+      "zig_lines_per_file_before_and_after_identical": {
+        "lib/letflow/router.ex": 14,
+        "lib/letflow/routers/audit.ex": 7,
+        "lib/letflow/routers/definitions.ex": 15,
+        "lib/letflow/routers/dlq.ex": 1,
+        "lib/letflow/routers/identity.ex": 11,
+        "lib/letflow/routers/instances.ex": 5,
+        "lib/letflow/routers/metrics_exposition.ex": 1,
+        "lib/letflow/routers/onboarding.ex": 2
+      },
+      "pre_existing_marker_count_before": 0,
+      "marker_lines_inserted_after": {
+        "lib/letflow/router.ex": 3,
+        "lib/letflow/routers/audit.ex": 7,
+        "lib/letflow/routers/definitions.ex": 13,
+        "lib/letflow/routers/dlq.ex": 1,
+        "lib/letflow/routers/identity.ex": 6,
+        "lib/letflow/routers/instances.ex": 5,
+        "lib/letflow/routers/metrics_exposition.ex": 1,
+        "lib/letflow/routers/onboarding.ex": 2,
+        "total": 38
+      }
+    },
+    "verification": {
+      "pre_check_regex": "grep -c 'PROVENANCE (historical, not current decision authority):' <file> == 0 for all 8 files before starting (confirmed genuine before-state)",
+      "post_check_regex": "grep -c 'PROVENANCE (historical, not current decision authority):' <file> matches inserted-marker counts above; a per-line awk scan (marker resets tracking on next blank line, sets tracking true on marker match) found zero .zig occurrences without a preceding marker in any of the 8 files",
+      "path_text_preserved": ".zig line counts identical before/after in every file (see table above) -- no citation line deleted or altered; sample diffs quoted below show only a + marker line added",
+      "sample_diffs_quoted": [
+        "lib/letflow/router.ex: +PROVENANCE line before 'GET /api/tenant-config...' paragraph, before 'Readiness endpoint...' paragraph, before the Deferred-routes table -- surrounding lines byte-identical",
+        "lib/letflow/routers/dlq.ex: +PROVENANCE line before the 'Contract source' paragraph -- surrounding lines byte-identical",
+        "lib/letflow/routers/metrics_exposition.ex: +PROVENANCE line before the REQ-078-divergences table header -- surrounding lines byte-identical",
+        "lib/letflow/routers/audit.ex: 7 markers inserted (opening moduledoc paragraph, 2 prose paragraphs, 3 individual bullets in the cursor-divergence list, 1 inline # code comment) -- all citation text unchanged",
+        "lib/letflow/routers/definitions.ex: 13 markers inserted, including one before the '## Two different R-Co files are called validation.zig' heading itself and one above each of its two list bullets -- all citation text unchanged"
+      ],
+      "divergence_lines_check": {
+        "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <8 files>",
+        "before": "lib/letflow/routers/metrics_exposition.ex:67:  **Staleness decision: exposed, unlike R-Co.** R-Co tracks an internal staleness flag",
+        "after": "lib/letflow/routers/metrics_exposition.ex:68:  **Staleness decision: exposed, unlike R-Co.** R-Co tracks an internal staleness flag",
+        "result": "line shifted by +1 (one marker inserted earlier in the same moduledoc) but text is byte-identical; no other divergence line found in either run"
+      },
+      "toolchain": {
+        "available": false,
+        "detail": "which/command -v found no mix, elixir, or erl binary in this environment. mix compile --warnings-as-errors and mix test could NOT be run here. ORCH/TEST-RUNNER must independently verify compilation and the relevant test files (test/letflow/router_test.exs, test/letflow/routers/req196_audit_route_test.exs [note: no audit_test.exs under routers/, this is the actual audit-router test], test/letflow/routers/definitions_test.exs, test/letflow/routers/dlq_test.exs, test/letflow/routers/identity_test.exs, test/letflow/routers/instances_test.exs, test/letflow/routers/metrics_exposition_test.exs, test/letflow/routers/onboarding_test.exs) on a host with a working toolchain."
+      }
+    },
+    "judgment_calls_flagged_for_reviewer": [
+      "6 of the 38 markers (audit.ex:314; definitions.ex:1167, 1178, and 1194; identity.ex:771; instances.ex:316 -- exact post-insertion line numbers) sit inside plain Elixir `#` comment blocks, not a @moduledoc heredoc or a .md file -- a context the design doc (built around moduledoc prose/table/bullet and Markdown citations) does not explicitly address. Inserting the bare marker line there would not be valid Elixir syntax outside a string/heredoc and would break compilation. I prefixed those specific marker lines with '# ' (matching the surrounding comment style) so the file stays syntactically valid while the marker text remains substring-greppable by the design's own regex (grep matches the substring regardless of a leading '# '). Files affected: lib/letflow/routers/audit.ex (1 marker), lib/letflow/routers/definitions.ex (3 markers), lib/letflow/routers/identity.ex (1 marker), lib/letflow/routers/instances.ex (1 marker). Flagging for REVIEWER sign-off since this is a small extension of the design's own convention, not something the design doc itself resolved.",
+      "definitions.ex: the heading line '## Two different R-Co files are called `validation.zig`. They are unrelated.' itself contains a .zig substring; treated as its own single-line citation unit (marker placed directly above the heading), separate from the two list bullets immediately below it (each bullet also cites a distinct validation.zig file and got its own marker). Flagging in case REVIEWER reads the design's 'paragraph' rule as intending the heading+list to be one combined unit instead."
+    ],
+    "out_of_scope_untouched": "No files outside the 8 named in REQ-243's scope were modified, including files that also carry a .zig citation belonging to sibling chunks REQ-244..REQ-253 (e.g. lib/letflow/routers/promotions.ex was not touched)."
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "handoff_id": "WF02-REQ264-20260905-step-02",
+  "run_id": "WF02-REQ264-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ264-20260905/step02-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T00:00:00Z",
+  "completed_at": "2026-09-06T00:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-264"],
+    "requirement_text": {
+      "REQ-264": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-a = lib/letflow/design/, the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs and non-reqNNN-named files that sort before req017). This is one of eight requirements covering lib/letflow/design/ (REQ-264..REQ-271, disjoint chunks). lib/letflow/design/ is out of scope for REQ-243..REQ-253 (lib/ chunks of REQ-238's split)."
+    },
+    "related_handoff_ids": ["WF02-REQ264-20260905-step-01"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ264-20260905/step01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "lib/letflow/design/0001-web-framework-addendum-req065.md",
+      "lib/letflow/design/0001-web-framework-decision.md",
+      "lib/letflow/design/0002-oidc-integration-decision.md",
+      "lib/letflow/design/0003-ecto-schema-strategy-decision.md",
+      "lib/letflow/design/api-pagination.md",
+      "lib/letflow/design/export_import.md",
+      "lib/letflow/design/identity-schema.md",
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/design/iss-0078-pin-rebind-provenance.md",
+      "lib/letflow/design/iss-0079-pin-override-verification.md",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "lib/letflow/design/promotion_plan.md",
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ]
+  },
+  "task": {
+    "description": "Gate DOC-UPDATER's completed work on branch feature/WF02-REQ264-20260905 (commit b01d4082). DOC-UPDATER applied REQ-237's PROVENANCE marker convention to exactly the 13 named files in REQ-264's owned_modules (see step01-doc-updater.json's full result for its self-reported verification). Independently confirm, do not just trust the handoff's own claims: (1) scope is limited to exactly the 13 named files -- run `git diff --stat b01d4082~1 b01d4082` yourself and confirm only those 13 lib/letflow/design/ files plus the step01 handoff JSON changed, nothing in CLAUDE.md/README.md/docs/migration/README.md or any other lib/letflow/design/ file; (2) the change is additive-only -- run `git diff -U0 -- <13 files> | grep -c '^[+-].*\\.zig'` yourself and confirm it is 0 (no .zig-bearing line added/removed/altered), and spot check several diff hunks directly to confirm each hunk is a single added PROVENANCE line with no other text changed; (3) evaluate the two flagged edge-case placements as defensible extensions of the existing convention rather than scope problems: (a) heading line carrying a .zig citation immediately followed by a fenced code block of further .zig names (0001-web-framework-addendum-req065.md, 0001-web-framework-decision.md) -- marker placed above the heading; (b) export_import.md's .zig citation embedded in the document's own H1 title line -- marker placed as the literal first line of the file, above the title. Read the actual files at those locations, don't just trust the handoff's description of them; (4) confirm via `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <13 files>` that the two known divergence-note lines are present and byte-identical to what step01's handoff quotes. Render a PASS/FAIL verdict with your own independently-run evidence for each of the four checks above.",
+    "acceptance_criteria": [
+      "Scope check: git diff --stat independently run and quoted; confirms only the 13 named files + step01 handoff changed",
+      "Additive-only check: git diff -U0 grep count independently run and quoted, equals 0; at least 3 diff hunks read directly and confirmed to add only a PROVENANCE marker line",
+      "Edge-case check: both flagged placements read directly in the actual files and judged defensible or not, with reasoning",
+      "Divergence-note check: grep independently run before/after judgement, byte-identical confirmed",
+      "Explicit PASS or FAIL verdict with next_action set to 'Route to merge' (PASS) or 'Return to DOC-UPDATER for rework' (FAIL)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently verified DOC-UPDATER's b01d4082 on feature/WF02-REQ264-20260905. All four checks pass: (1) scope is exactly the 13 named files plus the step01 handoff JSON, nothing else -- confirmed by git diff --stat. (2) change is additive-only -- grep count of added/removed .zig-bearing lines is 0; hand-read hunks in 0002-oidc-integration-decision.md, identity-schema.md, promotion_plan.md, plus both edge-case files each show exactly one added 'PROVENANCE (historical, not current decision authority):' line with all surrounding path/citation text preserved verbatim as unchanged context. (3) Both flagged edge-case placements read directly in the current files and judged defensible: (a) 0001-web-framework-addendum-req065.md's '### 2.1 Routes' and '### 2.2 Middleware' headings (each a .zig citation immediately followed, no blank line, by a fenced code block of further .zig names) have the marker placed immediately above the heading -- correct, since a marker line can never legally sit inside a fenced code block, and the heading is the smallest enclosing citation-bearing unit; (b) export_import.md's H1 title line itself carries the export_import.zig citation, and the marker is placed as the literal first line of the file, above the title -- correct for the same reason: a marker cannot split or enter a heading/title line, so 'immediately above' is the only available position, and it does not alter or corrupt the title text. Neither is scope creep or a new convention; both are the documented single-citation-line rule applied to a heading/title context. (4) Divergence notes: exactly 2 matches for 'unlike R-Co|deliberately diverges|diverges from R-Co' across the 13 files both before (b01d4082~1) and after -- iss-0079-pin-override-verification.md (line 129 pre-change, 131 post-change) and promotion_plan.md (line 449 pre-change, 452 post-change). Direct byte-for-byte comparison of the pre- and post-change line text confirms both are identical; the line-number shift is accounted for entirely by earlier marker insertions in the same files, not by any edit to the divergence-note lines themselves.",
+    "verification": {
+      "scope_check": {
+        "command": "git diff --stat b01d4082~1 b01d4082",
+        "result": "14 files changed, 174 insertions(+), 1 deletion(-): the 13 named lib/letflow/design/ files (0001-web-framework-addendum-req065.md +3, 0001-web-framework-decision.md +4, 0002-oidc-integration-decision.md +16, 0003-ecto-schema-strategy-decision.md +2, api-pagination.md +17, export_import.md +2, identity-schema.md +6, iss-0047-username-race-conflict-target.md +1, iss-0078-pin-rebind-provenance.md +5, iss-0079-pin-override-verification.md +2, iss0438-entity-subsystem-scoping.md +11, promotion_plan.md +4, promotion_review_state_machine.md +2) plus handoffs/WF02-REQ264-20260905/step01-doc-updater.json (its own status/bookkeeping edit, +100/-1). Nothing else -- CLAUDE.md, README.md, docs/migration/README.md, and every other lib/letflow/design/ file absent from the diff."
+      },
+      "additive_only_check": {
+        "command": "git diff -U0 b01d4082~1 b01d4082 -- <13 files> | grep -c '^[+-].*\\.zig'",
+        "result": "0 -- no .zig-bearing line added, removed, or altered in any of the 13 files.",
+        "hunks_read_directly": [
+          "lib/letflow/design/0002-oidc-integration-decision.md -- 16 hunks, each adding exactly one 'PROVENANCE (historical, not current decision authority):' line immediately above a heading/paragraph/table-header unit; all other lines unchanged context.",
+          "lib/letflow/design/identity-schema.md -- 6 hunks, same single-line-add pattern, table header and paragraph units.",
+          "lib/letflow/design/promotion_plan.md -- 4 hunks, same pattern, including one directly above an R-Co source-path citation paragraph.",
+          "lib/letflow/design/0001-web-framework-addendum-req065.md, 0001-web-framework-decision.md, export_import.md -- read specifically for the two flagged edge cases (see edge_case_check below); confirmed single-line-add pattern there too."
+        ]
+      },
+      "edge_case_check": {
+        "a_heading_plus_fence": {
+          "files": ["lib/letflow/design/0001-web-framework-addendum-req065.md"],
+          "observed": "Lines 105-117 (post-change): marker line inserted immediately above '### 2.1 Routes -- ...*.zig...' heading, which is immediately followed (no blank line) by a fenced code block listing 31 further .zig route-module names. Same pattern repeats at line 125 above '### 2.2 Middleware'.",
+          "judgement": "Defensible. A marker line cannot be placed inside a fenced code block without corrupting it, and the heading itself is the smallest enclosing citation-bearing unit (it names R-Co's routes/*.zig path). Placing the marker immediately above the heading, treating heading+fence as one outer unit, is a direct, non-inventive application of the documented single-citation-line shape, not a new convention."
+        },
+        "b_title_line_citation": {
+          "files": ["lib/letflow/design/export_import.md"],
+          "observed": "Line 1 (post-change) is the literal marker line, followed by line 2, the document's original H1 title '# Design: REQ-034 -- Definition export/import (`export_import.zig`, PD-09)', unchanged.",
+          "judgement": "Defensible. The .zig citation is embedded inside the H1 title itself, which cannot be split or have a marker inserted mid-line without corrupting the title. Placing the marker as the file's literal first line, immediately above the title, is the only available 'immediately above' position and matches the single-citation-line rule's intent without altering the title text."
+        }
+      },
+      "divergence_note_check": {
+        "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <13 files>, run against b01d4082~1 (via git show) and against the current working tree",
+        "before": "iss-0079-pin-override-verification.md:129, promotion_plan.md:449 (2 matches, both 'unlike R-Co' phrasing)",
+        "after": "iss-0079-pin-override-verification.md:131, promotion_plan.md:452 (2 matches, same phrasing)",
+        "byte_identity": "Direct line-text comparison (git show b01d4082~1:<file> | sed -n '<line>p' vs. current file's shifted line) confirms both lines are byte-identical before and after; the +2/+3 line-number shift in each file is fully accounted for by marker lines inserted earlier in the same file, not by any edit to the divergence-note lines."
+      }
+    },
+    "deviations_and_issues": [],
+    "artifacts_out": [
+      "handoffs/WF02-REQ264-20260905/step02-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to merge"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

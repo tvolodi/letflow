@@ -63,6 +63,7 @@ Reasoning:
 
 Reasoning:
 
+PROVENANCE (historical, not current decision authority):
 - R-Co sets `resolved_id = dupe(change.new_version)` (`pin_resolver.zig:130`)
   — i.e., it stores a **version string** into a field every other producer
   in this module (`resolve_one_ref/4`, `interpret_lookup/3`,
@@ -125,6 +126,7 @@ Reasoning:
   (moduledoc, "Persistence"), so a fold that discards part of it produces a
   reconstructed view that disagrees with the log it was built from, with no
   signal that anything was dropped.
+PROVENANCE (historical, not current decision authority):
 - Append matches R-Co's own tested, deliberate choice
   (`pin_resolver.zig:143-160`, "so the merged set stays a superset rather
   than silently dropping a recorded rebind") and is the only option that
@@ -144,6 +146,7 @@ adding `started_event_id` as the **third** parameter (after the existing
 two, in their existing order) — not a keyword option, not a reordering of
 the existing two arguments.**
 
+PROVENANCE (historical, not current decision authority):
 Reasoning for parameter position: appending at the end means every existing
 call site adds exactly one trailing argument rather than restructuring two
 existing ones — smallest possible diff at both call sites
@@ -288,6 +291,7 @@ New algorithm, per entry within one rebind event's `entries` list:
    already uses across entries — no change to that discipline, only to
    what happens per entry).
 
+PROVENANCE (historical, not current decision authority):
 The output list is **not re-sorted** after either an in-place update or an
 append — same as today (`merge_effective_pins/2` never calls `sort_pins/1`;
 that is a `resolve/4`/`apply_inheritance/2`-only step). An appended entry
@@ -403,6 +407,7 @@ third argument:
   regression coverage for Decision 4 / the issue's core complaint that this
   field was permanently `nil`).
 
+PROVENANCE (historical, not current decision authority):
 - **`:470`** — `PinResolver.merge_effective_pins(base, rebind_events)`.
   Needs a third argument (same as above). Its assertion at `:472-477`
   **genuinely breaks on content, not just arity**: it currently asserts

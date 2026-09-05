@@ -117,6 +117,7 @@ error.**
 
 ### 2.1 Why this is not the forbidden "naive insert-then-rescue" pattern
 
+PROVENANCE (historical, not current decision authority):
 `identity.ex`'s own comment above `upsert_by_external_identity/4` (lines 156-163)
 forbids "a naive insert-then-rescue-unique-constraint-error pattern (that would change
 the concurrency semantics R-Co's own implementation chose)." That prohibition targets

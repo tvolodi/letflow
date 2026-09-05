@@ -18,6 +18,7 @@ acceptance criterion below has a resolved (not "TBD") answer in this document.
 
 ## 1. Ground truth on R-Co's actual `src/identity/` and `src/oidc/` contents (verified this session)
 
+PROVENANCE (historical, not current decision authority):
 The skeleton's Question section (and REQ-011's `description`) describe `src/identity/`
 as "18 files, including `manager.zig` for JIT provisioning, `jwks_cache.zig`,
 `role_registry.zig`, `provider/` for Keycloak specifics" — implying a flat directory of
@@ -28,6 +29,7 @@ inferred, not trusted from any prior written source, following the same discipli
 
 ### 1.1 `src/identity/` — 18 files total, but nested, not flat
 
+PROVENANCE (historical, not current decision authority):
 Top level (4 files):
 ```
 onboarding.zig   registry.zig   role_registry.zig   service.zig
@@ -54,6 +56,7 @@ src/identity/provider/
     ├── jwks_cache.zig      ← the actual JWKS cache (see §2.2)
     └── standards_verifier.zig
 ```
+PROVENANCE (historical, not current decision authority):
 4 (top-level) + 14 (nested) = **18 files**, confirmed by `find src/identity/ -name
 "*.zig" | wc -l` → `18`. The requirement's stated count (18) is correct; what's wrong
 is the implied flat structure — `manager.zig` lives at
@@ -64,6 +67,7 @@ directly under `src/identity/`, exactly as the skeleton says.
 
 ### 1.2 `src/oidc/` — 13 files, flat, count confirmed correct
 
+PROVENANCE (historical, not current decision authority):
 ```
 agent_lifecycle.zig      claim_mapping.zig       coexistence_auth.zig
 identity_stability.zig   jit_provisioning.zig     migration_helper.zig
@@ -71,6 +75,7 @@ realm_deletion.zig       realm_provisioning.zig   realm_seed.zig
 realm_tenant_binding.zig tenant_claim_source.zig  test_token_helper.zig
 verification_benchmark.zig
 ```
+PROVENANCE (historical, not current decision authority):
 13 files, confirmed by `find src/oidc/ -name "*.zig" | wc -l` → `13`, matching both the
 skeleton and REQ-011's `description`. **`jit_provisioning.zig` is here, in `src/oidc/`,
 not in `src/identity/`** — the requirement's framing ("JIT user provisioning
@@ -78,6 +83,7 @@ not in `src/identity/`** — the requirement's framing ("JIT user provisioning
 lives; `identity/provider/manager.zig` is a thin delegation shim (see §2.1), while
 `src/oidc/jit_provisioning.zig` is the real orchestration layer.
 
+PROVENANCE (historical, not current decision authority):
 **Resolution ELIXIR-DEV must apply, not re-derive:** when the Reasoning section cites
 "JIT user provisioning," cite **`src/oidc/jit_provisioning.zig`** (the orchestration
 logic) together with **`src/identity/registry.zig`'s `createOrGetJitOidcUser`**
@@ -117,6 +123,7 @@ all) as "the multi-provider dispatch point, including the multi-realm
 issuer-re-verification fallback (`verifyBearerTokenWithIssuer`)" rather than as "JIT
 provisioning" — see §1.2's resolution for which file to cite for JIT specifically.
 
+PROVENANCE (historical, not current decision authority):
 ### 2.2 `src/identity/provider/oidc/jwks_cache.zig` — the actual JWKS cache
 
 Read in full (141 lines). `JwksCache` is an in-memory (not persisted, not
@@ -143,6 +150,7 @@ its own comment — a design that predates/ignores BEAM concurrency primitives e
 (it would need `Agent`/`ETS`/`:persistent_term` wrapping to be safe under Elixir's
 default concurrent-request model, not a direct port).
 
+PROVENANCE (historical, not current decision authority):
 ### 2.3 `src/identity/role_registry.zig` — per-tenant custom role registry (IDN-05)
 
 Read in full (280 lines), doc-comment header cites design artefact
@@ -170,6 +178,7 @@ mapper. A library integration would need a **separate**, hand-written
 domain logic with a SQL-transaction coupling no third-party OIDC library would (or
 should) provide.
 
+PROVENANCE (historical, not current decision authority):
 ### 2.4 `src/identity/provider/adapters/keycloak/provider.zig` — the actual Keycloak adapter
 
 Read the first 80 lines (of a 65KB+ file, per the earlier `ls -la`, i.e. this is one of
@@ -194,6 +203,7 @@ Letflow picks for the token-verification piece, because none of this admin-API
 provisioning surface (realm/client/user management via Keycloak's Admin REST API) is
 something either candidate library provides (see §3).
 
+PROVENANCE (historical, not current decision authority):
 ### 2.5 `src/oidc/jit_provisioning.zig` — the actual JIT provisioning orchestration
 
 Read the first 120 lines (of a larger file). Doc-comment header: "OIDC-09 — JIT user
@@ -229,6 +239,7 @@ hand-written provisioning logic on top, because "what happens to local applicati
 state after token verification succeeds" is inherently an application concern, not a
 protocol concern.
 
+PROVENANCE (historical, not current decision authority):
 ### 2.6 `src/oidc/claim_mapping.zig` and `src/oidc/realm_tenant_binding.zig` — supporting facts
 
 Briefly read for completeness (not exhaustively, since neither is separately named in
@@ -290,6 +301,7 @@ The skeleton names "`ueberauth` + an OIDC strategy" as a single candidate, but t
 materially different strategy packages exist and the Decision must pick between them,
 not treat "ueberauth" as one undifferentiated option:
 
+PROVENANCE (historical, not current decision authority):
 **3.2a `ueberauth_oidcc`** (built on the Erlang `oidcc` library, `erlef/oidcc`):
 - Current version **0.4.2** (last published 2025-07-02, per Hex.pm). Erlang Ecosystem
   Foundation-maintained (`erlef` org), same foundation that stewards Elixir/OTP
@@ -327,6 +339,7 @@ version **0.4.0** per Hex.pm):
 
 ### 3.3 Summary table of out-of-box coverage vs. R-Co's actual behaviors (§2)
 
+PROVENANCE (historical, not current decision authority):
 | R-Co behavior (file) | `assent` 0.3.1 | `ueberauth_oidcc` 0.4.2 (+ `oidcc` ~3.7) |
 |---|---|---|
 | JIT user provisioning (`src/oidc/jit_provisioning.zig` + `registry.zig`'s `createOrGetJitOidcUser`) | Not provided — claims-out only | Not provided — claims-out only |
@@ -373,6 +386,7 @@ to resolve now (see §6).
 
 ## 5. What NOT to do (scope boundary ELIXIR-DEV must respect)
 
+PROVENANCE (historical, not current decision authority):
 - REQ-011 and this design produce a **decision record only**. No actual OIDC
   integration code, no `mix.exs` dependency addition (even if the Decision favors
   `ueberauth_oidcc`), no new file under `lib/letflow/` beyond what already exists.
@@ -394,6 +408,7 @@ to resolve now (see §6).
 
 ## 6. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-011 acceptance criterion | Concrete design element addressing it |
 |---|---|
 | "`docs/migration/decisions/0002-oidc-integration.md` exists with an explicit decision, not just a pros/cons list" | §3.3's summary table shows no row favoring `assent` or `ueberauth_keycloak_strategy` over `ueberauth_oidcc` — the Reasoning section must conclude with a single stated winner (library or hand-roll) rather than leaving the comparison open; this design does not pre-pick the winner (ELIXIR-DEV's call per `owner: ELIXIR-DEV`) but gives it a decisive, asymmetric comparison to conclude from |
@@ -402,6 +417,7 @@ to resolve now (see §6).
 
 ## 7. Open questions / discrepancies to register, not silently resolve
 
+PROVENANCE (historical, not current decision authority):
 1. **Skeleton's Question section misattributes JIT provisioning's filename.** The
    existing `docs/migration/decisions/0002-oidc-integration.md` skeleton (and
    REQ-011's own `description` in `docs/requirements.yaml`) says JIT provisioning is

@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-034 — Definition export/import (`export_import.zig`, PD-09)
 
 **Requirement:** REQ-034 (`docs/requirements.yaml`, stage S2, `depends_on: [REQ-030]`)
@@ -364,6 +365,7 @@ the common case.
 
 ---
 
+PROVENANCE (historical, not current decision authority):
 ## 6. Required moduledoc text
 
 ```

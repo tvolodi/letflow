@@ -181,6 +181,7 @@ model. Reading the actual migration timeline shows R-Co did not stop there:
    `public.event_type_registry`, `public.webhook_subscriptions`, `public.api_tokens`,
    guarded by a `migration_window_active` flag so production cutovers can defer the
    drop.
+PROVENANCE (historical, not current decision authority):
 5. **`src/db/migrations.zig`'s `runForSchema`** (module doc-comment: "SPT-01: extended
    with `runForSchema` to support schema-per-tenant migrations") is the mechanism that
    replays the same migration file set once per registered tenant schema, under a
@@ -282,6 +283,7 @@ Reasoning (status: decided) already describes two concrete, already-verified fac
 about how `tenant_id` is used in at least one real R-Co table today, independent of
 this design's own §1/§2 research:
 
+PROVENANCE (historical, not current decision authority):
 1. **JIT-provisioning upsert** — `src/identity/registry.zig`'s
    `createOrGetJitOidcUser`, "an idempotent upsert keyed on `(tenant_id,
    external_realm, external_id)` via `INSERT ... ON CONFLICT ... DO NOTHING RETURNING

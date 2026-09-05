@@ -250,3 +250,151 @@ split_out_to:
 # requirement") assumed.
 reopened_for_run: ADHOC-ISS0423-20260905
 reopened_at: "2026-09-05T00:07:55Z"
+
+# ── Resolution, 2026-09-05T04:00:00Z (WF03-ISS0423-20260905) ──
+status: resolved
+resolved_in_run: WF03-ISS0423-20260905
+resolved_at: "2026-09-05T04:00:00Z"
+resolution_note: >
+  ROOT CAUSE CONFIRMED, THEN A REAL FIX SHIPPED AND VERIFIED FOUR TIMES
+  INDEPENDENTLY -- not merely a diagnosis. ISSUE-FIXER's fresh Step 1
+  measurement (this run) confirmed the reopen note's own reconciliation:
+  ISS-0427/ISS-0428/ISS-0426 all landed and resolved their own levers
+  (template-clone provisioning, test_parallel.sh wiring, wall-clock flake);
+  ISS-0113 (Letflow.TenantFixture.provisioned_tenant!/1's global
+  Sandbox.mode(Letflow.Repo, :auto) call) remained the sole confirmed
+  blocker on this record's own causal chain to real async: true execution.
+  Also confirmed: of the 46 real TenantFixture call sites, ZERO were
+  actually async: true before this run (a prior "93 files/1.4%" figure had
+  conflated moduledoc prose with real declarations) -- so "conversion" here
+  means genuinely NEW async: false -> async: true flips, not un-defeating
+  already-declared-but-inert files.
+
+  DESIGN CYCLE, self-correcting exactly as this pipeline's redundancy
+  principle is supposed to work. CODE-DESIGNER's first design (an
+  opts[:restore_sandbox] opt-in doing Sandbox.mode(:manual) + a fresh
+  checkout post-provisioning) passed CODE-DESIGN-VALIDATOR's independent
+  gate, then FAILED for real at ELIXIR-DEV's own implementation: 26/38
+  scoped-run examples failed. ELIXIR-DEV traced the true mechanism rather
+  than forcing a pass or guessing: Ecto's Sandbox.mode/2 checks in ALL pool
+  connections whenever the requested mode differs from the pool's current
+  one -- a 4th failure mechanism distinct from the three ISS-0113's own
+  investigation had named, and one the original design did not anticipate.
+  Routed back to CODE-DESIGNER as rework iteration 1 (not iteration
+  exhausted -- 1 of 3 max).
+
+  THE REWORK'S FIX IS SIMPLER THAN THE ORIGINAL DESIGN, NOT MORE COMPLEX:
+  traced through actual Ecto/DBConnection source
+  (DBConnection.Ownership.Manager's same-mode no-op guard) that
+  provisioned_tenant!/1's OWN PRE-EXISTING, unconditional
+  Sandbox.mode(Letflow.Repo, :auto) first line is ALREADY sufficient for
+  async: true safety by itself -- the newly-added restore_sandbox branch's
+  own SECOND mid-test mode flip was the actual defect, discarding the
+  connection provisioning had just populated. Fix: deleted the
+  restore_sandbox mechanism entirely. Net shipped diff: a moduledoc note on
+  test/support/tenant_fixture.ex plus `async: false` -> `async: true` on
+  test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs -- zero
+  new runtime code.
+
+  VERIFIED FOUR TIMES BY FOUR DIFFERENT PARTIES/SEEDS, not once: (1)
+  CODE-DESIGNER's own rework verification -- reproduced the original
+  failure (4/11), then 13 clean runs of the fix across default and
+  randomized seeds, 38/38 every time. (2) CODE-DESIGN-VALIDATOR's
+  independent regate -- personally ran the scoped suite twice with two
+  distinct explicit seeds (12345, 98765), 38/38 both times. (3)
+  ELIXIR-DEV's sign-off -- a third independent run, seed 840049, 38/38,
+  plus confirmed the diff matches the design's own normative section
+  exactly with no scope creep. (4) REVIEWER -- independently re-verified
+  every technical claim in the design's mechanism against actual dependency
+  source (not the design doc's prose), confirmed no supervision-tree file
+  touched, no contradiction with decision
+  0009-test-parallel-pool-sizing.md/ISS-0287, and a guard (moduledoc note)
+  against reintroducing the exact reverted defect. One MINOR non-blocking
+  finding: the guard is prose-only, no compile/test-time check -- recorded
+  as a future follow-up, not a rework gate.
+
+  FULL-SUITE VERIFICATION (AC5), quoted verbatim, per TEST-RUNNER's own
+  handoff (handoffs/WF03-ISS0423-20260905/step-04-test-runner.json):
+    BEFORE: "Finished in 1316.3 seconds (18.2s async, 1298.1s sync)" /
+      "Result: 3227 passed (6 properties, 3221 tests), 21 excluded", 0 failures.
+    AFTER run 1: "Finished in 1670.4 seconds (37.2s async, 1633.1s sync)" /
+      3224/3227 passed, 3 failures.
+    AFTER run 2: "Finished in 1597.1 seconds (35.4s async, 1561.7s sync)" /
+      3226/3227 passed, 1 failure.
+  AC4 satisfied both runs: passing count well above the 3060 floor, total
+  test count (3227) and excluded count (21) both unchanged from BEFORE --
+  zero tests deleted, skipped, or excluded. Async share: 2.2% both AFTER
+  runs vs BEFORE's 1.4% -- a modest, honestly-reported improvement
+  consistent with converting exactly 2 files, not inflated.
+
+  AC5's INTER-RUN INCONSISTENCY, ADJUDICATED, NOT HIDDEN. TEST-RUNNER
+  correctly reported run 1 vs run 2's differing failure sets as a BLOCKER
+  per its own explicit instruction not to attribute it away unilaterally.
+  ORCH independently re-verified (not merely accepted) the structural
+  attribution before overriding to accept AC5 as satisfied for this
+  record's own scope: `git diff origin/main --name-only`, re-run directly
+  by ORCH, confirms this branch touches ONLY
+  docs/issues/ISS-0423.yaml, handoffs/, lib/letflow/design/iss0113-*.md,
+  test/letflow/secrets_test.exs, test/letflow/webhooks_test.exs, and
+  test/support/tenant_fixture.ex -- none of the three actually-failing
+  files (test/letflow/row_approval_test.exs,
+  test/letflow/definitions/pack_update_migration_test.exs,
+  test/mix/tasks/letflow.lint_handoffs_test.exs) or test/support/data_case.ex
+  appear in that diff. This is core-directives.md's Failure Attribution
+  route 1 (structurally, this branch cannot have caused it), independently
+  confirmed rather than copied from TEST-RUNNER's own report. The
+  Mix.Tasks.Letflow.LintHandoffsTest failure (both runs) matches an
+  ALREADY-FILED, OPEN issue (ISS-0445, GH#860,
+  "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS asserts run([]) == :ok against the
+  LIVE handoffs/ corpus") -- cited, not duplicated. The
+  RowApprovalTest/PackUpdateMigrationTest inter-run inconsistency (run 1
+  only) was NOT previously on record -- registered fresh as ISS-0480 (queue
+  task 480, GH#933), a load-dependent Ecto.Adapters.SQL.Sandbox
+  checkout-race hypothesis on plain public-schema tables, unrelated to this
+  record's own 2-file async conversion (shares no code path or table with
+  either failing test). Per "No Issue Left Local-Only," this is visible,
+  claimable work for a future run, not silently absorbed here.
+
+  DECISION 0009/ISS-0287 RECONCILIATION: confirmed consistent throughout the
+  design/rework/regate cycle, restated here per this record's own AC1. This
+  fix touches none of TEST_MAX_CONNECTIONS/TEST_CONNECTION_HEADROOM/
+  TEST_MIN_POOL_SIZE/TEST_SUPERUSER_RESERVED/TEST_NONPOOL_CONNECTION_RESERVE/
+  TEST_POOL_SIZE, and does not change N-derivation or the cross-partition
+  budget formula those knobs govern. The design's own section 5/6 (see
+  lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md)
+  identified and answered a genuinely distinct INTRA-partition question
+  (peak concurrent DBConnection checkouts within one partition's own pool,
+  which 0009's budget/N arithmetic treats as a black box by design) via
+  direct arithmetic for this tranche's small size (2 files, bounded by the
+  pre-existing ExUnit scheduler-wide concurrency ceiling that pool_size was
+  already sized against) -- not an amendment to 0009, a confirmation that a
+  distinct, adjacent question exists and does not require one at this
+  tranche's size. Peak concurrent checkouts contributed by this fix: 2
+  files' worth, within an already-existing, already-governed system-wide
+  async population (147 -> 149 files), comfortably under pool_size (32 for
+  plain mix test on the verification host; TEST_POOL_SIZE=5 per
+  scripts/test_parallel.sh partition at N=16, per decision 0009's own
+  verified formula) -- no new mechanism required at this size; the design's
+  own section 5.4 states the threshold at which a future, larger tranche
+  would need one.
+
+  NOT FIXED, DISCLOSED. Only 2 of the 46 real TenantFixture call sites were
+  classified and converted this run (test/letflow/secrets_test.exs,
+  test/letflow/webhooks_test.exs) -- a deliberate, bounded first tranche,
+  not an oversight (design section 4.3's own reasoning: every site must be
+  read, not grepped, to classify safely against ISS-0113's three named
+  mechanisms; a first tranche proves the mechanism in a real running suite
+  before committing to a larger batch). The remaining 44 files are
+  unconverted and explicitly left for a future tranche to apply the same
+  mechanical decision procedure (design section 3) to, one file at a time.
+  test/letflow/service_catalog_test.exs (real Task.start+Task.async holding
+  a row lock) and test/letflow/routers/onboarding_test.exs (manages its own
+  ad-hoc Sandbox.mode(:auto) call outside TenantFixture's own procedure,
+  flagged as design OQ-1) were verified unsafe/out-of-procedure and
+  correctly excluded. A Letflow.SandboxPool-backed rework of TenantFixture
+  itself (the broader lever ISSUE-FIXER's Step 1 diagnosis named as option
+  (b)) remains a legitimate, larger follow-on if a future tranche's real
+  measured speedup across the remaining 44 files leaves a large gap -- not
+  pursued here, consistent with this record's own prior scope-split
+  discipline (ISS-0427/ISS-0428 were split out the same way, twice, rather
+  than folding multiple levers into one run).

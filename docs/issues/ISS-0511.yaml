@@ -72,3 +72,16 @@ resolution_note: >
   (release blocked by the classifier as above) -- left for that session
   to reconcile when it resumes; the underlying issue is genuinely fixed
   and merged regardless of the queue's bookkeeping state.
+
+  ADDENDUM (2026-09-05T21:01:25Z, ORCH, WF03-ISS0511-20260905, the
+  originating session resuming after a context restore): the redispatched
+  TEST-RUNNER step (handoffs/WF03-ISS0511-20260905/step-04-test-runner.json,
+  section 4.1(a-1) redispatch after the original dispatch died mid-flight)
+  independently confirmed AC3 via CI evidence for the exact merged tip
+  commit (a18c86174bcc5475348dc2f5e1753bcd7c918939, verified via
+  `gh run view --json headSha`): 3244 tests, 6 properties, 0 failures
+  across 4 partitions, plus clean isolated wasm_hang/lua_wallclock_race
+  re-runs -- consistent with, and independent corroboration of, this
+  entry's own local-run evidence above. Queue task 511, previously stuck
+  locked under this session's own agent_id per the note above, has now
+  been released status:done directly against the queue API.

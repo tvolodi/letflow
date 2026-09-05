@@ -1030,3 +1030,51 @@ history:
       (handoffs/WF02-REQ259-20260905/step-2d-reviewer.json). No rebase
       was needed (main unchanged at 04590fb6 since branch point). Queue
       task 497 released status:done (letflow-ee-orch).
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-05T18:33:25Z"
+    note: >
+      WF-03 run WF03-ISS0511-20260905 (queue task 511, agent_id
+      letflow-ee-orch, GH#998). Fixing ISS-0511: REQ-257's correctly-
+      inserted PROVENANCE marker comment line broke
+      test/letflow/simulation/req207_vortex_test.exs's id:/title:
+      adjacency walk-back assumption for REQ-225/227/228/229/230/231,
+      failing every main CI run since ac9ad440. Test-only fix; the
+      docs/requirements.yaml PROVENANCE marker placement is correct and
+      untouched (REQ-237/ISS-0510 convention). Branch
+      feature/WF03-ISS0511-20260905 created off main.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-05T21:01:25Z"
+    note: >
+      WF03-ISS0511-20260905 complete. ISSUE-FIXER confirmed the root
+      cause (Enum.at(title_lines, idx - 1) assumed exact one-line id:/
+      title: adjacency). TEST-DESIGNER implemented a bounded private
+      helper nearest_preceding_id_line/2 that walks upward skipping only
+      blank/comment lines (CRLF-trimmed), stopping at and returning the
+      first real content line -- verified 4/4 passing on the scoped
+      test. REVIEWER independently re-derived correctness: bounded walk
+      confirmed by inspection, two counter-examples traced (a corrupted
+      id: line still fails the existing assertion; a fully-deleted id:
+      line raises rather than silently passing), CRLF-trim confirmed
+      necessary and correctly ordered, scope confirmed limited to the
+      one test file. TEST-RUNNER confirmed ISS-0511's AC3 (full mix
+      letflow.check backend gate clean) via CI evidence for the exact
+      merged tip commit (verified via gh run view --json headSha
+      matching the branch's own HEAD, not a stale run): 3244 tests, 6
+      properties, 0 failures across 4 partitions, plus clean isolated
+      wasm_hang/lua_wallclock_race re-runs. Merged to main as 73cbf91d
+      (PR #999). This session resumed after a context restore and found
+      the PR already merged by the time the redispatched TEST-RUNNER
+      step completed (HANDOFF_PROTOCOL.md section 4.1(a-1) redispatch,
+      rework_count not incremented, after the original Step 4 dispatch
+      died mid-flight with no committed work) -- reconciled by writing
+      the missing step-04 handoff, registry completion, and this
+      run-history append rather than duplicating the already-landed
+      fix. Queue task 511 released status:done. docs/issues/ISS-0511.yaml
+      flipped to status: resolved. GH#998 (already auto-closed via
+      Closes #998) given an evidence comment.

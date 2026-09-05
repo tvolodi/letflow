@@ -4988,16 +4988,18 @@
       "workflow_id": "WF-03",
       "requirement_ids": [],
       "stage": null,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/simulation/req207_vortex_test.exs"
       ],
       "lock_acquired_at": "2026-09-05T18:33:25Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00 GIT_SETUP COMPLETED PASS, branch feature/WF03-ISS0511-20260905 pushed",
+      "lock_released_at": "2026-09-05T21:01:25Z",
+      "released_lock": true,
+      "last_known_step": "Step Final",
       "backfilled": false,
-      "note": "ISS-0511 (queue task 511, locked to letflow-ee-orch, GH#998). Fixing req207_vortex_test.exs line ~908-914 id:/title: adjacency walk-back which breaks on REQ-257s intentional PROVENANCE comment line for REQ-225/227/228/229/230/231. Test-only fix; docs/requirements.yaml content is correct and untouched. Pre-start check: registry scanned, no existing WF03-ISS0511-* entry, no owned_modules overlap with any active run."
+      "recovered": true,
+      "recovery_note": "handoffs/WF03-ISS0511-20260905/step-04-test-runner.json, (a-1) redispatch -- the original TEST-RUNNER dispatch for Step 4 died before beginning any work (left IN_PROGRESS, null result, never committed); a fresh TEST-RUNNER instance was redispatched per HANDOFF_PROTOCOL.md section 4.1(a-1), rework_count not incremented.",
+      "note": "ISS-0511 (queue task 511, locked to letflow-ee-orch, GH#998, released done). Fixed req207_vortex_test.exs's id:/title: adjacency walk-back which broke on REQ-257's intentional PROVENANCE comment line for REQ-225/227/228/229/230/231, via a bounded nearest_preceding_id_line/2 helper (commits 013a0303/21b4f995). REVIEWER PASSed with independent counter-example tracing (handoffs/WF03-ISS0511-20260905/step-03-reviewer.json). TEST-RUNNER confirmed the full mix letflow.check backend gate clean for the merged tip commit via CI evidence (3244 tests, 0 failures, plus clean isolated wasm_hang/lua_wallclock_race re-runs). Merged to main as 73cbf91d (PR #999). docs/issues/ISS-0511.yaml marked resolved."
     }
   ]
 }

@@ -1,0 +1,44 @@
+id: ISS-0512
+title: "enforce no async:true test file may reach Sandbox.mode/2"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0480-20260905
+severity: MAJOR
+description: >
+  Filed as a follow-on from ISS-0480/ISS-0481. Sandbox.mode/2 checks in every
+  connection in the pool when the mode changes, so an async:true file
+  reaching it (directly or transitively via
+  TenantFixture.provisioned_tenant!/1) corrupts concurrently-running async
+  tests. ISS-0480 restored the invariant by construction for two files but
+  nothing prevents recurrence. This is the third recurrence in this family
+  (ISS-0113 OQ-5 flagged the general risk but only guarded a file that
+  itself calls mode/2 directly, never a bystander file reached transitively).
+
+  CAUTION (carried forward from the filing note): the naive check is wrong
+  -- an unanchored grep matches moduledoc prose, not real declarations.
+  Detection must anchor on a real `use ... async: true` declaration (e.g.
+  `^  use .*async: true`), not any line containing the substring. The check
+  must also correctly recognize legitimate mode/2 callers
+  (test/support/tenant_schema_reaper.ex, test/support/tenant_template.ex)
+  without false-flagging them -- those files are allowed to call mode/2;
+  the defect class is an *async:true test file* reaching it, not the
+  existence of a mode/2 caller.
+affected_files:
+  - test/support/tenant_fixture.ex
+  - test/support/tenant_schema_reaper.ex
+  - test/support/tenant_template.ex
+  - mix.exs (or wherever mix letflow.check's task chain is defined)
+acceptance_criteria:
+  - "A check in the mix letflow.check chain fails when an async:true test file
+    transitively reaches Sandbox.mode/2"
+  - "The check is anchored to real async:true declarations, not moduledoc prose
+    mentioning the phrase, with a test proving this"
+  - "test/support/tenant_schema_reaper.ex and test/support/tenant_template.ex are
+    not false-flagged"
+  - "The check catches a reintroduction of the ISS-0480 pattern (a regression
+    test proves this)"
+related:
+  - ISS-0480
+  - ISS-0113
+queue_task_id: 512
+github_issue: 1000
+status: open

@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0512-20260905-step-00",
+  "run_id": "WF03-ISS0512-20260905",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0512-20260905/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-05T21:15:00Z",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0512"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0512.yaml",
+      "docs/issues/ISS-0480.yaml",
+      "docs/issues/ISS-0113.yaml",
+      "test/support/tenant_fixture.ex",
+      "test/support/tenant_schema_reaper.ex",
+      "test/support/tenant_template.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0512-20260905",
+    "base_commit": "c5ec3fbc"
+  },
+  "task": {
+    "description": "WF-03 Step 00->1: claimed queue task 512 (ISS-0512, GH#1000). Diagnose the actual shape of the defect class: an async:true test file must never transitively reach Ecto.Adapters.SQL.Sandbox.mode/2 (which checks in every pooled connection, corrupting concurrently-running async tests). This is the third recurrence in this family (ISS-0480 fixed two instances by construction; ISS-0113 OQ-5 flagged the general risk but only guarded a direct caller). Read ISS-0480.yaml and ISS-0113.yaml in full for prior context. Your job: identify the real call graph (which test support files call Sandbox.mode/2 directly today, e.g. tenant_schema_reaper.ex/tenant_template.ex, and how test files could transitively reach them, e.g. via TenantFixture.provisioned_tenant!/1), and produce a diagnosis that CODE-DESIGNER can use to design a static check for mix letflow.check's task chain. Do NOT implement the fix yourself -- route to CODE-DESIGNER next. CAUTION carried forward from the filing note: a naive unanchored grep for 'async: true' matches moduledoc prose too; anchor on a real `use ... async: true` declaration. The check must not false-flag tenant_schema_reaper.ex/tenant_template.ex themselves (they are legitimate mode/2 callers, not async:true test files)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0512-20260905 created off main @ c5ec3fbc (post ISS-0511 merge). No SECURITY-REVIEWER needed (test-infra/CI-tooling change, no tenant-data path)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.PinRebind do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   PIN-05 (REQ-060) — explicit instance pin rebind. Ports `src/engine/pin_rebind.zig`
   (R-Co, 388 lines). At design/implementation time R-Co's source tree was believed
   unreachable, so every behavioural claim in this module traced to REQ-060's own requirement text

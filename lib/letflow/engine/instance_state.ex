@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.InstanceState do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   The full state of one running process instance — ports `transition.zig`'s
   `InstanceState` (EE-02, `lib/letflow/design/req044-transition-kernel.md`
   §2). Plain struct, not an `Ecto.Schema` — this module has zero
@@ -9,6 +10,7 @@ defmodule Letflow.Engine.InstanceState do
 
   ## Variable storage: no ObjectMap allocator-ownership equivalent (REQ-044)
 
+  PROVENANCE (historical, not current decision authority):
   `transition.zig`'s `InstanceState.variables` is a `std.json.ObjectMap`, a
   mutable hash map whose entries are heap-allocated through an explicit
   `std.mem.Allocator` the caller owns and must free — Zig's manual-memory

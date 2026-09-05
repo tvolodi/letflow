@@ -4833,6 +4833,32 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED -- PR #927 squash-merged (e5d07019). Queue task 418 released back to OPEN (no status), not done: the primitive shipped but ISS-0418 is not resolved.",
       "note": "WF-03 run for ISS-0418 (MAJOR): implement OQ-5's cap on concurrently in-flight WASM invocations. Selected because ORCH measured the CI gate at a 44% pass rate (14 fail / 11 pass across 25 runs) with EVERY classifiable failure being this exact flake. NOT MERELY A TEST FLAKE: per req170's live-verified findings against wasmex's Rust source, each timed-out invocation permanently leaks an uncancellable native thread in a Tokio pool shared by every tenant on the node -- a production availability defect currently manifesting as CI noise. STALE-LOCK RECOVERY DISCLOSED: task 418 was locked by a dead session (branch 3 days stale, one Step 00 commit, no registry entry, no handoffs dir); ORCH declined to force it initially, the user reported nobody was working it, ORCH re-verified with evidence and force-released per the dead-sibling-session discretion rule. | OUTCOME: primitive + test wiring shipped, footprint 8->6 with zero coverage lost, concurrent-contention race closed by construction and gate-verified. ISSUE DELIBERATELY LEFT OPEN: production dispatch is still uncapped (the actual multi-tenant hazard), and post-merge CI on the merging PR itself still showed the flake (4/5, AC2 timing out) -- 4 passes/2 failures in 6 attempts against a 3-in-6 baseline, inside noise, NOT claimed as improvement. The design gate's sequential-exhaustion BLOCKER, which ORCH overrode on model-vs-measurement grounds, gained weak corroboration since the failure landed on AC2, the only double-dispatch test. Design section 10's falsifiable prediction stands unresolved."
+    },
+    {
+      "run_id": "WF02-REQ245-20260905",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-245",
+      "issue_id": "ISS-0424",
+      "queue_task_id": 483,
+      "queue_agent_id": "letflow-ee-orch",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/engine.ex",
+        "lib/letflow/engine/execution_error.ex",
+        "lib/letflow/engine/expr.ex",
+        "lib/letflow/engine/instance_state.ex",
+        "lib/letflow/engine/join_counter.ex",
+        "lib/letflow/engine/pin_rebind.ex",
+        "lib/letflow/engine/pin_resolver.ex",
+        "lib/letflow/engine/plugin_interface.ex",
+        "lib/letflow/engine/plugin_registry.ex"
+      ],
+      "started_at": "2026-09-05T12:03:29Z",
+      "lock_released_at": "2026-09-05T15:19:07Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #985 squash-merged (1bf2ce98) after two rebases onto sibling REQ-250/251/252 chunks landed during CI wait, all non-overlapping file scope. Queue task 483 released status:done. REQ-245 flipped to done in docs/requirements.yaml, run-history event appended to requirement_status.v9.yaml.",
+      "note": "WF-02 run for REQ-245 (queue task 483), chunk 238b1 of REQ-238's 11-way split (ISS-0424 part 3b-3): applied REQ-237's .zig provenance-marking convention to lib/letflow/engine.ex and 8 sibling lib/letflow/engine/*.ex files. Same established pattern as REQ-233/234/235/240/241/242/243: no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER, straight to ELIXIR-DEV then REVIEWER, both PASS. ELIXIR-DEV: 20 markers inserted across 9 files, 0 deletions, verified via before/after .zig-line-count parity and residual awk scan. REVIEWER: independently re-derived every marker count, .zig line count, and divergence-line diff directly against main rather than trusting the handoff -- PASS. Local full mix test suite post-rebase: 3253 passed, 0 failed. CI's duplicate backend-gate run showed 1 failure in Letflow.SandboxPoolTest (ISS-0224-class pool-contention timing flake) on a module this branch's 9-file diff does not touch -- attributed structurally (git diff --stat scope check, ISS-0224's own documented history of this exact profile, non-reproduction in an isolated 23/23-passed local rerun) and recorded in the PR body per GIT_MERGE.md's attribution requirement; merged via gh pr merge --squash --delete-branch (plain merge succeeded on the second attempt after a rebase onto further-advanced main, no --admin override needed)."
     }
   ]
 }

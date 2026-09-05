@@ -1,9 +1,16 @@
 {
+  "handoff_id": "WF02-REQ256-20260905-step-01",
   "run_id": "WF02-REQ256-20260905",
-  "step": 1,
-  "agent_id": "DOC-UPDATER",
+  "workflow_id": "WF-02",
+  "step": "1",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ256-20260905/step01-doc-updater.json",
   "status": "COMPLETED",
   "completed_at": "2026-09-05T16:44:02Z",
+  "context": {
+    "commit_sha": "7296b1e7"
+  },
   "result": {
     "status": "PASS",
     "summary": "Applied REQ-237's .zig provenance-marking convention to docs/requirements.yaml's REQ-079..REQ-188 entry range (REQ-256, closes ISS-0424 part 3c-3 / REQ-239 chunk-239c). Range boundaries determined by grep against the current file: REQ-079 started at line 4573, REQ-188 started at line 9902, REQ-189 (first entry after the range, excluded) started at line 9979 -- i.e. the scoped block was lines 4573-9978 inclusive before any edit. Enumerated every .zig-containing line in that block with `grep -n '\\.zig' docs/requirements.yaml` filtered to those line numbers: 112 matching lines. Classified each into its enclosing citation unit per the design's structural rule, following the exact precedent already established by earlier sibling chunks elsewhere in the same file (REQ-001..REQ-078's already-marked entries, inspected directly before starting): (a) a `description: >` folded block containing one or more .zig mentions gets ONE plain-text marker line as the block's first content line (no '#', since it is YAML scalar body text, not YAML syntax); (b) a `title:` field containing .zig gets a '#'-prefixed comment-line marker inserted between the entry's `- id:` line and its `title:` line, matching the file's own REQ-021 precedent (a bare marker there would corrupt the YAML mapping); (c) an `acceptance_criteria:` list item ('      - \"...\"') containing .zig gets a '#'-prefixed comment line immediately above that one bullet, matching precedent at REQ-018/REQ-020; (d) a '#'-delimited stage-intro header comment block ('  # ---...---' bounded, containing .zig anywhere inside) gets exactly ONE '#'-prefixed marker at the very top of the whole block, matching the S1/S2 stage-header precedent already in the file (one marker covers the whole multi-paragraph block, not one per internal .zig mention). Applied via a scratch Python script (scratch, not committed) that parsed these four cases mechanically and inserted markers bottom-up to keep line numbers stable; a first pass correctly found ALL 112 .zig lines fell into one of the four cases (zero 'UNHANDLED' lines reported). RESULT: 60 marker lines inserted (fewer than 112 because most .zig mentions share an enclosing unit -- e.g. a single description block citing 3-5 distinct .zig files gets one marker, per the design's own unit-not-mention granularity). Two stage-intro header comment blocks in range (S6 first batch at original line ~9026, S6 second batch at original line ~9492) each received exactly one marker per the whole-block rule.",
@@ -72,12 +79,12 @@
       "None requiring escalation. One self-caught tooling defect during this run (not a scope issue): the scratch insertion script's line-join round-trip initially dropped the file's single trailing blank line at EOF, which would have shown as a spurious 1-line deletion in git diff --numstat. Caught by checking numstat before committing, fixed by restoring the trailing CRLF, and re-verified as 60 insertions / 0 deletions before commit.",
       "OQ-1/OQ-3 from lib/letflow/design/req237-zig-provenance-marking-convention.md (styling-vs-greppability trade-off; marking index-table-shaped citations uniformly with justification-shaped ones) did not become concretely relevant to any citation in this range -- every .zig citation in REQ-079..REQ-188 was either a description paragraph, a title field, an acceptance-criterion bullet, or a stage-intro header comment block; no markdown table citation (the OQ-3-relevant shape) occurred in this range.",
       "All REQ ids in the nominal 079-188 numeric span exist as entries in the file within this range (no missing/renumbered ids observed while scanning line-by-line through the range)."
-    ]
+    ],
+    "artifacts_out": [
+      "docs/requirements.yaml"
+    ],
+    "next_action": "Route to ORCH for Step 6 bookkeeping (flip REQ-256's own status to done, append run-history event) once this scope-implementation step is accepted."
   },
-  "commit_sha": "7296b1e7",
-  "artifacts_out": [
-    "docs/requirements.yaml",
-    "handoffs/WF02-REQ256-20260905/step01-doc-updater.json"
-  ],
-  "next_action": "Route to ORCH for Step 6 bookkeeping (flip REQ-256's own status to done, append run-history event) once this scope-implementation step is accepted."
+  "rework_count": 0,
+  "max_rework": 3
 }

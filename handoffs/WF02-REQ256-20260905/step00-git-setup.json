@@ -1,25 +1,41 @@
 {
+  "handoff_id": "WF02-REQ256-20260905-step-00",
   "run_id": "WF02-REQ256-20260905",
   "workflow_id": "WF-02",
-  "step": "00-git-setup",
-  "agent_id": "ORCH",
-  "requirement_ids": ["REQ-256"],
-  "issue_id": "ISS-0424",
-  "queue_task_id": 494,
-  "queue_agent_id": "letflow-ee-orch",
-  "timestamp": "2026-09-05T16:38:06Z",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ256-20260905/step00-git-setup.json",
   "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T16:38:06Z",
+  "started_at": "2026-09-05T16:38:06Z",
+  "completed_at": "2026-09-05T16:38:50Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-256"],
+    "issue_ids": ["ISS-0424"],
+    "queue_task_id": 494,
+    "queue_agent_id": "letflow-ee-orch",
+    "branch_name": "feature/WF02-REQ256-20260905",
+    "base_commit": "e1688743",
+    "pre_start_checks": {
+      "registry_scanned": true,
+      "registry_findings": "No existing WF02-REQ256-* entry in handoffs/registry.json. WF02-REQ254-20260905 (sibling chunk 239a, REQ-011 through REQ-050 range) is present and status COMPLETED, released_lock: true -- no collision. No WF02-REQ255-* entry found (sibling chunk 239b). No REQ-255/256/257 branches found locally or on origin (git branch -a and git fetch origin checked). No handoffs/WF02-REQ256-* directory existed prior to this run.",
+      "sibling_chunk_note": "REQ-254's own registry note records a MINOR REVIEWER finding: consider a YAML-comment-line marker case as a fourth citation-unit shape before REQ-255/256/257 hit the same contexts. Flagged for DOC-UPDATER/REVIEWER on this run.",
+      "concurrency_conclusion": "Clear to proceed -- no evidence of another session working REQ-256 specifically. Sibling chunks (REQ-255, REQ-257, etc.) may be in flight on other hosts touching different entry ranges of the same file; will rebase before merge per ORCHESTRATOR.md section 7.1."
+    }
+  },
+  "task": {
+    "description": "WF-02 Step 00: claim queue task 494 (REQ-256), the 3rd of ten chunk-level requirements applying REQ-237's .zig provenance-marking convention to docs/requirements.yaml (chunk 239c, the REQ-079 through REQ-188 entry range). No CODE-DESIGNER step -- the convention is already designed and CODE-DESIGN-VALIDATOR-passed; this is a mechanical apply-step. Dispatching straight to DOC-UPDATER."
+  },
   "result": {
     "status": "PASS",
-    "summary": "git pull origin main --ff-only (already up to date), created and checked out feature/WF02-REQ256-20260905 from main.",
-    "base_commit": "e1688743",
-    "branch": "feature/WF02-REQ256-20260905"
+    "summary": "git pull origin main --ff-only (already up to date), created and checked out feature/WF02-REQ256-20260905 from main @ e1688743.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Dispatch DOC-UPDATER to implement REQ-256 (docs/requirements.yaml, REQ-079 through REQ-188 entry range only) per REQ-237's design doc."
   },
-  "pre_start_checks": {
-    "registry_scanned": true,
-    "registry_findings": "No existing WF02-REQ256-* entry in handoffs/registry.json. WF02-REQ254-20260905 (sibling chunk 239a, REQ-011 through REQ-050 range) is present and status COMPLETED, released_lock: true -- no collision. No WF02-REQ255-* entry found (sibling chunk 239b). No REQ-255/256/257 branches found locally or on origin (git branch -a and git fetch origin checked). No handoffs/WF02-REQ256-* directory existed prior to this run.",
-    "sibling_chunk_note": "REQ-254's own registry note records a MINOR REVIEWER finding: consider a YAML-comment-line marker case as a fourth citation-unit shape before REQ-255/256/257 hit the same contexts. Flagged for DOC-UPDATER/REVIEWER on this run.",
-    "concurrency_conclusion": "Clear to proceed -- no evidence of another session working REQ-256 specifically. Sibling chunks (REQ-255, REQ-257, etc.) may be in flight on other hosts touching different entry ranges of the same file; will rebase before merge per ORCHESTRATOR.md section 7.1."
-  },
-  "next_step": "Dispatch DOC-UPDATER to implement REQ-256 (docs/requirements.yaml, REQ-079 through REQ-188 entry range only) per REQ-237's design doc."
+  "rework_count": 0,
+  "max_rework": 3
 }

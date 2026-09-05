@@ -1,0 +1,43 @@
+{
+  "handoff_id": "d5b3e7a1-8c4f-4e2a-b01c-3f6e9d2b0511",
+  "run_id": "WF03-ISS0511-20260905",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0511-20260905/step-03-reviewer.json",
+  "created_at": "2026-09-05T18:43:27Z",
+  "started_at": "2026-09-05T18:43:27Z",
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0511-20260905/step-02-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0511.yaml",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0511-20260905/step-02-test-designer.json"
+    ],
+    "owned_modules": ["test/letflow/simulation/req207_vortex_test.exs"]
+  },
+  "task": {
+    "description": "Gate TEST-DESIGNER's fix (branch feature/WF03-ISS0511-20260905, commits 013a0303/21b4f995) for ISS-0511 before merge. This is a test-only fix (no lib/ change, no SECURITY-REVIEWER-triggering tenant-data path), so this REVIEWER pass is the sole idiom/correctness/scope gate before TEST-RUNNER's full-suite check. Read step-01-issue-fixer.json and step-02-test-designer.json in full for the diagnosed root cause and the exact fix specified.\n\nWhat changed: in test/letflow/simulation/req207_vortex_test.exs, a new private helper `nearest_preceding_id_line/2` replaces the old single-line `Enum.at(title_lines, idx - 1)` lookup in the 'vortex-entity-list-filter-and-page' test. The helper walks upward from idx - 1, skipping lines that are blank or match /^#/ after trimming a trailing \\r and surrounding whitespace, and returns the first non-blank non-comment line (or nil if it runs off the start of the list). The downstream `Enum.any?(allowed_ids, &(preceding_line =~ \"id: #{&1}\"))` assertion is unchanged.\n\nVerify specifically:\n1. The walk-back is correctly BOUNDED -- it must stop at (and return) the first non-blank/non-comment line, never continuing past a real content line to search further up for an id: line. Read the helper's actual code (git diff main feature/WF03-ISS0511-20260905 -- test/letflow/simulation/req207_vortex_test.exs) and confirm this by inspection, not by trusting the handoff prose.\n2. This bounding means a genuinely wrong or missing id: line still fails the existing assertion -- reason through at least one concrete counter-example (e.g. if a future edit removed an id: line entirely, or replaced it with wrong content) and confirm the helper would surface that wrong/missing content to the assertion rather than masking it.\n3. The \\r trim is necessary and correctly placed given docs/requirements.yaml's confirmed CRLF line endings (per step-01's diagnosis) -- confirm trim_trailing(\"\\r\") before trim() doesn't accidentally strip meaningful content or mis-order.\n4. Scope: confirm via `git diff main feature/WF03-ISS0511-20260905 --stat` that only test/letflow/simulation/req207_vortex_test.exs changed content (handoffs/ bookkeeping files are expected and fine) -- docs/requirements.yaml must be untouched.\n5. Idiom: private helper placement, naming, recursion style (guard clauses on idx >= 0 / idx < 0) are consistent with this test file's existing helper conventions (e.g. find_child_by_parent_instance_id/2 nearby).\n6. No scope creep: nothing else in the test file was touched beyond the helper addition and the one call-site change.\n\nThis is NOT the full-suite gate -- TEST-RUNNER runs `mix letflow.check` next regardless of this step's outcome (if PASS). Your job is idiom/correctness/scope review of the diff itself.",
+    "acceptance_criteria": [
+      "Independently inspected the actual diff (not just the handoff's prose claim)",
+      "Explicitly confirms the walk-back cannot mask a genuinely wrong/missing id: line, with reasoning via a concrete counter-example",
+      "Confirms only the one test file has content changes; docs/requirements.yaml untouched",
+      "Confirms idiom consistency with existing file conventions",
+      "result.status is PASS or FAIL with clear reasoning either way",
+      "result.next_action routes to TEST-RUNNER on PASS, or back to TEST-DESIGNER with specific rework instructions on FAIL"
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -10043,6 +10043,7 @@ requirements:
     stage: S6
     impl_order: 362  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       FIRST requirement of S6's secrets half; REQ-190 and REQ-191 depend
       on it. It exists because
       docs/migration/stage-6-operational-cross-cutting.md's own Decisions
@@ -10161,6 +10162,7 @@ requirements:
       REQ-183 and REQ-190.
     acceptance_criteria:
       - "docs/migration/decisions/0016-secrets-storage-backend.md exists, follows the format of the existing records in that directory (Question / Decision / Evidence / consequences), and names one chosen storage backend with the alternatives it rejected"
+      # PROVENANCE (historical, not current decision authority):
       - "the record names the exact environment variable Letflow's master key comes from, its required format, and states that startup FAILS when it is absent or malformed -- explicitly rejecting R-Co's hardcoded all-zeros key and citing the four call sites (src/api/routes/webhooks.zig:375, src/webhook/dispatcher.zig:537, src/webhook/subscription_store.zig:224, src/effects/worker.zig:42) plus the zero-match grep for MASTER_KEY/WRAPPING_KEY across R-Co's src/"
       - "the record states whether the secrets table is per-tenant-schema (decision 0003 Decision B) or global, and if global, records REVIEWER sign-off on that divergence together with the R-Co-grounded reason -- it does not diverge from 0003 silently"
       - "the record fixes the literal secret-reference syntax as a quoted string with an example, and states whether the key-id suffix is optional and what an omitted key id resolves to"
@@ -10177,6 +10179,7 @@ requirements:
     stage: S6
     impl_order: 363  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Builds what REQ-189's decision record specifies. Core only -- no
       route, no controller, per this stage's core/route split precedent
       (REQ-176 then REQ-178; REQ-181 then REQ-182; REQ-183 then REQ-184).
@@ -10275,6 +10278,7 @@ requirements:
     stage: S6
     impl_order: 364  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Core only, no routes -- REQ-192 adds the HTTP surface. This is the
       most-referenced unbuilt subsystem in the codebase: THREE separate
       already-shipped sites name it as a stage-S6 gap, and a fourth
@@ -10390,12 +10394,14 @@ requirements:
     depends_on: [REQ-031, REQ-069, REQ-072, REQ-067]
 
   - id: REQ-192
+    # PROVENANCE (historical, not current decision authority):
     title: Port services.zig's route surface onto the service catalog (GET /services, GET/POST/PATCH/DELETE /admin/services, SVC-04)
     owner: ELIXIR-DEV
     status: done
     stage: S6
     impl_order: 365  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       The route half of the service-catalog split, atop REQ-191's core --
       the same shape REQ-178 has to REQ-176 and REQ-182 has to REQ-181.
       docs/migration/stage-4-api-surface.md:101 deferred services.zig
@@ -10457,6 +10463,7 @@ requirements:
     stage: S6
     impl_order: 366  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       First of S6's observability half. Letflow has NO logger
       configuration at all -- verified: config/config.exs, dev.exs,
       test.exs, prod.exs and runtime.exs contain zero `config :logger`
@@ -10534,6 +10541,7 @@ requirements:
     stage: S6
     impl_order: 367  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       S6 is the owning stage for Letflow's metrics subsystem, and
       lib/letflow/routers/metrics.ex says so itself: its moduledoc states
       "S6 observability is the owning stage for Letflow's metrics
@@ -10636,6 +10644,7 @@ requirements:
     stage: S6
     impl_order: 368  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Core only, no route change -- REQ-196 adapts the existing route
       onto this store.
       THE GAP, recorded in Letflow's own code rather than inferred:
@@ -10801,6 +10810,7 @@ requirements:
     stage: S6
     impl_order: 370  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Extends lib/letflow/engine/expr.ex. It does not replace it: that
       module's own moduledoc states "A fuller expression surface, if a
       later stage needs one, EXTENDS this module rather than replacing
@@ -10896,6 +10906,7 @@ requirements:
       - "EE-05's contract is intact: evaluate_condition/2 given the same malformed expression still returns false rather than raising or returning an error tuple, and a test asserts transition.ex's exclusive-gateway behaviour for a bad condition is unchanged from before this requirement"
       - "expr.ex's own documented purity grep (Repo, Logger, DateTime, System.os_time, System.system_time, HTTPoison, Req, File, :rand, :crypto) still returns ZERO matches after this change, quoted in the PR"
       - "now() is NOT added, and the moduledoc states why -- that R-Co's own evaluator documents now() as inherently impure while every other builtin is pure, and that adding it would break expr.ex's purity and REQ-050's determinism guarantee -- and states the decided disposition for the clock-dependent builtins rather than leaving it open"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc states that src/expr/benchmark.zig is deliberately not ported, naming it as a benchmarking harness with no production behaviour"
       - "the moduledoc records that R-Co's expr is not a CEL implementation and that EXP-102 cut over from vendored CEL to it, so the @unsupported_call_markers list rejects CEL vocabulary that R-Co does not implement either"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
@@ -10908,6 +10919,7 @@ requirements:
     stage: S6
     impl_order: 371  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Second and last of S6's expr half, atop REQ-197's extended grammar.
       Split from REQ-197 because REQ-197 changes the grammar, the
       precedence table and the error surface, while this adds a function
@@ -10979,6 +10991,7 @@ requirements:
     stage: S6
     impl_order: 372  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       The last of this batch's six subsystems, and the one the first
       batch deferred for having "zero grounding anywhere in this repo".
       With R-Co reachable it is now fully grounded, and it turns out to
@@ -11110,6 +11123,7 @@ requirements:
     stage: S6
     impl_order: 373  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/timeline.zig
       was silently unscoped while the stage doc asserted src/obs was covered).
       Investigated rather than assumed, per that finding's own instruction, and
@@ -11199,6 +11213,7 @@ requirements:
     stage: S6
     impl_order: 374  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Added in this batch's rework 1 (REQ-VALIDATOR finding: src/obs/alerts.zig,
       972 lines, was silently unscoped). Drafted rather than deferred because
       every input it needs is built by this stage or the first S6 batch, so it
@@ -11297,6 +11312,7 @@ requirements:
     stage: S6
     impl_order: 375  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Added in this batch's rework 2 (REQ-VALIDATOR finding: the rework-1
       "this list is exhaustive" assertion was FALSE for src/repository --
       artifacts.zig, canonicaliser.zig, activation.zig and schemas.zig had
@@ -11443,6 +11459,7 @@ requirements:
     stage: S6
     impl_order: 376  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Added in this batch's rework 2, the second half of the
       artifact-repository pair REQ-202 opens. Split from REQ-202 because
       REQ-202 builds a content store and a canonicaliser while this builds
@@ -11653,6 +11670,7 @@ requirements:
     stage: S7
     impl_order: 382  # letflow-queue task id, GH#754
     description: >
+      PROVENANCE (historical, not current decision authority):
       FIRST requirement of S7, the correctness gate over S4/S5/S6's combined
       output (docs/migration/stage-7-simulation-uat-parity.md). Builds the
       harness REQ-206/207/208 run scenarios through; ports no scenario logic
@@ -11767,6 +11785,7 @@ requirements:
       - "seeding the same company twice in one test run is a no-op the second time (no duplicate tenant/user/group/definition, no raised error) -- one explicit test per entity kind (tenant, user, group, definition), matching seed.py's documented idempotent-409 contract"
       - "Letflow.Simulation.Runner executes a minimal one-step api-via scenario end to end against a real running instance (real HTTP through Letflow.Router, not a mocked handler) and evaluates at least one instance_state-method expected outcome by querying actual instance state afterward"
       - "a scenario step declared via: gui is recorded with outcome DEFERRED_TO_S8 by the runner, never silently skipped (absent from the report) and never executed as if it were an api step"
+      # PROVENANCE (historical, not current decision authority):
       - "the runner moduledoc explicitly distinguishes this harness from Letflow.Routers.SimulationTest/simulation_test.zig's design-time definition-validation tool, states that this requirement does not build that router, and cites both R-Co source files by path"
       - "if a YAML-parsing library is added to mix.exs, REVIEWER sign-off is recorded for it in this requirement's PR"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
@@ -11779,6 +11798,7 @@ requirements:
     stage: S7
     impl_order: 383  # letflow-queue task id, GH#755
     description: >
+      PROVENANCE (historical, not current decision authority):
       Second requirement of S7. Ports and runs, via REQ-205's harness, the
       four SwiftRoute scenario YAMLs confirmed present in R-Co at
       tests/simulation/scenarios/: swiftroute-tenant-onboarding-happy.yaml
@@ -11853,6 +11873,7 @@ requirements:
     stage: S7
     impl_order: 384  # letflow-queue task id, GH#756
     description: >
+      PROVENANCE (historical, not current decision authority):
       Third requirement of S7. Ports and runs, via REQ-205's harness, the
       four Vortex scenario YAMLs confirmed present in R-Co:
       vortex-production-order-above-threshold.yaml (3 steps, all via: api --
@@ -11988,6 +12009,7 @@ requirements:
     stage: S7
     impl_order: 386  # letflow-queue task id, GH#758
     description: >
+      PROVENANCE (historical, not current decision authority):
       Fifth requirement of S7. Ports what's portable from
       tests/differential/ (tests/differential/corpus/conditions_v1.json,
       confirmed 15 entries this session by counting condition_id fields;
@@ -12049,6 +12071,7 @@ requirements:
       - "test/fixtures/simulation/differential_corpus.json contains all 15 entries from R-Co's tests/differential/corpus/conditions_v1.json with condition_id, condition_text, context and expected_result preserved byte-for-byte, verified by a count/diff-style check against the count established this session (15)"
       - "a single property-style ExUnit test iterates every corpus entry and asserts Letflow.Engine.Expr's translate_cel_to_expr/1 + evaluate path returns exactly expected_result given the entry's context bound as variables -- one test loop, not 15 duplicated test bodies"
       - "every corpus entry is accounted for in the suite's own run output as either evaluated-and-matched or EXPECTED_UNSUPPORTED with the specific rejected construct named -- the sum of both categories equals 15, and zero entries are silently absent from the suite"
+      # PROVENANCE (historical, not current decision authority):
       - "the test module's moduledoc states explicitly that this is a regression/golden-value port, not a CEL-vs-expr differential, and cites both R-Co source files (tests/differential/differential_test.zig, tests/differential/corpus/conditions_v1.json) and expr.ex's own EXP-102/AC11 moduledoc section as the reason no second implementation exists to diff against"
       - "if any corpus entry's evaluated result diverges from its expected_result on a construct expr.ex's own moduledoc claims to support (i.e. a genuine regression, not an EXPECTED_UNSUPPORTED case), it is reported to ORCH as a finding per core-directives.md's No Issue Left Local-Only rather than silently adjusted or excluded"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
@@ -12138,6 +12161,7 @@ requirements:
     stage: S6
     impl_order: 394  # letflow-queue task id, GH#774
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes GH#769 / ISS-0390 ("Missing attachment/document-upload
       subsystem"), filed by ELIXIR-DEV during REQ-206 (S7, the SwiftRoute
       simulation batch, merged in PR #767) and independently reconfirmed by
@@ -12483,6 +12507,7 @@ requirements:
     stage: S3
     impl_order: 415  # letflow-queue task id, GH#812
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes ISS-0411/GH#807 (queue task 411): Letflow.Engine never
       dispatches :SERVICE_TASK nodes. dispatch_node/4
       (lib/letflow/engine/transition.ex:334-339) hits its generic
@@ -13531,11 +13556,13 @@ requirements:
     depends_on: [REQ-222, REQ-223]
 
   - id: REQ-225
+    # PROVENANCE (historical, not current decision authority):
     title: Entity definition JSON schema shape and structural validation rules (definition.zig + validator.zig's definition-validation half)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Opens the entity/data-model subsystem port, per ISS-0438's CODE-DESIGN-VALIDATOR-passed
       scoping recommendation (lib/letflow/design/iss0438-entity-subsystem-scoping.md,
       "IN SCOPE -- port the generic (untyped) entity subsystem as new S6
@@ -13621,6 +13648,7 @@ requirements:
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 2 of the ISS-0438 entity-subsystem port (see REQ-225's
       description for the originating scoping recommendation; not restated
       here). Builds the persisted, denormalised `entity_definitions` table
@@ -13681,11 +13709,13 @@ requirements:
     impl_order: 461  # letflow-queue task id
 
   - id: REQ-227
+    # PROVENANCE (historical, not current decision authority):
     title: Entity record payload validation against a definition's derived schema (validator.zig's record-payload half, ISS-0160/GH#481 parity)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 3 of the ISS-0438 entity-subsystem port (see REQ-225's
       description for the originating scoping recommendation). Ports
       validator.zig's validateRecordPayload/buildRecordSchema half (~475
@@ -13750,11 +13780,13 @@ requirements:
     impl_order: 462  # letflow-queue task id
 
   - id: REQ-228
+    # PROVENANCE (historical, not current decision authority):
     title: Entity event registration and record commands (events.zig + commands.zig -- create/update/delete, idempotent replay, synthetic-instance-per-type)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 4 of the ISS-0438 entity-subsystem port (see REQ-225's
       description for the originating scoping recommendation). Ports
       events.zig + commands.zig (~640 combined lines).
@@ -13812,9 +13844,11 @@ requirements:
     acceptance_criteria:
       - "ENTITY_RECORD_CREATED, ENTITY_RECORD_UPDATED and ENTITY_RECORD_DELETED are each registered exactly once via Letflow.EventStore.Registry.register_type/2, verified by querying event_type_registry after this module's seed step runs"
       - "a create command for a record conforming to its entity definition appends exactly one ENTITY_RECORD_CREATED event, updates entity_record_latest in the same transaction, and a forced failure after the event append but before the projection update leaves neither committed -- one explicit test"
+      # PROVENANCE (historical, not current decision authority):
       - "submitting a create command twice with the SAME idempotency key returns the ORIGINAL record both times (same record_id, same field_values) rather than creating a second record or event -- ISS-0159/GH#480 parity, verified against commands.zig's actual behavior, not only the design doc"
       - "a create command whose field_values fail REQ-227's record-payload validation is rejected with zero events appended"
       - "the entity_type_instances synthetic-instance mapping creates exactly one instance_projections-equivalent row per entity TYPE, not per record -- demonstrated by creating three records of the same entity type and confirming only one synthetic instance row exists for that type"
+      # PROVENANCE (historical, not current decision authority):
       - "the design artefact for this requirement explicitly states the per-entity-type (not per-record) synthetic-instance decision and that it matches R-Co's actual shipped commands.zig rather than the design doc's more abstract hedge"
       - "the outer event-envelope schema (registered at Registry.register_type/2 time) and REQ-227's inner field_values validation are both exercised by at least one test each, and the moduledoc states which validates which, per the design artefact's §3 distinction"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
@@ -13823,11 +13857,13 @@ requirements:
     impl_order: 463  # letflow-queue task id
 
   - id: REQ-229
+    # PROVENANCE (historical, not current decision authority):
     title: Entity record projection and replay (projector.zig -- entity_record_latest, replay-to-snapshot, full re-projection)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 5 of the ISS-0438 entity-subsystem port (see REQ-225's
       description for the originating scoping recommendation). Ports
       projector.zig (213 lines).
@@ -13866,11 +13902,13 @@ requirements:
     impl_order: 464  # letflow-queue task id
 
   - id: REQ-230
+    # PROVENANCE (historical, not current decision authority):
     title: Entity query DSL -- closed-enum operators, per-tenant field allowlist, and the parameterised SQL compiler (query/types.zig + allowlist.zig + compiler.zig)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 6a of the ISS-0438 entity-subsystem port -- a materially sized
       sixth subsystem the original ISS-0438 filing did NOT mention or size
       at all (the design artefact measured query/ directly at 1,064 lines,
@@ -13928,11 +13966,13 @@ requirements:
     impl_order: 465  # letflow-queue task id
 
   - id: REQ-231
+    # PROVENANCE (historical, not current decision authority):
     title: Entity query DSL -- keyset pagination cursor codec and field-grant row-level redaction (query/cursor.zig + field_grants.zig)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Slice 6b of the ISS-0438 entity-subsystem port -- the second half of
       the query/ split REQ-230 opens (see REQ-230's description for the
       full originating context, not restated here).
@@ -13981,6 +14021,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the routers slice of ISS-0424/GH#828 part 2 (queue task 424),
       sized per ISSUE-FIXER's diagnosis
       (handoffs/WF03-ISS0424-20260904/step-01-issue-fixer-diagnosis.json)
@@ -14024,6 +14065,7 @@ requirements:
       - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/routers/ | wc -l` and quote the count (measured 35 at draft time, 2026-09-04 -- re-derive, do not trust this number verbatim if the tree has moved)"
       - "after the change, the same grep against lib/letflow/routers/ returns zero occurrences -- quote the before and after counts side by side"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/routers/` and save the full output; after the change, re-run the identical grep and diff the two outputs -- the set of matching lines, by content, must be byte-identical (same divergence notes preserved verbatim); quote both outputs and the diff (empty diff expected)"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in lib/letflow/routers/ is deleted -- `grep -c '\\.zig' lib/letflow/routers/*.ex` summed before and after are equal; quote both sums"
       - "for at least 3 of the touched occurrences, the commit message or an inline comment names the specific technical reason kept (not merely 'rephrased'), spot-checkable by REVIEWER"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
@@ -14036,6 +14078,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the engine+wasm+lua slice of ISS-0424/GH#828 part 2, same
       rationale and method as REQ-232 (read REQ-232's description for the
       full judgement-call criteria; not restated here in full).
@@ -14070,6 +14113,7 @@ requirements:
       - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine.ex lib/letflow/engine/` and save the output; after the change, re-run and diff -- byte-identical set of matching lines required, including engine/execution_error.ex:7 and engine/pin_resolver.ex:141's own text surviving verbatim; quote both outputs and the diff"
       - "lib/letflow/engine/pin_rebind.ex is untouched by this requirement's commits -- confirmed by git diff --stat"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
@@ -14081,6 +14125,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the definitions slice of ISS-0424/GH#828 part 2, same
       rationale and method as REQ-232 (read REQ-232's description for the
       full judgement-call criteria; not restated here).
@@ -14106,6 +14151,7 @@ requirements:
       - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/definitions.ex lib/letflow/definitions/` and save the output, including definitions/process_definition.ex:34; after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
       - "lib/letflow/routers/definitions.ex is untouched by this requirement's commits (it belongs to REQ-232) -- confirmed by git diff --stat"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
@@ -14117,6 +14163,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the event_store slice of ISS-0424/GH#828 part 2, same
       rationale and method as REQ-232 (read REQ-232's description for the
       full judgement-call criteria; not restated here).
@@ -14139,6 +14186,7 @@ requirements:
       - "before starting, run `grep -roE 'matches R-Co|mirrors R-Co|same as R-Co|R.Co.s own|R-Co own|parity|port of R-Co' lib/letflow/event_store.ex lib/letflow/event_store/ -r | wc -l` and quote the count (measured 15 at draft time, 2026-09-04 -- re-derive)"
       - "after the change, the identical grep returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/event_store.ex lib/letflow/event_store/` and save the output; after the change, re-run and diff -- byte-identical set of matching lines required; quote both outputs and the diff"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
@@ -14150,6 +14198,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the api/+plugs/ slice of ISS-0424/GH#828 part 2 (the first of
       three sub-slices REQ-236 was split into, because REQ-236's original
       15-file span was too heterogeneous for one turn -- 5 unrelated
@@ -14174,6 +14223,7 @@ requirements:
       - "before starting, run the parity-phrase grep against exactly the 4 files listed in this requirement's description and quote the count (measured 7 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 4 by diffing against REQ-232/233/234/235/241/242's own file lists to rule out double-coverage or gaps)"
       - "after the change, the identical grep against the same 4 files returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 4 files and save the output (expected empty at draft time); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
@@ -14185,6 +14235,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the identity+instances+tasks+tenant_provisioning+audit slice
       of ISS-0424/GH#828 part 2 (the second of three sub-slices REQ-236 was
       split into -- see REQ-240's description for why). Same rationale and
@@ -14205,6 +14256,7 @@ requirements:
       - "before starting, run the parity-phrase grep against exactly the 6 files listed in this requirement's description and quote the count (measured 34 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 6 by diffing against REQ-232/233/234/235/240/242's own file lists to rule out double-coverage or gaps)"
       - "after the change, the identical grep against the same 6 files returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 6 files and save the output (expected empty at draft time); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
@@ -14216,6 +14268,7 @@ requirements:
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the repository+sandbox_pool+webhooks+lib/mix/tasks slice of
       ISS-0424/GH#828 part 2 (the third of three sub-slices REQ-236 was
       split into -- see REQ-240's description for why). Same rationale and
@@ -14239,17 +14292,20 @@ requirements:
       - "before starting, run the parity-phrase grep against exactly the 5 files listed in this requirement's description and quote the count (measured 8 at draft time, 2026-09-05 -- re-derive, and confirm the file list is still exactly these 5 by diffing against REQ-232/233/234/235/240/241's own file lists to rule out double-coverage or gaps)"
       - "after the change, the identical grep against the same 5 files returns zero occurrences -- quote before and after counts"
       - "before starting, run `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` against the same 5 files and save the output (expected: lib/letflow/sandbox_pool/fixture_loader.ex:11 and lib/letflow/repository/artifact.ex:13 at minimum); after the change, re-run and diff -- byte-identical required; quote both outputs and the diff"
+      # PROVENANCE (historical, not current decision authority):
       - "no .zig source-path citation line in the touched files is deleted -- summed grep -c '\\.zig' counts before and after are equal, quoted"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: []
     impl_order: 477  # letflow-queue task id
 
   - id: REQ-237
+    # PROVENANCE (historical, not current decision authority):
     title: Define the .zig provenance-citation marking convention -- demote from decision-authority framing to clearly-marked historical provenance (closes ISS-0424 part 3a, design)
     owner: CODE-DESIGNER
     status: done
     stage: S6
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the design-decision portion of ISS-0424/GH#828 part 3.
       ISS-0424's own text: the ~1235 .zig source-path citations scattered
       through lib/ moduledocs and docs/ (re-verified 2026-09-04: 200 files,

@@ -1,0 +1,62 @@
+{
+  "handoff_id": "29e4651a-54d4-46ad-89d1-e057bc3217a6",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-0.5-1-issue-fixer-diagnose.json",
+  "created_at": "2026-09-05T04:50:00Z",
+  "started_at": "2026-09-05T04:50:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0480.yaml",
+      "docs/issues/ISS-0458.yaml",
+      "docs/issues/ISS-0110.yaml",
+      "docs/issues/ISS-0217.yaml",
+      "docs/issues/ISS-0219.yaml",
+      "docs/issues/ISS-0224.yaml",
+      "docs/issues/ISS-0113.yaml",
+      "test/letflow/row_approval_test.exs",
+      "test/letflow/definitions/pack_update_migration_test.exs",
+      "test/support/data_case.ex",
+      "config/test.exs"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Combined Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0480. ORCH has already done a first-pass registry scan (recorded below) -- your job is to independently verify or refute it, and then REPRODUCE the defect first-hand rather than accepting the filing's prose. Do not implement any fix; this step is diagnosis only.\n\nBACKGROUND FROM ORCH'S OWN SCAN (verify, don't just trust): ISS-0458 (instrumented, superseded_by ISS-0219) already established a DB-provisioning/contention-race family covering ISS-0110 (TenantSchemaReaper liveness-guard race, resolved), ISS-0217 (test_parallel.sh sibling-partition false-positive of that same guard, resolved), ISS-0219 (TEST_PARALLEL_N auto-derivation exceeding host connection budget, resolved -- docs only), and ISS-0224 (SandboxPool provision_sandbox/0 blocking the pool mailbox under contention, resolved). ORCH read all four and judges ISS-0480 does NOT match this family: all four are about scripts/test_parallel.sh's multi-process partitioning or Letflow.SandboxPool's own fixture-loader pool -- neither mechanism is in play here. ISS-0480's own two failing files (test/letflow/row_approval_test.exs, test/letflow/definitions/pack_update_migration_test.exs) both use PLAIN `use Letflow.DataCase, async: true` with no TenantFixture/provisioned_tenant! call at all (grepped, zero matches) -- test/support/data_case.ex's setup is a bare `Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)` per test process, nothing more. This run was plain `mix test` (not test_parallel.sh), so ISS-0217/ISS-0219's script-partitioning mechanisms cannot apply either.\n\nALSO CHECKED: ISS-0113 (Sandbox.mode(:auto) leak in TenantFixture.provisioned_tenant!/1, resolved TODAY in WF03-ISS0423-20260905, the same run that filed THIS issue). Its mechanism requires a call to provisioned_tenant!/1 or the shared TenantFixture module. Neither ISS-0480 file calls it (grepped, zero matches in row_approval_test.exs; pack_update_migration_test.exs's own moduledoc explicitly documents why it deliberately does NOT use that fixture machinery -- REQ-041's tables are GLOBAL/public-schema, created by the ordinary `mix ecto.migrate` step, not per-tenant provisioning). So ISS-0113's mechanism is also structurally ruled out for these two files -- verify this conclusion yourself rather than taking ORCH's grep on trust.\n\nWHAT THIS LOOKS LIKE INSTEAD: a plain per-test-process Ecto.Adapters.SQL.Sandbox.checkout/1 race or Postgres connection-budget exhaustion under HEAVY CONCURRENT ASYNC load from plain `mix test` (not test_parallel.sh) -- i.e., ExUnit's own async test-process concurrency (bounded by :max_cases, defaulting to schedulers_online * 2) checking out sandbox connections against config/test.exs's configured pool_size at the same moment many OTHER async: true tests in the suite are also checking out. RowApprovalTest's failure ({:error, :not_found} right after create()) and PackUpdateMigrationTest's failure (Ecto.ConstraintError foreign_key_constraint on solution_pack_artefact_bases_tenant_id_fkey, i.e. a FK insert failing against a tenants row that should already exist in the SAME sandboxed transaction) both look like symptoms of a test process observing a transaction/connection state that isn't fully its own -- consistent with sandbox pool exhaustion forcing a checkout onto an unexpected connection, or a connection-checkout timeout under load being swallowed/mishandled somewhere in the call path. This is a hypothesis, not yet a finding -- your job is to test it.\n\nWHAT TO ACTUALLY DO:\n1. Read config/test.exs's pool_size/pool_count configuration and Postgres's actual max_connections on this host (`SHOW max_connections;` via psql or `mix run -e` against Letflow.Repo). Compute the actual concurrent-connection demand a plain `mix test` run creates (ExUnit max_cases * effective pool arrangement) and check whether it can exceed the configured budget.\n2. Attempt to REPRODUCE: run plain `mix test` (foreground, synchronous, per core-directives.md's 'No Background Wait For A Cross-Turn Notification' -- do NOT background this or use Monitor/run_in_background, let the call block for its full ~25-30 minutes) multiple times on this exact commit. Budget for at least 2 runs; a 3rd if the first two disagree in a way that needs a tiebreaker. Record pass/fail per run, and if either target file fails, capture the actual error and stack trace (not just the summary line).\n3. If reproduced: trace the mechanism concretely -- e.g. instrument or reason from Ecto/DBConnection source (same standard as ISS-0224's and ISS-0113's own resolutions, which both traced through actual library source rather than stopping at 'it's probably contention'). Identify whether this is: (a) sandbox connection-pool exhaustion (pool_size too low for ExUnit's real async concurrency), (b) a genuine ownership/checkout race distinct from pool sizing, or (c) something else entirely.\n4. If NOT reproduced after your planned runs: this may legitimately be a no_defect or a narrower-than-filed finding. Per ISSUE_QUEUE.md's no_defect bar, you must still name the specific mechanisms you tested and ruled out, and state the method's limitations (e.g., 'not reproduced in N runs on this host under current load' is not the same claim as 'cannot occur').\n5. Report your verdict recommendation (fold into an existing tracked class as instrumented, a genuinely new mechanism needing its own fix, or no_defect) with the evidence bar each requires per ISSUE_QUEUE.md's 'Issue status vocabulary' section -- ORCH will route based on your finding, not decide the verdict for you.\n\nDo NOT implement a fix. Do NOT modify lib/ or test/ files (temporary instrumentation for reproduction is fine if reverted and the revert is verified per WF-03's own mutant-probe discipline, same as Step 4's rule -- git checkout -- afterward, verify git status clean before completing this handoff).",
+    "acceptance_criteria": [
+      "Independently verified (not merely copied) whether ISS-0480 belongs to the already-tracked ISS-0110/ISS-0217/ISS-0219/ISS-0224 family or ISS-0113's mechanism, stating the specific structural reason either way",
+      "At least 2 full plain `mix test` runs actually executed synchronously (not backgrounded) on this commit, with real pass/fail counts and, for any failure of the two target files, the actual error/stack trace quoted",
+      "Root cause traced through actual mechanism (config, Ecto/DBConnection source, or measured connection counts) if reproduced -- not asserted by feel",
+      "A genuine verdict recommendation stated: fold-into-existing-class (instrumented) / new-distinct-mechanism (needs CODE-DESIGNER) / no_defect -- with the specific evidence ISSUE_QUEUE.md's vocabulary requires for whichever is chosen",
+      "No lib/ or test/ file left modified at handoff completion (git status clean) if any temporary instrumentation was used"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

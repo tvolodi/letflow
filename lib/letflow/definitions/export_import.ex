@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.ExportImport do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Definition export/import (`Letflow.Definitions.ExportImport`), REQ-034, PD-09.
   Ported from `src/definition/export_import.zig`'s `ExportImportStore`.
 

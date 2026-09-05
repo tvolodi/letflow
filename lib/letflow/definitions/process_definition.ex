@@ -128,6 +128,7 @@ defmodule Letflow.Definitions.ProcessDefinition do
   Structural changeset for updating a process definition's mutable fields.
   Does no I/O.
 
+  PROVENANCE (historical, not current decision authority):
   The castable field list intentionally excludes `:status`, `:tenant_id` and
   `:created_by` (`src/definition/store.zig:101-108` for the equivalent field
   list). Status movement is a guarded UPDATE, not a changeset (see this

@@ -3,6 +3,7 @@ defmodule Letflow.Definitions.PromotionAssertionRun do
   Ecto schema for the `promotion_assertion_runs` table. See
   `lib/letflow/design/req040-promotion-assertion-rerun.md` §4.
 
+  PROVENANCE (historical, not current decision authority):
   Ported from R-Co's `src/definition/assertion_rerun.zig` (PRM-06/07) — one row per
   `(review_id, plan_digest)` idempotency key, recording the outcome of replaying a
   `Letflow.Definitions.PromotionArtifact.t()`'s assertions against an ephemeral

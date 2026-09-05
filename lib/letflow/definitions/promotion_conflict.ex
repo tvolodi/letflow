@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.PromotionConflict do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Conflict preflight check for one or more `process_key`s about to be
   promoted into a target tenant. Ported from R-Co's
   `src/definition/promotion_conflict.zig` (PRM-02), per

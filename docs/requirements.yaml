@@ -14475,7 +14475,7 @@ requirements:
   - id: REQ-248
     title: Apply the .zig provenance-marking convention to lib/letflow/definitions.ex and lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex (closes ISS-0424 part 3b-6)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

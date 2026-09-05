@@ -78,6 +78,7 @@ defmodule Letflow.Definitions do
 
   ## `search/2` -- full-text search over `name`/`description` (REQ-042)
 
+  PROVENANCE (historical, not current decision authority):
   `search/2` (REQ-042) adds definition full-text search over `process_definitions`'
   `name`/`description` columns via `ILIKE` ranking, ported from `store.zig`'s
   `Store.search()` per `src/design/definition.md`'s PD-10 section. **PD-10 states
@@ -903,6 +904,7 @@ defmodule Letflow.Definitions do
           | common_error()
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Rolls back `process_key` to `target_version`, per
   `lib/letflow/design/req038-promotion-rollback.md` (ported from R-Co's
   `src/definition/rollback.zig`, PRM-08).
@@ -922,6 +924,7 @@ defmodule Letflow.Definitions do
   2a). Three guard cases, checked in this order, each writing zero rows
   (INV-RB-5):
 
+    PROVENANCE (historical, not current decision authority):
     * no row currently `:active` for this `process_key` -> `{:error, :process_key_not_found}`
       (covers both "process_key never existed" and "every version already
       deprecated/archived" -- design §5 step 2b, a faithful port of `rollback.zig`'s own
@@ -1038,6 +1041,7 @@ defmodule Letflow.Definitions do
           | common_error()
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Ports `src/definition/assertion_rerun.zig`'s `applyPromotionAssertionRerun` (PRM-06/07)
   -- idempotent assertion replay against an ephemeral REQ-039 sandbox, keyed by
   `(review_id, plan_digest)`.
@@ -1294,6 +1298,7 @@ defmodule Letflow.Definitions do
   # ===================================================================================
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   One variable-schema registration input. `json_schema` is the ALREADY-DECODED
   document (a `map()` if well formed). Callers that hold JSON text -- the
   solution-pack install path, whose wire format carries `schema_content` as a
@@ -1364,6 +1369,7 @@ defmodule Letflow.Definitions do
        failure aborts and nothing is written:
        `{:error, {:not_well_formed, variable_key, path}}` or
        `{:error, {:schema_too_deep, variable_key}}`.
+    PROVENANCE (historical, not current decision authority):
     6. Insert via `Letflow.Engine.VariableSchema.changeset/2` -- REQ-109's
        changeset, not a second one -- with `prefix: opts[:prefix]` and
        `on_conflict: :nothing, conflict_target: [:definition_id,
@@ -2663,6 +2669,7 @@ defmodule Letflow.Definitions do
   # apply_promotion_assertion_rerun/6 helpers (design §6, §7)
   # -----------------------------------------------------------------------------------
 
+  # PROVENANCE (historical, not current decision authority):
   # Design §7.1 -- direct port of buildIdempotencyKey (assertion_rerun.zig:120-122).
   defp build_idempotency_key(review_id, plan_digest) do
     "promotion_rerun:" <> review_id <> ":" <> plan_digest
@@ -3008,6 +3015,7 @@ defmodule Letflow.Definitions do
     {pre_teardown_status, nil, true}
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Teardown (release) failed -- the recordTeardownFailure precedence rule
   # (assertion_rerun.zig:620-631, quoted in design §0/§7.5): a teardown failure
   # never demotes an already-failed run, and only ever demotes a passed run into
@@ -3240,6 +3248,7 @@ defmodule Letflow.Definitions do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Design §6.1 step f -- a direct port of stripDotPath's recursive
   # descend-then-remove-leaf-key algorithm (assertion_rerun.zig:589-601): parse as
   # JSON, for each dot-path descend into nested objects by "."-separated segments
@@ -3274,6 +3283,7 @@ defmodule Letflow.Definitions do
 
   defp strip_dot_path(value, _segments), do: value
 
+  # PROVENANCE (historical, not current decision authority):
   # Design §6.1 -- default assertion_evaluator when opts[:assertion_evaluator] is
   # omitted or nil: a placeholder evaluator, not a richer "real" one this
   # codebase has no engine to justify yet (behavior matches

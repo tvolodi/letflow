@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.Graph do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Graph structural validator — the pure, no-I/O validation core of a process
   definition's `graph` (`{"nodes": [...], "edges": [...]}` shape). Ported from
   `src/definition/graph.zig`'s `validateGraph()` (R-Co,
@@ -8,6 +9,7 @@ defmodule Letflow.Definitions.Graph do
   `lib/letflow/design/req028-graph-structural-validator.md` (the gate-approved
   design this module implements).
 
+  PROVENANCE (historical, not current decision authority):
   `Letflow.Definitions.Graph` *is* the graph struct being validated
   (`%Letflow.Definitions.Graph{nodes: [...], edges: [...]}`, mirroring
   `graph.zig`'s `DefinitionGraph`) and also hosts `validate_graph/1` plus the 8
@@ -72,6 +74,7 @@ defmodule Letflow.Definitions.Graph do
 
   defmodule Node do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     A single node in a `Letflow.Definitions.Graph` (ports `graph.zig`'s
     `GraphNode`). Plain struct, not an `Ecto.Schema` — see design doc §2.1.
     """
@@ -89,6 +92,7 @@ defmodule Letflow.Definitions.Graph do
 
   defmodule Edge do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     A single directed edge in a `Letflow.Definitions.Graph` (ports
     `graph.zig`'s `GraphEdge`). Plain struct, not an `Ecto.Schema` — see design
     doc §2.2. `condition`/`is_default` are carried on the struct but not read
@@ -109,6 +113,7 @@ defmodule Letflow.Definitions.Graph do
 
   defmodule Violation do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     One structural-validation failure returned by `validate_graph/1` (ports
     `graph.zig`'s `Violation`). `code` is a lowercase `snake_case` atom rather
     than `graph.zig`'s SCREAMING_SNAKE_CASE string — see design doc §2.3 for
@@ -577,6 +582,7 @@ defmodule Letflow.Definitions.Graph do
     violations
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # id -> first-occurrence 0-based index. On a repeated id, the first
   # occurrence wins and later occurrences are silently ignored here (matching
   # `graph.zig`'s `nodeIndex`'s linear-scan-returns-first-match behavior;

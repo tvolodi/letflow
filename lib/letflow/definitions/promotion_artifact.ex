@@ -13,6 +13,7 @@ defmodule Letflow.Definitions.PromotionArtifact do
   exact same struct `load_fixtures_only/3` already accepts — no field-for-field
   duplicate struct is introduced here.
 
+  PROVENANCE (historical, not current decision authority):
   `candidate_definitions` is passed through unread by
   `apply_promotion_assertion_rerun/6`'s own default assertion-replay path — it exists
   as a stable extension point for a future, custom `assertion_evaluator` (design §0(a),
@@ -25,6 +26,7 @@ defmodule Letflow.Definitions.PromotionArtifact do
 
   defmodule Assertion do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     One assertion to replay: its stable `id` (used both in `failing_assertion_ids` on a
     failure and as the extension point a custom `assertion_evaluator` keys off of) and
     its `payload` -- the placeholder "result" text the default evaluator echoes back

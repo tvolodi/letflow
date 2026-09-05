@@ -4,7 +4,7 @@
   "step": "02-code-designer",
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGNER",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "rework_count": 1,
   "created_at": "2026-09-05T17:22:14Z",
   "started_at": "2026-09-05T17:22:14Z",
@@ -28,5 +28,11 @@
       "The marker text, section 2(a) regex, and the three original unit shapes remain untouched"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "summary": "Corrected the sub-case (a) clause in lib/letflow/design/req237-zig-provenance-marking-convention.md that names the REQ-021 example. Verified ground truth first via docs/requirements.yaml:806-808 (id: REQ-021 at 806, the PROVENANCE marker at 807, title: at 808). Fixed only that clause; nothing else in the file was touched.",
+    "before": "...or above an `id:`/`title:` key pair whose value contains the citation (`docs/requirements.yaml:807-809`, REQ-021 — the marker precedes the `id:` line since `id:` and `title:` are the same requirement-entry unit).",
+    "after": "...or above an `id:`/`title:` key pair whose value contains the citation (REQ-021: `id:` at `docs/requirements.yaml:806`, marker at line 807, `title:` at line 808 — the marker precedes the `title:` line, since `id:` and `title:` are treated as the same requirement-entry unit for this shape's purpose).",
+    "diff_scope_verified": "git diff on the file shows only the pre-existing ISS-0510 amendment block (top-of-file summary + section 2 new shape + section 8 pointer, all already present/uncommitted before this rework) plus this one corrected clause inside sub-case (a). No other section, sub-case (b), the REQ-017 example, marker text, regex, or the three original unit shapes were modified."
+  }
 }

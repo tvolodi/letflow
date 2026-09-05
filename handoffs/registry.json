@@ -5024,7 +5024,7 @@
     {
       "run_id": "WF02-REQ260-20260905",
       "workflow_id": "WF-02",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "stage": "S6",
       "requirement_ids": [
         "REQ-260"
@@ -5045,8 +5045,10 @@
       "branch_name": "feature/WF02-REQ260-20260905",
       "queue_task_id": 498,
       "queue_agent_id": "letflow-ee-orch",
-      "last_known_step": "Step 00 COMPLETED PASS, commit pending (dispatch-time commit follows this registry write)",
-      "note": "Chunk 239f of REQ-239 replacement set -- docs/issues/*.yaml, ISS-0001 through ISS-0079 subset carrying a .zig reference (11 files). Sibling chunks 239a-e2,g,h,i are REQ-254/255/256/257/258/259/261/262/263."
+      "lock_released_at": "2026-09-05T22:17:21Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #1004 squash-merged to main (eaf17c13). Queue task 498 released done, REQ-260 done.",
+      "note": "Chunk 239f of REQ-239 replacement set -- docs/issues/*.yaml, ISS-0001 through ISS-0079 subset carrying a .zig reference (11 files). Sibling chunks 239a-e2,g,h,i are REQ-254/255/256/257/258/259/261/262/263. DOC-UPDATER applied 53 additive PROVENANCE markers across the 11 files (71 pre-existing .zig citations covered, zero deletions). REVIEWER independently re-derived the diff-based checks and PASSed. PR #1004's Backend gate failed twice on the identical already-tracked ISS-0340 flake (scoped_repo_opts/1 full-suite-ordering race), structurally unrelated to this docs-only diff; main's enforce_admins:true branch protection blocks a true admin bypass, so both failed jobs were rerun via `gh run rerun --failed` and passed clean on retry -- no code change, confirming the flake rather than a regression. Merged eaf17c1391af2878941cbb62ced00ce55ba22c6b."
     }
   ]
 }

@@ -4,7 +4,7 @@
   "step": "03-code-design-validator",
   "from_agent": "ORCH",
   "to_agent": "CODE-DESIGN-VALIDATOR",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "rework_count": 1,
   "created_at": "2026-09-05T17:30:00Z",
   "started_at": "2026-09-05T17:30:00Z",
@@ -28,5 +28,17 @@
       "No other part of the document changed beyond this one clause since the prior FAIL"
     ]
   },
-  "result": null
+  "result": {
+    "status": "PASS",
+    "verified": {
+      "requirements_yaml_806_808": {
+        "806": "  - id: REQ-021",
+        "807": "    # PROVENANCE (historical, not current decision authority):",
+        "808": "    title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)"
+      },
+      "design_doc_clause": "Sub-case (a) now reads: 'REQ-021: id: at docs/requirements.yaml:806, marker at line 807, title: at line 808 -- the marker precedes the title: line' -- matches the file exactly, with precise line numbers rather than a vague range.",
+      "diff_scope": "git show a5af4627 -- lib/letflow/design/req237-zig-provenance-marking-convention.md shows only the sub-case (a) REQ-021 clause text was rewritten (old text claimed marker precedes id: citing 807-809; new text correctly states marker precedes title: citing 806/807/808). No other hunk touches sub-case (b), the REQ-017 example, section 1, sections 4-8, or the top-of-file chunking amendment paragraph structure -- those are unchanged by this commit."
+    },
+    "findings": "All three acceptance criteria satisfied: (1) REQ-021 clause now accurately states marker precedes title:, verified directly against docs/requirements.yaml lines 806-808; (2) citation cites precise lines 806/807/808; (3) commit a5af4627 is scoped to only this one clause -- no other content changed."
+  }
 }

@@ -628,3 +628,23 @@ history:
       ORCH independently confirmed mix compile --warnings-as-errors, mix
       format --check-formatted, and a targeted mix test run (249 passed)
       before this status flip.
+  - req: REQ-242
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T09:45:00Z"
+    note: >
+      Retired parity-justification phrasing in
+      lib/letflow/repository/artifact.ex,
+      lib/letflow/sandbox_pool/fixture_loader.ex,
+      lib/letflow/webhooks/subscription.ex,
+      lib/mix/tasks/letflow.check.test.ex,
+      lib/mix/tasks/letflow.lint_handoffs.ex (closes ISS-0424 part 2e-3,
+      queue task 477, GH#924, PR #945, feature/WF02-REQ242-20260905).
+      REVIEWER passed the implementation
+      (handoffs/WF02-REQ242-20260905/step-02d-reviewer.json) and confirmed a
+      full-tree sanity check that ISS-0424 Part 2's goal is cleanly
+      achieved. ORCH independently confirmed mix compile
+      --warnings-as-errors, mix format --check-formatted, and a targeted
+      mix test run (223 passed) before this status flip. This closes
+      ISS-0424 Part 2 entirely (REQ-232, REQ-233, REQ-234, REQ-235,
+      REQ-240, REQ-241, REQ-242 all done).

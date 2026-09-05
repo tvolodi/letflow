@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   ever printed, and leading with "log line missing" would send a reader hunting a
   nonexistent parsing bug instead of the real compile error.
 
-  **Failure-mode parity** (design doc section 4): on a failing run, this task prints
+  **Full failure detail, either failure mode** (design doc section 4): on a failing run, this task prints
   the full content of every partition log that shows real test failures (a `Failed:`
   line) or a crash (no `Result:` line) before raising, so an agent reading the
   terminal/CI job log sees the actual failing test's detail without needing the

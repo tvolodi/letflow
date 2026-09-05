@@ -29,7 +29,7 @@ defmodule Letflow.Repository.Artifact do
   `content_json` column, no `byte_size`/`content_type` columns). Both R-Co
   migrations use `CREATE TABLE IF NOT EXISTS`, so which shape a given R-Co
   database ends up with depends on migration-application order and prior
-  database state -- a real defect in R-Co's own migration history, not a
+  database state -- a real defect in R-Co's migration history, not a
   design choice to reproduce. **Letflow ships exactly one shape: migration
   045's**, the one `src/repository/artifacts.zig` actually codes against --
   the shape this schema module defines. See

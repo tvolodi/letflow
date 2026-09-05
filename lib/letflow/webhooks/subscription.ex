@@ -24,8 +24,10 @@ defmodule Letflow.Webhooks.Subscription do
   current active signing key) and **`secret_key_id`** (the pinned version at
   creation time). The `secret_hash` DB column still exists (blanked to
   `NULL` by `20260830000004_add_secret_ref_to_webhook_subscriptions.exs`,
-  not dropped — matches R-Co's own `GBL-128` migration shape) but this
-  struct has **no field mapping to it** — `Ecto.Schema` tolerates an
+  not dropped — a blank-not-drop keeps the migration reversible without a
+  backfill on rollback and doesn't break any code still referencing the
+  column name, the same shape decision 0016 §F traces to `GBL-128`) but
+  this struct has **no field mapping to it** — `Ecto.Schema` tolerates an
   unmapped column silently. A hash was never usable as an HMAC signing key
   in the first place (0016 §F): HMAC-SHA256 requires the actual key bytes to
   compute a reproducible MAC, which a one-way hash cannot supply.

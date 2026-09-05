@@ -478,7 +478,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   # VALUES never affect depth tracking or key detection. The root object's
   # members sit at `depth == 1`; a depth-1 string immediately followed
   # (mod whitespace) by `:` is a KEY candidate -- this is a purely
-  # syntactic rule, not alternating-parity bookkeeping, so it cannot desync
+  # syntactic rule, not an odd/even alternation count, so it cannot desync
   # on an odd/malformed structure. Only a depth-1 KEY whose *decoded*
   # content equals exactly "status" is a candidate; a nested `result.status`
   # (or any `status` key at depth >= 2) is scanned over but never a

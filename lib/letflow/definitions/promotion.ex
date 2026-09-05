@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.Promotion do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   `promote_definition/3` — the version-pointer-move + event-append operation
   `Letflow.Definitions.PromotionReviewStore.mark_review_applied/2`'s *caller*
   invokes (some future orchestrator, REQ-040 or later, calls this function

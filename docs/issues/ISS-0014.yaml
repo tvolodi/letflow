@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ023-20260816
 discovered_at: 2026-08-16T16:05:57Z
 severity: MAJOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   REQ-026's description says to "Port src/event_store/store.zig's
   Store.read(), Store.readGlobal(), Store.pointInTime(), and Store.archive()
   (per src/design/event_store.md's respective sections: ... ES-07 for
@@ -14,6 +15,7 @@ description: >
 
   Store.archive() does not exist in R-Co any more.
 
+  PROVENANCE (historical, not current decision authority):
   Verified independently by ORCH by reading the actual source, not taken
   from CODE-DESIGNER's report. c:\Users\tvolo\dev\ai-dala\R-Co\src\event_store\store.zig
   (around lines 1288-1310) carries an explicit retirement block:

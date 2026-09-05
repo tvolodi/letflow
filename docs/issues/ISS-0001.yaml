@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ010
 discovered_at: 2026-08-14T21:16:52Z
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   docs/requirements.yaml REQ-010's description and acceptance_criteria[2] state R-Co's
   src/api/routes/ has 22 route modules. docs/migration/decisions/0001-web-framework.md's
   pre-existing Question section also states 22, and its own code-block listing is
@@ -42,6 +43,7 @@ github_issue: https://github.com/tvolodi/letflow/issues/1
 status: resolved
 resolved_at: 2026-08-15T19:03:12Z
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Fixed as recommended: docs/requirements.yaml REQ-010's description now says 24
   routes / 7 middleware modules (content_type added to the description's middleware
   list). docs/migration/decisions/0001-web-framework.md's Question section prose and

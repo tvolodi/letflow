@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ260-20260905/step01-doc-updater.json",
   "created_at": "2026-09-05T21:42:02Z",
   "started_at": "2026-09-05T21:42:02Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-05T21:51:05Z",
+  "status": "COMPLETED",
   "priority": "MEDIUM",
   "context": {
     "stage": "S6",
@@ -52,11 +52,97 @@
     ]
   },
   "result": {
-    "status": "PENDING",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "status": "PASS",
+    "summary": "Applied REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, both 2026-09-05 amendments) to exactly the 11 files named in REQ-260 (chunk 239f): docs/issues/ISS-{0001,0002,0005,0014,0045,0063,0075,0076,0077,0078,0079}.yaml. 53 PROVENANCE marker lines inserted total (ISS-0001: 2, ISS-0002: 7, ISS-0005: 1, ISS-0014: 2, ISS-0045: 2, ISS-0063: 3, ISS-0075: 3, ISS-0076: 3, ISS-0077: 3, ISS-0078: 8, ISS-0079: 19), covering all 71 pre-existing .zig citation lines (sum unchanged before/after per file). Every citation unit fell into one of the four documented shapes: (1) paragraph, applied at the sub-bullet/sub-numbered-item granularity for tight (non-blank-separated) lists inside a YAML folded (`>`) scalar -- description/resolution/fix_note/scoping_note/correction blocks are plain prose as far as YAML is concerned, so the marker is inserted as an ordinary prose line, no '#' needed (consistent with REQ-259's precedent of marking individual list items in a tight list as separate paragraph units); (4a) YAML comment-line above a single sequence item -- ISS-0002's own `title:` key (marker as a bare `#`-prefixed comment line between `id:` and `title:`, matching the REQ-021 precedent), and every `.zig`-carrying string item inside ISS-0078's and ISS-0079's `r_co_evidence:`/`letflow_evidence:` YAML sequences (13 items total across both files, each individually marked with its own `#`-prefixed comment line immediately above it, since a bare prose line above a quoted sequence item would corrupt YAML). No table shape and no commented-out '# ---' section-header block (shape 4b) occurred in this chunk. No citation-unit shape outside the four documented ones was found -- no new issue needs to be raised for CODE-DESIGNER.",
+    "verification": {
+      "pre_change_zig_counts": {
+        "ISS-0001.yaml": 4, "ISS-0002.yaml": 14, "ISS-0005.yaml": 1, "ISS-0014.yaml": 3,
+        "ISS-0045.yaml": 2, "ISS-0063.yaml": 4, "ISS-0075.yaml": 4, "ISS-0076.yaml": 6,
+        "ISS-0077.yaml": 3, "ISS-0078.yaml": 10, "ISS-0079.yaml": 20, "sum": 71,
+        "command": "grep -c '\\.zig' docs/issues/ISS-000{1,2,5}.yaml docs/issues/ISS-00{14,45,63,75,76,77,78,79}.yaml (per file, summed)"
+      },
+      "acceptance_criteria_evidence": [
+        {
+          "ac": "AC1 -- pre-change count of OLD (unmarked) .zig citations, quoted per file and summed",
+          "result": "ISS-0001:4, ISS-0002:14, ISS-0005:1, ISS-0014:3, ISS-0045:2, ISS-0063:4, ISS-0075:4, ISS-0076:6, ISS-0077:3, ISS-0078:10, ISS-0079:20 = 71 total, matching step-00's own pre-flight count exactly"
+        },
+        {
+          "ac": "AC2 -- post-change: zero unmarked citations remain; before/after counts equal",
+          "command": "grep -c '\\.zig' <each file> before vs after",
+          "result": "Every file's .zig count is unchanged before/after (4,14,1,3,2,4,4,6,3,10,20 both times) -- confirms zero citation lines deleted, only marker lines added. Every one of the 71 .zig lines is now preceded, within its own citation unit (paragraph or YAML sequence-item), by a 'PROVENANCE (historical, not current decision authority):' marker -- manually walked per file against the marker insertion points."
+        },
+        {
+          "ac": "AC2 -- git diff --numstat per file",
+          "command": "git diff --numstat -- docs/issues/ISS-0001.yaml ... ISS-0079.yaml",
+          "result": "2/0, 7/0, 1/0, 2/0, 2/0, 3/0, 3/0, 3/0, 3/0, 8/0, 19/0 -- all insertions, 0 deletions in every file. Sum of insertions (53) equals the marker count exactly (no extra blank-line insertions needed, unlike the markdown-table case in REQ-259 -- no tables exist in these YAML files)."
+        },
+        {
+          "ac": "AC2 -- greppability, both regex and plain-string forms",
+          "command": "grep -rlF 'PROVENANCE (historical, not current decision authority):' <11 files> | wc -l ; grep -rlE 'PROVENANCE \\(historical, not current decision authority\\):' <11 files> | wc -l",
+          "result": "11 and 11 -- both forms find markers in all 11 files"
+        },
+        {
+          "ac": "AC3 -- sampled diff, path text preserved verbatim (>=10 citations across >=5 files)",
+          "command": "git diff -- docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0063.yaml | grep -A2 '^+.*PROVENANCE'",
+          "result": "14 citation units sampled across the 5 named files (ISS-0001: 2, ISS-0002: 7, ISS-0005: 1, ISS-0014: 2, ISS-0063: 2 shown), well over the required 10/5 -- every hunk shows only a '+PROVENANCE...' line added, every path/citation text line survives as unchanged diff context, no '-' line anywhere. Also spot-checked the YAML-comment shapes: ISS-0002's title: key marker and ISS-0078/ISS-0079's r_co_evidence:/letflow_evidence: sequence-item markers, all showing only a '+# PROVENANCE...' comment line added above the untouched quoted string item."
+        },
+        {
+          "ac": "AC3 -- stronger proof, zero .zig-bearing lines touched on either side",
+          "command": "git diff -U0 -- <all 11 files> | grep -c '^[+-].*\\.zig'",
+          "result": "0 -- confirms no .zig-bearing line was added, removed, or altered anywhere across all 11 files; every citation line survives purely as diff context, since the marker text itself never contains the substring '.zig'"
+        },
+        {
+          "ac": "AC4 -- CLAUDE.md, README.md, docs/migration/README.md untouched",
+          "command": "git diff --stat -- CLAUDE.md README.md docs/migration/README.md",
+          "result": "empty output -- confirmed untouched. Pre-flight grep -n '\\.zig' on all three also returned zero matches (exit 1), confirming none carries a raw .zig citation to begin with, matching the requirement's own expectation."
+        },
+        {
+          "ac": "AC5 -- deliberate-divergence notes byte-identical before/after",
+          "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <all 11 files>, run before and after this requirement's edits",
+          "result": "0 matches before and 0 matches after across all 11 files (this chunk's files happen to contain none of these three phrases) -- both listings empty, therefore byte-identical (0/0)."
+        },
+        {
+          "ac": "no doubled/duplicate consecutive markers (idempotency)",
+          "command": "awk one-liner scanning each file for two consecutive 'PROVENANCE (historical' lines",
+          "result": "no output in any of the 11 files -- zero doubled markers"
+        },
+        {
+          "ac": "YAML still parses for all 11 files",
+          "command": "python -c \"import yaml; yaml.safe_load(open(p, encoding='utf-8'))\" per file",
+          "result": "all 11 files parsed successfully"
+        },
+        {
+          "ac": "only the 11 named files changed (plus this handoff)",
+          "command": "git diff --stat",
+          "result": "docs/issues/ISS-0001.yaml | 2 ++; ISS-0002.yaml | 7 +++++++; ISS-0005.yaml | 1 +; ISS-0014.yaml | 2 ++; ISS-0045.yaml | 2 ++; ISS-0063.yaml | 3 +++; ISS-0075.yaml | 3 +++; ISS-0076.yaml | 3 +++; ISS-0077.yaml | 3 +++; ISS-0078.yaml | 8 ++++++++; ISS-0079.yaml | 19 +++++++++++++++++++; plus handoffs/WF02-REQ260-20260905/step01-doc-updater.json | 2 +- (this file's own status claim) -- exactly the 11 named files, nothing else in docs/issues/ and no sibling-chunk file touched"
+        }
+      ]
+    },
+    "deviations_and_issues": [
+      "No citation-unit shape outside the four documented ones (single line, paragraph, table, YAML comment-line/sequence-item) was encountered anywhere in these 11 files -- no new issue is being raised for CODE-DESIGNER. Two of the four shapes were exercised here: paragraph (the large majority -- description/resolution/fix_note/scoping_note/correction folded-scalar prose, including sub-bullets and numbered sub-items inside a tight, non-blank-separated list, each treated as its own paragraph unit consistent with REQ-259's established precedent) and YAML comment-line/sequence-item shape 4(a) (ISS-0002's title: key, and 13 individual .zig-carrying string items inside ISS-0078's and ISS-0079's r_co_evidence:/letflow_evidence: sequences -- a variant of 4(a) not explicitly named in the design doc's own two named sub-cases (acceptance_criteria bullets, id:/title: pairs) but a mechanical extension of the identical principle: a bare prose line above a quoted YAML sequence item would corrupt the sequence, so a '#'-prefixed comment line is used instead, with no change to the marker text or regex. Flagging this as a MINOR note per the task's own instruction to record any judgement call, even though it required no new convention -- r_co_evidence:/letflow_evidence: sequence items are structurally identical to the already-documented acceptance_criteria-bullet case (both are '- \"...\"'-shaped YAML sequence items), so this is not considered a genuinely new shape warranting a CODE-DESIGNER issue.",
+      "No table shape (shape 3) and no commented-out '# ---' section-header block (shape 4b) occurred anywhere in this chunk's 11 files -- confirmed by inspection before applying. Only paragraph and 4(a) were exercised; expected variation across chunks, not a coverage gap in this run."
+    ],
+    "artifacts_out": [
+      "docs/issues/ISS-0001.yaml",
+      "docs/issues/ISS-0002.yaml",
+      "docs/issues/ISS-0005.yaml",
+      "docs/issues/ISS-0014.yaml",
+      "docs/issues/ISS-0045.yaml",
+      "docs/issues/ISS-0063.yaml",
+      "docs/issues/ISS-0075.yaml",
+      "docs/issues/ISS-0076.yaml",
+      "docs/issues/ISS-0077.yaml",
+      "docs/issues/ISS-0078.yaml",
+      "docs/issues/ISS-0079.yaml",
+      "handoffs/WF02-REQ260-20260905/step01-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "r_co_evidence:/letflow_evidence: YAML sequences (ISS-0078, ISS-0079) are structurally identical to the design doc's already-documented acceptance_criteria-bullet YAML sequence-item case (shape 4a), but were not literally named in the design doc's text (which names acceptance_criteria bullets and id:/title: pairs as its two 4(a) examples). Applied the closest-matching existing shape (4a, one '#'-prefixed comment line per sequence item) rather than inventing a new convention. Not filed as a new CODE-DESIGNER issue since it required no new marker text, regex, or placement rule -- it is the same rule applied to a same-shaped YAML construct with a different key name. Recorded here for visibility per the task's own instruction to flag any judgement call."
+      }
+    ],
+    "next_action": "Route to REVIEWER (Step 2d)"
   },
   "rework_count": 0,
   "max_rework": 3

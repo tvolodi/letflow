@@ -23,6 +23,7 @@ description: >
   is REQ-049 design doc sec 3.1's stated rule ("new_keys are NEVER looked up
   in variable_validations at all") and is faithfully implemented.
 
+  PROVENANCE (historical, not current decision authority):
   R-Co does NOT do this. `mergeVariables`' Phase 1
   (R-Co/src/engine/instance.zig:2389-2430) iterates EVERY key of
   `output_variables` via `var it = output_variables.iterator()` and checks
@@ -63,6 +64,7 @@ affected_files:
 status: resolved
 resolved_at: "2026-08-20T12:30:00Z"
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Decision made and both findings fixed in
   docs/migration/decisions/0007-variable-merge-validates-new-keys.md:
   adopted R-Co's semantic (validate every incoming key, new or overwrite
@@ -130,6 +132,7 @@ scoping_note: >
   acceptance criterion it likely warrants a decision record under
   docs/migration/decisions/.
 
+  PROVENANCE (historical, not current decision authority):
   Whoever picks this up: verify BOTH sides directly rather than trusting
   this note. R-Co instance.zig:2389-2430 (Phase 1 iteration and the
   unconditional schema_map.get) and :2432 (the separate collision check);

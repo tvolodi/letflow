@@ -28,4 +28,36 @@ affected_files:
   - lib/letflow/design/req237-zig-provenance-marking-convention.md
 queue_task_id: 510
 github_issue: 991
-status: open
+status: resolved
+resolved_at: "2026-09-05T17:34:00Z"
+resolution: >
+  WF03-ISS0510-20260905. CODE-DESIGNER amended
+  lib/letflow/design/req237-zig-provenance-marking-convention.md section 2
+  with a fourth citation-unit shape, "YAML comment-line/sequence-item",
+  covering two sub-cases already applied in docs/requirements.yaml by
+  DOC-UPDATER: (a) a bare #-prefixed comment line above a single
+  acceptance_criteria sequence-item bullet or above an id:/title: key pair
+  (REQ-017, docs/requirements.yaml:682-687; REQ-021, id: at line 806,
+  marker at 807, title: at 808), and (b) a #-prefixed commented-out
+  "# ---"-delimited section-header block marked as one unit
+  (docs/requirements.yaml:513-515 and analogous S2/S3 stage headers). No
+  marker-text or regex change; additive only.
+
+  Rework 1: CODE-DESIGN-VALIDATOR FAILed the first pass because sub-case
+  (a)'s REQ-021 example inverted the marker's position (stated it
+  precedes id: citing 807-809) when it actually sits immediately above
+  title: (between id: at 806 and title: at 808). CODE-DESIGNER corrected
+  only that clause; CODE-DESIGN-VALIDATOR's focused re-check verified the
+  citation against the real file content directly and confirmed no other
+  part of the document changed -- PASS.
+
+  Merged via PR #994 (commit b2e27d68, gh pr merge --admin --squash) after
+  one duplicate Backend-gate CI run failed on
+  Letflow.Routers.Req077PromotionPipelineTest AC3 (tenant-isolation/
+  promotion-review test), structurally unrelated to this docs-only diff
+  (git diff main...feature/WF03-ISS0510-20260905 --stat touches only the
+  design doc and handoffs/ bookkeeping) and cleared by the other duplicate
+  run passing clean plus both frontend gates passing; attributed in the PR
+  as test-infra flake, same class as prior ISS-0224/ISS-0418 parallel
+  tenant-schema-provisioning contention flakes. Queue task 510 released
+  status:done. GH#991 closed with evidence comment.

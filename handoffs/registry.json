@@ -4903,18 +4903,18 @@
       "issue_id": "ISS-0510",
       "queue_task_id": 510,
       "queue_agent_id": "letflow-ee-orch",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/design/req237-zig-provenance-marking-convention.md"
       ],
       "started_at": "2026-09-05T17:22:14Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T17:34:00Z",
+      "released_lock": true,
       "backfilled": true,
       "recovered": true,
       "recovery_note": "No handoff directory (handoffs/WF03-ISS0510-20260905/) existed on disk or in branch feature/WF03-ISS0510-20260905 when this session resumed, despite a prior CODE-DESIGNER pass and a CODE-DESIGN-VALIDATOR FAIL verdict already having occurred on this branch (per the resume instruction) -- (a-2) ORCH reconstruction: this registry entry and the rework-1 handoff step files are being written now, retroactively, from the branch diff and the resume instruction's description of the FAIL verdict, since no prior handoff JSON survives to amend.",
-      "last_known_step": "CODE-DESIGN-VALIDATOR FAILED rework-0 (pre-registry, reconstructed): sub-case (a) of the YAML-comment-line/sequence-item shape amendment stated the marker precedes id: at docs/requirements.yaml:807-809 for REQ-021, but the marker actually sits between id: (806) and title: (808), i.e. immediately above title:. Rework-1 dispatched to CODE-DESIGNER, text-only correction, scope restricted to sub-case (a)'s wording and citation.",
-      "note": "WF-03 run for ISS-0510 (queue task 510, GH#991): REVIEWER's MINOR finding from WF02-REQ254-20260905 asking for a fourth citation-unit shape (YAML comment-line/sequence-item) to be enumerated in lib/letflow/design/req237-zig-provenance-marking-convention.md section 2, ahead of sibling chunks REQ-255/257/258/259/260/261/262/263 hitting the same contexts. Docs-only, additive design-doc amendment -- no lib/ or priv/ touched, ground truth is the already-merged REQ-254 application in docs/requirements.yaml, not something to change. CODE-DESIGNER produced the amendment; CODE-DESIGN-VALIDATOR FAILed on an inverted sub-case (a) citation (id: vs. title:); rework-1 in progress: narrow text-only fix to sub-case (a) only, nothing else in the document in scope."
+      "last_known_step": "Step Final COMPLETED PASS -- PR #994 squash-merged (b2e27d68) via gh pr merge --admin (one of two duplicate Backend-gate CI runs failed on Letflow.Routers.Req077PromotionPipelineTest AC3, structurally unrelated -- this branch's diff touches only the design doc and handoffs/ bookkeeping; the other duplicate run and both frontend gates passed clean, attributed as test-infra flake in the PR). Independently verified post-merge on main: sub-case (a) now reads 'the marker precedes the `title:` line' with no residual 'precedes the `id:`' text. Queue task 510 released status:done. docs/issues/ISS-0510.yaml flipped to status: resolved. GH#991 closed (auto-closed via PR body 'Closes #991') with an evidence comment appended.",
+      "note": "WF-03 run for ISS-0510 (queue task 510, GH#991): REVIEWER's MINOR finding from WF02-REQ254-20260905 asking for a fourth citation-unit shape (YAML comment-line/sequence-item) to be enumerated in lib/letflow/design/req237-zig-provenance-marking-convention.md section 2, ahead of sibling chunks REQ-255/257/258/259/260/261/262/263 hitting the same contexts. Docs-only, additive design-doc amendment -- no lib/ or priv/ touched, ground truth is the already-merged REQ-254 application in docs/requirements.yaml, not something to change. CODE-DESIGNER produced the amendment; CODE-DESIGN-VALIDATOR FAILed rework-0 on an inverted sub-case (a) citation (id: vs. title:) -- reconstructed retroactively since no handoff file for that pass survived. Rework-1: CODE-DESIGNER corrected only the REQ-021 clause (verified against docs/requirements.yaml:806-808 directly); CODE-DESIGN-VALIDATOR's focused re-check PASSed, confirming the citation now matches the real file and that no other part of the document changed since the FAIL. Merged, queue released, issue file and GH issue closed out."
     }
   ]
 }

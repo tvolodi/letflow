@@ -50,6 +50,7 @@ defmodule Letflow.Engine.Wasm.HostApi do
 
   ## `uuid` has no Lua counterpart (AC5)
 
+  PROVENANCE (historical, not current decision authority):
   `uuid` does not appear in `platform.ex`'s 8-row `@capability_matrix` — R-Co's
   `src/wasm/host_api/uuid.zig` had no Lua-side sibling either, an asymmetry that
   predates Letflow's migration. This requirement implements `uuid` as a **documented

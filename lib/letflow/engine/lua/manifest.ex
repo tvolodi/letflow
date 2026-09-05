@@ -79,6 +79,7 @@ defmodule Letflow.Engine.Lua.Manifest do
 
   ## R-Co field carried over vs. dropped (AC6)
 
+  PROVENANCE (historical, not current decision authority):
   `R-Co/src/lua/manifest.zig` is **not present in this checkout** — confirmed by
   `find` returning no result for the file or for any `R-Co` directory at all, the
   same pattern already hit for `R-Co/src/lua/capabilities.zig` and

@@ -13,6 +13,7 @@ defmodule Letflow.Engine.Lua.Platform do
 
   ## `platform.now` is ungated by design — not an omission
 
+  PROVENANCE (historical, not current decision authority):
   Per decision 0014 / R-Co's `src/lua/host_api/mod.zig` capability matrix: `now` is "a
   pure time read with no state reach," and that matrix entry is "a POSITIVE design
   statement, not an omission ... A test that expects a gate on `now` or `fail` is reading

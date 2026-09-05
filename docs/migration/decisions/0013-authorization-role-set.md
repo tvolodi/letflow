@@ -31,6 +31,7 @@ matrix or from the SPA's nav gating.
 This looked like a design question and turned out to be a defect. The evidence
 decides it:
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's own backend defines the role.** `src/api/authorization.zig` declares
 `PROCESS_OPERATOR` in its `Role` enum, and the identifier appears **48 times**
 across `src/` — including a full permission arm (`.PROCESS_OPERATOR => switch
@@ -44,6 +45,7 @@ backend is built to *receive* the role from a token.
 of a 281-line module. The five-role set is not an invention to be trimmed — it
 is the thing the port was gated on.
 
+PROVENANCE (historical, not current decision authority):
 **The realm file is the odd one out, and it is a dev fixture.**
 `bpm-default.json` is 175 lines of local bootstrap data, imported by
 `start-dev --import-realm`. It is not a specification of the platform's role

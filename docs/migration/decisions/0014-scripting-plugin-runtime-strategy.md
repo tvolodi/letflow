@@ -24,6 +24,7 @@ and is not reopened here.
 
 ## Evidence — R-Co source, verified directly against the live tree
 
+PROVENANCE (historical, not current decision authority):
 Counted with `find … -name '*.zig' -exec wc -l {} +` against
 `c:\Users\tvolo\dev\ai-dala\R-Co\` on 2026-08-23:
 
@@ -41,6 +42,7 @@ of each half actually exists.
 
 ### The Lua half is real code
 
+PROVENANCE (historical, not current decision authority):
 `src/lua/luajit_bindings.zig` (318 lines) binds a real, statically-linked LuaJIT 2.1,
 vendored at `vendor/luajit/` (`COPYRIGHT`, `build.zig`, `dynasm/`, `src/` all present)
 and built through the upstream three-stage bootstrap (minilua → dynasm → buildvm). Its
@@ -58,10 +60,12 @@ LuaJIT is linked and executes Lua."
 
 Two hard-won invariant sets live in that half and must survive any port:
 
+PROVENANCE (historical, not current decision authority):
 - `src/lua/stdlib.zig` (143 lines) — **SBX-1: prune strictly AFTER open** ("open base
   FIRST, prune AFTER"; line 111 warns that reordering breaks it). Never opened: `io`,
   `os`, `package`, `debug`, `jit`, `ffi`, `bit`, `coroutine`. Line 57 states `ffi` is
   "a COMPLETE sandbox escape (arbitrary memory …)".
+PROVENANCE (historical, not current decision authority):
 - `src/lua/instruction_limiter.zig` (126 lines) — **INV-2**: the registry is not
   reachable from script code ("Lua source syntax has no way to name a pseudo-index").
   **INV-4**: one combined `LUA_MASKCOUNT` hook (line 72,
@@ -71,11 +75,13 @@ Two hard-won invariant sets live in that half and must survive any port:
 
 ### The WASM half is entirely stubs
 
+PROVENANCE (historical, not current decision authority):
 `src/wasm/wasmtime_bindings.zig` (250 lines) header:
 
 > NOTE: Actual C FFI integration deferred to Stage 10.
 > For now, provide type stubs to allow module testing and compilation.
 
+PROVENANCE (historical, not current decision authority):
 `Engine`, `Store`, `Instance`, `Module`, `Func`, `Trap`, `Memory` are all declared
 `extern struct {}` — empty. Line 54: "Stub functions (will be replaced with real C FFI
 in Stage 10)". Line 58: `return null; // Stub: actual implementation in Stage 10`.
@@ -85,6 +91,7 @@ in Stage 10)". Line 58: `return null; // Stub: actual implementation in Stage 10
 `src/wasm/executor.zig:117`, and four `host_api/` placeholders
 (`call_service.zig`, `read_variable.zig`, `write_variable.zig`, `uuid.zig`).
 
+PROVENANCE (historical, not current decision authority):
 **There is no working Wasmtime integration in R-Co.** This is load-bearing and must not
 be papered over: the WASM half of S5 is a **specification port** from
 `R-Co/docs/addon-1/02-functional-requirements.md` (WASM-01..14, Stage 9), not a code
@@ -196,6 +203,7 @@ BEAM scheduler thread** unless it is a dirty NIF or yields cooperatively. Both h
 are strictly worse for code paths that execute **tenant-supplied, adversarial-by-default
 input** — which is exactly what a workflow script is.
 
+PROVENANCE (historical, not current decision authority):
 For **Lua**, `tv-labs/lua` removes the hazard class entirely rather than mitigating it.
 There is no native code: a runaway script is BEAM bytecode executing in an ordinary
 BEAM process, killable by ordinary BEAM means. Note precisely what this replaces.
@@ -375,6 +383,7 @@ Lua half is better served without a NIF.
 
 ## Requirements NOT satisfiable as literally worded
 
+PROVENANCE (historical, not current decision authority):
 S5's expansion **must restate these rather than claim them met.** Silently marking a
 requirement RELEASED against a runtime that does not satisfy its literal text is exactly
 the failure mode `luajit_bindings.zig`'s header records — LUA-01..16 sat "marked

@@ -18,6 +18,7 @@ Resolves: ISS-0077 / GH#300.
 time — is inserted unconditionally, with no schema check, even when a schema is
 registered for it and the value violates it.
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `mergeVariables` (`instance.zig:2389-2430`) does not do this: Phase 1 iterates
 every key of `output_variables` and checks `schema_map.get(key)` unconditionally, with no
 comparison against `current_vars` at all. Collision detection (`current_vars.get(key)` at
@@ -37,6 +38,7 @@ new-key inserts still produce no event.
 
 ## Reasoning
 
+PROVENANCE (historical, not current decision authority):
 **The current behavior was never a considered choice.** ISS-0077's own provenance trace
 (and this record's own re-verification, both source trees read directly — R-Co
 `instance.zig:2389-2430`/`:2432`, Letflow `variable_merge.ex:196-207` as it stood before

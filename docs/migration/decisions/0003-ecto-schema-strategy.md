@@ -119,6 +119,7 @@ function Decision B implies (see below).
 `adp-03-tenant-context-resolution-api.md`, `adp-04-user-tenant-binding.md`,
 `adp-04a-external-identity-linkage-user.md`, `adp-04b-tenant-realm-binding.md`.
 
+PROVENANCE (historical, not current decision authority):
 All six describe the same additive `tenant_id`-column pattern applied to different
 table groups: a `tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'`
 column, backfilled onto existing tables with a reserved default-tenant UUID, made a
@@ -155,6 +156,7 @@ implementation diverged from what the adp-0x docs describe:
 - `GBL-112_tnt01_drop_legacy_public_business_tables.sql` drops 19 named legacy
   `public`-schema business tables outright (guarded by a `migration_window_active`
   flag for production cutover sequencing).
+PROVENANCE (historical, not current decision authority):
 - `src/db/migrations.zig`'s `runForSchema` replays the migration set once per
   registered tenant schema under a `search_path` of `<schema>,public` — the
   mechanism that actually executes schema-per-tenant, confirmed directly from

@@ -9,6 +9,19 @@ below) only chunked `docs/` and `docs/requirements.yaml` — it never produced a
 `lib/letflow/design/`'s 100 `.zig`-carrying files. Nothing else in this document was
 re-litigated or reopened; REQ-237 itself remains `status: done`.
 
+**AMENDMENT 2026-09-05 (ISS-0510):** added a fourth citation-unit shape to §2 —
+"YAML comment-line/sequence-item" — covering two patterns DOC-UPDATER already applied in
+`docs/requirements.yaml` (a `#`-prefixed comment line above an `acceptance_criteria` bullet
+or `id:`/`title:` key, and a `#`-prefixed commented-out `# ---` section-header block).
+REVIEWER (gating WF02-REQ254-20260905) found this shape missing from §2's enumeration,
+though DOC-UPDATER's handling of it — identical marker text, `#`-prefixed only because YAML
+syntax requires it — was judged a defensible in-scope mechanical extension, not a second
+convention. This amendment records that shape explicitly so REQ-255/257/258/259/260/261/262/263
+(sibling pending `docs/requirements.yaml` chunks) don't each have to re-derive the same
+judgment call. The marker text, §2(a)'s regex, and the original three unit shapes
+(line/paragraph/table) are unchanged. §3 gets a one-line pointer to this amendment; nothing
+else in this document was re-litigated or reopened; REQ-237 itself remains `status: done`.
+
 ---
 
 # Design: REQ-237 — `.zig` provenance-citation marking convention (closes ISS-0424 part 3a)
@@ -115,6 +128,43 @@ without reading for meaning:
   multiple rows each cite a distinct `.zig` file. Re-inserting per-row would corrupt Markdown
   table syntax (a plain text line cannot sit inside a table without becoming a malformed row)
   and is unnecessary: the table as a whole is one citation unit for this purpose.
+- **YAML comment-line/sequence-item** (added 2026-09-05, ISS-0510 — a fourth shape, found
+  already applied in `docs/requirements.yaml` by REQ-239/DOC-UPDATER, not identified in the
+  original §1 survey because §1's survey did not separately enumerate YAML-syntax
+  constraints): when the citation unit lives inside a YAML file (`docs/requirements.yaml`)
+  and the enclosing context is itself a YAML comment, or a plain scalar/sequence item that
+  cannot take a bare non-comment text line immediately above it without corrupting YAML
+  syntax (inserting an unprefixed prose line directly above a `- "..."` sequence item, or
+  above an `id:`/`title:` key, would itself parse as an invalid or unintended YAML node), the
+  marker is inserted as a `# `-prefixed YAML comment line, containing the identical marker
+  text verbatim, immediately above the unit. Two sub-cases, both already applied in the
+  current tree:
+  - **(a) Sequence item or key line:** a bare `#`-prefixed comment line immediately above a
+    single `acceptance_criteria` sequence-item bullet (`docs/requirements.yaml:682-687`,
+    REQ-017 — three separate acceptance-criteria bullets, each independently marked
+    immediately above the specific bullet whose text carries the citation, not above the
+    whole `acceptance_criteria:` list, since each bullet is itself a single-citation-line
+    unit per the first bullet above) or above an `id:`/`title:` key pair whose value contains
+    the citation (REQ-021: `id:` at `docs/requirements.yaml:806`, marker at line 807, `title:`
+    at line 808 — the marker precedes the `title:` line, since `id:` and `title:` are treated
+    as the same requirement-entry unit for this shape's purpose).
+  - **(b) Commented-out section-header block:** when the citation is itself already inside a
+    commented-out `# ---`-delimited section-header block (a run of consecutive `#`-prefixed
+    lines forming one structural header, not prose), the marker precedes the whole block as
+    one unit — same "smallest enclosing unit" principle the table bullet above uses, not one
+    marker per header line (`docs/requirements.yaml:513-515`, and recurring identically at
+    the analogous S2/S3 stage-header blocks).
+  This sub-case is purely a placement rule, not a second marker: the marker text is
+  unchanged, and the `# ` prefix is YAML comment syntax required by the surrounding file
+  format to keep the document parseable — it is not part of the marker string itself. Because
+  the marker text itself contains no `#`, §2(a)'s regex and the plain-string `grep -F` form
+  both already match this shape unmodified: `grep -F 'PROVENANCE (historical, not current
+  decision authority):' docs/requirements.yaml` finds the `#`-prefixed instances exactly like
+  any unprefixed one, since `grep` matches the string anywhere in the line regardless of
+  leading characters. No regex change, no marker-text change, and no reinterpretation of the
+  three unit shapes above — this is an additive fourth shape only, needed because
+  `docs/requirements.yaml` is the one citation-carrying file in this codebase written in a
+  syntax (YAML) where a bare prose line cannot always be inserted directly.
 - **De-duplication:** if a marker line already immediately precedes a unit (verifiable by a
   one-line `grep -B1` check per unit), no second marker is inserted — this makes the rule
   idempotent, so REQ-238/239 (or any future audit) can re-run it safely.
@@ -181,7 +231,10 @@ branches) was also a legitimate design and is not obviously worse.
   `docs/requirements.yaml` phrasings (`SOURCE:`, `CONTRACT SOURCE:`) and spot-checked against
   `docs/migration/stage-5-scripting-plugins.md` (one of the 15 `docs/migration/*.md` files
   carrying a `.zig` reference, confirmed present via this session's own `grep -rl` in §1) —
-  the same three unit shapes (line/paragraph/table) recur there, no fourth shape was found.
+  the same three unit shapes (line/paragraph/table) recur there. (Amended 2026-09-05,
+  ISS-0510: a fourth shape — the YAML comment-line/sequence-item placement in §2 — was later
+  found needed specifically inside `docs/requirements.yaml`'s YAML syntax, where a bare prose
+  line cannot always be inserted directly; it does not add a second marker or regex, see §2.)
 
 **No second marker is needed.** This design does not invoke the "or explicitly says why they
 need different markers if unifying is not possible" fallback the requirement's own text

@@ -1701,8 +1701,16 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 32
+    entries: 34
     note: >
+      Recounted to 34 by WF02-REQ253-20260905's fourth Step Final rebase,
+      which found main further advanced by WF02-REQ256-20260905's own
+      Step Final bookkeeping (REQ-256 started+done, 2 appends) -- no
+      conflict on requirement_status.v9.yaml itself, it auto-merged
+      cleanly. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 34 on-disk entries, rather
+      than carrying forward either side's independently-computed 32/33,
+      per this note's own recount-every-time rule.
       Recounted to 32 by WF02-REQ253-20260905's third Step Final rebase,
       which found main further advanced by WF02-REQ254-20260905's own
       Step Final closeout (PR #990, its own REQ-254 done-event append) --
@@ -1743,6 +1751,12 @@ volumes:
       rebase conflict on this file (superseded above; this run's own
       pre-rebase count did not yet know of the concurrently-landed
       REQ-245 done-event).
+      Incremented to 33 by ORCH's own REQ-256 started+done event pair
+      (WF02-REQ256-20260905, Step Final bookkeeping) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 33 on-disk entries, no
+      rebase conflict on this file (queue task 494, chunk 239c, closes
+      ISS-0424 part 3c-3). (Superseded by the recount to 34 at the top of
+      this note.)
       Incremented to 31 by ORCH's own REQ-254 done-event append
       (WF02-REQ254-20260905, Step Final) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 31 on-disk entries, no

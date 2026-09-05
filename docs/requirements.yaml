@@ -4571,12 +4571,14 @@ requirements:
     depends_on: [REQ-072, REQ-030, REQ-109]
 
   - id: REQ-079
+    # PROVENANCE (historical, not current decision authority):
     title: Instance routes 1/2 -- write path (instances.zig handleCreate/handleCancel/handleReconstruct)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 146  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the write half of src/api/routes/instances.zig (1,535 lines / 8
       handlers -- split two ways with REQ-080 along R-Co's own read/write
       seam): handleCreate (L55, EE-01, POST /api/v1/instances), handleCancel
@@ -4611,12 +4613,14 @@ requirements:
     depends_on: [REQ-072]
 
   - id: REQ-080
+    # PROVENANCE (historical, not current decision authority):
     title: Instance routes 2/2 -- read path (instances.zig handleGetById/List/History/Timeline/GetPins)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 147  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the read half of src/api/routes/instances.zig: handleGetById
       (L422), handleList (L586), handleHistory (L839), handleTimeline (L1067)
       and handleGetPins (L1265). Five handlers over 1,113 of the file's 1,535
@@ -4646,12 +4650,14 @@ requirements:
     depends_on: [REQ-079]
 
   - id: REQ-081
+    # PROVENANCE (historical, not current decision authority):
     title: Definition routes 1/2 -- read path (definitions.zig handleGetById/List/GetActiveByName/Search/Export)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 148  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the read half of src/api/routes/definitions.zig (1,276 lines / 13
       handlers -- split two ways with REQ-082): handleGetById (L71), handleList
       (L98), handleGetActiveByName (L182), handleSearch (L210) and handleExport
@@ -4684,12 +4690,14 @@ requirements:
     depends_on: [REQ-072]
 
   - id: REQ-082
+    # PROVENANCE (historical, not current decision authority):
     title: Definition routes 2/2 -- write and lifecycle path (definitions.zig Create/Put/Patch/Delete/Activate/Deprecate/Archive/Import)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 149  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the write half of src/api/routes/definitions.zig: handleCreate
       (L309), handlePut (L362), handlePatch (L458), handleDelete (L546),
       handleActivate (L633), handleDeprecate (L721), handleArchive (L759) and
@@ -4795,12 +4803,14 @@ requirements:
     depends_on: [REQ-081, REQ-109]
 
   - id: REQ-083
+    # PROVENANCE (historical, not current decision authority):
     title: Task routes 1/2 -- read path (tasks.zig handleList/handleGetById/handleInbox)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 150  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the read half of src/api/routes/tasks.zig (1,085 lines / 7 handlers
       -- split two ways with REQ-085): handleList (L89, EE-03/API-04, cursor
       paginated), handleGetById (L290) and handleInbox (L960).
@@ -4828,6 +4838,7 @@ requirements:
       - "a task id belonging to another tenant returns the same response as a nonexistent id, demonstrated by a test (INV-5)"
       - "listing tasks as a tenant A caller returns no tenant B task when both tenants have tasks on identically-named nodes, demonstrated by a test seeding both (INV-1)"
       - "the serialised task response contains an explicit field allowlist and does not encode the Ecto struct wholesale, demonstrated by a test asserting the full key set (INV-2)"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc states which src/tasks/store.zig query operations were ported and which were not, rather than describing the boundary approximately"
       - "a caller without TasksRead receives 403 on all three endpoints"
     depends_on: [REQ-072]
@@ -4839,6 +4850,7 @@ requirements:
     stage: S4
     impl_order: 151  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Write a decision record settling stage-4-api-surface.md's OQ-2, which
       that document explicitly flags as "Flag to REVIEWER before building; do
       not decide it inside a route requirement." Deliverable shape follows
@@ -4875,6 +4887,7 @@ requirements:
     acceptance_criteria:
       - "a numbered record exists under docs/migration/decisions/ selecting exactly one of hand-build, open_api_spex, or defer-to-S6, stated as an explicit decision sentence rather than a pros-and-cons list"
       - "the record states how the choice depends on REQ-065's framework resolution, and if open_api_spex is selected it explicitly reconciles that with whichever position REQ-065's addendum left standing"
+      # PROVENANCE (historical, not current decision authority):
       - "the record names the actual R-Co source it reasons against with correct counts (7 modules, 992 lines under src/api/openapi/, plus routes/openapi.zig at 158) and notes the correction to stage-4-api-surface.md's table"
       - "the record addresses spec-drift risk explicitly, naming what keeps the spec in sync with the routes under the selected option"
       - "the record names which stage and which future requirement owns the execution, so the selected option has an owner rather than being decided and dropped"
@@ -4882,12 +4895,14 @@ requirements:
     depends_on: [REQ-065]
 
   - id: REQ-085
+    # PROVENANCE (historical, not current decision authority):
     title: Task routes 2/2 -- write path (tasks.zig handleComplete/handleClaim/handleAssign/handleReassign)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 152  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the write half of src/api/routes/tasks.zig: handleComplete (L341,
       EE-04), handleClaim (L551), handleAssign (L628) and handleReassign
       (L736). Four state-changing handlers over REQ-047/048's task domain
@@ -4938,6 +4953,7 @@ requirements:
     # than backfilled, since a completed requirement has no remaining claim
     # to make; there is nothing for get_next_task to hand out.
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port R-Co's `variable_schemas` table and the per-key lookup that feeds
       it into REQ-049's merge, so that REQ-049's schema-rejection branch --
       built, tested in isolation, and currently UNREACHABLE through the real
@@ -5178,6 +5194,7 @@ requirements:
       - "a variable_schemas row belonging to tenant A has zero effect on a completion running in tenant B: the identical (definition_id, variable_key, violating value) completion that is REJECTED in tenant A SUCCEEDS in tenant B, demonstrated with two provisioned tenant schemas (INV-1)"
       - "a lookup invoked with a missing, nil or empty prefix fails closed with a distinct, pattern-matchable error and issues no query, demonstrated by a test rather than argued"
       - "mix.exs gains no new JSON Schema dependency and grep shows the validation calling Letflow.EventStore.Registry.JsonSchema.validate/2, with lib/letflow/engine.ex's moduledoc stating why that rather than REQ-024's validate_payload/3, and stating that req049-variable-merge.md sections 7.1 and 7.2 are superseded (wrapper shape; :unknown_event_type row) and that section 13.2's open question is CLOSED because the pure delegate has no tenant-resolution error surface"
+      # PROVENANCE (historical, not current decision authority):
       - "lib/letflow/engine/variable_merge.ex's moduledoc is corrected IN PLACE on three counts, each verified by reading THAT file directly rather than inferring it from lib/letflow/engine.ex: (a) the paragraph at lines 24-29, which today asserts the caller resolves outcomes by calling Letflow.EventStore.Registry.validate_payload/3, cites REQ-109's rationale instead and no longer names validate_payload/3 as the caller's mechanism; (b) ISS-0075 claim 1 -- the Dependency ordering section (lines 31-46) no longer asserts REQ-061 is status pending and unimplemented, restating it in the past tense as the condition that held at implementation time, with the surrounding does-not-depend-on-REQ-061 rationale preserved rather than deleted; (c) ISS-0075 claim 2 -- the lines 18-20 caveat calling design section 3.2 an unverified reconstruction because no R-Co source tree is reachable is REPLACED, not merely deleted, by a positive citation of R-Co src/engine/instance.zig:2300-2304's ISS-202 two-phase merge doc comment confirming the reconstruction was correct. Landing (b) and (c) closes ISS-0075 / GH#296"
       - "the new lib/letflow/engine/variable_schema.ex's Letflow.Engine.VariableSchema moduledoc carries four things, each verified by reading that file: all three R-Co 'schema' concepts (tasks.form_schema, variable_schemas, form_schema_registry) with which is in scope; the dedicated-table resolution of req049-variable-merge.md section 7.3; REQ-078 and REQ-082 named as the carriers of the deferred registration path, with the note that neither currently mentions it; and promotion_plan.ex plus pin_resolver.ex named as the two remaining unwired consumers"
       - "lib/letflow/engine.ex's moduledoc states that the former hardcoded nil at the merge call site was design-sanctioned by req049-variable-merge.md section 7.3 rather than a defect, and records the REQ-059 pinning-vs-live-read tension as an open question for REVIEWER together with the reason it is latent (pin_resolver.ex's default lookup carries json_schema: nil) -- both verified by reading that file"
@@ -5194,6 +5211,7 @@ requirements:
     # (superseding the invented 154, which addressed an unrelated live task
     # and was never returned by register_task). Mirrored to GH#315.
     description: >
+      PROVENANCE (historical, not current decision authority):
       REQ-059 (PIN-01..04) and REQ-060 (PIN-05) are both `done` and SHIPPED.
       Their gate-approved design docs deferred several questions specifically
       and only because the R-Co source tree could not be read at design time.
@@ -5283,6 +5301,7 @@ requirements:
       ambiguous between "looked and found none" and "did not look."
     acceptance_criteria:
       - "all SIX named locations (req059-pin-resolver.md:538; pin_resolver.ex:106; req060-pin-rebind.md:541 with :464; req060-pin-rebind.md:551; req060-pin-rebind.md:100; req060-pin-rebind.md:134) are each dispositioned as exactly one of confirmed | divergent_doc_only | divergent_behavioural | unsettled_by_source, the disposition recorded inline at that location, and the handoff result states the count per disposition summing to six -- a location left unaddressed is a FAIL regardless of what the others concluded"
+      # PROVENANCE (historical, not current decision authority):
       - "every confirmed, divergent_doc_only and divergent_behavioural disposition cites a specific R-Co file:line (in src/engine/pin_resolver.zig, src/engine/pin_rebind.zig or src/api/routes/pin_rebind.zig) that was actually read this run, and every unsettled_by_source disposition cites the R-Co file:line consulted plus why it does not settle the question -- no disposition rests on REQ-059's or REQ-060's own requirement text, which is the exact second-hand sourcing this audit exists to replace"
       - "git diff shows ZERO changes under lib/letflow/ outside @moduledoc/comment prose -- no function body, guard, @spec, lock mode or return value altered -- verified by inspecting the diff, so that a behavioural finding cannot have been silently repaired instead of reported"
       - "every divergent_behavioural finding (if any) has a corresponding docs/issues/ISS-NNNN.yaml naming the R-Co file:line, the Letflow file:line, and the behavioural delta, plus a filed GitHub issue or an explicit `github_issue: null # gh unavailable` note; and if there are ZERO such findings the handoff states that explicitly as a result rather than leaving it inferred from the absence of issue files"
@@ -5292,6 +5311,7 @@ requirements:
     depends_on: [REQ-059, REQ-060]
 
   - id: REQ-111
+    # PROVENANCE (historical, not current decision authority):
     title: Verify REQ-050's CEL translation rules against transition.zig, and close out REQ-062's standing R-Co disclaimer (ISS-0076 item 3)
     owner: ISSUE-FIXER
     status: done
@@ -5301,6 +5321,7 @@ requirements:
     # and was never returned by register_task). Mirrored to GH#316, closed
     # 2026-08-20 -- audit landed in 29676de, queue task released status:done.
     description: >
+      PROVENANCE (historical, not current decision authority):
       Two shipped S3 designs carry deferrals that exist only because the R-Co
       source tree could not be read at design time. It can be read now. This
       requirement resolves both against the real sources and RECORDS what it
@@ -5426,6 +5447,7 @@ requirements:
       - "the zero-R-Co-citation measurement is recorded with the actual command run and its actual output, and the count of Letflow file:line citations in req062-sub-process-runtime.md is separately re-derived and stated as OUT of scope -- neither the zero nor the 55 may be reported from this requirement's text without re-running the greps, and no alternative pattern is substituted to make the zero non-zero"
       - "all THREE dispositioned locations (req050-exclusive-gateway-cel.md:19; req050-exclusive-gateway-cel.md:490; req062-sub-process-runtime.md:674) are each dispositioned as exactly one of confirmed | divergent_doc_only | divergent_behavioural | unsettled_by_source, recorded inline at that location, with the count per disposition stated and summing to three -- a location left unaddressed is a FAIL regardless of what the others concluded. ROLLUP RULE, since AC3 requires req050:19 be dispositioned rule-by-rule and :490 category-by-category: a location's single disposition is the MOST SEVERE of its per-rule or per-category dispositions, ordered confirmed < divergent_doc_only < unsettled_by_source < divergent_behavioural, and BOTH levels are reported -- the per-item breakdown and the rolled-up location disposition. Reporting only the rollup loses the detail AC3 exists to force; reporting only the breakdown leaves this AC's arithmetic with nothing to count"
       - "req050:19's rewrite and boundary rules are dispositioned RULE BY RULE, and req050:490's four unsupported categories (macros, type-conversion functions, collection functions, ternary) CATEGORY BY CATEGORY, each with its own R-Co citation -- a single block verdict covering a whole rule set or category set is a FAIL even if that verdict is correct"
+      # PROVENANCE (historical, not current decision authority):
       - "every confirmed, divergent_doc_only and divergent_behavioural disposition cites a specific R-Co file:line actually read this run (in src/engine/transition.zig or src/design/iss602_cel_expr_differential.md for locations (b)/(c), or the relevant SPC-01 source for (d)), and every unsettled_by_source disposition cites the R-Co file:line consulted plus why it does not settle the question -- no disposition rests on REQ-050's or REQ-062's own requirement text, which is the second-hand sourcing this audit exists to replace"
       - "a difference between Letflow's and R-Co's hasCelUnsupportedFeatures DETECTION ALGORITHM (regex vs. scanner, the MECHANISM by which string-literal spans are tracked) is not by itself recorded as a divergence, since req050:490 explicitly left the algorithm to ELIXIR-DEV -- the disposition turns on the SET of categories detected and the boundary behaviour, and the finding states which of the two it is assessing. CRITICAL BOUNDARY, do not conflate: the span-tracking MECHANISM is out of scope, but the OUTCOME it produces -- whether a literal '?' inside a quoted CEL string is detected as the ternary operator -- is BOUNDARY BEHAVIOUR and IS in scope. If Letflow and R-Co disagree on that outcome, record it as a divergence; dismissing it as an algorithm difference would be a FALSE NEGATIVE on gateway routing, the exact path this requirement states the test suite cannot catch"
       - "git diff shows ZERO changes under lib/letflow/ outside @moduledoc/comment prose -- no function body, guard, @spec or return value altered, and in particular no CEL translation or boundary rule changed -- verified by inspecting the diff, so that a behavioural finding cannot have been silently repaired instead of reported"
@@ -6667,6 +6689,7 @@ requirements:
     stage: S4
     impl_order: 244  # letflow-queue task id; depends_on translated to queue task id [234]
     description: >
+      PROVENANCE (historical, not current decision authority):
       Letflow is multi-tenant and binds each tenant to an identity realm:
       tenants.idp_realm_id, with a real unique partial index, and
       Letflow.Identity.resolve_tenant_by_realm/1 driving tenant resolution
@@ -6766,6 +6789,7 @@ requirements:
     stage: S4
     impl_order: 249  # letflow-queue task id; depends_on translated to queue task id [244]
     description: >
+      PROVENANCE (historical, not current decision authority):
       REQ-135 established WHAT of R-Co's src/identity/provider/ ports and
       what is dropped. This requirement designs the thing itself: how a
       realm gets created for a tenant, and what happens when half of it
@@ -7243,6 +7267,7 @@ requirements:
     stage: S2
     impl_order: 282  # letflow-queue task id, GH#556
     description: >
+      PROVENANCE (historical, not current decision authority):
       REQ-041's design (lib/letflow/design/req041-pack-update-diff-schema.md
       §3.3, §9 OQ-6) chose its own three-value Ecto.Enum for
       pack_update_resolutions.resolution -- [:keep_theirs, :take_incoming,
@@ -7314,6 +7339,7 @@ requirements:
       - "a new migration under priv/repo/migrations/ (sorting after 20260817083803_create_pack_update_resolutions.exs) exists with an up that rewrites any pre-existing 'keep_theirs' -> 'keep_local' and 'custom' -> 'merged' rows in pack_update_resolutions.resolution, and a symmetric down; mix ecto.migrate and mix ecto.rollback both run clean with real output quoted"
       - "grep -rn \"keep_theirs\\|:custom\\b\" lib/ test/ returns zero hits after the change (excluding historical prose in this requirement's own design-doc update that explicitly narrates the old names as superseded), with the real grep output quoted"
       - "test/letflow/definitions/pack_update_migration_test.exs and the full mix test suite pass with real output quoted"
+      # PROVENANCE (historical, not current decision authority):
       - "lib/letflow/design/req041-pack-update-diff-schema.md §9 OQ-6 is updated to state the rename is done, citing this requirement and R-Co/src/definition/pack_update.zig:25-29"
     depends_on: []
 
@@ -7324,6 +7350,7 @@ requirements:
     stage: S5
     impl_order: 300  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       FIRST requirement of S5's Lua half; every other Lua requirement
       depends_on it directly or transitively. Executes
       docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
@@ -7418,6 +7445,7 @@ requirements:
     stage: S5
     impl_order: 335  # letflow-queue task id (re-registered 2026-08-26; original task 301 expired/queue reset)
     description: >
+      PROVENANCE (historical, not current decision authority):
       Decision-and-design requirement that unblocks REQ-156 (LUA-09). It
       exists as its own requirement rather than as prose inside REQ-156
       because docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md's
@@ -7537,6 +7565,7 @@ requirements:
     stage: S5
     impl_order: 337  # letflow-queue task id (re-registered 2026-08-26; original task 303 expired/queue reset)
     description: >
+      PROVENANCE (historical, not current decision authority):
       Builds Letflow's Lua sandbox construction -- the single function every
       script execution obtains its Lua state from -- and the test suite
       proving what that state cannot reach. Ports the PROPERTY of
@@ -7624,6 +7653,7 @@ requirements:
     stage: S5
     impl_order: 304  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       RESTATEMENT OF LUA-14, AND WHY -- this is the requirement decision 0014's
       REVIEWER round 1 caught being wrongly listed as satisfiable, and it is
       the clearest instance in S5 of a library default silently not meeting a
@@ -7686,6 +7716,7 @@ requirements:
       - "platform.now() called from inside a script returns a string that Elixir's DateTime.from_iso8601/1 parses successfully into a UTC DateTime, asserted by test"
       - "the time source is injectable and a test asserts platform.now() returns one exact, pre-set timestamp rather than merely a well-formed one"
       - "the moduledoc states that this requirement restates LUA-14, that os.time is NOT in Lua.new/1's default deny-set (6 of the 11 os functions are denied by default; os.clock/os.date/os.difftime/os.setlocale/os.time are not), and that denying os.date/os.clock/os.difftime goes BEYOND LUA-14's literal wording as a deliberate extension of its intent"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc records that platform.now is ungated by design per R-Co/src/lua/host_api/mod.zig's capability matrix, so a future requirement adding a capability gate to it is wrong"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-151]
@@ -7757,6 +7788,7 @@ requirements:
     stage: S5
     impl_order: 306  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       RESTATEMENT OF LUA-08 AS ONE HALF OF A TWO-LAYER PAIR, AND WHY.
       Decision 0014 lists LUA-08 and LUA-10 together on its watchlist of
       requirements not satisfiable as literally worded, with this reasoning:
@@ -7874,6 +7906,7 @@ requirements:
     stage: S5
     impl_order: 308  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Implements the mechanism REQ-149 decided. This requirement CANNOT START
       until REQ-149 is done, because decision 0014's OQ-1 explicitly blocks
       LUA-09's expansion and calls it "the weakest point of the Lua decision";
@@ -7929,6 +7962,7 @@ requirements:
     stage: S5
     impl_order: 309  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Builds the capability substrate every host function in REQ-159 and
       REQ-160 checks against, and the closed-set registration that makes
       LUA-05's "and no others" clause enforceable. Ports
@@ -7988,6 +8022,7 @@ requirements:
       - "a test asserts platform.call_service('X') without a service:call:X grant produces a structured error, which is LUA-05's own acceptance criterion"
       - "a test asserts a service:call:alpha grant does NOT authorise platform.call_service('beta'), proving the grant is parameterised by service id rather than blanket"
       - "a test asserts platform.now and platform.fail are callable with an EMPTY capability set, confirming they are ungated by design rather than accidentally reachable"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc reproduces R-Co/src/lua/host_api/mod.zig's capability matrix including the stated rationale for now and fail being ungated"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-153]
@@ -7999,6 +8034,7 @@ requirements:
     stage: S5
     impl_order: 310  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Completes LUA-07, whose audit-persistence half already shipped as
       REQ-058 (lib/letflow/engine/lua_script_audit.ex, S3). That module's own
       moduledoc records that it ports "only the audit-persistence path,
@@ -8037,6 +8073,7 @@ requirements:
       - "a test asserts the manifest hash produced here is what flows into Letflow.Engine.LuaScriptAudit's audit row for a successful execution, so 'recorded with each execution' is proven end to end rather than in isolation"
       - "a test asserts a mismatch between the computed hash and the caller-supplied registered_hash still yields LuaScriptAudit's own {:manifest_hash_mismatch, ...} error and writes no audit row, confirming INV-LSA-2 is fed rather than bypassed"
       - "the moduledoc states the hash algorithm and exactly which bytes/fields it covers"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc names any field of R-Co/src/lua/manifest.zig deliberately not ported, and why"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-157]
@@ -8048,6 +8085,7 @@ requirements:
     stage: S5
     impl_order: 311  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       First of two sibling requirements splitting R-Co's eight-function
       platform.* surface along the read/write seam, so each fits one agent
       turn. This one covers the functions that only READ or EMIT and stage
@@ -8101,6 +8139,7 @@ requirements:
     stage: S5
     impl_order: 312  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Second of two sibling requirements splitting the platform.* surface;
       REQ-159 covers the read path. This one covers the functions with
       OUTBOUND EFFECT, which is why it is separated: their correctness
@@ -8155,6 +8194,7 @@ requirements:
     stage: S5
     impl_order: 313  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       RESTATEMENT OF LUA-15, AND WHY. LUA-15 (Structured Failure, MUST) reads
       "platform.fail(reason, details) MUST TERMINATE THE SCRIPT and propagate
       a structured failure to the engine. The engine MUST record a
@@ -8295,6 +8335,7 @@ requirements:
     stage: S5
     impl_order: 315  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       First of the two decision requirements that unblock S5's WASM half.
       Decision 0014's "Ownership of execution" states "OQ-3 and OQ-4 block the
       WASM half's expansion and should be resolved first," so both are filed
@@ -8343,6 +8384,7 @@ requirements:
       - "the artefact restates WASM-02's four-export ABI (init, execute, deinit, get_capabilities) into the chosen mode's concrete contract, in enough detail that REQ-166 implements against it without improvising"
       - "the artefact names the exact import surface REQ-167 must assert a filesystem denial against under the chosen mode, replacing WASM-07's component-model-specific 'wasi:filesystem/types' where that is not the chosen mode"
       - "the artefact states how the chosen ABI represents the values REQ-150's number-marshalling rule governs, so WASM-12's parity requirement has a defined mapping"
+      # PROVENANCE (historical, not current decision authority):
       - "the artefact cites R-Co/src/wasm/wasmtime_bindings.zig's 'deferred to Stage 10' header and states that R-Co's stub code settles nothing here, so the choice is Letflow's own and not a port"
       - "no mix.exs change and no file under lib/letflow/engine/ is modified, confirmed by `git diff --stat` scoped to its commits"
     depends_on: [REQ-162]
@@ -8739,6 +8781,7 @@ requirements:
     stage: S5
     impl_order: 323  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       First of two sibling requirements splitting WASM-12's host API along the
       same read/write seam REQ-159 and REQ-160 use on the Lua side, so each
       fits one agent turn and so the parity comparison is between matching
@@ -9023,6 +9066,7 @@ requirements:
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-164, REQ-166]
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------------
   # Stage 6 -- Operational cross-cutting (first batch)
   #
@@ -9078,6 +9122,7 @@ requirements:
     stage: S6
     impl_order: 351  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       FIRST requirement of S6's DLQ half. Builds the generic, origin-agnostic
       dead-letter core that REQ-177 (wiring existing hooks) and REQ-178 (the
       route layer) build on. R-Co's dlq.zig route (337 lines) was already
@@ -9158,6 +9203,7 @@ requirements:
     stage: S6
     impl_order: 352  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Closes the two named hooks REQ-056 and REQ-061 each left explicitly
       for this stage rather than building a partial DLQ themselves. REQ-056
       (EXT-01, service_task.zig): "OBS-05's dead-letter queue (src/dlq/, S6
@@ -9206,12 +9252,14 @@ requirements:
     depends_on: [REQ-176, REQ-056, REQ-061]
 
   - id: REQ-178
+    # PROVENANCE (historical, not current decision authority):
     title: Port dlq.zig's S4 route surface onto the DLQ core (GET/POST /api/v1/dlq, DlqOperate-gated)
     owner: ELIXIR-DEV
     status: done
     stage: S6
     impl_order: 353  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Third and last requirement of this batch's DLQ half -- the route layer
       atop REQ-176's core and REQ-177's landing sites. dlq.zig (337 lines)
       was catalogued in docs/migration/stage-4-api-surface.md's
@@ -9251,6 +9299,7 @@ requirements:
       - "GET /api/v1/dlq honors status, source_type, search, cursor and page_size independently, each with its own test demonstrating the filter narrows the result set"
       - "POST /api/v1/dlq/:id/retry and .../discard both require the DlqOperate permission from REQ-069's matrix -- a caller holding no role with that permission receives 403, and a caller from a different tenant naming a real id belonging to tenant A receives 404, never 403 -- three explicit tests"
       - "POST /api/v1/dlq/:id/retry and .../discard against a non-existent id return 404, and against an id already \"resolved\" or \"discarded\" return a 409-shaped conflict rather than a generic 500 -- covering the not-found and terminal-state cases each with their own test"
+      # PROVENANCE (historical, not current decision authority):
       - "the route module's moduledoc states explicitly that R-Co's dlq.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead, so a future reader does not assume R-Co parity was verified when it wasn't"
     depends_on: [REQ-176, REQ-069, REQ-072]
 
@@ -9261,6 +9310,7 @@ requirements:
     stage: S6
     impl_order: 354  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       REQ-VALIDATOR rework: REQ-179 as originally drafted bundled a schema
       migration, a context module, AND four HTTP routes into one oversized
       requirement, whereas REQ-176 ("no route or controller file is added")
@@ -9317,12 +9367,14 @@ requirements:
     depends_on: [REQ-072]
 
   - id: REQ-182
+    # PROVENANCE (historical, not current decision authority):
     title: Port webhooks.zig's subscription CRUD route surface onto the webhook core (GET/POST/PATCH/DELETE /api/v1/webhooks/subscriptions, WebhooksManage-gated)
     owner: ELIXIR-DEV
     status: done
     stage: S6
     impl_order: 355  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       REQ-VALIDATOR rework: the route-layer half of REQ-179's split (see
       REQ-181's description for the full rework rationale), atop REQ-181's
       webhook_subscriptions core, mirroring REQ-176/REQ-178's core/route
@@ -9352,6 +9404,7 @@ requirements:
       - "every subscription route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403, and a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403"
       - "GET /api/v1/webhooks/subscriptions returns {items: [...]} with each item's target_url, event_types, status and created_at present, matching webhooksApi.list's consumer shape"
       - "DELETE /api/v1/webhooks/subscriptions/:id removes the subscription such that a subsequent list no longer includes it, and a second DELETE of the same id returns 404 rather than a duplicate success"
+      # PROVENANCE (historical, not current decision authority):
       - "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that web/src/api/dlq.ts / web/src/types/api.ts were the binding contract instead"
     depends_on: [REQ-181, REQ-069, REQ-072]
 
@@ -9458,6 +9511,7 @@ requirements:
     depends_on: [REQ-181, REQ-176, REQ-189, REQ-190]
 
   - id: REQ-184
+    # PROVENANCE (historical, not current decision authority):
     title: Port webhooks.zig's deliveries route onto the delivery-dispatch core (GET /api/v1/webhooks/subscriptions/:id/deliveries, WebhooksManage-gated)
     owner: ELIXIR-DEV
     status: done
@@ -9486,9 +9540,11 @@ requirements:
       - "the route requires the WebhooksManage permission from REQ-069's matrix -- a caller lacking it receives 403"
       - "a caller from a different tenant naming a real subscription id belonging to tenant A receives 404, never 403, regardless of whether that subscription has delivery attempts"
       - "a request against a non-existent subscription id returns 404"
+      # PROVENANCE (historical, not current decision authority):
       - "the route module's moduledoc states explicitly that R-Co's webhooks.zig was not inspected in this batch (unreachable from the drafting environment) and that the SPA's already-committed contract was the binding source of truth instead"
     depends_on: [REQ-183, REQ-181, REQ-069, REQ-072]
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------------
   # Stage 6 -- Operational cross-cutting (SECOND batch)
   #
@@ -9597,6 +9653,7 @@ requirements:
     stage: S6
     impl_order: 358  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       FIRST requirement of S6's scheduler half; REQ-186, REQ-187 and
       REQ-188 all depend on it. Filed as its own decision-and-design
       requirement, in the shape REQ-148/149/150 established for S5's open
@@ -9712,6 +9769,7 @@ requirements:
     stage: S6
     impl_order: 359  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Builds the scheduler core REQ-185's artefact specifies. Core only --
       no route, no controller, following the core/route split this stage
       established (REQ-176 then REQ-178; REQ-181 then REQ-182; REQ-183
@@ -9906,6 +9964,7 @@ requirements:
     stage: S6
     impl_order: 361  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Third and last of S6's scheduler half. Two deliverables that share
       one mechanism -- REQ-186's poll loop -- and are therefore built
       together rather than split into a requirement each.
@@ -9971,6 +10030,7 @@ requirements:
       - "the retention runner is DISABLED by default: with no configuration set, a full poll cycle invokes Letflow.EventStore.archive/1 zero times, asserted rather than assumed"
       - "with the retention runner explicitly enabled in config, a poll cycle invokes archive/1 and rows older than the tenant's configured retention are moved to events_archive -- closing the zero-caller gap, asserted by row counts before and after"
       - "the retention runner runs on REQ-186's existing scheduler process rather than adding a second independent periodic process to lib/letflow/application.ex, confirmed by git diff of application.ex showing no new ticker child"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc states that partition_maintenance.zig and partition_retention.zig are deliberately not ported, naming decision 0003 Decision C's partitioning deferral and ISS-0014's adopted option (a) as the blocker, and that SCH-04 escalation timers are deferred because :HUMAN_TASK has no escalation_timer_duration attribute in Letflow's graph schema"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
@@ -14986,7 +15046,7 @@ requirements:
   - id: REQ-256
     title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-079 through REQ-188 entry range (closes ISS-0424 part 3c-3)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ256-20260905-step-2d",
+  "run_id": "WF02-REQ256-20260905",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ256-20260905/step-2d-reviewer.json",
+  "created_at": "2026-09-05T00:00:00Z",
+  "started_at": "2026-09-05T00:00:00Z",
+  "completed_at": "2026-09-05T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-256"],
+    "requirement_text": {
+      "REQ-256": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239c = docs/requirements.yaml, the REQ-079 through REQ-188 entry range."
+    },
+    "artifacts_in": [
+      "handoffs/WF02-REQ256-20260905/step01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ254-20260905/step-2d-reviewer.json"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml (REQ-079 through REQ-188 entry range only)"
+    ]
+  },
+  "task": {
+    "description": "Gate this run's diff (git diff main...HEAD -- docs/requirements.yaml) against REQ-237's design doc, against REQ-254's REVIEWER precedent for the '#'-prefixed YAML-comment-marker case, and against ORCHESTRATOR.md's WF-02 Step 2d idiom/scope-creep review, adapted for a docs-only mechanical apply-step. Nine specific checks per the handoff."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified DOC-UPDATER's REQ-256 apply (not by trusting its summary) against REQ-237's design (lib/letflow/design/req237-zig-provenance-marking-convention.md sections 2/2a/4) and REQ-254's own REVIEWER precedent for the '#'-prefixed YAML-comment-marker technique. All nine checks pass. (1) Marker text: grep over docs/requirements.yaml lines 4573-10038 shows all 60 inserted PROVENANCE lines end in the exact literal 'PROVENANCE (historical, not current decision authority):' -- only the leading whitespace/'#'-prefix varies by host-syntax context, never the marker text itself; zero variant wording. (2) Additive-only: `git diff main...HEAD -- docs/requirements.yaml` shows zero '-' content lines (only the '+++' diff header matched a naive '-' grep check, confirmed and excluded) -- 60 net insertions, matching `git diff --numstat` (60/0) and DOC-UPDATER's own reported count; no citation path text altered or removed. No REQ-256-own status flip line appears in this diff at all (unlike REQ-254's run) -- confirmed this run's Step 00 status bookkeeping lives in a separate handoff/registry commit, not inside docs/requirements.yaml's content diff. (3) Scope: re-located REQ-079 at line 4573, REQ-188 at line 9960, REQ-189 at line 10039 fresh via grep against the current tree (not trusted from DOC-UPDATER's quoted numbers, though they match exactly) -- `git diff -U0` shows all 60 hunks' pre-edit line numbers fall between 4573 and 9973, strictly inside the pre-edit REQ-079(4573)..REQ-189(9979) span; no hunk touches REQ-001..REQ-078 or REQ-189 onward. (4) `git diff --stat main...HEAD` confirms CLAUDE.md, README.md, and docs/migration/README.md are untouched -- changed files are docs/requirements.yaml, this run's own handoff/registry bookkeeping, and a pre-existing docs/issues/ISS-0510.yaml that was already committed on an ancestor commit (27bec4c6, REQ-254's own filed finding) before this run's branch point, not created or modified by this run. (5) Deliberate-divergence grep ('unlike R-Co|deliberately diverges|diverges from R-Co') run independently against main and HEAD: 52 matches both times; stripped of line-number prefixes, `diff` reports the two lists byte-identical. (6) Structural scan (own script, walking every '.zig'-bearing line in the 4573-10038 range backward to its nearest blank line or an in-range PROVENANCE marker): zero unmarked citation lines found across all matching lines in range. (7) `python -c \"import yaml; yaml.safe_load(...)\"` against the current working tree's docs/requirements.yaml parses cleanly, 241 top-level requirement entries, matching DOC-UPDATER's reported count. (8) The two stage-header comment blocks DOC-UPDATER reports (S6 first batch, line 9069; S6 second batch, line 9547) were read directly: each is exactly one top-level 2-space-indented '# PROVENANCE...' line immediately above a full '# ---...---'-bounded multi-paragraph header block, one marker per whole block -- read REQ-254's own range (line 513) for direct comparison and confirmed the identical shape (one marker, top-level indent, immediately preceding the block). Consistent with precedent. (9) Applied REQ-254's REVIEWER ruling directly: this range's instances (title: field marker between '- id:' and 'title:' lines at e.g. line 4574, matching REQ-021's cited precedent; acceptance_criteria bullet marker at e.g. line 4841/9543; stage-header block marker at 9069/9547) are the same three '#'-prefixed cases REQ-254 already ruled a defensible in-scope mechanical extension of the single convention, not a new invented one -- the marker's literal text and section 2(a) regex are unchanged in every instance, the '#' prefix is structurally forced by YAML host-syntax (comment lines, list-sequence position) exactly as REQ-254 reasoned, not a stylistic choice. No new variant technique appears in this range beyond the three already-blessed by REQ-254 (title-field comment, acceptance_criteria-bullet comment, stage-header-block comment); no markdown-table citation shape occurred in this range either (consistent with DOC-UPDATER's own note). Checked docs/anti-patterns.md: no entry bears on this class of change. Note ISS-0510.yaml (REQ-254's REVIEWER-filed MINOR finding recommending the design doc be amended to enumerate the YAML-comment case as a fourth citation-unit shape) remains open and unresolved as of this run -- it is not this run's scope to act on, but it is now clear the same judgment call has been re-applied uniformly across REQ-254 and REQ-256 (and presumably REQ-255) without incident, reinforcing that the amendment is low-urgency documentation cleanup, not evidence of drift.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ256-20260905/step-2d-reviewer.json"
+    ],
+    "issues": [],
+    "next_action": "Route to ORCH for Step Final: flip REQ-256's status in docs/requirements.yaml (in_progress -> done) and append the run-history event; then proceed to merge. REVIEWER did not touch docs/requirements.yaml's status field or run-history, per instruction. ISS-0510 (filed by REQ-254's REVIEWER run, still open) remains valid low-urgency follow-on work for REQ-ANALYST/CODE-DESIGNER -- not re-filed here since it already covers this exact gap and this run found nothing new to add to it."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

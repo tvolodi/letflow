@@ -4877,6 +4877,44 @@
       "backfilled": false,
       "last_known_step": "Step Final COMPLETED PASS -- PR #988 squash-merged (04930c9f) via gh pr merge --admin (one of two duplicate backend-gate CI runs hit the already-open ISS-0418 wasm_hang recurrence flake, test/letflow/engine/wasm/call_timeout_test.exs and host_api_write_test.exs, structurally cleared -- this branch touches zero files under lib/letflow/engine/wasm/ or test/letflow/engine/wasm/; the other duplicate run and both frontend gates passed clean). Queue task 492 released status:done. REQ-254 flipped to done in docs/requirements.yaml, run-history done-event appended to requirement_status.v9.yaml (31 entries).",
       "note": "WF-02 run for REQ-254 (queue task 492), chunk 239a of REQ-239's 10-way split (ISS-0424 part 3c-1): applied REQ-237's .zig provenance-marking convention to docs/requirements.yaml, the REQ-011 through REQ-050 entry range. UNUSUAL vs. sibling chunks 238a-h/239e-i: owner is DOC-UPDATER, not ELIXIR-DEV, since the edited file is docs/requirements.yaml itself, not a lib/ module -- no mix compile/test executable surface, so no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER ran; straight to DOC-UPDATER then REVIEWER, both PASS. DOC-UPDATER: 70 PROVENANCE markers inserted, 0 deletions beyond this run's own status-flip line, 152 .zig lines preserved before/after. REVIEWER: independently re-verified marker text, additive-only diff, scope boundaries, divergence-note byte-identity, and YAML validity -- PASS, with one MINOR non-blocking finding (recommend REQ-237's design doc enumerate the YAML-comment-line marker case as a fourth citation-unit shape before REQ-255/256/257 hit the same contexts). Also fixed same-branch: CI's own A9 invariant test caught Step 00's started-event append had not been mirrored into requirement_status.index.yaml's declared entries: count -- corrected before merge. Sibling chunks REQ-255 through REQ-263 (239b-i) cover disjoint entry ranges/files in the same run of ten and may be in flight concurrently on other hosts; also observed a genuinely unrelated concurrent ORCH-role session sharing this same working tree during this run's CI wait (its own ad-hoc ISS-0418 recurrence-logging task, branch chore/ISS0418-recurrence-20260905, PR #989) -- left alone per ORCHESTRATOR.md section 7.1, not folded into this run."
+    },
+    {
+      "run_id": "WF02-REQ256-20260905",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-256",
+      "issue_id": "ISS-0424",
+      "queue_task_id": 494,
+      "queue_agent_id": "letflow-ee-orch",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/requirements.yaml (REQ-079 through REQ-188 entry range only)"
+      ],
+      "started_at": "2026-09-05T16:38:06Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 (git setup) COMPLETED PASS -- branch feature/WF02-REQ256-20260905 created from main at e1688743.",
+      "note": "WF-02 run for REQ-256 (queue task 494), chunk 239c of REQ-239's 10-way split (ISS-0424 part 3c-3): applies REQ-237's .zig provenance-marking convention to docs/requirements.yaml, the REQ-079 through REQ-188 entry range. Sibling of WF02-REQ254-20260905 (chunk 239a, REQ-011 through REQ-050, COMPLETED) -- same pattern, owner DOC-UPDATER then REVIEWER, no ELIXIR-DEV/CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER (docs/requirements.yaml only, no executable surface). Pre-start check: registry scanned, no existing WF02-REQ256-* entry, no WF02-REQ255-* entry, no REQ-255/256/257 branches local or on origin. Will carry forward REQ-254's REVIEWER MINOR finding (YAML-comment-line marker case as a fourth citation-unit shape) for this chunk's REVIEWER pass. Will rebase onto main immediately before merge since sibling chunks may land concurrently touching the same file at different line ranges."
+    },
+    {
+      "run_id": "WF03-ISS0510-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0510",
+      "queue_task_id": 510,
+      "queue_agent_id": "letflow-ee-orch",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+      ],
+      "started_at": "2026-09-05T17:22:14Z",
+      "lock_released_at": "2026-09-05T17:34:00Z",
+      "released_lock": true,
+      "backfilled": true,
+      "recovered": true,
+      "recovery_note": "No handoff directory (handoffs/WF03-ISS0510-20260905/) existed on disk or in branch feature/WF03-ISS0510-20260905 when this session resumed, despite a prior CODE-DESIGNER pass and a CODE-DESIGN-VALIDATOR FAIL verdict already having occurred on this branch (per the resume instruction) -- (a-2) ORCH reconstruction: this registry entry and the rework-1 handoff step files are being written now, retroactively, from the branch diff and the resume instruction's description of the FAIL verdict, since no prior handoff JSON survives to amend.",
+      "last_known_step": "Step Final COMPLETED PASS -- PR #994 squash-merged (b2e27d68) via gh pr merge --admin (one of two duplicate Backend-gate CI runs failed on Letflow.Routers.Req077PromotionPipelineTest AC3, structurally unrelated -- this branch's diff touches only the design doc and handoffs/ bookkeeping; the other duplicate run and both frontend gates passed clean, attributed as test-infra flake in the PR). Independently verified post-merge on main: sub-case (a) now reads 'the marker precedes the `title:` line' with no residual 'precedes the `id:`' text. Queue task 510 released status:done. docs/issues/ISS-0510.yaml flipped to status: resolved. GH#991 closed (auto-closed via PR body 'Closes #991') with an evidence comment appended.",
+      "note": "WF-03 run for ISS-0510 (queue task 510, GH#991): REVIEWER's MINOR finding from WF02-REQ254-20260905 asking for a fourth citation-unit shape (YAML comment-line/sequence-item) to be enumerated in lib/letflow/design/req237-zig-provenance-marking-convention.md section 2, ahead of sibling chunks REQ-255/257/258/259/260/261/262/263 hitting the same contexts. Docs-only, additive design-doc amendment -- no lib/ or priv/ touched, ground truth is the already-merged REQ-254 application in docs/requirements.yaml, not something to change. CODE-DESIGNER produced the amendment; CODE-DESIGN-VALIDATOR FAILed rework-0 on an inverted sub-case (a) citation (id: vs. title:) -- reconstructed retroactively since no handoff file for that pass survived. Rework-1: CODE-DESIGNER corrected only the REQ-021 clause (verified against docs/requirements.yaml:806-808 directly); CODE-DESIGN-VALIDATOR's focused re-check PASSed, confirming the citation now matches the real file and that no other part of the document changed since the FAIL. Merged, queue released, issue file and GH issue closed out."
     }
   ]
 }

@@ -85,8 +85,8 @@ defmodule Letflow.Plugs.ApiPipeline do
   # Plug.Parsers). See Letflow.Plugs.Admission's moduledoc.
   plug(Letflow.Plugs.Admission, pool: :global)
 
-  # 2 MB cap — matches R-Co's `max_body_size` default; large enough for any
-  # single-workflow payload while preventing unbounded reads. This root
+  # 2 MB cap — large enough for any single-workflow payload while
+  # preventing unbounded reads from a single request. This root
   # `length:` is the shared floor forwarded to every parser in the list
   # below UNLESS a parser overrides it via its own `{parser, opts}` tuple
   # (`Plug.Parsers.init/1`: `Keyword.merge(root_opts, opts)`, per-parser

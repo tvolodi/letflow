@@ -14017,7 +14017,7 @@ requirements:
   - id: REQ-240
     title: Retire parity-justification phrasing in lib/letflow/api/ and lib/letflow/plugs/ -- restate on merit or delete (closes ISS-0424 part 2e-1)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the api/+plugs/ slice of ISS-0424/GH#828 part 2 (the first of

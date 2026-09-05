@@ -120,10 +120,9 @@ defmodule Letflow.Api.Context do
     1. Reads the `x-trace-id` request header.
     2. If present and non-empty: propagates it as-is, truncated to 256 bytes
        (`trace.zig`'s `MAX_TRACE_ID_LEN`) — no UUID-shape validation is
-       performed on incoming values, matching R-Co's own
-       `extractOrGenerate/2` behavior. This is a direct behavioral port, not
-       an idiom translation: a caller-supplied trace id is a correlation
-       convenience, not a security-checked value.
+       performed on incoming values: a caller-supplied trace id is a
+       correlation convenience, not a security-checked value, so accepting
+       any non-empty string up to the length cap is deliberate, not a gap.
     3. If absent or empty: generates a fresh UUID v4 via
        `generate_trace_id/0`.
     4. Assigns `conn.assigns[:trace_id]`.
@@ -135,9 +134,10 @@ defmodule Letflow.Api.Context do
        rule.
     6. Sets the `x-trace-id` response header eagerly, via
        `put_resp_header/3`, at this same point — not deferred to
-       send-time. This differs from R-Co's own arrangement (`trace.zig`
-       writes the response header at send-time, reading the threadlocal),
-       but is safe and simpler here: `put_resp_header/3` only stages the
+       send-time the way a threadlocal-based design would need to
+       (`trace.zig` writes the response header at send-time because that's
+       the only point a threadlocal value is guaranteed still set). Setting
+       it early is safe and simpler here: `put_resp_header/3` only stages the
        header on the conn struct, and Plug/Bandit doesn't finalize response
        headers until `send_resp/3` (or equivalent) is actually called later
        in the pipeline, so an early-set header survives unless a later plug

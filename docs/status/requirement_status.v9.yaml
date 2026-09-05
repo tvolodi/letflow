@@ -601,3 +601,16 @@ history:
       (handoffs/WF02-REQ237-20260905/step-02b-code-design-validator-recheck.json).
       REQ-238 (lib/ apply) and REQ-239 (docs/ apply) depend on this design
       landing.
+  - req: REQ-240
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T08:44:14Z"
+    note: >
+      Retired parity-justification phrasing in lib/letflow/api/authorization.ex,
+      lib/letflow/api/context.ex, lib/letflow/plugs/api_pipeline.ex,
+      lib/letflow/plugs/tenant_status.ex (closes ISS-0424 part 2e-1, queue task
+      475, GH#922, PR #943, feature/WF02-REQ240-20260905). REVIEWER passed the
+      implementation (handoffs/WF02-REQ240-20260905/step-02d-reviewer.json);
+      ORCH independently confirmed mix compile --warnings-as-errors, mix
+      format --check-formatted, and mix test test/letflow/api/ test/letflow/plugs/
+      (289 passed) before this status flip.

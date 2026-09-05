@@ -1,5 +1,6 @@
 defmodule Letflow.SandboxPool.FixtureLoader do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Loads a fixed list of fixture rows into a claimed sandbox schema's allowlisted tables,
   TRUNCATE-ing each distinct target table first (ports R-Co's
   `src/definition/fixture_loader.zig` per PRM-06 §3 — see
@@ -84,6 +85,7 @@ defmodule Letflow.SandboxPool.FixtureLoader do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # First-seen order preserved, matching fixture_loader.zig:71-85.
   defp distinct_table_names(fixtures) do
     fixtures

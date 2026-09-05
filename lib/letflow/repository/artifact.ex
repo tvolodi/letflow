@@ -22,6 +22,7 @@ defmodule Letflow.Repository.Artifact do
 
   ## R-Co migration 058 shape conflict (AC11)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's migration `058_repo_artifacts_tenant_activation.sql` re-creates
   `repository_artifacts` with a COMPLETELY DIFFERENT shape from migration
   `045_repository_artifacts.sql` (`version_id` as primary key rather than

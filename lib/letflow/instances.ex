@@ -26,6 +26,7 @@ defmodule Letflow.Instances do
 
   @type opts :: [prefix: String.t()]
 
+  # PROVENANCE (historical, not current decision authority):
   # `InstanceProjection.status`'s Ecto.Enum values, as the four uppercase
   # strings the HTTP layer accepts -- source of truth is that schema
   # (instance_projection.ex:125-128), not hand-duplicated as a separate

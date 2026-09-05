@@ -1,0 +1,53 @@
+{
+  "handoff_id": "b3f1b5e2-6a2d-4c1e-9e0a-1d4c7f2a0511",
+  "run_id": "WF03-ISS0511-20260905",
+  "workflow_id": "WF-03",
+  "step": "0.5-1",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
+  "created_at": "2026-09-05T18:33:25Z",
+  "started_at": "2026-09-05T18:33:25Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0511.yaml",
+      "test/letflow/simulation/req207_vortex_test.exs"
+    ],
+    "owned_modules": ["test/letflow/simulation/req207_vortex_test.exs"]
+  },
+  "task": {
+    "description": "Combined Step 0.5 (registry lookup) + Step 1 (diagnose) for ISS-0511. This issue's root cause is already substantially diagnosed in docs/issues/ISS-0511.yaml (read it in full) and independently confirmed by ORCH by reading the actual test code: test/letflow/simulation/req207_vortex_test.exs, the 'vortex-entity-list-filter-and-page' test (around lines 879-915). The test finds every docs/requirements.yaml line whose title: matches /entit(y|ies)/i, then for each match does `Enum.at(title_lines, idx - 1)` (line ~908) to get exactly ONE line immediately above and asserts it is an id: line naming one of a fixed allowed set (REQ-207, REQ-225..231). REQ-257 (merged, correct per REQ-237/ISS-0510 -- do NOT touch docs/requirements.yaml) inserted a `# PROVENANCE (historical, not current decision authority):` comment line between id: and title: for 6 of those 7 entries (REQ-225, REQ-227, REQ-228, REQ-229, REQ-230, REQ-231). For those 6, `idx - 1` now lands on the PROVENANCE comment line, not the id: line, so the assertion fails. Step 0.5: check docs/issues/*.yaml for any prior resolved entry with a similar id:/title:-adjacency or PROVENANCE-marker-parsing symptom (this looks novel, but confirm). Step 1: confirm this root cause by actually running `mix test test/letflow/simulation/req207_vortex_test.exs` on this branch (pre-fix) and quoting the real failure output -- do not just trust the issue file's prose (No Speculation / core-directives.md). Then state precisely what a fix must change: the walk-back logic must skip over any intervening comment line(s) (lines matching /^\\s*#/ once trimmed) between the title: line and the nearest preceding id: line, rather than assuming exact adjacency (idx - 1). Note for the design step: the fix must still correctly reject a genuinely wrong/missing id: (i.e. walking back must stop at the first non-comment, non-blank line and require THAT to be the id: line -- it must not skip past a real content line searching for an id: further up). Do NOT implement the fix yourself. Do NOT modify docs/requirements.yaml.",
+    "acceptance_criteria": [
+      "Step 0.5 result states whether a matching prior resolved issue exists (expected: none, but must be checked, not assumed)",
+      "Step 1 result quotes the ACTUAL `mix test test/letflow/simulation/req207_vortex_test.exs` failure output on this branch (pre-fix), not a description of it",
+      "Step 1 result states the precise root cause (idx - 1 walk-back, single-line assumption) and the precise fix requirement (skip comment lines when walking back to find id:, but still fail on a genuinely missing/wrong id:)",
+      "No files outside handoffs/ are modified by this step",
+      "next_action routes to CODE-DESIGNER for fix design"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0511-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0511-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

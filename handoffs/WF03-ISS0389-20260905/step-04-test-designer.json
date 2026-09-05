@@ -1,0 +1,54 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-04",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "TEST-DESIGNER",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0389-20260905/step-04-test-designer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T04:15:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": [
+      "WF03-ISS0389-20260905-step-03",
+      "WF03-ISS0389-20260905-step-03c"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0389-advance-timer-endpoint.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/fixtures/simulation/swiftroute/scenarios/shipment-ops-timeout-escalation.yaml",
+      "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
+      "test/letflow/simulation/req206_swiftroute_test.exs"
+    ],
+    "artifacts_out": [
+      "test/specs/ISS-0389.md",
+      "test/letflow/scheduler_test.exs",
+      "test/letflow/routers/instances_test.exs",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
+      "test/fixtures/simulation/swiftroute/scenarios/shipment-ops-timeout-escalation.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 4: write test spec and test code for ISS-0389's advance-timer endpoint (design doc AC1-AC10), un-skip the REQ-206 shipment-ops-timeout-escalation scenario's step 2 per AC5/AC10, and route to TEST-DESIGN-VALIDATOR."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full test spec at test/specs/ISS-0389.md. (1) Letflow.Scheduler.resolve_advance_target/3 had ZERO tests referencing it by name before this run (confirmed by grep) -- added 9 tests across two new describe blocks in test/letflow/scheduler_test.exs covering all 7 of the design's own branch outcomes: 0/1/2+ pending timers with timer_id absent, and not-found/not-pending(fired)/wrong-instance/correct for an explicit timer_id (the 'same-404' fold). (2) test/letflow/routers/instances_test.exs had NO advance-timer tests at all -- added a new 'advance-timer' describe block (8 tests) plus graph_timer_end/0, start_instance_with_timer!/1, pending_timer_ids/2 helpers, covering AC5 (200/fired/token-off-TIMER, proven end-to-end via instance_status becoming :completed on a TIMER->END graph), AC6 (404, zero pending), AC7 (400, 2+ pending, both remain pending), AC8 (404, cross-instance timer_id, neither timer fires), AC9 (422 x2, instance_id and timer_id), design's own 'body not a JSON object' 400 case, and a dedicated 403 authz-enforcement test for :InstancesAdvanceTimer (distinct from the generic route-walk AC4 already covers). (3) Un-skipped shipment-ops-timeout-escalation.yaml step 2 (via:skip -> via:api) per AC5/AC10, rewrote req206_swiftroute_test.exs's matching describe block to assert real outcomes (timer_status: fired, node_id: ops-escalation-timer, and current_nodes read directly off instance_projections since GET /instances/:id's own response shape carries no tokens field -- only POST /:id/reconstruct does). (4) Added a real ops-escalation-timer TIMER node to process_shipment_dispatch.yaml (fork branch parallel to ops-assessment/finance-estimate feeding parallel-join) since the pre-existing timeout-ops-assessment edge was a comment-only annotation, never a real REQ-187 timer mechanism -- HUMAN_TASK has no boundary-timer capability in this engine. (5) Fixed two pre-existing bugs surfaced only by actually dispatching this fixture for the first time (never previously exercised end-to-end): (a) req206_swiftroute_test.exs's own ops-timeout-escalation test destructured the WRONG definition (%{approval: ...} instead of %{dispatch: ...}), inert while step 2 was a no-op :skip; (b) process_shipment_dispatch.yaml's parallel-fork was a :combined_unsupported gateway (in_degree>1 AND out_degree>1) that Engine.create/2 correctly rejects -- fixed with a new pure-merge injury-check-merge EXCLUSIVE_GATEWAY node. Both fixes documented in the fixture's own header comment and the test spec.",
+    "mix_check_test_run": "mix compile --warnings-as-errors: clean. mix format --check-formatted (all touched files): clean. Targeted: mix test test/letflow/scheduler_test.exs (28 passed), test/letflow/routers/instances_test.exs (52 passed), test/letflow/simulation/req206_swiftroute_test.exs (4 passed) -- combined run of all three: 84 passed, 0 failed. mix letflow.check.test (full parallel suite): 444/446 passed (1/1 property, 443/445 tests), 11 excluded; the 2 failures are test/mix/tasks/letflow_check_toolchain_test.exs's 'rust pin (REQ-165)' tests, pre-existing and unrelated -- System.cmd(\"rustc\", [\"--version\"]) raises :enoent because this sandbox has no rustc binary on PATH at all (confirmed directly: `command -v rustc` finds nothing even with asdf shims on PATH). The task's own ISS-0069 substring check ('default values for the optional arguments') found zero matches across all partition logs -- no dead default argument introduced by this run's new test helpers.",
+    "mutation_check": "resolve_advance_target/3, the route, and :InstancesAdvanceTimer are all brand-new this run (WF-03 'code under test did not exist' case) -- per that procedure, applied a mutant to lib/letflow/scheduler.ex's resolve_advance_target/3: changed '[_ | _] -> {:error, :ambiguous_pending_timers}' to '[_ | _] -> {:error, :no_pending_timer}'. Measured: mix test test/letflow/scheduler_test.exs test/letflow/routers/instances_test.exs went from 80 passed/0 failed to 78 passed/2 failed, with exactly the 2 tests designed to catch this branch failing (scheduler_test.exs's own 'two or more pending timers -> {:error, :ambiguous_pending_timers}' test, and instances_test.exs's AC7 'no timer_id against an instance with two or more pending timers returns 400' test) -- no other test affected. Reverted the mutant and re-ran: back to 80 passed/0 failed, confirming the revert. Full detail in test/specs/ISS-0389.md's 'Non-existence mutation check' section.",
+    "issues": [
+      "mix letflow.check.test's full-suite gate reports FAILED due to 2 pre-existing rustc-toolchain-check failures wholly unrelated to this issue (test/mix/tasks/letflow_check_toolchain_test.exs) -- this sandbox has no rustc binary installed at all. Flagged for TEST-RUNNER/RELEASE-VALIDATOR in case a different environment is available for the final gate; not something TEST-DESIGNER should fix (out of scope, pre-existing, unrelated to any file this run touched)."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

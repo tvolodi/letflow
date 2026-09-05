@@ -312,6 +312,49 @@ defmodule Letflow.Scheduler do
     end
   end
 
+  # ===========================================================================
+  # resolve_advance_target/3 -- ISS-0389 design §3
+  # ===========================================================================
+  #
+  # Resolves which `timers` row a `POST /instances/:id/advance-timer` request
+  # targets, without ever locking or mutating it -- the caller (the router)
+  # passes the resolved `timer.id` to `fire_timer/2` separately, which does
+  # its own `FOR UPDATE` fetch inside its own transaction. This keeps the
+  # router's INV-RT-1 boundary intact (it never issues a `Repo.*` call
+  # itself) while leaving `fire_timer/2` untouched.
+  @spec resolve_advance_target(
+          instance_id :: Ecto.UUID.t(),
+          timer_id :: Ecto.UUID.t() | nil,
+          tenant_schema :: String.t()
+        ) ::
+          {:ok, Timer.t()}
+          | {:error, :no_pending_timer}
+          | {:error, :ambiguous_pending_timers}
+  def resolve_advance_target(instance_id, nil, tenant_schema)
+      when is_binary(instance_id) and is_binary(tenant_schema) do
+    pending_timers =
+      Timer
+      |> where([t], t.status == "pending" and t.instance_id == ^instance_id)
+      |> Repo.all(prefix: tenant_schema)
+
+    case pending_timers do
+      [] -> {:error, :no_pending_timer}
+      [timer] -> {:ok, timer}
+      [_ | _] -> {:error, :ambiguous_pending_timers}
+    end
+  end
+
+  def resolve_advance_target(instance_id, timer_id, tenant_schema)
+      when is_binary(instance_id) and is_binary(timer_id) and is_binary(tenant_schema) do
+    Timer
+    |> where([t], t.id == ^timer_id)
+    |> Repo.one(prefix: tenant_schema)
+    |> case do
+      %Timer{status: "pending", instance_id: ^instance_id} = timer -> {:ok, timer}
+      _not_found_or_not_pending_or_wrong_instance -> {:error, :no_pending_timer}
+    end
+  end
+
   defp append_timer_fired_event(%Timer{} = timer, now, fired_late, tenant_schema) do
     payload =
       Jason.encode!(%{

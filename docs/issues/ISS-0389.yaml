@@ -29,4 +29,31 @@ source: >
   re-confirmation).
 queue_task_id: 389
 github_issue: 768
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0389-20260905
+resolved_at: "2026-09-05T04:35:00Z"
+resolution: >
+  Implemented POST /api/v1/instances/:id/advance-timer via ISSUE-FIXER
+  sizing (found the underlying Letflow.Scheduler.fire_timer/2 already
+  callable directly, but three real design decisions -- timer-targeting
+  semantics with 0/1/2+ pending timers, a new authz permission, and
+  production-vs-test-only routing -- needed CODE-DESIGNER, not an
+  ad-hoc ELIXIR-DEV choice) then the full WF-02 pipeline:
+  CODE-DESIGNER's design (lib/letflow/design/iss0389-advance-timer-
+  endpoint.md) -> CODE-DESIGN-VALIDATOR PASS (independently re-verified
+  every cited file/line) -> ELIXIR-DEV implementation
+  (Letflow.Scheduler.resolve_advance_target/3, the new router handler,
+  full :InstancesAdvanceTimer authz wiring) -> SECURITY-REVIEWER PASS
+  (tenant isolation, authz-before-mutation, INV-RT-1, same-404
+  discipline, no injection surface) -> REVIEWER PASS -> TEST-DESIGNER
+  (un-skipped REQ-206's shipment-ops-timeout-escalation scenario step 2,
+  fixed 2 incidental pre-existing fixture bugs blocking that dispatch)
+  -> TEST-DESIGN-VALIDATOR rework cycle 1 (AC3's PLATFORM_ADMIN/
+  AGENT_RUNNER role coverage was missing on the first pass, fixed) ->
+  re-check PASS -> TEST-RUNNER confirmed the real full-suite aggregate
+  (3243 tests across 8 parallel partitions, 3241 passed, 2 pre-existing
+  rustc-toolchain-gap failures unrelated to this change -- corrected a
+  reporting error where an intermediate report quoted a single
+  partition's own summary line as if it were the full-suite total).
+  PR to be squash-merged via ORCH Step Final; queue task 389 released
+  status:done, GH#768 best-effort closed.

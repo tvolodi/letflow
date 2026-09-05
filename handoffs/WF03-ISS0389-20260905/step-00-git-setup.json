@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-00",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T03:35:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0389.yaml (full read)",
+      "lib/letflow/engine.ex (existing TIMER node dispatch/scheduling logic)",
+      "lib/letflow/scheduler.ex and lib/letflow/scheduler/poller.ex (existing timer-firing mechanism, if any real timer advance already happens on a schedule)",
+      "test/letflow/simulation/req206_swiftroute_test.exs (the shipment-ops-timeout-escalation scenario that needed this and used a :skip fallback)"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 00: claimed queue task 389 (ISS-0389) via get_next_task. No POST /api/v1/instances/:id/advance-timer endpoint exists in lib/letflow/routers/ -- confirmed still true by ORCH's own fresh grep before dispatch. Referenced as a blocking gap by REQ-208/209 (both now done, both worked around it via a documented :skip fallback in their own simulation scenarios). Dispatching Step 1 to ISSUE-FIXER to: (a) re-confirm via fresh grep that the endpoint genuinely still doesn't exist anywhere (not just the exact string 'advance-timer' -- check for any manual-timer-firing/force-fire mechanism under a different name); (b) determine the real semantics needed (does 'advance' mean force-fire a specific pending TIMER node immediately regardless of its scheduled time, bypassing Letflow.Scheduler.Poller's normal tick-based firing? or does it mean something else, e.g. moving the simulated clock forward?); (c) size whether this is genuinely new public API surface needing a CODE-DESIGNER pass (new route, new Engine function, new @spec, likely a tenant-authz-gated action) or something smaller ELIXIR-DEV can scope directly."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0389-20260905 created off main @ b5fe974c. No diagnosis performed at this step."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

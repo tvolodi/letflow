@@ -8,8 +8,13 @@
 # needs; no new process fixture required (design §3.3).
 #
 # Step 1: start instance (real api)
-# Step 2: advance timer (SKIP/MINOR — advance-timer endpoint absent, grep-confirmed, design §0)
-# Step 3: verify instance still ACTIVE (real api — proves harness coherence despite step 2 skip)
+# Step 2: advance timer (real api -- ISS-0389 shipped POST .../advance-timer;
+#   process_shipment_dispatch.yaml's ops-escalation-timer TIMER node, added by
+#   ISS-0389, gives this step a real, single pending timer to force-fire)
+# Step 3: verify instance still ACTIVE (real api -- the ops-assessment/
+#   finance-estimate HUMAN_TASKs are still outstanding, so the parallel-join
+#   this timer feeds cannot fire yet; the timer's own token has moved off the
+#   TIMER node regardless -- asserted directly in the test via GET's tokens)
 id: swiftroute-shipment-ops-timeout-escalation
 company_id: swiftroute
 process_id: DEFINITION_NAME
@@ -35,11 +40,13 @@ steps:
     produces: instance
     actor: actor-swiftroute-lena
 
-  # Step 2 — SKIP: advance-timer endpoint absent (grep evidence in design §0 and test)
-  - via: skip
-    severity: MINOR
+  # Step 2 — real api: force-fire the instance's one pending timer
+  # (ops-escalation-timer, ISS-0389). No params key -> body_params: %{}, the
+  # literal empty-JSON-object shape the route's design requires.
+  - via: api
     action: "POST /api/v1/instances/{{produces.instance.instance_id}}/advance-timer"
-    note: "POST /api/v1/instances/:id/advance-timer does not exist in Letflow.Router -- grep -rn \"advance-timer|advance_timer\" lib/letflow/router.ex lib/letflow/routers/*.ex -> zero matches (lib/letflow/design/req206-swiftroute-scenario-execution.md §0). Scenario's own documented fallback: mark SKIP severity MINOR."
+    produces: advance_timer_result
+    actor: actor-swiftroute-marco
 
   # Step 3 — verify instance is still ACTIVE (no error, no premature completion)
   - via: api

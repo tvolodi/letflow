@@ -15,10 +15,13 @@ defmodule Letflow.Routers.InstancesTest do
 
   import Plug.Test
   import Plug.Conn
+  import Ecto.Query, only: [where: 3, select: 3]
 
   alias Letflow.Definitions
   alias Letflow.Engine
   alias Letflow.EventStore.InstanceProjection
+  alias Letflow.Scheduler
+  alias Letflow.Scheduler.Timer
   alias Letflow.TenantFixture
 
   @opts Letflow.Routers.Instances.init([])
@@ -113,6 +116,66 @@ defmodule Letflow.Routers.InstancesTest do
 
   defp instance_count(schema_name) do
     Repo.aggregate(InstanceProjection, :count, prefix: schema_name)
+  end
+
+  # ISS-0389: START -> TIMER -> END -- gives an instance exactly one real,
+  # armed, force-fireable pending timer the moment it's created (REQ-187's
+  # engine automatically arms a :TIMER node's timer on token arrival), for
+  # POST /:id/advance-timer's own router-level tests below. "P1D" keeps it
+  # far from its own `fire_at` so nothing but this file's explicit
+  # advance-timer calls ever fires it.
+  defp graph_timer_end do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "timer",
+          "node_type" => "TIMER",
+          "attributes" => %{"duration_iso8601" => "P1D"}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "timer"},
+        %{"id" => "e2", "source" => "timer", "target" => "end"}
+      ]
+    }
+  end
+
+  defp start_instance_with_timer!(schema_name) do
+    assert {:ok, definition} =
+             Definitions.create(
+               %{
+                 name: unique_name("req-advtimer-def"),
+                 version: "1.0.0",
+                 graph: graph_timer_end(),
+                 created_by: Ecto.UUID.generate()
+               },
+               prefix: schema_name
+             )
+
+    assert {:ok, %{definition: activated}} =
+             Definitions.activate(definition.id, prefix: schema_name)
+
+    assert {:ok, result} =
+             Engine.create(
+               %{
+                 definition_id: activated.id,
+                 initial_variables: %{},
+                 actor_id: Ecto.UUID.generate(),
+                 idempotency_key: unique_idempotency_key("advtimer-start")
+               },
+               prefix: schema_name
+             )
+
+    result.instance_id
+  end
+
+  defp pending_timer_ids(schema_name, instance_id) do
+    Timer
+    |> where([t], t.instance_id == ^instance_id and t.status == "pending")
+    |> select([t], t.id)
+    |> Repo.all(prefix: schema_name)
   end
 
   # ── AC1 -- POST /instances creates via Engine, 201 with instance id ───────
@@ -500,6 +563,168 @@ defmodule Letflow.Routers.InstancesTest do
         |> dispatch()
 
       assert conn.status == 403
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0389 -- POST /instances/:id/advance-timer
+  # (lib/letflow/design/iss0389-advance-timer-endpoint.md, AC5-AC9)
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "advance-timer" do
+    # AC5
+    test "empty JSON body against an instance with exactly one pending timer returns 200, fires it, and the token moves off the TIMER node" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-a")
+      instance_id = start_instance_with_timer!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{}
+        })
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["instance_id"] == instance_id
+      assert body["node_id"] == "timer"
+      assert body["timer_status"] == "fired"
+
+      # end-to-end proof the timer firing actually drove the token off the
+      # TIMER node: START -> TIMER -> END means firing completes the instance.
+      assert instance_status(tenant.schema_name, instance_id) == :completed
+      assert pending_timer_ids(tenant.schema_name, instance_id) == []
+    end
+
+    # AC6
+    test "an instance with zero pending timers returns 404" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-b")
+      {instance_id, _def} = start_instance!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{}
+        })
+        |> dispatch()
+
+      assert conn.status == 404
+    end
+
+    # AC7
+    test "no timer_id against an instance with two or more pending timers returns 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-c")
+      instance_id = start_instance_with_timer!(tenant.schema_name)
+
+      assert {:ok, _timer2} =
+               Scheduler.create(
+                 Repo,
+                 %{
+                   instance_id: instance_id,
+                   timer_type: "deadline",
+                   node_id: "extra-timer",
+                   fire_at:
+                     DateTime.utc_now()
+                     |> DateTime.add(3600, :second)
+                     |> DateTime.truncate(:microsecond)
+                 },
+                 prefix: tenant.schema_name
+               )
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{}
+        })
+        |> dispatch()
+
+      assert conn.status == 400
+      assert length(pending_timer_ids(tenant.schema_name, instance_id)) == 2
+    end
+
+    # AC8
+    test "a timer_id naming a real pending timer belonging to a DIFFERENT instance returns 404, not a cross-instance fire" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-d")
+      instance_a = start_instance_with_timer!(tenant.schema_name)
+      instance_b = start_instance_with_timer!(tenant.schema_name)
+      [timer_b_id] = pending_timer_ids(tenant.schema_name, instance_b)
+
+      conn =
+        build_conn("POST", "/#{instance_a}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{"timer_id" => timer_b_id}
+        })
+        |> dispatch()
+
+      assert conn.status == 404
+      assert pending_timer_ids(tenant.schema_name, instance_a) != []
+      assert pending_timer_ids(tenant.schema_name, instance_b) != []
+    end
+
+    # AC9
+    test "a syntactically invalid instance_id returns 422" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-e")
+
+      conn =
+        build_conn("POST", "/not-a-uuid/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{}
+        })
+        |> dispatch()
+
+      assert conn.status == 422
+    end
+
+    # AC9
+    test "a syntactically invalid timer_id returns 422" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-f")
+      instance_id = start_instance_with_timer!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: %{"timer_id" => "not-a-uuid"}
+        })
+        |> dispatch()
+
+      assert conn.status == 422
+      assert pending_timer_ids(tenant.schema_name, instance_id) != []
+    end
+
+    # design §4's "request body present but not a JSON object" -> 400
+    test "a request body that decodes to something other than a JSON object returns 400" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-g")
+      instance_id = start_instance_with_timer!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["PROCESS_OPERATOR"],
+          body: ["not", "an", "object"]
+        })
+        |> dispatch()
+
+      assert conn.status == 400
+      assert pending_timer_ids(tenant.schema_name, instance_id) != []
+    end
+
+    # Authorization wiring (design §5) -- :InstancesAdvanceTimer, not granted
+    # to TASK_WORKER. The generic route-walk in
+    # test/letflow/api/authorization_enforcement_test.exs already proves the
+    # declared policy key resolves correctly (AC4); this proves the router
+    # actually enforces it end to end and that a denied caller fires nothing.
+    test "a caller without InstancesAdvanceTimer is denied 403, and the timer is not fired" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "iss0389-advt-h")
+      instance_id = start_instance_with_timer!(tenant.schema_name)
+
+      conn =
+        build_conn("POST", "/#{instance_id}/advance-timer", tenant, %{
+          roles: ["TASK_WORKER"],
+          body: %{}
+        })
+        |> dispatch()
+
+      assert conn.status == 403
+      assert pending_timer_ids(tenant.schema_name, instance_id) != []
     end
   end
 

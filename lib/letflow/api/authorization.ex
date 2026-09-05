@@ -87,6 +87,7 @@ defmodule Letflow.Api.Authorization do
           | :RolesManage
           | :AttachmentsManage
           | :AttachmentsRead
+          | :InstancesAdvanceTimer
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -122,6 +123,7 @@ defmodule Letflow.Api.Authorization do
           | :RolesManage
           | :AttachmentsManage
           | :AttachmentsRead
+          | :InstancesAdvanceTimer
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -146,14 +148,15 @@ defmodule Letflow.Api.Authorization do
     :TenantsManage,
     :RolesManage,
     :AttachmentsManage,
-    :AttachmentsRead
+    :AttachmentsRead,
+    :InstancesAdvanceTimer
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
-  @doc "All seventeen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage` plus REQ-212's `:AttachmentsManage`/`:AttachmentsRead`."
+  @doc "All eighteen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage` plus REQ-212's `:AttachmentsManage`/`:AttachmentsRead` plus ISS-0389's `:InstancesAdvanceTimer`."
   @spec permissions() :: [permission()]
   def permissions, do: @permissions
 
@@ -253,6 +256,12 @@ defmodule Letflow.Api.Authorization do
 
   def endpoint_policy_key("POST", "/instances"), do: :InstancesStart
   def endpoint_policy_key("POST", "/instances/:id/cancel"), do: :InstancesCancel
+
+  # ISS-0389 -- a genuine new permission, fully wired (not the
+  # rebind-pins/reconstruct ad-hoc route-declared-atom pattern; see
+  # lib/letflow/design/iss0389-advance-timer-endpoint.md Decision 2).
+  def endpoint_policy_key("POST", "/instances/:id/advance-timer"),
+    do: :InstancesAdvanceTimer
 
   def endpoint_policy_key("GET", path)
       when path in [
@@ -445,6 +454,7 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:InstancesStart), do: :InstancesStart
   def required_permission(:InstancesCancel), do: :InstancesCancel
   def required_permission(:InstancesRead), do: :InstancesRead
+  def required_permission(:InstancesAdvanceTimer), do: :InstancesAdvanceTimer
   def required_permission(key) when key in [:TasksList, :TasksGetById], do: :TasksRead
   def required_permission(:TasksComplete), do: :TasksComplete
   def required_permission(key) when key in [:TasksAssign, :TasksReassign], do: :TasksAssign
@@ -515,7 +525,8 @@ defmodule Letflow.Api.Authorization do
         :MetricsRead,
         :WebhooksManage,
         :AttachmentsManage,
-        :AttachmentsRead
+        :AttachmentsRead,
+        :InstancesAdvanceTimer
       ]
 
   def role_allows?(:TASK_WORKER, permission),

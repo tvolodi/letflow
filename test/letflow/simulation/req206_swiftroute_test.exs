@@ -18,9 +18,18 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   test-local simplified process (`SimpleShipmentApproval`) replaces SERVICE_TASK
   nodes with direct END edges so `complete_task/3` succeeds end-to-end.
 
-  ## Two UNIMPLEMENTED findings — reported to ORCH via result.issues (not filed here)
-  1. POST /api/v1/instances/:id/advance-timer absent (grep-confirmed, zero matches)
-  2. No document/attachment API in Letflow or R-Co src/
+  ## One remaining UNIMPLEMENTED finding — reported to ORCH via result.issues (not filed here)
+  1. No document/attachment API in Letflow or R-Co src/
+
+  Finding #1 as originally filed here — `POST /api/v1/instances/:id/advance-timer`
+  absent — was ISS-0389 (queue task 389, GH#768); the route now exists
+  (`lib/letflow/routers/instances.ex`'s `authz_post "/:id/advance-timer"`, see
+  `lib/letflow/design/iss0389-advance-timer-endpoint.md`). TEST-DESIGNER has
+  since un-skipped `shipment-ops-timeout-escalation.yaml` step 2 (`via: skip`
+  -> `via: api`) and added a real `ops-escalation-timer` TIMER node to
+  `process_shipment_dispatch.yaml` so the scenario has an actual pending
+  timer to force-fire — see the `swiftroute-shipment-ops-timeout-escalation`
+  describe block below (design doc AC5/AC10).
 
   Real Postgres, `async: false` — tenant provisioning needs `Sandbox.mode(:auto)`.
   """
@@ -414,10 +423,31 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   # ─── AC3: swiftroute-shipment-ops-timeout-escalation ────────────────────
 
   describe "swiftroute-shipment-ops-timeout-escalation" do
-    test "step 1 :ok, step 2 :skip/:minor (advance-timer absent), step 3 :ok", %{
+    # ISS-0389 un-skip: step 2 previously ran `via: skip`/`severity: MINOR`
+    # because `POST /instances/:id/advance-timer` did not exist
+    # (handoffs/WF03-ISS0389-20260905/step-03-elixir-dev.json). The route now
+    # ships, and `process_shipment_dispatch.yaml` gained a real
+    # `ops-escalation-timer` TIMER node (forked in parallel with
+    # `ops-assessment`/`finance-estimate`, feeding `parallel-join`) so this
+    # scenario has an actual, single pending timer to force-fire -- design
+    # doc AC5/AC10 (`lib/letflow/design/iss0389-advance-timer-endpoint.md`).
+    #
+    # Also fixes a pre-existing bug in this test's own `definitions` pattern:
+    # it destructured `%{approval: definition}` (the unrelated
+    # SimpleShipmentApproval graph used by the high-value-happy scenario
+    # above) instead of `%{dispatch: definition}` (`process_shipment_dispatch.yaml`,
+    # the "Driver Incident Report" process this scenario's own header comment
+    # and `initial_variables: injury_involved` actually target). That bug was
+    # inert while step 2 was a no-op :skip (neither graph has an
+    # `ops-escalation-timer` TIMER node before this change, and step
+    # 1/3 only ever checked instance ACTIVE status, which both graphs
+    # satisfy identically) -- it stops being inert now that step 2 must
+    # resolve a real pending timer against the real graph this scenario is
+    # documented to exercise.
+    test "step 1 :ok, step 2 :ok (timer force-fired, token off TIMER node), step 3 :ok", %{
       schema_name: schema_name,
       actors: actors,
-      definitions: %{approval: definition}
+      definitions: %{dispatch: definition}
     } do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "shipment-ops-timeout-escalation.yaml"))
@@ -438,21 +468,43 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
       assert step1.outcome == :ok,
              "step 1 (POST /instances) failed — detail: #{inspect(step1.detail)}"
 
-      # Step 2: SKIP/MINOR — advance-timer endpoint absent (grep-confirmed)
-      assert step2.outcome == :skip,
-             "step 2 expected :skip, got #{inspect(step2.outcome)}"
+      # Step 2: POST .../advance-timer — real route, real force-fire (ISS-0389)
+      assert step2.outcome == :ok,
+             "step 2 (POST advance-timer) failed — detail: #{inspect(step2.detail)}"
 
-      assert step2.severity == :minor,
-             "step 2 expected severity :minor, got #{inspect(step2.severity)}"
+      assert step2.captured["timer_status"] == "fired",
+             "expected timer_status \"fired\", got: #{inspect(step2.captured)}"
 
-      assert step2.captured == nil
-      assert step2.detail =~ "advance-timer"
+      assert step2.captured["node_id"] == "ops-escalation-timer",
+             "expected the fired timer's node_id to be the ops-escalation-timer TIMER node, got: #{inspect(step2.captured)}"
 
-      # Step 3: instance still ACTIVE (harness coherent despite step 2 SKIP)
+      assert step2.captured["instance_id"] == step1.detail["instance_id"]
+
+      # Step 3: GET /instances/:id — instance still ACTIVE (ops-assessment and
+      # finance-estimate are still outstanding HUMAN_TASKs, so parallel-join
+      # cannot fire yet). GET's own response shape (`instance_map/1`,
+      # lib/letflow/routers/instances.ex) carries no `tokens` field (only
+      # `POST /:id/reconstruct` does) -- proving the escalation timer's own
+      # token genuinely moved off the TIMER node therefore reads
+      # `current_nodes` directly off the real `instance_projections` row,
+      # rather than through this step's own captured JSON.
       assert step3.outcome == :ok,
              "step 3 (GET /instances) failed — detail: #{inspect(step3.detail)}"
 
-      # Both expected_outcomes: instance ACTIVE (1 before skip, 1 after)
+      assert step3.captured["status"] == "ACTIVE"
+
+      instance_id = step1.detail["instance_id"]
+
+      current_nodes =
+        Repo.get!(Letflow.EventStore.InstanceProjection, instance_id, prefix: schema_name).current_nodes
+
+      refute "ops-escalation-timer" in current_nodes,
+             "expected the fired timer's token to have moved off ops-escalation-timer, current_nodes: #{inspect(current_nodes)}"
+
+      assert "ops-assessment" in current_nodes
+      assert "finance-estimate" in current_nodes
+
+      # Both expected_outcomes: instance ACTIVE (1 before advance-timer, 1 after)
       assert length(report.outcome_results) == 2
 
       assert Enum.all?(report.outcome_results, &(&1.outcome == :pass)),
@@ -490,21 +542,25 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   # ─── UNIMPLEMENTED findings — machine-verifiable source evidence ────────
 
   describe "UNIMPLEMENTED findings (source evidence for result.issues)" do
-    test "advance-timer endpoint absent from Letflow.Router and Routers.Instances" do
-      # AC3: source evidence that POST /api/v1/instances/:id/advance-timer does not exist.
-      # Scenario's own note field cites this; this test makes it machine-verifiable.
-      router_content =
-        File.read!(Path.expand("../../../lib/letflow/router.ex", __DIR__))
-
-      instances_content =
-        File.read!(Path.expand("../../../lib/letflow/routers/instances.ex", __DIR__))
-
-      refute String.contains?(router_content, "advance-timer"),
-             "Found 'advance-timer' in router.ex — UNIMPLEMENTED finding is no longer accurate"
-
-      refute String.contains?(instances_content, "advance_timer"),
-             "Found 'advance_timer' in instances.ex — UNIMPLEMENTED finding is no longer accurate"
-    end
+    # SUPERSEDED by ISS-0389 (2026-09-05): this test's original assertion
+    # ("POST /api/v1/instances/:id/advance-timer does not exist anywhere in
+    # lib/letflow/router.ex or lib/letflow/routers/instances.ex") was the
+    # machine-verifiable source evidence for this file's own moduledoc
+    # finding #1 and for the shipment-ops-timeout-escalation scenario's step
+    # 2 SKIP/MINOR fallback. `lib/letflow/design/iss0389-advance-timer-endpoint.md`
+    # has since shipped the real route (`authz_post "/:id/advance-timer"` in
+    # `lib/letflow/routers/instances.ex`), so that finding is no longer
+    # accurate and the grep this test ran now legitimately matches — same
+    # "stale absence-check removed rather than inverted or left permanently
+    # red" precedent the attachments finding below already established. This
+    # does NOT itself un-skip the scenario fixture's step 2 (that fixture/YAML
+    # edit and the accompanying `describe "swiftroute-shipment-ops-timeout-
+    # escalation"` test's assertions belong to TEST-DESIGNER per the design's
+    # own AC5/AC10 — see `handoffs/WF03-ISS0389-20260905/step-03-elixir-dev.json`
+    # for the explicit flag). See
+    # `lib/letflow/design/iss0389-advance-timer-endpoint.md` and
+    # `lib/letflow/routers/instances.ex`'s own moduledoc row for the new
+    # route's coverage.
 
     # SUPERSEDED by REQ-212 (2026-09-01): this test's original assertion
     # ("no attachment/document-upload routes exist anywhere in

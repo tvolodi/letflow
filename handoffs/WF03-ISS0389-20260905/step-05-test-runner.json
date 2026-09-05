@@ -1,0 +1,58 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-05",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0389-20260905/step-05-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T04:35:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": [
+      "WF03-ISS0389-20260905-step-04b-test-design-validator-recheck"
+    ],
+    "artifacts_in": [
+      "test/letflow/api/authorization_test.exs",
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "test/letflow/routers/instances_test.exs",
+      "test/letflow/scheduler_test.exs",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "test/fixtures/simulation/swiftroute/process_shipment_dispatch.yaml",
+      "test/fixtures/simulation/swiftroute/scenarios/shipment-ops-timeout-escalation.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c",
+    "commit": "1fde5fe7"
+  },
+  "task": {
+    "description": "Run mix letflow.check.test to completion on feature/WF03-ISS0389-20260905 (commit 1fde5fe7) and report the real, full aggregated result -- TEST-DESIGN-VALIDATOR's re-check flagged that prior '444/446 full suite' claims from TEST-DESIGNER were actually a single parallel-partition's own summary line, not the true aggregate across all N partitions the runner splits the suite into."
+  },
+  "result": {
+    "status": "PASS",
+    "command": "mix letflow.check.test",
+    "partition_log_dir": "/tmp/letflow_test_parallel.r9nijd",
+    "per_partition_results": [
+      "partition-1.log: 474 passed (2 properties, 472 tests), 3 excluded",
+      "partition-2.log: 344 passed (1 property, 343 tests), 1 excluded",
+      "partition-3.log: 431 passed, 3 excluded",
+      "partition-4.log: 444/446 passed (1/1 property, 443/445 tests), 11 excluded -- 2 failures",
+      "partition-5.log: 419 passed",
+      "partition-6.log: 324 passed",
+      "partition-7.log: 423 passed, 6 excluded",
+      "partition-8.log: 382 passed (2 properties, 380 tests)"
+    ],
+    "real_aggregate": "3243 tests total across 8 partitions, 3241 passed, 2 failed",
+    "failures": [
+      "Mix.Tasks.Letflow.CheckToolchainTest \"rust pin (REQ-165) a matching rust pin reports OK with no mismatch\" -- ErlangError :enoent, System.cmd(\"rustc\", ...) fails because this sandbox has no rustc binary on PATH",
+      "Mix.Tasks.Letflow.CheckToolchainTest \"rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running\" -- same root cause"
+    ],
+    "note": "Both failures are pre-existing, environment-only gaps (no rustc toolchain in this sandbox) unrelated to ISS-0389's change -- confirmed by (a) git diff b5fe974c..1fde5fe7 --stat touching only authorization.ex/routers/instances.ex/scheduler.ex and their tests/specs, nothing toolchain-related, and (b) this exact failure class recurring identically and independently on multiple unrelated PRs earlier in this same session. mix compile --warnings-as-errors and mix format --check-formatted both clean (re-confirmed by ORCH directly). Zero new failures introduced by this branch. Ready for Step Final."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

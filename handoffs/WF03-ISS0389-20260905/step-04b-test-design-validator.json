@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-04b",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "04b",
+  "from_agent": "TEST-DESIGN-VALIDATOR",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-04b-test-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-05T05:10:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-04"],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 4b: independently verify TEST-DESIGNER's coverage of design doc iss0389-advance-timer-endpoint.md AC1-AC10 and the full-suite/mutation claims."
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Coverage gap on AC3. Design doc §6 AC3 requires four specific role_allows? assertions for :InstancesAdvanceTimer: PROCESS_OPERATOR==true, TASK_WORKER==false, AGENT_RUNNER==false, PLATFORM_ADMIN==true. Cross-referenced every test in the diff (test/letflow/api/authorization_test.exs, test/letflow/api/authorization_enforcement_test.exs, test/letflow/routers/instances_test.exs 'advance-timer' describe block): PROCESS_OPERATOR==true is exercised indirectly (AC5's 200 test uses roles: ['PROCESS_OPERATOR']), TASK_WORKER==false is exercised indirectly (the dedicated 403 test uses roles: ['TASK_WORKER']). AGENT_RUNNER and PLATFORM_ADMIN are NOT referenced anywhere in the diff in connection with :InstancesAdvanceTimer or advance-timer -- no unit test in authorization_test.exs's 'PROCESS_OPERATOR grants InstancesCancel...'-style per-role grant/deny pattern was added for this permission, and no router-level test uses PLATFORM_ADMIN or AGENT_RUNNER against the advance-timer route. This is a real, mechanically-identifiable coverage gap, not a style nitpick: AC3 is a closed four-assertion criterion and two of the four have zero test coverage anywhere in the suite.",
+    "other_checks_performed": [
+      "AC1: verified by grep -n 'advance-timer' lib/letflow/routers/instances.ex (route present) -- not itself asserted by a test, but this is the router's own registration; AC4's route-walk test in authorization_enforcement_test.exs mechanically confirms endpoint_policy_key('POST','/instances/:id/advance-timer') resolves to the exact declared key :InstancesAdvanceTimer (real_key == declared_key branch) with no @allowlist entry needed -- AC2's first clause and AC4 are both genuinely covered.",
+      "AC2 second clause (required_permission(:InstancesAdvanceTimer) == :InstancesAdvanceTimer) has no standalone unit assertion, but is exercised transitively by every router-level advance-timer test (the full authz pipeline runs it) -- acceptable as coverage, same standard as AC3's PROCESS_OPERATOR/TASK_WORKER paths.",
+      "AC5-AC9: each has a direct, well-isolated router-level test in test/letflow/routers/instances_test.exs 'advance-timer' describe block, including negative-state assertions (timers remain pending on 400/404/422/403). Confirmed adequate.",
+      "AC10: confirmed correctly handled -- the stale absence-check test was removed (not left red), following this file's own established 'SUPERSEDED by <ISS/REQ>' comment convention used elsewhere in the same file for an analogous REQ-212 case. Adequate.",
+      "resolve_advance_target/3: all 7 design-specified branches (scheduler_test.exs's two new describe blocks) are each independently covered by an isolated test. Adequate.",
+      "Fixture scope judgment (process_shipment_dispatch.yaml TIMER node + injury-check-merge gateway, req206_swiftroute_test.exs definition-key fix): read both diffs in full. Verdict: genuinely necessary, not scope creep. Un-skipping step 2 (mandated by this issue's own AC5/AC10) requires actually dispatching this fixture through Engine.create/2 for the first time ever; the wrong-definition-key bug and the combined_split_join_not_supported gateway bug both block that dispatch outright (Engine.create/2 would reject the graph, and the test would exercise the wrong process entirely) -- these are not optional cleanups, the scenario literally cannot run without both fixes. Documented inline with clear header comments in both files rather than silently glossed over. No objection.",
+      "Spec shape (test/specs/ISS-0389.md) compared against test/specs/REQ-156.md: comparable structure and rigor (change summary, per-file test-case breakdown, mutation-check section, verification-performed with real command output, coverage checklist). Adequate.",
+      "Full-suite claim (444/446) and the mutation-test claim (80->78->80) were NOT independently re-run: this sandbox has no mix/elixir/erl on PATH at all (confirmed: `command -v mix elixir erl` all empty) -- no toolchain available to execute mix test or apply/revert a mutant myself. Flagging per core-directives 'if you can't run it, say so explicitly instead of guessing' rather than passing on the strength of TEST-DESIGNER's report. This must still be independently confirmed (by re-running in an environment with the toolchain) before this proceeds, in addition to the AC3 fix below."
+    ],
+    "required_fix": [
+      "Add explicit role_allows? coverage for :InstancesAdvanceTimer covering all four roles named in design AC3 (PROCESS_OPERATOR=true, TASK_WORKER=false, AGENT_RUNNER=false, PLATFORM_ADMIN=true) -- either as a dedicated unit test in test/letflow/api/authorization_test.exs matching that file's existing 'X grants Y, denies Z' per-role pattern, or as explicit router-level tests exercising PLATFORM_ADMIN (200) and AGENT_RUNNER (403) against POST .../advance-timer alongside the existing PROCESS_OPERATOR/TASK_WORKER cases. Either location is acceptable; leaving AGENT_RUNNER and PLATFORM_ADMIN untested for this permission is not.",
+      "When resubmitting, re-confirm (with a toolchain available) that mix letflow.check.test's real total and the mutation-test result match what was reported -- this validator could not execute mix in this sandbox and the claim remains unverified pending an environment where it can be re-run."
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

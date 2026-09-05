@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-02b",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0389-20260905/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T04:40:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-02"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0389-advance-timer-endpoint.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "test/fixtures/simulation/swiftroute/scenarios/shipment-ops-timeout-escalation.yaml",
+      "test/support/simulation/runner.ex",
+      "test/letflow/simulation/req206_swiftroute_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 1b: independently verify CODE-DESIGNER's design for POST /api/v1/instances/:id/advance-timer against the real codebase before implementation."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "All checked claims verified true against real files, not paraphrase: (1) shipment-ops-timeout-escalation.yaml step 2 genuinely has no `params` key, and runner.ex:411-421 confirms that yields body_params: %{} -- design's empty-body targeting semantics match. (2) instances.ex lines 119-129 genuinely state the rebind-pins/reconstruct ad-hoc permission shortcut was 'explicitly ruled out' and deferred to REQ-131 -- design's citation is accurate. authorization.ex's real line numbers for the type unions (71/93), endpoint_policy_key/2's InstancesCancel clause (255), required_permission/1's InstancesCancel clause (446), and role_allows?/2's PROCESS_OPERATOR clause (503) match the design's cited edit points almost exactly; PROCESS_OPERATOR's real permission list includes InstancesCancel/AttachmentsManage/DlqOperate as claimed. authorization_enforcement_test.exs's allowlist mechanism (lines 101-190) confirms AC4's claim that a real endpoint_policy_key/2 clause resolves through the normal non-:Unknown branch with no allowlist entry needed. (3) grep across router.ex/routers/*.ex/plugs/*.ex for Mix.env/environment-guard patterns returned zero hits, confirming 'no route is environment-gated' is true; fire_timer/2's real implementation (scheduler.ex:264-296) matches the design's described {:ok,:fired}/{:ok,:already_final}/transaction/lock shape exactly. (4) No implementation code in the design doc -- only a route-macro declaration and @spec blocks. (5) Spot-checked AC2, AC3, AC4, AC10 against real code -- all mechanically checkable and accurate. (6) req206_swiftroute_test.exs lines 493-501 do contain the exact stale absence-assertion test the design flags. No fabricated claims, no inaccurate file references, no contradiction with the fixture's real request shape found. Routing to ELIXIR-DEV for implementation.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

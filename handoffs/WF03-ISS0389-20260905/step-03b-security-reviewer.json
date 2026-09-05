@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-03b",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "03b",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-03b-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T05:20:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-03"],
+    "artifacts_in": [
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c",
+    "head_commit": "280ce695"
+  },
+  "task": {
+    "description": "WF-03 Step 2c: SECURITY-REVIEWER gate on ISS-0389's new POST /instances/:id/advance-timer route, resolve_advance_target/3, and the InstancesAdvanceTimer permission, against docs/agents/instructions/security-invariants.md INV-1..INV-8."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Verified against `git diff main...feature/WF03-ISS0389-20260905` directly (not the handoff paraphrase). INV-1 (tenant isolation) APPLIES: resolve_advance_target/3 (lib/letflow/scheduler.ex:~324-354) scopes both query paths (nil-timer_id list-pending and explicit-timer_id lookup) with Repo.all/Repo.one prefix: tenant_schema, and the explicit-timer_id branch pattern-matches `%Timer{status: \"pending\", instance_id: ^instance_id}` before returning {:ok, timer} -- a timer belonging to a different instance (even within the same tenant schema) falls through to the catch-all {:error, :no_pending_timer}, and cross-tenant is structurally impossible since tenant_schema comes from conn.assigns.scoped_opts[:prefix] (auth-derived), same pattern as every other handler in this router (handle_cancel, handle_reconstruct, etc, confirmed by grep). Authz correctness verified: authz_post \"/:id/advance-timer\", :InstancesAdvanceTimer (instances.ex ~line 343) gates the route before handle_advance_timer runs -- not an in-body check. Confirmed :InstancesAdvanceTimer wired through all five sites in authorization.ex: permission type union, endpoint_policy_key type union, @permissions list, endpoint_policy_key/2 clause, required_permission/1 clause, and PROCESS_OPERATOR's role_allows?/2 list only -- PLATFORM_ADMIN via existing catch-all, TASK_WORKER/PROCESS_DESIGNER/AGENT_RUNNER unchanged (no grant). INV-RT-1 (no Repo.* in routers): handle_advance_timer/render_advance_timer/cast_optional_timer_id in instances.ex contain zero Repo references -- all persistence delegated to Scheduler.resolve_advance_target/3 and Scheduler.fire_timer/2. Same-404 discipline confirmed: resolve_advance_target/3's explicit-timer_id branch folds not-found, not-pending, and wrong-instance into one {:error, :no_pending_timer} -> Response.not_found(conn), no distinguishing body. No SSRF/injection surface: timer_id used only via Ecto.UUID.cast/1 then as an Ecto query param (^timer_id) -- never string-interpolated, no external fetch introduced. Force-fire hazard checked: fire_timer/2 (unchanged) already fires irrespective of fire_at vs now (pre-existing behavior per design doc line 6-7), and its do_fire/2 calls Letflow.Engine.advance_after_timer_fired/3 inside the same transaction, which re-locks instance_projections and rejects with {:error, {:instance_not_active, status}} if the instance is already terminal -- this pre-existing guard, not something ISS-0389 adds, already prevents a force-fire from corrupting a cancelled/completed instance's state; ISS-0389 introduces no new ordering assumption since fire_timer/2 never assumed real chronological firing to begin with. No FAIL findings.",
+    "invariant_verdicts": {
+      "INV-1": "APPLIES -- PASS",
+      "INV-2": "NOT-APPLICABLE (S4/S5 scope not yet reached)",
+      "INV-3": "NOT-APPLICABLE (S4/S5 scope not yet reached)",
+      "INV-4": "APPLIES -- PASS (500 on fire_timer/2 {:error,_} carries no detail, matches render_cancel/2 precedent)",
+      "INV-5": "NOT-APPLICABLE (S4/S5 scope not yet reached)",
+      "INV-6": "APPLIES -- PASS (force-fire hazard analyzed above; no new corruption path)",
+      "INV-7": "APPLIES -- PASS (authz genuinely gates the route, not an afterthought)",
+      "INV-8": "APPLIES -- PASS (no secret resolution in this diff; out of scope for that sub-check)"
+    },
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

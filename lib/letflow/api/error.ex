@@ -1,5 +1,6 @@
 defmodule Letflow.Api.Error do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   RFC 9457 Problem Details builder — ports `src/api/errors.zig` (272 lines).
 
   Pure: no `Plug.Conn` dependency and no I/O. Build a `t()` with one of the
@@ -9,6 +10,7 @@ defmodule Letflow.Api.Error do
 
   ## Zig-to-Elixir translation notes
 
+  PROVENANCE (historical, not current decision authority):
   * **`HandlerResult` struct → conn-threading functions.** `errors.zig`'s
     companion `response.zig` returns a `HandlerResult` value
     (`status_code`/`body`/`content_type`) because Zig has no request object to
@@ -16,6 +18,7 @@ defmodule Letflow.Api.Error do
     is not ported at all: `Letflow.Api.Response` exposes functions that take
     and return a `Plug.Conn.t()` instead. See `Letflow.Api.Response`'s
     moduledoc.
+  PROVENANCE (historical, not current decision authority):
   * **Content-Type is a deliberate divergence from R-Co.** `response.zig`'s
     `problemResponse/2` does not set `content_type` on the `HandlerResult` it
     returns, so it falls through to the struct default
@@ -24,11 +27,13 @@ defmodule Letflow.Api.Error do
     replicate that: error responses are sent as `application/problem+json`,
     the media type RFC 9457 §3 defines for exactly this document shape.
     Success responses stay on `application/json`, matching R-Co.
+  PROVENANCE (historical, not current decision authority):
   * **No allocator-failure fallback.** `errors.zig`'s `serialise/2` can fail
     with `error{OutOfMemory}`, and `response.zig`'s `problemResponse/2` has a
     hand-written literal 500 JSON string for that case. Elixir has no
     caller-managed allocator, so neither the error union nor the fallback body
     has an analogue; both are deliberately dropped rather than transliterated.
+  PROVENANCE (historical, not current decision authority):
   * **Strings are properly escaped.** `errors.zig`'s `serialise/2` builds its
     JSON with `std.fmt.allocPrint` and literal `"{s}"` interpolation, which
     does **not** escape quotes, backslashes, or control characters inside
@@ -65,6 +70,7 @@ defmodule Letflow.Api.Error do
   defstruct [:type, :title, :status, :detail, trace_id: "", errors: nil, extensions: nil]
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   An RFC 9457 Problem Details object. Mirrors `errors.zig`'s `ProblemDetails`
   field set 1:1 (`type`/`title`/`status`/`detail`/`trace_id`), plus one
   extension member this port adds: `errors`, a list of per-field validation
@@ -95,6 +101,7 @@ defmodule Letflow.Api.Error do
   @doc """
   Serialise a problem document to a JSON body.
 
+  PROVENANCE (historical, not current decision authority):
   Unlike `errors.zig`'s `serialise/2`, this does **not** resolve `trace_id`
   from a thread-local — `Letflow.Api.Error` is conn-agnostic by design (see
   `docs/migration/stage-4-api-surface.md`: prefer `conn.assigns`, do not port a
@@ -223,6 +230,7 @@ defmodule Letflow.Api.Error do
   @doc """
   HTTP 413 — Content Too Large.
 
+  PROVENANCE (historical, not current decision authority):
   Not present in `errors.zig` — R-Co's manual body-reading loop bounds reads
   itself rather than raising a typed error for "too large". Added by REQ-068
   for `Letflow.Plugs.SafeJsonParser`, the first Letflow caller that needs it
@@ -311,6 +319,7 @@ defmodule Letflow.Api.Error do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   HTTP 422 — Empty Promotion Plan. REQ-066 §0.2 deliberately deferred this
   constructor ("PRM-01 AC3/AC4 ... is itself a separate, not-yet-landed
   Letflow requirement") — REQ-077 is that requirement. Matches
@@ -341,6 +350,7 @@ defmodule Letflow.Api.Error do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   HTTP 409 — Promotion Conflict. A genuine addition (not REQ-066-deferred):
   R1/R7/R10's conflict response must carry the `conflicts` array
   (`promotion_review.zig:197-209`) as an RFC 9457 §3.2 extension member —

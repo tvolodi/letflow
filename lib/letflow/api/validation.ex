@@ -1,5 +1,6 @@
 defmodule Letflow.Api.Validation.FieldConstraint do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   A single field constraint within a `Letflow.Api.Validation` schema. Ports
   `validation.zig`'s `FieldConstraint` struct — see
   `lib/letflow/design/req068-validation.md` §0.6-§0.8 for the two fields
@@ -39,6 +40,7 @@ end
 
 defmodule Letflow.Api.Validation.FieldError do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   A single field-level validation error. Ports `validation.zig`'s `FieldError`
   struct 1:1 (field/constraint/message/received).
   """
@@ -57,6 +59,7 @@ end
 
 defmodule Letflow.Api.Validation do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Request-body schema validation — ports `src/api/validation.zig` (592 lines).
   `middleware/validate.zig` (86 lines) is not ported as a separate module: its
   only job was calling this module's `validate/2`-equivalent and mapping the
@@ -93,6 +96,7 @@ defmodule Letflow.Api.Validation do
 
   ## Scope boundary
 
+  PROVENANCE (historical, not current decision authority):
   This module, and REQ-068 as a whole, does **not** port `src/api/middleware/
   rate_limit.zig` or `src/api/middleware/quota_enforcement.zig`. Both need
   per-tenant counter storage that no Letflow requirement has built yet;
@@ -110,6 +114,7 @@ defmodule Letflow.Api.Validation do
   @doc """
   Validate a single field's decoded JSON value against one constraint.
 
+  PROVENANCE (historical, not current decision authority):
   `value` is `:missing` when the field key was absent from the body (as
   opposed to present with a JSON `null`, which decodes to Elixir `nil` and is
   passed through as `nil` — R-Co's `validateField` treats an absent key and a
@@ -117,6 +122,7 @@ defmodule Letflow.Api.Validation do
   `json_value == null or json_value.? == .null` as one condition; ported the
   same way here).
 
+  PROVENANCE (historical, not current decision authority):
   Returns `nil` when the value passes every check the constraint declares, or
   the first violated `FieldError.t()` otherwise — `validation.zig` returns on
   the first per-field failure too (`validate/2` below is what collects one
@@ -177,21 +183,26 @@ defmodule Letflow.Api.Validation do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Validate a decoded request body against a schema, collecting **every**
   violated constraint rather than stopping at the first — mirrors
   `validation.zig:404` ("If there are field-level errors, return them all").
 
+  PROVENANCE (historical, not current decision authority):
   Structural checks (§0.9 of the design doc) run first and, if either fires,
   short-circuit before any `FieldConstraint` is evaluated — the same
   early-return shape as `validate/4`'s own "must be an object" check
   (`validation.zig:377-386`).
 
+  PROVENANCE (historical, not current decision authority):
   ## Two different R-Co files are called `validation.zig`. They are unrelated.
 
+    PROVENANCE (historical, not current decision authority):
     * `src/api/validation.zig` (592 lines) is the **request-body validator** —
       API-07, which checks an *incoming JSON request payload* against a
       field-constraint schema and returns RFC 9457 field errors. **That is
       this module** (REQ-068).
+    PROVENANCE (historical, not current decision authority):
     * `src/api/routes/validation.zig` (173 lines) is the **definition-graph
       validation endpoint** — `POST /api/v1/definitions/:id/validate`,
       VLD-01/02/03, which runs validators over a *stored process-definition

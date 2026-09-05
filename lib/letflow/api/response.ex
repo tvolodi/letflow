@@ -1,11 +1,13 @@
 defmodule Letflow.Api.Response do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   The single response contract every S4 route emits — ports
   `src/api/response.zig` (69 lines). Nothing renders a response body by hand
   once this module exists.
 
   ## Zig-to-Elixir translation
 
+  PROVENANCE (historical, not current decision authority):
   `response.zig` defines a `HandlerResult` struct (`status_code`, `body`,
   `content_type` defaulting to `CONTENT_TYPE_JSON`) and returns it by value,
   because Zig has no request object to carry the result. **In Elixir the conn
@@ -24,6 +26,7 @@ defmodule Letflow.Api.Response do
 
   **Success responses:** `application/json`, unchanged from R-Co.
 
+  PROVENANCE (historical, not current decision authority):
   **Error responses:** `application/problem+json`. This diverges from R-Co:
   `response.zig`'s `problemResponse/2` never sets `content_type` on the
   `HandlerResult` it returns, so R-Co's error responses fall through to the
@@ -83,6 +86,7 @@ defmodule Letflow.Api.Response do
   @doc """
   HTTP 204 — No Content.
 
+  PROVENANCE (historical, not current decision authority):
   Takes no `body` parameter (mirroring `noContent()` in `response.zig`), so an
   accidental non-empty 204 body is impossible to pass in rather than merely
   discouraged. No `Content-Type` is set: a 204 carries no representation.
@@ -99,6 +103,7 @@ defmodule Letflow.Api.Response do
   document's `trace_id`, then sends it at the document's own status with
   `Content-Type: application/problem+json`.
 
+  PROVENANCE (historical, not current decision authority):
   `trace_id` resolution matches `errors.zig`'s `serialise/2` precedence exactly:
 
     1. a non-empty `trace_id` already on the problem document wins (the

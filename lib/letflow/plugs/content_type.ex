@@ -1,5 +1,6 @@
 defmodule Letflow.Plugs.ContentType do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Content-Type enforcement — ports `src/api/middleware/content_type.zig`
   (119 lines). See `lib/letflow/design/req068-validation.md` §0.2 for the
   full decision table this ports verbatim, including the PUT-with-no-body
@@ -45,6 +46,7 @@ defmodule Letflow.Plugs.ContentType do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Ports checkContentType/3 (content_type.zig:45-81) exactly, including the
   # PUT-with-no-body -> 400 branch a literal reading of "POST/PUT/PATCH
   # without Content-Type -> 415" would miss.
@@ -81,6 +83,7 @@ defmodule Letflow.Plugs.ContentType do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Ports stripParams/1 (content_type.zig:114-119): strip everything from
   # the first ";" onward, trim trailing whitespace/tabs from what remains —
   # "application/json; charset=utf-8" -> "application/json".

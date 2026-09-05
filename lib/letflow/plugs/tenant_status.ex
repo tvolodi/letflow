@@ -3,6 +3,7 @@ defmodule Letflow.Plugs.TenantStatus do
   Tenant status gate — two independent, linearly-composed checks over the
   same tenant lookup.
 
+  PROVENANCE (historical, not current decision authority):
   1. **Deactivation check (REQ-075, all methods).** A request against a
      tenant whose `status` is `:inactive`, from a caller whose roles
      (`conn.assigns.auth_context.roles`) do not include `"PLATFORM_ADMIN"`,
@@ -17,6 +18,7 @@ defmodule Letflow.Plugs.TenantStatus do
      entry; do not narrow to write-only or widen the exemption without a
      fresh sign-off.
 
+  PROVENANCE (historical, not current decision authority):
   2. **Write-pause check (REQ-021, ports `src/api/middleware/tenant_status.zig`'s
      `checkTenantWritePause/4`), unchanged.** A write request
      (`POST`/`PUT`/`PATCH`/`DELETE`) against a tenant whose `status` is
@@ -33,6 +35,7 @@ defmodule Letflow.Plugs.TenantStatus do
   has resolved `conn.assigns[:auth_context][:tenant_id]` (and `:roles`), and
   before dispatching to any sub-router.
 
+  PROVENANCE (historical, not current decision authority):
   **Fail-closed on a genuine DB error during the tenant-status lookup** — a
   deliberate divergence from `tenant_status.zig`'s own fail-open behavior
   (pool exhaustion / query failure both let the request through in R-Co).

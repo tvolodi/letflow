@@ -231,7 +231,7 @@ defmodule Letflow.Engine do
   REQ-052 introduces no new process and therefore has no equivalent
   supervisor to keep).
 
-  R-Co's own EE-08 additionally (a) cancels pending timers atomically via
+  R-Co's EE-08 additionally (a) cancels pending timers atomically via
   SCH-03 (`src/scheduler/`, S6 — not yet built in Letflow) and (b) abandons
   any in-flight `SERVICE_TASK` HTTP call best-effort (REQ-056's own future
   transport, out of S3 scope). **Neither exists in Letflow yet, and
@@ -873,8 +873,8 @@ defmodule Letflow.Engine do
   end
 
   # REQ-215 design doc §2.3 -- the minimal inline {{variables.KEY}} template
-  # renderer. Scoped to exactly the syntax R-Co's own design doc names
-  # (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
+  # renderer. Scoped to exactly the {{variables.KEY}} syntax the R-Co design
+  # doc names (src/design/ext-01-service-task-node.md:20, {{variables.order_id}}), and
   # to url_template only (body_template rendering is out of this
   # requirement's own scope, §7 Open Question 2). No existing rendering
   # mechanism was found anywhere in this codebase to reuse (§0.1) -- this

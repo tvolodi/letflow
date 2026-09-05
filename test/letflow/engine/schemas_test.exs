@@ -394,10 +394,11 @@ defmodule Letflow.Engine.SchemasTest do
       assert doc =~ "remains the engine's authoritative summary of active token positions"
     end
 
-    test "states status dumps lowercase, matching R-Co's own tokens.status strings exactly (design §5.3 point 4)" do
+    test "states status dumps lowercase, a fixed convention distinct from Task.status's uppercase (design §5.3 point 4)" do
       doc = normalized_moduledoc(Token)
 
-      assert doc =~ "matching R-Co's own `tokens.status` strings exactly"
+      assert doc =~ "a fixed convention per design"
+      assert doc =~ "this codebase already has a same-shaped table using the opposite casing"
     end
   end
 end

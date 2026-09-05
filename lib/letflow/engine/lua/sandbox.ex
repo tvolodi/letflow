@@ -45,7 +45,7 @@ defmodule Letflow.Engine.Lua.Sandbox do
   could otherwise be reached.
 
   (b) `jit`, `ffi`, and `bit` do not exist in Lua 5.3 at all — they are LuaJIT-specific.
-  R-Co's exclusion of them, including `ffi` (which R-Co's own `stdlib.zig` calls "a
+  R-Co's exclusion of them, including `ffi` (which R-Co's `stdlib.zig` calls "a
   COMPLETE sandbox escape"), is vacuous under this runtime, not satisfied. No deny-set
   entry is added for them because there is nothing at those paths to deny and no library
   file installs them.

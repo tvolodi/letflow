@@ -26,8 +26,9 @@ defmodule Letflow.Engine.Expr do
   therefore rejects CEL vocabulary (macros, type-conversion functions,
   collection functions, `in`, the ternary operator) that **neither** R-Co
   **nor** Letflow implements — this module's translation layer restricts
-  authored conditions to what R-Co's own `src/expr` grammar actually
-  supports, not a Letflow gap against a CEL surface R-Co never had. A
+  authored conditions to exactly the grammar `src/expr` (the target this
+  port implements) actually supports, not a Letflow gap against a CEL
+  surface neither implementation ever had. A
   future contributor tempted to "complete" CEL support against
   `@unsupported_call_markers` would be acting against a closed EXP-102
   decision, not filling a real gap.
@@ -36,7 +37,7 @@ defmodule Letflow.Engine.Expr do
 
   R-Co's real builtin whitelist (`src/expr/lexer.zig` L17-32) has 11
   entries: `length`, `lower`, `upper`, `trim`, `contains`, `startsWith`,
-  `endsWith`, `coalesce`, `now`, `date_add`, `date_diff`. R-Co's own
+  `endsWith`, `coalesce`, `now`, `date_add`, `date_diff`. R-Co's
   `evaluator.zig` documents, in its own comment, that `now()` is
   "inherently impure; all other built-ins are pure." Adding `now()` (or
   `date_add`/`date_diff` insofar as they depend on it) here would read the
@@ -223,7 +224,8 @@ defmodule Letflow.Engine.Expr do
         # identifier (`a&&b` -> `aandb`) instead of `a and b` -- a silent
         # wrong-edge routing bug, not a parse error. Already-spaced input can
         # end up with doubled spaces (`a  and  b`); harmless, since
-        # `do_tokenize/2` below skips whitespace like R-Co's own lexer does.
+        # `do_tokenize/2` below already skips whitespace during lexing, the
+        # same standard tokenizer behavior R-Co's lexer also relies on.
         expr_source =
           cel_condition
           |> strip_variables_prefix()

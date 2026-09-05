@@ -85,8 +85,10 @@ defmodule Letflow.Engine.ExecutionError do
 
   @typedoc """
   A closed-looking but explicitly **open** union (the trailing `atom()` is
-  deliberate, not a typo) — mirrors R-Co's own error-code table being a
-  mapping, not a hardcoded case statement. The five named atoms map 1:1 onto
+  deliberate, not a typo) — kept open, as a mapping rather than a hardcoded
+  case statement, so a future calling path can add its own error atom
+  without needing every existing `case`/`cond` over `error_type()` updated
+  for exhaustiveness first. The five named atoms map 1:1 onto
   this requirement's five calling paths (REQ-049, REQ-050, REQ-056, REQ-057,
   REQ-062).
   """

@@ -73,8 +73,8 @@ defmodule Letflow.Engine.SnapshotWriter do
      equal or greater force to a per-instance snapshot *cadence counter*,
      which is even less than the full instance state REQ-045 already
      declined to keep in a process.
-  2. **In-process counter, R-Co's own shape.** R-Co's `SnapshotWriter` is a
-     struct holding a pool handle — structurally the kind of thing that
+  2. **In-process counter (a struct-held pool-handle shape).** R-Co's
+     `SnapshotWriter` is a struct holding a pool handle — structurally the kind of thing that
      *could* hold a per-instance counter if REQ-045 had resolved to
      supervised per-instance processes. It did not, so an in-process
      counter has no natural home in Letflow's current instance-engine shape

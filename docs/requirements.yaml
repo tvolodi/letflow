@@ -13903,7 +13903,7 @@ requirements:
   - id: REQ-233
     title: Retire parity-justification phrasing in lib/letflow/engine.ex, lib/letflow/engine/*, engine/wasm/*, engine/lua/* -- restate on merit or delete (closes ISS-0424 part 2b)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the engine+wasm+lua slice of ISS-0424/GH#828 part 2, same

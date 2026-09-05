@@ -124,6 +124,7 @@ mechanics depend on exact behavior; none of it is asserted from memory)
   PK (167–182), `uq_event_archive_idempotency` likewise not recreated because
   "plat_event_idempotency supersedes its purpose" (192–193), `plat_event_idempotency`
   DDL (200–207), rebuilt `event_payload_store` with the composite FK (215–223).
+PROVENANCE (historical, not current decision authority):
 - `src/event_store/store.zig` (1619 lines) — sidecar-first append rationale (588–598),
   sidecar INSERT (606–617), the "generate `event_id` exactly once" bug note (623–636),
   duplicate resolution across `events`/`events_ephemeral`/`events_archive` (638–703, table
@@ -131,8 +132,10 @@ mechanics depend on exact behavior; none of it is asserted from memory)
   (705–727), payload side-table INSERT keyed on `(event_id, created_at)` (835–854),
   "the SAME created_at" bound into `instance_projections` (856–864), **`Store.archive()`
   retired** (1287–1310).
+PROVENANCE (historical, not current decision authority):
 - `src/event_store/platform.zig` (12 lines) — the three sentinels; `PLATFORM_INSTANCE_ID`
   is "Never inserted into instance_projections" (line 5).
+PROVENANCE (historical, not current decision authority):
 - `src/event_store/registry.zig` (583 lines) — read to confirm REQ-024's boundary; it owns
   `event_type_registry`, which this requirement does **not** create.
 - `src/design/par-01-monthly-range-partitioning.md:203–209` — the `plat_`-prefix
@@ -149,6 +152,7 @@ mandates for every tenant-scoped migration.
 
 **Explicitly NOT in scope, and not silently dropped:**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Owned by | Citation |
 |---|---|---|
 | `Letflow.EventStore` context module (`append/1`, `read/2`, `read_global/1`, `point_in_time/3`, `archive/1`) | REQ-025, REQ-026 | `docs/requirements.yaml:1042–1139` |
@@ -325,6 +329,7 @@ and the shipped S1 migrations:
 
 Migration `20260816120001_create_events.exs` — `Letflow.Repo.Migrations.CreateEvents`.
 
+PROVENANCE (historical, not current decision authority):
 | Column | Ecto migration type | DB type | Null / default | Notes & citation |
 |---|---|---|---|---|
 | `event_id` | `:binary_id`, `primary_key: true` | `uuid` | `NOT NULL` (implied by PK) | Component 1 of the composite PK. **No DB default** — REQ-025 must generate it once and bind the same value into `events` and `event_idempotency` (R-Co `store.zig:623–636` documents the live bug caused by two independent `gen_random_uuid()` calls orphaning the sidecar row). |
@@ -422,6 +427,7 @@ retrofit must widen it; that is recorded here so it is a planned step, not a sur
 
 #### 3.1.3 Foreign keys on `events`: none, deliberately
 
+PROVENANCE (historical, not current decision authority):
 - **`instance_id` → `instance_projections.instance_id`: no FK.** R-Co has none
   (`001:23–40`), and `src/event_store/platform.zig:5` states the reason directly:
   `PLATFORM_INSTANCE_ID` is a sentinel that is "Never inserted into instance_projections".
@@ -532,6 +538,7 @@ table's own `prefix:` automatically because `ref.options` carries no `:prefix`
 (`:1872`) — so no extra prefix threading is needed and the FK stays inside the tenant
 schema.
 
+PROVENANCE (historical, not current decision authority):
 **`on_delete: :restrict`, diverging from R-Co's `ON DELETE CASCADE` (`012:18`, `1147:222`)
 — decided, with rationale.** Under `CASCADE`, REQ-026's `archive/1` (which `DELETE`s from
 `events` after copying to `events_archive`, `event_store.md:294, 324–329`) would silently
@@ -576,6 +583,7 @@ prefix whose meaning Letflow's design explicitly rejects would import a known mi
 the prefix is dropped and the domain-meaningful part of the name is preserved, which is
 exactly what Decision A prescribes (`0003:98–103`).
 
+PROVENANCE (historical, not current decision authority):
 | Column | Ecto migration type | DB type | Null / default | Notes & citation |
 |---|---|---|---|---|
 | `id` | `:binary_id`, `primary_key: true` | `uuid` | `NOT NULL` | Decision A; REQ-023's exception list does not include this table (`requirements.yaml:965–967`). This is why the uniqueness of `idempotency_key` is expressed as an explicit unique **index** (REQ-023 acceptance criterion 4) rather than as R-Co's `idempotency_key TEXT PRIMARY KEY` (`1147:201`). |
@@ -586,18 +594,21 @@ exactly what Decision A prescribes (`0003:98–103`).
 
 **Indexes:**
 
+PROVENANCE (historical, not current decision authority):
 | Index name | Columns | Unique | Why / citation |
 |---|---|---|---|
 | *(PK)* | `(id)` | yes | Decision A |
 | `uq_event_idempotency_key` | `(idempotency_key)` | **yes** | **REQ-023 acceptance criterion 4.** This single index carries the whole ES-03 global-uniqueness invariant that R-Co previously split across `events.uq_event_idempotency` (`001:48–49`) and `events_archive.uq_event_archive_idempotency` (`013:20–21`). |
 | `idx_event_idempotency_event` | `(event_id, event_created_at)` | no | R-Co `1147:206–207`; supports the duplicate-resolution lookup path (`store.zig:654–697`). |
 
+PROVENANCE (historical, not current decision authority):
 **No foreign key to `events`, deliberately.** The claimed event may legitimately live in
 `events` *or* `events_archive` (R-Co additionally searches `events_ephemeral`;
 `store.zig:670–675` enumerates all three), so an FK to `events` alone would break the
 moment REQ-026's `archive/1` moves the row. R-Co's sidecar likewise carries no FK
 (`1147:200–204`).
 
+PROVENANCE (historical, not current decision authority):
 **Why this table exists at all, and what it supersedes** — this is REQ-023 acceptance
 criterion 4's second half and §7's moduledoc text. 0003 Decision C point **2(b)**
 (`0003:277–282`) resolves `event_store.md`'s Open Question #1 (`event_store.md:451–460`),
@@ -775,6 +786,7 @@ separate `:bigint` *schema* type; `:bigint`/`:bigserial` are *migration* types).
 `read_after_writes: true` on `global_seq` is required because the value is assigned by the
 database sequence, never by the changeset.
 
+PROVENANCE (historical, not current decision authority):
 `event_id` and `created_at` carry **no `autogenerate`**. This is deliberate and is the
 single most easily-missed detail in this design: REQ-025 must mint `event_id` exactly once
 and bind the *same* value into `events`, `event_idempotency` and (for large payloads)
@@ -957,6 +969,7 @@ Notes ELIXIR-DEV must not lose:
 
 ## 6. Invariants
 
+PROVENANCE (historical, not current decision authority):
 | id | Invariant | Enforced where | Source |
 |---|---|---|---|
 | INV-EV-1 | **Event immutability.** No function anywhere in `lib/letflow/event_store/` may produce an `UPDATE` against a committed `events` row. There is no `update_changeset/2` on `Letflow.EventStore.Event`. This is an application/schema-module-layer invariant; Ecto migrations have no "no updates" DDL primitive. | `Event`'s function list (§5.1) + its moduledoc (§7.1) | 0003 Decision C point 1 (`0003:254–262`); `event_store.md:274` |
@@ -1058,6 +1071,7 @@ created here; S3 adds them in its own migration.
 
 ## 8. Cross-module dependencies
 
+PROVENANCE (historical, not current decision authority):
 | Dependency | Direction | Nature |
 |---|---|---|
 | `Letflow.Repo` (`lib/letflow/repo.ex`) | schemas → Repo | Only at REQ-025/026 call time. REQ-023 adds no `Repo` call of its own. |
@@ -1075,6 +1089,7 @@ created here; S3 adds them in its own migration.
 
 ## 9. Open questions — explicitly listed, not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (MAJOR, affects REQ-026): `event_retention_policies` has no owning requirement.**
 REQ-026's `archive/1` is specified to consult it ("per-event-type policies from
 `event_retention_policies` take precedence", `requirements.yaml:1126`), and
@@ -1088,6 +1103,7 @@ REQ-023's acceptance-criteria-bounded scope. Resolution needed before REQ-026 st
 either extend REQ-026's scope to create it, or file it as its own requirement. Reported as
 an issue in this step's handoff.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-2 (MAJOR, addressed to REQ-026): how do large payloads survive archival?**
 `event_payload_store` rows are keyed to `events` rows. REQ-026's `archive/1` copies to
 `events_archive` and deletes from `events` (`event_store.md:294, 324–329`). Three
@@ -1111,6 +1127,7 @@ events across *instances* within one tenant — which is all ES-04 asks for
 because solving it later means either a `platform`-schema sequence or an ordering key that
 is not a bare integer — a change with real blast radius that should be made deliberately.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 (MINOR): PAR-03's `retention_class` / `events_ephemeral` machinery is not ported.**
 R-Co's current `store.zig` routes appends to either `events` or `events_ephemeral` based on
 an event type's retention class (`store.zig:705–770`). No Letflow requirement mentions
@@ -1144,6 +1161,7 @@ Zig/SQL and to say so explicitly where they disagree, rather than glossing over 
 disagreements were found. All were resolved in favour of the actual source plus 0003,
 which is what Letflow ships against.
 
+PROVENANCE (historical, not current decision authority):
 **C-1 — `Store.archive()` no longer exists in R-Co.** `event_store.md:115–119` documents
 `Store.archive(retention_days) StoreError!u64`, and invariants 11 and 12
 (`event_store.md:294–296`) describe its behaviour. `src/event_store/store.zig:1287–1310`
@@ -1157,6 +1175,7 @@ that no longer exists upstream, so it has no current reference implementation �
 `event_payload_store` carries no information about archival payload handling (OQ-2). The
 `events_archive` *table* is unaffected: `1147:167–190` still creates it.
 
+PROVENANCE (historical, not current decision authority):
 **C-2 — `event_store.md`'s idempotency invariants 4 and 5 and Open Question #1 are
 obsolete.** Invariant 4 (`event_store.md:280`) asserts a `uq_event_idempotency` UNIQUE
 index on `events(idempotency_key)` and an `ON CONFLICT (idempotency_key) DO NOTHING`
@@ -1167,6 +1186,7 @@ indexes (`1147:162–165, 192–193`) and `store.zig:705–727` records that `ON
 supersession 0003 Decision C 2(b) already recorded, and §3.5/§7.2 encode it — so this
 contradiction is *resolved by an existing Letflow decision*, not newly decided here.
 
+PROVENANCE (historical, not current decision authority):
 **C-3 — `event_payload_store.created_at` means two different things in two R-Co
 revisions.** `012_event_retention.sql:21` declares `created_at TIMESTAMPTZ NOT NULL DEFAULT
 NOW()` — the side-table row's own insert time. `1147:218` rebuilds the table with
@@ -1184,6 +1204,7 @@ has a UNIQUE index"; `012:18` matches. `1147:221` replaced it with
 wording (`requirements.yaml:933`), while the composite constraint the FK needs is
 satisfied on the parent side by `events`' own primary key.
 
+PROVENANCE (historical, not current decision authority):
 *(Additionally, `event_store.md:4` lists the module's files as `store.zig` and
 `registry.zig` only, while `src/event_store/` actually contains three files —
 `platform.zig` (12 lines) exists too. `docs/migration/stage-2-event-store-definitions.md:7`

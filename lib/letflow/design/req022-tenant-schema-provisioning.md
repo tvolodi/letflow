@@ -33,6 +33,7 @@ writes the actual `.exs`/`.ex` files from this.
   :binary_id)` FK syntax, required `#`-comment moduledoc header), `lib/letflow/repo.ex`
   (plain `Ecto.Repo`, `Ecto.Adapters.Postgres` — no dynamic-repo/multi-repo setup exists
   today).
+PROVENANCE (historical, not current decision authority):
 - **R-Co source, read directly, ported for behavior not code (per this requirement's own
   instruction):** `C:\Users\tvolo\dev\ai-dala\R-Co\migrations\060_schema_per_tenant_bootstrap.sql`
   (`public.tenant_schemas` table shape, `public.bpm_provision_tenant_schema(p_tenant_id
@@ -285,6 +286,7 @@ a 2-arity function with a default argument, not two unrelated arities.
    contract).
 4. Return `{:ok, applied_versions}`.
 
+PROVENANCE (historical, not current decision authority):
 **No implicit chaining invariant:** `provision_tenant_schema/1` never calls
 `replay_migrations/2`, and `replay_migrations/2` never calls `provision_tenant_schema/1`.
 They are two separate, composable steps a caller sequences explicitly — this mirrors

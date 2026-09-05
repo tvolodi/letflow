@@ -1,4 +1,5 @@
 # Design: REQ-026 — Event read paths, archive, and platform sentinels
+PROVENANCE (historical, not current decision authority):
 (`Store.read`/`readGlobal`/`pointInTime`/`archive` + `platform.zig`)
 
 **Requirement:** REQ-026 (`docs/requirements.yaml:1102-1191`, stage S2,
@@ -103,11 +104,13 @@ describe shape only; ELIXIR-DEV writes the real version at Step 2a.
   signature and `{:error, :tenant_not_provisioned}` / `{:error, :invalid_schema_name}`
   error shape, reused unchanged by every function below that takes `prefix:`.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source (`src/event_store/store.zig`'s `read`/`readGlobal`/`pointInTime`/`archive`,
 `src/event_store/platform.zig`, `src/design/event_store.md`'s ES-02/04/06/07 sections):
 genuinely unreachable on this host**, confirmed freshly for this run (not assumed stale
 from REQ-025/029/032's prior findings):
 
+PROVENANCE (historical, not current decision authority):
 ```
 $ find / -maxdepth 3 -iname "R-Co" 2>/dev/null
 (no output)
@@ -164,6 +167,7 @@ unwieldy — that is implementation discretion, not a design requirement.
 
 ---
 
+PROVENANCE (historical, not current decision authority):
 ## 3. Platform sentinel constants (`platform.zig` port)
 
 **Accessibility, not raw module attributes.** REQ-026's acceptance criterion 7 requires
@@ -179,12 +183,14 @@ idiom):
 @spec platform_tenant_id() :: Ecto.UUID.t()
 ```
 
+PROVENANCE (historical, not current decision authority):
 Each must carry a one-line `@doc` citing `src/event_store/platform.zig` verbatim, per
 acceptance criterion 7 — e.g. (illustrative wording, not a mandated literal string):
 `"PLATFORM_INSTANCE_ID sentinel — ported from src/event_store/platform.zig. Never
 inserted into instance_projections (per req023-event-store-schema.md §3.1.3's citation
 of platform.zig:5)."`
 
+PROVENANCE (historical, not current decision authority):
 **Values — explicitly NOT decided here, flagged per this run's own instruction not to
 invent.** `platform.zig`'s three literal UUID strings are unreachable (§0). This design
 does not propose specific UUID literals as a design decision — see §11 OQ-1 for the
@@ -852,6 +858,7 @@ so it applies last relative to everything already merged.
 
 ### 8.5 No CRUD API — restated from §1
 
+PROVENANCE (historical, not current decision authority):
 `RetentionPolicy.insert_changeset/2` is the only public write surface this requirement
 adds for this table. No `Letflow.EventStore.upsert_retention_policy/2`-equivalent
 function is built — R-Co's `Store.upsertRetentionPolicy()` (cited in `req023`'s OQ-1,
@@ -933,6 +940,7 @@ a new one.
 
 ## 12. Open questions — explicitly listed, not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (MAJOR): the three platform sentinel constants' exact UUID string values are
 unknown.** `platform.zig` is unreachable (§0). This design specifies the accessor
 function shape (§3) but not the literal values. ELIXIR-DEV must either (a) locate the
@@ -972,6 +980,7 @@ CODE-DESIGN-VALIDATOR can confirm this reading rather than take it as settled.
 
 ## 13. Traceability — every acceptance criterion mapped to a concrete design element
 
+PROVENANCE (historical, not current decision authority):
 | # | Acceptance criterion (paraphrased) | Design element |
 |---|---|---|
 | 1 | `read/2` returns exactly N events for an instance, ascending `sequence_number`, `$ref` transparently resolved | §4.2 STEP 2 (ordering), §4.4 + §9 (`$ref` resolution) |

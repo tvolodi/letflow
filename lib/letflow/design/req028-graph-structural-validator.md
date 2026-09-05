@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-028 — Graph structural validator (graph.zig, PD-02)
 
 **Requirement:** REQ-028 (`docs/requirements.yaml`, stage S2)
@@ -19,6 +20,7 @@ named checks' exact trigger/violation semantics, and the DFS cycle-detection alg
 - `docs/migration/stage-2-event-store-definitions.md` (full) — in particular the
   "Static-typing gap" finding, which this design cites directly in §9's node-type-validity
   open question.
+PROVENANCE (historical, not current decision authority):
 - **R-Co source, read directly, ported for behavior not code:**
   `C:\Users\tvolo\dev\ai-dala\R-Co\src\definition\graph.zig` — the real `validateGraph()`
   (lines ~191–384), its `dfsVisit` helper (lines ~395–442), `NodeType`/`GraphNode`/
@@ -52,6 +54,7 @@ struct itself, `validate_graph/1`, and all 8 check functions), plus three small 
 modules defined in the same file: `Letflow.Definitions.Graph.Node` (`GraphNode`),
 `Letflow.Definitions.Graph.Edge` (`GraphEdge`), and `Letflow.Definitions.Graph.Violation`.
 
+PROVENANCE (historical, not current decision authority):
 **Why the graph struct and the validator share one module name:** `graph.zig` itself
 defines `DefinitionGraph`, `GraphNode`, `GraphEdge`, `Violation`, `ValidationResult`, and
 `validateGraph()` all in one file with no further sub-namespacing. Elixir's idiom for "the
@@ -63,6 +66,7 @@ here even though this isn't a DB-backed schema: `Letflow.Definitions.Graph` both
 struct type. This avoids inventing an artificial second name for the exact same "the graph
 being validated" concept the module's own name already denotes.
 
+PROVENANCE (historical, not current decision authority):
 **Why one file, not one file per struct:** Unlike `Letflow.Identity.Tenant`/`User`/`Group`
 (real, independently-queried DB rows that get reused across many unrelated contexts and
 so earn their own files), `Node`/`Edge`/`Violation` have no meaning or reuse outside graph
@@ -102,6 +106,7 @@ requirement's own instruction ("Implement the shared types ... as plain structs/
 | `label` | `String.t() \| nil` | `nil` | Display label, optional. |
 | `attributes` | `map() \| nil` | `nil` | **Provisional typing, flagged open in §9** — see there before treating this as final. |
 
+PROVENANCE (historical, not current decision authority):
 `@enforce_keys [:id, :node_type]` — a node with no `id`/`node_type` at all is a
 construction-time error (raises), not a value CHK-03/CHK-05's string-equality logic would
 otherwise have to silently tolerate as `nil`. `label`/`attributes` are genuinely optional
@@ -110,6 +115,7 @@ enforced.
 
 ### 2.2 `Letflow.Definitions.Graph.Edge` (ports `GraphEdge`)
 
+PROVENANCE (historical, not current decision authority):
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `id` | `String.t()` | *(required)* | Non-empty, expected unique within the definition (no named CHK-08-adjacent check validates edge-id uniqueness — `graph.zig` itself has none either; not invented here). |
@@ -118,6 +124,7 @@ enforced.
 | `condition` | `String.t() \| nil` | `nil` | CEL expression for `EXCLUSIVE_GATEWAY` routing (PD-06). **Not read by any of REQ-028's 8 checks** — carried on the struct now because the requirement's own field list names it, consumed starting at REQ-029. |
 | `is_default` | `boolean()` | `false` | Same status as `condition`: present on the struct, unread by REQ-028's 8 checks, consumed starting at REQ-029. |
 
+PROVENANCE (historical, not current decision authority):
 `@enforce_keys [:id, :source, :target]`. Note this struct deliberately omits R-Co's
 `transform` field (EXT-04) — REQ-028's own description lists exactly 5 `GraphEdge` fields
 (`id/source/target/condition/is_default`), and `transform` is validated by a separate
@@ -127,6 +134,7 @@ explicit field list.
 
 ### 2.3 `Letflow.Definitions.Graph.Violation`
 
+PROVENANCE (historical, not current decision authority):
 | Field | Type | Notes |
 |---|---|---|
 | `code` | `Letflow.Definitions.Graph.Violation.code()` — `atom()`, one of the 9 values in §5's table | Machine-readable. **Lowercase `snake_case` atom, not the SCREAMING_SNAKE_CASE string `graph.zig` uses** — see rationale below. |
@@ -135,6 +143,7 @@ explicit field list.
 `@enforce_keys [:code, :message]` — both fields are always present together; there is no
 partially-built `Violation`.
 
+PROVENANCE (historical, not current decision authority):
 **Why lowercase atom codes, diverging from `graph.zig`'s literal `"MISSING_START_NODE"`
 string codes:** this is a deliberate Decision-A-style adaptation (Ecto-idiomatic redesign,
 not a 1:1 port), stated explicitly rather than left as a silent divergence. Two reasons:
@@ -196,6 +205,7 @@ i.e. exactly the two atoms CHK-06's gateway exemption tests membership against; 
 mechanism (module attribute built at compile time vs. a private zero-arity function) is
 ELIXIR-DEV's implementation choice, not specified further here.
 
+PROVENANCE (historical, not current decision authority):
 **Open question on enforcement — see §9.2.** Elixir's `atom()` type has no compile-time
 membership check the way Zig's `enum` does; nothing in this design (or in `graph.zig`'s
 own 8 checks) rejects a `Node` whose `node_type` is some other atom entirely.
@@ -218,6 +228,7 @@ rather than silently ignored:
   `%{valid: true, violations: []}` or `%{valid: false, violations: [%Violation{}, ...]}`.
   A structurally-invalid *input graph* is not a function *failure*; it is exactly the
   legitimate, expected output value the caller asked for.
+PROVENANCE (historical, not current decision authority):
 - This mirrors `graph.zig`'s own error taxonomy precisely: `GraphError` there has exactly
   one member, `OutOfMemory` — an allocator-failure case with **no Elixir equivalent**
   (Elixir doesn't surface allocation failure as an ordinary function return). `graph.zig`
@@ -230,6 +241,7 @@ rather than silently ignored:
 
 ## 5. The 8 named checks — exact trigger and violation semantics
 
+PROVENANCE (historical, not current decision authority):
 Every check reads directly from the raw `graph.nodes`/`graph.edges` lists passed into
 `validate_graph/1` — **no check clamps/truncates the input first** (§7.3 explains why,
 diverging from `graph.zig`'s `MAX_NODES`/`MAX_EDGES` array-safety clamp).
@@ -252,17 +264,20 @@ Every private check function's signature: `@spec check_*(Letflow.Definitions.Gra
 checks that only look at `nodes` or only at `edges` take the full struct, for a uniform
 signature §7's composition relies on), returns a (possibly empty) violation list.
 
+PROVENANCE (historical, not current decision authority):
 **CHK-03 detail — both endpoints of one edge can each independently fire:** if an edge has
 *both* a dangling `source` and a dangling `target`, that is **two separate violations**,
 not one — ported faithfully from `graph.zig`'s two independent `if` checks (not an
 `if/else`). This is itself an instance of the never-short-circuit principle, one level
 down: even within a single edge's checks, both endpoint checks always run.
 
+PROVENANCE (historical, not current decision authority):
 **CHK-04 detail — the exact per-node-type rule** (ported verbatim from `graph.zig`'s
 `switch (node.node_type)`), using "has ≥1 incoming edge" / "has ≥1 outgoing edge" computed
 only from edges whose *own* endpoints resolve to a real node (a dangling edge contributes
 no connectivity to either side — CHK-03 already reports it separately):
 
+PROVENANCE (historical, not current decision authority):
 - `:START` → isolated iff it has **no outgoing** edge (incoming edges to a START node are
   never checked for this rule — `graph.zig` explicitly special-cases START to only need
   outgoing).
@@ -272,6 +287,7 @@ no connectivity to either side — CHK-03 already reports it separately):
   atoms at all — see §9.2) → isolated iff it is **missing incoming OR missing outgoing**
   (both are required).
 
+PROVENANCE (historical, not current decision authority):
 **CHK-05 detail — "duplicate" is reported once per repeated occurrence, not once per
 distinct ID:** ported from `graph.zig`'s `for (nodes, 0..) |node, i| { for (nodes[0..i])
 ... break }` — for node at index `i`, compare against every node at a strictly lower
@@ -282,6 +298,7 @@ index 0), and index 2 gets one violation (matched against index 0 or 1, whicheve
 scan reaches first — either way, exactly one). **Three occurrences of the same id produce
 two violations, not one and not three.**
 
+PROVENANCE (historical, not current decision authority):
 **Node/edge lookup semantics used by CHK-03/CHK-04/CHK-06 — "first match wins":** all
 three checks that need to resolve a `node.id` string to "does this node exist" /
 "which node is this" use the same linear-scan-returning-first-match semantics as
@@ -296,12 +313,14 @@ hand-wavy, so this section spells out the exact traversal rule end to end.
 
 ### 6.1 Setup (done once, before any DFS call)
 
+PROVENANCE (historical, not current decision authority):
 1. **`node_index` — id → first-occurrence 0-based index map**, built via a left-to-right
    fold over `Enum.with_index(graph.nodes)` inserting with `Map.put_new/3` (which keeps
    the *first* inserted value on a repeated key and silently ignores later ones) — this is
    the precise Elixir construction that reproduces `graph.zig`'s `nodeIndex`'s
    linear-scan-returns-first-match behavior exactly, without needing a literal linear scan
    per lookup.
+PROVENANCE (historical, not current decision authority):
 2. **`adjacency` — a `%{non_neg_integer() => [non_neg_integer()]}` map** from a node's
    index to the list of target-node indices reachable via one direct outgoing edge, built
    by resolving every edge's `source`/`target` through `node_index` and **excluding any
@@ -317,6 +336,7 @@ hand-wavy, so this section spells out the exact traversal rule end to end.
 
 ### 6.2 Outer driver — visit every component, not just nodes reachable from START
 
+PROVENANCE (historical, not current decision authority):
 Fold over node indices `0..(length(graph.nodes) - 1)`, carrying a `visited ::
 MapSet.t(non_neg_integer())` accumulator (starts empty) and a `violations ::
 [Violation.t()]` accumulator (starts empty) across the fold. For each index `i` **not
@@ -371,6 +391,7 @@ Behavior, precisely:
      via some *other* path — a cross/forward edge in DFS terms, not an ancestor
      relationship, so **not** a cycle regardless of gateway status. No violation, no
      recursion, accumulators pass through unchanged.
+PROVENANCE (historical, not current decision authority):
 3. Return `{visited_after_fold, violations_after_fold}` — a 2-tuple, not 3. `on_stack`
    never needs to propagate back up to the caller: by the time `dfs_visit(u, ...)` returns
    (after every one of `u`'s outgoing edges has been processed, exactly matching
@@ -388,6 +409,7 @@ back-edge branch, where `u` is *literally the same node* as `v`. That means:
 - A self-loop on a **non-gateway** node (e.g. `:HUMAN_TASK`) → `u` is not a gateway and `v`
   (== `u`) is not a gateway → **rejected**, `:cycle_without_gateway`. **This is the case
   REQ-028's acceptance criterion 4 tests.**
+PROVENANCE (historical, not current decision authority):
 - A self-loop on an `:EXCLUSIVE_GATEWAY`/`:PARALLEL_GATEWAY` node → both `u` and `v` (== `u`)
   are the same gateway node → by the identical rule, **permitted, no violation** — this
   falls directly out of `graph.zig`'s own literal `dfsVisit` (its `is_gateway[node_idx]`
@@ -402,6 +424,7 @@ back-edge branch, where `u` is *literally the same node* as `v`. That means:
 
 ### 7.1 Composition — fixed order, unconditional, concatenated
 
+PROVENANCE (historical, not current decision authority):
 `validate_graph/1`'s body calls all 8 check functions **unconditionally, every time**,
 against the *same*, unmodified `graph` argument, and concatenates their results in this
 fixed order (matching `graph.zig`'s own literal source order, so any hand-traced example
@@ -437,6 +460,7 @@ hard prerequisite for another to produce a meaningful result.** Specifically:
 - CHK-01/CHK-02/CHK-07/CHK-08 are simple counts/lengths over the raw lists, trivially
   independent of everything else.
 
+PROVENANCE (historical, not current decision authority):
 **The one genuinely subtle interaction, stated explicitly rather than glossed over:**
 CHK-04 and CHK-06 both resolve `node.id` strings to indices via the same
 first-match-wins `node_index` map (§6.1). If the graph *also* has duplicate node IDs
@@ -453,6 +477,7 @@ per-node attribution came out oddly for the duplicated id.
 
 ### 7.3 Deliberate divergence: no `MAX_NODES`/`MAX_EDGES` clamp-and-continue
 
+PROVENANCE (historical, not current decision authority):
 `graph.zig` clamps `nodes`/`edges` to the first `MAX_NODES`/`MAX_EDGES` entries
 *after* recording the CHK-07/CHK-08 violation, and every subsequent check in that function
 operates only on the clamped slice — driven entirely by Zig's fixed-size stack arrays
@@ -469,6 +494,7 @@ Zig memory-safety mechanism Elixir doesn't need.
 
 ## 8. Purity / zero-I/O invariant (AC5)
 
+PROVENANCE (historical, not current decision authority):
 `Letflow.Definitions.Graph` depends on **Elixir/Erlang stdlib only** — `Enum`, `Map`,
 `MapSet`, `String`, `Kernel`. No `alias Letflow.Repo`, no `import Ecto.Query`, no
 `Ecto.Changeset` anywhere in the module. No `Logger.*` call. No clock read
@@ -488,6 +514,7 @@ sites confirm zero Repo/database calls anywhere in its call graph" literally.
 
 ### 9.1 `Node.attributes` typing: raw JSON string vs. decoded map
 
+PROVENANCE (historical, not current decision authority):
 `graph.zig`'s `GraphNode.attributes` is `?[]const u8` — a raw JSON-object *string*,
 re-parsed on demand by whichever function needs it (`validateNodeAttributes`'s
 per-node-type checks, not any of REQ-028's own 8 checks — **none of CHK-01..CHK-08 ever
@@ -502,6 +529,7 @@ default.
 
 ### 9.2 No 9th check for "node_type is one of the 7 known values"
 
+PROVENANCE (historical, not current decision authority):
 Neither `graph.zig`'s 8 checks nor this design's ported 8 checks include a check that
 `node.node_type` is actually one of the 7 (or 8, in the current `graph.zig`) valid
 enum variants — in Zig this is structurally unnecessary, since the `enum` type system
@@ -520,6 +548,7 @@ constructed at all.
 
 ### 9.3 Who decodes the raw `graph` `jsonb` column into `Graph.t()`/`Node.t()`/`Edge.t()`?
 
+PROVENANCE (historical, not current decision authority):
 REQ-027 (schema-only, not yet built) stores `graph` as a raw `jsonb` column
 (`{"nodes": [...], "edges": [...]}`). This design's `validate_graph/1` takes an
 **already-constructed** `Letflow.Definitions.Graph.t()` struct — it does not parse JSON

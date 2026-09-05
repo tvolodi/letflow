@@ -1196,3 +1196,56 @@ history:
       confirming the flake rather than a real regression. Merged as
       eaf17c1391af2878941cbb62ced00ce55ba22c6b (squash, PR #1004).
       Queue task 498 released status:done. Local main synced.
+  - req: REQ-265
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T22:48:51Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/design/req017-claim-mapping.md through
+      req029-node-attribute-edge-condition-validators.md (closes ISS-0424
+      part 3c-12, queue task 503, feature/WF02-REQ265-20260905). This is
+      chunk 239-design-b of eight lib/letflow/design/-scope chunks
+      (REQ-264..271). 176 markers inserted across 13 files (10+29+8+15+
+      22+2+21+12+4+9+8+29+7), 0 deletions; per-file .zig line counts
+      identical before/after (sum 232 both times). REVIEWER independently
+      re-verified every marker count, re-diffed citation text for
+      byte-identical preservation, spot-checked table-unit placement (one
+      marker per table, not per row, in req017/req018/req028), confirmed
+      no YAML frontmatter in any of the 13 files (ISS-0510's YAML-shape
+      amendment correctly did not apply), and confirmed
+      CLAUDE.md/README.md/docs/migration/README.md/sibling design files
+      untouched -- PASS (handoffs/WF02-REQ265-20260905/step-02d-reviewer.json;
+      noted one minor arithmetic discrepancy in DOC-UPDATER's own
+      divergence-note count, 4 claimed vs. 5 actual matching lines --
+      text itself byte-identical either way, not a scope/content defect,
+      does not block PASS). Docs-only, no mix compile/format/test
+      applicable. ORCH will merge and release queue task 503 status:done.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 9 — CLOSED 2026-09-05. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-04 through
+# 2026-09-05 (44 entries, lines 1-1223). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at feature/WF02-REQ265-20260905's
+# Step Final, whose own REQ-265 done-event append brought this file to 1223
+# lines, over its declared roll_rule ceiling (max_lines: 1200) -- confirmed via
+# `wc -l` on the working-tree file per this volume's own "WHEN THIS VOLUME IS
+# FULL" procedure. Reads of this volume are TARGETED reads only -- a line range
+# or a pattern match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v10.yaml
+#
+# Why this file was closed: WF02-REQ265-20260905's own REQ-265 done-event
+# append brought the on-disk count to 44 entries across 1223 lines -- over the
+# roll ceiling. No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

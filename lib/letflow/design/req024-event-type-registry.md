@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-024 — Event type registry (registry.zig / ES-05)
 
 **Requirement:** REQ-024 (`docs/requirements.yaml`, stage S2)
@@ -68,6 +69,7 @@ none of these referenced the wrong convention or need to change to fix the BLOCK
 - `mix.exs` / `mix.lock`, read directly: `{:jason, "~> 1.4"}` is already a dependency
   (`jason` `1.4.5` pinned in `mix.lock`); `ex_json_schema` (or any other JSON-Schema
   library) is **not** present in either file — confirmed by `grep`, not assumed.
+PROVENANCE (historical, not current decision authority):
 - **R-Co source, read directly (per this requirement's own instruction — port behavior,
   not code):**
   - `src/event_store/registry.zig` (the real `registerType`/`validatePayload`/`getType`/
@@ -106,6 +108,7 @@ that bar isn't met is in §1.4.**
 
 ### 1.1 What R-Co's own validator actually does (the thing being ported)
 
+PROVENANCE (historical, not current decision authority):
 `src/tools/json_schema.zig`'s own moduledoc is explicit that R-Co never implemented full
 JSON Schema: "Full JSON Schema draft-07 compliance is still NOT required. `$ref`,
 `allOf`/`anyOf`/`oneOf`/`not`, `patternProperties`, `pattern`, `format`, `dependencies`,
@@ -152,6 +155,7 @@ with a table (§1.1) that states it unambiguously. There's no approximation gap 
 adoption would close; there's only a widening it would introduce.
 
 Two further practical points:
+PROVENANCE (historical, not current decision authority):
 - **Error shape.** AC3 requires field-level failures as `(field_path :: RFC 6901
   pointer, constraint, actual value)`. R-Co's own `validateCollect` already produces
   exactly this shape (`Violation{path, constraint, actual}`). `ex_json_schema`'s own
@@ -167,6 +171,7 @@ Two further practical points:
 
 ### 1.3 Concrete shape of the port
 
+PROVENANCE (historical, not current decision authority):
 `Letflow.EventStore.Registry.JsonSchema` (§4.4) mirrors `json_schema.zig`'s
 `validateCollect`/`collectInto` keyword-for-keyword: `type` (mismatch short-circuits
 further checks at that level — matches R-Co's cascade-avoidance behavior exactly),
@@ -200,6 +205,7 @@ REQ-024's own instruction, escalation is reserved for "a genuinely new library
 dependency" — this isn't one, so no `docs/migration/decisions/0005-*.md` (see §0's note
 on the free number) is written.
 
+PROVENANCE (historical, not current decision authority):
 **What ELIXIR-DEV's `@moduledoc` on `Letflow.EventStore.Registry` must state (traced at
 §8, AC5):** that JSON Schema payload validation is implemented by this project's own
 `Letflow.EventStore.Registry.JsonSchema` (not a library), that this choice was made at
@@ -232,6 +238,7 @@ by the handoff's own `owned_modules: ["lib/letflow/event_store"]`):
 | `Letflow.EventStore.Registry.ValidationFailure` | `lib/letflow/event_store/registry/validation_failure.ex` | Plain struct (not `Ecto.Schema` — never persisted), §4.3 |
 | `Letflow.EventStore.Registry.JsonSchema` | `lib/letflow/event_store/registry/json_schema.ex` | Pure validator module (no `Repo`, no I/O), §4.4 |
 
+PROVENANCE (historical, not current decision authority):
 **Why `JsonSchema` nests under `Registry` rather than living at `Letflow.EventStore.JsonSchema`
 or a new `lib/letflow/tools/` namespace:** R-Co's own `json_schema.zig` sits under
 `src/tools/` specifically because it is shared by two unrelated features
@@ -268,6 +275,7 @@ re-confirmation).
 implementation time, matching `req022-tenant-schema-provisioning.md`'s own precedent for
 this instruction). Module name `Letflow.Repo.Migrations.CreateEventTypeRegistry`.
 
+PROVENANCE (historical, not current decision authority):
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | `:binary_id` | `primary_key: true` | Decision A convention, matches every other table in this codebase |
@@ -484,6 +492,7 @@ or-atom-key tolerance, matching every other `attrs`-taking function in this code
    4–5; not built here since REQ-024's acceptance criteria don't ask for it.
 6. Return `{:ok, %EventType{}}` on success.
 
+PROVENANCE (historical, not current decision authority):
 **Callout — `:schema_version_not_monotonic` is a new rule, not a straight R-Co port.**
 R-Co's own `registerType`/`validateRegisterParams` has **no** "greater than all existing
 versions" check at all — only the exact-`(name, schema_version)`-collision check exists
@@ -517,6 +526,7 @@ happens). This is a deliberate choice, not left ambiguous: `validate_payload/3` 
 
 **Behavior, in order:**
 
+PROVENANCE (historical, not current decision authority):
 1. `Jason.decode(payload)`. Structural guard, ported from R-Co's `isJsonObject`
    pre-check + its malformed-JSON fallback, **collapsed into one check** since Elixir's
    `Jason.decode/1` already fully parses (unlike Zig's cheap leading-byte peek): if
@@ -601,6 +611,7 @@ silently-vanished error case someone might later wonder about.
 1. **Resolve `tenant_id` to `schema_name`** — identical mechanism to §4.1 step 1:
    `Repo.get_by(Letflow.TenantProvisioning.Registration, tenant_id: tenant_id)`. `nil` →
    return `{:error, :tenant_not_provisioned}` immediately.
+PROVENANCE (historical, not current decision authority):
 2. `SELECT * FROM event_type_registry WHERE name = $1 ORDER BY schema_version DESC
    LIMIT 1` (parameterized, `prefix: schema_name` — the value resolved in step 1, not a
    caller-supplied argument) — matches R-Co's `getType` query exactly (order/limit
@@ -663,6 +674,7 @@ collect(pointer, value, schema):
   # like $ref/allOf/pattern/format) is silently ignored -- ported deliberately, §1.1
 ```
 
+PROVENANCE (historical, not current decision authority):
 `join_pointer/2` implements RFC 6901 §3 escaping (`~` → `~0`, `/` → `~1`) exactly as
 `json_schema.zig`'s `joinPointer` does. The document root's own pointer is `""` inside
 the recursion and rendered as `"/"` by the caller when needed (matches

@@ -187,10 +187,12 @@ this repo's own `deps/`.
   and the DDL that drops and re-adds
   `instance_definition_snapshots_definition_id_fkey` **with `ON DELETE CASCADE`**
   (78–88). This is §10 C-1.
+PROVENANCE (historical, not current decision authority):
 - `src/definition/store.zig` — `CreateParams.stage` "Stored as NULL when omitted"
   (84–85), `ListOpts.stage` (94–95), `UpdateParams` (101–108), the real `create()`
   INSERT with bare `ON CONFLICT DO NOTHING` and its schema-variant comment (283–305),
   the `NULLIF($6, '')` stage binding (292, 303), the `stage = $N` list filter (439–446).
+PROVENANCE (historical, not current decision authority):
 - `src/definition/snapshot.zig` — the real `INSERT INTO instance_definition_snapshots …
   ON CONFLICT (instance_id) DO NOTHING` (155–184); confirmed it writes **no** tenant
   column.
@@ -459,6 +461,7 @@ Migration `20260816193002_create_instance_definition_snapshots.exs` —
 `Letflow.Repo.Migrations.CreateInstanceDefinitionSnapshots`. **Must sort after
 `…193001`** (it carries a foreign key to `process_definitions`).
 
+PROVENANCE (historical, not current decision authority):
 | Column | Ecto migration type | DB type | Null / default | Notes & citation |
 |---|---|---|---|---|
 | `instance_id` | `:binary_id`, `primary_key: true` | `uuid` | `NOT NULL` (implied by PK) | Natural PK, caller-supplied. `004:60` (`UUID PRIMARY KEY`); `definition.md:1888–1890, 1914`. REQ-027: "instance_id (binary_id, primary key)" (`requirements.yaml:1174`). **No DB default** — the instance id is minted by the engine (S3), never by this row. `ON CONFLICT (instance_id) DO NOTHING` (REQ-033) arbitrates on this PK (`definition.md:1999`; `snapshot.zig:168`). |
@@ -475,6 +478,7 @@ Migration `20260816193002_create_instance_definition_snapshots.exs` —
 (`requirements.yaml:1179–1182`). R-Co has no such columns either (`004:59–66`). An
 `updated_at` on a write-once table would be actively misleading.
 
+PROVENANCE (historical, not current decision authority):
 **No `tenant_id` on this table, deliberately.** Decision B retains `tenant_id` "on the
 tables the adp-0x docs describe" (`0003:37–45`). `adp-02`'s own table mapping (lines
 15–21) lists `process_definitions`, `instance_projections`, `tasks`, `tokens`,
@@ -816,6 +820,7 @@ and REQ-033 depend on, so it is stated here rather than left implicit.
 #   cast:              [:name, :version, :description, :stage, :graph]
 #   validate_required: [:name, :version, :graph]
 #   same three validate_length calls and the same two unique_constraint declarations
+PROVENANCE (historical, not current decision authority):
 #   Field list mirrors R-Co's UpdateParams exactly (store.zig:101-108:
 #   name/version/description/graph/stage) -- notably NO :status, NO :tenant_id,
 #   NO :created_by. Status movement is a guarded UPDATE, not a changeset; see the
@@ -1093,6 +1098,7 @@ second precision (§3.1), which is also what R-Co does. A real fix is a composit
 `(created_at, id)` with a row-value comparison — a REQ-030 API decision (it changes the
 opaque cursor's encoding), not a schema one. Recorded, not resolved.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-5 (MINOR, addressed to REQ-030): `""` vs `NULL` for `stage`, and the
 `InitialStatusNotDraft` path.** Two small semantics R-Co settles in code that this
 design does not encode:
@@ -1221,6 +1227,7 @@ recorded because REQ-030 must use the **corrected** table. Letflow's REQ-030 tex
 does (`requirements.yaml:1336–1341` lists exactly the three permitted edges), so no
 action is needed — only confirmation that the stale diagram is not the source to follow.
 
+PROVENANCE (historical, not current decision authority):
 **C-5 — `ON CONFLICT` target: the design doc names one, the code omits it.**
 `definition.md:376–381` specifies
 `INSERT … ON CONFLICT (name, version) DO NOTHING RETURNING *`. R-Co's actual
@@ -1235,6 +1242,7 @@ swallow a `uq_active_definition` conflict, silently returning
 `DuplicateNameVersion` for a completely different violation. Forward note for REQ-030;
 nothing in REQ-027 changes either way.
 
+PROVENANCE (historical, not current decision authority):
 **C-6 — checked and cleared, recorded because it reads like a contradiction.**
 `definition.md:1494` and `store.zig:84–85` both say `stage` is "stored as NULL when
 omitted", while `store.zig:303` binds `params.stage orelse ""` — an empty string, not

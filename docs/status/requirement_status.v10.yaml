@@ -1,0 +1,169 @@
+# Letflow — Requirement run history — VOLUME 10 (CURRENT)
+#
+# docs/requirements.yaml's `status:` field is the current state of each
+# requirement (pending/in_progress/done/blocked) — read that first. This file is
+# the history behind it: one entry per time an agent picked up, finished, or got
+# blocked on a piece of work.
+#
+# APPEND ONE ENTRY PER EVENT. NEVER REWRITE, REORDER, EDIT OR DELETE A PAST
+# ENTRY — in this volume or any closed one. An agent once rewrote this history
+# from scratch with different field names and silently destroyed prior entries;
+# see docs/anti-patterns.md, "Overwriting docs/status/requirement_status.yaml
+# instead of appending". That is what this rule exists to prevent, and it is not
+# negotiable.
+#
+# VOLUMES. The history is split across volumes because a file too large to read
+# cannot show you its own schema. Index (start here):
+#   docs/status/requirement_status.index.yaml
+# Predecessor: docs/status/requirement_status.v9.yaml (volume 9, closed,
+#   1,223 frozen-prefix lines / 1,251 total lines with closure footer --
+#   over its own roll ceiling, so targeted reads only; see the index).
+#
+# ── HOW TO APPEND (this is the procedure; it is executable, run it) ───────────
+#
+# 1. Confirm you are writing to the current volume. Never assume this file is it.
+#    Run the ONE LINE for YOUR shell — grep does not exist in PowerShell, and
+#    Select-String does not exist in bash. Each is a single line; do not wrap it:
+#      Bash:
+#        grep -n 'status: current' -B 2 docs/status/requirement_status.index.yaml
+#      PowerShell:
+#        Select-String -Path docs/status/requirement_status.index.yaml -Pattern 'status: current' -Context 2,0
+#    Both print the `- volume:` / `path:` lines above the `status: current`
+#    marker. The `path:` value they show is the file you append to.
+#
+# 2. Read THIS volume in full — one Read call on this path, no offset, no limit.
+#    That is possible by construction: the roll rule below keeps every current
+#    volume under 1,200 lines / 120,000 bytes, inside the Read tool's 256KB and
+#    2,000-line limits. If that read is refused or truncated, STOP: the roll rule
+#    has failed and that is itself a defect to file, not to work around.
+#    Confirm both bounds before you rely on the read (lines AND bytes — a
+#    line-truncated read is silent):
+#      Bash:
+#        wc -l < FILE ; wc -c < FILE
+#      PowerShell:
+#        (Get-Content FILE).Count ; (Get-Item FILE).Length
+#    (FILE = docs/status/requirement_status.v10.yaml. PowerShell has no `&&`;
+#    `;` chains unconditionally in both shells.)
+#
+# 3. Get the timestamp from the clock, never from memory:
+#      Bash:       date -u +"%Y-%m-%dT%H:%M:%SZ"
+#      PowerShell: (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+#
+# 4. Append your entry at the end of the file. Append — do not open the file for
+#    rewriting, do not regenerate it, do not reflow existing entries.
+#    If you append via a Bash heredoc, the delimiter MUST be quoted (`<<'EOF'`,
+#    never `<<EOF`): your note text will routinely contain backticks and colons
+#    because it is prose ABOUT this file's own field names, and an unquoted
+#    delimiter lets Bash execute a backtick span as a command substitution,
+#    silently deleting it from what lands on disk (ISS-0199, hit live). In
+#    PowerShell, use a literal here-string (`@'...'@`), never an interpolating
+#    one (`@"..."@`), for the matching reason with `$`.
+#
+# 5. Verify you appended and did not replace, AND that what landed is what you
+#    wrote — two checks, neither optional:
+#      a. The line count must GROW:
+#           git diff --numstat docs/status/requirement_status.v10.yaml
+#         Any nonzero deletion count on this file is a defect. Revert and redo.
+#         This proves you appended; it proves nothing about WHAT you appended —
+#         a shell that silently ate a backtick span still line-balances.
+#      b. Re-read what you just wrote:
+#           Bash:       tail -n 8 docs/status/requirement_status.v10.yaml
+#           PowerShell: Get-Content docs/status/requirement_status.v10.yaml -Tail 8
+#         Confirm the note text reads exactly as you intended — no missing
+#         words, no blank span where a backtick-quoted field name belonged.
+#         This is the check (a) structurally cannot make: ISS-0199 was a real
+#         append that passed (a) at `43\t0` while its note text had already
+#         been silently gutted by an unquoted-heredoc command substitution.
+#
+# 6. Update this volume's `entries:` count in
+#      docs/status/requirement_status.index.yaml
+#    to match — increment it by one, in the SAME commit as your append. A
+#    declared count nobody updates is a number nobody can trust; ISS-0199
+#    finding 2 found this volume's `entries:` at 0 after real entries had
+#    already landed. test/docs/requirement_status_invariants_test.exs's A9
+#    asserts this count against what is actually on disk.
+#
+# 7. Apply the roll rule below.
+#
+# ── ENTRY SHAPE — all five fields, in this order, every time ──────────────────
+#
+#   - req: <REQ-NNN | SCOPE-CHANGE>
+#     event: <started | done | blocked | cancelled | revised | verified>
+#     agent: <AGENT_ID>
+#     at: <UTC timestamp from the clock, not memory>
+#     note: short free-text (what shipped, or what's blocking)
+#
+#   ALL FIVE FIELDS ARE REQUIRED, INCLUDING `note:`. The timestamp field is named
+#   `at:` — never `timestamp:`. Three volume-1 entries break this: line 4803
+#   (REQ-053) and line 5050 (REQ-054) have no `note:` at all, and line 4896
+#   (REQ-056) writes `timestamp:` where `at:` belongs. They are declared in
+#   docs/status/requirement_status.index.yaml under `known_shape_anomalies:` and
+#   are LEFT AS WRITTEN, for the same reason the `event: SCOPE-CHANGE` entries
+#   are — correcting a past entry is what this file forbids. Do not copy them,
+#   and do not "clean them up": assertion A4b in
+#   test/docs/requirement_status_invariants_test.exs fails either way.
+#
+# ── `req:` — THE COMPLETE LIST. Exactly two legal values ──────────────────────
+#
+#   REQ-NNN        A requirement in docs/requirements.yaml. Three digits, zero-
+#                  padded (REQ-003, not REQ-3). 151 entries in volume 1.
+#   SCOPE-CHANGE   ANY work not tied to a requirement id: WF-03 issue
+#                  resolutions, queue reconciliation, pipeline/process changes,
+#                  manual bookkeeping. 31 entries in volume 1. Put the real
+#                  subject (the ISS id, the run id, what was reconciled) in
+#                  `note:`.
+#
+#   THERE IS NO THIRD VALUE. In particular: `req: ISS-NNNN` IS NOT LEGAL and has
+#   zero precedent (0 occurrences across volume 1's 182 entries). Recording an
+#   issue fix uses `req: SCOPE-CHANGE` with the ISS id named in `note:`. This is
+#   written down here because it was previously discoverable only by surveying
+#   the whole file, and `req: ISS-NNNN` is the obvious wrong guess.
+#
+# ── `event:` — THE COMPLETE LIST. Exactly six legal values ────────────────────
+#
+#   started    work picked up.                         (54 in volume 1)
+#   done       work finished and merged.               (107 in volume 1)
+#   blocked    work stopped on an external dependency.   (5 in volume 1)
+#   cancelled  work abandoned; it will not be finished.  (8 in volume 1)
+#   revised    a prior decision or scope was changed.    (4 in volume 1)
+#   verified   independently re-verified after `done`.   (1 in volume 1)
+#
+#   Volume 1's original header listed only started|done|blocked, while
+#   cancelled, revised and verified were already in use — an inaccuracy that
+#   could only be found by reading 5,766 lines. All six are documented here.
+#
+#   SCOPE-CHANGE IS NOT AN EVENT VALUE. Three volume-1 entries (lines 3490,
+#   3577, 3744) carry `event: SCOPE-CHANGE`. They are wrong, they are recorded
+#   as known anomalies in the index, and they are LEFT AS WRITTEN — correcting a
+#   past entry is exactly what this file forbids. Do not copy them, and do not
+#   "clean them up".
+#
+#   Adding a seventh event value is a documentation change, not an improvisation:
+#   amend this header in the same commit that first uses it, or use an existing
+#   value. An undocumented value fails
+#   test/docs/requirement_status_invariants_test.exs.
+#
+# ── WHEN THIS VOLUME IS FULL — the roll rule ──────────────────────────────────
+#
+# AFTER appending, measure this file (working tree, not the git blob — the Read
+# tool measures the working tree, and CRLF checkouts add one byte per line):
+#     Bash:       wc -l < FILE ; wc -c < FILE
+#     PowerShell: (Get-Content FILE).Count ; (Get-Item FILE).Length
+#
+# If lines > 1200 OR bytes > 120000, roll before your handoff completes:
+#   1. Append this volume's closure footer (copy volume 1's footer, adjusting the
+#      volume number, dates, counts and successor path).
+#   2. Create docs/status/requirement_status.v<n+1>.yaml containing THIS HEADER
+#      TEXT verbatim — with the volume number, opening date and predecessor path
+#      updated — followed by `history:` and no entries.
+#   3. In docs/status/requirement_status.index.yaml: set this volume's status to
+#      `closed`, fill its entries/lines/bytes/frozen_prefix_lines/
+#      frozen_prefix_sha256, and add the new volume with `status: current`.
+#   4. Commit all three files together. A closed volume with no successor, or two
+#      current volumes, fails the invariant test.
+#
+# Rolling is normal maintenance, not an incident. It is expected roughly every
+# 40 entries. It never moves, edits or deletes an existing entry.
+
+
+history:

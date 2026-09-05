@@ -3,6 +3,7 @@
 **Requirement:** REQ-019 (`docs/requirements.yaml`, stage S1)
 **Owner (implementer):** ELIXIR-DEV
 **This document produces:** `Letflow.Identity.Tenant`'s changeset function shapes (create
+PROVENANCE (historical, not current decision authority):
 + update), the `resolveTenantByRealm`/`resolveRealmByTenant`-equivalent function
 signatures, the realm-ownership guard function signature, and the exact error-shape
 composition with REQ-018's already-merged `Letflow.Identity.provision_oidc_user/3`. No
@@ -37,6 +38,7 @@ specify), not Elixir code to copy verbatim.
   partial index is REQ-015's already-built DB-level enforcement of "each idp_realm_id
   maps to at most one tenant"; this design's changeset surfaces a violation of it via
   `unique_constraint/2`, it does not re-derive the invariant at a different layer.
+PROVENANCE (historical, not current decision authority):
 - `lib/letflow/design/req018-jit-provisioning.md` — full file, read as both the style/
   depth template for this document and for its §7 statement that `:realm_tenant_mismatch`
   is "named for shape-parity with `jit_provisioning.zig`'s `JitProvisioningError` set but
@@ -64,6 +66,7 @@ specify), not Elixir code to copy verbatim.
 - `docs/agents/instructions/security-invariants.md` — INV-1 (tenant data isolation),
   INV-7 (no SQL string interpolation), INV-8 (no unhandled crashes) — all three assessed
   explicitly in §9 below, since the realm-ownership guard is itself a security control.
+PROVENANCE (historical, not current decision authority):
 - R-Co `src/oidc/realm_tenant_binding.zig` (full file) — `resolveTenantByRealm`,
   `resolveRealmByTenant`, their exact SQL (`SELECT ... FROM tenant WHERE idp_realm_id =
   $1 LIMIT 1`; `SELECT idp_realm_id FROM tenant WHERE id = $1::uuid LIMIT 1`), the
@@ -145,6 +148,7 @@ No new files. No new migration — REQ-015's `tenants` table (specifically
 `tenants_idp_realm_id_partial_index`) already has the exact index this design's
 changeset needs to name via `unique_constraint/2` (§3).
 
+PROVENANCE (historical, not current decision authority):
 ## 2. Key invariants this design enforces (source: adp-04b + realm_tenant_binding.zig)
 
 Restated here as the design's own checklist, each mapped to where it's enforced below:
@@ -364,6 +368,7 @@ unnecessary.
         {:ok, Tenant.t()} | {:error, :not_found}
 ```
 
+PROVENANCE (historical, not current decision authority):
 Queries `Letflow.Identity.Tenant` via `Repo.get_by(Tenant, idp_realm_id: idp_realm_id)`
 — exact `WHERE`-clause parity with `realm_tenant_binding.zig`'s `resolveTenantByRealm`
 (`SELECT ... FROM tenant WHERE idp_realm_id = $1 LIMIT 1`, §0). Returns `{:ok, tenant}`
@@ -393,6 +398,7 @@ rather than silently assumed, mirroring REQ-018's own OQ-4 treatment.
         {:ok, String.t() | nil} | {:error, :not_found}
 ```
 
+PROVENANCE (historical, not current decision authority):
 Queries `Letflow.Identity.Tenant` via `Repo.get(Tenant, tenant_id)` — exact parity with
 `realm_tenant_binding.zig`'s `resolveRealmByTenant` (`SELECT idp_realm_id FROM tenant
 WHERE id = $1::uuid LIMIT 1`, §0). If no tenant with that ID exists: `{:error,
@@ -596,6 +602,7 @@ Reasoning:
    matching REQ-018's own OQ-4 precedent (same unresolved question, restated here for
    this design's own functions) rather than silently picking a different policy for a
    sibling function in the same module. Left for REVIEWER to confirm project-wide.
+PROVENANCE (historical, not current decision authority):
 5. **OQ-5 — `resolve_realm_by_tenant/1`'s `{:ok, nil}` return for a tenant with no bound
    realm is a deliberate divergence from `realm_tenant_binding.zig`'s literal behavior**
    (which treats a null `idp_realm_id` as `PersistenceFailed`, an error). This design's
@@ -666,6 +673,7 @@ answers to the same question.
   explicit `oidc_mode` argument rather than reading OIDC-enabled state from
   `Application` config itself, and that no config key for this currently exists (§8,
   OQ-1).
+PROVENANCE (historical, not current decision authority):
 - Modified file: `lib/letflow/identity.ex` gains `resolve_tenant_by_realm/1`,
   `resolve_realm_by_tenant/1`, `verify_realm_ownership/2`. `@moduledoc` (already
   present from REQ-018) should gain a note citing `src/oidc/realm_tenant_binding.zig`

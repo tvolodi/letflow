@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-029 — Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06)
 
 **Requirement:** REQ-029 (`docs/requirements.yaml`, stage S2)
@@ -34,6 +35,7 @@ code blocks.
   this design's node-attribute checks are exactly the kind of larger validation surface that
   finding warns not to under-test).
 
+PROVENANCE (historical, not current decision authority):
 **Access gap, stated explicitly per this task's own instruction, not silently worked around:**
 this environment does not have `R-Co/src/definition/graph.zig` or
 `R-Co/src/design/definition.md` checked out anywhere reachable (searched the whole filesystem
@@ -49,6 +51,7 @@ flagged inline where they occur rather than glossed over:
    and §6 below reconstruct a concrete, testable algorithm for each from REQ-029's prose
    description alone, and flag every place a real algorithm read from source could plausibly
    diverge from this reconstruction (§9.1).
+PROVENANCE (historical, not current decision authority):
 2. Everywhere REQ-028's design doc already resolved a naming/typing/behavior question by
    reading `graph.zig` directly (e.g. exact CHK-04 per-type connectivity rule), this design
    defers to that already-approved resolution rather than re-deriving it, since REQ-028's
@@ -132,6 +135,7 @@ confirm or override it rather than let it stand by default. This section does th
 **Resolution: `map() | nil` is confirmed, with one further pin this design adds that §9.1 did
 not yet need to make — map keys are `String.t()`, not atoms.**
 
+PROVENANCE (historical, not current decision authority):
 - **Why `map() | nil` (not `String.t() | nil`, i.e. not the raw undecoded JSON string
   `graph.zig`'s `?[]const u8` uses) still holds:** REQ-028 §9.1's own reasoning stands —
   Elixir/`Jason` naturally decodes a `jsonb` column's contents to a map before any validator
@@ -141,6 +145,7 @@ not yet need to make — map keys are `String.t()`, not atoms.**
   directly — a decoded map is the only shape that lets it do so without embedding its own JSON
   parser, which would be actual implementation logic (and a second, redundant decode) this
   design has no reason to invent.
+PROVENANCE (historical, not current decision authority):
 - **Why keys must be `String.t()`, not atoms — a new pin, not previously decided:** a `Node`
   constructed from a request body's raw `attributes` JSON object has attacker/tenant-controlled
   key names. `String.to_atom/1` (or `Jason.decode!/1, keys: :atoms`) on untrusted input is a
@@ -235,6 +240,7 @@ exists).
 
 ### 4.1a CHK-10's `"service_id"` alternative (fixed 2026-08-20, ISS-0104/GH#334)
 
+PROVENANCE (historical, not current decision authority):
 **A SERVICE_TASK node passes CHK-10 if *either* `"endpoint"` or `"service_id"` passes the §4.1
 non-blank test — the violation fires only when *both* are blank/missing.** This mirrors
 `Letflow.Engine.ServiceTask.parse_config_from_node_attributes/1`'s own routing (REQ-056 design
@@ -415,6 +421,7 @@ directly so TEST-DESIGNER can test it standalone against bare strings, per AC4's
 ("isValidCelSyntax-equivalent rejects... accepts...") which names the function itself as the
 thing under test, not just its effect via `validate_edge_conditions/1`.
 
+PROVENANCE (historical, not current decision authority):
 **Flagged per §0: reconstructed from REQ-029's own framing alone** ("a minimal structural (CEL
 syntax-only, no evaluation) check... R-Co's own comment notes vendor/cel/cel.zig is a stub, so
 this is a minimal subset check, not a full CEL implementation") — definition.md's actual "CEL

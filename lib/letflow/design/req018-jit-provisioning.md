@@ -1,5 +1,6 @@
 # Design: REQ-018 — JIT user provisioning (createOrGetJitOidcUser equivalent)
 
+PROVENANCE (historical, not current decision authority):
 **Requirement:** REQ-018 (`docs/requirements.yaml`, stage S1)
 **Owner (implementer):** ELIXIR-DEV
 **This document produces:** the `Letflow.Oidc.JitProvisioningConfig` struct shape, the
@@ -65,6 +66,7 @@ do), not Elixir code to copy verbatim.
   per-realm struct with a `for_realm/1` lookup using `Application.fetch_env!/2`, and a
   pure `default/1`-style fallback. `Letflow.Oidc.JitProvisioningConfig` (§1 below)
   follows this exact shape/convention.
+PROVENANCE (historical, not current decision authority):
 - R-Co source, read directly:
   - `c:\Users\tvolo\dev\ai-dala\R-Co\src\oidc\jit_provisioning.zig` (full file) — the
     orchestration layer. `JitProvisioningConfig` struct (`realm`, `enabled`,
@@ -114,6 +116,7 @@ parallels how `IdentityContext` (also `Letflow.Oidc`) is produced by the OIDC si
 consumed by `Letflow.Identity`'s JIT function (§2) — `JitProvisioningConfig` is the same
 kind of "OIDC-side input to an Identity-side operation" value.
 
+PROVENANCE (historical, not current decision authority):
 Ported from `jit_provisioning.zig`'s `JitProvisioningConfig` (lines 108-126) and
 `DEFAULT_JIT_CONFIG` (lines 142-147), dropping the `deinit/2` manual-memory-management
 function (BEAM GC makes it structurally inapplicable, same reasoning `IdentityContext`'s
@@ -228,8 +231,10 @@ to REQ-019's realm-ownership guard, called earlier in REQ-021's pipeline order p
 REQ-018/019's own descriptions). Stated explicitly here so ELIXIR-DEV doesn't invent a
 second tenant-resolution step inside this function.
 
+PROVENANCE (historical, not current decision authority):
 ### 2.2 Orchestration steps (matching `jit_provisioning.zig`'s orchestration + `registry.zig`'s upsert, composed)
 
+PROVENANCE (historical, not current decision authority):
 1. **JIT-disabled check.** If `jit_config.enabled == false`, return
    `{:error, :jit_disabled}` immediately — no DB access at all. This ports
    `JitProvisioningError.JitDisabled` (registry/jit_provisioning's error set,
@@ -259,6 +264,7 @@ second tenant-resolution step inside this function.
    through the return map. **Open question flagged in §8**: should `default_roles` also
    appear in the return map for convenience? Not added here since REQ-018's own
    acceptance criteria don't require it and the caller already holds the value.
+PROVENANCE (historical, not current decision authority):
 4. **Audit event emission — explicitly NOT ported in this requirement.**
    `jit_provisioning.zig`'s `processProvisionResult` emits an audit entry
    (`emitJitProvisionAuditEvent`, INSERT into `audit_entries`) when `created == true`.
@@ -267,6 +273,7 @@ second tenant-resolution step inside this function.
    explicitly out of REQ-018's scope (REQ-018's description and acceptance criteria make
    no mention of an audit trail) and is named here as a deferred/follow-up item, not
    silently dropped — see §8.
+PROVENANCE (historical, not current decision authority):
 5. **Attribute synchronization — explicitly NOT ported.**
    `jit_provisioning.zig`'s `syncAttributesFromIdentityContext` (OIDC-10 equivalent,
    lines 343-402) is a separate, later requirement's territory (not REQ-018, not listed
@@ -287,6 +294,7 @@ second tenant-resolution step inside this function.
 
 ### 3.1 Why `Repo.insert/2` + `on_conflict:`/`conflict_target:`, not raw SQL
 
+PROVENANCE (historical, not current decision authority):
 Ecto's `Repo.insert/2` accepts `on_conflict: :nothing` together with
 `conflict_target: {:unsafe_fragment, "..."}` or a column-list/index-name form,
 translating directly to Postgres's `INSERT ... ON CONFLICT (...) [WHERE ...] DO NOTHING`
@@ -313,6 +321,7 @@ parameterized Repo.query."
 
 ### 3.2 Why not `Ecto.Multi`
 
+PROVENANCE (historical, not current decision authority):
 `Ecto.Multi` composes multiple dependent `Repo` operations into one transaction with
 named steps — useful when several distinct writes must succeed or fail together. This
 upsert is a single logical operation (one conditional insert, with a select-before and
@@ -329,9 +338,11 @@ matching the shape of the actual problem (`backend_developer_guide.md` §3.2's p
 reasoning for `:gen_statem` vs. plain Ecto applies by the same spirit: don't reach for
 heavier machinery when a simpler primitive already fits).
 
+PROVENANCE (historical, not current decision authority):
 ### 3.3 Algorithm steps (exact, matching `registry.zig` lines 843-912)
 
 ```
+PROVENANCE (historical, not current decision authority):
 1. SELECT-FIRST:
    existing = Repo.get_by(Letflow.Identity.User,
                 tenant_id: tenant_id,
@@ -365,6 +376,7 @@ heavier machinery when a simpler primitive already fits).
    IF insert genuinely returned a newly-created row (not a conflict-signal):
      RETURN {:ok, new_user, created: true}
 
+PROVENANCE (historical, not current decision authority):
 3. RE-SELECT ON CONFLICT (insert signaled "no row returned" -- conflict happened):
    existing_after_conflict = Repo.get_by(Letflow.Identity.User,
                                 tenant_id: tenant_id,
@@ -375,11 +387,13 @@ heavier machinery when a simpler primitive already fits).
    IF existing_after_conflict != nil:
      RETURN {:ok, existing_after_conflict, created: false}
 
+PROVENANCE (historical, not current decision authority):
 4. COLLISION FALLBACK (should not happen under normal operation, but must be handled):
    RETURN {:error, :external_identity_collision}
    -- exact parity with registry.zig line 911: `return error.ExternalIdentityCollision`
 ```
 
+PROVENANCE (historical, not current decision authority):
 This is the full state machine REQ-018's third acceptance criterion asks for
 ("a simulated concurrent-insert race ... is handled by the re-select fallback without
 raising an unhandled exception"). Step 4 is the deliberately-unreachable-in-normal-
@@ -415,6 +429,7 @@ default.)
 
 ### 4.2 Column-by-column mapping
 
+PROVENANCE (historical, not current decision authority):
 | `users` column | Source | Notes |
 |---|---|---|
 | `tenant_id` | `tenant_id` function argument (§2.1) | Not read from `identity_context.tenant_id` — see §2.1's explicit reasoning. |
@@ -429,6 +444,7 @@ default.)
 
 ### 4.3 `display_name` fallback — resolved, cited
 
+PROVENANCE (historical, not current decision authority):
 **Decision: when `identity_context.display_name` is `nil`, `display_name` is set to
 `identity_context.preferred_username`.** This is not invented for this design — it is
 directly cited from `jit_provisioning.zig`'s own `syncAttributesFromIdentityContext`
@@ -472,6 +488,7 @@ mechanism is the `ON CONFLICT` target on the other index).
 **This design does not resolve the tension by picking a mangling scheme (e.g.
 tenant-prefixing the stored username).** Three real options exist and none is free of
 consequence:
+PROVENANCE (historical, not current decision authority):
 - (a) Leave `username` = `preferred_username` verbatim and accept that a second
   tenant's same-named OIDC user fails JIT provisioning with a changeset error (a hard
   failure — consistent with jit_provisioning.zig's Key Invariant 2, "the auth pipeline
@@ -487,6 +504,7 @@ consequence:
   outside this design's file scope (REQ-015's migration is not something REQ-018 is
   authorized to alter), and would need its own REQ-ANALYST-drafted follow-up requirement
   plus REVIEWER sign-off on revisiting a `done` requirement's schema.
+PROVENANCE (historical, not current decision authority):
 - (c) Mangle the stored `username` to guarantee uniqueness (e.g.
   `"#{realm}:#{preferred_username}"` or append a short tenant/external-id suffix) —
   not chosen here because REQ-018's description doesn't ask for it, and R-Co's
@@ -515,11 +533,13 @@ least documented in the test suite rather than silently undiscovered.
 Set **unconditionally** on every insert this function performs (never conditionally, never
 read from any input):
 
+PROVENANCE (historical, not current decision authority):
 - `password_hash: "__OIDC_ONLY__"` — the exact literal `registry.zig` line 887 uses.
   Never validated as a real hash, never used for authentication (OIDC users authenticate
   via bearer token, not this field) — its only purpose is satisfying `users.password_hash`'s
   `null: false` constraint with an unambiguous sentinel marking "this row has no usable
   local password."
+PROVENANCE (historical, not current decision authority):
 - `auth_source: :oidc` — the `Ecto.Enum` atom value corresponding to the DB string
   `'oidc'` `registry.zig` line 875 hardcodes directly into the SQL text (not a bind
   parameter in Zig's version either — R-Co's own implementation treats this as a fixed
@@ -538,6 +558,7 @@ not merely an implementation detail.
 
 1. REQ-020 (per-tenant role registry, `tenant_role`/`groups` tables) is `pending`, not
    `done` — REQ-018's own `depends_on` is `[REQ-015, REQ-017]` only, not REQ-020.
+PROVENANCE (historical, not current decision authority):
 2. REQ-015's schema (the only identity schema that exists as of this design) has no
    users<->roles join table at all. `tenant_role` (REQ-015) maps `name -> group_id`, a
    role-name-to-group binding — it is not a per-user role assignment table, and has no
@@ -546,6 +567,7 @@ not merely an implementation detail.
    `jit_provisioning.zig`'s `reconcileOidcRoles`, §0 — `INSERT INTO user_roles (user_id,
    role_id, role_source) ...` joining a `roles` table) that has **no Letflow-side
    equivalent in any `done` requirement's schema**.
+PROVENANCE (historical, not current decision authority):
 3. REQ-018's description explicitly frames `default_roles` as part of
    `JitProvisioningConfig`'s *shape* ("Per-realm JIT config ... default_roles falling
    back to VIEWER ... matching jit_provisioning.zig's JitProvisioningConfig shape") —
@@ -584,6 +606,7 @@ fallback rule is specified as a property of **reading** `JitProvisioningConfig`,
 @spec default_roles(config :: Letflow.Oidc.JitProvisioningConfig.t()) :: [String.t()]
 ```
 
+PROVENANCE (historical, not current decision authority):
 A small accessor on `Letflow.Oidc.JitProvisioningConfig` (or equivalently, a plain
 `if config.default_roles == [], do: ["VIEWER"], else: config.default_roles` at any call
 site) that returns `["VIEWER"]` when `config.default_roles` is `[]`, otherwise
@@ -598,6 +621,7 @@ since no code in this requirement's scope actually calls it.
 
 ## 7. Error handling — hard-failure semantics (Key Invariant 2)
 
+PROVENANCE (historical, not current decision authority):
 Per `jit_provisioning.zig`'s own "Key invariants" §2 ("Provisioning failure is a hard
 failure — the auth pipeline MUST NOT proceed") and REQ-018's description ("Provisioning
 failure must be a hard failure ... return {:error, reason}, never swallow"):
@@ -613,6 +637,7 @@ failure must be a hard failure ... return {:error, reason}, never swallow"):
   `provision_oidc_user/3` must uphold on its side (never silently swallow, always
   surface `{:error, reason}`) but does not itself implement REQ-021's pipeline-level
   enforcement of that contract, since REQ-021 is a separate pending requirement.
+PROVENANCE (historical, not current decision authority):
 - **Full enumerated `provisioning_error()` type** (§2.1's `@type`):
   - `:jit_disabled` — §2.2 step 1.
   - `:realm_tenant_mismatch` — **named for shape-parity with `jit_provisioning.zig`'s
@@ -654,6 +679,7 @@ failure must be a hard failure ... return {:error, reason}, never swallow"):
    (its own OQ-1) — this design makes the identical choice for consistency but flags it
    again since it's a fresh instance of the same judgment call, not automatically
    inherited from the earlier sign-off.
+PROVENANCE (historical, not current decision authority):
 2. **OQ-2 — where does the `enabled == false` short-circuit check belong: inside
    `provision_oidc_user/3` (this design's current choice, §2.2 step 1) or in REQ-021's
    future pipeline caller?** `jit_provisioning.zig`'s own module doc assigns "loading
@@ -788,6 +814,7 @@ simulated concurrent-insert race (criterion 3). Concrete guidance:
 
 ## 11. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-018 acceptance criterion | Concrete design element |
 |---|---|
 | "calling the provisioning function twice with the same (tenant_id, external_realm, external_id) returns the same user_id both times, with created: true only on the first call — demonstrated with an actual test or iex session, not just described" | §3.3's algorithm (select-first short-circuits the second call); §9's testing guidance for the idempotency test |
@@ -813,9 +840,11 @@ testing notes — §9.
   placement per §10's note — schema-module-local, matching `Approval`'s precedent,
   unless ELIXIR-DEV has a specific reason to place it in the context module instead,
   stated explicitly in the handoff either way).
+PROVENANCE (historical, not current decision authority):
 - `@moduledoc` on `Letflow.Identity` cites `src/oidc/jit_provisioning.zig` AND
   `src/identity/registry.zig`'s `createOrGetJitOidcUser` explicitly (both — acceptance
   criterion 4 names both files).
+PROVENANCE (historical, not current decision authority):
 - `@moduledoc` on `Letflow.Oidc.JitProvisioningConfig` cites `src/oidc/jit_provisioning.zig`'s
   `JitProvisioningConfig` struct and `DEFAULT_JIT_CONFIG` constant, and states explicitly
   (matching `ClaimMappingConfig`'s precedent) that no DB-backed per-realm config table is

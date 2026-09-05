@@ -587,3 +587,17 @@ history:
       ORCH independently confirmed mix compile --warnings-as-errors, mix
       format --check-formatted, and mix test test/letflow/event_store*.exs
       test/letflow/event_store/ (178 passed) before this status flip.
+  - req: REQ-237
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T08:13:39Z"
+    note: >
+      Defined the .zig provenance-citation marking convention -- demote from
+      decision-authority framing to clearly-marked historical provenance
+      (closes ISS-0424 part 3a design, queue task 474, GH#921, PR #942,
+      feature/WF02-REQ237-20260905). Design-only requirement, no
+      ELIXIR-DEV/REVIEWER step. CODE-DESIGN-VALIDATOR passed the design after
+      one rework cycle
+      (handoffs/WF02-REQ237-20260905/step-02b-code-design-validator-recheck.json).
+      REQ-238 (lib/ apply) and REQ-239 (docs/ apply) depend on this design
+      landing.

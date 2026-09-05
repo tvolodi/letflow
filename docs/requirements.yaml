@@ -14117,7 +14117,7 @@ requirements:
   - id: REQ-237
     title: Define the .zig provenance-citation marking convention -- demote from decision-authority framing to clearly-marked historical provenance (closes ISS-0424 part 3a, design)
     owner: CODE-DESIGNER
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the design-decision portion of ISS-0424/GH#828 part 3.

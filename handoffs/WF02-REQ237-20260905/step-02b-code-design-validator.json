@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF02-REQ237-20260905-step-02b",
+  "run_id": "WF02-REQ237-20260905",
+  "workflow_id": "WF-02",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ237-20260905/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T10:15:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-237"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ237-20260905/step-00-git-setup.json",
+      "handoffs/WF02-REQ237-20260905/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "docs/requirements.yaml (REQ-232..236,238,240..242 entries, re-derived counts)",
+      "lib/letflow/ (real grep -rl '\\.zig' counts, re-derived this session)"
+    ],
+    "branch_name": "feature/WF02-REQ237-20260905",
+    "base_commit": "bf601feb"
+  },
+  "task": {
+    "description": "Independent verification of REQ-237's design artefact against the real tree.",
+    "acceptance_criteria": []
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "AC-1 (marker/regex + worked example), AC-2 (single-regex coverage), AC-3 (path text preserved) and the 'no implementation code' / traceability parts of AC-5 all verified genuinely PASS: the docs/requirements.yaml:13810-13811 before-text and lib/letflow/identity.ex:3-6 before-text quoted in the design are byte-identical to the real tree; the after-text in both worked examples adds exactly one line with zero alteration to the original path text (confirmed diffing manually); the regex reasoning in Design decision 1(c) re: heredoc/Markdown text needing no escaping beyond the two literal parens is sound; 2 of 5 claimed citation phrasings independently spot-checked (CONTRACT SOURCE: at docs/requirements.yaml:9150/9209/9260, and the inline-prose form at identity.ex, plus the bullet at scheduler.ex:57-58 and the table at router.ex:71-73) are real, not invented. `git diff --stat main...feature/WF02-REQ237-20260905` touches only the two handoffs and the design doc -- no implementation code.\n\nAC-4 FAILS on re-derived real counts. The design's own sizing reference (REQ-232:12, REQ-233:13, REQ-234:7, REQ-235:5, REQ-240:4, REQ-241:6, REQ-242:5 files) is accurate -- max precedent chunk is 13 files (REQ-233). But re-running `grep -rl '\\.zig'` against the design's own proposed REQ-238 chunk boundaries today gives: 238a (router.ex+routers/) = 15 files, not the design's claimed 13; 238b (engine.ex+engine/* excl. lua/wasm) = 18 files, not the design's claimed ~14; 238d (definitions.ex+definitions/*) = 15 files, not the design's claimed 14. Three of the design's eight REQ-238 chunks (238a, 238b, 238d) exceed the 13-file precedent ceiling on real, present-tense counts -- 238b exceeds it by a wide margin (18 vs. 13) even under the design's own (also-too-low) ~14 estimate, meaning this isn't just OQ-2's flagged future drift, it is a violation of AC-4 that exists today, at design time, and the design's own research (§0/§1) did not catch it because the per-chunk counts in §6 were not actually re-run the way §1's top-level counts were (§1's 183/58/538 lib/docs totals ARE real re-derivations; §6's per-subsystem breakdown is not, despite reading as though it were).\n\nRequired rework: re-run `grep -rl '\\.zig'` against each proposed REQ-238/REQ-239 chunk boundary (not just the lib/docs top-line totals) and either (a) split 238a/238b/238d further so every chunk lands at or under 13 files (the real, verified precedent max), or (b) explicitly justify in the design why a chunk may exceed 13 and get that justification in front of REVIEWER rather than silently asserting compliance. Either resolution must replace the current §6 table's per-chunk counts with numbers actually re-run this session, the same rigor §1 applied to the top-level totals. No other section requires rework. Do not re-litigate AC-1/2/3/5's already-verified elements.",
+    "gaps": [
+      "AC-4: chunk 238a (routers) claimed 13 files, real count 15 -- exceeds 13-file precedent ceiling",
+      "AC-4: chunk 238b (engine-core excl. lua/wasm) claimed ~14 files, real count 18 -- exceeds ceiling under both claimed and real numbers",
+      "AC-4: chunk 238d (definitions) claimed 14 files, real count 15 -- exceeds ceiling",
+      "Section 6's per-chunk file counts were not re-derived by direct grep the way Section 1's top-level totals were, despite Section 0 claiming 'every count in this document is a real grep result run in this session'"
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

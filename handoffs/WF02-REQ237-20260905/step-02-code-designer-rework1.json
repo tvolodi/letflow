@@ -1,0 +1,44 @@
+{
+  "handoff_id": "WF02-REQ237-20260905-step-02-rework1",
+  "run_id": "WF02-REQ237-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ237-20260905/step-02-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T11:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-237"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ237-20260905/step-00-git-setup.json",
+      "handoffs/WF02-REQ237-20260905/step-02-code-designer.json",
+      "handoffs/WF02-REQ237-20260905/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (§6 revised)",
+      "lib/letflow/ (real grep -rl '\\.zig' counts, re-derived fresh this session, all 11 REQ-238 chunk boundaries)",
+      "docs/ (real grep -rl/-c '\\.zig' counts, re-derived fresh this session, all 10 REQ-239 chunk boundaries)"
+    ],
+    "branch_name": "feature/WF02-REQ237-20260905",
+    "base_commit": "bf601feb"
+  },
+  "task": {
+    "description": "Rework 1 of 3: CODE-DESIGN-VALIDATOR failed AC-4 because §6's per-chunk file counts (238a, 238b, 238d) were not actually re-grepped and exceeded the 13-file precedent ceiling on real counts (15, 18, 15 respectively vs. claimed 13, ~14, 14). Re-run the actual file-listing grep for every chunk in §6 (all 8 REQ-238 and all 8 REQ-239 chunks, not just the 3 flagged), split any chunk exceeding 13 files into smaller sub-chunks, and update §6 with corrected, freshly-verified counts.",
+    "acceptance_criteria": [
+      "every REQ-238 and REQ-239 chunk boundary in §6 is re-grepped fresh this session, not carried over from the prior revision",
+      "no chunk in §6 exceeds 13 files (the real, verified precedent ceiling from REQ-233)",
+      "the sum of each requirement's chunk file counts matches the re-derived top-level total exactly",
+      "no other section of the design (marker convention, regex, worked examples) is altered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Re-ran grep -rl '\\.zig' against every proposed chunk boundary in §6 (all 8 original REQ-238 chunks and all 8 original REQ-239 chunks), fresh this session, not carried over. Confirmed the validator's three flagged counts exactly: 238a (router.ex+routers/) = 15 files (was claimed 13), 238b (engine-core excl. lua/wasm) = 18 files (was claimed ~14), 238d (definitions.ex+definitions/) = 15 files (was claimed 14). Also found, by re-checking chunks the validator did not flag, two more REQ-239 chunks that exceeded the ceiling once actually counted: 239e (docs/migration/*.md) = 15 files (was already correctly counted as 15 but exceeds the 13-file ceiling that applies uniformly, not just to REQ-238), and the 239f/239g issues split = 17/16 files (both over 13). All five over-ceiling chunks were re-partitioned: 238a -> 238a1(8)+238a2(7); 238b -> 238b1(9)+238b2(9); 238d -> 238d1(8)+238d2(7); 239e -> 239e1(8, docs/migration/decisions/*.md)+239e2(7, docs/migration/stage-*.md); docs/issues/*.yaml (33 files) -> three ISS-id-range thirds 239f/239g/239h (11/11/11) instead of two halves. REQ-238 is now 11 chunks (8,7,9,9,4,8,7,10,9,5,8 = 84, matching the re-derived 84-file lib/ total exactly, up from the prior revision's 83 due to expected drift). REQ-239 is now 10 chunks (4 requirements.yaml line-quartiles unchanged at ~135 lines each, plus 239e1/e2/f/g/h/i file counts 8+7+11+11+11+10 = 58, matching the re-derived 58-file docs/ excl.-requirements.yaml total exactly). Every remaining chunk in both requirements is now at or under the 13-file ceiling (max is 238e/238f at 10/9). OQ-2 updated to reflect that this rework's own trigger (chunks growing past the ceiling between design-time and validation-time) is exactly the drift risk it already flagged, and to instruct ELIXIR-DEV/DOC-UPDATER to re-split further at fix time if drift recurs. AC-4 traceability row updated to cite the new 11+10 chunk counts. No other section (marker text/regex in §2, coverage confirmation in §3, worked examples in §4, verification method in §5, OQ-1/OQ-3) was touched. git diff --stat confirms only lib/letflow/design/req237-zig-provenance-marking-convention.md and this handoff changed -- no implementation code, no files outside the two permitted paths."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

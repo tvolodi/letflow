@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ237-20260905-step-02b-recheck",
+  "run_id": "WF02-REQ237-20260905",
+  "workflow_id": "WF-02",
+  "step": "1b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ237-20260905/step-02b-code-design-validator-recheck.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T12:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-237"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": [
+      "handoffs/WF02-REQ237-20260905/step-02-code-designer-rework1.json",
+      "handoffs/WF02-REQ237-20260905/step-02b-code-design-validator.json"
+    ],
+    "artifacts_reviewed": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (full, esp. §6)"
+    ],
+    "branch_name": "feature/WF02-REQ237-20260905",
+    "base_commit": "bf601feb"
+  },
+  "task": {
+    "description": "Independent re-check of CODE-DESIGNER's rework-1 fix to §6's chunking plan (rework of prior FAIL for 3 over-ceiling chunks).",
+    "acceptance_criteria": [
+      "every REQ-238 and REQ-239 chunk in the current §6 is independently re-grepped, not trusted from CODE-DESIGNER's note",
+      "no chunk exceeds 13 files",
+      "the union of all chunks covers the full original scope with no file dropped or double-counted",
+      "chunk partitioning is unambiguous (alphabetical/functional, not arbitrary)",
+      "no other section of the design (marker text, regex, worked examples §1-5) was altered"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Independently re-ran every grep, not trusting CODE-DESIGNER's paraphrase. Top-level totals confirmed fresh: lib/ (excl. design/) = 84 files, docs/ (excl. requirements.yaml) = 58 files, docs/requirements.yaml = 538 matching lines -- all match §1/§6's claims exactly. REQ-238's 11 chunks (238a1:8, 238a2:7, 238b1:9, 238b2:9, 238c:4, 238d1:8, 238d2:7, 238e:10, 238f:9, 238g:5, 238h:8) were each re-grepped individually; union of all 11 chunk file lists, deduplicated and diffed against a fresh top-level `grep -rl` of lib/, is byte-identical -- no file dropped, no file in two chunks, every chunk <=13 (max 10). Also confirmed the two files not assigned to any router chunk (routers/admin_services.ex, routers/mobile_tenant_config.ex) correctly have no .zig reference, so 238a1+238a2=15 legitimately equals the full router-scope count. REQ-239's 6 file-based chunks (239e1:8, 239e2:7, 239f:11, 239g:11, 239h:11, 239i:10) were likewise each re-grepped; union matches the 58-file docs/ total exactly, no gap/overlap (docs/issues ISS-id ranges 0001-0079/0085-0100/0101-0439 partition the real 33-file set cleanly by simple numeric range, not arbitrarily). docs/migration split (239e1 decisions/ vs 239e2 stage-*.md) is a clean directory-based functional split, unambiguous for DOC-UPDATER. requirements.yaml quartering (239a-d) is unchanged from the already-passed prior revision and is not subject to the file ceiling (one file, line-based). git diff between the original design commit (3317d836) and the rework commit (fa67b102), scoped to the whole file, shows changes confined to §6, the §7 traceability row for the chunking AC, and OQ-2 -- §1 through §5 (research, marker text/regex, coverage confirmation, worked examples, verification method) are byte-identical, confirming nothing already passed was touched. No implementation code (.ex/.exs bodies) appears anywhere in the diff. All four re-check acceptance criteria satisfied. PASS -- route to ORCH for Step Final."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

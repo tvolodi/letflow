@@ -1701,8 +1701,12 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by ORCH's ISS-0422 SCOPE-CHANGE done-event append
+      (ORCH-direct-20260905-ISS0422) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 12 on-disk entries, no
+      rebase conflict on this file.
       Incremented to 11 by DOC-UPDATER's REQ-232 done-event append
       (WF02-REQ232-20260905) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 11 on-disk entries, no

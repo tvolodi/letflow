@@ -1,0 +1,77 @@
+{
+  "handoff_id": "c4a2e6d9-1f3b-4a7c-8e5d-9b2f0a6c3d71",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "07d",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0480-20260905/step-07d-code-design-validator-regate.json",
+  "created_at": "2026-09-05T09:38:28Z",
+  "started_at": "2026-09-05T09:38:28Z",
+  "completed_at": "2026-09-05T09:38:28Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-07c-code-designer-rework2.json",
+      "handoffs/WF03-ISS0480-20260905/step-07b-code-design-validator.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture_dispatch_test.exs",
+      "test/support/data_case.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Focused re-gate (not a full re-review) of step-07c's correction to §11.2/§11.4 of lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, per step-07b's single BLOCKER, plus a spot-check that §11.1/§11.3/§11.5-11.8 were not modified beyond what step-07c claims.",
+    "acceptance_criteria": [
+      "§11.2 and §11.4 state the safety property mode-agnostically (no Sandbox.mode/2 call issued by the new path -> whichever mode is already ambient, {:shared, self()} or :auto, is left undisturbed)",
+      "test/support/tenant_fixture_dispatch_test.exs is explicitly named as the concrete :auto-mode instance",
+      "The correction cites §9.3's single-owner-under-:auto trace for why that case is also safe",
+      "§11.1, §11.3, §11.5, §11.6, §11.7, §11.8 were not modified beyond what step-07c claims (verified via git diff on the correcting commit)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Focused re-gate of the single correction ordered in step-07b. Verified via `git show 75184403` (the commit step-07c's edit landed in) rather than trusting CODE-DESIGNER's diff description, plus independent reads of test/support/tenant_fixture_dispatch_test.exs and §9.3 of the design doc itself.\n\n1. MODE-AGNOSTIC RESTATEMENT (§11.2): confirmed. The 'Purpose' paragraph no longer frames the goal only around {:shared, self()}; it now says the goal is reusing 'the SAME connection the caller's own test process is already using at the moment this function runs — whatever mode that connection is under'. The load-bearing 'Concrete mechanism' step 3 paragraph was rewritten from 'the caller's own {:shared, self()} mode ... is left completely alone' to 'since this path issues no Sandbox.mode/2 call itself, whichever mode/connection the caller's test process is ALREADY using at the moment this function runs is left completely undisturbed' — this is exactly the mode-agnostic property step-07b required, stated as the PRIMARY claim, not a caveat appended after the fact.\n\n2. MODE-AGNOSTIC RESTATEMENT (§11.4): confirmed. A new bullet was added asking 'Does §11.2's safety hold for a caller whose ambient mode is :auto rather than {:shared, self()} ... ?' and answering 'Yes, but not via the {:shared, self()} property ... because the property that actually matters is mode-agnostic: this path disturbs nothing, so whichever mode/connection was already ambient stays ambient.' The Conclusion paragraph was likewise extended to state both properties side by side rather than only the {:shared, self()} one.\n\n3. tenant_fixture_dispatch_test.exs NAMED AS THE CONCRETE :auto INSTANCE: confirmed in both §11.2 and §11.4. §11.2's Purpose paragraph and mechanism step 3 both name the file and quote its line-60 `setup do Sandbox.mode(Letflow.Repo, :auto) end`, stating it runs after DataCase's injected setup and before provisioned_tenant!/1. §11.4's new bullet repeats this by name with the same line-60 citation. Independently re-read test/support/tenant_fixture_dispatch_test.exs directly (not taken from the design's quote): line 51 is `use Letflow.DataCase, async: false`, and lines 59-62 are exactly `setup do\\n  Sandbox.mode(Letflow.Repo, :auto)\\n  :ok\\nend` — the design's quotation is accurate, not fabricated or misquoted.\n\n4. §9.3 CITATION FOR THE :auto SUB-CASE: confirmed as substantively correct, not just present. Independently re-read §9.3 (lines 731-789) directly: its steps 3-4 trace exactly the property being cited — under :auto mode, a lone test process's first post-mode-flip query auto-checks-out a fresh proxy and is recorded as that proxy's owner (`manager.ex:279`, `Map.put(checkouts, caller, {:owner, ref, proxy})`), and every subsequent query from the same process reuses that same proxy via the `{status, _ref, proxy} when status in [:owner, :allowed]` clause. This is precisely 'single owner reusing one connection under :auto', which is what §11.2/§11.4's new text claims §9.3 establishes — the citation is accurate, the mechanism it points to genuinely supports the conclusion, and this is not a citation to a section that only superficially resembles the needed property.\n\n5. SPOT-CHECK — §11.1/§11.3/§11.5/§11.6/§11.7/§11.8 unmodified beyond claim: confirmed via `git show 75184403 -- lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md | grep '^@@'`. Exactly four hunks: (a) lines 1-7, the top status header; (b)+(c) lines 2175-2231, both inside §11.2's own span (2184-2266, confirmed via a fresh grep of `^### 11\\.` section markers — §11.1 ends at 2183, §11.2.1 starts at 2267); (d) lines 2422-2470, inside §11.4's own span (2400-2493, §11.5 starts at 2494). No hunk overlaps §11.1 (2089-2183), §11.3 (2354-2399), §11.5 (2494-2545), §11.6 (2546-2589), §11.7 (2590-2677), or §11.8 (2678-end). The spot-check independently confirms step-07c's own claim rather than accepting it on the producer's word.\n\n6. NO IMPLEMENTATION CODE / NO NEW DEFERRALS: all four diff hunks are prose only — no fenced code block (```) added or removed by this commit; the file's existing 10 fenced blocks (all pre-existing, all inside §3/§9/§10, none inside §11) are unaffected. No 'TBD' or new OQ marker introduced — §11.8's open-questions list is untouched per the hunk-range check above.\n\nAll acceptance criteria for this focused re-gate are met. The correction is textually accurate against every source it cites (the test file's actual content, §9.3's actual trace) and does not merely restate the producer's claim — each citation was independently re-verified against the underlying artefact. §11 as a whole (§11.0-§11.8) now passes cleanly across both gate iterations; nothing further blocks implementation.",
+    "artifacts_out": [
+      "handoffs/WF03-ISS0480-20260905/step-07d-code-design-validator-regate.json"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": ["75184403d4901da851b1b2ee4070ce75fbfda244"],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to ELIXIR-DEV to implement §11's mechanism: the Process.put signal in test/support/data_case.ex (per §11.1), the provisioned_tenant!/1 dispatch logic, and the new provision_via_shared_connection/1 path -- per §11.6's signatures-only deliverable list. §11 design is now fully gated across both iterations; no further CODE-DESIGN-VALIDATOR rework is outstanding."
+  },
+  "rework_count": 2,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 1,
+      "gated_at": "2026-09-05T09:33:35Z",
+      "status": "FAIL",
+      "summary": "§11.2/§11.4's stated safety premise ('the caller's own {shared, self()} mode... is left completely alone') is false for test/support/tenant_fixture_dispatch_test.exs, the exact file §11.7 names as required regression evidence. Everything else in the rework (§11.0, §11.1, §11.2.1, §11.3, §11.5, §11.6, §11.7, §11.8) passes.",
+      "issues": [
+        "BLOCKER: §11.2/§11.4's stated safety premise is false for tenant_fixture_dispatch_test.exs; restate mode-agnostically and name that file as the concrete :auto instance, citing §9.3."
+      ],
+      "next_action": "Rework CODE-DESIGNER: correct §11.2's and §11.4's stated safety-property text (text-only, no mechanism change), then re-route to CODE-DESIGN-VALIDATOR for a focused re-gate."
+    },
+    {
+      "iteration": 2,
+      "gated_at": "2026-09-05T09:38:28Z",
+      "status": "PASS",
+      "summary": "Focused re-gate of step-07c's correction (commit 75184403). §11.2/§11.4 now state the safety property mode-agnostically, name tenant_fixture_dispatch_test.exs as the concrete :auto instance with an accurate line-60 quote, and cite §9.3's single-owner-under-:auto trace correctly (verified against §9.3's actual text, not just the citation's presence). Spot-check via git diff hunk ranges confirms §11.1/§11.3/§11.5/§11.6/§11.7/§11.8 untouched.",
+      "issues": [],
+      "next_action": "Route to ELIXIR-DEV to implement §11's mechanism (data_case.ex Process.put signal, provisioned_tenant!/1 dispatch, provision_via_shared_connection/1)."
+    }
+  ]
+}

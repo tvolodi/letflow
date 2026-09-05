@@ -1,0 +1,25 @@
+{
+  "handoff_id": "WF02-REQ248-20260905-step-02-elixir-dev",
+  "run_id": "WF02-REQ248-20260905",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ248-20260905/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "created_at": "2026-09-05T00:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-248"]
+  },
+  "task": {
+    "description": "Apply REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, section 2) to chunk 238d1: lib/letflow/definitions.ex and lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex. For every .zig source-path citation, insert the literal marker line 'PROVENANCE (historical, not current decision authority):' immediately above the smallest enclosing citation unit (single citation line, whole prose paragraph, whole comment block, or bullet/numbered-list item), per section 2's structural placement rule and precedents established by REQ-243/244/246/247. Pure text insertion -- no citation text altered, no code/behavior change."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "8 files edited, 23 PROVENANCE markers inserted covering all 25 pre-existing .zig citation lines (some units span 2 lines, e.g. graph.ex's paragraph and Violation moduledoc, and definitions.ex's search/2 paragraph -- 1 marker covers a multi-line unit). Before: grep -rc 'PROVENANCE (historical, not current decision authority):' on all 8 files = 0 for every file (zero pre-existing markers confirmed). After: same command = definitions.ex:10, export_import.ex:1, graph.ex:6, process_definition.ex:1, promotion.ex:1, promotion_artifact.ex:2, promotion_assertion_run.ex:1, promotion_conflict.ex:1 (total 23). Verified every one of the 25 .zig citation lines has a marker within its enclosing unit's preceding lines (windowed grep check, zero unmarked citations remain). grep -c '\\.zig' per file unchanged before/after (sum 25), confirming zero citation text lost. git diff shows only '+' lines (pure additions, no '-' lines) across all 8 files -- sample-diffed well over 5 citations across all 8 files, all byte-identical original path text preserved. Divergence-line check: grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' on the 8 files, before and after, both return only lib/letflow/definitions/process_definition.ex:34 (the known REQ-234-family divergence line), byte-identical and unmodified by this change (the edit in that file was at lines 131-135, unrelated). No Elixir/mix toolchain available in this environment ('which mix' -> not found, exit 127) -- mix compile/mix test could not be run; explicitly flagged rather than claimed. This is a pure text-insertion change (no @spec, logic, or behavior touched), committed as c9822b66 on branch feature/WF02-REQ248-20260905, not pushed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

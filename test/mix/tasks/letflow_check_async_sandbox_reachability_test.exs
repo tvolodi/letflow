@@ -200,10 +200,9 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
   describe "run/1 against a scratch --dir fixture" do
     setup do
       dir =
-        Path.join(
-          System.tmp_dir!(),
-          "letflow-check-async-sandbox-#{System.unique_integer([:positive])}"
-        )
+        System.tmp_dir!()
+        |> Path.join("letflow-check-async-sandbox-#{System.unique_integer([:positive])}")
+        |> Path.expand()
 
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
@@ -308,10 +307,9 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
   describe "run/1 -- support-module-shaped files are excluded by file selection" do
     setup do
       dir =
-        Path.join(
-          System.tmp_dir!(),
-          "letflow-check-async-sandbox-support-#{System.unique_integer([:positive])}"
-        )
+        System.tmp_dir!()
+        |> Path.join("letflow-check-async-sandbox-support-#{System.unique_integer([:positive])}")
+        |> Path.expand()
 
       File.mkdir_p!(dir)
       on_exit(fn -> File.rm_rf!(dir) end)
@@ -322,10 +320,22 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
     test "a tenant_schema_reaper.ex-shaped mode/2 caller (not *_test.exs) is never scanned", %{
       dir: dir
     } do
+      # Each support-module-shaped fixture below carries a real, anchored
+      # `use ..., async: true` line in addition to its mode/2 call site --
+      # not just the call site alone. Without that line, content-based
+      # classification (`async_true_file?/1`) would already exclude these
+      # files on its own, which means this test would pass even if a future
+      # glob change widened file *selection* to let `.ex` files through --
+      # proving nothing about the selection/glob mechanism this test claims
+      # to pin. With the `use ..., async: true` line present, the ONLY thing
+      # keeping these two files out of scope is that file selection never
+      # even discovers them (they don't match `**/*_test.exs`).
       File.write!(
         Path.join(dir, "tenant_schema_reaper.ex"),
         fixture([
           "defmodule Letflow.TenantSchemaReaperFixture do",
+          "  use Letflow.DataCase, async: true",
+          "",
           "  def sweep_orphans do",
           "    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)",
           "  end",
@@ -337,6 +347,8 @@ defmodule Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest do
         Path.join(dir, "tenant_template.ex"),
         fixture([
           "defmodule Letflow.TenantTemplateFixture do",
+          "  use Letflow.DataCase, async: true",
+          "",
           "  def ensure_template! do",
           "    Sandbox.mode(Letflow.Repo, :auto)",
           "  end",

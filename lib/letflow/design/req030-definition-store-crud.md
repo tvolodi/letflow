@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-030 — Definition store CRUD (`store.zig`, PD-01/PD-03/PD-04/PD-07)
 
 **Requirement:** REQ-030 (`docs/requirements.yaml`, stage S2, `depends_on: [REQ-027, REQ-028, REQ-029]`)
@@ -130,6 +131,7 @@ writes the real version at Step 2a.
 session (unlike REQ-029's run, which flagged it as absent; re-verified fresh rather than
 trusting that prior absence was still true):**
 
+PROVENANCE (historical, not current decision authority):
 - `src/definition/store.zig` (full read to line 1293, covering every function REQ-030
   ports) — `CreateParams`/`ListOpts` field docs (76–100), `create()`'s full body (186–316)
   including the exact validation-phase order **A (name/version) → B (validateGraph) → B2
@@ -273,6 +275,7 @@ reuses without re-deriving.
   service_scope_validator: service_scope_validator_fun() | nil
 ]
 
+PROVENANCE (historical, not current decision authority):
 @type common_error ::
   {:error, :invalid_schema_name}
   | {:error, {:transaction_failed, term()}}
@@ -321,6 +324,7 @@ reuses without re-deriving.
   {:ok, Letflow.Definitions.ProcessDefinition.t()} | create_error()
 ```
 
+PROVENANCE (historical, not current decision authority):
 Pipeline, in this exact order (phase-gated, mirroring `store.zig:186-316`'s own P-A/B/B2/B3/D
 structure — each phase's violations are returned and the pipeline stops; violations across
 phases are never merged, matching R-Co exactly):
@@ -336,6 +340,7 @@ phases are never merged, matching R-Co exactly):
    structurally cannot produce it.
 3. **P2 — resolve `tenant_id`.** `TenantProvisioning.tenant_id_for_schema_name(opts[:prefix])`
    → `{:error, :invalid_schema_name}` on failure.
+PROVENANCE (historical, not current decision authority):
 4. **P3 — name.** `attrs[:name]` (or `attrs["name"]`) must be a `String.t()`,
    `byte_size > 0`, `byte_size <= 255` → else `{:error, :name_invalid}`. Ported from
    `store.zig:198` (`params.name.len == 0 or params.name.len > 255`). This duplicates
@@ -343,6 +348,7 @@ phases are never merged, matching R-Co exactly):
    pre-changeset check produces the specific typed atom PD-01 names (`NameInvalid`) rather
    than a generic `%Ecto.Changeset{}`, and running it before phase P5's (expensive, in
    Elixir terms) graph conversion matches R-Co's own "cheapest checks first" ordering.
+PROVENANCE (historical, not current decision authority):
 5. **P4 — version.** `attrs[:version]` must be a `String.t()`, `byte_size > 0` → else
    `{:error, :version_empty}`. Ported from `store.zig:201`. (No upper-bound check is named
    by R-Co's own error taxonomy here — `varchar(255)` still enforces one at the DB layer via
@@ -352,6 +358,7 @@ phases are never merged, matching R-Co exactly):
    emptiness, `definition.md:190-191`.)
 6. **P5 — graph presence/shape.** `attrs[:graph]` (or `attrs["graph"]`) must be present and
    a plain map (not `nil`, not a list, not a string) → else `{:error, :graph_structure_invalid}`.
+PROVENANCE (historical, not current decision authority):
 7. **P6 — graph struct conversion.** `graph_struct_from_map(graph_map)` (§5) →
    `{:ok, Letflow.Definitions.Graph.t()} | :error`. On `:error` → `{:error, :graph_structure_invalid}`.
    Ports `store.zig`'s implicit `GraphStructureInvalid` (`definition.md:49-50`, "graph is not
@@ -420,6 +427,7 @@ the acceptance criterion's own named fallback.
    directly rather than letting a cast failure reach `Repo.get/3` as a raised
    `Ecto.Query.CastError` (INV-8; R-Co's `Uuid` is a fixed-width binary type with no
    equivalent malformed-string case, so this is a genuine Elixir-side addition, not a port).
+PROVENANCE (historical, not current decision authority):
 3. `Repo.get(ProcessDefinition, id, prefix: schema_name)` → `nil` → `{:error, :not_found}`;
    struct → `{:ok, struct}`. Ports `store.zig:358` (`rows.rows.len == 0 →
    DefinitionNotFound`).
@@ -434,6 +442,7 @@ the acceptance criterion's own named fallback.
 ```
 
 1. Resolve `opts[:prefix]` (§3).
+PROVENANCE (historical, not current decision authority):
 2. Query: `ProcessDefinition |> where([d], d.name == ^name and d.status == :active) |>
    Repo.all(prefix: schema_name)`. **Exact match on `name`, exact match on `status ==
    :active`** — no `ILIKE`, distinct from `list/2`'s `name` filter (§4.4.5's citation
@@ -458,6 +467,7 @@ has exactly one query, not two).
 
 ### 4.4 `list/2` (PD-07's `?stage=` filter)
 
+PROVENANCE (historical, not current decision authority):
 ```
 @type list_filters :: %{
   optional(:name) => String.t() | nil,
@@ -479,6 +489,7 @@ has exactly one query, not two).
   {:ok, [Letflow.Definitions.ProcessDefinition.t()]} | common_error()
 ```
 
+PROVENANCE (historical, not current decision authority):
 Always `{:ok, list}` — an empty list on no matches, never an error (ports
 `store.zig:485`'s `rowsToDefinitions` over a possibly-empty row set; REQ-030's own
 description states this explicitly).
@@ -487,6 +498,7 @@ Query composition (pseudocode — the actual `Ecto.Query` composition is ELIXIR-
 job):
 
 1. Resolve `opts[:prefix]` (§3).
+PROVENANCE (historical, not current decision authority):
 2. `effective_limit = clamp(filters[:limit] || 50, min: 1, max: 200)` — a `nil`/absent/`0`
    input maps to `50`; anything `> 200` clamps to `200`. Ports `store.zig:396`'s
    `if opts.limit == 0 then 50 elseif opts.limit > 200 then 200 else opts.limit`.
@@ -498,11 +510,13 @@ job):
    constant string, only the *value* is a bind parameter — the same distinction
    `tenant_provisioning.ex`'s one `fragment/1` use already documents for a different reason).
 5. If `filters[:status]` is non-nil: add `where([d], d.status == ^filters.status)`.
+PROVENANCE (historical, not current decision authority):
 6. If `filters[:stage]` is non-nil: add `where([d], d.stage == ^filters.stage)`. **Exact
    match, no `ILIKE`** — ports `store.zig:439-448`'s plain `stage = $N`, distinct from the
    `name` filter's substring behavior. **AC8 turns on this predicate being exact**: a
    `stage` filter value of `"prod"` must not also match a row whose stage is `"production"`.
 7. If `filters[:after_created]` is non-nil: add `where([d], d.created_at > ^filters.after_created)`.
+PROVENANCE (historical, not current decision authority):
 8. All added `where/2` clauses combine with `AND` (Ecto composes successive `where/2` calls
    conjunctively by default) — this is what makes the three filters "combinable... in the
    same call" (AC8): each is an independent, optional `AND`-joined predicate, so passing
@@ -733,6 +747,7 @@ Wrapped in one `try/rescue` (converting any unexpected raised exception to
    read-only transaction is harmless; ends the branch here, skipping every step below).
 5. `%{status: status}` where `status in [:deprecated, :archived]` →
    `Repo.rollback(:not_draft)`.
+PROVENANCE (historical, not current decision authority):
 6. `%{status: :draft} = definition` — **the only branch that proceeds to a real
    activation.** If `opts[:service_scope_validator]` is non-`nil`: call
    `graph_struct_from_map(definition.graph)` (§5) — `:error` → `Repo.rollback(:graph_structure_invalid)`
@@ -781,6 +796,7 @@ Wrapped in one `try/rescue` (converting any unexpected raised exception to
    :graph_structure_invalid} → {:error, :graph_structure_invalid}`; `{:error,
    {:service_scope_violation, reason}} → {:error, {:service_scope_violation, reason}}`.
 
+PROVENANCE (historical, not current decision authority):
 **A genuine cross-row race is not specially handled, matching R-Co exactly.** Two
 *different* DRAFT rows sharing the same `name`, activated concurrently, each acquire their
 own row's `FOR UPDATE` lock (different `id`s never block each other) and could both reach
@@ -806,6 +822,7 @@ Wrapped in the same `try/rescue` → `{:error, {:transaction_failed, exception}}
 
 1. Resolve `opts[:prefix]` (§3).
 2. `now = DateTime.utc_now() |> DateTime.truncate(:microsecond)`.
+PROVENANCE (historical, not current decision authority):
 3. Inside `Repo.transaction(fn -> ... end)` (matching `store.zig:761-802`'s explicit
    `BEGIN`/`COMMIT` wrapping, even though a single `UPDATE` is already atomic on its own —
    kept for source fidelity and because the fallback `SELECT` in step 5 benefits from
@@ -819,6 +836,7 @@ Wrapped in the same `try/rescue` → `{:error, {:transaction_failed, exception}}
      |> Repo.update_all([set: [status: :deprecated, updated_at: now]], prefix: schema_name)
    ```
 4. `count == 1` → return `hd(rows)` from the transaction function.
+PROVENANCE (historical, not current decision authority):
 5. `count == 0` → fallback lookup to disambiguate not-found from wrong-status, exactly
    mirroring `store.zig:785-798`: `Repo.get(ProcessDefinition, id, prefix: schema_name)`.
    `nil` → `Repo.rollback(:not_found)`. Non-`nil` (the row exists but its `status` wasn't
@@ -914,6 +932,7 @@ cursor semantics as-is, including its known skip-risk at a `created_at` tie. A c
 `(created_at, id)` cursor would close it but is new API surface no current acceptance
 criterion asks for — not built here.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-3 (MINOR, for REQ-031's own CODE-DESIGNER to confirm or correct):** §6.2 step 6 places
 the `service_scope_validator` hook call after the row lock, inside the `:draft` branch,
 before the two transition UPDATEs — matching `store.zig`'s real, current code structure.

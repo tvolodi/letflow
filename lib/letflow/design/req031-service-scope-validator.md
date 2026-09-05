@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-031 — Service scope activation validator (`service_scope_validator.zig`, SVC-03)
 
 **Requirement:** REQ-031 (`docs/requirements.yaml`, stage S2, `depends_on: [REQ-030]`)
@@ -22,6 +23,7 @@ moduledoc text — **no implementation code**. No function bodies, no `.ex` file
 
 **Letflow shipped code, read directly (not assumed):**
 
+PROVENANCE (historical, not current decision authority):
 - `lib/letflow/definitions.ex` — **full file (819 lines)**. Confirms the exact, already-merged
   hook contract this design must fit, byte-for-byte, not paraphrased:
   - `@type service_scope_validator_fun :: (Graph.t(), tenant_id :: Ecto.UUID.t() -> :ok | {:error, term()})`
@@ -86,6 +88,7 @@ moduledoc text — **no implementation code**. No function bodies, no `.ex` file
 
 **R-Co source of truth (`C:\Users\tvolo\dev\ai-dala\R-Co\`), read directly:**
 
+PROVENANCE (historical, not current decision authority):
 - `src/definition/service_scope_validator.zig` (full file, 225 lines) — `ServiceScopeError`,
   `ScopeViolation`, `ServiceScopeValidator.validateServiceTaskReferences`,
   `checkServiceId`, `checkPluginHandler`. This design ports the algorithm's *shape* (graph
@@ -96,6 +99,7 @@ moduledoc text — **no implementation code**. No function bodies, no `.ex` file
   tenant-scoped entry at all" branch (line 220-222, comment: "PD-05 already validates
   handler existence; skip") never fails — this is a genuine, deliberate asymmetry in the
   source, not a Letflow invention (§5.3).
+PROVENANCE (historical, not current decision authority):
 - `src/design/svc-01-04-service-scope.md` §2.5 ("Service scope activation validator") and
   §3.3 ("Definition activation scope validation") — read in full. §2.5 confirms the
   `Store.service_scope_validator: ?*ServiceScopeValidator = null` optional-injectable-field
@@ -124,6 +128,7 @@ later stage actually builds those two dependencies."*
 
 **Explicitly NOT built here, not silently papered over (AC5):**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Real dependency | Belongs to |
 |---|---|---|
 | A real, DB-backed service registry answering "is `service_id` X registered, and what's its scope/owner?" | `ServiceCatalog` (R-Co: `src/repository/service_catalog.zig`) — a tenant-scoped service registry table | **S6** (operational cross-cutting / repository layer — not yet ported as of this requirement; no Letflow requirement currently owns it) |
@@ -183,6 +188,7 @@ names two options — "two behaviour callbacks or a struct of functions." This d
 ```
 @type scope :: :global | :tenant
 
+PROVENANCE (historical, not current decision authority):
 @type lookup_record :: %{scope: scope(), owner_tenant_id: Ecto.UUID.t() | nil}
   # owner_tenant_id is nil iff scope == :global; expected non-nil iff scope == :tenant
   # (mirrors R-Co's ServiceCatalogRecord.owner_tenant_id: ?[16]u8, "null when scope =
@@ -199,6 +205,7 @@ names two options — "two behaviour callbacks or a struct of functions." This d
 @type service_lookup_result :: {:ok, lookup_record()} | {:error, :not_registered}
 @type plugin_lookup_result :: {:ok, lookup_record()} | {:error, :not_registered}
 
+PROVENANCE (historical, not current decision authority):
 @type service_lookup_fun :: (service_id :: String.t() -> service_lookup_result())
 @type plugin_lookup_fun ::
   (plugin_handler :: String.t(), tenant_id :: Ecto.UUID.t() -> plugin_lookup_result())
@@ -316,6 +323,7 @@ of R-Co's `ActivateParams.tenant_id: ?[16]u8` "null = platform-admin bypass" con
 
 ---
 
+PROVENANCE (historical, not current decision authority):
 ## 5. Algorithm — `validate/3` (ports `validateServiceTaskReferences`/`checkServiceId`/
 `checkPluginHandler`, `.zig` lines 54-223)
 
@@ -323,10 +331,12 @@ of R-Co's `ActivateParams.tenant_id: ?[16]u8` "null = platform-admin bypass" con
 §0):** the whole walk is one `Enum.reduce_while/3` over SERVICE_TASK nodes, in `graph.nodes`'
 original order — no re-sorting, no collected list of violations.
 
+PROVENANCE (historical, not current decision authority):
 1. `service_task_nodes = Enum.filter(graph.nodes, &(&1.node_type == :SERVICE_TASK))` —
    `Enum.filter/2` preserves relative order, matching the `.zig` source's single linear pass
    over `graph.nodes` with an inline `if (node.node_type != .SERVICE_TASK) continue`
    (equivalent walk order, restated as filter-then-iterate for clarity).
+PROVENANCE (historical, not current decision authority):
 2. `Enum.reduce_while(service_task_nodes, :ok, fn node, :ok -> ... end)` — for each node, in
    order:
    a. `node.attributes` is `nil` → this node contributes nothing; `{:cont, :ok}`. Ports the
@@ -348,6 +358,7 @@ original order — no re-sorting, no collected list of violations.
 
 ### Service branch table (step 2b, `lookup.service_lookup.(service_id)` result)
 
+PROVENANCE (historical, not current decision authority):
 | Lookup result | Outcome |
 |---|---|
 | `{:error, :not_registered}` | **Violation.** `reason: :service_not_registered`, `message: "service #{service_id} is not registered"` (verbatim template, `.zig` line 121 / design-doc §4 table). |
@@ -358,6 +369,7 @@ original order — no re-sorting, no collected list of violations.
 
 ### Plugin branch table (step 2c, `lookup.plugin_lookup.(plugin_handler, tenant_id)` result)
 
+PROVENANCE (historical, not current decision authority):
 | Lookup result | Outcome |
 |---|---|
 | `{:error, :not_registered}` | **Pass — no violation.** First asymmetry with the service table above, by design (see note below, INV-SSV-5) — ports `.zig`'s `checkPluginHandler`'s "no tenant-scoped entry at all: PD-05 already validates; skip" branch (line 220-222) verbatim. |
@@ -366,6 +378,7 @@ original order — no re-sorting, no collected list of violations.
 | `{:ok, %{scope: :tenant, owner_tenant_id: nil}}` | **Pass — no violation.** Second asymmetry with the service table above, by design (see note below, INV-SSV-9) — ports `.zig`'s `checkPluginHandler`'s `const owner = reg.owner_tenant_id orelse return;` (line 187) **verbatim**: a bare `return` inside a `ServiceScopeError!void` function is a *successful* return, not an error — R-Co does not raise a violation here. This is the exact inverse of the service table's row 4 above (`{:ok, %{scope: :tenant, owner_tenant_id: nil}}` → Violation for services), which ports `checkServiceId`'s structurally identical-shaped null-owner case (`.zig` line 142-151) the *opposite* way. Do not fold this row into the mismatched-owner row below — they are different R-Co source branches with different outcomes. |
 | `{:ok, %{scope: :tenant, owner_tenant_id: owner}}` where `owner != tenant_id` **and non-nil** | **Violation** (ports `.zig` lines 188-200). `reason: :plugin_not_available_to_tenant`, `message: "plugin #{plugin_handler} is not available to this tenant"` (verbatim template). |
 
+PROVENANCE (historical, not current decision authority):
 **Why the first asymmetry (not-registered → skip) is preserved, not "fixed":** this is not a
 Letflow simplification or an oversight — it is R-Co's own, deliberate design (§0's citation of
 both the `.zig` source and `svc-01-04-service-scope.md` §3.3's data-flow diagram, whose plugin
@@ -375,6 +388,7 @@ handler **existence** (as opposed to tenant **scope**) is validated by a differe
 own future PD-05 port (REQ-029, already shipped) will ever actually validate `plugin_handler`
 existence is unconfirmed — flagged as §9 OQ-3, not silently assumed.
 
+PROVENANCE (historical, not current decision authority):
 **Why the second asymmetry (nil `owner_tenant_id` → pass) is preserved, not "fixed":** this is
 a distinct, orthogonal asymmetry from the one above — it concerns a *resolved* tenant-scoped
 entry with malformed owner data, not an unresolved lookup. R-Co's `checkServiceId` (line
@@ -448,6 +462,7 @@ This module implements ONLY the graph-walk-and-scope-comparison algorithm (SVC-0
 an injectable `Lookup` (two functions the caller supplies). It does NOT implement, and does
 not itself depend on, either of R-Co's two real dependencies:
 
+  PROVENANCE (historical, not current decision authority):
   * a `ServiceCatalog` -- a tenant-scoped, DB-backed service registry
     (R-Co: `src/repository/service_catalog.zig`) -- belongs to **stage S6**
     (operational cross-cutting / repository layer), not yet ported as of this module.
@@ -467,6 +482,7 @@ optionality through, not inventing new complexity.
 
 ## 8. Invariants
 
+PROVENANCE (historical, not current decision authority):
 | id | Invariant | Enforced where |
 |---|---|---|
 | INV-SSV-1 | No new atom is ever created from caller/tenant-controlled input. `kind`/`reason` are drawn from a small, fixed, module-defined set; `node_id`/`ref_id` remain `String.t()` throughout. | §3.2 (`Violation.t()`'s closed `reason()`/`kind()` union types) |
@@ -513,6 +529,7 @@ inventing a new existence check here would be scope creep against this requireme
 acceptance criteria (none of which mention plugin-handler existence), but the gap is worth a
 future requirement's attention rather than being silently assumed closed.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 (MINOR, flag for REVIEWER/SECURITY-REVIEWER):** §5's plugin branch table treats a
 resolved tenant-scoped plugin lookup with a `nil` `owner_tenant_id` as a **pass** (INV-SSV-9),
 the exact inverse of the service table's identically-shaped case, which is a **violation**

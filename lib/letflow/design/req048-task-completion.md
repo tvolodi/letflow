@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-048 — Task completion (`instance.zig` `completeTask`, EE-04)
 
 **Requirement:** REQ-048 (`docs/requirements.yaml`, stage S3, per this run's handoff

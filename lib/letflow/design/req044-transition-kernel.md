@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-044 — Pure transition kernel skeleton (transition.zig EE-02)
 
 **Requirement:** REQ-044 (`docs/requirements.yaml`, stage S3)
@@ -40,6 +41,7 @@ bodies, no `.ex`/`.exs` code block contains real logic.
   they are the literal atom set REQ-023 already shipped and REQ-043's ALTER TABLE migration
   confirmed (not re-added) as unchanged. §10 states this as the resolved dependency-ordering note.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap, stated explicitly rather than silently worked around:** this environment has no
 `R-Co/src/engine/transition.zig` or `R-Co/src/design/engine.md` reachable (searched the whole
 filesystem for `transition.zig`/`engine.md`/any `R-Co` directory — no match), the same class of
@@ -183,6 +185,7 @@ contract minimal: the event says *which* token changes, `definition_snapshot` su
 topology needed to compute *what* changes, matching the signature's own framing ("all state is
 passed in").
 
+PROVENANCE (historical, not current decision authority):
 **`pending_event/0` declared as `term()`, not a fabricated tagged-tuple union — stated as a
 deliberate placeholder, not a "TBD":** the task names `PendingEvent` as "the tagged union
 transition.zig declares for EE-06/EE-07 split/join payloads" — i.e. its real shape is defined by
@@ -280,6 +283,7 @@ edge's `target`; every other field on the token (`token_id`, `branch_id`,
 `waiting_child_instance_id`) is unchanged. `instance_state.tokens` is updated in place (the one
 matching `token_id` replaced, order otherwise preserved). Returns `{:ok, new_instance_state, []}`.
 
+PROVENANCE (historical, not current decision authority):
 **Multiple-outgoing-edges assumption, flagged (§12.1):** `Letflow.Definitions.Graph`'s CHK-04
 (REQ-028) only requires a `:START` node to have **at least** one outgoing edge, not exactly one —
 a structurally-legal graph could give `:START` two or more. This design picks the first in
@@ -296,6 +300,7 @@ resulting `tokens` list is `[]` (no other token is still in flight — relevant 
 `:completed`. If `tokens` is **not** empty after removal, `status` is left unchanged (still
 `:active`) — other branches are still executing. Returns `{:ok, new_instance_state, []}`.
 
+PROVENANCE (historical, not current decision authority):
 **Multi-token completion rule, flagged (§12.2):** this is this design's own reconstruction of
 "moves the instance toward COMPLETED" (deliberately not "sets status to COMPLETED
 unconditionally") — the phrasing implies a token reaching `:END` is necessary but not always
@@ -485,6 +490,7 @@ ELIXIR-DEV's placement choice, content is fixed):
 ```
 ## Variable storage: no ObjectMap allocator-ownership equivalent (REQ-044)
 
+PROVENANCE (historical, not current decision authority):
 `transition.zig`'s `InstanceState.variables` is a `std.json.ObjectMap`, a
 mutable hash map whose entries are heap-allocated through an explicit
 `std.mem.Allocator` the caller owns and must free — Zig's manual-memory
@@ -555,6 +561,7 @@ as its own explicit moduledoc paragraph, not merely implied by the field's `@typ
 
 ### 12.1 `:START` with more than one outgoing edge — reasoned default, not verified against source
 
+PROVENANCE (historical, not current decision authority):
 §6.1's "first edge in declaration order" is this design's own tie-break for a structurally-legal
 (per REQ-028's CHK-04) but semantically unusual graph. Not verified against `transition.zig`'s
 literal source (§0's access gap). If R-Co source becomes reachable, ELIXIR-DEV should diff this

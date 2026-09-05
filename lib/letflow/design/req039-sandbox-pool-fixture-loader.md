@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-039 — Sandbox pool and fixture loader (`sandbox_pool.zig` + `fixture_loader.zig`)
 
 **Requirement:** REQ-039 (`docs/requirements.yaml:1822-1873`, stage S2, `depends_on: [REQ-022]`)
@@ -43,6 +44,7 @@ conventions); `deps/ecto_sql/lib/ecto/migration/schema_migration.ex` (confirms
 `Ecto.Migrator`'s `schema_migrations` bookkeeping table is created *inside* the
 `:prefix` schema it migrates, lines 26-77 — load-bearing for §4.6's cleanup claim).
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source of truth (`C:\Users\tvolo\dev\ai-dala\R-Co\`), read directly:**
 `src/definition/sandbox_pool.zig` (300 lines, in full) — the moduledoc's "process-local
 table" framing (6, quoted verbatim in §2), `SandboxPool.claim` (74-150, including the
@@ -82,6 +84,7 @@ design's answer).
 
 **Explicitly NOT in scope, and not silently dropped:**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Owned by | Citation |
 |---|---|---|
 | `promotion_assertion_runs` table, `applyPromotionAssertionRerun/…`, the idempotency-key check, frozen-clock/seeded-RNG injection, assertion replay | REQ-040 | `requirements.yaml:1875-…` ("…promotion_assertion_runs schema") |
@@ -99,6 +102,7 @@ that boundary.
 
 ## 2. THE OPEN QUESTION — process-per-instance vs. row-based state, resolved
 
+PROVENANCE (historical, not current decision authority):
 REQ-039's own description flags this explicitly, citing `sandbox_pool.zig`'s own
 moduledoc: *"The pool records every active claim in a process-local table"*
 (`sandbox_pool.zig:6`) and asks CODE-DESIGNER to weigh it against
@@ -107,6 +111,7 @@ assume either direction. This section is that resolution.
 
 ### 2.1 What "process-local table" actually means (clearing up a term collision)
 
+PROVENANCE (historical, not current decision authority):
 Zig's own comment is a false cognate for anyone skimming this codebase's Postgres-heavy
 vocabulary: `sandbox_pool.zig`'s `active: std.ArrayList(ActiveClaim)` (`sandbox_pool.
 zig:47`) is an **in-process, in-memory list**, not a Postgres table. Nothing in
@@ -198,6 +203,7 @@ designed around here.
 
 ## 3. Module and file plan
 
+PROVENANCE (historical, not current decision authority):
 | File | Module | Mirrors (R-Co) |
 |---|---|---|
 | `lib/letflow/sandbox_pool.ex` | `Letflow.SandboxPool` (GenServer + client API) and nested `Letflow.SandboxPool.SandboxClaim` (plain struct) | `src/definition/sandbox_pool.zig` |
@@ -268,6 +274,7 @@ generated. AC5's request/response text ("returns SandboxUnavailable") maps to
 convention (`backend_developer_guide.md` §3.5); `SandboxUnavailable` is REQ-039's own
 literal name (not R-Co's `PoolExhausted`), preserved as the Elixir error atom.
 
+PROVENANCE (historical, not current decision authority):
 ```
 @spec release(sandbox_id :: String.t(), pool :: GenServer.server()) ::
         :ok
@@ -298,6 +305,7 @@ cleanly.
 }
 ```
 
+PROVENANCE (historical, not current decision authority):
 - `active` is the entire "process-local table" `sandbox_pool.zig:6`'s moduledoc
   describes — an in-memory map, not a Postgres table (§2.1). `map_size(active)` is the
   live count against which `max_concurrent` is enforced.
@@ -321,6 +329,7 @@ cleanly.
      caller_ref}, max_wait_ms)` timer, append `{from, caller_ref, timer_ref}` to
      `waiting`, and return `{:noreply, state}` — the caller is now parked and does not
      receive a reply until either step 5 or step 6 fires.
+PROVENANCE (historical, not current decision authority):
 4. **Provisioning sequence** (used both by step 2 and by step 5 when a slot frees for a
    waiter):
    a. `sandbox_id = Ecto.UUID.generate()`.
@@ -393,6 +402,7 @@ cleanly.
 
 ### 4.6 Why migration-replay, not `LIKE ... INCLUDING DEFAULTS`
 
+PROVENANCE (historical, not current decision authority):
 Zig's `claim()` scaffolds each sandbox's fixture-target tables by copying the shape of
 a fixed reference schema, `tenant_default` (`sandbox_pool.zig:121-131`:
 `CREATE TABLE "{s}".process_definitions (LIKE tenant_default.process_definitions
@@ -493,6 +503,7 @@ defmodule Letflow.SandboxPool.FixtureLoader.FixtureRow do
 end
 ```
 
+PROVENANCE (historical, not current decision authority):
 `row_json` is a raw JSON text string (matching Zig's `row_json: []const u8`,
 `fixture_loader.zig:15`), bound as a `$1::jsonb` parameter — never decoded into an
 Elixir map by this module and never string-interpolated into SQL.
@@ -503,6 +514,7 @@ Elixir map by this module and never string-interpolated into SQL.
 @allowlist ["process_definitions", "instance_definition_snapshots"]
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Divergence from Zig's `{process_definitions, variable_schemas, instances}`
 (`fixture_loader.zig:30-34`), stated and justified:** two of Zig's three allowlisted
 tables have no Letflow equivalent today. `variable_schemas` has never been ported (no
@@ -553,20 +565,24 @@ semantic arguments, and no behavior is hidden behind an undocumented option.
 
 ### 5.4 Algorithm (steps, not code)
 
+PROVENANCE (historical, not current decision authority):
 1. If `fixtures == []`: return `:ok` immediately (matches `fixture_loader.zig:51`; a
    no-op load issues no SQL at all, including no TRUNCATE).
 2. **Schema-name shape validation (§5.5 INV-FL-1, an invariant this design adds beyond
    Zig's own source — see rationale there):** `sandbox_schema` must match
    `^sandbox_[0-9a-f]{32}$` exactly (the shape §4.4 step 4(b) always produces). If not:
    return `{:error, :invalid_schema_name}` without issuing any SQL.
+PROVENANCE (historical, not current decision authority):
 3. Compute the distinct `table_name` list from `fixtures`, preserving first-seen order
    (identical dedup algorithm to `fixture_loader.zig:71-85`).
+PROVENANCE (historical, not current decision authority):
 4. Validate every distinct `table_name` against `@allowlist` (§5.2). The **first**
    non-allowlisted name found short-circuits: return `{:error, :invalid_table_name}`
    without issuing any TRUNCATE or INSERT for *any* table, including ones that *are*
    allowlisted (matches Zig's own all-or-nothing validate-before-any-SQL ordering,
    `fixture_loader.zig:87-97` — validation is a separate pass that completes in full
    before the mutation pass begins).
+PROVENANCE (historical, not current decision authority):
 5. Open a `Repo.transaction/1` (see §5.6 for why this is a deliberate improvement over
    Zig's non-transactional sequence, not a silent behavior change):
    a. For each distinct table (in first-seen order): issue
@@ -590,6 +606,7 @@ semantic arguments, and no behavior is hidden behind an undocumented option.
 
 ### 5.5 Invariants
 
+PROVENANCE (historical, not current decision authority):
 - **INV-FL-1 (added beyond Zig's own source, justified by INV-7).** Zig's
   `loadFixturesOnly` trusts its `sandbox_schema` parameter positionally with no shape
   check before interpolating it into `SET search_path TO "<schema>", public`
@@ -624,6 +641,7 @@ semantic arguments, and no behavior is hidden behind an undocumented option.
 
 ### 5.6 Two stated divergences from Zig's fixture loader, justified
 
+PROVENANCE (historical, not current decision authority):
 1. **Transactional atomicity (added).** Zig's own comment states plainly: "On any
    error the function returns and leaves the sandbox in whatever state it reached; the
    defer in the assertion re-run pipeline still releases the sandbox"
@@ -636,6 +654,7 @@ semantic arguments, and no behavior is hidden behind an undocumented option.
    believes were loaded) at no cost this codebase doesn't already pay routinely
    (`TenantProvisioning.provision_tenant_schema/1` wraps its own multi-statement
    sequence in exactly the same primitive). Adopted as a strict improvement.
+PROVENANCE (historical, not current decision authority):
 2. **Explicit schema-qualification instead of `SET search_path` (changed mechanism,
    same behavior).** Zig mutates the borrowed connection's `search_path` for the
    duration of the load, then restores it (`fixture_loader.zig:61-69`) — a reasonable
@@ -745,6 +764,7 @@ Presented as literal documentation-string content ELIXIR-DEV copies verbatim ins
 
 ### 10.1 `Letflow.SandboxPool`
 
+PROVENANCE (historical, not current decision authority):
 ```
 Ephemeral Postgres-schema sandbox pool (ports R-Co's `src/definition/sandbox_pool.zig`
 per PRM-06/PRM-07 — see `src/design/prm-batch1-promotion-assertion-rerun.md`).
@@ -758,6 +778,7 @@ naming scheme, never `"tenant_" <> hex`.
 
 ## Process-per-instance vs. row-based state (REQ-039's open question, resolved here)
 
+PROVENANCE (historical, not current decision authority):
 REQ-039 explicitly flagged this as an open question rather than assuming an answer,
 citing `docs/migration/stage-2-event-store-definitions.md`'s "Early findings" section
 (process-vs-row) and `sandbox_pool.zig`'s own moduledoc ("The pool records every active
@@ -778,6 +799,7 @@ not survive a `SandboxPool` process restart (design doc §11 OQ-3).
 
 ### 10.2 `Letflow.SandboxPool.FixtureLoader`
 
+PROVENANCE (historical, not current decision authority):
 ```
 Loads a fixed list of fixture rows into a claimed sandbox schema's allowlisted tables,
 TRUNCATE-ing each distinct target table first (ports R-Co's
@@ -844,6 +866,7 @@ row to key off, since that table isn't this requirement's) would need to close b
 this pool is relied on under sustained production load. Not built here; named
 explicitly so it is not later mistaken for an oversight.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 — `max_concurrent_sandboxes` default value (5) is a placeholder tuning
 number, not a derived one.** No source read for this design (R-Co's `src/config/
 quota_policy.zig`, referenced only as a dependency name in `prm-batch1-…md`'s

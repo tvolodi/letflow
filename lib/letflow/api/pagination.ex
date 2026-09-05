@@ -1,5 +1,6 @@
 defmodule Letflow.Api.Pagination do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   The shared cursor-based pagination module every S4 list endpoint delegates
   to — ports `src/api/pagination.zig` (406 lines, R-Co's API-06). Design:
   `lib/letflow/design/api-pagination.md`.
@@ -53,6 +54,7 @@ defmodule Letflow.Api.Pagination do
 
   defmodule Cursor do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     An opaque decoded cursor payload. Ports `pagination.zig`'s `Cursor` struct
     (lines 61-72) minus its allocator/`deinit` fields — BEAM garbage
     collection has no caller-managed allocator or manual `free` to port.
@@ -69,6 +71,7 @@ defmodule Letflow.Api.Pagination do
 
   defmodule Page do
     @moduledoc """
+    PROVENANCE (historical, not current decision authority):
     The standardised page-response envelope. Ports `PageResponse(comptime T:
     type)` (`pagination.zig` lines 78-87) — Elixir has no generics, so
     `t(item)` is a documentation-only parameterised `@type` (the same
@@ -114,6 +117,7 @@ defmodule Letflow.Api.Pagination do
   (non-numeric, a decimal point, trailing garbage, a negative sign) is
   `{:error, :invalid_page_size}`.
 
+  PROVENANCE (historical, not current decision authority):
   This is the parse-time concern the design's §0.1 calls out as having no
   direct `pagination.zig` counterpart: Zig's `validatePageSize(raw: ?u16)`
   takes an already-parsed `?u16`, a type boundary Elixir has no compile-time
@@ -132,10 +136,12 @@ defmodule Letflow.Api.Pagination do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Range-validates an already-parsed page size. Ports `validatePageSize/1`
   (`pagination.zig` lines 97-108) almost verbatim: `nil` -> the default;
   `0` or `> #{@max_page_size}` -> reject; otherwise pass through unchanged.
 
+  PROVENANCE (historical, not current decision authority):
   Reject, not clamp: no out-of-range input is ever rounded to a bound (design
   §0.2). `0` and `> #{@max_page_size}` share the same error atom, ported
   verbatim from `pagination.zig`'s single-member `PageSizeError` set rather
@@ -178,6 +184,7 @@ defmodule Letflow.Api.Pagination do
   # ── Cursor decoding — prefix + expiry validation (§5) ───────────────────
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Decodes and validates a cursor, in the same order `pagination.zig`'s
   `decodeCursor/5` performs its checks (lines 140-180):
 
@@ -298,6 +305,7 @@ defmodule Letflow.Api.Pagination do
   # ── Encode-side raw-payload builders (§6) ───────────────────────────────
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Builds a raw cursor payload of the shape `"<prefix><timestamp_us>:<key>"`
   (e.g. `"T:1716412800000000:abc123"`). Ports `buildRawCursor/4`
   (`pagination.zig` lines 193-200) minus its `allocator` parameter. Pass the
@@ -310,6 +318,7 @@ defmodule Letflow.Api.Pagination do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Builds a raw cursor payload of the shape
   `"<prefix><sort_timestamp_us>:<key>:<cursor_created_at_us>"` (e.g.
   `"I:1716412800000000:abc123:1716412860000000"`). Ports
@@ -324,6 +333,7 @@ defmodule Letflow.Api.Pagination do
   # ── Cursor-payload parsing utilities (§7) ───────────────────────────────
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Extracts a decimal integer from `decoded[offset, len]`. Ports
   `parseIntFromCursor/3` (`pagination.zig` lines 227-235). An out-of-bounds
   slice or a non-digit-only slice is `{:error, :invalid_cursor}`.
@@ -348,6 +358,7 @@ defmodule Letflow.Api.Pagination do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Returns the zero-indexed byte position of the `n`-th `:` (1-indexed `n`,
   matching `pagination.zig`'s own 1-indexing) in `slice`, or `nil` if fewer
   than `n` colons exist. Ports `findNthColon/2` (`pagination.zig` lines

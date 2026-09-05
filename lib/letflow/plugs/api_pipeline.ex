@@ -7,6 +7,7 @@ defmodule Letflow.Plugs.ApiPipeline do
   All middleware that must NOT run on `GET /health` lives here and here only —
   sub-routers declare no plug chains.
 
+  PROVENANCE (historical, not current decision authority):
   `&Letflow.Api.Context.assign_trace_id/1` (REQ-072) is mounted immediately
   after `Plug.Parsers`, before `Letflow.Plugs.AuthPipeline` — so every
   request, including one that fails authentication, gets a trace id. This is
@@ -50,6 +51,7 @@ defmodule Letflow.Plugs.ApiPipeline do
 
   ## Deferred plugs (not yet declared — added by owning stage)
 
+  PROVENANCE (historical, not current decision authority):
   | Deferred plug                    | R-Co source              | Owning stage                              |
   |----------------------------------|--------------------------|-------------------------------------------|
   | `Letflow.Plugs.ContentType`      | `content_type.zig`       | S4 (no owning REQ assigned yet)           |

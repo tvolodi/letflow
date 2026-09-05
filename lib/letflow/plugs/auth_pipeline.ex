@@ -4,6 +4,7 @@ defmodule Letflow.Plugs.AuthPipeline do
   dev-bearer-token plug (cancelled along with the rest of the MVP-1
   milestone; REQ-103 is not prior art this module extends, it never landed).
 
+  PROVENANCE (historical, not current decision authority):
   Ports the orchestration order from R-Co's `src/api/middleware/auth.zig`
   (`authenticate/3` → `tryTenantRealmAuth` → `postAuthJitProvision`):
 
@@ -221,6 +222,7 @@ defmodule Letflow.Plugs.AuthPipeline do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Step 1a — RFC 6750 §2.1 case-sensitive "Bearer " prefix, matching
   # auth.zig's own check. Missing header, wrong prefix, or an empty token
   # after stripping the prefix all short-circuit here, before step 1b's
@@ -248,6 +250,7 @@ defmodule Letflow.Plugs.AuthPipeline do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Step 2a — realm slug parsed from the `iss` claim's "/realms/" suffix
   # (matching auth.zig's own realmSlugFromIssuer/1), not a `tenant_id` claim.
   defp extract_realm(claims) do

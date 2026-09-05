@@ -1,5 +1,6 @@
 defmodule Letflow.Api.Context do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Tenant-scoped request context and the cross-tenant 404 mechanism — ports
   `src/api/tenant_context.zig` (104 lines), `src/api/trace_context.zig` (55
   lines), and `src/api/pipeline_context.zig` (45 lines), folded into this one
@@ -18,6 +19,7 @@ defmodule Letflow.Api.Context do
   all: **every one of the three becomes an explicit `conn.assigns` key,
   populated once, read directly off the conn by whoever needs it.**
 
+  PROVENANCE (historical, not current decision authority):
   `pipeline_context.zig`'s one field, `pipeline_run_id`, has no current
   Letflow caller (no S1–S3 module reads or writes a pipeline-run correlation
   id yet), so there is nothing left for a `pipeline_context`-equivalent
@@ -108,6 +110,7 @@ defmodule Letflow.Api.Context do
   @max_trace_id_bytes 256
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Plug-shaped `conn -> conn` function (not a full `@behaviour Plug` module —
   it takes no `opts`), mounted first in `Letflow.Plugs.ApiPipeline`'s chain,
   immediately after `Plug.Parsers` and before `Letflow.Plugs.AuthPipeline` —
@@ -118,6 +121,7 @@ defmodule Letflow.Api.Context do
   Behavior:
 
     1. Reads the `x-trace-id` request header.
+    PROVENANCE (historical, not current decision authority):
     2. If present and non-empty: propagates it as-is, truncated to 256 bytes
        (`trace.zig`'s `MAX_TRACE_ID_LEN`) — no UUID-shape validation is
        performed on incoming values: a caller-supplied trace id is a
@@ -132,6 +136,7 @@ defmodule Letflow.Api.Context do
        `trace_id`. See the moduledoc's "no process dictionary" section for
        why this does not violate this module's own no-raw-dictionary-access
        rule.
+    PROVENANCE (historical, not current decision authority):
     6. Sets the `x-trace-id` response header eagerly, via
        `put_resp_header/3`, at this same point — not deferred to
        send-time the way a threadlocal-based design would need to
@@ -163,6 +168,7 @@ defmodule Letflow.Api.Context do
     |> put_resp_header(@trace_id_header, trace_id)
   end
 
+  # PROVENANCE (historical, not current decision authority):
   @doc "Pure UUID v4 helper, matching `trace.zig`'s `generateUuidV4/1` (36-char canonical form)."
   @spec generate_trace_id() :: String.t()
   def generate_trace_id, do: Ecto.UUID.generate()

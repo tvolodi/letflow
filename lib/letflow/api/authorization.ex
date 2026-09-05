@@ -1,5 +1,6 @@
 defmodule Letflow.Api.Authorization do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Role/permission authorization matrix and 403 decision contract — ports
   `src/api/authorization.zig` (281 lines, R-Co). Pure module: no `Plug.Conn`,
   no I/O, never raises on any input. See
@@ -161,6 +162,7 @@ defmodule Letflow.Api.Authorization do
   def permissions, do: @permissions
 
   defmodule AccessContext do
+    # PROVENANCE (historical, not current decision authority):
     @moduledoc "Ports `authorization.zig`'s `AccessContext` struct."
     @enforce_keys [:user_id, :roles]
     defstruct [:user_id, :roles]
@@ -172,6 +174,7 @@ defmodule Letflow.Api.Authorization do
   end
 
   defmodule AccessDecision do
+    # PROVENANCE (historical, not current decision authority):
     @moduledoc "Ports `authorization.zig`'s `AccessDecision` struct."
     @enforce_keys [:kind]
     defstruct kind: nil, task_scope: nil
@@ -210,6 +213,7 @@ defmodule Letflow.Api.Authorization do
   defp role_from_string(_other), do: nil
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Maps an HTTP method + path template to an `endpoint_policy_key/0`. Ports
   `endpointPolicyKey/2` (authorization.zig L77-112) exactly, including the
   SVC-04 service-catalog entries.
@@ -222,6 +226,7 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("PATCH", "/definitions/:id"), do: :DefinitionsPatch
   def endpoint_policy_key("POST", "/definitions/:id/activate"), do: :DefinitionsActivate
 
+  # PROVENANCE (historical, not current decision authority):
   # REQ-082 -- deprecate/archive/delete/import. authorization.zig has NO
   # entries for these four (confirmed by grep against that source, zero hits) --
   # same "no endpoint_policy_key clause, not permission-gated" pattern REQ-078/079
@@ -275,6 +280,7 @@ defmodule Letflow.Api.Authorization do
 
   def endpoint_policy_key("GET", "/tasks"), do: :TasksList
 
+  # PROVENANCE (historical, not current decision authority):
   # REQ-083 (OQ-8) -- GET /tasks/inbox maps to the same :TasksList policy key
   # as GET /tasks, because there is only one evaluateAccess call site for
   # this whole flow: handleInbox (tasks.zig L960-982) builds a
@@ -390,6 +396,7 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Ports `evaluateAccess/2` (authorization.zig L114-139) exactly, branch order
   included.
   """

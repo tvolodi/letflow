@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF02-REQ250-20260905-step-02d-reviewer",
+  "run_id": "WF02-REQ250-20260905",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ250-20260905/step-02d-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "created_at": "2026-09-05T14:30:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-250"]
+  },
+  "task": {
+    "description": "Idiom/scope gate on ELIXIR-DEV's application of REQ-237's PROVENANCE marker convention to lib/letflow/api/* and lib/letflow/plugs/* (chunk 238e, 10 files)"
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all claims. Per-file grep -c '\\.zig' summed to 74 on both main and the branch (unchanged, zero citation text lost). grep -cF marker count: 0 on main, 61 on branch (matches claim). git diff --name-only shows exactly the 10 expected files plus this run's handoffs touched -- nothing else. response.ex's divergence line: `diff <(git show main:response.ex | sed -n 27p) <(sed -n 30p response.ex)` returned zero differences -- byte-identical, shift is solely from 3 earlier markers in the same file. Read the full diff (502 lines) end to end across all 10 files: every hunk adds exactly one '+' marker line (either 'PROVENANCE (historical, not current decision authority):' as plain prose/moduledoc text, or '# PROVENANCE ...' inside Elixir comment blocks) with zero '-' lines anywhere -- no citation text, code, or logic altered. Spot-checked placement against design section 2 and precedent across 4+ files: authorization.ex correctly uses '# '-prefixed markers ahead of code comments (line 40, 48) vs. plain-text markers inside @moduledoc/@doc heredocs (lines 8, 32, 56) -- consistent with precedent from REQ-243/244. pagination.ex correctly gives each of two adjacent-but-distinct prose units under one @doc its own marker (lines 231, 236) rather than merging them. validation.ex correctly gives each bullet in the two-file disambiguation list (lines 391, 396) its own standalone marker, matching the established bullet-item rule. api_pipeline.ex marks the whole deferred-plugs table with one marker above the header row (line 416), not per-row, matching the design's table-unit rule. Explicitly re-confirmed authorization.ex (tenant-authz path) and tenant_status.ex (tenant-status gate) carry ONLY added marker lines -- grep-diffed both files against every non-PROVENANCE +/- line and found none; SECURITY-REVIEWER escalation not warranted, consistent with REQ-240's precedent. No scope creep: no new abstraction, behaviour, or module introduced; this is pure comment/doc-text insertion within the design's already-approved mechanical rule, nothing beyond stage/requirement scope. TEST-DESIGNER routing: SKIP is correct -- no executable logic changed, existing 289 tests already re-verified green by ORCH cover behavior untouched by this change.",
+    "findings": {
+      "idiomatic": "N/A -- pure documentation/comment marker insertion, no code logic to assess for OTP idiom",
+      "supervision": "unaffected -- no process/supervision-tree changes in this diff",
+      "type_safety_gaps": "none found -- no transition/state logic touched",
+      "scope_creep": "none found",
+      "decision_record_consistency": "consistent with docs/migration/decisions and REQ-237's design doc section 2 placement rule"
+    },
+    "verified_counts": {
+      "zig_citations_before": 74,
+      "zig_citations_after": 74,
+      "markers_before": 0,
+      "markers_after": 61,
+      "files_touched_expected": 10,
+      "files_touched_unexpected": 0
+    },
+    "recommendation": "PASS -- route to ORCH for Step Final. TEST-DESIGNER: SKIP (pure text-insertion, no executable logic changed)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.JoinCounter do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Tracks one outstanding PARALLEL_GATEWAY split/join cohort — ports
   `transition.zig`'s `JoinCounter` (EE-07, `lib/letflow/design/
   req051-parallel-gateway-split-join.md` §2, "added by R-Co's ISS-105") as a

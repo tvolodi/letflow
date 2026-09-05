@@ -1,0 +1,67 @@
+{
+  "handoff_id": "d49c0ea0-2ae9-4ca4-ae88-2ec4e3c2eceb",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0480-20260905/step-02-code-designer.json",
+  "created_at": "2026-09-05T06:17:41Z",
+  "started_at": "2026-09-05T06:17:41Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "29e4651a-54d4-46ad-89d1-e057bc3217a6"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-0.5-1-issue-fixer-diagnose.json",
+      "docs/issues/ISS-0480.yaml",
+      "docs/issues/ISS-0113.yaml",
+      "docs/issues/ISS-0423.yaml",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "docs/agents/instructions/security-invariants.md"
+    ],
+    "owned_modules": [
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex"
+    ]
+  },
+  "task": {
+    "description": "Design a fix for the ISS-0113/ISS-0423-disclosed remaining hazard that ISS-0480 caught recurring in the wild: `Letflow.TenantFixture.provisioned_tenant!/1`'s unconditional `Sandbox.mode(Letflow.Repo, :auto)` call (test/support/tenant_fixture.ex:222) is a GLOBAL per-repo setting, so any one of the 44 still-unconverted call sites running mid-suite forcibly checks in EVERY other concurrently-running async test's connection -- including tests that never call provisioned_tenant!/1 themselves and have no way to defend against it. Read this run's ISSUE-FIXER diagnosis (handoffs/WF03-ISS0480-20260905/step-0.5-1-issue-fixer-diagnose.json result.summary) in full first -- it traces the mechanism through Ecto's own sandbox.ex source (mode/2's documented 'checks in connections being used in any other test running concurrently' behaviour) and captured three live, real occurrences across two full-suite runs, each against a different victim test. This is not a fresh investigation; treat the mechanism as established fact.\n\nThis is NOT a new root cause -- it is ISS-0113/ISS-0423's own explicitly disclosed remaining scope (44 of 46 TenantFixture call sites unconverted) actually manifesting. Read docs/issues/ISS-0113.yaml's full resolution_note and docs/issues/ISS-0423.yaml's full resolution_note before designing -- both already contain load-bearing prior art you must not silently re-attempt:\n  - ISS-0113's FIRST attempted fix (an opts[:restore_sandbox] opt-in doing Sandbox.mode(:manual) + a fresh checkout after provisioning) was tried for real, passed its own design gate, then FAILED at implementation (26/38) -- traced to a 4th Sandbox.mode/2 mechanism: Ecto's Sandbox.mode/2 checks in ALL pool connections whenever the requested mode differs from the pool's CURRENT one, so a second mid-test mode flip (the restore step itself) discards the connection provisioning had just populated. Do not propose a per-call restore-to-:manual step without addressing this exact failure mode head-on.\n  - The mechanism that DID work for the 2 already-converted files (secrets_test.exs, webhooks_test.exs) is: no restore at all, relying on the pre-existing unconditional :auto call being 'ALREADY SUFFICIENT... PROVIDED the call site is independently verified' against three (now four, per ISS-0423's own resolution note) named failure mechanisms (self-checkout, concurrent multi-process DB access, second provisioning call, and this run's own newly-confirmed global-blast-radius-on-OTHER-files mechanism). That per-call-site verification approach is exactly what leaves 44 sites (and therefore every OTHER async: true test in the suite, including files with NO TenantFixture involvement at all, like ISS-0480's own two victims) permanently exposed until every site is converted or defended -- which is why ISS-0480 recurred.\n\nYOUR DESIGN MUST DECIDE, and justify the choice with reasoning grounded in the diagnosis (not merely restate the options): \n(a) NARROW: continue the per-call-site conversion tranche approach (verify + flip async:false->true one file at a time against the four named mechanisms) for some or all of the remaining 44 TenantFixture call sites. This does NOT close the hazard for the two ISS-0480 victim files themselves (they already ARE async: true and call NO fixture) -- it only reduces how often the global mode-flip fires, proportional to how many of the 44 you convert. State plainly whether a partial narrow conversion actually protects RowApprovalTest/PackUpdateMigrationTest, or whether ONLY converting all 44 (or another structural change) removes their exposure. \n(b) STRUCTURAL: remove the global-blast-radius hazard at its source, so files with NO TenantFixture involvement (like ISS-0480's own two victims) stop being exposed regardless of how many of the 44 remaining call sites are converted or not. Concrete directions worth evaluating (not prescriptive -- you decide, but show your reasoning against each): a separate, dedicated Ecto.Repo/connection pool for TenantFixture-provisioned tenant schemas so its Sandbox.mode/2 flips never touch Letflow.Repo's pool that ordinary DataCase tests use; or moving provisioned_tenant!/1's schema provisioning off the sandboxed Repo pool entirely (e.g. a raw, non-sandboxed connection dedicated to migration replay, never touching Sandbox.mode/2 on the shared pool at all); or something else you identify as removing the mode/2 call's global reach. Check each candidate against decision 0009-test-parallel-pool-sizing.md's DBConnection budget arithmetic (a second pool/connection changes peak concurrent connection demand) and against Letflow.SandboxPool's own existing moduledoc (test/support -- there is already a quota-bounded, owner-monitored pool abstraction in this codebase built for exactly this shape; evaluate whether it's reusable here or whether TenantFixture's needs are different enough to warrant its own mechanism).\n\nWhichever direction you choose, or if you choose a hybrid, your design's normative section must be unambiguous enough for ELIXIR-DEV to implement without further judgement calls, per this project's weak-model-tolerance standard. State explicitly: what changes, what does NOT change (public API of provisioned_tenant!/1, error taxonomy, any existing call site's return shape), and what verification ELIXIR-DEV/TEST-DESIGNER must run to prove the fix actually closes ISS-0480's specific exposure (RowApprovalTest and PackUpdateMigrationTest must stop being vulnerable to ANY concurrently-running TenantFixture-using test, not merely stop failing in one lucky run -- a fail-then-pass regression test per WF-03 Step 4 must be able to demonstrate this, so your design should suggest how such a test could deterministically trigger the hazard pre-fix, e.g. by forcing a concurrent provisioned_tenant!/1 call while a DataCase-only test holds an in-flight transaction, mirroring ISS-0110's own targeted-reproduction technique of simulating the race directly rather than relying on suite-wide timing luck).\n\nDo not touch supervision-tree files. Do not write implementation code -- design artefact only, in lib/letflow/design/, per this project's design/implementation split.",
+    "acceptance_criteria": [
+      "Design artefact written to lib/letflow/design/ (a new file, or a new section appended to lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md if you judge it the same design lineage -- your call, state which and why)",
+      "Explicitly addresses whether a narrow per-call-site conversion tranche can ever fully protect a file with zero TenantFixture involvement (like ISS-0480's two victims), or whether only a structural fix does -- this determines whether ISS-0480 can be marked resolved by this fix or only instrumented",
+      "Does not re-propose the exact restore_sandbox mechanism ISS-0113 already tried and reverted, without explaining what is different this time if some variant of it is chosen",
+      "States precisely what changes and what does not (public API, error taxonomy, existing call sites' behavior)",
+      "Reconciles against decision 0009-test-parallel-pool-sizing.md's DBConnection budget arithmetic if the design adds any connection/pool",
+      "Describes a concrete, deterministic mechanism TEST-DESIGNER can use to construct a fail-then-pass regression test for ISS-0480's specific exposure (a forced concurrent TenantFixture call racing a plain DataCase test), not merely 'run the suite many times and hope it reproduces'",
+      "No implementation code in the design artefact (design signatures/@specs/data-flow only)"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,7 +1,7 @@
 defmodule Letflow.EventStore.Registry do
   @moduledoc """
-  Context module for the event type registry (ES-05) — port of R-Co's
-  `src/event_store/registry.zig`: `register_type/2`, `validate_payload/3`,
+  Context module for the event type registry (ES-05), implementing the
+  interface specified in `src/event_store/registry.zig`: `register_type/2`, `validate_payload/3`,
   `get_type/2`, backed by the tenant-scoped `event_type_registry` table
   (`Letflow.EventStore.Registry.EventType`). See
   `lib/letflow/design/req024-event-type-registry.md` for the full design
@@ -38,13 +38,15 @@ defmodule Letflow.EventStore.Registry do
   external library such as `ex_json_schema`. This choice was made explicitly
   at CODE-DESIGNER design time — see
   `lib/letflow/design/req024-event-type-registry.md` section 1 for the full
-  reasoning (in short: R-Co's own validator deliberately implements only a
-  narrow keyword subset and treats every other keyword as inert; a
-  general-purpose draft-04/06/07 library would enforce keywords R-Co
-  deliberately leaves inert, a real behavioral divergence rather than a
-  cosmetic one, and the library's own error taxonomy doesn't match this
-  platform's required `(field_path, constraint, actual)` shape without an
-  adapter layer of comparable size to just porting the validator directly).
+  reasoning (in short: this project intentionally implements only a
+  narrow keyword subset and treats every other keyword as inert, matching
+  the exact contract this codebase's registered event-type schemas are
+  written against; a general-purpose draft-04/06/07 library would enforce
+  additional keywords those schemas don't expect, a real behavioral
+  divergence rather than a cosmetic one, and the library's own error
+  taxonomy doesn't match this platform's required `(field_path, constraint,
+  actual)` shape without an adapter layer of comparable size to just writing
+  the validator directly).
   No new `mix.exs` dependency was added for this — see section 1.4 for why
   this doesn't rise to a new `docs/migration/decisions/` record. See
   `Letflow.EventStore.Registry.JsonSchema`'s own moduledoc for the exact
@@ -52,7 +54,7 @@ defmodule Letflow.EventStore.Registry do
   `maxLength`, `enum`, `required`, `properties`, `items`,
   `additionalProperties` — every other keyword, including `$ref`/`pattern`/
   `format`/`allOf`/`anyOf`/`oneOf`/`not`/`patternProperties`, is silently
-  ignored, matching R-Co's own documented "permitted and inert" contract).
+  ignored, per that module's own documented "permitted and inert" contract).
 
   ## No `last_validation_failures/1`-equivalent function
 
@@ -109,23 +111,23 @@ defmodule Letflow.EventStore.Registry do
 
   @doc """
   Validates a raw JSON-encoded payload string against `event_type`'s most
-  recently registered schema version (R-Co's own `validatePayload` has no
-  exact-version parameter either — it unconditionally validates against
-  `getType`'s `ORDER BY schema_version DESC LIMIT 1` result, so "most recent
-  only" is R-Co's actual real behavior, not a narrowing this port
-  introduces — see the design doc section 4.2).
+  recently registered schema version (there is no exact-version parameter
+  by design, not omission — see the design doc section 4.2: validation
+  always targets the most recently registered version, resolved via
+  `getType`'s `ORDER BY schema_version DESC LIMIT 1` result).
 
-  `payload` is a raw, not-yet-decoded JSON string (matches R-Co's
-  `payload: []const u8` and this function's realistic caller — an HTTP
-  request body before any decoding happens). Decoding failure, or a
+  `payload` is a raw, not-yet-decoded JSON string, matching this function's
+  realistic caller — an HTTP request body before any decoding happens.
+  Decoding failure, or a
   successfully-decoded non-object payload (JSON array/string/number/bool/
   null at the root) is reported the same way an ordinary schema violation
   is: `{:error, {:payload_validation_failed, [%ValidationFailure{field_path:
   "/", constraint: "type", actual: payload}]}}` — this is a platform-level
   invariant about event payload shape (payloads are always JSON objects),
-  enforced here rather than inside `JsonSchema`, matching R-Co's own module
-  boundary (`registry.zig`'s `validatePayloadAgainstSchema`, not the
-  generic, schema-driven `json_schema.zig`).
+  enforced here rather than inside `JsonSchema`, since it is a payload-shape
+  invariant, not a schema-driven check — the same boundary
+  `registry.zig`'s `validatePayloadAgainstSchema` draws against the generic,
+  schema-driven `json_schema.zig`.
   """
   @spec validate_payload(
           event_type :: String.t(),

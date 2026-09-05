@@ -133,6 +133,7 @@ FK). Recommended filename order (timestamps strictly increasing):
 Source: adp-04b §"Data model and migration/backfill semantics", §"Core types"
 (`Tenant` struct), §"Key invariants" 1–2.
 
+PROVENANCE (historical, not current decision authority):
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | `:binary_id` | `primary_key: true` | Decision A |
@@ -274,6 +275,7 @@ acceptance criteria. This is deferred to REQ-018/REQ-019's changeset-level valid
 
 ### 2.3 `groups`
 
+PROVENANCE (historical, not current decision authority):
 Source: REQ-015's description ("if no groups table exists yet in Letflow, add a
 minimal groups table too: id, tenant_id, name — `src/identity/role_registry.zig`'s
 `upsertRole` checks group existence before writing"); adp-04's `Group` struct
@@ -305,6 +307,7 @@ REQ-020 (role registry, which is the first consumer of `groups` existence-checki
 decide when it writes `upsert_role`'s group-existence check, since REQ-020 is where
 group lookups actually happen.
 
+PROVENANCE (historical, not current decision authority):
 **Required migration file header comment (ELIXIR-DEV: copy verbatim):**
 
 ```
@@ -325,6 +328,7 @@ group lookups actually happen.
 
 ### 2.4 `tenant_role`
 
+PROVENANCE (historical, not current decision authority):
 Source: REQ-015's description ("tenant_role: id (binary_id), name (unique per tenant
 schema), group_id (binary_id, references groups), inserted_at ... Schema module should
 expose the same shape as `src/identity/role_registry.zig`'s `TenantRoleStore` will need
@@ -355,6 +359,7 @@ Indexes:
 - `create index(:tenant_role, [:group_id])` — FK-like column, per the established
   convention.
 
+PROVENANCE (historical, not current decision authority):
 **Required migration file header comment (ELIXIR-DEV: copy verbatim):**
 
 ```
@@ -479,6 +484,7 @@ REQ-021) owns `groups` CRUD; it exists solely as `tenant_role.group_id`'s and RE
 existence-check target. A future requirement (not yet drafted) owns group management
 proper.
 
+PROVENANCE (historical, not current decision authority):
 ### 3.4 `Letflow.Identity.TenantRole` — `lib/letflow/identity/tenant_role.ex`
 
 ```

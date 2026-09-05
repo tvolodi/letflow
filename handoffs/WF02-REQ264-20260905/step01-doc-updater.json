@@ -6,9 +6,11 @@
   "from_agent": "ORCH",
   "to_agent": "DOC-UPDATER",
   "file": "handoffs/WF02-REQ264-20260905/step01-doc-updater.json",
-  "status": "PENDING",
+  "status": "COMPLETED",
   "priority": "MEDIUM",
   "created_at": "2026-09-05T22:29:00Z",
+  "started_at": "2026-09-05T22:30:10Z",
+  "completed_at": "2026-09-05T22:44:50Z",
   "context": {
     "stage": "S6",
     "requirement_ids": ["REQ-264"],
@@ -49,6 +51,102 @@
       "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat",
       "the deliberate-divergence notes inside this chunk's scope (the 13 named files) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <13 files>` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
     ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, both 2026-09-05 amendments) to exactly the 13 files named in REQ-264 (chunk 239-design-a): lib/letflow/design/{0001-web-framework-addendum-req065,0001-web-framework-decision,0002-oidc-integration-decision,0003-ecto-schema-strategy-decision,api-pagination,export_import,identity-schema,iss-0047-username-race-conflict-target,iss-0078-pin-rebind-provenance,iss-0079-pin-override-verification,iss0438-entity-subsystem-scoping,promotion_plan,promotion_review_state_machine}.md. 75 PROVENANCE marker lines inserted total (per file: 3,4,16,2,17,2,6,1,5,2,11,4,2), covering all 181 pre-existing .zig citation lines (per-file .zig counts unchanged before/after; sum unchanged at 181). All files are Markdown, not YAML, so only the three original citation-unit shapes (single line, paragraph, table) applied -- no YAML comment-line shape (shape 4) was needed, as expected. Two shapes needed a closest-match judgement call rather than a literal reading of the three documented shapes: (1) a `.zig` citation embedded in a document/section-introducing heading line immediately followed (no blank line) by a fenced code block listing further `.zig` names -- treated the heading line as the outermost enclosing single-citation-line unit and placed the marker immediately above the heading, never inside or immediately before the code fence itself, since a marker line cannot legally sit inside a fenced code block; (2) export_import.md's very first `.zig` citation is in the document's H1 title line itself -- marker placed as the literal first line of the file, above the title, since that is the only 'immediately above' available for a title-line citation. Both are mechanical extensions of the existing 'single citation line' shape, not new conventions, so no new CODE-DESIGNER issue is filed; recorded here as MINOR per REVIEWER's ISS-0510 precedent for this exact situation.",
+    "verification": {
+      "pre_change_zig_counts": {
+        "0001-web-framework-addendum-req065.md": 18,
+        "0001-web-framework-decision.md": 15,
+        "0002-oidc-integration-decision.md": 65,
+        "0003-ecto-schema-strategy-decision.md": 2,
+        "api-pagination.md": 21,
+        "export_import.md": 2,
+        "identity-schema.md": 6,
+        "iss-0047-username-race-conflict-target.md": 1,
+        "iss-0078-pin-rebind-provenance.md": 5,
+        "iss-0079-pin-override-verification.md": 2,
+        "iss0438-entity-subsystem-scoping.md": 30,
+        "promotion_plan.md": 9,
+        "promotion_review_state_machine.md": 5,
+        "sum": 181,
+        "command": "grep -c '\\.zig' <each of the 13 files>, summed"
+      },
+      "acceptance_criteria_evidence": [
+        {
+          "ac": "AC1 -- pre-change count of OLD (unmarked) .zig citations, quoted per file and summed",
+          "result": "Independently re-derived (not trusted from ORCH's pre-flight): 18+15+65+2+21+2+6+1+5+2+30+9+5 = 181, matching ORCH's pre-flight figure exactly."
+        },
+        {
+          "ac": "AC2 -- post-change: zero unmarked citations remain; before/after counts equal",
+          "command": "grep -c '\\.zig' <each of the 13 files> (post-change)",
+          "result": "Post-change per-file counts identical to pre-change: 18,15,65,2,21,2,6,1,5,2,30,9,5 -- sum still 181. Zero .zig lines deleted; every citation unit is now preceded, within its own unit (line/paragraph/table/heading), by a 'PROVENANCE (historical, not current decision authority):' marker."
+        },
+        {
+          "ac": "AC2 -- no .zig-bearing line added/removed/altered",
+          "command": "git diff -U0 -- <13 files> | grep -c '^[+-].*\\.zig'",
+          "result": "0 -- confirms no .zig-bearing line was added, removed, or altered anywhere across all 13 files."
+        },
+        {
+          "ac": "AC2 -- greppability, both regex and plain-string forms",
+          "command": "grep -rlF 'PROVENANCE (historical, not current decision authority):' <13 files> ; grep -rlE 'PROVENANCE \\(historical, not current decision authority\\):' <13 files>",
+          "result": "Both commands list all 13 files -- markers are found by both the plain-string and regex forms in every file."
+        },
+        {
+          "ac": "AC3 -- sampled diff, path text preserved verbatim (>=10 citations across >=5 files)",
+          "command": "git diff -- lib/letflow/design/0002-oidc-integration-decision.md (and others)",
+          "result": "Sampled across 0002-oidc-integration-decision.md (16 units), api-pagination.md (17 units), identity-schema.md (6 units), iss-0078-pin-rebind-provenance.md (5 units), promotion_plan.md (4 units) -- well over the required 10 citations / 5 files. Every diff hunk shows only a single '+PROVENANCE (historical, not current decision authority):' line added; every path/citation text line survives unchanged as diff context; no '-' line appears anywhere in any of the 13 files' diffs."
+        },
+        {
+          "ac": "AC4 -- CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk untouched",
+          "command": "git diff --stat (repo-wide)",
+          "result": "Only the 13 named files plus this run's own handoff JSON appear in the diff (14 files changed, 77 insertions(+), 1 deletion(-) -- the 1 deletion is this handoff's own 'status' field bookkeeping edit, not any content file). CLAUDE.md, README.md, docs/migration/README.md, and every other lib/letflow/design/ file are absent from the diff -- confirmed untouched."
+        },
+        {
+          "ac": "AC5 -- deliberate-divergence notes byte-identical before/after",
+          "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <13 files>, run before and after this requirement's edits",
+          "result": "Before: 2 matches (iss-0079-pin-override-verification.md:129 and promotion_plan.md:449, both 'unlike R-Co' phrasing). After: 2 matches at the same lines relative to their files' own new marker insertions (iss-0079-pin-override-verification.md:131, promotion_plan.md:452 -- line numbers shifted only by markers inserted earlier in the same file, confirmed via git diff that neither line itself was touched by any edit hunk). Text of both lines is byte-identical before and after."
+        },
+        {
+          "ac": "no doubled/duplicate consecutive markers (idempotency)",
+          "command": "manual scan of each file's inserted marker lines for immediate repetition",
+          "result": "No doubled markers found in any of the 13 files."
+        },
+        {
+          "ac": "only the 13 named files changed (plus this handoff)",
+          "command": "git diff --stat",
+          "result": "lib/letflow/design/0001-web-framework-addendum-req065.md | 3 +++; 0001-web-framework-decision.md | 4 ++++; 0002-oidc-integration-decision.md | 16 ++++++++++++++++; 0003-ecto-schema-strategy-decision.md | 2 ++; api-pagination.md | 17 +++++++++++++++++; export_import.md | 2 ++; identity-schema.md | 6 ++++++; iss-0047-username-race-conflict-target.md | 1 +; iss-0078-pin-rebind-provenance.md | 5 +++++; iss-0079-pin-override-verification.md | 2 ++; iss0438-entity-subsystem-scoping.md | 11 +++++++++++; promotion_plan.md | 4 ++++; promotion_review_state_machine.md | 2 ++; plus handoffs/WF02-REQ264-20260905/step01-doc-updater.json (this file's own status/timestamp bookkeeping) -- exactly the 13 named files, nothing else, no sibling-chunk file touched."
+        }
+      ]
+    },
+    "deviations_and_issues": [
+      "No citation-unit shape outside the three Markdown shapes (single line, paragraph, table) was needed for these 13 files -- as expected, since they are Markdown not YAML, shape 4 (YAML comment-line/sequence-item) did not apply and no embedded YAML fences carrying .zig citations were found. Two placements required a closest-matching judgement call rather than a literal reading of the three shapes, both mechanical extensions of the existing 'single citation line' shape, not new conventions: (1) a heading line itself carrying a .zig citation, immediately followed (no blank line) by a fenced code block listing further .zig filenames (e.g. 0001-web-framework-addendum-req065.md's '### 2.1 Routes -- ...*.zig...' heading followed by a code-fenced list of route module names) -- the marker was placed immediately above the heading, treating heading+code-block as one outer unit, since a marker can never legally sit inside a fenced code block; (2) export_import.md's opening H1 title line itself carries a `.zig` citation (`export_import.zig`) -- the marker was placed as the literal first line of the file, above the title, the only 'immediately above' available for a title-line citation. Neither is filed as a new CODE-DESIGNER issue since no new marker text, regex, or placement rule was needed -- both are the existing single-citation-line rule applied to a heading/title context. Recorded here as MINOR per REVIEWER's established ISS-0510 precedent for exactly this kind of judgement call.",
+      "iss0438-entity-subsystem-scoping.md also required treating a sentence that continues after a fenced code block (a paragraph interrupted by a code fence mid-sentence) as one unit: the marker was placed above the paragraph's own introductory line, before the fence, rather than splitting the unit or placing a marker after the fence -- consistent with 'never insert a marker inside or immediately corrupting a fenced code block' and 'smallest enclosing unit, bounded by blank lines' read together. No table shape occurred in any of the 13 files that required a per-row vs. per-table judgement call beyond the documented rule."
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/0001-web-framework-addendum-req065.md",
+      "lib/letflow/design/0001-web-framework-decision.md",
+      "lib/letflow/design/0002-oidc-integration-decision.md",
+      "lib/letflow/design/0003-ecto-schema-strategy-decision.md",
+      "lib/letflow/design/api-pagination.md",
+      "lib/letflow/design/export_import.md",
+      "lib/letflow/design/identity-schema.md",
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/design/iss-0078-pin-rebind-provenance.md",
+      "lib/letflow/design/iss-0079-pin-override-verification.md",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "lib/letflow/design/promotion_plan.md",
+      "lib/letflow/design/promotion_review_state_machine.md",
+      "handoffs/WF02-REQ264-20260905/step01-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "Two placements in this chunk required a closest-matching judgement call not literally spelled out by REQ-237's three Markdown citation-unit shapes: (1) a heading line itself carrying a .zig citation immediately followed by a fenced code block of further .zig names (0001-web-framework-addendum-req065.md and 0001-web-framework-decision.md both have this shape) -- resolved by marking above the heading, treating heading+code-block as one outer unit. (2) A .zig citation inside a document's own H1 title line (export_import.md) -- resolved by placing the marker as the file's literal first line, above the title. Both are mechanical extensions of the existing single-citation-line shape, not new conventions, so no new CODE-DESIGNER issue is filed. Recorded for visibility per the task's own instruction to flag any judgement call, consistent with REVIEWER's ISS-0510 precedent."
+      }
+    ],
+    "next_action": "Route to REVIEWER"
   },
   "rework_count": 0,
   "max_rework": 3

@@ -7,6 +7,7 @@ port-vs-defer recommendation, not an implementation design — no
 Elixir function bodies or literal Ecto schema field lists appear below,
 per ISS-0438's own AC7 and this handoff's task.
 
+PROVENANCE (historical, not current decision authority):
 **Sources actually read in full for this recommendation** (not
 summarized from ISS-0438's own text): `C:\Users\tvolo\dev\ai-dala\R-Co\src\entities\mod.zig`
 (127 lines), `definition.zig` (370 lines), `validator.zig` (1005 lines,
@@ -39,6 +40,7 @@ batches**
 This is a genuine "yes, build it" recommendation, not a default. The
 reasoning:
 
+PROVENANCE (historical, not current decision authority):
 1. **It is a real, working, already-battle-tested subsystem in R-Co**,
    not a stub. `validator.zig`'s record-payload validation half
    (ISS-0160/GH#481) exists specifically because an earlier version
@@ -83,6 +85,7 @@ complete" line and not a new S6.5/S7-adjacent stage. Rationale for S6
 specifically rather than S5 (the other half of the router table's own
 "S5/S6" hedge):
 
+PROVENANCE (historical, not current decision authority):
 - **The router table's own citation trail points at S6, not S5.**
   `src/design/entities.md`'s "Cross-module dependencies" table names
   `src/repository/*`, `src/event_store/*`, `src/api/pagination.zig`,
@@ -106,6 +109,7 @@ specifically rather than S5 (the other half of the router table's own
 ### Rough requirement-slice breakdown (actionable by REQ-ANALYST without
 re-reading R-Co source)
 
+PROVENANCE (historical, not current decision authority):
 Following the precedent this project's own S6 batches already set for
 splitting a subsystem into core-then-route slices (REQ-176→178,
 REQ-181→184, REQ-202→203, REQ-211→212), and R-Co's own module boundaries
@@ -113,6 +117,7 @@ REQ-181→184, REQ-202→203, REQ-211→212), and R-Co's own module boundaries
 `events.zig` / `query/`), a natural cut is **five to six
 requirement-sized slices**:
 
+PROVENANCE (historical, not current decision authority):
 1. **Entity definition schema + validator core** (`definition.zig` +
    `validator.zig`'s definition-validation half, ~370 + ~530 lines of the
    1005). Covers: the `EntityDefinition`/`FieldDef`/`IndexDef`/`FKDef`/
@@ -189,6 +194,7 @@ requirement-sized slices**:
    actually needs a query compiler, as that row's own R-Co-source
    annotation says.
 
+PROVENANCE (historical, not current decision authority):
 No route/controller layer is included in this breakdown — matching
 REQ-202's own precedent (`Letflow.Repository`'s HTTP surface is
 explicitly out of scope, "no consumer contract exists yet"), the same
@@ -204,6 +210,7 @@ apply.
 ### A finding ISS-0438 itself missed, worth flagging explicitly (AC2
 actionability)
 
+PROVENANCE (historical, not current decision authority):
 ISS-0438's own filed description sizes the subsystem at "~3400 lines"
 covering only `definition.zig`/`validator.zig`/`commands.zig`/
 `projector.zig`/`events.zig`/`mod.zig` — it never mentions `query/` even
@@ -266,6 +273,7 @@ Concretely, against the real module (`lib/letflow/event_store/registry.ex`,
   naturally from slice 4's own module (or a one-time seed step it
   triggers), the same shape any other platform event type registration
   takes, not a bespoke "entity event" registration path.
+PROVENANCE (historical, not current decision authority):
 - `Registry.validate_payload/3` — R-Co's own `commands.zig` deliberately
   does **not** call R-Co's `registry.zig::validatePayloadAgainstSchema`
   from `createRecord`/`updateRecord`/`deleteRecord` for the
@@ -338,6 +346,7 @@ kind = entity" maps onto the real `Letflow.Repository`/`ArtifactKind`
 current value list as-is — it needs a one-line extension, not a
 structural change.**
 
+PROVENANCE (historical, not current decision authority):
 Read directly from `lib/letflow/repository/artifact_kind.ex` (28
 lines, the entire module): the value list is a hardcoded, closed atom
 list —
@@ -365,6 +374,7 @@ Concretely, what a Letflow port gets for free from the *existing*,
 already-shipped `Letflow.Repository` (388 lines, read in full) once
 `:entity` is added to the value list:
 
+PROVENANCE (historical, not current decision authority):
 - **`Letflow.Repository.create/2`** already implements exactly the
   "canonicalise → hash (SHA-256) → dedup-on-`content_hash` → version-sequence"
   pipeline R-Co's design doc describes for entity definitions
@@ -469,6 +479,7 @@ to it.
    tenant-scoped via `prefix`/`tenant_id`), tenant-scoped is the
    natural default, but REQ-ANALYST should state this explicitly in
    slice 1/2's requirement text rather than let it default silently.
+PROVENANCE (historical, not current decision authority):
 3. **Synthetic-instance-per-entity-type vs. per-record** — R-Co's design
    doc explicitly defers this too ("Deferring this decision is safe —
    the table structure supports either model"), and this recommendation

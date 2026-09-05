@@ -1,5 +1,6 @@
 # REQ-067 — `Letflow.Api.Pagination`
 
+PROVENANCE (historical, not current decision authority):
 Design for the shared cursor-based pagination module every S4 list endpoint
 delegates to. Ports `src/api/pagination.zig` (406 lines, API-06). No
 implementation code below — signatures, `@spec`-style types, and struct/type
@@ -64,8 +65,10 @@ per-route-handler call into this module's two functions, the same way
 `Letflow.Api.Error`/`Letflow.Api.Response` are called directly from handlers
 (REQ-066 §0.3). A shared validation plug is REQ-068's scope, not this one's.
 
+PROVENANCE (historical, not current decision authority):
 ### 0.2 Reject, not clamp — and the HTTP status divergence from `pagination.zig`'s own comment
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's `validatePageSize/1` rejects, never clamps** — confirmed by reading
 the source directly (`pagination.zig:100-105`): `raw == null` returns
 `DEFAULT_PAGE_SIZE`; `v == 0` returns `error.PageSizeTooLarge`; `v >
@@ -75,6 +78,7 @@ port preserves reject-not-clamp exactly: `validate_page_size/1` never rounds
 an out-of-range value to `MIN_PAGE_SIZE`/`MAX_PAGE_SIZE` — every out-of-range
 input becomes an error tuple.
 
+PROVENANCE (historical, not current decision authority):
 **Status code — a deliberate, explicitly-flagged divergence from
 `pagination.zig`'s own doc comment.** The Zig source's own comment at
 `pagination.zig:97` states `0 → error.PageSizeTooLarge (HTTP 422 per API-06
@@ -94,6 +98,7 @@ tuple (`{:error, :page_size_too_large}`), not a status code, precisely so the
 status-code choice stays a route-handler/call-site concern this module does
 not hard-code.
 
+PROVENANCE (historical, not current decision authority):
 **Same error atom for `0` and `> 200` — ported verbatim, not "fixed."**
 `pagination.zig`'s `PageSizeError` set has exactly one member
 (`PageSizeTooLarge`), so both the zero case and the too-large case return the
@@ -105,6 +110,7 @@ the source actually does.
 
 ### 0.3 Structural enforcement of INV-1 / INV-5 (no tenant scope in the cursor)
 
+PROVENANCE (historical, not current decision authority):
 `Letflow.Api.Pagination.Cursor` (§2) has exactly one field: `inner ::
 binary()`. There is no `tenant_id`, `schema`, `prefix`, or any other field a
 caller-supplied, tamper-decoded value could populate to widen a query's scope
@@ -147,6 +153,7 @@ misuse.
 @cursor_expiry_us  86_400_000_000  # pos_integer(), 24h in microseconds
 ```
 
+PROVENANCE (historical, not current decision authority):
 Ported exactly as `pagination.zig` declares them (lines 18/21/24/27) — no
 rounding, no re-derivation from a "24 * 3600 * 1_000_000" expression, matching
 the handoff's explicit instruction to port the literal constants.
@@ -179,6 +186,7 @@ defstruct [:inner]
 @type t :: %__MODULE__{inner: binary()}
 ```
 
+PROVENANCE (historical, not current decision authority):
 Ports `pagination.zig`'s `Cursor` struct (lines 61-72) minus its
 allocator/`deinit` fields — Elixir has no caller-managed allocator or manual
 `free`, so `allocator` and `deinit/1` are dropped entirely (BEAM garbage
@@ -201,6 +209,7 @@ defmodule Letflow.Api.Pagination.Page do
 end
 ```
 
+PROVENANCE (historical, not current decision authority):
 Ports `PageResponse(comptime T: type)` (lines 78-87) — Elixir has no generics,
 so `Page.t(item)` is a parameterised `@type` (a documentation-only type
 parameter, same technique Elixir's own `Enumerable.t()` uses), not a runtime
@@ -279,6 +288,7 @@ distinct error atom (mirrors `CursorError`'s member set, lines 37-46, minus
 `OutOfMemory` — no Elixir analogue, dropped same as REQ-066 dropped Zig's
 allocator-failure branches):
 
+PROVENANCE (historical, not current decision authority):
 1. **Base64url decode.** `Base.url_decode64(encoded, padding: false)` — `:error`
    (malformed input) → `{:error, :invalid_base64}`.
 2. **Prefix match.** `String.starts_with?(decoded, prefix)` — `false`, or
@@ -301,6 +311,7 @@ allocator-failure branches):
    `now_us - ts > expiry_window_us` → `{:error, :expired}` (AC4). Otherwise
    proceed to build the `Cursor`.
 
+PROVENANCE (historical, not current decision authority):
 **Deliberate atom-naming divergence, flagged rather than silently ported.**
 `pagination.zig` reuses `error.InvalidBase64` for three different failure
 modes: genuinely malformed base64 (check 1), and two malformed-timestamp-slice
@@ -322,6 +333,7 @@ On success: `{:ok, %Cursor{inner: decoded}}`.
 
 ### 5.1 Wall-clock time
 
+PROVENANCE (historical, not current decision authority):
 No standalone function is ported for `currentMicrosecondTimestamp/0` (lines
 254-273) — Elixir's `System.system_time(:microsecond)` is a one-line BEAM
 builtin with no OS-specific branching to hide behind a private helper, unlike
@@ -368,6 +380,7 @@ result to get the opaque base64url string handed to the HTTP client as
 @spec find_nth_colon(binary(), pos_integer()) :: non_neg_integer() | nil
 ```
 
+PROVENANCE (historical, not current decision authority):
 Port `parseIntFromCursor/3` (lines 227-235) and `findNthColon/2` (lines
 239-248) verbatim in shape. `parse_int_from_cursor/3` extracts a decimal `i64`
 (Elixir: unbounded `integer()`) from `decoded[offset, len]`;
@@ -382,6 +395,7 @@ interpret those fields itself, per §0.3's opacity requirement.
 
 ## 8. Error-tuple shapes (summary)
 
+PROVENANCE (historical, not current decision authority):
 | Function | Success | Errors |
 |---|---|---|
 | `parse_page_size_param/1` | `{:ok, pos_integer() \| nil}` | `{:error, :invalid_page_size}` |
@@ -426,6 +440,7 @@ depend on this module's public functions.
 
 ## 10. Invariants (restated compactly)
 
+PROVENANCE (historical, not current decision authority):
 - **INV-1 / INV-5 (structural, not conventional).** `Cursor.t()` has exactly
   one field, `inner :: binary()`. No `tenant_id`, `schema`, or `prefix` field
   exists on the struct — there is no slot a decoded cursor could populate to
@@ -475,11 +490,13 @@ depend on this module's public functions.
    one `with` step per call site at the cost of the two concerns being
    harder to test independently. Left to CODE-DESIGN-VALIDATOR/REVIEWER;
    either shape satisfies AC2 as written.
+PROVENANCE (historical, not current decision authority):
 2. **400 vs. 422 for page-size rejection (§0.2).** This design follows the
    requirement dispatch's explicit 400 instruction over `pagination.zig`'s own
    comment saying 422. Flagged for REVIEWER to confirm this reading of the
    dispatch is correct before ELIXIR-DEV wires the route-handler `else`
    clause to `Response.bad_request/2`.
+PROVENANCE (historical, not current decision authority):
 3. **`:invalid_cursor` vs. reusing `:invalid_base64` for malformed-timestamp-
    slice failures inside `decode_cursor/4` (§5).** This design splits them;
    `pagination.zig` conflates them under one Zig error. Behaviorally a no-op

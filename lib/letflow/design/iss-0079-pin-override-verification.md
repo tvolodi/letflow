@@ -12,12 +12,14 @@ authoritative pin. Because pins are immutable after `INSTANCE_STARTED` (except v
 `PinRebind`) and `pin_for/3` is "no fallback, ever" (PIN-03 AC1/AC5), an unverified override
 poisons every later execution-time lookup for that instance's whole lifetime.
 
+PROVENANCE (historical, not current decision authority):
 R-Co does not do this (`R-Co/src/engine/pin_resolver.zig`, read directly this session,
 line numbers below). Verified independently rather than trusted from the issue text, per
 its own instruction to do so.
 
 ## What R-Co actually does — verified directly, and it is narrower than "override" suggests
 
+PROVENANCE (historical, not current decision authority):
 `applyPinOverrides` (`pin_resolver.zig:602-691`), called as Step 5, after Steps 2-4 have
 already unconditionally resolved every real graph reference via the normal catalog/registry
 lookup (`:254-290`, unconditional — an override does **not** skip the base resolution):

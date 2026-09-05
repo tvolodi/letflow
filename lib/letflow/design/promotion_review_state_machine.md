@@ -139,6 +139,7 @@ the doc internally consistent with the §2.3 fix.
   the DB layer. §4.4 below reuses this exact idiom for AC4's concurrent-`approve_review`
   test, rather than inventing a new mechanism.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source** (`src/definition/promotion_review.zig` PRM-04, `src/definition/
 promotion.zig` ENV-03, and `src/design/prm-04-promotion-review-state-machine.md`):
 **genuinely unreachable on this host**, re-checked fresh for this run:
@@ -186,6 +187,7 @@ not `:gen_statem`.
 Two new sibling submodules under `lib/letflow/definitions/`, following the
 `InstanceDefinitionSnapshot`/`SnapshotStore` schema-vs-context split (§0):
 
+PROVENANCE (historical, not current decision authority):
 | File | Module | Ported from |
 |---|---|---|
 | `lib/letflow/definitions/promotion_review_store.ex` | `Letflow.Definitions.PromotionReviewStore` | `promotion_review.zig`, PRM-04 |

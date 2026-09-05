@@ -11,6 +11,7 @@ defmodule Letflow.Routers.Services do
 
   ## Contract source (design §0)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `src/api/routes/services.zig` (417 lines) has five handlers —
   `handleListServices` (L27), `handleAdminListServices` (L62),
   `handleAdminRegisterService` (L93), `handleAdminUpdateService` (L175),

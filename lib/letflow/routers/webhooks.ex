@@ -16,6 +16,7 @@ defmodule Letflow.Routers.Webhooks do
 
   ## Contract source
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `webhooks.zig` was **not inspected** while drafting this route
   layer (REQ-182) or the deliveries route added on top of it (REQ-184) — R-Co
   is at a Windows path unreachable from this sandbox, verified absent, not

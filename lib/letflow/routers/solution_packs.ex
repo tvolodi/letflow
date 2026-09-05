@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.SolutionPacks do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Solution-pack export/install sub-router (REQ-078, design
   `lib/letflow/design/req078-supporting-routes.md` §8). Ports
   `src/api/routes/solution_packs.zig`'s `handleExport` (L29) and
@@ -59,19 +60,23 @@ defmodule Letflow.Routers.SolutionPacks do
 
   ## Deliberate non-ports, each with its reason and owner
 
+    PROVENANCE (historical, not current decision authority):
     * **`service_catalog_entries` / `409 CATALOG_CONFLICT`**
       (`solution_packs.zig:135`) — Letflow has no service catalog;
       `services.zig` owns stage **S6**. Export emits `[]`; install rejects a
       non-empty array with **422** rather than silently discarding
       tenant-supplied content.
+    PROVENANCE (historical, not current decision authority):
     * **`MODULE_NON_EXPORTABLE`** (`solution_packs.zig:83`) — no
       process-module packaging in Letflow; `process_modules.zig` owns stage
       **S5**.
+    PROVENANCE (historical, not current decision authority):
     * **`409 TenantInactive`** (`solution_packs.zig:127-134`) — already
       enforced **upstream**: `Letflow.Plugs.TenantStatus` runs in
       `Letflow.Plugs.ApiPipeline` before any sub-router and rejects an
       inactive tenant with `403 tenant_inactive` for every method. A 409
       branch here could never fire.
+    PROVENANCE (historical, not current decision authority):
     * **`409 VARIABLE_SCHEMA_CONFLICT`** (`solution_packs.zig:136`) —
       **unreachable in Letflow**, not merely unported. Install creates every
       definition it writes schemas for, and `ProcessDefinition`'s primary key
@@ -81,6 +86,7 @@ defmodule Letflow.Routers.SolutionPacks do
       standing condition that invalidates it**: if a later requirement adds an
       install mode that attaches variable schemas to a *pre-existing*
       definition, the conflict becomes reachable and must be reinstated.
+    PROVENANCE (historical, not current decision authority):
     * **R-Co's idempotent re-install** (`buildIdempotentResult`,
       `src/solution/store.zig:682`, called from `:337`) — R-Co returns a
       synthetic success for an already-installed pack. **Letflow returns 409**,
@@ -94,6 +100,7 @@ defmodule Letflow.Routers.SolutionPacks do
 
   ## Authorization gap — REQ-131 closes it
 
+  PROVENANCE (historical, not current decision authority):
   Neither route calls `Letflow.Api.Authorization.evaluate_access/2`.
   `endpoint_policy_key/2` has **no clause** for `POST /solution-packs/*` —
   there is no existing policy clause to extend (R-Co's `authorization.zig`
@@ -118,8 +125,10 @@ defmodule Letflow.Routers.SolutionPacks do
   `Letflow.Definitions.SolutionPack`, which cannot be reached without the
   prefix, because the prefix is the `opts` argument.
 
+  PROVENANCE (historical, not current decision authority):
   ## `sandbox_access.zig` is NOT ported by REQ-078
 
+  PROVENANCE (historical, not current decision authority):
   Recorded here as the nearest module in the requirement.
   `src/api/routes/sandbox_access.zig` (181 lines) is deliberately excluded,
   for three independent reasons any one of which suffices: it exports no

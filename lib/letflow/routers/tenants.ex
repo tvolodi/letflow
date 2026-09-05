@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Tenants do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Tenant-administration sub-router (REQ-075), mounted at `/tenants` directly
   by `Letflow.Plugs.ApiPipeline` (so full paths under `/api/v1` are
   `/api/v1/tenants`, `/api/v1/tenants/:slug`, etc). **Not** nested under
@@ -85,6 +86,7 @@ defmodule Letflow.Routers.Tenants do
 
   ## Deactivation-status statement (AC5)
 
+  PROVENANCE (historical, not current decision authority):
   A tenant with `status: :inactive` rejects a subsequent authenticated
   request from that tenant's own (non-PLATFORM_ADMIN) caller with `403
   tenant_inactive`, checked in `Letflow.Plugs.TenantStatus` before the
@@ -361,6 +363,7 @@ defmodule Letflow.Routers.Tenants do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # ── POST /tenants/:test_tenant_id/promote/:process_key -- REQ-077 R10 ──
   #
   # No request body (R-Co's promotion.zig parses none, design §8.4) --
@@ -417,6 +420,7 @@ defmodule Letflow.Routers.Tenants do
 
   defp render_promote(conn, {:error, _other}), do: Response.internal_error(conn)
 
+  # PROVENANCE (historical, not current decision authority):
   # Exactly 4 keys (design §7.7), ported from promotion.zig:70-91.
   # `warnings` is always `[]` -- R-Co populates it from a semantic gate
   # (runSemanticGateOnSource) this codebase does not port (OQ-6); the key

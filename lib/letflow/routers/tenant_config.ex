@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.TenantConfig do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Public login-bootstrap sub-router (REQ-078, design
   `lib/letflow/design/req078-supporting-routes.md` §12). Ports
   `src/api/routes/tenant_config.zig`'s `handleTenantConfig` (L52).
@@ -10,6 +11,7 @@ defmodule Letflow.Routers.TenantConfig do
 
   ## Why this is mounted on `Letflow.Router`, NOT in `Letflow.Plugs.ApiPipeline`
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's endpoint is **explicitly public** — `tenant_config.zig:3` says
   "Public endpoint (no auth required)" and `main.zig:462` carries the same
   comment. Its purpose is login-page bootstrap: the SPA calls it to learn
@@ -32,6 +34,7 @@ defmodule Letflow.Routers.TenantConfig do
 
   ## The never-error rule is LOAD-BEARING, not an R-Co quirk
 
+  PROVENANCE (historical, not current decision authority):
   `tenant_config.zig:50-51` states it outright: *"Never returns an error to
   the caller — DB failures fall through to the default tenant config so the
   frontend login page always renders."* Ported **exactly**, for two
@@ -73,11 +76,13 @@ defmodule Letflow.Routers.TenantConfig do
 
   ## `?host=` is accepted, and today always falls through to the default
 
+  PROVENANCE (historical, not current decision authority):
   R-Co resolves `?host=` by joining `tenant_hostnames` -> `tenant`
   (`tenant_config.zig:167-207`). **Letflow has no host->tenant binding of any
   kind** — `grep -rn "tenant_hostname\\|hostname" lib/ priv/repo/migrations/`
   returns zero hits. Letflow has only realm->tenant and slug->tenant.
 
+  PROVENANCE (historical, not current decision authority):
   Adding a `tenant_hostnames` table, Ecto schema and migration here was
   **considered and rejected**: no acceptance criterion asks for it, nothing in
   this requirement would ever write to it, and a table with no writer is a
@@ -87,6 +92,7 @@ defmodule Letflow.Routers.TenantConfig do
   no caller in one paragraph and add a table with no writer in the next.
   **REQ-078 therefore adds NO migration at all.**
 
+  PROVENANCE (historical, not current decision authority):
   So `?host=` is honoured syntactically and produces the default config —
   which is **byte-identical to what R-Co produces for an unbound hostname**
   (`tenant_config.zig:81-102` leaves `realm_id = "bpm-default"`). Since
@@ -134,6 +140,7 @@ defmodule Letflow.Routers.TenantConfig do
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
 
+  # PROVENANCE (historical, not current decision authority):
   # Ported from tenant_config.zig:59/:60/:62, then corrected under REQ-133:
   # the literal ported defaults named R-Co's nginx gateway port (8081) and
   # client id (bpm-platform-api) verbatim, both stale against Letflow's own

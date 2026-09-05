@@ -47,4 +47,38 @@ related:
   - ISS-0445
 queue_task_id: 480
 github_issue: 933
-status: open
+status: resolved
+resolution: >
+  RESOLVED by WF03-ISS0480-20260905, PR #1002, squash-merged as 162379ae.
+
+  Reverted test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs
+  from async: true to async: false. Root cause: Ecto.Adapters.SQL.Sandbox.mode/2
+  checks in EVERY connection in the pool when the mode actually changes
+  (deps/db_connection/lib/db_connection/ownership/manager.ex:169-172), and
+  both files reached that call via TenantFixture.provisioned_tenant!/1's
+  unconditional Sandbox.mode(Letflow.Repo, :auto). Any concurrently-running
+  async:true test silently lost its connection. RowApprovalTest and
+  PackUpdateMigrationTest were innocent bystanders -- neither calls
+  Sandbox.mode/2 itself.
+
+  With both files async: false, ExUnit's guarantee that all async:true modules
+  complete before any async:false module starts means the mode flip can never
+  land on a concurrently-running async test. INV-1 (no async:true file may
+  reach Sandbox.mode/2) now holds by construction, independently verified.
+
+  Verified with a real before/after on the same host: with the change
+  stashed, RowApprovalTest failed on the first attempt (seed 1); with it
+  applied, 0/4 failures across four seeds. Full suite 3231/3231.
+
+  Named the tension with ISS-0423 rather than avoiding it: this reverts 2 of
+  the 66 files a sibling converted to async: true days ago for speed. The
+  cost was not separately measurable against suite jitter; the trade was
+  judged proportionate given a MAJOR intermittent hitting bystander tests at
+  a measured 3-of-4 hit rate.
+
+  PackUpdateMigrationTest's FK symptom did not reproduce independently (0/4)
+  but is covered by the same mechanism -- recorded as mechanism-level
+  inference, not repro-confirmed.
+
+  Follow-up filed: ISS-0481 (queue task 512, GH#1000) -- INV-1 currently has
+  no automated enforcement, only prose.

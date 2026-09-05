@@ -5009,17 +5009,17 @@
       "queue_task_id": 480,
       "queue_agent_id": "letflow-2-orch",
       "github_issue_number": 933,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "test/letflow/row_approval_test.exs",
         "test/letflow/definitions/pack_update_migration_test.exs"
       ],
       "started_at": "2026-09-05T15:45:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-06T00:15:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 run for ISS-0480 (MAJOR): load-dependent Sandbox checkout race hitting RowApprovalTest and PackUpdateMigrationTest under concurrent async load. Selected after both nominated architecture MAJORs (ISS-0425, ISS-0430) turned out already resolved by siblings -- ORCH re-derived the open set from current main rather than trusting a stale survey. STALE-LOCK RECOVERY DISCLOSED: task 480 was locked by the COMPLETED WF03-ISS0423-20260905 run, which filed ISS-0480 as an incidental finding, locked the task, merged its own work via PR #934, and never released 480 because 480 was not what it was working. Force-released on that evidence. ORCH established that both files are async: true AND share two tables (solution_pack_artefact_bases, pack_update_resolutions), which the issue's own framing treats as independent symptoms -- a candidate common mechanism worth testing explicitly."
+      "last_known_step": "Step Final COMPLETED -- PR #1002 squash-merged to main (162379ae). Queue task 480 released done, ISS-0480 resolved.",
+      "note": "WF-03 run for ISS-0480 (MAJOR): load-dependent Sandbox checkout race hitting RowApprovalTest and PackUpdateMigrationTest under concurrent async load. Selected after both nominated architecture MAJORs (ISS-0425, ISS-0430) turned out already resolved by siblings -- ORCH re-derived the open set from current main rather than trusting a stale survey. STALE-LOCK RECOVERY DISCLOSED: task 480 was locked by the COMPLETED WF03-ISS0423-20260905 run, which filed ISS-0480 as an incidental finding, locked the task, merged its own work via PR #934, and never released 480 because 480 was not what it was working. Force-released on that evidence. ORCH established that both files are async: true AND share two tables (solution_pack_artefact_bases, pack_update_resolutions), which the issue's own framing treats as independent symptoms -- a candidate common mechanism worth testing explicitly. | OUTCOME: shipped, 3231/3231, INV-1 holds by construction. Four CI cycles on this PR, three caused by concurrent sibling merges and one by ORCH's own mid-flight documentation pushes to main -- a real cost named and to be avoided (batch bookkeeping into the next substantive commit rather than pushing standalone notes to main while a PR is open)."
     }
   ]
 }

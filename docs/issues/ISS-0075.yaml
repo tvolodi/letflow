@@ -28,11 +28,13 @@ description: >
   dependency-ordering rationale survives without asserting a false current
   status.
 
+  PROVENANCE (historical, not current decision authority):
   STALE CLAIM 2 (lines 18-20) -- the more consequential one. The moduledoc
   qualifies design §3.2's abort-the-entire-batch semantic as "a reasoned
   reconstruction, not verified against `instance.zig`'s literal source,
   since no R-Co source tree is reachable in this environment."
 
+  PROVENANCE (historical, not current decision authority):
   The R-Co source tree IS reachable at c:\Users\tvolo\dev\ai-dala\R-Co, and
   this run verified the reconstruction directly. R-Co's own `mergeVariables`
   doc comment (src/engine/instance.zig:2300-2304) reads: "Merge
@@ -86,6 +88,7 @@ fix_note: >
   does-not-depend-on-REQ-061 rationale is preserved, not deleted, as this
   issue required.
 
+  PROVENANCE (historical, not current decision authority):
   CLAIM 2 REPAIRED. The lines 18-20 "reasoned reconstruction ... no R-Co
   source tree is reachable" caveat is REPLACED, not merely deleted, by a
   positive citation: design section 3.2's abort-entire-batch semantic is now

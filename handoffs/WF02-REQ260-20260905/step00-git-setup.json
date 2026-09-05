@@ -1,0 +1,65 @@
+{
+  "handoff_id": "WF02-REQ260-20260905-step-00",
+  "run_id": "WF02-REQ260-20260905",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ260-20260905/step00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T21:39:20Z",
+  "started_at": "2026-09-05T21:39:20Z",
+  "completed_at": "2026-09-05T21:39:20Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-260"],
+    "requirement_text": {
+      "REQ-260": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239f = docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference).\n\nThis is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nDo NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits -- carried forward unchanged from REQ-239's own out-of-scope note; confirm with a grep first if either file also contains a raw .zig citation, but none is expected.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 11 files in this chunk carry a .zig reference today (`grep -rl '\\.zig' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml`). If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "source_text": {
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md": "See ss2 (marker text + placement rule: single citation line / paragraph / table / YAML comment-line-sequence-item -- four shapes as of the 2026-09-05 ISS-0510 amendment), ss2(a) (regex), ss3 (coverage confirmation), ss4 (two worked before/after examples), ss5 (verification method: total-marked-count grep, no-path-text-lost grep, idempotency check). docs/issues/*.yaml is YAML, so the fourth (YAML comment-line/sequence-item) shape from the ISS-0510 amendment may apply wherever a .zig citation sits inside a commented-out block, a sequence-item bullet, or a plain scalar key/value that cannot take a bare prose line directly above it without corrupting YAML syntax -- apply that shape's sub-cases (a) and (b) exactly as documented for docs/requirements.yaml; if a genuinely new citation-unit shape not covered by any of the four documented ones is found, do NOT invent a fifth ad-hoc convention -- flag it as a new issue for CODE-DESIGNER (same process ISS-0510 was raised through) and apply the closest-matching existing convention in the meantime with a clear note in this run's handoff, per REVIEWER's own established precedent this session (ISS-0510)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ259-20260905/step00-git-setup.json",
+      "handoffs/WF02-REQ257-20260905/step01-doc-updater.json"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0001.yaml",
+      "docs/issues/ISS-0002.yaml",
+      "docs/issues/ISS-0005.yaml",
+      "docs/issues/ISS-0014.yaml",
+      "docs/issues/ISS-0045.yaml",
+      "docs/issues/ISS-0063.yaml",
+      "docs/issues/ISS-0075.yaml",
+      "docs/issues/ISS-0076.yaml",
+      "docs/issues/ISS-0077.yaml",
+      "docs/issues/ISS-0078.yaml",
+      "docs/issues/ISS-0079.yaml"
+    ],
+    "queue_task_id": 498,
+    "queue_agent_id": "letflow-ee-orch",
+    "branch_name": "feature/WF02-REQ260-20260905",
+    "base_commit": "4f7c7596a65946fdd68029b7ab8038b688cd6cd6",
+    "pre_start_checks": {
+      "registry_scanned": true,
+      "registry_findings": "grep -c '\"WF02-REQ260' handoffs/registry.json -> 0. git branch -a and git log --all --oneline grepped for REQ260/260 -> no local or remote branch, no commit, for REQ-260. No existing WF02-REQ260-* entry anywhere. Sibling chunks REQ-254/256/257/258/259 all show COMPLETED in the registry and orchestrator.log (PRs #988, in-flight-then-merged #99x, #995/#996/#998-area) with disjoint owned_modules from this run's docs/issues/ISS-0001..0079 scope -- confirmed no file-path overlap by inspection of each sibling's owned_modules list.",
+      "sibling_chunk_note": "This run implements chunk 239f (docs/issues/*.yaml, ISS-0001 through ISS-0079 subset carrying a .zig reference, 11 files) per REQ-237's design doc section 6. Sibling chunks 239g (REQ-261, ISS-0085-0100) and 239h (REQ-262, ISS-0101-0439) are disjoint ISS-id ranges within the same docs/issues/ directory -- no file-path overlap with this run's 11 named files.",
+      "concurrency_conclusion": "Clear to proceed -- no evidence of another session working REQ-260 specifically. Will re-read handoffs/registry.json immediately before appending this run's own entry (ORCHESTRATOR.md section 7.1), and will rebase onto current main immediately before merging since main has been moving frequently today from concurrent sibling REQ-25x/26x work."
+    }
+  },
+  "task": {
+    "description": "WF-02 Step 00: claim queue task 498 (REQ-260), chunk 239f of REQ-239's original scope -- applies REQ-237's .zig provenance-marking convention (design doc lib/letflow/design/req237-zig-provenance-marking-convention.md, including both 2026-09-05 amendments, especially the fourth YAML comment-line/sequence-item citation-unit shape added by ISS-0510) to exactly these 11 files: docs/issues/ISS-0001.yaml, docs/issues/ISS-0002.yaml, docs/issues/ISS-0005.yaml, docs/issues/ISS-0014.yaml, docs/issues/ISS-0045.yaml, docs/issues/ISS-0063.yaml, docs/issues/ISS-0075.yaml, docs/issues/ISS-0076.yaml, docs/issues/ISS-0077.yaml, docs/issues/ISS-0078.yaml, docs/issues/ISS-0079.yaml. No CODE-DESIGNER step -- the convention is already designed and CODE-DESIGN-VALIDATOR-passed; this is a mechanical apply-step, same shape as REQ-254/256/257/259 before it. Dispatching straight to DOC-UPDATER, then REVIEWER."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git pull origin main --ff-only (fast-forwarded 5a5a113d..4f7c7596), created and checked out feature/WF02-REQ260-20260905 from main @ 4f7c7596. Pre-flight grep -c '\\.zig' confirmed non-zero counts in all 11 named files (ISS-0001:4, ISS-0002:14, ISS-0005:1, ISS-0014:3, ISS-0045:2, ISS-0063:4, ISS-0075:4, ISS-0076:6, ISS-0077:3, ISS-0078:10, ISS-0079:20 -- sum 71), matching the requirement's own draft-time expectation that all 11 named files carry at least one reference.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Dispatch DOC-UPDATER to implement REQ-260 (the 11 named docs/issues/ISS-*.yaml files only) per REQ-237's design doc."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

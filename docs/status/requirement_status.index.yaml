@@ -1701,8 +1701,11 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 39
+    entries: 40
     note: >
+      Recounted to 40 by WF02-REQ260-20260905's own Step 00, appending one
+      `started` event for REQ-260 (grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml = 40 on-disk entries).
       Recounted to 39 by WF03-ISS0511-20260905's own closeout-bookkeeping
       rebase onto main, which found main further advanced by
       WF02-REQ258-20260905's own recount to 37 (its second Step Final

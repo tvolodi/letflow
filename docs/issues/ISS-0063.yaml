@@ -131,6 +131,7 @@ scoping_note: >
   word "schema" in R-Co. Verified by direct source read of
   c:\Users\tvolo\dev\ai-dala\R-Co:
 
+  PROVENANCE (historical, not current decision authority):
   (1) `tasks.form_schema` -- R-Co populates this from
   `node.attributes["form_schema"]` at activation
   (src/engine/instance.zig:5490 `extractFormSchemaJson`; :5488 is its doc
@@ -142,6 +143,7 @@ scoping_note: >
   fix this issue, because form_schema is not the validation source in the
   source system either.
 
+  PROVENANCE (historical, not current decision authority):
   (2) `variable_schemas` -- `(definition_id, variable_key) -> json_schema`,
   R-Co migrations/012_event_retention.sql:32. THIS is the real validation
   source: R-Co's `mergeVariables` (src/engine/instance.zig:2318) SELECTs
@@ -166,6 +168,7 @@ scoping_note: >
   lib/letflow/definitions/promotion_plan.ex:191 states "there is no
   `variable_schemas` table or `process_definitions` column in Letflow today".
 
+  PROVENANCE (historical, not current decision authority):
   TRUE STATUS: a known, documented, deliberate MIGRATION GAP -- not a bug, and
   not blocked on any decision. The unreachable rejection branch is
   design-sanctioned build-ahead. What is missing is a PORT, not an invention:

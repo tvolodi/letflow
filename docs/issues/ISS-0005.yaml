@@ -15,6 +15,7 @@ description: >
   mentions schema-per-tenant, a tenant_schemas registry table, or a per-tenant
   schema-provisioning function anywhere in their text.
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's actual migration history (verified directly this session against
   C:\Users\tvolo\dev\ai-dala\R-Co\migrations\) shows R-Co later layered a second,
   orthogonal isolation mechanism on top of the tenant-column pattern:

@@ -1,15 +1,18 @@
 id: ISS-0002
+# PROVENANCE (historical, not current decision authority):
 title: 0002-oidc-integration.md skeleton's Question section misattributes JIT provisioning to src/identity/manager.zig
 discovered_by: ELIXIR-DEV
 discovered_in_run: WF02-REQ011
 discovered_at: 2026-08-15T15:48:21Z
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   docs/migration/decisions/0002-oidc-integration.md's pre-existing Question section
   (and REQ-011's own description field in docs/requirements.yaml) describe
   src/identity/ as containing "manager.zig for JIT provisioning" — implying JIT user
   provisioning is implemented at src/identity/manager.zig.
 
+  PROVENANCE (historical, not current decision authority):
   Verified directly against R-Co's source this session (lib/letflow/design/
   0002-oidc-integration-decision.md sections 1-2 has the full research): that file
   path does not exist. The actual path is src/identity/provider/manager.zig (nested
@@ -21,6 +24,7 @@ description: >
   (looksLikeJwt/isJwtSegmentLexicallyDecodable) used to decide whether dual_accept
   mode should attempt OIDC verification at all — it does not implement JIT semantics.
 
+  PROVENANCE (historical, not current decision authority):
   The actual JIT provisioning orchestration lives in src/oidc/jit_provisioning.zig
   (doc-comment: "OIDC-09 — JIT user provisioning orchestration... bridges the OIDC-08
   claim-mapping output (IdentityContext) and the ADP-04a identity service
@@ -29,6 +33,7 @@ description: >
   external_realm, external_id), hardcoded password_hash='__OIDC_ONLY__' and
   auth_source='oidc', per-realm config, hard-fail-closed on provisioning failure).
 
+  PROVENANCE (historical, not current decision authority):
   This is the same kind of stale-source-reference discrepancy ISS-0001 found for
   REQ-010's route/middleware counts. Not corrected in place as part of REQ-011 — out
   of that requirement's declared file scope, which is limited to the
@@ -45,6 +50,7 @@ description: >
   worth a follow-up source read before anyone relies on/rules out that package's
   caching behavior in a future decision.
 
+  PROVENANCE (historical, not current decision authority):
   Recommended fix: update docs/migration/decisions/0002-oidc-integration.md's Question
   section (and REQ-011's description field in docs/requirements.yaml) to say
   "src/oidc/jit_provisioning.zig (orchestration) + src/identity/registry.zig's
@@ -58,6 +64,7 @@ github_issue: https://github.com/tvolodi/letflow/issues/4
 status: resolved
 resolved_at: 2026-08-15T19:08:00Z
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Fixed as recommended: docs/migration/decisions/0002-oidc-integration.md's Question
   section now cites src/oidc/jit_provisioning.zig (JIT orchestration) and
   src/identity/registry.zig's createOrGetJitOidcUser (the actual upsert) instead of

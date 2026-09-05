@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF02-REQ254-20260905-step-2d",
+  "run_id": "WF02-REQ254-20260905",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ254-20260905/step-2d-reviewer.json",
+  "created_at": "2026-09-05T15:43:13Z",
+  "started_at": "2026-09-05T15:43:13Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-254"],
+    "requirement_text": {
+      "REQ-254": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239a = docs/requirements.yaml, the REQ-011 through REQ-050 entry range. This is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/requirements.yaml, the REQ-011 through REQ-050 entry range under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk. Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits."
+    },
+    "artifacts_in": [
+      "handoffs/WF02-REQ254-20260905/step-06-doc-updater.json (DOC-UPDATER's completed result -- read the actual attested evidence, not just the summary)",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (sections 2, 2a, 4 -- the marker convention this diff must conform to)"
+    ],
+    "owned_modules": [
+      "docs/requirements.yaml (REQ-011 through REQ-050 entry range only)"
+    ]
+  },
+  "task": {
+    "description": "Gate this run's diff (git diff main...HEAD -- docs/requirements.yaml) against REQ-237's design doc and against ORCHESTRATOR.md's WF-02 Step 2d idiom/scope-creep review, adapted for a docs-only change: this is a mechanical, already-designed marker-insertion apply-step (no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER ran -- there is no application-executable surface). Confirm independently, not by trusting DOC-UPDATER's summary: (1) every inserted line is the exact fixed marker text 'PROVENANCE (historical, not current decision authority):' with no variant wording; (2) every insertion is additive-only (no deletion, no reflow, no alteration of existing citation path text) -- check via git diff for any '-' lines in docs/requirements.yaml, expect none; (3) the diff's changed-line ranges fall ONLY within the REQ-011 through REQ-050 entry block (re-locate the current boundaries yourself: grep -n for REQ-011's and REQ-051's id: lines) -- flag any hunk outside that range as scope creep, EXCEPT the one expected hunk at REQ-254's own status: pending -> in_progress line (that is ORCH's own Step 00 edit, not DOC-UPDATER's, and is in scope); (4) CLAUDE.md, README.md, and docs/migration/README.md are untouched (git diff --stat main...HEAD); (5) the deliberate-divergence notes ('unlike R-Co'/'deliberately diverges'/'diverges from R-Co') are unmodified in content -- re-run the grep yourself before (git show main:docs/requirements.yaml) and after, strip line numbers, diff the content, confirm byte-identical; (6) zero un-marked .zig citations remain inside the REQ-011..REQ-050 range -- confirm structurally, not by trusting a count; (7) the file still parses as valid YAML (e.g. via a YAML parser, or at minimum confirm no obviously broken syntax around every inserted line, especially the '#'-comment insertions inside acceptance_criteria bullet lists and inside a commented section-header block -- these are a real deviation from the design doc's three named unit shapes (line/paragraph/table) since the design doc did not explicitly anticipate a YAML list-item or comment-block context, so give this deviation genuine scrutiny: is a '#'-prefixed marker line a defensible application of the design's own placement rule to a YAML syntax context the design didn't enumerate, or does it constitute an unauthorized new convention that should have been flagged as an open question instead of applied silently? Note explicitly whether you consider this in-scope 'mechanical application of an existing design to a case the design didn't foresee' or out-of-scope 'quiet design decision that needed CODE-DESIGN-VALIDATOR sign-off.'"
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

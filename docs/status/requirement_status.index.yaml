@@ -1701,8 +1701,13 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 31
+    entries: 33
     note: >
+      Incremented to 33 by ORCH's own REQ-256 started+done event pair
+      (WF02-REQ256-20260905, Step Final bookkeeping) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 33 on-disk entries, no
+      rebase conflict on this file (queue task 494, chunk 239c, closes
+      ISS-0424 part 3c-3).
       Incremented to 31 by ORCH's own REQ-254 done-event append
       (WF02-REQ254-20260905, Step Final) -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 31 on-disk entries, no

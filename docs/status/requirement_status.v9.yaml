@@ -882,3 +882,45 @@ history:
       in this shared working tree also transiently clobbered this entry's
       first draft before it was committed; redone here from a fresh append.
       Queue task 492 released status:done (letflow-ee-orch).
+
+  - req: REQ-256
+    event: started
+    agent: ORCH
+    at: "2026-09-05T16:38:50Z"
+    note: >
+      WF-02 run WF02-REQ256-20260905 (queue task 494, agent_id
+      letflow-ee-orch), applying REQ-237's .zig provenance-marking
+      convention to docs/requirements.yaml, the REQ-079 through REQ-188
+      entry range (chunk 239c, closes ISS-0424 part 3c-3). Branch
+      feature/WF02-REQ256-20260905 created off main. This is the 3rd of ten
+      REQ-239-replacement chunks (REQ-254..REQ-263) applying the convention
+      to docs/requirements.yaml itself; owner is DOC-UPDATER, not
+      ELIXIR-DEV, since the edited file is docs/requirements.yaml, not lib/.
+      This started-event is appended retroactively at Step Final bookkeeping
+      time, backdated to Step 00's own commit (2662b69a), since the run's
+      earlier steps completed without this append landing at the time.
+
+  - req: REQ-256
+    event: done
+    agent: ORCH
+    at: "2026-09-05T16:49:55Z"
+    note: >
+      WF02-REQ256-20260905 complete. DOC-UPDATER applied REQ-237's .zig
+      PROVENANCE-marker convention to docs/requirements.yaml's REQ-079
+      through REQ-188 entry range: 60 marker lines inserted covering 112
+      .zig citation lines, additive-only (git diff --numstat 60/0),
+      file-wide .zig count unchanged (728 -> 728), YAML still parses (241
+      top-level entries), zero doubled markers, scope strictly within
+      REQ-079..REQ-188 (CLAUDE.md/README.md/docs/migration/README.md
+      untouched). REVIEWER independently re-verified all 9 gate checks and
+      PASSED (handoffs/WF02-REQ256-20260905/step-2d-reviewer.json),
+      including consistency with REQ-254's own precedent ruling on the
+      '#'-prefixed YAML-comment-marker technique used for title: fields,
+      acceptance_criteria bullets, and stage-header comment blocks -- no new
+      variant technique introduced, no rework needed. Branch already based
+      on origin/main's tip (da7ebb15) at Step Final, so no rebase was
+      required; `git diff --stat origin/main...HEAD` showed only this run's
+      60-insertion docs/requirements.yaml diff plus its own handoff/registry
+      bookkeeping. Merged via `gh pr merge --squash --delete-branch --admin`
+      per GIT_MERGE.md. Queue task 494 released status:done
+      (letflow-ee-orch).

@@ -8,13 +8,18 @@
 # Status values: pending | in_progress | done | blocked | cancelled
 #
 # Early development produced a handful of one-off findings (idiomatic
-# OTP usage, dev-loop feel, process-per-instance design, static-typing
-# gap) via a goals/evaluation_goal mechanism that has since been
-# retired now that Letflow is a committed migration rather than an
-# evaluation — see docs/status/requirement_status.yaml for the removal
-# record and the condensed verdicts folded into
+# OTP usage, dev-loop feel, static-typing gap) via a goals/evaluation_goal
+# mechanism that has since been retired now that Letflow is a committed
+# migration rather than an evaluation — see docs/status/requirement_status.yaml
+# for the removal record and the condensed verdicts folded into
 # docs/migration/stage-2-event-store-definitions.md and
 # stage-3-instance-engine.md, the two places that still needed them.
+# One of those early findings raised process-per-instance design as an
+# open question; REQ-045 later resolved it against a supervised process
+# per instance, in favor of a transactional context module with Postgres
+# row-lock-based concurrency (Letflow.Engine.create/2) — see
+# Letflow.Engine's own moduledoc ("Process-vs-row decision") and
+# Letflow.InstanceSupervisor's moduledoc (deliberately empty, not deleted).
 
 # ---------------------------------------------------------------------
 # Stages — full R-Co -> Elixir migration

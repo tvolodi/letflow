@@ -24,9 +24,16 @@ mobile tier** that does not exist yet (spec in `docs/mobile/`, stage
 S9). See `docs/migration/decisions/0011-frontend-ownership.md` and
 `0012-mobile-tier-stack.md`. Any text still saying `web/` is out of
 scope to rewrite predates that and is stale. A few findings from
-early development (idiomatic OTP usage, process-per-instance design)
-are folded directly into the stage-2 and stage-3 migration docs where
-they're still relevant, rather than tracked separately.
+early development (idiomatic OTP usage among them) are folded
+directly into the stage-2 and stage-3 migration docs where they're
+still relevant, rather than tracked separately. One of those early
+findings — running a supervised process per workflow instance — was
+explicitly decided against: REQ-045 resolved the S3 running-instance
+shape to a plain transactional context module (`Letflow.Engine.create/2`),
+with concurrency arbitrated by Postgres row locks, not a supervised
+process per instance. `Letflow.InstanceSupervisor` exists but is
+deliberately empty (see its own moduledoc); `Letflow.Engine`'s
+moduledoc ("Process-vs-row decision") has the full reasoning.
 
 ## Agent roster
 

@@ -4757,6 +4757,27 @@
       "backfilled": false,
       "last_known_step": "ISSUE-FIXER re-diagnosed (handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-diagnosis.json) and reconfirmed the prior 2026-09-02 scoping decision: ISS-0397 genuinely closed the join_counters persistence gap OQ-2 cited, but the independent R-Co architectural-parity finding (design doc's own section 0) still stands, so branch-level cancellation remains correctly unimplemented. Corrected the design doc's stale OQ-2 phrasing (section 4 table, section 11) to state the current reasoning. Queue task 402 released status:done (it had previously been released status-unset after the 2026-09-02 scoping run, which is why it resurfaced via get_next_task).",
       "note": "WF-03 issue-resolving run for ISS-0402, second pass. First pass (WF03-ISS0402-20260902) made the real scoping decision (do not implement branch-level cancellation) but released the queue task without a status, so it resurfaced. This run found no code change was needed -- only lib/letflow/design/req052-instance-cancellation.md's own OQ-2 text was stale (still framed join-counters persistence as the primary blocker without noting ISS-0397 closed it or that the architectural-parity finding is independent). Docs-only, sized as two single-file edits (this design doc, docs/issues/ISS-0402.yaml) per ORCHESTRATOR.md Sec10, done directly by ORCH after ISSUE-FIXER's diagnosis."
+    },
+    {
+      "run_id": "WF03-ISS0423-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0423",
+      "queue_task_id": 423,
+      "queue_agent_id": "tvolodi-orch",
+      "github_issue_number": 827,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/support/",
+        "config/test.exs",
+        "lib/letflow/sandbox_pool.ex"
+      ],
+      "started_at": "2026-09-05T00:06:41Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 00 COMPLETED PASS (ORCH performed branch mechanics directly after discovering and correcting an accidental overwrite of the pre-existing docs/issues/ISS-0423.yaml record -- see that file commit history). feature/WF03-ISS0423-20260905 pushed.",
+      "note": "Task pre-claimed/locked in letflow-queue before this run (task 423, agent_id tvolodi-orch, locked 2026-09-05T00:06:41Z, github_issue 827) per dispatching instruction. IMPORTANT CORRECTION recorded in-run: docs/issues/ISS-0423.yaml already existed (filed ORCH-adhoc-20260902-arch-review, six commits of measurement, two scope-splits to ISS-0427/ISS-0428) -- the dispatching instruction's premise that it did not exist yet was wrong (HANDOFF_PROTOCOL.md section 1.1). ORCH's own first pass overwrote it; caught before any further step ran, reverted to original content, and a dated reopen note appended reconciling that ISS-0427/ISS-0428/ISS-0426 are now all resolved and ISS-0113 (Sandbox.mode(:auto) global leak) is the one still-open blocker on this issue's own original causal chain. mix letflow.check itself changed since the 2026-09-02 filing too (ISS-0428 landed: it now shells to scripts/test_parallel.sh, not plain serial mix test) -- the queue task's own \"30 min gate\" framing needs re-verification against current main, not assumption."
     }
   ]
 }

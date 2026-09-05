@@ -44,6 +44,7 @@ defmodule Letflow.Engine.Lua.Sandbox do
   deny-set entry anyway, for literal-text completeness, though it denies nothing that
   could otherwise be reached.
 
+  PROVENANCE (historical, not current decision authority):
   (b) `jit`, `ffi`, and `bit` do not exist in Lua 5.3 at all — they are LuaJIT-specific.
   R-Co's exclusion of them, including `ffi` (which R-Co's `stdlib.zig` calls "a
   COMPLETE sandbox escape"), is vacuous under this runtime, not satisfied. No deny-set
@@ -193,6 +194,7 @@ defmodule Letflow.Engine.Lua.Sandbox do
     # mutate a Lua closure's captured upvalues directly). This is a real, non-vacuous
     # sandbox gap in the library's own default sandbox that R-Co's LUA-03 (which never
     # opened `debug` at all) would have closed and that `Lua.new/1`'s defaults do not.
+    # PROVENANCE (historical, not current decision authority):
     {[:debug],
      "Installed, and NOT in Lua.new/1's own @default_sandbox. Metatable-protection " <>
        "bypass and arbitrary upvalue mutation are capabilities strictly beyond " <>

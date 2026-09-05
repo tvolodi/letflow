@@ -33,6 +33,7 @@ defmodule Letflow.EventStore.StoredPayload do
 
   ## `on_delete: :restrict` and the question it keeps open (design OQ-2)
 
+  PROVENANCE (historical, not current decision authority):
   The composite foreign key `(event_id, event_created_at)` →
   `events(event_id, created_at)` is declared `ON DELETE RESTRICT`, diverging
   from R-Co's `ON DELETE CASCADE`. Under CASCADE, REQ-026's archive operation

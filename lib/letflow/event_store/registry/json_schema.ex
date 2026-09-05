@@ -1,5 +1,6 @@
 defmodule Letflow.EventStore.Registry.JsonSchema do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure JSON Schema validator — no I/O, no `Repo` — implementing exactly the
   keyword subset `src/tools/json_schema.zig` specifies:
   `type`, `minimum`/`maximum`, `minLength`/`maxLength`, `enum`, `required`,

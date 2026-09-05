@@ -1,5 +1,6 @@
 defmodule Letflow.EventStore do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for `Store.append()` (ES-01/02/03/05/08/DB-03), implementing the
   append semantics specified in `src/event_store/store.zig`. See
   `lib/letflow/design/req025-event-append.md` for the full design this module
@@ -19,6 +20,7 @@ defmodule Letflow.EventStore do
 
   ## `event_id`/`created_at` are minted exactly once
 
+  PROVENANCE (historical, not current decision authority):
   `event_id`/`created_at` are minted exactly once per `append/2` call and bound
   identically into `events`, `event_idempotency`, and (only when the payload is
   oversized) `event_payload_store` — design invariant INV-EV-5. R-Co shipped and
@@ -772,6 +774,7 @@ defmodule Letflow.EventStore do
   # the full design this section implements.
   # =========================================================================
 
+  # PROVENANCE (historical, not current decision authority):
   # Platform sentinel constants (design doc §3, platform.zig port).
   #
   # VALUES FLAGGED, per the design doc's own §3/§12 OQ-1: `platform.zig` is
@@ -789,6 +792,7 @@ defmodule Letflow.EventStore do
   @platform_tenant_id "00000000-0000-0000-0000-000000000003"
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   PLATFORM_INSTANCE_ID sentinel -- ported from `src/event_store/platform.zig`
   (value unverified, see this module's source comment above these three
   accessors). Never inserted into `instance_projections`, per
@@ -798,6 +802,7 @@ defmodule Letflow.EventStore do
   def platform_instance_id, do: @platform_instance_id
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   PLATFORM_ACTOR_ID sentinel -- ported from `src/event_store/platform.zig`
   (value unverified, see this module's source comment above these three
   accessors). Identifies the platform itself as the acting party for
@@ -808,6 +813,7 @@ defmodule Letflow.EventStore do
   def platform_actor_id, do: @platform_actor_id
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   PLATFORM_TENANT_ID sentinel -- ported from `src/event_store/platform.zig`
   (value unverified, see this module's source comment above these three
   accessors). Identifies the platform itself as the tenant for
@@ -922,6 +928,7 @@ defmodule Letflow.EventStore do
 
     * All four are `AND`-composed with each other and with
       `:after_global_seq`.
+    PROVENANCE (historical, not current decision authority):
     * `:from` / `:to` are **inclusive** bounds on `events.created_at`. The
       `from > to` case is deliberately **not** checked here -- it is the
       route's responsibility, per the handler-level check in

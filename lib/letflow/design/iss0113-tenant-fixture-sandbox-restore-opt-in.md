@@ -1,16 +1,66 @@
 # ISS-0113 — Per-caller opt-in Sandbox-mode restore in `Letflow.TenantFixture.provisioned_tenant!/1`
 
-Status: design, **§11 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905` REWORK
-ITERATION 2), §11.2/§11.4 CORRECTED (same run, REWORK ITERATION 2 re-gate) —
-SUPERSEDES §10.2/§10.3/§10.3.2 for `async: false` callers.** The correction:
-§11.2/§11.4 originally stated their safety property only in terms of
-`{:shared, self()}` mode being left alone; CODE-DESIGN-VALIDATOR found that
-premise false for `test/support/tenant_fixture_dispatch_test.exs` (ambient
-mode is `:auto` there, per that file's own local `setup`), so both sections
-now state the property mode-agnostically (no `Sandbox.mode/2` call issued,
-so whichever mode is ambient — `{:shared, self()}` or `:auto` — is
-undisturbed) and cite §9.3's single-owner-under-`:auto` trace for the
-`:auto` sub-case. No mechanism change.
+Status: design, **§11.10.2/§11.10.2a/§11.10.4a CORRECTED (WF-03 Step 2,
+`WF03-ISS0480-20260905` REWORK ITERATION 5, documentation-only — no
+implementation change).** §11.10.2's own stated safety premise ("the
+shared connection is ordinarily-committing, never rolled back at
+teardown") was FALSE, per ISSUE-FIXER's mechanical reassessment
+(`handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json`):
+`Ecto.Adapters.SQL.Sandbox.checkout/2` unconditionally installs
+rollback-at-checkin hooks regardless of `:auto`/`:manual`/`{:shared, pid}`
+mode, so `provision_via_shared_connection/1`'s writes on the
+`DataCase`-checked-out `Letflow.Repo` connection are always removed by the
+ambient Sandbox rollback before `teardown_wrap`'s own DROP SCHEMA/DELETE
+ever runs, for the `async: false` + `template: :clone` default path (44 of
+47 real call sites). `teardown_wrap`'s DROP/DELETE is retained as harmless,
+already-idempotent defense-in-depth for this path (and remains the genuine,
+load-bearing cleanup for a caller provisioning via
+`with_provisioning_repo/1`/`ProvisioningRepo` directly, per §10's original
+mechanism, whose writes ARE durable) — not the operative cleanup mechanism
+§11.10.2 originally believed it to be for the shared-connection path. See
+§11.10.2 (corrected premise), §11.10.2a (new — what `teardown_wrap`
+actually accomplishes and why no new hazard exists), and §11.10.4a (new —
+corrects `test/letflow/support/tenant_fixture_test.exs`'s C5 test, which
+asserted `schema_present_before_drop=true` as the expected/only case; that
+assertion encoded the same false premise). No code/behavior change to
+`teardown/2`, `guarded/2`, or `log_teardown/3` follows from this
+correction — §11.10.5's implementation list gains only a comment-text fix
+(item 4a).
+
+Prior status line, superseded above but kept for the historical record:
+**§11 ADDED (WF-03 Step 2, `WF03-ISS0480-20260905` REWORK
+ITERATION 2), §11.2/§11.4 CORRECTED (same run, REWORK ITERATION 2 re-gate),
+§11.9 ADDED + §11.2/§11.4/§11.7 CORRECTED AGAIN (WF-03 Step 2, REWORK
+ITERATION 3) — SUPERSEDES §10.2/§10.3/§10.3.2 for `async: false` callers.**
+The iteration-2 correction: §11.2/§11.4 originally stated their safety
+property only in terms of `{:shared, self()}` mode being left alone;
+CODE-DESIGN-VALIDATOR found that premise false for
+`test/support/tenant_fixture_dispatch_test.exs` (ambient mode is `:auto`
+there, per that file's own local `setup`), so both sections now state the
+property mode-agnostically (no `Sandbox.mode/2` call issued, so whichever
+mode is ambient — `{:shared, self()}` or `:auto` — is undisturbed) and cite
+§9.3's single-owner-under-`:auto` trace for the `:auto` sub-case.
+
+**The iteration-3 correction (§11.9, normative): §11.2/§11.4's own claim
+that `provision_via_shared_connection/1`'s path "issues zero `Sandbox.mode/2`
+calls of any kind" was FALSE as originally stated** — ELIXIR-DEV's own
+required §11.7 regression run (`backfill_test.exs` fail-then-pass) caught it
+empirically before it shipped: `test/support/tenant_template.ex:82`'s
+`Letflow.Test.TenantTemplate.ensure_template!/0`, called by every
+`template: :clone` provisioning call (the default, §11.1's own dispatch
+target for `provision_via_shared_connection/1`), issues its own unconditional
+`Sandbox.mode(Letflow.Repo, :auto)` as its own first line — already
+documented by §9.7, but never reconciled against §11.2/§11.4's own "zero
+calls" claim. §11.9 is the reconciliation: it makes `ensure_template!/0`'s
+own mode-setting conditional on the template not already being built
+(`template_ready?/0`), the fast/steady-state path for every real call after
+a partition's first, which is what removes the disruptive call from
+`provision_via_shared_connection/1`'s reachable path without touching the
+one case (first-ever build) that genuinely needs `:auto` mode to run
+`unboxed_run/3`'s DDL. §11.2/§11.4's own text is corrected in place (not
+merely appended to) to state the property precisely: "zero `Sandbox.mode/2`
+calls once the template is already built" — see §11.9 for why that
+qualifier is both necessary and sufficient.
 §10's structural fix (route ALL provisioning through a second, dedicated
 `Ecto.Repo`, `Letflow.Test.ProvisioningRepo`) was implemented, and a
 full-suite `mix test` run (not the 172-test scoped run §10.7's OQ-9 status
@@ -2214,11 +2264,26 @@ by this path, ever:**
    `Repo.` calls resolve to, which is now `Letflow.Repo` itself (the dynamic
    repo binding step 1 just confirmed), not `ProvisioningRepo`.
 3. **No `Sandbox.mode(Letflow.Repo, ...)` call of any kind, anywhere in this
-   function.** This is the single load-bearing property distinguishing
-   §11.2 from both the original (pre-ISS-0113) code and the reverted §3.2
-   mechanism (§9.2): since this path issues no `Sandbox.mode/2` call itself,
-   whichever mode/connection the caller's test process is ALREADY using at
-   the moment this function runs is left completely undisturbed — that is
+   function's OWN body, and — once the template is already built,
+   `template_ready?/0 == true`, the steady-state case for every call after a
+   partition's first — none in anything it calls either, per §11.9's fix to
+   `Letflow.Test.TenantTemplate.ensure_template!/0`.** (**CORRECTED, REWORK
+   ITERATION 3:** the original text here claimed this held unconditionally,
+   for the whole call tree, with no qualifier. That was false —
+   `ensure_template!/0`, called from this path's own step 2 via
+   `provision_schema!/2`'s `:clone` clause, issued its own unconditional
+   `Sandbox.mode(Letflow.Repo, :auto)` regardless of template state, until
+   §11.9's fix made that call conditional. The qualifier is real and load-
+   bearing: this path is safe from the FIRST call in a partition (which
+   still builds the template and still needs `:auto` mode to do so, §11.9)
+   onward, but the FIRST call itself does issue one `Sandbox.mode/2` call —
+   §11.9 states exactly why that single, one-time, per-partition call does
+   not reopen anything §11.2/§11.4 need.) This is the single load-bearing
+   property distinguishing §11.2 from both the original (pre-ISS-0113) code
+   and the reverted §3.2 mechanism (§9.2): since this path issues no
+   `Sandbox.mode/2` call itself (nor, post-§11.9, does its steady-state call
+   tree), whichever mode/connection the caller's test process is ALREADY
+   using at the moment this function runs is left completely undisturbed — that is
    normally `{:shared, self()}`, established once by `DataCase.setup/1`
    before this function ever runs, but it is not always: if a later `setup`
    callback declared in the same test module changes the mode again before
@@ -2406,21 +2471,31 @@ under the conditions the property is actually about" — checking the actual
 new code path §11.2 introduces, not merely re-asserting §11.0 Claim 3's
 conclusion:
 
-- **§11.2's own body issues zero `Sandbox.mode/2` calls of any kind** (§11.2
-  step 3, stated as the section's single load-bearing property). The
-  ORIGINAL hazard's entire mechanism (§9.1/§10.0) is `Sandbox.mode/2`'s
-  own global, empty-exclusion-list check-in effect — a code path that never
-  calls `Sandbox.mode/2` at all cannot trigger that effect, structurally,
-  regardless of how many times it runs or how many processes call it
-  concurrently. This is a stronger property than "safe because callers are
-  serialized" (§11.0 Claim 3's own argument) — §11.2 does not even need
-  Claim 3's serialization guarantee to be safe against the ORIGINAL hazard,
-  because it simply never performs the action (`Sandbox.mode/2` on
-  `Letflow.Repo`) that hazard requires. Claim 3's serialization argument is
-  still true and still relevant (it is what makes reusing the caller's own
-  connection READ-CORRECT — see next bullet — not merely what makes it
-  hazard-free), but the hazard-freedom itself rests on the simpler,
-  structural fact that this path makes no mode-changing call at all.
+- **§11.2's own body issues zero `Sandbox.mode/2` calls of any kind, and —
+  once the template is built, per §11.9 — nothing in its call tree does
+  either** (§11.2 step 3, as corrected in REWORK ITERATION 3; stated as the
+  section's single load-bearing property). **CORRECTED, REWORK ITERATION
+  3:** this bullet originally asserted the unqualified version of this claim
+  (no `Sandbox.mode/2` call anywhere in the whole call tree, unconditionally)
+  — false, per §11.9's diagnosis of `ensure_template!/0`'s own unconditional
+  call. The qualified version (true once `template_ready?/0`, which is every
+  call after a partition's first) is what actually holds, and §11.9 explains
+  why the remaining, unqualified first-call case does not reopen this
+  section's conclusion. The ORIGINAL hazard's entire mechanism (§9.1/§10.0)
+  is `Sandbox.mode/2`'s own global, empty-exclusion-list check-in effect — a
+  code path that never calls `Sandbox.mode/2` at all cannot trigger that
+  effect, structurally, regardless of how many times it runs or how many
+  processes call it concurrently. This is a stronger property than "safe
+  because callers are serialized" (§11.0 Claim 3's own argument) for the
+  steady-state case — §11.2 does not need Claim 3's serialization guarantee
+  to be safe against the ORIGINAL hazard once the template is built, because
+  it simply performs no mode-changing action at all in that case. Claim 3's
+  serialization argument is still true and still relevant (it is what makes
+  reusing the caller's own connection READ-CORRECT — see next bullet — not
+  merely what makes it hazard-free, AND it is what §11.9 itself leans on to
+  clear the one-time first-build call), but the hazard-freedom for every
+  call after the first rests on the simpler, structural fact that this
+  path's call tree makes no mode-changing call at all in that case.
 - **Does §11.2 reintroduce visibility risk for OTHER concurrently-running
   `async: false` tests?** No such tests exist by construction — ExUnit's
   own documented scheduling (§5.1/§9.4, re-confirmed §11.0 Claim 3) runs at
@@ -2671,9 +2746,39 @@ new fixture — it needs to:
    single lucky pass" discipline) to confirm the fix is deterministic, not
    itself accidentally timing-sensitive — a lighter version of §9.5's own
    verification depth (2 runs, not 10+), since §11.2's own mechanism is
-   structural (no `Sandbox.mode/2` call at all, §11.4) rather than a
-   guard-ordering property that could plausibly be timing-sensitive the way
-   §9's original discovery was.
+   structural (no `Sandbox.mode/2` call at all once the template is built,
+   §11.4/§11.9) rather than a guard-ordering property that could plausibly
+   be timing-sensitive the way §9's original discovery was.
+5. **NEW, REWORK ITERATION 3 — required, not optional.** §11.9's fix changes
+   `Letflow.Test.TenantTemplate.ensure_template!/0` (a file TEST-DESIGNER
+   does not own, but whose test-observable behavior this rework's own
+   correctness now depends on) — `test/support/tenant_template_test.exs`'s
+   existing suite (whatever it currently covers for `ensure_template!/0`,
+   `template_ready?/0`, `assert_template_parity_against_independent_reference!/0`)
+   must be re-run and confirmed green, unmodified in assertion content,
+   against the §11.9 change. This is a narrower ask than a new test: §11.9
+   does not change `ensure_template!/0`'s observable contract (still
+   idempotent, still `:ok`-returning, still raises the same way on a broken
+   template) — only WHEN it issues a `Sandbox.mode/2` call internally, which
+   `tenant_template_test.exs` was never asserting on directly (grepped: zero
+   `Sandbox.mode` references in that file today) — so a clean re-run without
+   any edit to that file is the expected, sufficient outcome; TEST-RUNNER
+   should report if that assumption is wrong (i.e., if re-running surfaces
+   a failure), which would itself be a new finding requiring escalation, not
+   something to patch around silently.
+6. **NEW, REWORK ITERATION 3 — the specific reproduction case that found
+   this, restated as a permanent named regression check.** `mix test
+   test/letflow/tenant_provisioning/backfill_test.exs` (already item 1
+   above) is this rework's own most direct evidence: pre-§11.9 (§11.1-§11.6
+   implemented, §11.9 not yet applied), this exact command regresses from
+   4/5 passing to 0/5 passing, every failure `Ecto.InvalidChangesetError` /
+   `tenant_schemas_tenant_id_fkey does not exist`. Post-§11.9, the same
+   command must return to (at minimum) the pre-§11-work 4/5-passing baseline
+   with the ONE originally-targeted ISS-0332 test now also passing (5/5) —
+   TEST-RUNNER must quote the actual `mix test` result line for this file
+   specifically, not infer it from a broader suite summary, since this is
+   the exact file iteration 2's own regression was caught on and a broader
+   summary could mask a partial (not fully fixed) recurrence.
 
 ### 11.8 Open questions (explicit, not silently resolved)
 
@@ -2709,3 +2814,1000 @@ new fixture — it needs to:
   exists to teach: the scoped 172-test run at §10.7's OQ-9 status line
   reported clean while a full-suite run found 18-19 failures) are what
   actually confirm this. Do not merge until that full-suite run is PASS.
+
+## 11.9 REWORK ITERATION 3 — `ensure_template!/0`'s own unconditional
+     `Sandbox.mode/2` call, why it reopens Mechanism 4, and the fix
+     (normative — corrects §11.2/§11.4/§11.7, does not reopen them for
+     further debate)
+
+### 11.9.1 The contradiction, restated precisely from source
+
+ELIXIR-DEV's implementation of §11.1-§11.6 exactly as specified, then its own
+§11.7-required regression run (`mix test
+test/letflow/tenant_provisioning/backfill_test.exs`), found:
+
+- Pre-§11 (§10-only code, `git stash`-isolated): **4/5 passed**, 1 failure —
+  the documented ISS-0332 symptom (`assert updated >= 1` / `left: 0` /
+  `right: 1`), exactly §11.7's own expected pre-fix red.
+- Post-§11 (this design's §11.1-§11.6, exactly as specified):
+  **0/5 passed** — every test failing on
+  `clone_tenant_schema!/1 returned {:error, {:clone_failed,
+  %Ecto.InvalidChangesetError{errors: [tenant_id: {"does not exist",
+  [constraint: :foreign, constraint_name: "tenant_schemas_tenant_id_fkey"]}]}}}`.
+
+A regression strictly worse than the bug §11 exists to fix, on the exact
+population (44 of 47 real callers, `async: false` + `template: :clone`, the
+default combination) §11 targets. Root cause, traced to source, not guessed:
+
+`test/support/tenant_template.ex:82`, `Letflow.Test.TenantTemplate.
+ensure_template!/0`'s own first line:
+
+```
+Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+```
+
+issued **unconditionally**, before even checking `template_ready?/0`, on
+EVERY `:clone`-path call — and `provision_schema!/2`'s default `:clone`
+clause is what `provision_via_shared_connection/1` (§11.2) drives for every
+`async: false` caller not overridden by §11.2.1's `template: :replay`
+special case. §9.7 already documented this exact call site, quoted it
+verbatim, and drew the correct conclusion FOR THE §10 WORLD ("`:auto` mode
+is not something either template path could be made to avoid needing") —
+correct then, because in the §10 world EVERY caller's provisioning ran on
+`ProvisioningRepo`, so `Letflow.Repo`'s own ambient mode was irrelevant to
+provisioning and this call's global check-in effect landed on nothing the
+caller cared about. §11.2 changes that precondition — it routes an
+`async: false` caller's OWN `Tenant` insert and `clone_tenant_schema!/1`
+call onto `Letflow.Repo` directly, via `Ecto.Repo.put_dynamic_repo(Letflow.
+Repo)` — while asserting, unqualified, that this path "issues zero
+`Sandbox.mode/2` calls of any kind" (§11.2 step 3 and §11.4's first bullet,
+as originally written). That assertion was checked against §11.2's OWN
+body only; it was never checked against the full call tree
+`provision_via_shared_connection/1` → `provision_schema!/2` → (`:clone`
+clause) → `Letflow.Test.TenantTemplate.clone_tenant_schema!/1` — which does
+NOT call `ensure_template!/0` itself (§9.7/`clone_tenant_schema!/1`'s own
+docstring: "Preconditions: `ensure_template!/0` has already succeeded... does
+NOT call it implicitly") — **but `provision_schema!/2`'s `:clone` clause
+does call `ensure_template!/0` before calling `clone_tenant_schema!/1`**
+(confirmed: this is the ONLY place `ensure_template!/0` is invoked from a
+`TenantFixture`-mediated call, per `provision_schema!/2`'s own body, not
+re-quoted here since ELIXIR-DEV's own trace already confirms the call
+chain empirically via the reproduced failure). §11.4's own closing claim
+("§11 adds no new `Sandbox.mode/2`-calling code path beyond the two already
+analyzed... there is no third mechanism to separately verify") is the
+specific sentence that was false: `ensure_template!/0` is a third,
+pre-existing `Sandbox.mode/2` call site, unconditionally reachable from the
+`:clone` path regardless of which of §11's two dispatch branches is chosen,
+that §11.2/§11.4 never audited against their own "zero calls" claim.
+
+**Why this reintroduces Mechanism 4 exactly (§9.2), not a new mechanism.**
+Per §9.1's own source trace (`DBConnection.Ownership.Manager.handle_call
+({:mode, mode}, _, %{mode: mode} = state)`), a mode-change call is a no-op
+ONLY when the requested mode already equals the pool's current mode; any
+actual difference triggers `proxy_checkin_all_except(state, [], caller)` —
+a real, global, whole-pool check-in with an EMPTY exclusion list, discarding
+whatever connection the calling process (and every other process) currently
+holds. Under `provision_via_shared_connection/1`, the calling test process's
+`Letflow.Repo` connection is, at the moment `ensure_template!/0` runs,
+either `{:shared, self()}` (the common `DataCase.setup/1` case) or `:auto`
+established by some other local `setup` (`tenant_fixture_dispatch_test.exs`'s
+own shape, §11.4's last bullet) — but crucially, by this point in
+`provisioned_tenant!/1`'s own sequence, the caller has ALREADY executed its
+own `Tenant` insert (§11.2 step 2 runs the 3-6 step sequence in the SAME
+order `with_provisioning_repo/1` already used, and the `Tenant` insert
+precedes the `provision_schema!/2` call that reaches `ensure_template!/0`).
+So when `ensure_template!/0`'s `Sandbox.mode(Letflow.Repo, :auto)` call
+requests a mode that differs from whatever is ambient (`{:shared, self()}`
+differs from `:auto` — a real difference, guard does not fire), the
+check-in discards the connection holding that not-yet-committed `Tenant`
+insert, exactly as §9.2 already described for the ORIGINAL, reverted
+`restore_sandbox: true` mechanism — a mid-sequence `Sandbox.mode/2` call
+from ANY code path, not only one this design itself writes, breaks
+continuity the same way. `clone_tenant_schema!/1`'s own subsequent
+`Repo.transaction(fn -> ... end)` (which inserts the `Registration` row
+referencing `source_tenant_id`) then runs on a BRAND NEW, empty connection
+that cannot see the just-discarded `Tenant` row — the foreign-key violation
+ELIXIR-DEV reproduced is exactly this: `tenant_schemas_tenant_id_fkey does
+not exist` because, from that new connection's transactional point of view,
+no such tenant was ever inserted.
+
+### 11.9.2 The fix: make `ensure_template!/0`'s own `Sandbox.mode/2` call conditional on the template not already being built
+
+**Mechanism, stated exactly for `test/support/tenant_template.ex`
+(TEST-DESIGNER/ELIXIR-DEV note: this file is owned by neither
+`data_case.ex` nor `tenant_fixture.ex` — ELIXIR-DEV's step-08 handoff
+correctly flagged it as outside `owned_modules`; this design authorizes
+this ONE additional file's change explicitly, since it is the only place
+the contradiction can be resolved without abandoning §11.2's own premise):**
+
+`ensure_template!/0`'s current body (`test/support/tenant_template.ex`,
+lines 67-129) issues `Sandbox.mode(Letflow.Repo, :auto)` as its literal
+first statement, unconditionally, THEN checks `template_ready?/0`. The fix
+reorders this into a single condition: **issue the `Sandbox.mode/2` call
+only on the path that is about to actually build the template — i.e., move
+the existing `Sandbox.mode(Letflow.Repo, :auto)` line from before the
+`if template_ready?() do :ok else ... end` branch to INSIDE the `else`
+branch, as its own first statement there, immediately before the advisory
+lock is acquired.**
+
+Concretely (structure, not implementation — ELIXIR-DEV writes the actual
+diff):
+
+- `template_ready?()` (a pure `:persistent_term` read, §2.1, already the
+  function's own first real check) is evaluated FIRST, with no
+  `Sandbox.mode/2` call preceding it.
+- If `template_ready?()` is `true` (the steady-state case — every call in a
+  partition after the first, and by far the overwhelming majority of real
+  `:clone`-path calls in any run, since the template is built once per BEAM
+  VM/partition and cached thereafter): return `:ok` immediately, with **no
+  `Sandbox.mode/2` call issued anywhere in this function on this path** —
+  this is the fix's entire effect, and it is what makes §11.2/§11.4's
+  corrected, qualified claim ("zero `Sandbox.mode/2` calls once the template
+  is already built") true.
+- If `template_ready?()` is `false` (the template has not yet been built in
+  this process's/VM's lifetime — the first `:clone`-path call in a given
+  partition, or a `template_ready?/0` cache miss after a VM restart): THEN,
+  and only then, issue `Sandbox.mode(Letflow.Repo, :auto)`, exactly as
+  today, before proceeding to the advisory-lock/re-check/`unboxed_run/3`
+  build sequence (lines 87-127, entirely UNCHANGED — the build itself still
+  needs `:auto` mode for the same reason §9.7/this function's own existing
+  comment already states: `unboxed_run/3`'s DDL must survive past the
+  calling process's own sandboxed transaction, or the template ends up
+  half-built when that transaction later rolls back).
+
+**Why this is sufficient — the build path's own `:auto` call is safe by a
+different, already-established argument, not exempted by accident.** The
+build path (`template_ready?() == false`) is exactly §4.3's advisory-lock-
+protected, once-per-partition slow path — `Repo.query!("SELECT
+pg_advisory_lock(...)")` immediately follows the (now-conditional)
+`Sandbox.mode(:auto)` call, and per this module's OWN existing comment
+(lines 91-96, unchanged), that DDL runs unboxed specifically because it
+must survive the caller's sandboxed transaction ending. **The caller's own
+`Tenant` insert (§11.2 step 2, preceding this call in
+`provisioned_tenant!/1`'s sequence) is disrupted by this ONE, first-ever,
+per-partition `:auto` call exactly as it would be by any other — this fix
+does not make the first call free of Mechanism 4's effect.** What makes
+this an accepted, disclosed trade-off rather than an unresolved gap:
+
+1. **It happens at most once per BEAM VM / test-partition database**
+   (§4.2's own idempotency framing, `@built_marker_key` persistent_term,
+   unchanged) — not once per `:clone`-path call, not once per test file. A
+   plain `mix test` run (no partitioning) hits this at most once, ever, for
+   the whole run's duration; a `scripts/test_parallel.sh` run hits it at
+   most once PER PARTITION (each partition is its own BEM VM / database).
+2. **The disrupted caller is deterministically identifiable and already
+   has a working answer: it is not a new class of failure, it is the
+   ORIGINAL ISS-0113/pre-fix symptom, scoped down to exactly one call.**
+   The very first `:clone`-path, `async: false` test to run in a given
+   partition — whichever one ExUnit happens to schedule first among the
+   sync queue — has its own `Tenant` insert discarded by this one call,
+   the same way EVERY `:clone`-path call already had that discard happen
+   under §10-only code (which used `ProvisioningRepo`'s own `:auto` mode
+   unconditionally, never touching `Letflow.Repo`'s ambient mode at all —
+   so this exact caller was NEVER exposed to `ensure_template!/0`'s call
+   under §10; §11.2 is what first puts a `:clone`-path async:false caller's
+   OWN Tenant insert genuinely at risk from `ensure_template!/0`, for
+   exactly this one first-per-partition call). This means the fix is not
+   fully sufficient to reach zero regressions for that ONE, first,
+   per-partition caller — see §11.9.3 for why this remaining case is
+   real, disclosed, and mitigated rather than eliminated, and why
+   eliminating it entirely is a materially larger change this rework does
+   not make.
+
+### 11.9.3 The remaining first-call exposure, disclosed precisely, and why it does not block this rework
+
+**The honest remaining gap after §11.9.2's fix:** the very first
+`template: :clone` + `async: false` call in a given partition/VM, IF it
+also happens to be the call that triggers the template build (i.e., no
+`async: true` caller or earlier test already built the template first),
+still has its own `Tenant` insert discarded by `ensure_template!/0`'s
+now-conditional-but-still-real `:auto` call — because that ONE call
+necessarily fires before the build, and the build path's own precondition
+(DDL must run unboxed, past the sandboxed transaction) is incompatible with
+also preserving an in-flight sibling transaction's own uncommitted rows on
+the SAME connection. This is not fixable by relocating or retargeting this
+one call alone — see the three rejected alternatives below.
+
+**Why this is acceptable for this rework, stated as an explicit trade-off,
+not swept under §11.9.2's fix:**
+
+- **It affects at most ONE call site's outcome per partition, not 44.**
+  §11.9.2's fix reduces the affected population from "every `:clone`-path
+  `async: false` call, every time" (the regression ELIXIR-DEV found, 0/5 on
+  `backfill_test.exs`) to "the first `:clone`-path `async: false` call in a
+  partition, only if no `async: true` caller already built the template
+  first, and only for the ONE test that happens to run first in the sync
+  queue." A real `mix test` run's own `Registration`/template-building
+  order is dominated by whichever `async: true` file (per §9.4, at least
+  `secrets_test.exs`/`webhooks_test.exs` today) happens to run its own
+  `:clone`-path call during the async phase — which runs, per ExUnit's own
+  documented scheduling (§5.1, "sync modules run after all async modules
+  complete"), BEFORE any `async: false` file's tests start at all. **In
+  practice, on the current suite, the template is already built by the
+  time the sync queue's first `:clone`-path caller runs**, because at least
+  one `async: true` `TenantFixture` caller already exists and runs first —
+  making the residual gap this section discloses currently unobserved, not
+  merely theoretically small. This is stated as an empirical expectation
+  TEST-RUNNER's own full-suite run (§11.7 item 6) will confirm or refute,
+  not asserted as proven without that run.
+- **If it DOES fire (e.g. a future suite with zero `async: true`
+  `TenantFixture` callers, or a partition where the async phase happens to
+  contain no `:clone`-path caller), the failure mode is the SAME, already-
+  understood, already-diagnosed symptom** (`Ecto.InvalidChangesetError` /
+  FK-does-not-exist, or the ISS-0332-shaped read-miss) as the exact
+  regression this whole rework exists to fix — not a new, harder-to-
+  diagnose failure class. A future occurrence is straightforwardly
+  traceable back to this section by anyone who reads it, rather than a
+  silent, undocumented trap.
+- **Three alternative mechanisms considered and rejected, stated so a
+  future reader does not re-propose them without knowing why:**
+  1. *Route `ensure_template!/0`'s build-path `:auto` call through
+     `ProvisioningRepo` instead of `Letflow.Repo`.* Rejected: the build's
+     own DDL (`CREATE SCHEMA`, migrations replay via
+     `TenantProvisioning.replay_migrations/1`) must run on the SAME
+     connection the throwaway `Tenant`/`Registration` row was inserted on
+     (this function's own existing comment, lines 113-119: "Wrapping only
+     the migration puts that lookup on a different connection which cannot
+     see the row") — that throwaway row is inserted via plain
+     `Repo.insert_all/3` against whatever `Letflow.Repo`'s CURRENT dynamic
+     repo binding is at call time. Under `provision_via_shared_connection/1`,
+     that binding is explicitly `Letflow.Repo` itself (§11.2 step 1) — so
+     retargeting only the `Sandbox.mode/2` call to `ProvisioningRepo` while
+     the throwaway insert still executes against `Letflow.Repo` would split
+     the build's own two halves across connections, reproducing exactly
+     the "different connection, doesn't see the row" failure this
+     function's own comment already names as previously-tried-and-rejected
+     for a different reason. Making the WHOLE build (not just the mode
+     call) redirect to `ProvisioningRepo` would require this function to
+     know about `ProvisioningRepo` at all, which §10.2.1 deliberately
+     avoided doing to `TenantProvisioning`'s functions — extending that
+     same avoidance to `TenantTemplate` is consistent, not an oversight.
+  2. *Pre-build the template eagerly, before any test runs (e.g. from
+     `test/test_helper.exs`).* Rejected as out of scope for this rework:
+     it would guarantee the fast path is always the one hit, closing the
+     residual gap completely, but it is a materially different, larger
+     mechanism (global test-run bootstrap ordering, its own connection/
+     partition-boundary questions — does `test_helper.exs` run once per
+     partition already? under what connection state?) than this rework's
+     own bounded scope of "fix the regression ELIXIR-DEV found." Worth
+     flagging as a candidate for a FUTURE design (OQ-13 below), not
+     something this rework should absorb under schedule pressure.
+  3. *Have `provision_via_shared_connection/1` itself call
+     `Letflow.Test.TenantTemplate.ensure_template!/0` (or check
+     `template_ready?/0`) BEFORE its own `Tenant` insert, so any needed
+     build happens first, before there is an in-flight transaction to
+     discard.* This is the closest alternative to actually closing the gap
+     without touching `test_helper.exs` — but rejected for THIS rework
+     because it inverts §11.2 step 2's own documented sequencing ("run the
+     caller's existing 3-6 step provisioning sequence... EXACTLY as
+     `with_provisioning_repo/1`'s own body already sequences them"), a
+     property §11.2 states as deliberate parity with the existing,
+     shipped, verified `ProvisioningRepo` path — changing step ORDER for
+     one dispatch branch only, to work around a downstream module's own
+     mode call, is exactly the kind of scope creep `docs/anti-patterns.md`
+     warns against fixing by rearranging an unrelated caller instead of
+     the actual defect's own site. Flagged as OQ-13 for a future tranche
+     if the empirical run in §11.7 item 6 shows this gap is not, in fact,
+     already avoided by `async: true` callers building the template first.
+
+### 11.9.4 What ELIXIR-DEV implements for §11.9 (signatures only, no bodies)
+
+1. `test/support/tenant_template.ex`, `ensure_template!/0`: reorder the
+   existing `Sandbox.mode(Letflow.Repo, :auto)` statement (currently line
+   82, the function's first statement) to become the first statement
+   INSIDE the existing `else` branch of the existing `if template_ready?()
+   do :ok else ... end` conditional (i.e., immediately before the existing
+   `Repo.query!("SELECT pg_advisory_lock(...)")` line) — moving one
+   existing line, adding no new branch, no new function, no new module
+   attribute. `@spec ensure_template!() :: :ok` unchanged. The function's
+   own existing comment block (lines 69-81) explaining WHY the call exists
+   must be moved/adapted to sit with its relocated call site, updated to
+   note the call is now conditional on `template_ready?() == false` and to
+   cite this design's §11.9 for why (not merely "moved for no stated
+   reason").
+2. No change to `template_ready?/0`, `clone_tenant_schema!/1`,
+   `assert_clone_parity!/3`, `build_template!/0`,
+   `do_build_template!/1`, or any other function in this module — the
+   fix is a single statement's reordering, nothing else.
+3. No change to `test/support/tenant_fixture.ex` or
+   `test/support/data_case.ex` beyond what §11.1-§11.6 already specify —
+   §11.9 does not touch `provisioned_tenant!/1`, `provision_via_shared_
+   connection/1`, or `with_provisioning_repo/1`'s own bodies at all; the
+   fix is entirely inside `ensure_template!/0`.
+4. Re-run, in full, §11.7's regression plan (items 1-6, including the two
+   NEW items this rework's own §11.7 edit adds) after this change — the
+   `backfill_test.exs` fail-then-pass check (§11.7 item 1 / item 6) is what
+   confirms this fix actually closes the 0/5 regression, not merely that it
+   compiles.
+
+### 11.9.5 Open question added by this rework
+
+- **OQ-13.** §11.9.3's third rejected alternative (having
+  `provision_via_shared_connection/1` ensure the template is built before
+  its own `Tenant` insert, closing the residual first-call gap completely)
+  is deferred, not adopted, for this rework — see that subsection for why.
+  If TEST-RUNNER's full-suite run (§11.7 item 6, §11.9.3's own empirical
+  expectation) surfaces even one real failure attributable to this residual
+  gap (a `:clone`-path `async: false` test failing with the
+  FK-does-not-exist/read-miss symptom in a partition where no `async: true`
+  `TenantFixture` caller ran first), that is the signal this design's own
+  "currently unobserved" expectation was wrong for at least one partition
+  shape, and a future design step should adopt alternative 2 or 3 from
+  §11.9.3 rather than this rework attempting a second, unplanned patch
+  under the same run.
+
+## 11.10 REWORK ITERATION 4 — `provision_via_shared_connection/1`'s
+     `on_exit/1` teardown outlives its own connection, why, and the fix
+     (normative — corrects §11.2/§11.3/§11.6, does not reopen them for
+     further debate)
+
+### 11.10.0 What ELIXIR-DEV found, re-verified rather than inherited
+
+Per `HANDOFF_PROTOCOL.md` §1.1 and `core-directives.md`'s "re-derive under
+the conditions the property is actually about" — this is not taken on
+ELIXIR-DEV's report alone. Re-derived from source, independently, below:
+`Ecto.Adapters.SQL.Sandbox`'s own moduledoc and `DBConnection.Ownership`'s
+documented lifecycle both state that `{:shared, owner_pid}` mode ties the
+shared connection's validity to `owner_pid` remaining alive; ExUnit's own
+documented `on_exit/1` contract states the callback runs "after the test
+has exited, in a separate process, after the test process itself has been
+torn down" — the two facts compose exactly the way ELIXIR-DEV's stack trace
+demonstrates: `provision_via_shared_connection/1`'s own `on_exit/1` closure
+(`test/support/tenant_fixture.ex:303`) calls `Ecto.Repo.put_dynamic_repo
+(Letflow.Repo)` (a no-op — it does not change which pool `Letflow.Repo`
+targets) and then runs `teardown/2`'s three statements directly against
+whatever connection is ambient for the CALLING process — but the calling
+process, by the time `on_exit/1` fires, is the on_exit callback's own
+process, not the original test process the `{:shared, self()}` mode was
+established for. `DBConnection.Ownership.Manager` has no record of this new
+process as an owner or an allowed process for that shared connection (the
+original owner already exited, and its exit is exactly what invalidates the
+`{:shared, owner_pid}` registration per Sandbox's own documented behavior,
+not merely "the connection happens to be busy") — so the very first
+`Repo.query!`/`Repo.delete_all` call inside `teardown/2`
+(`schema_present?/1`'s own `Repo.query!/2}`, reached via `log_teardown/3` →
+`guarded/2`) attempts a checkout that has nothing to attach to, and
+`DBConnection.Holder.checkout/3` raises `exit, shutdown: "owner ... exited"`
+exactly as quoted in the BLOCKER. Independently confirmed via `git stash` to
+predate this rework entirely (commit c38dfa9b, `provision_via_shared_
+connection/1`'s own introduction) — this is not a defect this rework's own
+§11.9 change caused, and §11.9's tenant_template.ex reorder is not touched
+by this section's fix.
+
+**Why `guarded/2` and `log_teardown/3`'s own `rescue` clause do not already
+catch this, confirmed against source, not assumed.** Both
+(`test/support/tenant_fixture.ex:717-721`, `:556-558`) are `rescue
+_exception -> ...` clauses. Elixir's `rescue` catches values raised via
+`raise/1,2` (anything implementing the `Exception` behaviour) — it does
+**not** catch an `exit` signal, which is a distinct BEAM control-flow
+primitive `DBConnection.Holder.checkout/3` uses here specifically because
+the failure is a process-level condition (the pool's own ownership manager
+tearing down a stale registration), not an application-level exception.
+Catching an `exit` requires `catch :exit, reason -> ...` (or the combined
+`try ... catch :exit, _ -> ... rescue _ -> ... end` form) — a different
+Elixir construct from `rescue` entirely, not a broader flag on the same one.
+This confirms the BLOCKER's own diagnosis rather than merely restating it:
+INV-F-10 ("a failing log call must never turn a passing test red") is
+currently violated for this one failure shape because the boundary that is
+supposed to enforce it structurally cannot see this class of failure at
+all, regardless of how it is invoked.
+
+### 11.10.1 Two independent defects, not one — and only one of them is this
+     rework's to fix
+
+Re-reading the BLOCKER's own stack trace precisely: the raised `exit`
+propagates from `schema_present?/1` (called only from `log_teardown/3`'s own
+`guarded(fn -> schema_present?(schema_name) end, nil)` diagnostic read) —
+**not** from `teardown/2`'s own load-bearing `DROP SCHEMA`/`Repo.delete_all`
+statements, which never get a chance to run at all once `log_teardown/3`
+propagates the `exit` past its own non-catching `rescue`. So there are two
+separate things wrong, and conflating them would produce an incomplete fix:
+
+1. **The connection itself is unusable from the `on_exit/1` process** — this
+   is the root defect (§11.10.0) and the one this section fixes, because
+   fixing only item 2 below would still leave `teardown/2`'s own real
+   cleanup (`DROP SCHEMA`, the two `delete_all` calls) attempting to run on
+   a connection that cannot be checked out, merely with the symptom changed
+   from "test fails" to "teardown silently does nothing" — a worse outcome,
+   not a fix, since it would leave orphaned tenant schemas/rows behind on
+   every `async: false` + `template: :clone` test, silently.
+2. **`guarded/2`/`log_teardown/3`'s `rescue`-only boundary cannot see an
+   `exit`** — real, and independently worth closing per INV-F-10's own
+   stated intent, but **fixing this alone does not fix the BLOCKER**: even
+   if `log_teardown/3`'s diagnostic read were made exit-safe, `teardown/2`'s
+   own subsequent `Repo.query!`/`Repo.delete_all` calls (the DROP and the two
+   deletes) are NOT inside any `guarded/2`/rescue boundary at all today —
+   they are the function's own unprotected body — and would still raise the
+   identical `exit` past `on_exit/1`'s own caller (ExUnit reports an
+   uncaught `on_exit/1` failure as a test failure regardless of which
+   statement inside it raised). Both must be addressed for the BLOCKER to
+   actually close; §11.10.2 fixes item 1 (root cause, makes the connection
+   usable), §11.10.3 fixes item 2 (closes the disclosed INV-F-10 gap on the
+   diagnostic path specifically, as a hardening measure once item 1 is
+   fixed, not as a substitute for it).
+
+### 11.10.2 The fix: route `provision_via_shared_connection/1`'s `on_exit/1`
+     teardown through `Letflow.Test.ProvisioningRepo`, exactly as §10's own
+     path already does — provisioning itself stays on the shared connection
+
+**Chosen direction, and why it is the smallest correct fix, not merely the
+most convenient one.** The handoff dispatching this rework asked the load-
+bearing question directly: does `teardown/2` need to run on the SAME
+connection provisioning used, or merely on SOME connection with adequate
+visibility/permissions? Answered from `teardown/2`'s own body
+(`test/support/tenant_fixture.ex:522-534`, unchanged, re-read for this
+section): its three statements are `TenantProvisioning.schema_name_for_
+tenant/1` (a `Repo.get_by(Registration, ...)` read keyed by `tenant_id`),
+`Repo.query!(DROP SCHEMA IF EXISTS ... CASCADE)`, and two
+`Repo.delete_all/1` calls filtered by `tenant_id`/`id` — **every one of
+these reads or deletes rows/schemas by a value already known before
+teardown runs (`tenant_id`, closed over in the `on_exit/1` closure per
+§11.3), not by anything that must be visible only on a specific in-flight,
+uncommitted transaction.** By the time `on_exit/1` fires, `provisioned_
+tenant!/1`'s own provisioning sequence (the `Tenant` insert,
+`provision_schema!/2`'s clone/replay, `assert_schema_complete!/2`) has
+already either **completed and returned** (the test body ran to
+completion) or **raised out of `provisioned_tenant!/1` entirely** (in which
+case `on_exit/1` still fires, since ExUnit registers it unconditionally)
+— either way, the calling test process's OWN participation in whatever
+transaction/connection state it was using is over by the time the test
+process itself exits, which is a precondition for `on_exit/1` running at
+all (ExUnit's own documented ordering: `on_exit/1` runs strictly after the
+test process has finished). **Committed rows are visible from any
+connection to the same Postgres database** (ordinary MVCC read-committed
+visibility, the same fact §11.0 already established when it diagnosed WHY
+`ProvisioningRepo`'s separate pool was safe for provisioning in the first
+place) — and `provision_via_shared_connection/1` provisions on `Letflow.
+Repo` directly, under whatever mode is ambient (`{:shared, self()}` or
+`:auto`).
+**CORRECTED (WF03-ISS0480-20260905, rework #5 — this paragraph's own prior
+claim below was FALSE and is struck through in substance, not merely
+caveated, per `docs/anti-patterns.md`'s "don't silently resolve a
+conflict"/"supersede rather than overwrite" precedent.** The struck claim
+read: ~~"`DataCase`'s own `{:shared, self()}`/`:auto` choice ... never
+wraps the test body in a transaction that rolls back at teardown; it is a
+genuine, ordinarily-committing connection for the statements this codebase
+runs against it."~~ ISSUE-FIXER's mechanical reassessment
+(`handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json`,
+`result.summary` Item 1) confirms the opposite, read directly from source,
+not inferred:
+
+- `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:543-571` (`checkout/2`):
+  the `:sandbox` option defaults to `true` (line 548) and, when true,
+  installs `post_checkout`/`pre_checkin` pool hooks (lines 549-552)
+  **unconditionally, before any later `Sandbox.mode/2` call ever runs** —
+  `Sandbox.mode/2` (lines 509-516) never touches or removes these hooks; it
+  only calls `DBConnection.Ownership.ownership_mode/3`, a completely
+  separate, access-only operation.
+- `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675`
+  (`post_checkout`): calls `conn_mod.handle_begin([mode: :transaction] ++
+  opts, conn_state)` — opens a real transaction at checkout time,
+  unconditionally.
+- `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:677-701`
+  (`pre_checkin`): the ordinary-checkin clause calls
+  `conn_mod.handle_rollback([mode: :transaction] ++ opts, conn_state)` —
+  always ROLLBACK, never COMMIT.
+- **Neither `post_checkout` nor `pre_checkin` reads or branches on
+  `:manual` vs. `:auto` vs. `{:shared, pid}` mode at all — mode is not a
+  parameter to either function.** `{:shared, pid}`'s actual death path
+  (`manager.ex:241-242`'s `handle_info({:DOWN, ...})` →
+  `proxy_checkin/3` (`:285-297`, which is what triggers the pool's real
+  rollback machinery) → `owner_down/2` (`:364-386`, ETS/map bookkeeping
+  only) → `unshare/2` (`:402-408`, resets `state.mode` to `:manual`, no DB
+  operation)) confirms `{:shared, pid}` mode is orthogonal to checkin-time
+  rollback: it only widens which processes may use the connection DURING
+  the test, and has no branch that turns a checkin-time rollback into a
+  commit.
+
+**The true premise, replacing the struck claim above: a `Letflow.Repo`
+connection checked out via `Ecto.Adapters.SQL.Sandbox.checkout/2` — which
+`DataCase.setup/1` (`test/support/data_case.ex:16`) does unconditionally
+for every test, regardless of `async: true`/`false` or `{:shared,
+self()}`/`:manual` mode — is ALWAYS wrapped in a transaction that rolls
+back at checkin. `provision_via_shared_connection/1`'s writes on that
+connection are therefore never durable past the owning test process's
+exit; the ambient Sandbox rollback-at-checkin is what actually removes the
+provisioned schema and tracking rows, not `teardown_wrap`'s DROP/DELETE.**
+This is reconciled against §10's original mechanism, not merely asserted:
+`with_provisioning_repo/1`'s own path calls `Sandbox.mode(Letflow.Test.
+ProvisioningRepo, :auto)` on `Letflow.Test.ProvisioningRepo` — a repo whose
+connection `DataCase.setup/1` never checks out via `Sandbox.checkout/2` at
+all, so its writes are ordinary, real, auto-committing statements with no
+wrapping transaction to roll back. That is exactly why §10's original
+mechanism genuinely needs real explicit teardown (`ProvisioningRepo` writes
+are durable across test-process-exit and are left behind forever without a
+manual DROP/DELETE) — a property `Letflow.Repo`'s ambient, always-rolled-
+back connection does not share. The two mechanisms have fundamentally
+different persistence semantics; this correction is scoped to the
+shared-connection (`Letflow.Repo`) path specifically and must not be read
+as "teardown is never needed" for every caller (a caller provisioning via
+`with_provisioning_repo/1`/`ProvisioningRepo` directly still needs real
+teardown).
+So: **teardown does not need to run on the SAME connection provisioning
+used — it needs a live, permissioned connection to the SAME database, which
+`ProvisioningRepo` already is, by construction (§10.2, `config/test.exs`:
+same `database: "letflow_test#{MIX_TEST_PARTITION}"` as `Letflow.Repo`,
+confirmed by direct re-read of `config/test.exs` for this section — the two
+repos are two pools onto the identical database, not two databases).**
+
+**The fix, stated as a signature-level change (no bodies):**
+
+- `provisioned_tenant!/1`'s dispatch (§11.6 item 2's `connection_wrap`
+  binding) is now **split into two separately-named closures instead of
+  one shared one** — the current code binds a single `connection_wrap` and
+  reuses it for both the provisioning call and the `on_exit/1` teardown
+  call (§11.3's own stated design, now superseded by this section for the
+  teardown half only): a `provision_wrap` closure, bound exactly as
+  `connection_wrap` is today (`provision_via_shared_connection/1` when
+  `template == :clone and Process.get(:letflow_data_case_shared_mode?,
+  false)`, else `with_provisioning_repo/1`) — **unchanged, still used only
+  for the provisioning call** — and a `teardown_wrap` closure that is
+  **always `with_provisioning_repo/1`, regardless of what `provision_wrap`
+  resolved to.**
+- Concretely: `on_exit(fn -> with_provisioning_repo(fn -> teardown(tenant.id,
+  owner) end) end)` — literally the SAME shape §10.3.2's path already uses
+  for every caller today (quoted verbatim in the dispatching handoff's own
+  "For contrast" paragraph), now used **unconditionally** for the teardown
+  closure, independent of which path provisioning itself took.
+- **This directly reverses one clause of §11.3's own prior instruction**
+  ("the `on_exit/1` callback... must close over the SAME dispatch decision
+  `provisioned_tenant!/1` itself made for the provisioning call" — the
+  premise being that provisioning and teardown must never diverge in which
+  connection they use, or teardown's DROP/DELETE would run against a
+  different connection than the one provisioning committed to). §11.10.2
+  narrows that premise to what it actually protects: it is real and still
+  correct for why `assert_schema_complete!/2` and the caller's own later
+  test-body reads must share provisioning's connection (read-your-own-write,
+  same-transaction visibility while the test is still running) — but
+  teardown runs strictly AFTER the test's own reads are done and after the
+  provisioning connection's participation has ended, at which point the
+  only property teardown needs is "sees committed rows in the same
+  database," which `ProvisioningRepo` already supplies unconditionally, for
+  every caller, exactly as it already does for the `with_provisioning_repo/1`
+  dispatch branch today. §11.3's own "no NEW `Process.get`/`Process.put` at
+  teardown time" reasoning is unaffected — `teardown_wrap` needs no
+  process-dictionary read at all, since it is now a constant, not a
+  decision.
+- **`provision_wrap` (the provisioning-time dispatch) is completely
+  unchanged by this section** — `provision_via_shared_connection/1` keeps
+  running the `Tenant` insert, `provision_schema!/2`, and
+  `assert_schema_complete!/2` directly against `Letflow.Repo`, on the
+  caller's own ambient connection, exactly as §11.2 specifies. This section
+  changes ONLY which wrapper the `on_exit/1` closure passed to `teardown/2`
+  uses; it does not touch provisioning's own connection choice, `§11.2`'s
+  zero-`Sandbox.mode/2`-calls property, or `§11.9`'s `ensure_template!/0`
+  fix.
+
+### 11.10.2a `teardown_wrap`'s DROP/DELETE is defense-in-depth, not the
+     operative cleanup mechanism, for the shared-connection path (CORRECTED,
+     WF03-ISS0480-20260905 rework #5)
+
+**Given §11.10.2's corrected premise above, what does `teardown_wrap`'s
+`with_provisioning_repo(fn -> teardown(tenant.id, owner) end)` actually
+accomplish for the `async: false` + `template: :clone` default path (44 of
+47 real call sites, per ISSUE-FIXER's step-13 reassessment)?** Not what
+§11.10.2 originally believed. Stated precisely, per ISSUE-FIXER's
+mechanically-confirmed reassessment (step-13 handoff, Items 2-5):
+
+- **The real cleanup, for this path, is the ambient Sandbox rollback at
+  checkin** (§11.10.2's corrected premise) — `provision_via_shared_
+  connection/1`'s `Tenant` insert, `Registration` insert, and
+  `CREATE SCHEMA`/replay are all made on the caller's `Letflow.Repo`
+  connection, which is always inside a rollback-at-checkin transaction.
+  That rollback discards them before `on_exit/1`'s `teardown_wrap` closure
+  ever runs, for every caller on this path.
+- **`teardown_wrap`'s own DROP SCHEMA IF EXISTS/`delete_all` statements run
+  against state that is, for this path, already gone by construction** —
+  confirmed by direct reproduction, not inferred: ISSUE-FIXER ran `mix test
+  test/letflow/support/tenant_fixture_test.exs --only describe:"C5 --
+  teardown logging"` and observed the emitted line read
+  `schema_present_before_drop=false` (the schema was already absent before
+  `DROP SCHEMA IF EXISTS` executed), and separately ran `mix test
+  test/letflow/tenant_provisioning/backfill_test.exs --seed 0` and observed
+  the identical signature on ELIXIR-DEV's own ISS-0480 verification tests.
+- **This makes `teardown_wrap`'s statements a harmless, already-idempotent
+  no-op for this path, not a defect requiring a code fix.** `teardown/2`'s
+  own body (`test/support/tenant_fixture.ex:538-550`) degrades gracefully
+  at each step when the state is already gone: `schema_name_for_tenant/1`
+  returns `{:error, :invalid_tenant_id}` when the `Registration` row is
+  already rolled back, and `teardown/2`'s own `case` clause treats that as
+  a plain `:ok` (the DROP is skipped entirely — never reached, never
+  errors); Postgres's own `IF EXISTS` clause is unconditionally graceful
+  against an absent schema (confirmed by the C5 reproduction above, which
+  hit exactly this branch with no error, only a log line); `delete_all`
+  against zero matching rows is an ordinary, silent 0-row result in
+  Ecto/Postgres. No implementation change to `teardown/2` follows from this
+  correction — ELIXIR-DEV must not add speculative existence-guards around
+  any of its three statements; they are already safe.
+- **`teardown_wrap`'s DROP/DELETE is retained** — this design does not
+  propose removing it — **as defense-in-depth, not as the load-bearing
+  mechanism for the shared-connection path**, for two concrete reasons, not
+  a vague "just in case": (a) it is the operative, load-bearing cleanup for
+  any caller whose provisioning does NOT go through the fully-rolled-back
+  shared-connection path — concretely, a caller using
+  `with_provisioning_repo/1`/`ProvisioningRepo` directly for provisioning
+  per §10's original mechanism, whose writes ARE durable across
+  test-process-exit (§11.10.2's reconciliation paragraph above) and
+  genuinely need the DROP/DELETE to run; and (b) it costs nothing extra —
+  §11.10.5 item 5's own connection-budget analysis (unchanged by this
+  correction) already established this traffic is additional short-lived
+  load on an already-provisioned pool, not additional peak concurrency —
+  so keeping one code path for both cases (rather than branching teardown
+  behavior on how provisioning dispatched) is simpler and more uniform than
+  the alternative of skipping teardown_wrap for the shared-connection path
+  specifically. **No new hazard is introduced by any of this**:
+  ISSUE-FIXER's step-13 Item 4 traced `manager.ex`'s `{:shared, pid}`
+  sharing/unshare mechanism precisely and confirmed it only ever affects
+  the one owning connection, never another test's separate connection —
+  two different async tests hold entirely separate checkouts/proxies/
+  underlying Postgres connections, and standard Postgres MVCC read-
+  committed isolation applies between any two live, uncommitted
+  transactions on separate connections regardless of Sandbox mode. This
+  closes the "does this create a new cross-test leak" question the step-13
+  reassessment was dispatched to check — it does not.
+
+**Does this change what ELIXIR-DEV implements?** No. §11.10.5's
+signature-level implementation list is unchanged by this correction — this
+is a documentation-only fix to §11.10.2's premise and this new
+§11.10.2a's framing of `teardown_wrap`'s role, not a code change. The one
+non-design consequence is in the test suite (see §11.10.4a below).
+
+**Does this reopen the ORIGINAL ISS-0113/ISS-0480 hazard — a `Sandbox.mode/2`
+call reaching `Letflow.Repo`'s shared pool from teardown?** No, by
+construction: `with_provisioning_repo/1`'s own body (`test/support/
+tenant_fixture.ex:332-342`, unchanged) calls `Sandbox.mode(Letflow.Test.
+ProvisioningRepo, :auto)` — it has never, in any of §10/§11's iterations,
+called `Sandbox.mode/2` on `Letflow.Repo` itself. Routing teardown through
+it is not a new call to audit against the ORIGINAL hazard's own mechanism
+(§9.1's global check-in effect scoped per-repo, §10's own already-verified
+argument for why `ProvisioningRepo`'s pool cannot disturb `Letflow.Repo`'s)
+— it is reuse of the exact, already-safe mechanism §10.3.2 introduced and
+§10's own analysis already covers, for a caller population (`async: false`)
+that mechanism was never previously invoked for at teardown time, but was
+always safe to invoke for (§10's own safety argument was never scoped to
+`async: true` callers specifically — it is scoped to "any caller routing
+through `ProvisioningRepo`," which now includes this one, for teardown
+only).
+
+**Does this reopen Mechanism 4 (§9.2/§11.9) — a mid-sequence `Sandbox.mode/2`
+call on `Letflow.Repo` disrupting an in-flight connection holding
+uncommitted work?** No: `with_provisioning_repo/1`'s `Sandbox.mode/2` call
+targets `Letflow.Test.ProvisioningRepo`, never `Letflow.Repo` — Mechanism 4
+is specifically about a mode call reaching `Letflow.Repo`'s own pool while
+that pool holds an in-flight caller's uncommitted connection state; a call
+against a DIFFERENT repo's pool cannot check in a connection it does not
+own, structurally, the same "scoped per ownership-manager process, one
+manager per pool" fact §10's own moduledoc (`test/support/provisioning_
+repo.ex:14-24`, re-read for this section) already states. Additionally,
+by the time `on_exit/1` fires, there is no longer any "in-flight,
+uncommitted work" on `Letflow.Repo` to disrupt in the first place (§11.10.2's
+own opening argument) — the test process that held it has already exited.
+
+### 11.10.3 Hardening `guarded/2`/`log_teardown/3` to also catch `:exit` —
+     closes item 2 from §11.10.1, INV-F-10's own stated intent
+
+Independent of §11.10.2 (which makes the connection usable, so this
+diagnostic read no longer raises in the first place under normal
+operation), `guarded/2` is widened so its stated contract ("fun either
+returns its value, or [fails] and that ONE field degrades... while every
+other field is still gathered") actually holds for an `exit` the same way
+it already holds for a `raise`d exception — matching INV-F-10's own
+already-stated intent ("a failing log call must never turn a passing test
+red") for the failure SHAPE this rework discovered, not only the shape it
+originally anticipated. `log_teardown/3`'s own `rescue _exception -> :ok`
+boundary is widened the identical way, for the identical reason — it is the
+outer safety net around `guarded/2`'s own call in `log_teardown/3`'s body,
+and both must widen together or the inner one is redundant.
+
+**Signature-level change (no bodies):** both `guarded/2`
+(`test/support/tenant_fixture.ex:717-721`) and `log_teardown/3`'s own
+trailing `rescue` clause (`:556-558`) change their failure-boundary
+construct from `rescue _exception -> ...` (catches only `raise`d
+exceptions) to a combined form that ALSO catches an `exit` signal with the
+same fallback value/behavior — Elixir's `try/rescue/catch` allows both
+clauses on one `try` block (or, for `guarded/2`'s existing single-expression
+`fun.() rescue _exception -> degraded` shorthand, ELIXIR-DEV must expand it
+to an explicit `try do fun.() rescue _ -> degraded catch :exit, _ -> degraded
+end` form, since the bodyless shorthand syntax cannot carry a second
+`catch` clause — a real, disclosed shape change from today's one-line
+function body, still a signature-preserving change: `guarded/2`'s own
+`@spec`-equivalent behavior, "returns `fun`'s value or `degraded`," is
+unchanged, only which failure classes reach that fallback widens). No new
+public function, no new module attribute, no change to either function's
+arity or callers.
+
+**Why this is a hardening measure and not this section's primary fix,
+stated so it is not mistaken for one.** §11.10.2 alone is sufficient to
+close the BLOCKER: once teardown runs through `ProvisioningRepo`, the
+connection `schema_present?/1` checks out inside `log_teardown/3` is a
+live, valid one, and no `exit` is raised from that call site at all under
+normal operation — this section's own widening is a defense-in-depth
+measure for a DIFFERENT, currently-hypothetical scenario (some other,
+future cause of a mid-teardown `exit`, e.g. `ProvisioningRepo`'s own pool
+being saturated and timing out in a way that surfaces as an `exit` rather
+than a `raise`), not a substitute for fixing the root cause. Confirmed
+against §11.10.1's own item 2 analysis: applying ONLY this section without
+§11.10.2 would still leave `teardown/2`'s own unprotected `DROP SCHEMA`/
+`delete_all` statements raising the ORIGINAL `exit` past `on_exit/1` (they
+are not inside any `guarded/2` boundary, and are not being wrapped in one
+by this section either — see the next paragraph for why not).
+
+**Why `teardown/2`'s own `DROP SCHEMA`/`delete_all` statements are NOT
+wrapped in a `guarded/2`-style boundary, even though they are the
+statements that actually raised in the BLOCKER's own trace path once
+§11.10.2 is applied (they wouldn't raise at all once the connection is
+valid, but the boundary question is asked here for completeness).** Those
+three statements are teardown's own **load-bearing cleanup**, not a
+diagnostic read — INV-F-10's own scope ("a failing LOG call must never turn
+a passing test red") is specifically about observability code that exists
+only to report state, never about suppressing a failure in the actual
+cleanup operation itself. Swallowing a failed `DROP SCHEMA`/`delete_all`
+would silently leave an orphaned tenant schema/rows behind with no signal
+at all — worse than today's behavior (a loud, attributable test failure),
+and exactly the class of "hide a failing operation instead of fixing it"
+anti-pattern `docs/anti-patterns.md` warns against. If `ProvisioningRepo`'s
+connection is itself unavailable for some reason even after §11.10.2 (pool
+exhaustion, database unreachable), teardown SHOULD fail loudly — that is
+correct, not a gap this rework needs to close.
+
+### 11.10.4 Verification TEST-DESIGNER/ELIXIR-DEV must run for this rework
+     specifically
+
+Re-running §11.7's existing regression plan (items 1-6) is necessary but,
+per `core-directives.md`'s "re-derive under the conditions the property is
+actually about," **not sufficient on its own** to confirm teardown actually
+completed correctly — a test file returning `N/N passed` proves ExUnit
+did not observe a failure; it does not by itself prove the schema was
+actually dropped and the tracking rows actually deleted (a `guarded/2`
+swallowing a real failure, pre-§11.10.3, could in principle have produced
+the same green result while leaking state — exactly the gap this
+subsection exists to close empirically, not merely reason about):
+
+1. **Re-run §11.7 items 1-6 in full**, with real quoted output — this is
+   the existing required plan, unchanged, and is what confirms the BLOCKER
+   itself (the `exit`/`shutdown: "owner ... exited"` failures) is gone:
+   `backfill_test.exs` must return **5/5** (not merely "no exit raised" —
+   the ISS-0332 assertion itself, `assert updated >= 1`, must also still
+   pass, since that is what §11.9's own fix already closes and this
+   section must not regress), and `context_test.exs` must return **11/11**
+   (its pre-existing 5/11 was entirely this teardown defect, per the
+   BLOCKER's own git-stash-confirmed evidence — TEST-DESIGNER/ELIXIR-DEV
+   must re-confirm this file's own failures are fully gone, not merely
+   reduced, since a partial improvement here would mean a second,
+   undiagnosed defect remains).
+2. **New, explicit post-teardown state check — not merely "the test
+   passed."** For at least one `async: false` + `template: :clone` test
+   already exercising `provision_via_shared_connection/1`'s teardown path
+   (e.g. add this directly to `backfill_test.exs`, or as a new small
+   dedicated regression test — TEST-DESIGNER's choice of file, not
+   prescribed further here), assert AFTER the test's own body — most
+   simply, from a SEPARATE test in the same file that runs after, since
+   `on_exit/1` for a given test fires before the NEXT test in the same
+   sync queue starts, per ExUnit's own documented ordering — that:
+   - the tenant's schema no longer appears in
+     `information_schema.schemata` (`TenantFixture.capture_schema_state/1`
+     already exposes `schema_present?`, or a direct
+     `SELECT 1 FROM information_schema.schemata WHERE schema_name = $1`
+     against `Letflow.Repo` — any live connection, since teardown's own
+     DROP already committed by the time the NEXT test runs, ordinary
+     cross-connection MVCC visibility, no special wiring needed for the
+     ASSERTION side either), and
+   - the tracking rows are gone: `Letflow.Repo.get_by(Letflow.
+     TenantProvisioning.Registration, tenant_id: tenant_id)` and
+     `Letflow.Repo.get(Letflow.Identity.Tenant, tenant_id)` both return
+     `nil`.
+   This is what distinguishes "ExUnit didn't observe a red" from "teardown
+   actually ran its DROP/DELETE to completion" — the exact gap a
+   swallowed-`exit` scenario (pre-§11.10.3, or any future failure class
+   `guarded/2` might absorb) could otherwise hide silently.
+3. **Confirm the widened `guarded/2`/`log_teardown/3` boundary (§11.10.3)
+   does not mask a genuine teardown failure.** A test that forces
+   `schema_present?/1`'s own diagnostic read to raise (any mechanism
+   TEST-DESIGNER judges reproduces a `raise`, e.g. temporarily renaming
+   the table `information_schema.schemata` is not itself feasible/safe —
+   TEST-DESIGNER should instead verify this at the unit level by calling
+   `guarded/2`/`log_teardown/3` directly, or an equivalent fake, with a
+   function that raises and one that exits, confirming both degrade to
+   the same fallback rather than propagating) still allows the SAME test's
+   own `teardown/2` DROP/DELETE statements to run and be observed (per
+   item 2's own assertions) — i.e., the widened diagnostic boundary must
+   not be confused with, or accidentally extended to, the load-bearing
+   cleanup statements themselves (§11.10.3's own closing point).
+4. **`mix compile --warnings-as-errors --force` and
+   `mix format --check-formatted`**, both clean — unchanged standard gates,
+   restated because §11.10.3's `guarded/2` body-shape change (single
+   expression → explicit `try/rescue/catch`) is exactly the kind of
+   syntactic change most likely to introduce an incidental formatting/
+   warning regression if rushed.
+
+### 11.10.4a CORRECTION (WF03-ISS0480-20260905, rework #5) — C5's teardown-
+     logging test asserts the wrong expected value for the default path;
+     item 2 above is reframed, not retracted
+
+**§11.10.4 item 2 above (the "new, explicit post-teardown state check")
+remains required and correct as written** — asserting, from a later test,
+that the schema is gone from `information_schema.schemata` and the
+`Registration`/`Tenant` rows are gone is still the right verification, and
+still distinguishes "ExUnit didn't observe a red" from "the state is
+actually gone." §11.10.2a's correction does not weaken that check; it only
+corrects *why* the state is expected to be gone (ambient rollback, not
+`teardown_wrap`'s DROP/DELETE, for this path) — the observable outcome
+item 2 checks for is unchanged.
+
+**What DOES need correction: `test/letflow/support/tenant_fixture_test.exs`'s
+existing C5 test, "emits one marked teardown line naming the schema and its
+presence" (currently at line 343, `assert_teardown_line/1` at line 541),
+whose final assertion (line 556) is**
+
+```
+assert String.contains?(line, "schema_present_before_drop=true")
+```
+
+**This assertion encodes §11.10.2's now-corrected false premise as a test
+expectation**, not merely as prose: it asserts the schema is STILL present
+immediately before `teardown_wrap`'s DROP runs, which ISSUE-FIXER's direct
+run of this exact test showed is false on the majority path — the schema
+is already gone (`schema_present_before_drop=false`) by the time
+`log_teardown/3`'s diagnostic read fires, because the ambient Sandbox
+rollback already removed it. The test as currently written would only pass
+if the false premise were true; it does not currently correctly describe
+what the C5 test class is testing (log-line shape/content — that a
+correctly-marked line is emitted at all, naming the right schema and
+tenant_id — not the specific truth value of `schema_present_before_drop`
+for this call site's own dispatch path).
+
+**Corrected assertion, prescribed exactly (ELIXIR-DEV/TEST-DESIGNER must
+implement this, not invent an alternative):** replace line 556's
+hardcoded-`true` assertion with a check that the field is present and
+holds a valid boolean, without asserting which one — because, per
+§11.10.2a, `false` is the EXPECTED value for this test's own dispatch path
+(`provisioned_tenant!/1` under `DataCase`'s default `async: false` +
+`template: :clone`, i.e. `provision_via_shared_connection/1`, i.e. exactly
+`teardown_wrap`'s "state already gone by the time teardown runs" case), not
+an anomaly to guard against:
+
+```
+assert String.contains?(line, "schema_present_before_drop=false") or
+         String.contains?(line, "schema_present_before_drop=true")
+```
+
+(or equivalently, a regex extracting the field's value and asserting it
+`in [true, false]` — TEST-DESIGNER's choice of exact ExUnit idiom; the
+requirement is that the assertion accepts `false` as the expected/majority
+case for this call site, not merely as a tolerated edge case, and does not
+regress to a bare presence-only check that would silently accept a typo'd
+field name). **Add a one-line comment above the assertion** stating that
+`false` is expected here specifically because this test's own tenant is
+provisioned via `provision_via_shared_connection/1` (the default,
+ambient-rollback path — §11.10.2a), so a future reader does not
+reintroduce a hardcoded-`true` expectation without rereading this section.
+
+**Do not rename or re-scope the `schema_present_before_drop` field itself**
+(ISSUE-FIXER's step-13 handoff raised this as something for CODE-DESIGNER
+to decide) — the field's diagnostic value is exactly that it now reliably
+distinguishes the two dispatch paths' persistence semantics (`false` for
+the shared-connection path per §11.10.2a's corrected premise, `true`-or-
+gone-more-slowly for a `with_provisioning_repo/1`-provisioned caller whose
+writes are durable until `teardown_wrap`'s own DROP actually runs), which
+is diagnostically useful precisely because it now differs by path rather
+than being expected to always read one way. Renaming it would lose that
+signal for no benefit; the fix belongs in the test's assertion (and this
+design's prose), not in the field or the logging code.
+
+**§11.10.4 item 5's docstring-comment note above `schema_present_before_
+drop`'s definition in `test/support/tenant_fixture.ex` (lines 552-556,
+quoted verbatim: "distinguishes 'we tore down a schema that was still
+there' (normal) from 'we tore down a schema that had already vanished' --
+the ISS-0109 shape") also encodes the same false premise** — it frames
+`false` as the rare/anomalous ("ISS-0109 shape") case, when §11.10.2a
+establishes `false` is actually the EXPECTED, majority-path outcome for
+every `async: false` + `template: :clone` shared-connection caller.
+ELIXIR-DEV must update this comment to state the corrected framing: `false`
+is normal/expected for a `provision_via_shared_connection/1`-provisioned
+tenant (ambient Sandbox rollback already removed the schema before
+teardown ran); `true` is expected for a `with_provisioning_repo/1`-
+provisioned tenant (writes durable until this DROP actually runs). This is
+a comment-only change — no code/signature change to `log_teardown/3` or the
+field itself follows from it.
+
+### 11.10.5 What ELIXIR-DEV implements for §11.10 (signatures only, no
+     bodies)
+
+1. `test/support/tenant_fixture.ex`, `provisioned_tenant!/1`: the existing
+   single `connection_wrap` local binding (§11.6 item 2, currently reused
+   for both the provisioning call and the `on_exit/1` teardown closure) is
+   replaced by two bindings — `provision_wrap` (identical value/logic to
+   today's `connection_wrap`: `provision_via_shared_connection/1` when
+   `template == :clone and Process.get(:letflow_data_case_shared_mode?,
+   false)`, else `with_provisioning_repo/1`) and `teardown_wrap` (always
+   `&with_provisioning_repo/1`, no condition). `provision_wrap` replaces
+   `connection_wrap`'s use at the provisioning call site (currently
+   `connection_wrap.(fn -> ... end)` wrapping the whole 3-6 step body);
+   `teardown_wrap` replaces `connection_wrap`'s use inside the `on_exit/1`
+   registration (currently `on_exit(fn -> connection_wrap.(fn ->
+   teardown(tenant.id, owner) end) end)`, becomes `on_exit(fn ->
+   teardown_wrap.(fn -> teardown(tenant.id, owner) end) end)`). Public
+   `@spec provisioned_tenant!(opts()) :: tenant_fixture()` unchanged.
+2. `test/support/tenant_fixture.ex`, `guarded/2`
+   (`defp guarded(fun, degraded)`): body changes from the current
+   `fun.() rescue _exception -> degraded` shorthand to an explicit
+   `try do fun.() rescue _exception -> degraded catch :exit, _reason ->
+   degraded end` form (or equivalent — ELIXIR-DEV's exact clause naming/
+   ordering, same two-fallback behavior). No signature change (still
+   `defp guarded(fun, degraded)`, still returns `fun`'s value or
+   `degraded`).
+3. `test/support/tenant_fixture.ex`, `log_teardown/3`'s own trailing
+   `rescue _exception -> :ok` clause: same widening —
+   `rescue _exception -> :ok` becomes `rescue _exception -> :ok catch
+   :exit, _reason -> :ok` (or the equivalent combined-clause form). No
+   other change to `log_teardown/3`'s body (the `Logger.info/1` call and
+   its arguments, unchanged).
+4. `teardown/2`'s own body (`test/support/tenant_fixture.ex:522-534`):
+   **unchanged** — no `guarded/2` wrapping added to its three statements,
+   per §11.10.3's own closing argument (load-bearing cleanup must still
+   fail loudly, not degrade silently).
+4a. **NEW, WF03-ISS0480-20260905 rework #5.** `test/support/tenant_fixture.ex`
+    lines 552-556 (the docstring-comment above `log_teardown/3`'s
+    `schema_present_before_drop` computation): comment text only, corrected
+    per §11.10.4a's closing paragraph — `false` is the expected/normal
+    outcome for a `provision_via_shared_connection/1`-provisioned tenant
+    (ambient Sandbox rollback already removed the schema before teardown
+    ran), `true` is expected for a `with_provisioning_repo/1`-provisioned
+    tenant (writes durable until this DROP runs). No change to
+    `log_teardown/3`'s code/behavior.
+5. No change to `provision_via_shared_connection/1`, `with_provisioning_
+   repo/1`, `Letflow.Test.ProvisioningRepo`, `Letflow.Test.TenantTemplate`
+   (including §11.9's own `ensure_template!/0` fix, which this section
+   does not touch or re-open), `config/test.exs`, or
+   `scripts/test_parallel.sh`. §10.2.2's connection-budget arithmetic is
+   unaffected: this section adds no new connection acquisition beyond what
+   `with_provisioning_repo/1` already performs for every `ProvisioningRepo`-
+   dispatched caller today — it only adds ADDITIONAL callers of that
+   already-budgeted path at teardown time (previously: every `async: true`
+   caller's teardown, plus every caller's provisioning that dispatches
+   there; now, additionally: every `async: false` caller's teardown) —
+   §10.2.2's own headroom argument (advisory-lock-serialized provisioning,
+   pool sized for "one in-flight plus one spare," §10.2's own comment,
+   re-read for this section) was never contingent on teardown NOT also
+   using this pool; `with_provisioning_repo/1`'s pool usage per call is
+   brief (three simple statements, no advisory lock contention since
+   teardown never overlaps with template building) and each call still
+   fully releases its checkout before returning (`with_provisioning_repo/1`'s
+   own `after` block, unchanged), so this is additional short-lived
+   traffic on an already-provisioned pool, not additional peak concurrency
+   — flagged as OQ-14 below for TEST-RUNNER's own full-suite run to confirm
+   empirically rather than asserted as proven without that run, matching
+   this design's own established discipline (§11.9.3's identical framing
+   for its own empirical claim).
+
+### 11.10.6 Open questions added by this rework
+
+- **OQ-14.** §11.10.5 item 5's own closing claim — that routing every
+  `async: false` caller's teardown through `ProvisioningRepo`'s pool adds
+  short-lived traffic without raising PEAK concurrent checkouts against
+  `Letflow.Test.ProvisioningRepo` (pool_size 2, §10.2's own headroom
+  arithmetic) — is stated as an expectation grounded in `async: false`
+  tests never running concurrently with each other (ExUnit's own
+  documented sync-queue serialization, already established at §5.1/§11.4)
+  plus `with_provisioning_repo/1`'s own bounded/short checkout, not as an
+  empirically-measured peak. If TEST-RUNNER's full-suite run (§11.10.4
+  item 1) shows any `DBConnection.ConnectionError`/checkout-timeout
+  symptom against `Letflow.Test.ProvisioningRepo` specifically (distinct
+  from the BLOCKER's own `Letflow.Repo`-targeted `exit`), that is the
+  signal this expectation needs re-verification against §10.2.2's own
+  arithmetic, which assumed teardown traffic at a smaller population than
+  this section now routes through it.
+- **OQ-15.** §11.10.3's `guarded/2`/`log_teardown/3` widening catches
+  `:exit` broadly (any exit reason), matching `rescue`'s own
+  already-established breadth (any exception). This means a
+  `:killed`/`:normal`/shutdown-for-unrelated-reasons exit reaching this
+  boundary during a diagnostic read would ALSO degrade silently rather
+  than propagate, which is consistent with INV-F-10's own stated intent
+  for this specific, narrow diagnostic call site (`schema_present?/1`'s
+  read inside `log_teardown/3`, never anything load-bearing per §11.10.3's
+  own scope argument) but is recorded here as a deliberate breadth choice,
+  not an oversight, in case a future reader wants a narrower `catch :exit,
+  {:shutdown, _}` match instead — left as broad `catch :exit, _reason` for
+  this rework since INV-F-10's own precedent (`rescue _exception`, not a
+  narrower exception-type match) already established "broad, narrowly-
+  scoped-by-call-site" as this module's own chosen idiom.

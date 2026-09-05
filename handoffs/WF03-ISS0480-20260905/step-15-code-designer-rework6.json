@@ -1,0 +1,71 @@
+{
+  "handoff_id": "6428e9d9-e498-4394-92d6-c2fd67f4fefe",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "15",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-15-code-designer-rework6.json",
+  "created_at": "2026-09-05T11:21:08Z",
+  "started_at": "2026-09-05T11:21:08Z",
+  "completed_at": "2026-09-05T11:33:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "issue_ids": ["ISS-0480", "ISS-0113"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-14b-code-design-validator.json",
+      "handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex",
+      "deps/db_connection/lib/db_connection/ownership/manager.ex"
+    ],
+    "owned_modules": [],
+    "branch_name": "feature/WF03-ISS0480-20260905"
+  },
+  "task": {
+    "description": "Rework #6, citation-text-only: correct §11.10.2's post_checkout/pre_checkin citation in lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md per step-14b's BLOCKER finding.",
+    "acceptance_criteria": [
+      "§11.10.2's citation for post_checkout/pre_checkin names deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex, not deps/db_connection/lib/db_connection/ownership/manager.ex",
+      "Line ranges 658-675 (post_checkout) and 677-701 (pre_checkin) independently verified against the actual file before writing",
+      "No other text in the surrounding paragraph changed (mechanism claim, {:shared, pid} death-path citations at manager.ex:241-242/285-297/364-386/402-408 untouched, since those were confirmed accurate)",
+      "No implementation/test code written"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Fixed the citation-attribution defect step-14b's gate identified. Read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex lines 540-704 directly myself before editing (did not trust step-14b's line numbers either): confirmed `defp post_checkout(conn_mod, conn_state, opts)` is defined at lines 658-675 and `defp pre_checkin(:checkin, Connection, {conn_mod, conn_state, _in_transaction?}, opts)` (the ordinary-checkin clause) at lines 677-701, both in sandbox.ex -- exactly the range step-14b named, now confirmed first-hand rather than inherited. Also confirmed via the earlier gate's own grep claim (zero def/defp matches for post_checkout/pre_checkin anywhere under deps/db_connection) that manager.ex never defines either function; manager.ex only threads them as opaque keyword keys.\n\nEdited lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md at the two lines identified: 'deps/db_connection/lib/db_connection/ownership/manager.ex:658-675 (post_checkout)' -> 'deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675 (post_checkout)', and the same file-path swap for the :677-701 (pre_checkin) citation immediately below it. Nothing else in that paragraph or file changed: verified via `git diff` that the only content lines touched are the two file-path swaps, and confirmed by grep that the paragraph's other manager.ex citations (:241-242, :285-297, :364-386, :402-408, all part of the {:shared, pid} death-path trace that step-14b independently verified as accurate) are untouched, plus three unrelated manager.ex citations elsewhere in the doc (:224, :279, :220, describing ownership_checkout's :not_found auto-checkout path and its Map.put/case-clause reuse) are also untouched -- none of those name post_checkout/pre_checkin so none carried the defect.\n\nSource of the original mis-citation: it is not new to rework #5 or this design doc. It originates in handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json's own result.summary Item 1 (and its issues[0].description), which cites the same wrong manager.ex:658-701 range for post_checkout/pre_checkin. CODE-DESIGNER's rework #5 copied that citation verbatim into the design doc without independently re-verifying it against source, which is what let it through to this gate. That handoff is ISSUE-FIXER's own attestation of its diagnosis and is not mine to edit -- flagging it here per step-14b's next_action so ORCH has it on record: ORCH may want to file this as a MINOR finding via ISSUE_QUEUE.md against ISSUE-FIXER's step-13 handoff, per core-directives.md's 'Never resolve a conflict silently.' I did not file the issue myself since step-14b's next_action framed that as ORCH's call, not a blocking requirement on this rework.\n\nNo other section touched: §11.10.2a, §11.10.4a, and §11.10.5 item 4a are unchanged from rework #5, since step-14b confirmed checks 2-5 already PASS and unaffected by this correction. No implementation or test code added.",
+    "artifacts_out": ["lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md"],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "handoffs/WF03-ISS0480-20260905/step-13-issue-fixer-reassessment.json (ISSUE-FIXER's reassessment, result.summary Item 1 and issues[0].description) carries the same source mis-citation this rework fixes in the design doc: deps/db_connection/lib/db_connection/ownership/manager.ex:658-701 for post_checkout/pre_checkin, which are actually defined in deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701. That handoff file is ISSUE-FIXER's own attested record and not CODE-DESIGNER's to edit. Noting here per step-14b's next_action so ORCH can decide whether to file it against ISSUE-FIXER via ISSUE_QUEUE.md; not blocking for this rework since the design doc's own citation is now corrected and independently re-verified.",
+        "affected_requirement": null
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a focused re-gate of §11.10.2's citation only (checks 2-5 already PASS per step-14b and unaffected by this correction; no need to re-walk them). Once PASS, resume ELIXIR-DEV's comment-fix / full-regression step per step-14's original next_action. ORCH may also want to file the MINOR issue above against ISSUE-FIXER's step-13 handoff via ISSUE_QUEUE.md."
+  },
+  "rework_count": 6,
+  "max_rework": 3,
+  "gate_history": [
+    {
+      "iteration": 5,
+      "gated_at": "2026-09-05T11:19:07Z",
+      "status": "FAIL",
+      "summary": "Checks 2-5 PASS. Check 1 FAIL: §11.10.2's post_checkout/pre_checkin citation names deps/db_connection/lib/db_connection/ownership/manager.ex:658-701, but that file is only 454 lines long and never defines either function (zero def/defp matches in the whole db_connection tree). The functions are actually defp post_checkout/3 and defp pre_checkin/4 in deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-701, the same file already correctly cited two lines earlier for checkout/2. Mechanism claim itself confirmed accurate against the correct file. Mis-citation originates in step-13 ISSUE-FIXER's reassessment handoff, copied verbatim by CODE-DESIGNER's rework #5.",
+      "issues": ["BLOCKER: §11.10.2 cites the wrong file/module for post_checkout/pre_checkin (manager.ex instead of sandbox.ex)"],
+      "next_action": "Rework CODE-DESIGNER: correct the citation to name deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex:658-675 (post_checkout) and :677-701 (pre_checkin). Citation-text-only fix; no other section needs to change."
+    }
+  ]
+}

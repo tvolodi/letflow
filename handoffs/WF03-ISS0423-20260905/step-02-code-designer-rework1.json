@@ -1,0 +1,50 @@
+{
+  "handoff_id": "f4d0a6c3-2b5e-4f9d-ac1b-8d9e0f1a2b15",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "02-rework1",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0423-20260905/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-05T01:37:00Z",
+  "started_at": "2026-09-05T01:37:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c1a9d3f7-2b4e-4a8c-9d1f-6e7a8b9c0d12", "e3c9f5b2-1a4d-4e8c-9b0a-7c8d9e0f1a04"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0423-20260905/step-03-elixir-dev-implement.json",
+      "test/support/tenant_fixture.ex",
+      "test/support/data_case.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs"
+    ],
+    "owned_modules": ["test/support/", "config/test.exs"]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1 of 3. Your prior design (lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md, this run's step-02-code-designer.json) passed CODE-DESIGN-VALIDATOR's independent gate, but ELIXIR-DEV's faithful implementation of it (handoffs/WF03-ISS0423-20260905/step-03-elixir-dev-implement.json, result.status FAIL) surfaced a genuine 4th failure mechanism during its own required scoped test run against the two converted files -- not an implementation mistake, a real gap in the design your section 3.4 explicitly anticipated but did not cover for this specific interaction. Read that FAILED handoff's result.summary and result.issues in full for the complete trace; it is not restated here in full, only the load-bearing mechanism:\n\nMECHANISM 4, TRACED AND CONFIRMED (read test/support/data_case.ex yourself to verify -- it is only 24 lines): `Letflow.DataCase`'s own `setup/1` (line 16) does an UNCONDITIONAL per-test `Ecto.Adapters.SQL.Sandbox.checkout(Letflow.Repo)` for EVERY test, async or not, BEFORE the test body runs -- this is what gives an async:true test its own isolated transaction in the first place. It only additionally sets `{:shared, self()}` mode when NOT async (line 18-20) -- under async:true, that per-test checkout is deliberately left un-shared, which is the entire mechanism that makes concurrent async tests safe with each other.\n\nYour design's restore_sandbox:true branch calls `Sandbox.mode(Letflow.Repo, :manual)` mid-test, inside `provisioned_tenant!/1`, AFTER `DataCase.setup/1`'s own checkout already ran. Per Ecto's own `deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex` moduledoc (ELIXIR-DEV quoted it directly, verify yourself): 'Whenever you change the mode to :manual or :auto, all existing connections are checked in' -- GLOBALLY, for the WHOLE POOL, not scoped to the calling process. So the pre-existing, unconditional `Sandbox.mode(Letflow.Repo, :auto)` call that already sits at the top of `provisioned_tenant!/1` (predating your design entirely, tenant_fixture.ex line ~206/221) silently discards the test's OWN `DataCase.setup/1` checkout the moment `provisioned_tenant!/1` runs, and your new `restore_sandbox:true` branch's own fresh `Sandbox.checkout/1` afterward checks out a DIFFERENT, empty transaction context -- any data inserted via the test's original checkout before that point becomes invisible/orphaned. Confirmed failure signature: `Letflow.Secrets.put/2` raises 'tenant_id does not correspond to any known tenant' because `Repo.get` under the fresh post-restore connection cannot see the tenant row the ORIGINAL (pre-mode-switch) checkout inserted or that a query expects. This reproduced in 26/38 scoped-run examples across both converted files, 0 in tenant_fixture.ex itself, and did not occur under async:false because DataCase's own `{:shared, self()}` mode there routes every connection in the pool through the SAME shared owner regardless of mode switches -- masking the exact hazard async:true removes the mask from.\n\nThis is NOT one of mechanisms (a)/(b)/(c) from your section 2 -- it is not about a test's own later Sandbox.checkout call, a concurrent second process, or a second provisioning call. It is that ANY call to Sandbox.mode(:manual) or Sandbox.mode(:auto) mid-test, from ANY code path (including provisioned_tenant!/1's own PRE-EXISTING first line, not just your new branch), is fundamentally incompatible with async:true's per-test-isolated-checkout model, because a global mode change checks in every pool connection including the one DataCase.setup/1 already gave this specific test.\n\nYOUR REWORK TASK: redesign the opt-in mechanism so it does NOT call Sandbox.mode/2 (:manual or :auto) at any point, for any restore_sandbox:true call site, mid-test. Candidate directions to evaluate (you decide, this is not prescriptive):\n(a) Ecto.Adapters.SQL.Sandbox's ALLOW/OWNERSHIP mechanism (Sandbox.allow/3, or checking whether the CURRENT test process already owns a checked-out connection via Sandbox.checked_out?/1) instead of ever calling Sandbox.mode/2 to flip global mode -- if a per-test checkout already exists (from DataCase.setup/1), any code path needing DB access, including provisioned_tenant!/1's own migration replay/clone, should USE that existing checkout/allow it to a helper process rather than toggling global mode.\n(b) Re-examine whether provisioned_tenant!/1's OWN existing, pre-this-design, unconditional Sandbox.mode(:auto) call (not just your new branch) is itself compatible with async:true at all -- if it is not, and cannot be made not-to-call Sandbox.mode/2 without a larger rework of provisioned_tenant!/1's provisioning sequence (which needs :auto for Ecto.Migrator's own internal connection-checkout behavior per ISS-0113's own mechanism (c)), then state explicitly whether async:true is achievable for ANY TenantFixture caller without a materially larger redesign of the provisioning sequence itself, or whether this design's own conclusion should become a documented 'not safely achievable via a lightweight opt-in; a SandboxPool-backed rework (deferred option (b) in ISSUE-FIXER's original diagnosis) is the only viable path' verdict -- which is itself a legitimate outcome per ISS-0423's own AC6 (no-code-change verdict) IF you conclude the lightweight fix genuinely cannot work.\n(c) Any other approach you find, evaluated the same way: does it avoid a mid-test global Sandbox.mode/2 call while still allowing provision_schema!/2's own :clone or :replay path (both of which need SOME connection behavior, verify what Letflow.Test.TenantTemplate.clone_tenant_schema!/1 and TenantProvisioning.replay_migrations/1 actually require) to succeed.\n\nWhichever direction you take, you must explicitly verify your new design against a REAL scoped test run before declaring it fixed this time -- do not hand a second unverified design to ELIXIR-DEV. You have terminal access; run `mix test test/letflow/secrets_test.exs test/letflow/webhooks_test.exs` yourself against a prototype/spike of your new approach if that's the only way to be sure, or reason rigorously from Ecto.Adapters.SQL.Sandbox's actual documented API (read deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex yourself) rather than repeating the same unverified-until-implementation pattern that produced this rework cycle.\n\nUpdate lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md in place (or write a superseding section) reflecting the corrected mechanism -- do not silently discard the prior investigation (section 0's re-count work, section 4's scope work, section 5's peak-checkout arithmetic all likely still apply and should be preserved/referenced, not redone from scratch, unless your new approach genuinely changes them).",
+    "acceptance_criteria": [
+      "The reworked design explicitly names and addresses Mechanism 4 (global Sandbox.mode/2 checking in ALL pool connections, defeating DataCase.setup/1's own per-test checkout under async:true) by name, not silently",
+      "The reworked mechanism does not call Sandbox.mode(:manual) or Sandbox.mode(:auto) mid-test at any point for a restore_sandbox:true (or renamed equivalent) call site -- OR the design concludes with a reasoned, evidence-backed verdict that no lightweight opt-in can work and states why",
+      "If a new mechanism is proposed, it is verified against a real mix test run (not merely reasoned about) before being handed back for implementation, OR the design states plainly that verification requires an implementation pass and asks for a narrowly-scoped rework-2 implementation attempt with a fallback plan if it fails again",
+      "Prior sections (0, 4, 5, 6) are preserved or explicitly updated, not silently dropped",
+      "No change proposed touches provision_schema!/2's :clone or :replay paths in a way that breaks ISS-0427's own template-clone mechanism",
+      "Zero test assertions deleted, skipped, or weakened"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

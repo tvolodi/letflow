@@ -14360,7 +14360,7 @@ requirements:
   - id: REQ-246
     title: Apply the .zig provenance-marking convention to lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex (closes ISS-0424 part 3b-4)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

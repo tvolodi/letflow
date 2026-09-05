@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.Token do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   A single token's position and identity inside a running process instance —
   ports `transition.zig`'s `Token` (EE-02, `lib/letflow/design/
   req044-transition-kernel.md` §3). Plain struct, not an `Ecto.Schema` — this

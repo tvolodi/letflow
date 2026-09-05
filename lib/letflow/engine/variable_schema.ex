@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.VariableSchema do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Ecto schema for the tenant-scoped `variable_schemas` table, and the
   per-key output-variable schema lookup that feeds
   `Letflow.Engine.VariableMerge.merge/3`'s `variable_validations` argument
@@ -16,6 +17,7 @@ defmodule Letflow.Engine.VariableSchema do
   are named here and this list is the record that keeps the mistake from
   being repeatable:
 
+    PROVENANCE (historical, not current decision authority):
     * **`tasks.form_schema`** — populated at activation from
       `node.attributes["form_schema"]` (R-Co `src/engine/instance.zig:5490`,
       `extractFormSchemaJson`) and served in the task-detail response
@@ -55,6 +57,7 @@ defmodule Letflow.Engine.VariableSchema do
 
   ## The registration (INSERT) path — BUILT BY REQ-078, no longer deferred
 
+  PROVENANCE (historical, not current decision authority):
   REQ-109 built the table, this schema module, the lookup and the engine
   wiring, and wrote **no** `variable_schemas` row: `Letflow.Engine` only ever
   reads this table. R-Co scoped it identically — variable schemas are
@@ -65,8 +68,10 @@ defmodule Letflow.Engine.VariableSchema do
 
   Those mapped onto two S4 requirements:
 
+    PROVENANCE (historical, not current decision authority):
     * **REQ-078** — `solution_packs.zig`'s `handleInstall` (L110). **Landed;
       it built the shared function.**
+    PROVENANCE (historical, not current decision authority):
     * **REQ-082** — `definitions.zig`'s `handleImport` (L1126), plus
       `handleCreate`/`handlePut` where the submitted document carries schemas.
       **Pending; it CALLS the shared function and adds no second
@@ -246,6 +251,7 @@ defmodule Letflow.Engine.VariableSchema do
        is constructed**.
     2. Compute the validation candidates: every key in `incoming_variables`,
        new or overwrite alike.
+    PROVENANCE (historical, not current decision authority):
     3. If that set is empty (i.e. `incoming_variables` is empty), return
        `{:ok, %{}}` without issuing a query — no candidates means no schema
        lookup could possibly be needed (the same fast-path shape as
@@ -256,6 +262,7 @@ defmodule Letflow.Engine.VariableSchema do
     4. `fetch_schemas/3`. Any `{:error, reason}` propagates unchanged.
     5. `validations_for/3` over the candidate list.
 
+  PROVENANCE (historical, not current decision authority):
   **Every incoming key is validated, new or overwrite alike**
   (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
   GH#300/ISS-0077). Before that fix, only overwrite candidates — keys present
@@ -302,6 +309,7 @@ defmodule Letflow.Engine.VariableSchema do
   function — taking it here keeps the read on the enclosing transaction's
   connection alongside the already-locked `instance_projections` row.
 
+  PROVENANCE (historical, not current decision authority):
   One query, never one per key — avoiding an N+1 read pattern here (the same
   one-query shape `instance.zig:2318`'s own doc comment documents). The query
   is deliberately **not** filtered by candidate
@@ -352,6 +360,7 @@ defmodule Letflow.Engine.VariableSchema do
       its `variable_validations` typedoc); omission is the contract, and an
       explicit `:ok` would behave identically while obscuring which keys had a
       schema at all.
+    PROVENANCE (historical, not current decision authority):
     * an entry that is **not a map** -> also omitted, and logged. The column is
       `NOT NULL` jsonb, which permits an array, string, number or boolean —
       none of which satisfy `JsonSchema.validate/2`'s `when is_map(schema)`

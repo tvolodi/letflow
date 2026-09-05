@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.SubProcess do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   SPC-01 sub-process runtime half (REQ-062) — internal support module, not
   part of any public HTTP-facing contract. Ports `instance.zig`'s
   `createWithParentInheritance()` (internal-only child creation), the
@@ -36,6 +37,7 @@ defmodule Letflow.Engine.SubProcess do
   ## OQ-1 — SUB_PROCESS node definition reference — RESOLVED against R-Co by
   ## REQ-111 (divergent_doc_only, doc-only, no engine-behaviour change)
 
+  PROVENANCE (historical, not current decision authority):
   `resolve_child_definition/2` reads `node.attributes["definition_name"]` and
   resolves it via `Letflow.Definitions.get_active_by_name/2` — confirmed
   against `lib/letflow/definitions/graph.ex`'s own node-attribute validators
@@ -808,6 +810,7 @@ defmodule Letflow.Engine.SubProcess do
     end
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # OQ-2 (req062-sub-process-runtime.md §9, GH#329): verified against R-Co
   # (`R-Co/src/engine/instance.zig`'s `mergeVariables`, called at line 4956
   # for the sub-process completion path with the exact same `variable_schemas`

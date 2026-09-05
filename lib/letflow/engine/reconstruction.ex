@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.Reconstruction do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   EE-11 (REQ-053) — state reconstruction by event replay. Ports
   `reconstruction.zig`'s `reconstructInstance()` (R-Co's `src/design/engine.md`
   "Section EE-11: State Reconstruction", L5237). See
@@ -151,6 +152,7 @@ defmodule Letflow.Engine.Reconstruction do
 
   ## REQ-054 — snapshot-aware replay-source selection
 
+  PROVENANCE (historical, not current decision authority):
   `read_full_log/2` is widened to `read_full_log/3`, taking a new
   `min_sequence_number` argument (defaulting to `1` for every existing
   full-replay caller) — the same class of deliberate, additive-arity
@@ -444,6 +446,7 @@ defmodule Letflow.Engine.Reconstruction do
   # Step 2 (design doc §5) -- fold the merged log into an InstanceState.
   # ---------------------------------------------------------------------
 
+  # PROVENANCE (historical, not current decision authority):
   # REQ-054's own new lookup, against a different table (`instance_state_snapshots`,
   # execution state) than the `SnapshotStore.get_by_instance_id/2` call below
   # (`instance_definition_snapshots`, the graph) -- state seed vs. graph

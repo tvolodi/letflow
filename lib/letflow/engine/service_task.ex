@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.ServiceTask do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   EXT-01 (REQ-056) — service task configuration parsing, HTTP failure
   classification, retry backoff/decision, and idempotency-key construction.
   Ports `service_task.zig`'s engine-side pure logic per

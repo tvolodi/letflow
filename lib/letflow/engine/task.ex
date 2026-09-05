@@ -3,8 +3,10 @@ defmodule Letflow.Engine.Task do
   Ecto schema for the `tasks` table. See
   `lib/letflow/design/req043-instance-engine-schema.md` §4.
 
+  PROVENANCE (historical, not current decision authority):
   ## Scope — schema only, `src/tasks/store.zig`'s query surface NOT ported here
 
+  PROVENANCE (historical, not current decision authority):
   This module is the Ecto schema for the `tasks` table only — the table
   `EE-03` (`src/engine/instance.zig`'s task-activation path) and `EE-04` (task
   completion) write into. R-Co's `src/tasks/store.zig` (1202 lines)

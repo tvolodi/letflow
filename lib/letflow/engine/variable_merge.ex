@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.VariableMerge do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure variable scoping and merge — ports `instance.zig`'s `mergeVariables()`
   (EE-09, `lib/letflow/design/req049-variable-merge.md`, the gate-approved
   design this module implements). `merge/3` merges an `incoming_variables`
@@ -12,6 +13,7 @@ defmodule Letflow.Engine.VariableMerge do
       `{:variable_overwritten, key, old_value, new_value}` event, provided
       `variable_validations` has no `{:rejected, _}` outcome recorded for it
       (an absent entry, or an explicit `:ok`, both mean "no rejection").
+    PROVENANCE (historical, not current decision authority):
     * **Every** incoming key is checked against `variable_validations`, new or
       overwrite alike (`docs/migration/decisions/0007-variable-merge-validates-new-keys.md`,
       GH#300/ISS-0077) — collision (new vs. overwrite) only decides whether a

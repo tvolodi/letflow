@@ -1,5 +1,6 @@
 defmodule Letflow.Engine.Transition do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure transition kernel — ports `transition.zig`'s `transition()` (EE-02,
   `lib/letflow/design/req044-transition-kernel.md`, the gate-approved design
   this module implements). `transition/3`'s own header contract, quoted from
@@ -121,6 +122,7 @@ defmodule Letflow.Engine.Transition do
           | {:timer_fired, token_id :: String.t()}
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   The tagged union `transition.zig` declares for EE-06/EE-07 split/join
   payloads — narrowed here (design doc §5) from REQ-044's `term()`
   placeholder to a real closed union of the pending-event shapes various

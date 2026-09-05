@@ -563,3 +563,15 @@ history:
       independently confirmed mix compile --warnings-as-errors, mix
       format --check-formatted, and mix test test/letflow/engine/
       (977/977 passed) before this status flip.
+  - req: REQ-234
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T07:22:22Z"
+    note: >
+      Retired parity-justification phrasing in lib/letflow/definitions.ex,
+      lib/letflow/definitions/* (closes ISS-0424 part 2c, queue task 472,
+      GH#919, PR #940, feature/WF02-REQ234-20260905). REVIEWER passed the
+      implementation (handoffs/WF02-REQ234-20260905/step-02d-reviewer.json);
+      ORCH independently confirmed mix compile --warnings-as-errors, mix
+      format --check-formatted, and mix test test/letflow/definitions*.exs
+      test/letflow/definitions/ (377 passed) before this status flip.

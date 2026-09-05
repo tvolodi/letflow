@@ -788,3 +788,24 @@ history:
       independently confirmed mix compile --warnings-as-errors, mix format
       --check-formatted, and a targeted mix test run (178 passed) before
       this status flip.
+  - req: REQ-253
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T15:18:45Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and
+      lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex,
+      lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex (closes
+      ISS-0424 part 3b-11, queue task 491, GH#956, PR #986,
+      feature/WF02-REQ253-20260905). This is chunk 238h of eleven
+      REQ-238-replacement chunks (REQ-243..REQ-253) applying that convention --
+      the last of the eleven. REVIEWER passed the implementation
+      (handoffs/WF02-REQ253-20260905/step-02d-reviewer.json), flagging in its
+      own closing sanity check that REQ-245 (chunk 238b1, a sibling being
+      handled by a concurrent session against disjoint file scope) remains
+      status: pending, so ISS-0424 Part 3b's lib/ scope is NOT yet fully closed
+      despite this being the last chunk in numeric sequence. ORCH independently
+      confirmed mix compile --warnings-as-errors, mix format
+      --check-formatted, and a targeted mix test run (202 passed) before this
+      status flip.

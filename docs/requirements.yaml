@@ -14762,7 +14762,7 @@ requirements:
   - id: REQ-253
     title: Apply the .zig provenance-marking convention to lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex (closes ISS-0424 part 3b-11)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

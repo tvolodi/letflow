@@ -788,3 +788,30 @@ history:
       independently confirmed mix compile --warnings-as-errors, mix format
       --check-formatted, and a targeted mix test run (178 passed) before
       this status flip.
+  - req: REQ-245
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T15:18:39Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,
+      instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,
+      plugin_registry}.ex (closes ISS-0424 part 3b-3, queue task 483,
+      PR #985, feature/WF02-REQ245-20260905). This is chunk 238b1 of eleven
+      REQ-238-replacement chunks (REQ-243..REQ-253) applying that convention.
+      ELIXIR-DEV implemented (20 markers inserted, 9 files, 0 deletions);
+      REVIEWER independently re-verified marker counts, .zig line counts,
+      divergence lines, and scope by direct grep/diff against main, PASS
+      (handoffs/WF02-REQ245-20260905/step-02d-reviewer.json). ORCH
+      independently confirmed mix compile --warnings-as-errors, mix format
+      --check-formatted, and a full local mix test run (3253 passed, 0
+      failed) after rebase before pushing. CI's duplicate backend-gate run
+      showed 1 failure (Letflow.SandboxPoolTest, ISS-0224-class pool-
+      contention timing flake in test/letflow/sandbox_pool_test.exs) on a
+      module this branch does not touch; attributed structurally (9-file
+      diff scope confirmed via git diff --stat, ISS-0224's own documented
+      history of this exact profile, and non-reproduction in an isolated
+      23/23-passed local rerun) and recorded in the PR body per GIT_MERGE.md;
+      merged via gh pr merge --squash --delete-branch after two further
+      rebases onto sibling REQ-250/251/252 chunks that landed concurrently
+      (all non-overlapping file scope). Queue task 483 released status:done.

@@ -33,10 +33,10 @@ defmodule Letflow.TenantProvisioning do
   `tenant_schemas` registry are structurally global (a realm→tenant lookup
   must run before any tenant schema is known, so those two cannot live inside
   a tenant schema by construction). Whether `users`/`groups`/`tenant_role`
-  *should* eventually be retrofitted behind `:prefix` (matching R-Co's own
-  migration history, where identity tables also moved behind
-  schema-per-tenant post-migration-060) is left open for a future requirement
-  to decide explicitly — not assumed either way by this module.
+  *should* eventually be retrofitted behind `:prefix` (precedent: R-Co's
+  identity tables underwent the identical move behind schema-per-tenant,
+  at migration-060) is left open for a future requirement to decide
+  explicitly — not assumed either way by this module.
 
   ## `replay_migrations/2` also seeds platform event types (REQ-045 §9 OQ-3a,
   ## extended by ISS-0072/GH#257)
@@ -48,8 +48,8 @@ defmodule Letflow.TenantProvisioning do
   `"SUB_PROCESS_COMPLETED"`, and `"EXECUTION_ERROR"` — immediately after
   migrations apply successfully. `Letflow.EventStore.Registry.validate_payload/3`
   otherwise fails closed with `{:error, :unknown_event_type}` for every
-  tenant, since no shipped migration seeds these rows and R-Co's own
-  20-built-in-type seed was deliberately left out of
+  tenant, since no shipped migration seeds these rows -- a 20-built-in-type
+  seed was deliberately left out of
   `20260816163103_create_event_type_registry.exs` (that migration's own
   header comment: "nothing yet exists that emits them"). `INSTANCE_STARTED`
   was seeded first, for `Letflow.Engine.create/2` (REQ-045). The other 5 were
@@ -238,8 +238,8 @@ defmodule Letflow.TenantProvisioning do
 
   Calling this twice for the same `tenant_id` is **not an error** — the
   second call returns `{:ok, %Registration{}}` with the same row the first
-  call created, matching R-Co's own `bpm_provision_tenant_schema`'s documented
-  idempotency.
+  call created: safe to call repeatedly, e.g. from a retried onboarding
+  step, without erroring on a tenant that's already provisioned.
   """
   @spec provision_tenant_schema(tenant_id :: Ecto.UUID.t()) ::
           {:ok, Registration.t()}

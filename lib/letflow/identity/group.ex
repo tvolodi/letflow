@@ -42,7 +42,8 @@ defmodule Letflow.Identity.Group do
   @doc """
   Builds the insert changeset for `Letflow.Identity.create_group/2` (design
   §8 gap 1). `display_name` defaults to `name` when omitted or an empty
-  string (matches R-Co's `handleCreateGroup`, `identity.zig:361-371`).
+  string, so a group without a distinct display name still shows something
+  meaningful in a listing (`identity.zig:361-371`).
   `description` is normalized to `nil` when an empty string is supplied
   (matches `identity.zig:373-380`) — both normalizations happen here, not in
   the router, per the design's own note that this default is applied by

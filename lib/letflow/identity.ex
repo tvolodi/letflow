@@ -515,9 +515,9 @@ defmodule Letflow.Identity do
   end
 
   @doc """
-  Lists all groups, unpaginated (design §8 gap 3 — R-Co's own `handleListGroups`
-  is a flat, unpaginated list; no acceptance criterion for this requirement
-  calls for cursor pagination on this endpoint, unlike `list_group_members/3`).
+  Lists all groups, unpaginated (design §8 gap 3 — no acceptance criterion
+  for this requirement calls for cursor pagination on this endpoint, unlike
+  `list_group_members/3`).
 
   Ordered by `name` ascending (OQ-5 — this design's own reasonable default,
   not confirmed against `registry.zig`'s own `listGroups` ordering).
@@ -538,12 +538,10 @@ defmodule Letflow.Identity do
 
   @doc """
   Deletes a group, refusing (rather than cascading) if it still has members —
-  design §8 gap 4/§5. Mirrors R-Co's `deleteGroupIfEmpty`'s own guarded
-  `DELETE ... WHERE NOT EXISTS (...)`: a group with ≥1 member and a
-  genuinely nonexistent group both return `{:error,
-  :not_found_or_has_members}` — one unified error atom, deliberately, so a
-  caller cannot branch on a distinction R-Co's own handler never exposes
-  either (§5).
+  design §8 gap 4/§5. Uses a guarded `DELETE ... WHERE NOT EXISTS (...)`:
+  a group with ≥1 member and a genuinely nonexistent group both return
+  `{:error, :not_found_or_has_members}` — one unified error atom,
+  deliberately, so a caller cannot branch on that distinction either (§5).
 
   Uses `Ecto.Query`'s `not exists/1` (OQ-6, ELIXIR-DEV's choice over raw
   SQL) — empirically verified that a single `prefix:` option passed to
@@ -583,9 +581,11 @@ defmodule Letflow.Identity do
   `GroupMember.inserted_at` ascending, then `user_id` ascending (tiebreaker,
   OQ-4 — same OQ-1-shaped choice as `list_users/2`).
 
-  Cursor prefix is `"G:"` (distinct from `list_users/2`'s `"U:"`), reusing
-  R-Co's own unrouted `handleListGroupMembers`'s cursor-prefix literal
-  (`identity_service.zig:1107`). Same mint-time-vs-row-time care as
+  Cursor prefix is `"G:"` (distinct from `list_users/2`'s `"U:"` — the
+  distinct namespace stops a cursor minted for one listing endpoint from
+  being replayed against the other), using the same cursor-prefix literal
+  as the unrouted `handleListGroupMembers` (`identity_service.zig:1107`).
+  Same mint-time-vs-row-time care as
   `list_users/2`'s `build_next_cursor/1` — the cursor's expiry-checked slot
   carries the mint time, not `inserted_at`, so an old membership row's
   cursor never appears pre-expired the instant it's minted.
@@ -634,8 +634,9 @@ defmodule Letflow.Identity do
 
   Looks up the group first (→ `:group_not_found`), then deletes the matching
   membership row if one exists — `Repo.delete_all/2` on zero matching rows
-  is still `:ok`, matching R-Co's own idempotent `removeGroupMember` (no
-  "member didn't exist" error variant).
+  is still `:ok`: the caller's intent ("this user should not be a member")
+  is already satisfied whether or not a row existed to delete, so there is
+  no "member didn't exist" error variant.
   """
   @spec remove_group_member(
           group_id :: Ecto.UUID.t(),
@@ -922,15 +923,16 @@ defmodule Letflow.Identity do
     4. The plaintext token value is generated:
        `"lf_tok_" <> (32 random bytes, lowercase hex)` — a deliberate,
        cosmetic-only prefix divergence from R-Co's `"bpm_tok_"`.
-    5. `token_hash` is the SHA-256 hex digest of the plaintext (same algorithm as
-       R-Co's own `hashToken/1`).
-    6. `name` is `"token-" <> String.slice(token_hash, 0, 8)` — matches R-Co's
-       own generated-name scheme exactly.
+    5. `token_hash` is the SHA-256 hex digest of the plaintext — a one-way
+       hash, so the plaintext is never recoverable from the stored row.
+    6. `name` is `"token-" <> String.slice(token_hash, 0, 8)` — a name
+       derived deterministically from the token's own hash needs no
+       separate collision check, and exposes none of the plaintext's
+       unhashed bytes.
     7. The row is inserted via `Repo.insert/2`, `prefix: opts[:prefix]`.
 
-  **Roles are snapshotted, not live-referenced** — matches R-Co's own documented
-  behavior: a later role-registry change does not affect an already-issued
-  token's effective roles.
+  **Roles are snapshotted, not live-referenced**: a later role-registry
+  change does not affect an already-issued token's effective roles.
 
   Returns `{:ok, %{token: token, plaintext: plaintext}}` on success —
   `plaintext` is a bare local value that exists only in this return tuple,
@@ -1034,9 +1036,10 @@ defmodule Letflow.Identity do
 
   @doc """
   Lists every API token in `opts[:prefix]`'s schema, ordered by `inserted_at`
-  descending — matches R-Co's own `ORDER BY created_at DESC`. Unpaginated
-  (design §3.2 — no acceptance criterion here calls for cursor pagination on
-  this endpoint). Always `{:ok, _}` — an empty result is `{:ok, []}`.
+  descending, so the most recently issued token is first — the natural
+  default for an admin scanning issued tokens. Unpaginated (design §3.2 —
+  no acceptance criterion here calls for cursor pagination on this
+  endpoint). Always `{:ok, _}` — an empty result is `{:ok, []}`.
   """
   @spec list_tokens(opts :: opts()) :: {:ok, [ApiToken.t()]}
   def list_tokens(opts) do
@@ -1050,8 +1053,9 @@ defmodule Letflow.Identity do
   @doc """
   Revokes a token by id, idempotently — re-revoking an already-revoked token
   returns `{:ok, token}` unchanged rather than overwriting `revoked_at` with a
-  later timestamp (matches R-Co's own `SET revoked_at = COALESCE(revoked_at,
-  NOW())`). Returns `{:error, :not_found}` if no token with that id exists in
+  later timestamp: the first revocation timestamp is the historically
+  accurate one, and a second call must not erase it. Returns
+  `{:error, :not_found}` if no token with that id exists in
   `opts[:prefix]`'s schema.
   """
   @spec revoke_token(token_id :: Ecto.UUID.t() | String.t(), opts :: opts()) ::
@@ -1429,8 +1433,10 @@ defmodule Letflow.Identity do
   # exactly. Deliberately not Ecto.Multi (this is one logical conditional
   # insert, not several writes needing transactional composition) and
   # deliberately not a naive insert-then-rescue-unique-constraint-error
-  # pattern (that would change the concurrency semantics R-Co's own
-  # implementation chose) — see
+  # pattern (that would abort the surrounding transaction on the
+  # unique-constraint violation unless caught behind an explicit
+  # savepoint — added complexity this select-first approach avoids
+  # entirely) — see
   # lib/letflow/design/req018-jit-provisioning.md §3.
   defp upsert_by_external_identity(identity_context, tenant_id, jit_config, opts) do
     case get_by_external_identity(tenant_id, identity_context, opts) do

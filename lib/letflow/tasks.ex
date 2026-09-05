@@ -84,13 +84,13 @@ defmodule Letflow.Tasks do
 
   | R-Co function | This module's equivalent | Notes |
   |---|---|---|
-  | `TaskStore.getById` (L239-283) | `get_task/2` | Adds the `instance_projections` join for `correlation_key`, matching R-Co's own `LEFT JOIN` |
-  | `TaskStore.listCursor` (L579-737) | `list_tasks/2` | Cursor prefix `"T:"`, keyset `(inserted_at, id)` — same shape as R-Co; **extended** beyond R-Co's own shipped SQL to add ROLE-held-task scoping (see `resolve_principal_scope/2`'s own doc — R-Co's `listCursor` has no `ROLE` arm at all, only `USER`/`GROUP`; this requirement's own text and acceptance criteria require all three) |
+  | `TaskStore.getById` (L239-283) | `get_task/2` | Adds the `instance_projections` join for `correlation_key`, as a `LEFT JOIN` (keeps the query resilient even if a task's instance row is ever missing) |
+  | `TaskStore.listCursor` (L579-737) | `list_tasks/2` | Cursor prefix `"T:"`, keyset `(inserted_at, id)`; **extended** to add ROLE-held-task scoping beyond the ported baseline's `USER`/`GROUP`-only scoping (see `resolve_principal_scope/2`'s own doc; this requirement's own text and acceptance criteria require all three arms) |
   | `taskStatusToString`/`parseTaskStatus` (L1150-1163, L1143-1149) | `Letflow.Engine.Task`'s existing `Ecto.Enum` cast/dump (already shipped, REQ-043) | No new function needed — `Ecto.Enum` already does this |
   | `parseUuid`/`uuidToHex` | `Ecto.UUID.cast/1` / Ecto's native string-form UUIDs | No raw 16-byte UUID type in ordinary use elsewhere in this codebase |
   | `TaskStore.claimTask` (L761-849) | `claim_task/3` (REQ-085) | **Not** a port of `claimed_by`-column semantics — see `claim_task/3`'s own doc and the REQ-085 design doc §1 for the full resolution (Letflow has no `claimed_by` column; claim is atomic conditional self-assignment against `assignee_type`/`assignee_ref` instead) |
-  | `TaskStore.assign` (L851-908) | `assign_task/4` (REQ-085) | Ports R-Co's own `WHERE ... assignee_ref IS NULL` precondition exactly |
-  | `TaskStore.reassign`/`reassignInTx` (L910-1002) | `reassign_task/4` (REQ-085) | Ports R-Co's own `WHERE ... assignee_ref IS NOT NULL` precondition exactly |
+  | `TaskStore.assign` (L851-908) | `assign_task/4` (REQ-085) | Same `WHERE ... assignee_ref IS NULL` precondition: an assign only succeeds against a task with no current assignee, so two concurrent assigns can't silently overwrite each other's effect |
+  | `TaskStore.reassign`/`reassignInTx` (L910-1002) | `reassign_task/4` (REQ-085) | Same `WHERE ... assignee_ref IS NOT NULL` precondition: a reassign requires an existing assignee to reassign away from, distinguishing it from a first-time assign |
 
   **Not ported by this module** (every other `pub fn`/error set in
   `store.zig`):
@@ -161,10 +161,8 @@ defmodule Letflow.Tasks do
   @doc """
   Cursor-paginated task listing — backs `GET /tasks` and (via a
   caller-supplied `assignee_scope`) `GET /tasks/inbox`. One function backs
-  both endpoints, matching R-Co's own `handleInbox` (which itself builds a
-  `ListTasksParams` and calls `handleList`) — this function has no notion of
-  "which endpoint called me"; the caller (the router) decides `assignee_scope`
-  before calling.
+  both endpoints — this function has no notion of "which endpoint called
+  me"; the caller (the router) decides `assignee_scope` before calling.
 
   `assignee_scope`:
 
@@ -177,15 +175,17 @@ defmodule Letflow.Tasks do
       OR to a role in `principal_scope.role_names`. Built via
       `resolve_principal_scope/2`.
 
-  Sorted by `inserted_at` descending, then `id` descending (R-Co's own
-  `ORDER BY created_at DESC, id DESC`), cursor-paginated via
+  Sorted by `inserted_at` descending, then `id` descending — `id` as
+  tiebreaker keeps the sort (and therefore the cursor) deterministic when
+  two tasks share the same `inserted_at` timestamp — cursor-paginated via
   `Letflow.Api.Pagination` with prefix `"T:"`.
 
   Always returns `{:error, :invalid_cursor}` for a malformed/wrong-endpoint
   cursor (collapsing `Letflow.Api.Pagination.decode_cursor/4`'s
-  `:invalid_base64`/`:invalid_cursor` atoms into one, matching R-Co's own
-  single `INVALID_CURSOR`/422 branch for those cases) and
-  `{:error, :expired}` for one past its freshness window.
+  `:invalid_base64`/`:invalid_cursor` atoms into one — a cursor is opaque to
+  callers, so there's no caller-actionable difference between "not valid
+  base64" and "valid base64 but the wrong shape") and `{:error, :expired}`
+  for one past its freshness window.
 
   Each item is a `{Task.t(), form_version}` pair (REQ-126) — `form_version`
   comes from a `left_join` against `instance_definition_snapshots`, added
@@ -225,8 +225,9 @@ defmodule Letflow.Tasks do
 
   @doc """
   Fetches a single task by id, joined to `instance_projections` for
-  `correlation_key` (a plain `left_join`, matching R-Co's own `LEFT JOIN`),
-  and to `instance_definition_snapshots` for `form_version` (REQ-126 — see
+  `correlation_key` (a plain `left_join`, kept nullable-safe in case a
+  task's instance row is ever missing), and to `instance_definition_snapshots`
+  for `form_version` (REQ-126 — see
   this module's moduledoc "Form version pinning" section).
 
   `Ecto.UUID.cast/1` is checked first — an invalid UUID never reaches the DB
@@ -300,13 +301,14 @@ defmodule Letflow.Tasks do
   Resolves the group ids and role names a user holds — the requirement's own
   explicit instruction ("resolve group and role membership through
   `Letflow.Identity` rather than reimplementing the resolution"), and the one
-  place this module's read path goes beyond what R-Co's own shipped
-  `listCursor` SQL actually does: **R-Co's `include_group_membership_for_user`
-  branch covers `USER`/`GROUP` only — there is no `ROLE` arm anywhere in
-  R-Co's shipped `listCursor`.** REQ-083's own requirement text names all
-  three ("assigned directly to X, ... to a group X belongs to, and ... to a
-  role X holds") and tests all three explicitly — this module implements the
-  requirement's text, not R-Co's incomplete implementation of it.
+  place this module's read path goes beyond what the ported baseline's
+  `listCursor` SQL actually does: **the ported baseline's
+  `include_group_membership_for_user` branch covers `USER`/`GROUP` only —
+  there is no `ROLE` arm anywhere in that shipped query.** REQ-083's own
+  requirement text names all three ("assigned directly to X, ... to a group
+  X belongs to, and ... to a role X holds") and tests all three explicitly —
+  this module implements the requirement's text, not that earlier partial
+  implementation of it.
 
   Group ids: a direct read of the `group_members` table
   (`Letflow.Identity.GroupMember`, REQ-074's schema), inverted from
@@ -383,9 +385,10 @@ defmodule Letflow.Tasks do
           | {:error, term()}
 
   @doc """
-  Atomic conditional self-assignment (REQ-085 design doc §1, §3.4) -- **not**
-  a port of R-Co's `claimTask` (a separate `claimed_by` column this schema
-  does not have, see the design doc's §1 for the full resolution). Claimable
+  Atomic conditional self-assignment (REQ-085 design doc §1, §3.4) -- this
+  schema has no separate `claimed_by` column, so claim is implemented as
+  atomic conditional self-assignment against `assignee_type`/`assignee_ref`
+  instead (see the design doc's §1 for the full resolution). Claimable
   when the task is currently unassigned, or assigned to a group/role
   `attrs.actor_id` belongs to (via `resolve_principal_scope/2`, the same
   group/role resolution `GET /tasks/inbox` already uses -- no second
@@ -486,11 +489,12 @@ defmodule Letflow.Tasks do
 
   @doc """
   Assigns an unassigned `PENDING` task to `attrs.user_id` (REQ-085 design doc
-  §3.5) -- ports R-Co's own `TaskStore.assign` precondition exactly (`WHERE
-  ... assignee_ref IS NULL`). No group/role-membership check on the target
-  `user_id` -- matches R-Co exactly, and matches REQ-083's own "assignee_ref
-  is unvalidated free text" treatment of the read side, applied here to the
-  write side. `attrs.user_id`'s presence is this function's own
+  §3.5) -- requires the task currently have no assignee (`WHERE ...
+  assignee_ref IS NULL`), so two concurrent assigns can't silently overwrite
+  each other's effect. No group/role-membership check on the target
+  `user_id` -- consistent with REQ-083's own "assignee_ref is unvalidated
+  free text" treatment of the read side, applied here to the write side.
+  `attrs.user_id`'s presence is this function's own
   belt-and-suspenders guard (INV-8); the router's `Letflow.Api.Validation`
   call is the primary enforcement point.
   """
@@ -558,11 +562,11 @@ defmodule Letflow.Tasks do
 
   @doc """
   Changes the assignee of an already-assigned `PENDING` task to
-  `attrs.user_id` (REQ-085 design doc §3.6) -- ports R-Co's own
-  `TaskStore.reassign` precondition exactly (`WHERE ... assignee_ref IS NOT
-  NULL`), unconditionally overwriting whatever `assignee_type`/`assignee_ref`
-  was there before (`"USER"`/`"GROUP"`/`"ROLE"`). Same "no group/role check
-  on target `user_id`" note as `assign_task/4`.
+  `attrs.user_id` (REQ-085 design doc §3.6) -- requires the task currently
+  have an assignee (`WHERE ... assignee_ref IS NOT NULL`, distinguishing a
+  reassign from a first-time assign), unconditionally overwriting whatever
+  `assignee_type`/`assignee_ref` was there before (`"USER"`/`"GROUP"`/`"ROLE"`).
+  Same "no group/role check on target `user_id`" note as `assign_task/4`.
   """
   @spec reassign_task(task_id :: String.t(), attrs :: reassign_attrs(), opts :: reassign_opts()) ::
           {:ok, Task.t()} | reassign_error()
@@ -674,7 +678,8 @@ defmodule Letflow.Tasks do
   # Decodes the raw encoded cursor string into a `{inserted_at_us, id}` seek
   # tuple, or passes `nil` through unchanged. Collapses
   # Pagination.decode_cursor/4's :invalid_base64/:invalid_cursor into one
-  # atom, matching R-Co's own single INVALID_CURSOR branch for both.
+  # atom -- a cursor is opaque to callers, so there's no caller-actionable
+  # difference between the two failure shapes.
   @spec decode_list_cursor(String.t() | nil) ::
           {:ok, {non_neg_integer(), String.t()} | nil}
           | {:error, :invalid_cursor | :wrong_endpoint | :expired}

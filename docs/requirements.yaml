@@ -14600,7 +14600,7 @@ requirements:
   - id: REQ-250
     title: Apply the .zig provenance-marking convention to lib/letflow/api/* and lib/letflow/plugs/* (closes ISS-0424 part 3b-8)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

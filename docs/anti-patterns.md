@@ -2565,24 +2565,40 @@ issues does not go looking for a second requirement that never existed. This was
 449/450 the same minute; total exposure was under two minutes, with neither task ever
 dispatched to a workflow.
 
-## Drafting a new requirement with a blank `impl_order:` field instead of the deferred marker
+## Drafting new requirements with a blank `impl_order:`, then "fixing" it with a stale deferral marker
 
 On 2026-09-05, REQ-ANALYST drafted 10 new requirements (REQ-232..242, ISS-0424 parts 2/3)
 directly into `docs/requirements.yaml` without registering them via `letflow-queue`'s
-`register_task` first (reasonable -- REQ-VALIDATOR hadn't gated them yet). But instead of
-using the documented deferred-marker form for an unregistered entry
-(`# impl_order: UNREGISTERED -- <rationale>`, already used elsewhere by REQ-223/REQ-224),
-each entry was left with a bare `impl_order:` key and no value. `mix
-letflow.check_requirements_registration` classifies that as `:unclassified` (R2, hard
-fail) rather than `:deferred` (visible debt, does not gate) — it matches neither
-recognised shape. REQ-ANALYST and REQ-VALIDATOR both worked from the requirement's content
-and never ran `mix letflow.check_requirements_registration` (or the full `mix
-letflow.check`) locally before ORCH committed and pushed, so the PR's first CI run failed
-in ~45 seconds on this, not on any test.
+`register_task` first, and left each with a bare `impl_order:` key and no value. `mix
+letflow.check_requirements_registration` classifies a valueless key as `:unclassified`
+(R2, hard fail) rather than `:deferred` — it matches neither the registered-field shape
+nor the deferred-marker shape. Neither REQ-ANALYST nor REQ-VALIDATOR ran the local gate
+before ORCH committed and pushed, so the PR's first CI run failed in ~45 seconds on this,
+not on any test.
 
-**Any requirement drafted before its `letflow-queue` registration must use the deferred-
-marker comment form, never a bare `impl_order:` key with no value.** Whoever drafts or
-validates a new `docs/requirements.yaml` entry should run `mix
-letflow.check_requirements_registration` locally before handing it off or committing —
-it's fast (no network, no queue call) and would have caught this in seconds instead of a
-full CI round-trip.
+**The first fix was itself wrong.** ORCH's first response was to swap the blank field for
+the documented deferred-marker comment (`# impl_order: UNREGISTERED -- <rationale>`,
+matching REQ-223/REQ-224's existing usage) — which satisfies
+`check_requirements_registration` but is a *different* check's job to gate:
+`mix letflow.check_deferral_staleness` immediately failed all 10 with "STALE deferral --
+stage-scoped; stage S6 is ACTIVE". A deferral is only legitimate when the rationale is a
+live, expiring condition (`blocked-by: REQ-NNN`, checked against that requirement's actual
+status) — REQ-223/REQ-224's precedent works because REQ-222 is genuinely still open, not
+because "not yet registered" is itself an acceptable rationale. These 10 requirements had
+no real blocker (REQ-238/239's real dependency on the others is already expressed via
+`depends_on:`, not a deferral), so "unregistered" alone was never a legitimate reason to
+defer — it just means: go register it.
+
+**The actual fix:** call `register_task` for each requirement (in dependency order, so a
+dependent's real integer `depends_on` list can reference its prerequisites' freshly-
+allocated queue ids — recall `depends_on` takes queue-task integers, not `REQ-` strings),
+then write the real `impl_order: <id>  # letflow-queue task id` into each entry.
+
+**Lesson:** an `:unclassified` failure on a *freshly drafted, not-yet-registered*
+requirement is not evidence that the deferred-marker form applies — it's evidence the
+requirement should be registered now, unless there's a genuine, independently-checkable
+blocking condition. Whoever drafts or validates a new `docs/requirements.yaml` entry
+should run both `mix letflow.check_requirements_registration` and `mix
+letflow.check_deferral_staleness` locally (both fast, no queue call needed for either)
+before handing off or committing — each check gates a different failure mode, and passing
+one says nothing about the other.

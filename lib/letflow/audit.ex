@@ -13,10 +13,11 @@ defmodule Letflow.Audit do
   Two approaches exist for capturing an audit row: (a) a database-level
   `BEFORE`-trigger on each covered business table, deriving the action name
   from the row's own status transition and reading the acting user from a
-  Postgres session variable (R-Co's own approach); (b) capturing inside the
-  Elixir context-function boundary that already performs the mutation
-  (`Letflow.Definitions.activate/2`, `Letflow.Engine.cancel_instance/3`,
-  etc.), as one more step in the same transaction as the mutation itself.
+  Postgres session variable (the classic audit-trigger pattern); (b)
+  capturing inside the Elixir context-function boundary that already
+  performs the mutation (`Letflow.Definitions.activate/2`,
+  `Letflow.Engine.cancel_instance/3`, etc.), as one more step in the same
+  transaction as the mutation itself.
 
   **This module implements (b).**
 
@@ -84,11 +85,12 @@ defmodule Letflow.Audit do
   currently-stored column values and compares it against the stored
   `chain_hash` *before* checking that entry's `prev_chain_hash` against the
   previous entry's own recomputed hash. This is deliberately NOT the R-Co
-  behavior it replaces: R-Co's own chain-verification function reads every
+  behavior it replaces: that prior chain-verification function reads every
   content column and then only ever compares `prev_chain_hash` linkage,
   never recomputing a digest from the content it just read -- so an operator
   who edits a persisted `after_state` directly (bypassing the application)
-  while leaving both hash columns untouched passes R-Co's check outright.
+  while leaving both hash columns untouched passes a linkage-only check
+  outright, undetected.
   This module's `verify_chain/2` catches exactly that case, immediately, at
   the tampered entry itself, and reports it as `{:error, {:hash_mismatch,
   entry_id}}` distinct from `{:error, {:chain_broken, entry_id}}` (a linkage
@@ -368,8 +370,8 @@ defmodule Letflow.Audit do
     1. **Recomputes** `chain_hash` from that entry's own currently-stored
        column values and compares it against the stored `chain_hash`. A
        mismatch returns `{:error, {:hash_mismatch, entry.id}}` immediately --
-       this is the check R-Co's own chain-verification function never
-       performs (see this module's moduledoc).
+       this is the check the prior, replaced chain-verification approach
+       never performed (see this module's moduledoc).
     2. Compares the entry's stored `prev_chain_hash` against the *previous*
        entry's own just-recomputed `chain_hash` (never that previous entry's
        stored `prev_chain_hash`) -- so a tampered entry is reported against

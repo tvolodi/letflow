@@ -28,8 +28,9 @@ defmodule Letflow.Instances do
 
   # `InstanceProjection.status`'s Ecto.Enum values, as the four uppercase
   # strings the HTTP layer accepts -- source of truth is that schema
-  # (instance_projection.ex:125-128), not hand-duplicated for R-Co parity.
-  # R-Co's own instances.zig has a 5th value, RESTORED_ORPHAN -- an
+  # (instance_projection.ex:125-128), not hand-duplicated as a separate
+  # list needing its own upkeep.
+  # The R-Co source (`instances.zig`) has a 5th value, RESTORED_ORPHAN -- an
   # already-closed, earlier-shipped 4-vs-5 divergence (design doc's own
   # "Open question resolved" section), not this module's to widen.
   @valid_statuses ~w(ACTIVE COMPLETED CANCELLED ERROR)
@@ -73,8 +74,8 @@ defmodule Letflow.Instances do
   passed through to an `Ecto.Enum` cast failure.
 
   Filters: `status`, `definition_id`, `correlation_key`, `started_after`/
-  `started_before` (a Letflow addition over R-Co's own `handleList`, which
-  filters only `status`/`definition_id` -- see the design doc). Sorted
+  `started_before` (a Letflow addition beyond the original filter set of
+  `status`/`definition_id` -- see the design doc). Sorted
   `started_at` DESC, `instance_id` DESC (keyset pagination), same shape as
   `Letflow.Tasks.list_tasks/2`'s `(inserted_at, id)` cursor key.
   """

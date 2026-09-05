@@ -13843,7 +13843,7 @@ requirements:
   - id: REQ-232
     title: Retire parity-justification phrasing in lib/letflow/routers/* -- restate each decision on Letflow's own merit or delete it (closes ISS-0424 part 2a)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the routers slice of ISS-0424/GH#828 part 2 (queue task 424),

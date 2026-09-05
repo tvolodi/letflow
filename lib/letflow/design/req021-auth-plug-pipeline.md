@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-021 — Auth Plug pipeline (auth.zig/tenant_status.zig equivalent)
 
 **Requirement:** REQ-021 (`docs/requirements.yaml`, stage S1)
@@ -18,11 +19,13 @@ only.
   `{:ok,_}|{:error,_}` shape), §3.6 (SQL always parameterized), §6 (OIDC/ueberauth_oidcc
   partial-adoption decision, explicit statement that REQ-021's plug is Letflow's first real
   auth plug, not an extension of the never-built REQ-103).
+PROVENANCE (historical, not current decision authority):
 - `docs/migration/stage-1-identity.md` — S1 scope, `src/api/middleware/auth.zig`/
   `tenant_status.zig` named as the R-Co files this requirement ports.
 - `docs/migration/decisions/0002-oidc-integration.md` — confirms `ueberauth_oidcc`/`oidcc`
   cover token verification/JWKS caching only; JIT provisioning, tenant↔realm binding, and the
   role registry are hand-rolled (already built by REQ-018/019/020).
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\middleware\auth.zig` (read in full to line 1231 of
   1756 — the remainder is repeated `Auth401Code`-branch detail on the same
   `authenticate/postAuthJitProvision/tryTenantRealmAuth` shape already captured) — the
@@ -33,6 +36,7 @@ only.
   provision → role load). R-Co's `AuthResult` union (`authenticated | unauthenticated |
   forbidden`) and its `buildUnauthorizedAuth/buildForbidden` RFC-9457-shaped JSON bodies are
   the model for this design's error-response shapes (§5).
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\middleware\tenant_status.zig` (full file) —
   `checkTenantWritePause/4`: write-method allowlist (`POST`/`PUT`/`PATCH`/`DELETE`), no-op for
   an empty `tenant_id`, fail-open on pool exhaustion/query failure, 503 body when
@@ -55,6 +59,7 @@ only.
   `Letflow.Oidc.*` or `Letflow.Identity`'s OIDC-pipeline functions (its own moduledoc states
   this explicitly, REQ-020's design doc §6 restates it). Read in full to settle §4.4's "which
   roles" question below.
+PROVENANCE (historical, not current decision authority):
 - `lib/letflow/identity/tenant.ex` — `Letflow.Identity.Tenant` schema, `status` field
   `Ecto.Enum, values: [:active, :migrating]` (confirmed exact atom values — R-Co's
   `tenant_status.zig` compares the string `"MIGRATING"`; Letflow's column is an `Ecto.Enum`
@@ -112,6 +117,7 @@ in this exact order, per request:
    per adp-04a (task instruction, confirmed against `Letflow.Identity`'s own moduledoc: "REQ-021's
    future pipeline calls this before resolving/provisioning the user").
 4. JIT provisioning/lookup (REQ-018's `provision_oidc_user/3`).
+PROVENANCE (historical, not current decision authority):
 5. Tenant-status write-pause check (`tenant_status.zig` port) — placed **after** step 4 in this
    design's call order (not interleaved earlier) — see §6.1 for why.
 6. Attach an auth context (`user_id`, `tenant_id`, `roles`) to `conn.assigns` for downstream
@@ -139,6 +145,7 @@ DB or claim-mapping work runs (acceptance criterion 2).
 
 ## 2. Module placement — DECISION: two new Plug modules, plus a router change
 
+PROVENANCE (historical, not current decision authority):
 | File | Module | Role |
 |---|---|---|
 | `lib/letflow/plugs/auth_pipeline.ex` | `Letflow.Plugs.AuthPipeline` | Steps 1-4 + 6 (verify → tenant resolve → realm guard → JIT provision → attach context) |
@@ -147,6 +154,7 @@ DB or claim-mapping work runs (acceptance criterion 2).
 
 **Why two modules, not one, and why not folded into `router.ex` directly:**
 
+PROVENANCE (historical, not current decision authority):
 1. **R-Co itself keeps these as two separate files** (`auth.zig` vs. `tenant_status.zig`), each
    with its own moduledoc and its own single responsibility (`tenant_status.zig`'s own doc
    comment: "Call `checkTenantWritePause()` **after** auth resolves the `tenant_id`"). Mirroring
@@ -313,6 +321,7 @@ either:
 ### 4.2 Step 1 — bearer-token extraction + verification
 
 - Read the `authorization` header via `Plug.Conn.get_req_header(conn, "authorization")`.
+PROVENANCE (historical, not current decision authority):
 - Missing header, or present but not matching the case-sensitive `"Bearer "` prefix (matching
   R-Co's own case-sensitive RFC 6750 §2.1 check, `auth.zig` line 1182-1185, §0), or an empty
   token after stripping the prefix → **401, halt, stop. No further step in this pipeline runs**
@@ -326,6 +335,7 @@ either:
 
 ### 4.3 Step 2 — tenant resolution from realm claim
 
+PROVENANCE (historical, not current decision authority):
 - The **realm** is read from `claims["iss"]` (the JWT issuer claim — a Keycloak-issued token's
   issuer URL embeds the realm as its trailing path segment, matching R-Co's own
   `realmSlugFromIssuer/1` — `auth.zig` lines 954-963, §0) — **not** from a `tenant_id` claim.
@@ -339,6 +349,7 @@ either:
   `tenant_id_claim`-style approach, rather than a hardcoded `"/realms/"` URL-suffix parse. This
   design recommends the `iss`-URL-suffix approach as the direct, literal port of R-Co's own
   mechanism, but does not treat the alternative as closed.
+PROVENANCE (historical, not current decision authority):
 - Call `Letflow.Identity.resolve_tenant_by_realm(realm)`:
   ```
   @spec resolve_tenant_by_realm(idp_realm_id :: String.t()) ::
@@ -355,6 +366,7 @@ either:
 
 ### 4.4 Step 3 — realm-ownership guard (BEFORE JIT provisioning, per adp-04a)
 
+PROVENANCE (historical, not current decision authority):
 - Call `Letflow.Identity.verify_realm_ownership(tenant_id, realm)`:
   ```
   @spec verify_realm_ownership(tenant_id :: Ecto.UUID.t(), external_realm :: String.t()) ::
@@ -397,6 +409,7 @@ either:
     failures to 401" pattern, §3.1's OQ-4 note).
   - `{:ok, identity_context}` → proceed.
 - Resolve JIT config: `Letflow.Oidc.JitProvisioningConfig.for_realm(realm)`.
+PROVENANCE (historical, not current decision authority):
 - Call `Letflow.Identity.provision_oidc_user/3`:
   ```
   @spec provision_oidc_user(
@@ -553,6 +566,7 @@ retry-after: "30"
 body: {"error": "tenant_migrating", "detail": "tenant is being migrated; writes are paused"}
 ```
 
+PROVENANCE (historical, not current decision authority):
 `Retry-After` header value: **`"30"`** (30 seconds, a fixed literal, not computed from any
 migration-progress estimate — R-Co's own `tenant_status.zig` has no `Retry-After` header at all
 in its ported implementation, confirmed §0: `checkTenantWritePause`'s `HandlerResult` sets only
@@ -564,6 +578,7 @@ choice (no source specifies a duration) — flagged as **OQ-11** (§10) since an
 technically satisfies "has a Retry-After header," but `30` is a reasonable, round default absent
 a more specific business requirement.
 
+PROVENANCE (historical, not current decision authority):
 ## 6. `Letflow.Plugs.TenantStatus` — step 5, `tenant_status.zig` port
 
 ### 6.1 Module shape and placement in the call order
@@ -589,6 +604,7 @@ reasoning) makes this ordering explicit and structural (its position in the `plu
 ### 6.2 Method check (first, cheapest short-circuit)
 
 - `conn.method` is one of `"POST"`, `"PUT"`, `"PATCH"`, `"DELETE"` → proceed to §6.3.
+PROVENANCE (historical, not current decision authority):
 - Otherwise (`"GET"`, `"HEAD"`, or any other method) → **pass through unchanged, no DB query at
   all.** Matches R-Co's own `isWriteMethod/1` short-circuit (`tenant_status.zig` lines 23-28,
   §0) and acceptance criterion 3's second half verbatim ("a GET/HEAD request against the same
@@ -596,6 +612,7 @@ reasoning) makes this ordering explicit and structural (its position in the `plu
 
 ### 6.3 Tenant status lookup
 
+PROVENANCE (historical, not current decision authority):
 - Read `conn.assigns[:auth_context][:tenant_id]`. If `AuthPipeline` did not run before this plug
   (so `:auth_context` is absent) — see **OQ-12** (§10): this design specifies that
   `TenantStatus` is only ever mounted after `AuthPipeline` in the same pipeline (§8), so this
@@ -622,6 +639,7 @@ reasoning) makes this ordering explicit and structural (its position in the `plu
 
 ### 6.4 Fail-open vs. fail-closed — explicit divergence from R-Co, flagged
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `checkTenantWritePause/4` is **fail-open** on every DB-level problem: pool exhaustion
 returns `null` (pass through) and query failure returns `null` (pass through) — its own comments
 say so explicitly (`tenant_status.zig` lines 49, 56: `"on pool exhaustion let through"`, `"on
@@ -652,6 +670,7 @@ absence of a REQ-103 reference):
    per REQ-101's status note in `docs/requirements.yaml`) — explicitly stating REQ-103 is **not**
    prior art this module extends, since it never landed (matching the task instruction's own
    emphatic framing, and `backend_developer_guide.md` §6's identical statement, §0).
+PROVENANCE (historical, not current decision authority):
 2. Cite `src/api/middleware/auth.zig` as the ported orchestration source.
 3. Name explicitly which `router.ex` routes it is mounted in front of **today** — per §8 below,
    the answer is **none of the 3 existing routes** (all documented explicitly as not
@@ -659,6 +678,7 @@ absence of a REQ-103 reference):
    compiles, and is exercised by tests, but is not yet threaded into any live route's `plug`
    pipeline (§8's "available, not yet wired" framing).
 
+PROVENANCE (historical, not current decision authority):
 `Letflow.Plugs.TenantStatus`'s `@moduledoc` must similarly cite `src/api/middleware/
 tenant_status.zig` and state its "after auth, before dispatch to a write handler" calling
 convention (§6.1).
@@ -796,6 +816,7 @@ silently-assumed default.
    acceptance criteria, which only require "rejected," not a specific status code for this case.
 8. **OQ-8 — `:jit_disabled` returns 403** (§4.5). Not directly named by any acceptance criterion;
    this design's own judgment call, flagged for REVIEWER confirmation.
+PROVENANCE (historical, not current decision authority):
 9. **OQ-9 — this design deliberately does NOT replicate R-Co's "fall back to pre-JIT context on
    provisioning failure" behavior** (§4.6), returning 500 instead, because Letflow has no
    equivalent pre-JIT authenticated identity to fall back to. This is the single largest
@@ -804,6 +825,7 @@ silently-assumed default.
 10. **OQ-10 — single nested `:auth_context` assign key vs. three flat assign keys** (§5.1). This
     design's choice (nested) is not mandated by the acceptance criteria's wording; either
     satisfies it.
+PROVENANCE (historical, not current decision authority):
 11. **OQ-11 — `Retry-After: 30` is an arbitrary fixed value** (§5.5), added because AC3 requires
     the header but no source (R-Co's own `tenant_status.zig` has no such header) specifies a
     duration.

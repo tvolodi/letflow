@@ -83,6 +83,7 @@ $ find / -maxdepth 3 -iname "R-Co" 2>/dev/null
 (no output)
 ```
 
+PROVENANCE (historical, not current decision authority):
 Confirmed absent, exactly as REQ-029's run found. **This design therefore works from
 `docs/requirements.yaml`'s REQ-025 entry (a detailed paraphrase of `event_store.md`'s
 append section, per the task briefing) plus the extensive direct quotations of
@@ -105,6 +106,7 @@ treats all of them as a fixed, already-verified interface (§0) and works within
 
 **Explicitly NOT in scope, not silently dropped:**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Owned by |
 |---|---|
 | `read/2`, `read_global/1`, `point_in_time/3`, `archive/1` | REQ-026 |
@@ -755,6 +757,7 @@ word-for-word):
    `attrs`, and that `attrs` containing a `:tenant_id` key is a hard error
    (`:tenant_id_not_accepted`) — citing `docs/migration/decisions/0003-ecto-schema-strategy.md`'s
    2026-08-17 addendum by name.
+PROVENANCE (historical, not current decision authority):
 2. That `event_id`/`created_at` are minted exactly once per call and bound identically
    into `events`, `event_idempotency`, and (conditionally) `event_payload_store` —
    citing INV-EV-5 and the R-Co bug it prevents (`store.zig:623–636`, quoted via
@@ -816,6 +819,7 @@ overload to `Registry` (REQ-024's already-merged, sibling-owned module), which
 REQ-024's own §7.3 already flags as a "left for REVIEWER" fast-follow question, not
 something this design should decide unilaterally by editing a merged sibling module.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-3 (MINOR, methodological).** §6.1's "move Registry and metadata validation
 entirely outside the `Ecto.Multi`" is this design's own interpretation of invariants 8/9
 against a requirement-text paraphrase, not a literal quotation of `event_store.md`'s

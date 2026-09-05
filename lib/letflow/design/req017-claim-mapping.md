@@ -1,5 +1,6 @@
 # Design: REQ-017 — Pure claim-mapping module (OIDC-08 equivalent)
 
+PROVENANCE (historical, not current decision authority):
 **Requirement:** REQ-017 (`docs/requirements.yaml`, stage S1)
 **Owner (implementer):** ELIXIR-DEV
 **This document produces:** the exact `Letflow.Oidc.IdentityContext` struct shape, the
@@ -14,6 +15,7 @@ function bodies. Snippets below showing Zig source are cited evidence (what
 
 - `docs/requirements.yaml` REQ-017 (full entry, `depends_on: []`) — description and all
   four acceptance criteria.
+PROVENANCE (historical, not current decision authority):
 - `c:\Users\tvolo\dev\ai-dala\R-Co\src\oidc\claim_mapping.zig` **in full** (506 lines) —
   the primary porting source. Read directly, not from the requirement's paraphrase.
 - `docs/requirements.yaml` REQ-018, REQ-019, REQ-021 (full entries) — to confirm this
@@ -40,6 +42,7 @@ function bodies. Snippets below showing Zig source are cited evidence (what
   finding (ISS-0007) that Decision B applies to all S1 tables (not directly load-bearing
   here since this requirement introduces no DB table, but read for stage context).
 
+PROVENANCE (historical, not current decision authority):
 ## 1. Discrepancy check: requirement text vs. actual `claim_mapping.zig` source
 
 **Read in full, not paraphrased.** REQ-017's requirement-text summary is accurate against
@@ -83,6 +86,7 @@ contradiction, but a gap the requirement text glosses over):
   stale requirement-text citation; REQ-017's text was evidently drafted directly against
   this source.
 
+PROVENANCE (historical, not current decision authority):
 ## 2. `claim_mapping.zig`'s actual error sets (cited, not paraphrased)
 
 Two separate error sets exist in the source — conflating them would be a real bug, so
@@ -150,6 +154,7 @@ BEAM-side counterpart.
 
 ## 4. `Letflow.Oidc.ClaimMappingConfig` — config struct shape
 
+PROVENANCE (historical, not current decision authority):
 Ported from `claim_mapping.zig`'s `ClaimMappingConfig` (lines 55-62, cited below), with
 the JSON-string-vs-map distinction from §1 folded in and Elixir-idiomatic types
 substituted for Zig's `[]const u8`/`[]const []const u8`:
@@ -258,6 +263,7 @@ strictly-forced port decision.
 note and §2's finding that `loadClaimMappingConfig`/`ClaimMappingError` are out of scope) —
 noted here again as the deferred item REQ-017's description asks to flag explicitly.
 
+PROVENANCE (historical, not current decision authority):
 ## 5. Defaulting rules — cited from `claim_mapping.zig`'s actual mapping logic
 
 Per-field, citing the actual Zig code block each rule comes from (lines 240-262 of the
@@ -313,6 +319,7 @@ JSON-derived/`ueberauth_oidcc`-derived maps use) and a dot-delimited path string
 
 ## 6. `Letflow.Oidc.IdentityContext` — struct shape and struct-vs-map reasoning
 
+PROVENANCE (historical, not current decision authority):
 Ported from `claim_mapping.zig`'s `IdentityContext` (lines 65-72, cited below), dropping
 the `deinit/2` manual-memory-management function (lines 74-84) entirely — that function
 exists only because Zig has no garbage collector; the BEAM's own GC makes it structurally
@@ -585,6 +592,7 @@ assertion.
 
 ## 10. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-017 acceptance criterion | Concrete design element addressing it |
 |---|---|
 | "the mapping function has no Repo call, no HTTP call, and no other I/O anywhere in its call graph — verified by inspection and stated explicitly in the handoff" | §9 gives the complete call-graph enumeration and the exact handoff statement to make |
@@ -605,6 +613,7 @@ assertion.
    default, not a realm-specific entry" via an empty-string sentinel — no such consumer
    is named in REQ-018/019/021's current text, so this design does not believe one
    exists, but has not exhaustively proven a negative).
+PROVENANCE (historical, not current decision authority):
 2. **OQ-2 — `nil` subject treated identically to `""` subject (§7.3).** Zig's `subject`
    parameter is non-optional (`[]const u8`, never null in Zig's type system), so
    `claim_mapping.zig` itself has no "what if subject is null" case to port from — only
@@ -642,6 +651,7 @@ assertion.
   `lib/letflow/oidc/claim_mapping.ex` — establishing the `Letflow.Oidc` namespace (first
   use; REQ-016 only referenced `Letflow.Oidc.DefaultProvider` as a bare config atom,
   never a real module).
+PROVENANCE (historical, not current decision authority):
 - Each `@moduledoc` cites `src/oidc/claim_mapping.zig` explicitly (acceptance criterion
   4) — match `user.ex`/`tenant.ex`'s existing citation style (§0): name the specific
   source file, and state explicitly what this module does and does NOT cover (no DB-backed

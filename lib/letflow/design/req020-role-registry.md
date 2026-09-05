@@ -64,11 +64,13 @@ bodies. Signatures, type shapes, and prose only.
 - `lib/letflow/design/identity-schema.md` §2.4, §3.4 — REQ-015's own design doc for
   `tenant_role`/`groups`, confirming the same FK/index facts as the migration file
   itself and the "REQ-020 owns list_roles/upsert_role" ownership statement.
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\identity\role_registry.zig` (full file) —
   `TenantRoleStore.listRoles`, `TenantRoleStore.upsertRole`, `resolveRoleInTx`,
   `isValidRoleName`, `isValidUuidHex`, `TenantRoleError` error set (`GroupNotFound`,
   `RoleNameInvalid`, `GroupIdInvalid`, `PoolExhausted`, `PersistenceFailed`,
   `OutOfMemory`).
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\design\idn05-role-registry.md` — full file, read
   closely per task instruction: §3 "Public interface — TenantRoleStore" (exact SQL for
   all three functions, the upsert's BEGIN/existence-check/INSERT-ON-CONFLICT/COMMIT
@@ -101,12 +103,14 @@ the existing `Letflow.Identity` context module.**
 
 Reasoning:
 
+PROVENANCE (historical, not current decision authority):
 1. **REQ-020's own description text names the target explicitly**: "Port
    `src/identity/role_registry.zig`'s `TenantRoleStore` (`list_roles`, `upsert_role`) and
    `resolveRoleInTx` as **`Letflow.Identity.RoleRegistry` functions**." This is not
    ambiguous phrasing to interpret — it is a literal module name. The routing prompt for
    this design task defaults to this name "unless you find a strong reason not to," and
    no such reason surfaced during this design's research.
+PROVENANCE (historical, not current decision authority):
 2. **R-Co's own source structure supports a standalone module.** `role_registry.zig` is
    a standalone file (not folded into `registry.zig`, R-Co's general identity-table
    module) with its own top-of-file doc comment declaring it as the whole implementation
@@ -160,6 +164,7 @@ done without a changeset).
 @spec list_roles() :: [TenantRole.t()]
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Decision: zero arguments.** Returns all rows from `tenant_role`, sorted by `name` ASC.
 Returns `[]` (not an error) when the table is empty — matches
 `role_registry.zig`'s `listRoles` doc comment exactly ("Returns an empty slice (not an
@@ -236,6 +241,7 @@ Named error atoms, one per failure mode (task point 2's explicit instruction —
 | `group_id` is syntactically valid but no row exists in `groups` with that id | `{:error, :group_not_found}` | `TenantRoleError.GroupNotFound` |
 | DB-level constraint violation surfaced as a changeset error (defensive — see §3.2) | `{:error, %Ecto.Changeset{}}` | (no direct R-Co equivalent — R-Co's raw-SQL upsert has no changeset layer; this is Letflow's own INV-8 safety net) |
 
+PROVENANCE (historical, not current decision authority):
 **Validation order (task point 2's explicit instruction), exactly matching
 `upsertRole`'s own order in `role_registry.zig` line 121-122 and
 `idn05-role-registry.md` §3a's numbered algorithm:**
@@ -255,6 +261,7 @@ Named error atoms, one per failure mode (task point 2's explicit instruction —
 
 ### 3.1 Transaction shape (answers task point 3)
 
+PROVENANCE (historical, not current decision authority):
 **Decision: `Repo.transaction/1` wrapping a two-step callback — (a) a `Repo.get(Group,
 group_id)` existence check that rolls back with `:group_not_found` if nil, then (b) an
 `Repo.insert/2` with an `on_conflict:`/`conflict_target:` upsert clause returning the
@@ -266,6 +273,7 @@ diagram).
 Prose shape of the transaction callback (no code — describing the two ordered steps
 `Repo.transaction/1`'s function argument performs):
 
+PROVENANCE (historical, not current decision authority):
 - **Step a — existence check.** `Repo.get(Letflow.Identity.Group, group_id)`. Ecto's
   `Repo.get/2` does not raise for a missing row — it returns `nil` (this is the "never
   raise" mechanism for this step, restated in §4.3). If `nil`: call `Repo.rollback(reason)`
@@ -275,6 +283,7 @@ Prose shape of the transaction callback (no code — describing the two ordered 
   `Repo.transaction/1` receives), matching R-Co's own rollback-on-not-found step exactly
   (`role_registry.zig` lines 142-145: `if (exists_row == null) { conn.rollback() ...
   return TenantRoleError.GroupNotFound; }`).
+PROVENANCE (historical, not current decision authority):
 - **Step b — upsert.** If step a found a group, proceed to `Repo.insert/2` on a
   `%TenantRole{}` struct (or an `Ecto.Changeset` built from one — see §3.2 for why this
   design uses a changeset here despite REQ-015's `tenant_role.ex` defining none) with:
@@ -364,6 +373,7 @@ schema module, per REQ-018/019's established placement precedent —
 
 ### 4.1 Name validation
 
+PROVENANCE (historical, not current decision authority):
 **Rule (ported from `isValidRoleName`, `role_registry.zig` lines 224-237, and
 `idn05-role-registry.md` §3a step 1 / OQ-3):** `name` must be (a) non-empty, (b) at most
 128 Unicode codepoints, (c) contain no ASCII control characters (`0x00`-`0x1F` or
@@ -401,6 +411,7 @@ schema module, per REQ-018/019's established placement precedent —
 
 ### 4.2 `group_id` validation — pre-DB-round-trip UUID format check
 
+PROVENANCE (historical, not current decision authority):
 **Rule (ported from `isValidUuidHex`, `role_registry.zig` lines 240-251, and
 `idn05-role-registry.md` §3a step 2):** `group_id` must be validated as a syntactically
 well-formed UUID string **before** any DB query touches it — R-Co's own algorithm
@@ -446,6 +457,7 @@ task point 2's resolve_role_in_tx sub-instruction)
    transaction-callback equivalent, §6) returns `nil` when no row matches — this is
    `Repo.get_by/2`'s own documented, non-exceptional behavior for zero results; no
    `rescue` is needed for this case because there is nothing to rescue from.
+PROVENANCE (historical, not current decision authority):
 2. **Any DB error (genuinely malformed query, connection blip, or anything else that
    *could* raise) → `nil` via an explicit `rescue`.** Unlike `list_roles/0` and
    `upsert_role/2` (§2, §3), which both leave a genuine connection-level failure
@@ -476,6 +488,7 @@ task point 2's resolve_role_in_tx sub-instruction)
         Ecto.UUID.t() | nil
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Decision on the "existing transaction" parameter shape:** R-Co's `resolveRoleInTx`
 takes a raw `*db.Conn` — the caller's already-open connection/transaction handle — and
 explicitly does *not* acquire a new connection (`role_registry.zig` line 201-202: "does
@@ -566,6 +579,7 @@ performs HTTP calls" — Letflow's equivalent boundary is "any `Letflow.Oidc.*` 
 **Explicit acceptance-criterion requirement, not merely good practice** (REQ-020's fifth
 acceptance criterion): `Letflow.Identity.RoleRegistry`'s `@moduledoc` must:
 
+PROVENANCE (historical, not current decision authority):
 1. Cite `src/identity/role_registry.zig` as the ported source (and, per this project's
    established citation style elsewhere in this batch, may also cite
    `src/design/idn05-role-registry.md` as the design doc `role_registry.zig` itself
@@ -650,6 +664,7 @@ exception.
 
 ## 10. Acceptance-criteria traceability (answers task point 8)
 
+PROVENANCE (historical, not current decision authority):
 | REQ-020 acceptance criterion | Concrete design element |
 |---|---|
 | "list_roles/1 returns [] (not an error) against an empty tenant_role table, and returns all rows sorted by name when populated" | §2: `list_roles/0` (this design's arity decision, explained in full in §2), unparameterized `SELECT ... ORDER BY name ASC`, `[]` on empty table by construction (no rows → empty list, not an error) |

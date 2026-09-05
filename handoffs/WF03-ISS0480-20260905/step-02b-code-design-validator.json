@@ -1,0 +1,63 @@
+{
+  "handoff_id": "85889791-a82e-4d22-8cd7-79a36ce2dd62",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0480-20260905/step-02b-code-design-validator.json",
+  "created_at": "2026-09-05T06:25:45Z",
+  "started_at": "2026-09-05T06:25:45Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "29e4651a-54d4-46ad-89d1-e057bc3217a6",
+      "d49c0ea0-2ae9-4ca4-ae88-2ec4e3c2eceb"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0480-20260905/step-02-code-designer.json",
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0480-20260905/step-0.5-1-issue-fixer-diagnose.json",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "test/support/tenant_fixture.ex",
+      "config/test.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "owned_modules": []
+  },
+  "task": {
+    "description": "Hard-gate CODE-DESIGNER's §10 addition to lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md (commit 3cfdaf7b on this branch) -- the ISS-0480 structural fix (a new Letflow.Test.ProvisioningRepo, TenantFixture.provisioned_tenant!/1 redirected to it via Ecto.Repo.put_dynamic_repo/1 instead of calling Sandbox.mode(Letflow.Repo, :auto) directly). Read §10 in full (sections 10.0-10.7, roughly lines 948-1679) plus §§0-9 for context on the design lineage and the reverted restore_sandbox mechanism this design must not resemble. Do not accept CODE-DESIGNER's own result.summary as sufficient -- independently re-derive each of the following against the actual design text and, where a claim is checkable against real library source or arithmetic, against that source/arithmetic directly, per this project's 're-derive under the conditions the property is actually about' standard (core-directives.md).\n\nSPECIFIC CLAIMS TO INDEPENDENTLY VERIFY, NOT TRUST:\n1. The DBConnection.Ownership.Manager scoping claim -- that a Sandbox.mode/2 call issued against a SEPARATE Ecto.Repo (Letflow.Test.ProvisioningRepo, its own pool/supervisor) cannot check in connections belonging to a DIFFERENT repo's (Letflow.Repo's) pool. Check this against actual Ecto/DBConnection source (deps/ecto_sql/lib/ecto/adapters/sql/sandbox.ex and deps/db_connection, same standard ISSUE-FIXER's own diagnosis used) -- do not accept the design's own citation without opening the source yourself.\n2. The pool-budget arithmetic in design section 10.2.2 -- the claimed connection counts (34 total at plain `mix test`, aggregate worst case 80 vs usable ceiling 97 at test_parallel.sh N=16) and the reconciliation against decision 0009-test-parallel-pool-sizing.md's existing formula. Recompute independently from the design's own stated inputs; flag any arithmetic error found, however small.\n3. That NO second Sandbox.mode/2 call is added anywhere against Letflow.Repo specifically -- grep/read the design's own normative section (10.3) for every Sandbox.mode/2 or put_dynamic_repo/1 call site it specifies, and confirm none of them targets Letflow.Repo in a way that reintroduces ISS-0113's reverted mechanism-4 (a second mid-test mode flip on the SAME repo the outer test already checked a connection out of).\n4. That the design's own claim -- a narrow per-call-site conversion tranche cannot ever fully protect a file with zero TenantFixture involvement -- is actually argued, not merely asserted (design section 10.0). This determines whether ISS-0480 can be marked `resolved` (this design ships and works) vs. only ever `instrumented` (if the reasoning doesn't actually hold up) -- get this right, since ORCH's later status decision depends on your verdict here.\n5. Public API/error-taxonomy preservation (design section 10.4) -- confirm provisioned_tenant!/1's @spec, opts() type and return shape are genuinely unchanged in the design's own normative section, and that none of the 46 existing call sites need any edit.\n6. The regression-test mechanism in section 10.6 -- confirm it is genuinely deterministic (constructs the adversarial concurrent-caller scenario directly via Task.async, not suite-timing-dependent) and that it would plausibly fail pre-fix and pass post-fix as claimed, reasoning through the actual mechanism rather than taking the design's own claim at face value.\n\nApply the same FAIL discipline as any other gate: if any claim above does not hold up under your own re-derivation, this is a BLOCKER, named specifically (which claim, what you found instead), not a general impression. A PASS must state what you independently re-derived and how (per this project's own worked PASS example in HANDOFF_PROTOCOL.md), not merely 'looks correct.'",
+    "acceptance_criteria": [
+      "DBConnection.Ownership.Manager per-repo scoping independently confirmed against actual Ecto/DBConnection source, not the design's own citation alone",
+      "Pool-budget arithmetic (design 10.2.2) independently recomputed from stated inputs, any discrepancy named",
+      "Confirmed no second Sandbox.mode/2 call targets Letflow.Repo anywhere in the design's normative section 10.3",
+      "The 'narrow conversion cannot ever fully protect an uninvolved file' claim independently assessed as sound or not, with reasoning stated either way",
+      "provisioned_tenant!/1's public API/error taxonomy confirmed unchanged in the design's own normative text",
+      "Regression-test mechanism (10.6) assessed for genuine determinism, not suite-timing luck",
+      "Any BLOCKER named specifically enough for CODE-DESIGNER to act on without further clarification"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0480-20260905",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF03-ISS0480-20260905",
+      "push_status": "ok",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

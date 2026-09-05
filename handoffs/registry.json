@@ -4787,16 +4787,16 @@
       "queue_task_id": 418,
       "queue_agent_id": "letflow-2-orch",
       "github_issue_number": 816,
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "lib/letflow/engine/wasm/"
       ],
       "started_at": "2026-09-04T22:31:26Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T15:30:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "Step 00 git setup COMPLETED -- dispatching Step 1 to ISSUE-FIXER",
-      "note": "WF-03 run for ISS-0418 (MAJOR): implement OQ-5's cap on concurrently in-flight WASM invocations. Selected because ORCH measured the CI gate at a 44% pass rate (14 fail / 11 pass across 25 runs) with EVERY classifiable failure being this exact flake. NOT MERELY A TEST FLAKE: per req170's live-verified findings against wasmex's Rust source, each timed-out invocation permanently leaks an uncancellable native thread in a Tokio pool shared by every tenant on the node -- a production availability defect currently manifesting as CI noise. STALE-LOCK RECOVERY DISCLOSED: task 418 was locked by a dead session (branch 3 days stale, one Step 00 commit, no registry entry, no handoffs dir); ORCH declined to force it initially, the user reported nobody was working it, ORCH re-verified with evidence and force-released per the dead-sibling-session discretion rule."
+      "last_known_step": "Step Final COMPLETED -- PR #927 squash-merged (e5d07019). Queue task 418 released back to OPEN (no status), not done: the primitive shipped but ISS-0418 is not resolved.",
+      "note": "WF-03 run for ISS-0418 (MAJOR): implement OQ-5's cap on concurrently in-flight WASM invocations. Selected because ORCH measured the CI gate at a 44% pass rate (14 fail / 11 pass across 25 runs) with EVERY classifiable failure being this exact flake. NOT MERELY A TEST FLAKE: per req170's live-verified findings against wasmex's Rust source, each timed-out invocation permanently leaks an uncancellable native thread in a Tokio pool shared by every tenant on the node -- a production availability defect currently manifesting as CI noise. STALE-LOCK RECOVERY DISCLOSED: task 418 was locked by a dead session (branch 3 days stale, one Step 00 commit, no registry entry, no handoffs dir); ORCH declined to force it initially, the user reported nobody was working it, ORCH re-verified with evidence and force-released per the dead-sibling-session discretion rule. | OUTCOME: primitive + test wiring shipped, footprint 8->6 with zero coverage lost, concurrent-contention race closed by construction and gate-verified. ISSUE DELIBERATELY LEFT OPEN: production dispatch is still uncapped (the actual multi-tenant hazard), and post-merge CI on the merging PR itself still showed the flake (4/5, AC2 timing out) -- 4 passes/2 failures in 6 attempts against a 3-in-6 baseline, inside noise, NOT claimed as improvement. The design gate's sequential-exhaustion BLOCKER, which ORCH overrode on model-vs-measurement grounds, gained weak corroboration since the failure landed on AC2, the only double-dispatch test. Design section 10's falsifiable prediction stands unresolved."
     }
   ]
 }

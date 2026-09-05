@@ -207,3 +207,49 @@ recurrence_evidence_20260904: >
   reproduces identically -- but it does mean the wasm_hang subprocess is
   now the single slowest and least reliable segment of the backend gate,
   which raises this issue's priority relative to when it was filed.
+
+partial_fix_20260905: >
+  PARTIALLY ADDRESSED by WF03-ISS0418-20260905, PR #927, merged as e5d07019.
+  THIS ISSUE REMAINS OPEN -- deliberately. Queue task 418 was released back to
+  `open` (no status), not `done`.
+
+  WHAT SHIPPED: Letflow.Engine.Wasm.InvocationLease, a monitor-backed counting
+  semaphore (auto-releases if the holder dies, closing the brutal-kill leak class
+  that ruled out reusing Letflow.Admission unmodified; fails OPEN on its own
+  crash, the correct direction for an availability gate). Plus test-side wiring
+  across three call shapes, reducing the :wasm_hang suite from 8 slot-consuming
+  dispatches to 6 with zero coverage lost. Six unit tests, proven non-vacuous by
+  two deliberate mutations.
+
+  WHAT IS VERIFIED: the concurrent-contention race this issue's own recurrence
+  log documents is closed by construction (design section 6.3, independently
+  gate-verified). The footprint reduction is real and gate-verified.
+
+  WHAT IS NOT FIXED, and why this issue stays open:
+    1. PRODUCTION WASM DISPATCH IS STILL UNCAPPED. It does not call this module
+       at all. The multi-tenant availability hazard this issue is really about --
+       one tenant's hanging plugins permanently leaking uncancellable native
+       threads from a node-global pool shared by every tenant -- is UNCHANGED in
+       production. Only the test path is capped. Closing the follow-up
+       dispatch-integration work (design OQ-C) is what would actually address it.
+    2. THE CI FLAKE IS NOT DEMONSTRABLY FIXED. Post-implementation CI on the
+       merging PR itself showed the wasm_hang subprocess still failing (4/5, AC2
+       timing out at 180s). Across that PR: 4 passes / 2 failures in 6 attempts,
+       against a measured pre-change baseline of 3 failures in 6. 50% -> 33% on
+       six samples is inside noise and is NOT claimed as improvement.
+    3. THE SEQUENTIAL-EXHAUSTION HYPOTHESIS IS NOT REFUTED, and gained weak
+       corroboration. The design gate raised it as a BLOCKER (8 permanent leaks
+       cannot fit a ~4-slot CI pool regardless of serialization); ORCH overrode
+       it on the grounds that the strict model predicts DETERMINISTIC failure
+       while real CI showed probabilistic results. That override stands as
+       reasoning, but the post-merge failure landed on AC2 -- the ONLY test that
+       dispatches twice -- which is exactly where sequential slot pressure would
+       surface first.
+
+  WHAT WOULD SETTLE IT: accumulated wasm_hang outcomes on main across many runs.
+  Per design section 10's own falsifiable prediction, if the failure rate does not
+  improve materially against the 3-in-6 baseline, the concurrent-contention
+  diagnosis is wrong as the DOMINANT mechanism and this issue needs re-diagnosis,
+  with sequential exhaustion as the leading alternative. Whoever picks this up
+  next should gather that history FIRST rather than assuming either the fix
+  worked or that more reduction is the answer.

@@ -1,0 +1,31 @@
+id: ISS-0510
+title: "Enumerate the YAML-comment-line case as a fourth citation-unit shape in REQ-237's .zig provenance-marking design"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ254-20260905
+discovered_at: "2026-09-05T15:43:13Z"
+severity: MINOR
+description: >
+  REVIEWER, gating WF02-REQ254-20260905
+  (handoffs/WF02-REQ254-20260905/step-2d-reviewer.json), found that
+  lib/letflow/design/req237-zig-provenance-marking-convention.md section 2
+  names three citation-unit shapes (single line, paragraph, table) but does
+  not enumerate a YAML-comment-line context: bare acceptance_criteria
+  list-item bullets inside a sequence, and a commented-out (# ---)
+  section-header block, both found in docs/requirements.yaml. A bare prose
+  marker line in either position would corrupt YAML syntax (spurious
+  sequence item) or read inconsistently inside a comment block, so
+  DOC-UPDATER used a #-prefixed YAML comment carrying the identical marker
+  text instead. REVIEWER judged this a defensible, in-scope mechanical
+  extension of the existing single convention (not a silently-invented
+  second convention), since the marker text and section 2(a) regex are
+  unchanged -- but recommended amending the design doc to state this
+  explicitly as a fourth citation-unit shape before sibling chunks
+  REQ-255, REQ-256, and REQ-257 (still-pending docs/requirements.yaml
+  chunks from REQ-239's 10-way split) hit the same
+  acceptance_criteria/stage-header contexts and each have to re-derive the
+  same judgement call independently.
+affected_files:
+  - lib/letflow/design/req237-zig-provenance-marking-convention.md
+queue_task_id: 510
+github_issue: 991
+status: open

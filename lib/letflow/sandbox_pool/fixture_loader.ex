@@ -13,9 +13,9 @@ defmodule Letflow.SandboxPool.FixtureLoader do
   for how a future requirement extends it. `sandbox_schema` is independently validated
   against the exact shape `Letflow.SandboxPool.claim/1` always produces before any
   interpolation, closing the same injection class on the schema-name dimension (design
-  doc §5.5 INV-FL-1) — this hardening goes beyond what R-Co's own source validates, since
-  R-Co's caller-trust assumption does not carry over to this module's differently-shaped
-  Elixir call graph.
+  doc §5.5 INV-FL-1) — nothing in this module's own call graph guarantees a caller
+  passes an already-valid schema name before this point, so it is validated
+  explicitly here rather than assumed safe.
   """
 
   alias Letflow.Repo
@@ -41,9 +41,10 @@ defmodule Letflow.SandboxPool.FixtureLoader do
 
   # The exact shape Letflow.SandboxPool's provisioning sequence always
   # produces ("sandbox_" <> a 32-hex-digit UUID with hyphens stripped) --
-  # INV-FL-1, added beyond R-Co's own source because this function has no
-  # caller-trust guarantee enforced by the type system (security-invariants.md
-  # INV-7).
+  # INV-FL-1: this function has no caller-trust guarantee enforced by the
+  # type system (security-invariants.md INV-7), so the schema-name shape is
+  # validated explicitly here rather than assumed safe from caller position
+  # alone.
   @schema_name_pattern ~r/^sandbox_[0-9a-f]{32}$/
 
   @doc """

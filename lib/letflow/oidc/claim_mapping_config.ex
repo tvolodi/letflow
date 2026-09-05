@@ -1,5 +1,6 @@
 defmodule Letflow.Oidc.ClaimMappingConfig do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Per-realm configuration for `Letflow.Oidc.ClaimMapping` — which claim path
   (dot-delimited) supplies each `Letflow.Oidc.IdentityContext` field. Ported
   from `src/oidc/claim_mapping.zig`'s `ClaimMappingConfig` struct (lines

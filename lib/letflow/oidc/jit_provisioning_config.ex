@@ -1,5 +1,6 @@
 defmodule Letflow.Oidc.JitProvisioningConfig do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Per-realm configuration for `Letflow.Identity.provision_oidc_user/3` — whether
   JIT (just-in-time) user creation is enabled for a realm, the default `status`
   a newly-provisioned user gets, and the default role slugs to grant. Ported
@@ -79,6 +80,7 @@ defmodule Letflow.Oidc.JitProvisioningConfig do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Returns `config.default_roles`, falling back to `["VIEWER"]` when it's empty.
   Mirrors `jit_provisioning.zig`'s own comment on the `default_roles` field:
   "If empty, the user gets no platform roles and defaults to VIEWER."

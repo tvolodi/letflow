@@ -1,5 +1,6 @@
 defmodule Letflow.Oidc.ClaimMapping do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure mapping from verified OIDC claims to a `Letflow.Oidc.IdentityContext`.
   Ported from `src/oidc/claim_mapping.zig`'s `mapVerifiedClaims` (the pure,
   no-I/O function — Zig's `MappingError`, not `loadClaimMappingConfig`'s
@@ -71,6 +72,7 @@ defmodule Letflow.Oidc.ClaimMapping do
   `subject` parameter is non-optional, so this is this port's own extension
   beyond the literal source; see design doc §7.3 OQ-2).
 
+  PROVENANCE (historical, not current decision authority):
   Every other field defaults per `claim_mapping.zig`'s Key Invariant 3
   (missing claim, or claim present but the wrong JSON type, both converge on
   the same default — never an error): `email` -> `""`, `preferred_username`
@@ -129,6 +131,7 @@ defmodule Letflow.Oidc.ClaimMapping do
   end
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Shared helper for the `email`/`preferred_username`/`display_name`/`tenant_id`
   fields (`claim_mapping.zig`'s structurally-identical "missing-or-wrong-type
   both default identically" rule, confirmed across all four call sites in the

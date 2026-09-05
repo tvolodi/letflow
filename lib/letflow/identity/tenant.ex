@@ -5,6 +5,7 @@ defmodule Letflow.Identity.Tenant do
   migration/backfill semantics", "Core types" `Tenant` struct, "Key
   invariants" 1-2).
 
+  PROVENANCE (historical, not current decision authority):
   `status` distinguishes `:active` from `:migrating` from `:inactive` —
   `:migrating` is the concrete write-pause state R-Co's
   `src/api/middleware/tenant_status.zig` checks before allowing a mutating

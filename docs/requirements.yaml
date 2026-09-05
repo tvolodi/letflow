@@ -14654,7 +14654,7 @@ requirements:
   - id: REQ-251
     title: Apply the .zig provenance-marking convention to lib/letflow/identity.ex, lib/letflow/identity/*, and lib/letflow/oidc/* (closes ISS-0424 part 3b-9)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

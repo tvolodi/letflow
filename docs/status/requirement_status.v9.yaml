@@ -947,6 +947,27 @@ history:
       bookkeeping. Merged via `gh pr merge --squash --delete-branch --admin`
       per GIT_MERGE.md. Queue task 494 released status:done
       (letflow-ee-orch).
+  - req: REQ-258
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T18:01:58Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md
+      (closes ISS-0424 part 3c-5, queue task 496, GH#961,
+      feature/WF02-REQ258-20260905). This is chunk 239e1 of ten
+      REQ-239-replacement chunks (REQ-254..REQ-263) applying that
+      convention to docs/. 43 markers inserted across 8 files (11+7+2+2+
+      5+2+9+5), 0 deletions; per-file .zig line counts identical
+      before/after (0001=19, 0002=16, 0003=2, 0007=2, 0010=13, 0013=3,
+      0014=13, 0016=7). REVIEWER independently re-derived every marker
+      count, re-diffed citation text before/after for byte-identical
+      preservation, re-confirmed the 0007 deliberate-divergence note
+      untouched (only line-shifted), and confirmed CLAUDE.md/README.md/
+      docs/migration/README.md untouched -- PASS
+      (handoffs/WF02-REQ258-20260905/step-02d-reviewer.json). Docs-only,
+      no mix compile/format/test applicable. ORCH will merge and release
+      queue task 496 status:done.
 
   - req: REQ-257
     event: done

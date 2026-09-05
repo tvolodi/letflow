@@ -4,6 +4,7 @@ Status: decided (REQ-084). Owner: ELIXIR-DEV.
 
 ## Question
 
+PROVENANCE (historical, not current decision authority):
 `docs/migration/stage-4-api-surface.md`'s OQ-2: R-Co hand-builds and serves an OpenAPI
 spec from `src/api/openapi/` (7 modules) plus `routes/openapi.zig`. Does Letflow (a)
 hand-build the equivalent, (b) adopt the `open_api_spex` Hex package, or (c) defer spec
@@ -15,6 +16,7 @@ generation to S6 and serve no spec in S4? Flagged by `stage-4-api-surface.md` it
 **R-Co source, reverified directly against the live tree (not copied from the
 requirement filing):**
 
+PROVENANCE (historical, not current decision authority):
 ```
 src/api/openapi/builder.zig          235
 src/api/openapi/mod.zig                6
@@ -74,6 +76,7 @@ this tree today. A spec built now — whether by hand or via a struggling-to-fit
 hand-built Elixir surface of comparable size) pure carried cost with a payoff that is
 several stages away and not yet designed against.
 
+PROVENANCE (historical, not current decision authority):
 **(b) Drift risk, and what avoids it.** A hand-built spec that is not generated from
 the actual mounted routes goes stale silently the moment a route's shape changes and
 the spec isn't updated in lockstep — this is precisely the failure mode R-Co's
@@ -88,6 +91,7 @@ actual `Plug.Router`/sub-router route table, not hand-transcribed) — naming th
 constraint now is this record's contribution to that future decision, even though
 selecting the mechanism itself is out of scope here.
 
+PROVENANCE (historical, not current decision authority):
 **(c) No Elixir equivalent to `schema_registry.zig` exists yet.** Checked directly:
 no `open_api_spex` dependency in `mix.exs`, and no Ecto-schema-to-JSON-Schema
 generation tooling exists anywhere in `lib/` today (the `json_schema` references that
@@ -109,6 +113,7 @@ shape (what `web/` needs from the spec, if anything beyond documentation) is kno
 
 ## Ownership of execution
 
+PROVENANCE (historical, not current decision authority):
 **S6** owns the eventual OpenAPI spec work, alongside the rest of S6's operational
 cross-cutting scope (the same stage `docs/migration/README.md` and other S4
 requirements — e.g. REQ-068's `rate_limit.zig`/`quota_enforcement.zig` scope

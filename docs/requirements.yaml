@@ -15196,7 +15196,7 @@ requirements:
   - id: REQ-258
     title: Apply the .zig provenance-marking convention to docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md (closes ISS-0424 part 3c-5)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

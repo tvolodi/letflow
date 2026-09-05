@@ -4,6 +4,7 @@ Status: decided (REQ-011). Owner: ELIXIR-DEV.
 
 ## Question
 
+PROVENANCE (historical, not current decision authority):
 R-Co hand-rolls OIDC in `src/oidc/` (13 files, including
 `jit_provisioning.zig` for JIT provisioning orchestration) and
 `src/identity/` (18 files, including `registry.zig`'s
@@ -31,6 +32,7 @@ and any supervision-tree wiring it needs, is S1 execution work
 
 ## Reasoning
 
+PROVENANCE (historical, not current decision authority):
 **Note on source accuracy:** the Question section originally (pre-existing, not edited
 as part of REQ-011 itself) attributed JIT provisioning to `src/identity/manager.zig`.
 Verified directly against R-Co's source: that attribution was wrong. The file at
@@ -51,6 +53,7 @@ ISS-0002.
 For each R-Co behavior below: does `ueberauth_oidcc` cover it out of the box, or does
 Letflow still need custom code?
 
+PROVENANCE (historical, not current decision authority):
 - **JIT user provisioning** (`src/oidc/jit_provisioning.zig`, backed by
   `src/identity/registry.zig`'s `createOrGetJitOidcUser`) — **not covered, custom code
   required.** R-Co's implementation is real, tenant-aware business logic: an idempotent
@@ -65,6 +68,7 @@ Letflow still need custom code?
   a `createOrGetJitOidcUser`-equivalent regardless of library choice, so this dimension
   does not favor any candidate over hand-rolling; it favors none of them.
 
+PROVENANCE (historical, not current decision authority):
 - **JWKS caching** (`src/identity/provider/oidc/jwks_cache.zig`) — **covered out of
   the box.** R-Co's cache is a hand-built, single-process, TTL + globally
   rate-limited `std.StringHashMap` keyed by JWKS URI, explicitly documented as **not
@@ -81,6 +85,7 @@ Letflow still need custom code?
   (~> 0.3)` provides no comparable caching — its documented flow fetches JWKS fresh
   per verification, with no cache/TTL/refresh mechanism.
 
+PROVENANCE (historical, not current decision authority):
 - **Multi-realm / multi-tenant Keycloak binding** (`src/oidc/realm_tenant_binding.zig`,
   `src/identity/provider/adapters/keycloak/`) — **partially covered; the binding
   enforcement itself is custom code regardless.** R-Co enforces a specific, persisted
@@ -99,6 +104,7 @@ Letflow still need custom code?
   still hand-writes the binding table and its enforcement under any library choice;
   `ueberauth_oidcc` only makes the former half easier.
 
+PROVENANCE (historical, not current decision authority):
 - **Custom role registry** (`src/identity/role_registry.zig`) — **not covered, custom
   code required, and not really an OIDC-library concern at all.** `TenantRoleStore`
   wraps a per-tenant `tenant_role` SQL table with transactional resolution
@@ -135,6 +141,7 @@ supervisor identically regardless of which router/framework decision 0001 made.
 `assent` has no process/supervision component at all. This decision does not
 contradict or require revisiting 0001.
 
+PROVENANCE (historical, not current decision authority):
 **Deferred to S1 execution, not this decision record:** if/when `ueberauth_oidcc` is
 wired in, `Oidcc.ProviderConfiguration.Worker` needs a supervised child spec in
 `lib/letflow/application.ex` (likely one per configured realm/issuer, given the

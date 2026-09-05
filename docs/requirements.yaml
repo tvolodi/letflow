@@ -204,6 +204,7 @@ requirements:
     stage: S0
     impl_order: 5  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       R-Co hand-rolls OIDC in src/oidc/ (13 files) and src/identity/
       (18 files: JIT provisioning, JWKS cache, role registry, tenant
       binding). Write
@@ -509,6 +510,7 @@ requirements:
       - "verdict explicitly checks REQ-010/011/012's current status in docs/requirements.yaml and states whether any MVP-1 deliverable conflicts with a decision recorded there"
     depends_on: [REQ-107]
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------
   # S1 — identity-and-multi-tenancy
   # Expanded once S0's four decision records were REVIEWER-gated GO
@@ -549,6 +551,7 @@ requirements:
     stage: S1
     impl_order: 28  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Add priv/repo/migrations and corresponding lib/letflow/ Ecto schema
       modules for the three identity tables S1's later requirements build on,
       following docs/migration/decisions/0003-ecto-schema-strategy.md Decision
@@ -613,6 +616,7 @@ requirements:
     stage: S1
     impl_order: 29  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Execute the mix.exs dependency addition and supervision-tree wiring
       docs/migration/decisions/0002-oidc-integration.md explicitly deferred to
       S1 execution (see that decision's "Deferred to S1 execution" closing
@@ -655,6 +659,7 @@ requirements:
     stage: S1
     impl_order: 30  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/oidc/claim_mapping.zig's mapVerifiedClaims as a pure Elixir
       function (no I/O — zero DB/network calls, matching claim_mapping.zig's
       own Key Invariant 1) that maps verified OIDC claims (as returned by
@@ -674,8 +679,11 @@ requirements:
       (claim_mapping.zig's SubClaimMissing).
     acceptance_criteria:
       - "the mapping function has no Repo call, no HTTP call, and no other I/O anywhere in its call graph — verified by inspection and stated explicitly in the handoff"
+      # PROVENANCE (historical, not current decision authority):
       - "given claims missing every optional field, the function returns defaults matching claim_mapping.zig's Key Invariant 3 (email->\"\", preferred_username->sub value, roles->[], display_name->nil, tenant_id->nil) rather than erroring"
+      # PROVENANCE (historical, not current decision authority):
       - "given claims with no sub/subject, the function returns an error (not a default), matching claim_mapping.zig's SubClaimMissing"
+      # PROVENANCE (historical, not current decision authority):
       - "@moduledoc cites src/oidc/claim_mapping.zig as the ported source"
     depends_on: []
 
@@ -686,6 +694,7 @@ requirements:
     stage: S1
     impl_order: 31  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the real JIT-provisioning orchestration from src/oidc/jit_provisioning.zig
       together with the actual upsert from src/identity/registry.zig's
       createOrGetJitOidcUser (lines ~843-912 in R-Co's source) into a
@@ -720,6 +729,7 @@ requirements:
       - "calling the provisioning function twice with the same (tenant_id, external_realm, external_id) returns the same user_id both times, with created: true only on the first call — demonstrated with an actual test or iex session, not just described"
       - "the inserted row has password_hash set to the fixed OIDC-only marker and auth_source: :oidc"
       - "a simulated concurrent-insert race (two calls racing before either commits) is handled by the re-select fallback without raising an unhandled exception — either demonstrated or the code path is inspected and cited explicitly if concurrency can't be simulated in this environment"
+      # PROVENANCE (historical, not current decision authority):
       - "@moduledoc cites src/oidc/jit_provisioning.zig and src/identity/registry.zig's createOrGetJitOidcUser as the ported source"
     depends_on: [REQ-015, REQ-017]
 
@@ -730,6 +740,7 @@ requirements:
     stage: S1
     impl_order: 32  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/oidc/realm_tenant_binding.zig's resolveTenantByRealm and
       resolveRealmByTenant as Letflow.Identity functions operating on REQ-015's
       tenants schema, enforcing the one-to-one tenant<->realm invariant
@@ -762,6 +773,7 @@ requirements:
     stage: S1
     impl_order: 33  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/identity/role_registry.zig's TenantRoleStore (list_roles,
       upsert_role) and resolveRoleInTx as Letflow.Identity.RoleRegistry
       functions operating on REQ-015's tenant_role/groups schema. list_roles
@@ -787,16 +799,19 @@ requirements:
       - "upsert_role/2 with a non-existent group_id returns an error tuple rather than inserting a dangling reference"
       - "upsert_role/2 called twice with the same name and a different group_id updates the existing binding rather than creating a duplicate row"
       - "resolve_role_in_tx/2 (or equivalent inside-an-existing-transaction call) returns nil on any lookup failure (unknown name, table/connection issue) rather than raising"
+      # PROVENANCE (historical, not current decision authority):
       - "@moduledoc cites src/identity/role_registry.zig and states explicitly that this module has no coupling to the OIDC token-verification pipeline"
     depends_on: [REQ-015]
 
   - id: REQ-021
+    # PROVENANCE (historical, not current decision authority):
     title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)
     owner: ELIXIR-DEV
     status: done
     stage: S1
     impl_order: 34  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Add a Plug (or Plug pipeline) to lib/letflow/router.ex wiring together
       REQ-016's ueberauth_oidcc verification, REQ-017's claim mapping,
       REQ-019's tenant<->realm resolution + ownership guard, and REQ-018's
@@ -826,6 +841,7 @@ requirements:
       - "moduledoc explicitly states this plug supersedes REQ-103 (never built) as Letflow's first real auth plug, and names which router.ex routes (if any) it is mounted in front of"
     depends_on: [REQ-016, REQ-017, REQ-018, REQ-019, REQ-020]
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------
   # S2 — event-store-and-definitions
   # Expanded once S1 (identity-and-multi-tenancy) was fully done --
@@ -885,6 +901,7 @@ requirements:
     stage: S2
     impl_order: 36  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Build the multi-schema provisioning mechanism docs/migration/decisions/
       0003-ecto-schema-strategy.md Decision B named but explicitly deferred out
       of REQ-015's scope (see lib/letflow/design/identity-schema.md section 1's
@@ -1013,12 +1030,14 @@ requirements:
     depends_on: [REQ-022]
 
   - id: REQ-024
+    # PROVENANCE (historical, not current decision authority):
     title: Event type registry (registry.zig, ES-05 -- schema + registerType/validatePayload/getType)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 39  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/event_store/registry.zig (ES-05) as a Letflow.EventStore.Registry
       context module, per R-Co's src/design/event_store.md's registry.zig
       section. Add:
@@ -1079,12 +1098,14 @@ requirements:
     depends_on: [REQ-022]
 
   - id: REQ-025
+    # PROVENANCE (historical, not current decision authority):
     title: Event append (store.zig's append, ES-01/02/03/05/08/DB-03)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 45  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/event_store/store.zig's Store.append() (per
       src/design/event_store.md's full "append" section: Key invariants 1-2,
       4, 6-10; DB tables per operation's "append" row) as
@@ -1139,12 +1160,14 @@ requirements:
     depends_on: [REQ-023, REQ-024]
 
   - id: REQ-026
+    # PROVENANCE (historical, not current decision authority):
     title: Event read paths, archive, and platform sentinels (store.zig's read/readGlobal/pointInTime/archive + platform.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 49  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/event_store/store.zig's Store.read(), Store.readGlobal(),
       Store.pointInTime(), and Store.archive() (per
       src/design/event_store.md's respective sections: ES-02/06 for
@@ -1226,6 +1249,7 @@ requirements:
       - "calling archive/1 twice in a row moves the same rows the first time and zero additional rows the second time (idempotent), verified by row counts before/after each call"
       - "event_retention_policies exists (via this requirement's own migration) with columns id/event_type(unique)/policy(default keep_forever)/keep_days/keep_count/created_at/updated_at and the chk_retention_policy/chk_keep_days/chk_keep_count CHECK constraints, matching R-Co's 003_event_archive.sql shape"
       - "archive/1 against an event_type with an explicit event_retention_policies row uses that policy's keep_days/keep_count instead of the global retention_days fallback, demonstrated with a policy row that would move a different set of rows than the global default would"
+      # PROVENANCE (historical, not current decision authority):
       - "the three platform sentinel constants exist and are accessible from the context module, each documented as citing src/event_store/platform.zig"
     depends_on: [REQ-025]
 
@@ -1236,6 +1260,7 @@ requirements:
     stage: S2
     impl_order: 40  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Add priv/repo/migrations and Ecto.Schema modules for the two core
       definition tables R-Co's src/design/definition.md documents (module
       purpose section: "store.zig owns all DB-backed CRUD... against
@@ -1284,12 +1309,14 @@ requirements:
     depends_on: [REQ-022]
 
   - id: REQ-028
+    # PROVENANCE (historical, not current decision authority):
     title: Graph structural validator (graph.zig, PD-02)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 37  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/graph.zig's validateGraph() (per
       src/design/definition.md's graph.zig section, "Named validation checks
       (PD-02)" table) as a pure Letflow function -- no Ecto.Repo call, no I/O
@@ -1324,12 +1351,14 @@ requirements:
     depends_on: []
 
   - id: REQ-029
+    # PROVENANCE (historical, not current decision authority):
     title: Node-attribute and edge-condition validators (graph.zig, PD-05/PD-06)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 44  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Extend REQ-028's graph module with src/definition/graph.zig's
       validateNodeAttributes() (PD-05) and the edge-condition rules (PD-06),
       per src/design/definition.md's respective sections. Both are pure
@@ -1376,12 +1405,14 @@ requirements:
     depends_on: [REQ-028]
 
   - id: REQ-030
+    # PROVENANCE (historical, not current decision authority):
     title: Definition store CRUD (store.zig, PD-01/PD-03/PD-04/PD-07)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 48  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/store.zig's core Store operations (per
       src/design/definition.md's respective PD sections) as a
       Letflow.Definitions context module, operating on REQ-027's
@@ -1457,12 +1488,14 @@ requirements:
     depends_on: [REQ-027, REQ-028, REQ-029]
 
   - id: REQ-031
+    # PROVENANCE (historical, not current decision authority):
     title: Service scope activation validator (service_scope_validator.zig, SVC-03)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 51  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/service_scope_validator.zig's ServiceScopeValidator
       (per src/design/svc-01-04-service-scope.md section 2.5's public
       interface and section 3.3's data flow) as the hook REQ-030's
@@ -1505,12 +1538,14 @@ requirements:
     depends_on: [REQ-030]
 
   - id: REQ-032
+    # PROVENANCE (historical, not current decision authority):
     title: Sub-process interface contract, definition-time half only (sub_process_interface.zig, SPC-02)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 47  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port ONLY the SPC-02 (definition-time) half of
       src/definition/sub_process_interface.zig, per
       src/design/spc-01-sub-process-interface-contract.md -- the file's own
@@ -1547,16 +1582,19 @@ requirements:
       - "each of the 6 named violation codes has at least one explicit failing-example test"
       - "an interface entry's json_schema containing an unsupported-but-recognized-as-inert keyword (e.g. $ref or pattern) is accepted, not rejected, per spc-01's 'permitted and inert' rule"
       - "a json_schema nested beyond the 32-level recursion cap is rejected as malformed"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc explicitly states SPC-01 (runtime activation/completion helpers) is out of this requirement's scope and belongs to S3, naming src/engine/instance.zig as SPC-01's future integration point"
     depends_on: [REQ-029]
 
   - id: REQ-033
+    # PROVENANCE (historical, not current decision authority):
     title: Definition snapshot store (snapshot.zig, PD-08)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 46  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/snapshot.zig's SnapshotStore (per
       src/design/definition.md's PD-08 section) as a
       Letflow.Definitions.SnapshotStore module operating on REQ-027's
@@ -1593,12 +1631,14 @@ requirements:
     depends_on: [REQ-027]
 
   - id: REQ-034
+    # PROVENANCE (historical, not current decision authority):
     title: Definition export/import (export_import.zig, PD-09)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 52  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/export_import.zig's ExportImportStore (per
       src/design/definition.md's PD-09 section) as a
       Letflow.Definitions.ExportImport module, calling REQ-030's Store
@@ -1676,12 +1716,14 @@ requirements:
     depends_on: [REQ-022]
 
   - id: REQ-036
+    # PROVENANCE (historical, not current decision authority):
     title: Promotion plan computation, conflict preflight, and plan digest (promotion_plan.zig PRM-01 + promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 50  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port three tightly-coupled, read-only computation modules as one
       requirement (they share the same PlanEntry/PromotionPlan types and are
       consumed together by REQ-037's review insert), operating on REQ-027's
@@ -1753,12 +1795,14 @@ requirements:
     depends_on: [REQ-027, REQ-028]
 
   - id: REQ-037
+    # PROVENANCE (historical, not current decision authority):
     title: Promotion review state machine and base promote (promotion_review.zig PRM-04 + promotion.zig ENV-03)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 54  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the promotion_reviews state-machine transition functions
       (src/definition/promotion_review.zig, PRM-04, per
       src/design/prm-04-promotion-review-state-machine.md's "Public
@@ -1815,12 +1859,14 @@ requirements:
     depends_on: [REQ-035, REQ-036]
 
   - id: REQ-038
+    # PROVENANCE (historical, not current decision authority):
     title: Promotion rollback (rollback.zig, PRM-08)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 55  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/rollback.zig's rollbackDefinitionVersion() (per
       prm-batch1's "PRM-08 design" section) as
       Letflow.Definitions.rollback_definition_version/4, operating on
@@ -1859,12 +1905,14 @@ requirements:
     depends_on: [REQ-030, REQ-037]
 
   - id: REQ-039
+    # PROVENANCE (historical, not current decision authority):
     title: Sandbox pool and fixture loader (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 42  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/sandbox_pool.zig's SandboxPool (claim/release,
       on-demand Postgres-schema provisioning) and
       src/definition/fixture_loader.zig's loadFixturesOnly (per
@@ -1912,12 +1960,14 @@ requirements:
     depends_on: [REQ-022]
 
   - id: REQ-040
+    # PROVENANCE (historical, not current decision authority):
     title: Promotion assertion re-run orchestration (assertion_rerun.zig, PRM-06/07 + promotion_assertion_runs schema)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 56  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/assertion_rerun.zig's applyPromotionAssertionRerun()
       (per prm-batch1's "PRM-06 design" section 2 and "PRM-07 design"
       sections in full) as
@@ -1976,12 +2026,14 @@ requirements:
     depends_on: [REQ-039, REQ-037]
 
   - id: REQ-041
+    # PROVENANCE (historical, not current decision authority):
     title: Solution-pack update three-way diff (pack_update.zig, PRM-09)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 43  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/pack_update.zig's computePackUpdatePlan() (per
       prm-batch1's "PRM-09 design" section) as
       Letflow.Definitions.compute_pack_update_plan/5, plus its three
@@ -2037,12 +2089,14 @@ requirements:
     depends_on: [REQ-015]
 
   - id: REQ-042
+    # PROVENANCE (historical, not current decision authority):
     title: Definition full-text search (store.zig's search, PD-10)
     owner: ELIXIR-DEV
     status: done
     stage: S2
     impl_order: 53  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/definition/store.zig's Store.search() (per
       src/design/definition.md's PD-10 section) as
       Letflow.Definitions.search/1, operating on REQ-027's process_definitions
@@ -2089,6 +2143,7 @@ requirements:
     depends_on: [REQ-030]
 
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------
   # S3 — instance-engine
   # Expanded once S2 (event-store-and-definitions) was fully done --
@@ -2205,6 +2260,7 @@ requirements:
     stage: S3
     impl_order: 87  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Add the priv/repo/migrations and Ecto.Schema modules the instance engine
       needs but that S2 deliberately did not build, all schema-per-tenant via
       REQ-022's :prefix mechanism (Decision B's general rule for business
@@ -2265,18 +2321,21 @@ requirements:
       - "an ALTER TABLE migration adds definition_id, correlation_key, current_nodes, variables, error_detail, completed_at and cancelled_at to instance_projections and applies cleanly against a provisioned tenant schema via REQ-022's migration-replay mechanism"
       - "the uq_instance_correlation partial unique index exists and is demonstrated rejecting a second instance_projections row with the same (definition_id, correlation_key) while permitting any number of rows whose correlation_key is NULL"
       - "priv/repo/migrations gains tasks and (if REQ-043 concludes it is needed) tokens migrations, schema-per-tenant per REQ-022, applying cleanly, with tasks.status as an Ecto.Enum over exactly PENDING/COMPLETED/CANCELLED"
+      # PROVENANCE (historical, not current decision authority):
       - "the tasks schema module's moduledoc explicitly states that src/tasks/store.zig's standalone task query surface is NOT ported by this requirement and names where it belongs instead"
       - "the moduledoc states explicitly, as a resolved-and-justified choice rather than an omission, whether a separate tokens table exists in Letflow or whether instance_projections.current_nodes subsumes it"
       - "a row written into tasks has tenant_id equal to the tenant whose schema the write targeted, derived internally; a test deliberately making a caller-supplied tenant_id disagree with the target schema fails loudly rather than silently attributing to the wrong tenant"
     depends_on: [REQ-023, REQ-027]
 
   - id: REQ-044
+    # PROVENANCE (historical, not current decision authority):
     title: Pure transition kernel core types and dispatch skeleton (transition.zig, EE-02)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 88  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the core value types and top-level dispatch of
       src/engine/transition.zig's transition() (per src/design/engine.md
       "Section EE-02: Pure Transition Function", L442) as a pure Letflow
@@ -2328,12 +2387,14 @@ requirements:
     depends_on: [REQ-028, REQ-029]
 
   - id: REQ-045
+    # PROVENANCE (historical, not current decision authority):
     title: Instance start and engine execution shell (instance.zig create, EE-01) -- supersedes lib/letflow/process_instance.ex
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 89  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.create() (per
       src/design/engine.md "Section EE-01: Start Instance", L18) as the
       instance-start entry point, operating on REQ-043's extended
@@ -2466,12 +2527,14 @@ requirements:
     depends_on: [REQ-045]
 
   - id: REQ-047
+    # PROVENANCE (historical, not current decision authority):
     title: Task activation persistence (instance.zig applyTransition, EE-03)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 91  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.applyTransition() (per
       src/design/engine.md "Section EE-03: Task Activation", L1086) as the
       persistence orchestration layer that turns REQ-044's pure transition
@@ -2514,12 +2577,14 @@ requirements:
     depends_on: [REQ-045]
 
   - id: REQ-048
+    # PROVENANCE (historical, not current decision authority):
     title: Task completion (instance.zig completeTask, EE-04)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 93  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.completeTask() (per
       src/design/engine.md "Section EE-04: Complete Task", L1632) as
       complete_task/N, operating on REQ-043's tasks table and REQ-044's
@@ -2558,12 +2623,14 @@ requirements:
     depends_on: [REQ-047, REQ-049]
 
   - id: REQ-049
+    # PROVENANCE (historical, not current decision authority):
     title: Variable scoping and merge (instance.zig mergeVariables, EE-09)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 92  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.mergeVariables() (per
       src/design/engine.md "Section EE-09: Variable Scoping and Merge", L3957)
       as the variable-merge rule every task completion, service-task response
@@ -2600,12 +2667,14 @@ requirements:
     depends_on: [REQ-044, REQ-024]
 
   - id: REQ-050
+    # PROVENANCE (historical, not current decision authority):
     title: Exclusive gateway evaluation and condition expressions (transition.zig, EE-05)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 94  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/transition.zig's EXCLUSIVE_GATEWAY branch (per
       src/design/engine.md "Section EE-05: Exclusive Gateway/CEL", L2238) into
       REQ-044's transition dispatch. Pure, no I/O, same contract as REQ-044.
@@ -2681,6 +2750,7 @@ requirements:
       - "exactly one outgoing edge is followed in every passing case, asserted directly rather than inferred"
       - "a condition using an unsupported CEL feature (a macro, a type-conversion function, a collection function, or the ternary operator) evaluates to false via the catch-false rule rather than raising or erroring the instance, matching hasCelUnsupportedFeatures()'s boundary -- at least two such expressions tested explicitly"
       - "the CEL-to-expr translation is tested directly on each of its four documented rewrites (variables. prefix stripped, && -> and, || -> or, ! -> not with != passing through unchanged), rather than only end-to-end through gateway evaluation"
+      # PROVENANCE (historical, not current decision authority):
       - "the evaluator performs zero I/O and is deterministic, confirmed by inspection of its call graph and stated in the moduledoc, which cites src/engine/transition.zig's evaluateGatewayCondition() and src/expr/ as the ported reference and records which subset of the expression surface landed"
     depends_on: [REQ-044]
 

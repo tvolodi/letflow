@@ -174,6 +174,28 @@ recurrence_2026_09_04_b: >
 queue_task_id: 418
 github_issue: 816
 status: open
+orch_note_20260905: >
+  ORCH observation (2026-09-05, direct-append per this issue's own
+  convention, no code change): PR #937 (ISS-0389, docs/scheduler/router/
+  authz changes only, zero wasm-engine files touched) is the first PR in
+  this session to run CI AFTER this issue's own OQ-5 mitigation (commit
+  7a029591) landed on main. Both its duplicate CI runs hit the wasm_hang
+  subprocess on their first attempt: one run's second attempt (after an
+  unrelated first-attempt failure on ISS-0480's PackUpdateMigrationTest
+  flake) also hit wasm_hang; the other run's second attempt passed
+  clean. Net: 2 wasm_hang failures across 4 total attempts (2 runs x
+  2 attempts each) post-fix -- 50%, matching this issue's own cited
+  pre-fix baseline (3-in-6, also 50%) almost exactly. This is a single
+  additional data point, not a conclusion -- consistent with the
+  issue's own "accumulated ... across many runs" requirement before
+  re-diagnosis is warranted, and does not by itself refute or confirm
+  either the concurrent-contention or sequential-exhaustion hypothesis.
+  Queue task 418 released status:blocked (not done, not a defect
+  resolution -- this genuinely needs more accumulated CI history before
+  the next diagnostic step is actionable in a single agent turn;
+  status:blocked stops it resurfacing via get_next_task's LIFO ordering
+  ahead of genuinely actionable work, matching the precedent already
+  used for ISS-0399/ISS-0391 this same session).
 
 recurrence_evidence_20260904: >
   THREE OCCURRENCES ON A SINGLE PR (#899, WF03-ISS0428-20260904), observed

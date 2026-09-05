@@ -4962,7 +4962,9 @@
     {
       "run_id": "WF02-REQ259-20260905",
       "workflow_id": "WF-02",
-      "requirement_ids": ["REQ-259"],
+      "requirement_ids": [
+        "REQ-259"
+      ],
       "stage": "S6",
       "status": "COMPLETED",
       "owned_modules": [
@@ -4980,6 +4982,22 @@
       "last_known_step": "Step Final",
       "backfilled": false,
       "note": "letflow-ee-orch, queue task 497. Applied REQ-237's .zig provenance-marking convention (chunk 239e2) to the 7 named docs/migration/stage-*.md files only -- 51 marker lines covering 148 .zig citation lines. Disjoint scope from concurrent sibling WF02-REQ258-20260905 (chunk 239e1, docs/migration/decisions/*.md). REVIEWER PASSed with no findings (handoffs/WF02-REQ259-20260905/step-2d-reviewer.json). No fourth/novel citation shape found; DOC-UPDATER's list-item paragraph-unit judgment call was independently verified by REVIEWER as a defensible, conservative extension, consistent with ISS-0510/REQ-257 precedent."
+    },
+    {
+      "run_id": "WF03-ISS0511-20260905",
+      "workflow_id": "WF-03",
+      "requirement_ids": [],
+      "stage": null,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "test/letflow/simulation/req207_vortex_test.exs"
+      ],
+      "lock_acquired_at": "2026-09-05T18:33:25Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "last_known_step": "Step 00 GIT_SETUP COMPLETED PASS, branch feature/WF03-ISS0511-20260905 pushed",
+      "backfilled": false,
+      "note": "ISS-0511 (queue task 511, locked to letflow-ee-orch, GH#998). Fixing req207_vortex_test.exs line ~908-914 id:/title: adjacency walk-back which breaks on REQ-257s intentional PROVENANCE comment line for REQ-225/227/228/229/230/231. Test-only fix; docs/requirements.yaml content is correct and untouched. Pre-start check: registry scanned, no existing WF03-ISS0511-* entry, no owned_modules overlap with any active run."
     }
   ]
 }

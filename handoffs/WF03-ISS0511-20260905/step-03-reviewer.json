@@ -1,0 +1,51 @@
+{
+  "handoff_id": "d5b3e7a1-8c4f-4e2a-b01c-3f6e9d2b0511",
+  "run_id": "WF03-ISS0511-20260905",
+  "workflow_id": "WF-03",
+  "step": "3",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0511-20260905/step-03-reviewer.json",
+  "created_at": "2026-09-05T18:43:27Z",
+  "started_at": "2026-09-05T18:43:27Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0511-20260905/step-02-test-designer.json"
+    ],
+    "artifacts_in": [
+      "docs/issues/ISS-0511.yaml",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json",
+      "handoffs/WF03-ISS0511-20260905/step-02-test-designer.json"
+    ],
+    "owned_modules": ["test/letflow/simulation/req207_vortex_test.exs"]
+  },
+  "task": {
+    "description": "Gate TEST-DESIGNER's fix (branch feature/WF03-ISS0511-20260905, commits 013a0303/21b4f995) for ISS-0511 before merge. This is a test-only fix (no lib/ change, no SECURITY-REVIEWER-triggering tenant-data path), so this REVIEWER pass is the sole idiom/correctness/scope gate before TEST-RUNNER's full-suite check. Read step-01-issue-fixer.json and step-02-test-designer.json in full for the diagnosed root cause and the exact fix specified.\n\nWhat changed: in test/letflow/simulation/req207_vortex_test.exs, a new private helper `nearest_preceding_id_line/2` replaces the old single-line `Enum.at(title_lines, idx - 1)` lookup in the 'vortex-entity-list-filter-and-page' test. The helper walks upward from idx - 1, skipping lines that are blank or match /^#/ after trimming a trailing \\r and surrounding whitespace, and returns the first non-blank non-comment line (or nil if it runs off the start of the list). The downstream `Enum.any?(allowed_ids, &(preceding_line =~ \"id: #{&1}\"))` assertion is unchanged.\n\nVerify specifically:\n1. The walk-back is correctly BOUNDED -- it must stop at (and return) the first non-blank/non-comment line, never continuing past a real content line to search further up for an id: line. Read the helper's actual code (git diff main feature/WF03-ISS0511-20260905 -- test/letflow/simulation/req207_vortex_test.exs) and confirm this by inspection, not by trusting the handoff prose.\n2. This bounding means a genuinely wrong or missing id: line still fails the existing assertion -- reason through at least one concrete counter-example (e.g. if a future edit removed an id: line entirely, or replaced it with wrong content) and confirm the helper would surface that wrong/missing content to the assertion rather than masking it.\n3. The \\r trim is necessary and correctly placed given docs/requirements.yaml's confirmed CRLF line endings (per step-01's diagnosis) -- confirm trim_trailing(\"\\r\") before trim() doesn't accidentally strip meaningful content or mis-order.\n4. Scope: confirm via `git diff main feature/WF03-ISS0511-20260905 --stat` that only test/letflow/simulation/req207_vortex_test.exs changed content (handoffs/ bookkeeping files are expected and fine) -- docs/requirements.yaml must be untouched.\n5. Idiom: private helper placement, naming, recursion style (guard clauses on idx >= 0 / idx < 0) are consistent with this test file's existing helper conventions (e.g. find_child_by_parent_instance_id/2 nearby).\n6. No scope creep: nothing else in the test file was touched beyond the helper addition and the one call-site change.\n\nThis is NOT the full-suite gate -- TEST-RUNNER runs `mix letflow.check` next regardless of this step's outcome (if PASS). Your job is idiom/correctness/scope review of the diff itself.",
+    "acceptance_criteria": [
+      "Independently inspected the actual diff (not just the handoff's prose claim)",
+      "Explicitly confirms the walk-back cannot mask a genuinely wrong/missing id: line, with reasoning via a concrete counter-example",
+      "Confirms only the one test file has content changes; docs/requirements.yaml untouched",
+      "Confirms idiom consistency with existing file conventions",
+      "result.status is PASS or FAIL with clear reasoning either way",
+      "result.next_action routes to TEST-RUNNER on PASS, or back to TEST-DESIGNER with specific rework instructions on FAIL"
+    ]
+  },
+  "completed_at": "2026-09-05T23:52:10Z",
+  "result": {
+    "status": "PASS",
+    "summary": "Independently inspected `git diff main feature/WF03-ISS0511-20260905 -- test/letflow/simulation/req207_vortex_test.exs` rather than trusting the handoff prose. The new private helper (lines 508-527) reads:\n\n  defp nearest_preceding_id_line(title_lines, idx) when idx >= 0 do\n    line = Enum.at(title_lines, idx)\n    trimmed = line |> to_string() |> String.trim_trailing(\"\\r\") |> String.trim()\n\n    if trimmed == \"\" or Regex.match?(~r/^#/, trimmed) do\n      nearest_preceding_id_line(title_lines, idx - 1)\n    else\n      line\n    end\n  end\n\n  defp nearest_preceding_id_line(_title_lines, idx) when idx < 0, do: nil\n\n1. BOUNDING confirmed by inspection: recursion (idx - 1) fires ONLY inside the blank-or-comment branch. The `else` branch returns `line` immediately on the first non-blank/non-comment content -- there is no code path that continues searching upward past a real content line. This is a bounded skip-comments walk, not an unbounded nearest-id search.\n\n2. Concrete counter-examples traced through the actual code:\n   (a) id: line corrupted/replaced (e.g. `id: REQ-225` edited to `id: REQ-999` or any non-comment, non-blank text): that line is neither empty nor `^#`-matching after trim, so the walk-back stops and returns it verbatim. The unchanged downstream assertion `Enum.any?(allowed_ids, &(preceding_line =~ \"id: #{&1}\"))` then evaluates against that wrong content and fails exactly as it would have pre-fix -- not masked.\n   (b) id: line deleted entirely, leaving only blank/comment lines above title: all the way to the top of the file: the walk-back keeps recursing on the blank-or-comment branch until idx < 0, hits the `idx < 0` clause, and returns nil. `nil =~ \"id: ...\"` inside the Enum.any? raises (nil does not implement String.Chars-compatible =~ lhs), surfacing as a hard test failure/error rather than a silent pass. Either counter-example still fails the test -- the fix cannot mask a genuinely broken/missing id: line.\n\n3. \\r-trim handling verified against the real file: `docs/requirements.yaml` confirmed CRLF-terminated (`file` reports 'with CRLF line terminators'); inspected REQ-225's actual on-disk structure at lines 13558-13560: `id: REQ-225` / `# PROVENANCE (historical, not current decision authority):` / `title: ...` -- exactly the case the fix targets. `String.trim_trailing(\"\\r\")` before `String.trim()` is correct: splitting on \"\\n\" leaves a trailing \\r as the last char of each line, trimming it first (then surrounding whitespace) cannot strip meaningful content since \\r never appears mid-line in this file, and the two trims commute here regardless of order.\n\n4. Scope confirmed via `git diff main feature/WF03-ISS0511-20260905 --stat`: only test/letflow/simulation/req207_vortex_test.exs (23 lines, +21/-2) has content changes; handoffs/step-01/02/03*.json, handoffs/orchestrator.log, handoffs/registry.json are expected bookkeeping. Ran `git diff --quiet main feature/WF03-ISS0511-20260905 -- docs/requirements.yaml` -- confirmed UNTOUCHED (empty diff).\n\n5. Idiom consistency: the new helper is placed immediately after the file's other test-local private helper, `find_child_by_parent_instance_id/2` (line 502), following the same convention -- an explanatory comment block directly above a narrowly-scoped private function. Recursion uses guard-clause dispatch (`when idx >= 0` / `when idx < 0`) rather than a `case`/`cond`/manual branch inside a single clause, which is the idiomatic Elixir shape for bounded recursive walks and matches this file's existing style of small, single-purpose test-local helpers rather than generic/reusable abstractions.\n\n6. No scope creep: diff contains exactly the helper addition (lines 508-527) and the single call-site change (`Enum.at(title_lines, idx - 1)` -> `nearest_preceding_id_line(title_lines, idx - 1)` at line 929); the downstream `Enum.any?` assertion block is byte-for-byte unchanged. Nothing else in the file was touched.\n\nAlso independently re-ran `mix test test/letflow/simulation/req207_vortex_test.exs` on this branch (real Postgres) rather than trusting TEST-DESIGNER's reported result: actual tail output `Finished in 18.5 seconds (0.00s async, 18.5s sync)` / `Result: 4 passed`. This is a test-only change (test/ file, no lib/ change, no tenant-data-path), so no SECURITY-REVIEWER gate applies here and this REVIEWER pass is the sole idiom/correctness/scope gate before TEST-RUNNER's full-suite check, consistent with the handoff's framing.\n\nNo type-safety gap applies (this is test-code arithmetic over a static doc file, not application transition logic) and no scope-creep or anti-pattern findings to file under docs/issues/.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to TEST-RUNNER for the authoritative full-suite gate (mix letflow.check / mix test) on branch feature/WF03-ISS0511-20260905."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

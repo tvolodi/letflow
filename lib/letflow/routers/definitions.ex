@@ -41,14 +41,15 @@ defmodule Letflow.Routers.Definitions do
 
   ## REQ-082 — write/lifecycle routes: a permission-gate divergence from R-Co
 
-  R-Co's own `authorization.zig` has NO `endpoint_policy_key` entries for
-  deprecate/archive/delete/import — confirmed by grep against R-Co's source,
-  zero hits, the same "no clause, not permission-gated" shape REQ-078/079
-  already established for rebind-pins/reconstruct. REQ-082's own acceptance
-  criterion 7 ("a caller without DefinitionsWrite receives 403 on all eight
-  endpoints") requires gating these four anyway — see
-  `Letflow.Api.Authorization`'s own comment at its four new clauses for the
-  full reasoning.
+  These four routes have no pre-existing permission-gate precedent to
+  inherit — confirmed by grepping R-Co's `authorization.zig` for
+  `endpoint_policy_key` entries covering deprecate/archive/delete/import,
+  zero hits, the same
+  "no clause, not permission-gated" shape REQ-078/079 already established
+  for rebind-pins/reconstruct. REQ-082's own acceptance criterion 7 ("a
+  caller without DefinitionsWrite receives 403 on all eight endpoints") is
+  what requires gating these four — see `Letflow.Api.Authorization`'s own
+  comment at its four new clauses for the full reasoning.
 
   ## REQ-081 — read routes (design: `lib/letflow/design/req081-definition-routes-read.md`)
 
@@ -63,9 +64,10 @@ defmodule Letflow.Routers.Definitions do
   ### Route ordering
 
   `/active/:name`, `/search`, `/:id/export`, and (REQ-125) `/delta` are
-  declared **above** `/:id`, which is declared above `/`, matching R-Co's own
-  registration order (`main.zig`) and the same hazard class
-  `Letflow.Routers.Instances`'s `/:id/history`-before-`/:id` note documents:
+  declared **above** `/:id`, which is declared above `/` (this registration
+  order also appears in `main.zig`), for the same
+  reason `Letflow.Routers.Instances`'s `/:id/history`-before-`/:id` note
+  documents:
   `Plug.Router` is first-match-wins, so a bare `GET "/:id"` declared above any
   of these would swallow it with `id` bound to the literal suffix (`"delta"`
   for `/delta`).
@@ -89,8 +91,9 @@ defmodule Letflow.Routers.Definitions do
 
   `Definitions.search_paginated/3` returns `{:error, :query_empty}`/
   `{:error, :query_too_long}` for a validation failure (mapped to **400**,
-  matching REQ-081's acceptance criteria text verbatim — a deliberate
-  divergence from R-Co's own 422 for both), and a genuinely-valid,
+  matching REQ-081's acceptance criteria text verbatim — both are
+  malformed-input errors, not semantic-validation failures, so 400 is the
+  correct class for both), and a genuinely-valid,
   zero-match query returns `{:ok, %{items: [], next_cursor: nil}}` (**200**,
   empty array) — never conflated. `render_search_result/1`'s clause list
   keeps these as three separate code paths.
@@ -101,9 +104,10 @@ defmodule Letflow.Routers.Definitions do
   does for `instance_id` — `Letflow.Definitions.get_by_id/2` (REQ-030) already
   internally maps a cast failure to `{:error, :not_found}` (its own
   `cast_uuid/1`), so a malformed UUID and a genuinely-absent-but-well-formed
-  UUID collapse to the same 404. This is a **stronger** INV-5 guarantee than
-  R-Co's own 422-vs-404 split, flagged in the design doc for REVIEWER
-  sign-off rather than silently decided.
+  UUID collapse to the same 404 — the **stronger** INV-5 guarantee, since a
+  caller gets no signal distinguishing "malformed" from "absent" either way,
+  flagged in the design doc for REVIEWER sign-off rather than silently
+  decided.
 
   ## Two different R-Co files are called `validation.zig`. They are unrelated.
 
@@ -186,10 +190,11 @@ defmodule Letflow.Routers.Definitions do
 
   This route does not call `Letflow.Api.Authorization.evaluate_access/2`.
   `endpoint_policy_key/2` has no clause for
-  `POST /definitions/:id/validate`, and R-Co's own `authorization.zig` has no
-  entry for it either — so there is nothing to port, and deciding what
-  permission a definition validation requires is a policy question belonging
-  to **REQ-130/REQ-131**. Inventing a route-local permission check here was
+  `POST /definitions/:id/validate` — there is no existing policy clause to
+  extend (R-Co's `authorization.zig` has no entry for it either, so there
+  is no precedent to port from there either), and deciding what permission
+  a definition validation requires is a policy question belonging to
+  **REQ-130/REQ-131**. Inventing a route-local permission check here was
   explicitly ruled out. The route is authenticated and tenant-scoped but not
   permission-gated; **REQ-131 is the closer.**
 
@@ -614,7 +619,7 @@ defmodule Letflow.Routers.Definitions do
 
   # ── PUT /definitions/:id (REQ-082, design §"write routes"/put) ─────────
   #
-  # "Full replacement" (R-Co's own handlePut doc comment): name/version/graph
+  # Full replacement: name/version/graph
   # are structurally required by this schema; description/stage are read
   # directly from the raw body afterward (not through this schema, which
   # would treat an explicit `null` identically to "absent" -- see
@@ -844,15 +849,14 @@ defmodule Letflow.Routers.Definitions do
 
   # ── DELETE /definitions/:id (REQ-082, design §"write routes"/delete) ───
   #
-  # Status-dependent (PD-04), ported structurally from R-Co's handleDelete:
-  # DRAFT -> hard delete (204). ACTIVE -> deprecate then archive, TWO
-  # separate Definitions calls in the same request (R-Co's own comment:
-  # "Both run in the same request; the second call receives DEPRECATED
-  # status") -- reuses REQ-030's deprecate/2 and archive/2 exactly, no
-  # second state machine. DEPRECATED -> archive. ARCHIVED -> 409. A
-  # get_by_id-then-act read determines which branch to take, the same
-  # non-atomic two-step structure R-Co's own handleDelete has (it reads
-  # `current.status` then dispatches) -- not a Letflow-introduced race.
+  # Status-dependent (PD-04): DRAFT -> hard delete (204). ACTIVE -> deprecate
+  # then archive, TWO separate Definitions calls in the same request ("both
+  # run in the same request; the second call receives DEPRECATED status")
+  # -- reuses REQ-030's deprecate/2 and archive/2 exactly, no second state
+  # machine. DEPRECATED -> archive. ARCHIVED -> 409. A get_by_id-then-act
+  # read determines which branch to take -- a non-atomic two-step structure
+  # (reads `current.status` then dispatches) that is an existing race in
+  # the underlying status model, not one this router introduces.
 
   defp handle_delete(conn, raw_id) do
     opts = conn.assigns.scoped_opts
@@ -993,10 +997,10 @@ defmodule Letflow.Routers.Definitions do
   #
   # Body shape mirrors Letflow.Definitions.ExportImport.ExportDocument's own
   # fields (bpm_export_schema_version/name/version/description/graph),
-  # `id`/`exported_at` accepted but IGNORED (informational only, matching
-  # R-Co's own handleImport: "id is informational only" -- ExportImport.import/3
-  # never reads document.id when building its create/2 call either), plus
-  # REQ-082's own `variable_schemas` addition.
+  # `id`/`exported_at` accepted but IGNORED (informational only --
+  # ExportImport.import/3 never reads document.id when building its
+  # create/2 call, so accepting-but-discarding these fields is consistent
+  # with that contract), plus REQ-082's own `variable_schemas` addition.
 
   defp handle_import(conn) do
     opts = conn.assigns.scoped_opts

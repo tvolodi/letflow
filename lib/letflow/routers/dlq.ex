@@ -17,8 +17,9 @@ defmodule Letflow.Routers.Dlq do
   path unreachable from this sandbox, verified absent, not assumed covered.
   The binding contract instead is the already-shipped SPA consumer:
   `web/src/api/dlq.ts`'s `dlqApi` object and `web/src/types/api.ts`'s
-  `DlqEntry`/`CursorPage<T>` types. A future reader must not assume R-Co
-  route-shape parity was verified here — it was not.
+  `DlqEntry`/`CursorPage<T>` types. A future reader must not assume this
+  route layer's shape was cross-checked against R-Co's — it was not; the
+  SPA consumer above is the only contract this router is bound to.
 
   ## Authorization (REQ-131, REQ-069)
 

@@ -70,8 +70,9 @@ defmodule Letflow.Routers.MetricsExposition do
   gauge (a raw Unix timestamp, `node_exporter`'s own `_boot_time_seconds` convention)
   rather than a boolean flag, so any consumer can compute and threshold staleness
   itself (`time() - letflow_active_instances_last_refresh_timestamp_seconds >
-  threshold`) rather than Letflow baking in one arbitrary cutoff -- a genuine,
-  named improvement over R-Co's own recorded gap (design §6).
+  threshold`) rather than Letflow baking in one arbitrary cutoff -- a raw
+  timestamp lets any consumer define its own staleness threshold instead of
+  trusting one fixed boolean the exporter decided for them (design §6).
 
   ## Disposition of `lib/letflow/routers/metrics.ex` (AC9)
 

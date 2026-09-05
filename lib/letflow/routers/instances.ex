@@ -17,10 +17,10 @@ defmodule Letflow.Routers.Instances do
 
   ## Route ordering — `rebind-pins`/`cancel`/`reconstruct` MUST precede any future `POST /instances/:id`
 
-  R-Co's own registration carries the same constraint verbatim
-  (`src/main.zig:848`: "must precede plain /:id"). `Plug.Router` matches in
+  `Plug.Router` matches in
   declaration order, so a `post "/:id"` declared **above** these three would
-  swallow all of them. `/:id/cancel` and `/:id/reconstruct` are literal path
+  swallow all of them (`src/main.zig:848` documents the same ordering
+  constraint: "must precede plain /:id"). `/:id/cancel` and `/:id/reconstruct` are literal path
   suffixes distinct from `/:id/rebind-pins` and from each other, so they do
   not compete with one another regardless of relative order — but no bare
   `POST "/:id"` may be declared above any of the three. **REQ-080: `GET` and
@@ -55,10 +55,10 @@ defmodule Letflow.Routers.Instances do
 
   ## Reconstruct always write-backs, and has no route-local permission check
 
-  `write_back: true` is hardcoded, not a request option, matching R-Co's
-  `handleReconstruct` exactly. No `endpoint_policy_key/2` clause exists for
-  this route, and neither does R-Co's own `authorization.zig` (confirmed by
-  grep, zero hits) — same precedent as rebind-pins: authenticated +
+  `write_back: true` is hardcoded, not a request option — there is no
+  caller-facing flag to make it optional. No `endpoint_policy_key/2` clause
+  exists for this route (R-Co's `authorization.zig` has no entry for it
+  either, confirmed by grep, zero hits) — same precedent as rebind-pins: authenticated +
   tenant-scoped only, not permission-gated. A future permission requirement
   is a REQ-131-class policy decision, not this requirement's to invent.
 
@@ -120,9 +120,10 @@ defmodule Letflow.Routers.Instances do
 
   This route does not call `Letflow.Api.Authorization.evaluate_access/2`.
   `endpoint_policy_key/2` has no clause for
-  `POST /instances/:id/rebind-pins`, and R-Co's own `authorization.zig` has no
-  entry for it either — so there is nothing to port, and deciding what
-  permission a pin rebind requires is a policy question belonging to
+  `POST /instances/:id/rebind-pins` — there is no existing policy clause to
+  extend (R-Co's `authorization.zig` has no entry for it either), and
+  deciding what permission a pin rebind requires is a policy
+  question belonging to
   **REQ-130/REQ-131**. Inventing a route-local permission check here was
   explicitly ruled out. The route is authenticated and tenant-scoped but not
   permission-gated; **REQ-131 is the closer.**

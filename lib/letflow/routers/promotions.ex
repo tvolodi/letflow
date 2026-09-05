@@ -50,9 +50,9 @@ defmodule Letflow.Routers.Promotions do
   codebase has. `required_permission(:Unknown) -> :MetricsRead` exists in
   that module but is dead code on this path (`evaluate_access/2`'s `cond`
   short-circuits on `:Unknown` in its first branch) and is NOT what gates
-  these routes. This matches R-Co's own effective behaviour — `main.zig:1571`
-  hardcodes `.role = .PLATFORM_ADMIN` for the `promotions` resource — and is
-  a considered decision (design §4.2), not an unhandled fallthrough: no new
+  these routes. PLATFORM_ADMIN-only access to the promotions resource is a
+  considered decision (design §4.2, and R-Co's `main.zig:1571` hardcodes
+  the same restriction), not an unhandled fallthrough: no new
   policy key or permission is added to `Letflow.Api.Authorization` by this
   requirement.
 
@@ -86,8 +86,9 @@ defmodule Letflow.Routers.Promotions do
   in a state that permits this transition"`, naming the *operation class*,
   never the row's actual status. This is a deliberate 409 upgrade from
   R-Co's 400 `INVALID_REVIEW_TRANSITION` (D-8), required by AC4's own
-  wording; R-Co's own two other 409s (`PLAN_DIGEST_MISMATCH`,
-  `DUPLICATE_REVIEW`) are ported unchanged as 409s here too.
+  wording; the other two 409s (`PLAN_DIGEST_MISMATCH`,
+  `DUPLICATE_REVIEW`) needed no such upgrade and carry through unchanged as
+  409s here too.
 
   ## Assertion-run idempotency is preserved by omission (design §8.1, AC2)
 
@@ -473,8 +474,8 @@ defmodule Letflow.Routers.Promotions do
   # `serialised_plan` is decoded (real object, not a spliced raw string).
   # `created_at` is real (`iso8601/1` of `inserted_at`) -- R-Co hardcodes
   # "1970-01-01T00:00:00Z" (D-3), not ported. `assertions`/
-  # `needs_review_package` are domain logic computed inline by R-Co's own
-  # handler and are not ported (OQ-3, no context module produces either).
+  # `needs_review_package` are domain logic computed inline by the handler
+  # in R-Co and are not ported here (OQ-3, no context module produces either).
   @doc false
   @spec review_context_map(PromotionReview.t()) :: map()
   defp review_context_map(review) do

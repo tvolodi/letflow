@@ -661,21 +661,18 @@ defmodule Letflow.SchedulerTest do
       end
     end
 
-    test "no file under lib/letflow/api/, lib/letflow/routers/, or web/ references the scheduler or timers" do
-      root = File.cwd!()
-
-      candidate_paths =
-        ["lib/letflow/api/**/*.ex", "lib/letflow/routers/**/*.ex", "web/src/**/*.{ts,tsx}"]
-        |> Enum.flat_map(&Path.wildcard(Path.join(root, &1)))
-
-      offending =
-        for path <- candidate_paths,
-            source = File.read!(path),
-            source =~ ~r/Letflow\.Scheduler|"timers"|\/timers\b/,
-            do: path
-
-      assert offending == [],
-             "expected no route/controller/frontend file to reference the scheduler/timers, found: #{inspect(offending)}"
-    end
+    # SUPERSEDED by ISS-0389 (2026-09-05): at REQ-186 time no route exposed
+    # the scheduler at all, so "no lib/letflow/api|routers file references
+    # Letflow.Scheduler/timers" was a true and useful guard against a
+    # premature route. ISS-0389 (design
+    # `lib/letflow/design/iss0389-advance-timer-endpoint.md`) deliberately
+    # adds the first such route -- `POST /instances/:id/advance-timer` in
+    # `lib/letflow/routers/instances.ex`, calling
+    # `Letflow.Scheduler.resolve_advance_target/3` and
+    # `Letflow.Scheduler.fire_timer/2` -- reviewed and approved with that
+    # reference in place, so the original blanket assertion is no longer
+    # accurate and would flag intended, reviewed work as a regression. The
+    # narrower guard above (no Plug.Router/controller/route construct
+    # *inside* the scheduler modules themselves) still holds and is kept.
   end
 end

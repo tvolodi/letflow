@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-01",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T04:10:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-00"],
+    "artifacts_in": [
+      "lib/letflow/scheduler.ex (fire_timer/2, attempt_fire/2, maybe_rearm_timer/3)",
+      "lib/letflow/routers/instances.ex (route/authz pattern, e.g. authz_post \"/:id/cancel\")",
+      "lib/letflow/api/authorization.ex (permission enum + endpoint_policy_key + required_permission)",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "test/letflow/simulation/scenarios/shipment-ops-timeout-escalation.yaml (or equivalent fixture path)",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md §0"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 1: diagnose ISS-0389 (missing POST /api/v1/instances/:id/advance-timer) and size the fix."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-confirmed (fresh grep -rniE 'advance[-_]?timer|force_fire|fire_timer|manual_advance|force_advance' across lib/) that no HTTP-reachable manual/forced timer-firing capability exists under any name. All 'fire_timer' hits are the existing internal Letflow.Scheduler.fire_timer/2 and its callers/comments -- nothing in lib/letflow/routers/ references it.\n\nHow a TIMER node fires today: Letflow.Scheduler.Poller ticks on a timer, and for each tenant schema calls Letflow.Scheduler.attempt_fire(timer_id, tenant_schema) (public, lib/letflow/scheduler.ex ~line 425), which wraps the also-public Letflow.Scheduler.fire_timer/2 (~line 262) in try/rescue for failure accounting. fire_timer/2 opens one Repo.transaction/1, locks the timer row (fetch_and_lock_timer/2, FOR UPDATE), and if status == \"pending\" calls do_fire/2, which flips the row to fired, appends a TIMER_FIRED event, calls Letflow.Engine.advance_after_timer_fired/3 to actually drive the token through Transition, then maybe_rearm_timer/3 for recurrence. Critically: fire_timer/2 does NOT check timer.fire_at against now() anywhere in its own logic -- it only checks status == \"pending\". This means calling Letflow.Scheduler.fire_timer(timer_id, tenant_schema) directly, from anywhere, already forces that specific pending timer to fire immediately regardless of its scheduled time -- exactly the 'advance-timer' semantics needed.\n\nStructural finding for sizing (task 3): fire_timer/2 and attempt_fire/2 are ALREADY public, top-level functions in Letflow.Scheduler with clean @specs -- they are not private helpers reachable only from inside Poller's own polling GenServer loop. A new route handler can call Letflow.Scheduler.fire_timer/2 directly with zero refactor of the scheduler/poller. This is the good half of the finding: the actual force-fire mechanism is a non-issue.\n\nNot purely a test convenience (task 4): the scenario YAML (shipment-ops-timeout-escalation.yaml step 2) drives this via `via: api`, i.e. a real HTTP POST through the same simulation Runner that issues real HTTP calls for every other non-skip step -- it is written as a real product endpoint, not a Runner-internal test hook. grep of lib/letflow/simulation/ found no existing test-only 'fake fire' mechanism to promote; the scenario's own :skip fallback is the ONLY existing workaround, and it's a scenario-harness disposition, not an alternate firing path.\n\nWhat makes this genuine new API surface rather than a thin ELIXIR-DEV-only wrapper (task 5, verdict): (a) targeting semantics are undecided -- the route is `POST /instances/:id/advance-timer` with only instance_id in the path, but an instance can have zero, one, or (with parallel branches / recurring timers) more than one pending TIMER row; someone must decide whether the caller supplies node_id/timer_id, whether 'advance all pending timers for this instance' is the intended semantics, and what the response/error shape is for zero-pending vs multiple-pending. (b) this requires a genuinely NEW authz permission, not a copy-paste: lib/letflow/api/authorization.ex encodes permissions as a closed type union (~line 75/104), an endpoint_policy_key/2 clause (~line 255), a required_permission/1 clause (~line 446), and a seeded-permissions list (~line 508) -- all four need a coordinated new entry, and this module's own instances.ex moduledoc explicitly documents that inventing a route-local permission ad hoc was 'explicitly ruled out' for a comparable route (pin rebinds) as a policy decision left to a numbered requirement, not a developer's on-the-spot call. (c) a real product-vs-simulation-only question needs an explicit decision: should this ship as a real tenant-facing production route (implying real operational risk -- any tenant actor could force-fire any pending timer node ahead of schedule) or as a route gated to non-production/simulation use only. None of (a)-(c) are implementation details ELIXIR-DEV should decide unilaterally.\n\nVERDICT: route to CODE-DESIGNER. Scope for the design doc: (1) request/response contract for POST /api/v1/instances/:id/advance-timer, including how the target timer is identified and multi-timer/zero-timer behavior; (2) new authz permission (name, endpoint_policy_key/required_permission entries, seed list) and who may hold it; (3) explicit decision on production-route vs simulation/test-only route, with rationale; (4) confirmation that the handler should call the existing public Letflow.Scheduler.fire_timer/2 directly (no scheduler/poller refactor needed -- confirmed already cleanly callable). Downstream ELIXIR-DEV work itself should be small once the design answers these three questions, since the actual firing mechanism requires no change.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

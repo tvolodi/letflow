@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, and REQ-212's :AttachmentsManage/:AttachmentsRead" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, and ISS-0389's :InstancesAdvanceTimer" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -48,7 +48,8 @@ defmodule Letflow.Api.AuthorizationTest do
                :TenantsManage,
                :RolesManage,
                :AttachmentsManage,
-               :AttachmentsRead
+               :AttachmentsRead,
+               :InstancesAdvanceTimer
              ]
     end
   end

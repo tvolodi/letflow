@@ -1,0 +1,48 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-03",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T04:55:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-02b"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0389-advance-timer-endpoint.md",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex",
+      "test/letflow/api/authorization_test.exs",
+      "test/letflow/scheduler_test.exs",
+      "test/letflow/simulation/req206_swiftroute_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 2a: implement the approved ISS-0389 design -- POST /instances/:id/advance-timer, the resolve_advance_target/3 context function, and the InstancesAdvanceTimer authz permission -- exactly as specified, then route to SECURITY-REVIEWER/REVIEWER."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented all elements of lib/letflow/design/iss0389-advance-timer-endpoint.md against the real codebase, no deviation from the approved design: (1) Letflow.Scheduler.resolve_advance_target/3 added to lib/letflow/scheduler.ex, matching the design's exact @spec and branch table (nil timer_id -> 0/1/2+ pending rows -> :no_pending_timer/{:ok,timer}/:ambiguous_pending_timers; explicit timer_id -> same-404 fold of not-found/not-pending/wrong-instance into :no_pending_timer). fire_timer/2 untouched. (2) New authz_post \"/:id/advance-timer\" route in lib/letflow/routers/instances.ex, placed after /:id/reconstruct and before the bare create POST per the design's ordering requirement; handle_advance_timer/2 calls resolve_advance_target/3 then fire_timer/2, issues no Repo.* call itself (INV-RT-1), and maps errors exactly per the design's table (422 malformed instance_id/timer_id, 400 malformed body, 404 no_pending_timer, 400 ambiguous_pending_timers, 500 no-detail on fire_timer/2 error). (3) :InstancesAdvanceTimer wired through all five real edit points in lib/letflow/api/authorization.ex: permission type union (~line 90), endpoint_policy_key type union (~line 126), the @permissions list (~line 152), endpoint_policy_key/2's new POST /instances/:id/advance-timer clause (~line 264), required_permission/1 (~line 457), and PROCESS_OPERATOR's role_allows?/2 clause (~line 529); PLATFORM_ADMIN's catch-all and TASK_WORKER/AGENT_RUNNER's exclusion needed no change, matching the design's Decision 2 role table exactly. (4) test/letflow/simulation/req206_swiftroute_test.exs's stale absence-assertion test (former lines 493-506, 'advance-timer endpoint absent...') removed with a SUPERSEDED comment (same precedent the file's own REQ-212 attachments finding already established) rather than inverted -- explicitly flagged in that comment, in this handoff, and left the actual scenario-fixture un-skip (shipment-ops-timeout-escalation.yaml step 2 via:skip -> via:api, and its own describe block's assertions) to TEST-DESIGNER, per the design's own AC5/AC10 explicit assignment of that edit to TEST-DESIGNER, not ELIXIR-DEV -- NOT done in this step, flagged for the next WF-02/WF-03 run against REQ-206's fixture. Two additional now-stale tests found and fixed during verification (not anticipated by the design, both mechanical/no design-judgment involved): test/letflow/api/authorization_test.exs's exact-list AC1 assertion (permissions/0) updated to include :InstancesAdvanceTimer at the end; test/letflow/scheduler_test.exs's AC9 'no lib/letflow/api|routers file references the scheduler' guard (REQ-186-era, predates any scheduler route) removed with a SUPERSEDED comment since ISS-0389 deliberately and reviewedly adds the first such reference -- the narrower 'scheduler modules themselves define no route construct' guard in the same describe block is kept and still passes. mix compile --warnings-as-errors: clean, zero warnings. mix format --check-formatted: clean, no diff. Targeted suite (authorization_test.exs, authorization_ac9_test.exs, authorization_role_realm_test.exs, authorization_enforcement_test.exs, routers/instances_test.exs, simulation/req206_swiftroute_test.exs): 91 passed, 0 failed. Scheduler suite (scheduler_test.exs, scheduler_req188_test.exs, scheduler/*): 45 passed, 0 failed. AC2/AC3 mechanically re-verified via a throwaway ExUnit assertion (endpoint_policy_key, required_permission, role_allows? for all four cited roles) before deleting it -- all matched the design's stated values exactly. Full `mix test` was attempted but exceeded a 590s bound on this real-Postgres suite without finishing (not a failure -- just did not complete in the time available); the fuller run was not repeated given the targeted+scheduler suites already cover every file this change touches.",
+    "issues": [
+      "Design doc AC5/AC10 explicitly assign the shipment-ops-timeout-escalation.yaml fixture's step-2 un-skip (via:skip -> via:api) and its accompanying test assertions to TEST-DESIGNER, not ELIXIR-DEV -- NOT done in this step. The route is fully functional and ready for that fixture change once this handoff clears REVIEWER.",
+      "Two authorization/scheduler test files needed non-design-anticipated fixes (an exact-list assertion in authorization_test.exs, and a REQ-186-era 'no route references the scheduler' guard in scheduler_test.exs) -- both mechanical, no judgment calls, flagged here for visibility rather than silently folded into the diff without mention.",
+      "Full `mix test` did not complete within a 590s bound in this environment; only the targeted files this change touches (91 + 45 tests, all passing) were verified to completion. Flagging in case REVIEWER or TEST-RUNNER wants a longer-budget full run before merge."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

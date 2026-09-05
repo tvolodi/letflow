@@ -14,6 +14,7 @@ defmodule Letflow.Routers.Instances do
   | create      | `POST /instances`                  | `Letflow.Engine.create/2`                                               | `InstancesStart` | 201, `{instance_id, status, created_at}` |
   | cancel      | `POST /instances/:id/cancel`       | `Letflow.Engine.cancel_instance/3`                                      | `InstancesCancel` | 200, `{instance_id, status}`; 409 if already `COMPLETED` or already `CANCELLED` |
   | reconstruct | `POST /instances/:id/reconstruct`  | `Letflow.Engine.Reconstruction.reconstruct_instance/2` (`write_back: true`, not caller-controllable) | none (REQ-079 — same precedent as rebind, a future policy decision) | 200, `{instance_id, status, tokens: [{node_id, branch_id}], variables}` |
+  | advance-timer | `POST /instances/:id/advance-timer` | `Letflow.Scheduler.resolve_advance_target/3` (new) then `Letflow.Scheduler.fire_timer/2` (existing, unchanged) | `InstancesAdvanceTimer` (ISS-0389 — a real permission, fully wired, not the rebind-pins/reconstruct ad-hoc pattern) | 200, `{instance_id, timer_id, node_id, timer_status}`; 400 ambiguous pending timers; 404 no matching pending timer |
 
   ## Route ordering — `rebind-pins`/`cancel`/`reconstruct` MUST precede any future `POST /instances/:id`
 
@@ -307,6 +308,7 @@ defmodule Letflow.Routers.Instances do
   alias Letflow.Repository.Artifact
   alias Letflow.Repository.Attachment
   alias Letflow.Repository.Attachments
+  alias Letflow.Scheduler
 
   @idempotency_key_header "idempotency-key"
   @max_idempotency_key_bytes 255
@@ -336,6 +338,13 @@ defmodule Letflow.Routers.Instances do
   # route's comment and the enforcement test's allowlist.
   authz_post "/:id/reconstruct", :InstancesCancel do
     handle_reconstruct(conn, conn.params["id"])
+  end
+
+  # ISS-0389 -- force-fire a pending TIMER node. MUST precede the bare
+  # `authz_post "/"` below -- same ordering hazard class as the other
+  # `/:id/...` suffixes above (moduledoc "Route ordering").
+  authz_post "/:id/advance-timer", :InstancesAdvanceTimer do
+    handle_advance_timer(conn, conn.params["id"])
   end
 
   authz_post "/", :InstancesStart do
@@ -672,6 +681,70 @@ defmodule Letflow.Routers.Instances do
   defp render_reconstruct(conn, {:error, _internal}), do: Response.internal_error(conn)
 
   defp token_map(token), do: %{"node_id" => token.node_id, "branch_id" => token.branch_id}
+
+  # ── POST /instances/:id/advance-timer (ISS-0389 design §1-4) ──────────────
+  #
+  # Force-fires a pending TIMER node ahead of its own `fire_at`. Resolves
+  # "which timer" via `Scheduler.resolve_advance_target/3` (the router never
+  # issues a direct repo call itself, INV-RT-1), then delegates the actual
+  # fire to the existing `Scheduler.fire_timer/2` unchanged.
+  defp handle_advance_timer(conn, raw_id) do
+    opts = conn.assigns.scoped_opts
+    tenant_schema = Keyword.fetch!(opts, :prefix)
+
+    with {:ok, body} <- object_body(conn),
+         {:ok, instance_id} <- cast_instance_id(raw_id),
+         {:ok, timer_id} <- cast_optional_timer_id(Map.get(body, "timer_id")),
+         {:ok, timer} <- Scheduler.resolve_advance_target(instance_id, timer_id, tenant_schema) do
+      render_advance_timer(
+        conn,
+        instance_id,
+        timer,
+        Scheduler.fire_timer(timer.id, tenant_schema)
+      )
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+
+      {:error, :invalid_instance_id} ->
+        Response.unprocessable(conn, "instance_id is not a valid UUID")
+
+      {:error, :invalid_timer_id} ->
+        Response.unprocessable(conn, "timer_id is not a valid UUID")
+
+      {:error, :no_pending_timer} ->
+        Response.not_found(conn)
+
+      {:error, :ambiguous_pending_timers} ->
+        Response.bad_request(conn, "instance has more than one pending timer; specify timer_id")
+    end
+  end
+
+  defp render_advance_timer(conn, instance_id, timer, {:ok, fire_result})
+       when fire_result in [:fired, :already_final] do
+    Response.ok(conn, %{
+      "instance_id" => instance_id,
+      "timer_id" => timer.id,
+      "node_id" => timer.node_id,
+      "timer_status" => Atom.to_string(fire_result)
+    })
+  end
+
+  # INV-4 no-detail 500 -- matches render_cancel/2, render_reconstruct/2's
+  # own precedent for internal/unexpected fire_timer/2 failures.
+  defp render_advance_timer(conn, _instance_id, _timer, {:error, _reason}),
+    do: Response.internal_error(conn)
+
+  defp cast_optional_timer_id(nil), do: {:ok, nil}
+
+  defp cast_optional_timer_id(raw_timer_id) when is_binary(raw_timer_id) do
+    case Ecto.UUID.cast(raw_timer_id) do
+      {:ok, timer_id} -> {:ok, timer_id}
+      :error -> {:error, :invalid_timer_id}
+    end
+  end
+
+  defp cast_optional_timer_id(_not_a_string), do: {:error, :invalid_timer_id}
 
   # ── GET /instances/:id (design §"Router"/get_by_id) ────────────────────
 

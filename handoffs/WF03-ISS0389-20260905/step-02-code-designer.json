@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-02",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0389-20260905/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T03:17:24Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-01"],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0389-20260905/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/scheduler/timer.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/api/authorized_router.ex",
+      "lib/letflow/plugs/authorize.ex",
+      "test/letflow/api/authorization_enforcement_test.exs",
+      "test/fixtures/simulation/swiftroute/scenarios/shipment-ops-timeout-escalation.yaml",
+      "test/letflow/simulation/req206_swiftroute_test.exs",
+      "test/support/simulation/runner.ex"
+    ],
+    "artifacts_out": [
+      "lib/letflow/design/iss0389-advance-timer-endpoint.md"
+    ],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c"
+  },
+  "task": {
+    "description": "WF-03 Step 1 (CODE-DESIGNER continuation): design POST /api/v1/instances/:id/advance-timer -- request/response contract, targeting semantics, new authz permission wiring, and production-vs-test-only decision, per ISSUE-FIXER's three open questions."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Design doc written to lib/letflow/design/iss0389-advance-timer-endpoint.md. Three decisions: (1) targeting -- optional `timer_id` in request body; absent + exactly one pending timer for the instance succeeds (matches the swiftroute scenario fixture's body-less POST step exactly); absent + zero pending timers -> 404; absent + 2+ pending timers -> 400 requiring disambiguation; timer_id given but not-pending/not-found/wrong-instance all fold to the same 404 (INV-5-style). (2) authz -- new permission/endpoint_policy_key atom `:InstancesAdvanceTimer`, fully wired through endpoint_policy_key/2, required_permission/1, and role_allows?/2 (PROCESS_OPERATOR + PLATFORM_ADMIN catch-all only), explicitly NOT following the rebind-pins/reconstruct ad-hoc allowlist pattern since that router's own moduledoc says that shortcut was ruled out going forward -- this follows the AttachmentsManage/AttachmentsRead precedent instead. (3) production route, permission-gated, not simulation-only -- reasoning: fire_timer/2 has no env guard and no precedent exists for env-gated routes in this codebase, the scenario runner issues real HTTP against the real router (not a test-only hook), and there is genuine operational value (ops override for a stuck SLA/escalation timer) comparable to DlqOperate's retry/discard. Design also specifies a new Letflow.Scheduler.resolve_advance_target/3 context function (spec only) so the router never issues Repo.* directly (INV-RT-1), full response/error-status table, the 5 literal edit points across authorization.ex's 4 coordinated sites, 10 mechanically-checkable acceptance criteria, and 2 open questions (recurring-timer special-casing, idempotency-key convention divergence) left explicit rather than silently decided. Flags that test/letflow/simulation/req206_swiftroute_test.exs's existing absence-assertion test (~line 493-506) is now stale and must be deleted/inverted by TEST-DESIGNER, and that the scenario fixture's step 2 should move from via:skip/MINOR to via:api/pass. No implementation code written -- signatures, schemas, and decision tables only.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

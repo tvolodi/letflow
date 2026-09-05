@@ -18,9 +18,17 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   test-local simplified process (`SimpleShipmentApproval`) replaces SERVICE_TASK
   nodes with direct END edges so `complete_task/3` succeeds end-to-end.
 
-  ## Two UNIMPLEMENTED findings — reported to ORCH via result.issues (not filed here)
-  1. POST /api/v1/instances/:id/advance-timer absent (grep-confirmed, zero matches)
-  2. No document/attachment API in Letflow or R-Co src/
+  ## One remaining UNIMPLEMENTED finding — reported to ORCH via result.issues (not filed here)
+  1. No document/attachment API in Letflow or R-Co src/
+
+  Finding #1 as originally filed here — `POST /api/v1/instances/:id/advance-timer`
+  absent — was ISS-0389 (queue task 389, GH#768); the route now exists
+  (`lib/letflow/routers/instances.ex`'s `authz_post "/:id/advance-timer"`, see
+  `lib/letflow/design/iss0389-advance-timer-endpoint.md`). The scenario
+  fixture's step 2 SKIP/MINOR fallback and this file's own ops-timeout-
+  escalation test still reflect the pre-fix shape as of this commit —
+  un-skipping that step is TEST-DESIGNER's follow-up, not done here (design
+  doc AC5/AC10).
 
   Real Postgres, `async: false` — tenant provisioning needs `Sandbox.mode(:auto)`.
   """
@@ -490,21 +498,25 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   # ─── UNIMPLEMENTED findings — machine-verifiable source evidence ────────
 
   describe "UNIMPLEMENTED findings (source evidence for result.issues)" do
-    test "advance-timer endpoint absent from Letflow.Router and Routers.Instances" do
-      # AC3: source evidence that POST /api/v1/instances/:id/advance-timer does not exist.
-      # Scenario's own note field cites this; this test makes it machine-verifiable.
-      router_content =
-        File.read!(Path.expand("../../../lib/letflow/router.ex", __DIR__))
-
-      instances_content =
-        File.read!(Path.expand("../../../lib/letflow/routers/instances.ex", __DIR__))
-
-      refute String.contains?(router_content, "advance-timer"),
-             "Found 'advance-timer' in router.ex — UNIMPLEMENTED finding is no longer accurate"
-
-      refute String.contains?(instances_content, "advance_timer"),
-             "Found 'advance_timer' in instances.ex — UNIMPLEMENTED finding is no longer accurate"
-    end
+    # SUPERSEDED by ISS-0389 (2026-09-05): this test's original assertion
+    # ("POST /api/v1/instances/:id/advance-timer does not exist anywhere in
+    # lib/letflow/router.ex or lib/letflow/routers/instances.ex") was the
+    # machine-verifiable source evidence for this file's own moduledoc
+    # finding #1 and for the shipment-ops-timeout-escalation scenario's step
+    # 2 SKIP/MINOR fallback. `lib/letflow/design/iss0389-advance-timer-endpoint.md`
+    # has since shipped the real route (`authz_post "/:id/advance-timer"` in
+    # `lib/letflow/routers/instances.ex`), so that finding is no longer
+    # accurate and the grep this test ran now legitimately matches — same
+    # "stale absence-check removed rather than inverted or left permanently
+    # red" precedent the attachments finding below already established. This
+    # does NOT itself un-skip the scenario fixture's step 2 (that fixture/YAML
+    # edit and the accompanying `describe "swiftroute-shipment-ops-timeout-
+    # escalation"` test's assertions belong to TEST-DESIGNER per the design's
+    # own AC5/AC10 — see `handoffs/WF03-ISS0389-20260905/step-03-elixir-dev.json`
+    # for the explicit flag). See
+    # `lib/letflow/design/iss0389-advance-timer-endpoint.md` and
+    # `lib/letflow/routers/instances.ex`'s own moduledoc row for the new
+    # route's coverage.
 
     # SUPERSEDED by REQ-212 (2026-09-01): this test's original assertion
     # ("no attachment/document-upload routes exist anywhere in

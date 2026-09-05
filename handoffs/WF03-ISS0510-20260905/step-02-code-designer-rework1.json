@@ -1,0 +1,32 @@
+{
+  "run_id": "WF03-ISS0510-20260905",
+  "workflow_id": "WF-03",
+  "step": "02-code-designer",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "status": "PENDING",
+  "rework_count": 1,
+  "created_at": "2026-09-05T17:22:14Z",
+  "started_at": "2026-09-05T17:22:14Z",
+  "context": {
+    "issue_id": "ISS-0510",
+    "branch": "feature/WF03-ISS0510-20260905",
+    "requirement_text": null,
+    "owned_modules": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ]
+  },
+  "task": {
+    "description": "REWORK ITERATION 1: CODE-DESIGN-VALIDATOR FAILed the prior pass of this same amendment. Sub-case (a) of the new 'YAML comment-line/sequence-item' citation-unit shape (added under section 2, ISS-0510) states, for the REQ-021 example, 'the marker precedes the `id:` line', citing `docs/requirements.yaml:807-809`. Verified against the actual merged file (already applied via REQ-254, PR #988): line 806 is `id: REQ-021`, line 807 is the `# PROVENANCE (historical, not current decision authority):` marker, line 808 is `title: ...`. The marker sits immediately above `title:`, not above `id:` -- the design doc's wording is the reverse of what was actually done, and the cited line range is off by one relative to which line the marker sits above.\n\nFix required, and ONLY this: in the bullet under section 2's new 'YAML comment-line/sequence-item' shape, sub-case (a) ('Sequence item or key line'), correct the REQ-021 clause so it accurately states the marker precedes `title:` (not `id:`) -- since `id:` and `title:` are treated as one requirement-entry unit for this shape's purpose, state plainly which literal line the marker sits immediately above (title:, at the location it was actually applied) rather than asserting it precedes id:. Correct the citation from `docs/requirements.yaml:807-809` to the accurate line numbers: id: at 806, the marker itself at 807, title: at 808 -- cite these precisely rather than a vague range that implies the marker is above id:.\n\nDo not touch anything else in the document: leave section 1, sections 4-8, the REQ-238/239 chunking amendment block at the top, sub-case (b) (commented-out section-header block), and the REQ-017 example (acceptance_criteria bullets, docs/requirements.yaml:682-687) exactly as they are -- all of those already PASSED CODE-DESIGN-VALIDATOR and are out of scope for this rework.\n\nThis is a documentation-only, additive design-doc correction. The ground truth is the already-merged, already-applied marker placement in docs/requirements.yaml (REQ-254, PR #988) -- do not change docs/requirements.yaml itself, only this design doc's description of it.\n\nOn finishing, flip this handoff's status to COMPLETED (or FAILED if you cannot complete it) and fill in `result` as normal -- this is a rework dispatch, not a first claim; do not read the claim-step wording as suspending normal completion.",
+    "acceptance_criteria": [
+      "Sub-case (a) states the marker precedes `title:` (or otherwise accurately describes the applied position), not `id:`",
+      "The citation is corrected to reflect id: at line 806, marker at line 807, title: at line 808",
+      "No other section, bullet, sub-case, or example in the document is modified",
+      "The marker text, section 2(a) regex, and the three original unit shapes remain untouched"
+    ]
+  },
+  "result": null
+}

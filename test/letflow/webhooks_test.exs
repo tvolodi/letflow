@@ -26,7 +26,7 @@ defmodule Letflow.WebhooksTest do
   requirement's test file, not here.
   """
 
-  use Letflow.DataCase, async: false
+  use Letflow.DataCase, async: true
 
   alias Letflow.Webhooks
   alias Letflow.Webhooks.Delivery
@@ -39,7 +39,8 @@ defmodule Letflow.WebhooksTest do
   defp provisioned_tenant(slug_prefix \\ "req181-webhooks") do
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
-      display_name: "REQ-181 Webhooks Test Tenant"
+      display_name: "REQ-181 Webhooks Test Tenant",
+      restore_sandbox: true
     )
   end
 

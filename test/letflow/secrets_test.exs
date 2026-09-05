@@ -20,7 +20,7 @@ defmodule Letflow.SecretsTest do
   as production would.
   """
 
-  use Letflow.DataCase, async: false
+  use Letflow.DataCase, async: true
   use ExUnitProperties
 
   alias Letflow.Repo
@@ -35,7 +35,8 @@ defmodule Letflow.SecretsTest do
   defp provisioned_tenant(slug_prefix \\ "req190-secrets") do
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
-      display_name: "REQ-190 Secrets Test Tenant"
+      display_name: "REQ-190 Secrets Test Tenant",
+      restore_sandbox: true
     )
   end
 

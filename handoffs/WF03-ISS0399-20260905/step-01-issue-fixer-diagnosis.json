@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0399-20260905-step-01",
+  "run_id": "WF03-ISS0399-20260905",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0399-20260905/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-05T02:59:33Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-211", "REQ-212"],
+    "issue_ids": ["ISS-0399"],
+    "related_handoff_ids": ["WF03-ISS0399-20260901/step-01-issue-fixer-diagnosis.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0399.yaml",
+      "docs/requirements.yaml (REQ-211, REQ-212 entries)",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/repository/attachments.ex",
+      "lib/letflow/routers/webhooks.ex",
+      "lib/letflow/webhooks.ex"
+    ]
+  },
+  "task": {
+    "description": "WF-03 Step 1: re-check whether ISS-0399's deferred trigger condition (instance attachments exposed to a less-trusted-than-authenticated-tenant-user upload source) has occurred since the prior investigation on 2026-09-01, given REQ-212 (the route layer) has since moved from pending to done."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Re-diagnosis (recurrence of WF03-ISS0399-20260901's check, registry lookup found matching prior entry per Step 0.5 -- not a regression, a scheduled recheck since the tracked precondition, REQ-212 landing, has now occurred). Found: REQ-212 is now status: done in docs/requirements.yaml (was 'pending' at the 2026-09-01 check) and its route surface is live in lib/letflow/routers/instances.ex lines 364-376: `authz_post \"/:id/attachments\", :AttachmentsManage`, `authz_get \"/:id/attachments\", :AttachmentsRead`, `authz_get \"/:id/attachments/:attachment_id\", :AttachmentsRead`, `authz_delete \"/:id/attachments/:attachment_id\", :AttachmentsManage`. Confirmed by reading the router module directly (not the design doc's prose): every handler resolves `conn.assigns.scoped_opts` via `Letflow.Api.Context.scoped_repo_opts/1` before calling into `Letflow.Repository.Attachments`, and every route is gated through the `authz_*` macros requiring `AttachmentsManage`/`AttachmentsRead` permissions -- i.e. authenticated, tenant-scoped, and permission-gated, exactly the trust level ISS-0399's own text treats as non-blocking. No unauthenticated or public route exists for attachments; grepped lib/letflow/router.ex and found no bypass of the standard authenticated pipeline for this router. Separately checked the webhooks subsystem (lib/letflow/webhooks.ex, lib/letflow/routers/webhooks.ex) as the other named candidate for an external-integration trigger: webhooks are outbound-only (Letflow -> external endpoint, HMAC-signed dispatch via `deliver/3`/REQ-183) -- there is no inbound webhook-receiver route anywhere in lib/letflow/routers/, so webhooks cannot originate an attachment upload from an external caller. grep for `Attachments.upload` callers confirms the only call site is the new REQ-212 route handler itself (`render_upload_attachment(conn, Attachments.upload(attrs, opts))` at instances.ex:920); no other caller (batch job, external-integration adapter, public route) exists in lib/. Verdict: the deferred trigger condition described in ISS-0399 has NOT occurred. REQ-212 closed the gap the previous check flagged (no route existed at all) but landed with the same authenticated+tenant-scoped+permission-gated exposure the issue already treats as acceptable, not a less-trusted exposure. No new public-facing route or external-integration upload path was introduced. Recommend: ISS-0399 stays open/deferred as tracked debt, no REQ-ANALYST dispatch needed. Update docs/issues/ISS-0399.yaml scoping_note to record this recheck and that REQ-212 has since landed without triggering the deferred condition, so a future recheck knows this specific gap (REQ-212 pending) is already closed and the next actual trigger to watch for is a genuinely public/unauthenticated route or an inbound external-integration endpoint (e.g. an inbound webhook receiver, a public upload-by-link feature) -- neither exists today.",
+    "verdict": "NO_ACTION_TRIGGER_NOT_MET",
+    "recommendation": "Keep ISS-0399 status: open (deferred tracked debt). Do not dispatch REQ-ANALYST. Optionally have ORCH/DOC-UPDATER append an updated scoping_note to docs/issues/ISS-0399.yaml noting this 2026-09-05 recheck and that REQ-212 landing did not trigger the deferral condition, to save the next recheck from re-deriving the REQ-212-status fact from scratch."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

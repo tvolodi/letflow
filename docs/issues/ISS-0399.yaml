@@ -49,3 +49,24 @@ scoping_note: >
   when it lands, rather than this issue being picked up speculatively
   ahead of that). Queue task 399 released back to open (not done) --
   see handoffs/WF03-ISS0399-20260901/step-01-issue-fixer-diagnosis.json.
+
+  RECHECKED (WF03-ISS0399-20260905, 2026-09-05): REQ-212 has since
+  landed (status: done) and added the actual route surface --
+  lib/letflow/routers/instances.ex's POST/GET
+  /instances/:id/attachments and GET/DELETE
+  /instances/:id/attachments/:attachment_id, gated by
+  AttachmentsManage/AttachmentsRead permission macros and
+  Letflow.Api.Context.scoped_repo_opts/1 tenant scoping on every
+  handler. This closes the "no route at all" gap the 2026-09-01 check
+  found, but lands at the SAME authenticated/tenant-scoped/permission-
+  gated trust level this issue's own original text already treats as
+  non-blocking -- not the less-trusted exposure (public-facing route,
+  external integration) the real trigger condition requires. Also
+  checked the webhooks subsystem as the other plausible external-
+  trigger candidate: outbound-only (HMAC-signed deliver/3 to external
+  endpoints), no inbound webhook-receiver route exists anywhere in
+  lib/letflow/routers/, and grep confirms the only Attachments.upload
+  caller is REQ-212's own authenticated route handler. Trigger
+  condition still NOT met. Queue task 399 released back to open (not
+  done) again -- see
+  handoffs/WF03-ISS0399-20260905/step-01-issue-fixer-diagnosis.json.

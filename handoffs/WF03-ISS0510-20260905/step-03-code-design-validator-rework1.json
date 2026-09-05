@@ -1,0 +1,44 @@
+{
+  "run_id": "WF03-ISS0510-20260905",
+  "workflow_id": "WF-03",
+  "step": "03-code-design-validator",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "status": "COMPLETED",
+  "rework_count": 1,
+  "created_at": "2026-09-05T17:30:00Z",
+  "started_at": "2026-09-05T17:30:00Z",
+  "context": {
+    "issue_id": "ISS-0510",
+    "branch": "feature/WF03-ISS0510-20260905",
+    "requirement_text": null,
+    "owned_modules": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF03-ISS0510-20260905/step-02-code-designer-rework1.json"
+    ]
+  },
+  "task": {
+    "description": "This is a FOCUSED RE-CHECK, not a full re-validation. Your prior pass FAILed this same amendment because sub-case (a) (under section 2's new 'YAML comment-line/sequence-item' shape) stated the marker precedes the `id:` line for the REQ-021 example, citing `docs/requirements.yaml:807-809` -- but the actual applied marker sits between id: (806) and title: (808), i.e. immediately above title:, not id:. CODE-DESIGNER has now corrected only that clause (see step-02 handoff's result.before/result.after for the exact text change) and touched nothing else in the file.\n\nYour job: verify (1) the REQ-021 citation in sub-case (a) now accurately matches the real file content -- read docs/requirements.yaml lines 805-809 yourself and confirm id: at 806, marker at 807, title: at 808, and confirm the design doc's wording states the marker precedes title:, not id:; and (2) that nothing else in the document changed since your prior FAIL verdict -- diff the current file against what you reviewed before (or use `git show a5af4627 -- lib/letflow/design/req237-zig-provenance-marking-convention.md` / `git log -p` on the file) and confirm section 1, sections 4-8, the top-of-file chunking amendment, sub-case (b), and the REQ-017 example are byte-identical to what you already passed judgment on previously (whichever of those you had already found acceptable).\n\nDo not re-review the whole document from scratch as if this were a first pass -- scope your re-check to exactly these two questions. If both check out, PASS. If the citation is still wrong, or if anything beyond the sub-case (a) clause changed, FAIL with specifics.",
+    "acceptance_criteria": [
+      "REQ-021 example accurately states the marker precedes title: (not id:), matching docs/requirements.yaml:806-808 verified directly",
+      "The citation cites the precise lines (806/807/808) rather than a vague or incorrect range",
+      "No other part of the document changed beyond this one clause since the prior FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verified": {
+      "requirements_yaml_806_808": {
+        "806": "  - id: REQ-021",
+        "807": "    # PROVENANCE (historical, not current decision authority):",
+        "808": "    title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)"
+      },
+      "design_doc_clause": "Sub-case (a) now reads: 'REQ-021: id: at docs/requirements.yaml:806, marker at line 807, title: at line 808 -- the marker precedes the title: line' -- matches the file exactly, with precise line numbers rather than a vague range.",
+      "diff_scope": "git show a5af4627 -- lib/letflow/design/req237-zig-provenance-marking-convention.md shows only the sub-case (a) REQ-021 clause text was rewritten (old text claimed marker precedes id: citing 807-809; new text correctly states marker precedes title: citing 806/807/808). No other hunk touches sub-case (b), the REQ-017 example, section 1, sections 4-8, or the top-of-file chunking amendment paragraph structure -- those are unchanged by this commit."
+    },
+    "findings": "All three acceptance criteria satisfied: (1) REQ-021 clause now accurately states marker precedes title:, verified directly against docs/requirements.yaml lines 806-808; (2) citation cites precise lines 806/807/808; (3) commit a5af4627 is scoped to only this one clause -- no other content changed."
+  }
+}

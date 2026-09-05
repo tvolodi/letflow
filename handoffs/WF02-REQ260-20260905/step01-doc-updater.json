@@ -1,0 +1,63 @@
+{
+  "handoff_id": "WF02-REQ260-20260905-step-01",
+  "run_id": "WF02-REQ260-20260905",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ260-20260905/step01-doc-updater.json",
+  "created_at": "2026-09-05T21:42:02Z",
+  "started_at": "2026-09-05T21:42:02Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-260"],
+    "requirement_text": {
+      "REQ-260": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239f = docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference).\n\nThis is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nDo NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits -- carried forward unchanged from REQ-239's own out-of-scope note; confirm with a grep first if either file also contains a raw .zig citation, but none is expected.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 11 files in this chunk carry a .zig reference today (`grep -rl '\\.zig' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml`). If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "source_text": {
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md": "ss2 defines the marker text (fixed literal: `PROVENANCE (historical, not current decision authority):`) and the placement rule with FOUR citation-unit shapes as of the 2026-09-05 ISS-0510 amendment: (1) single citation line -- insert the marker on its own line immediately above a SOURCE:/CONTRACT SOURCE:-style line or lone bullet (and any hard-wrapped continuation lines of the same sentence); (2) paragraph -- for a .zig filename embedded in prose, the marker precedes the WHOLE paragraph (bounded by blank lines), not just the sentence/token; (3) table -- one marker above the table's header row, never per-row; (4) YAML comment-line/sequence-item (ISS-0510 addition) -- when the citation unit lives inside a YAML file and the enclosing context is itself a YAML comment, or a plain scalar/sequence item that cannot take a bare non-comment text line immediately above it without corrupting YAML syntax, the marker is inserted as a `# `-prefixed YAML comment line containing the identical marker text verbatim, immediately above the unit. Two sub-cases: (a) a bare #-prefixed comment line immediately above a single sequence-item bullet, or above an id:/title: key pair whose value contains the citation (marker precedes title: when id:+title: are treated as one requirement-entry unit); (b) when the citation is itself inside a commented-out `# ---`-delimited section-header block, the marker precedes the whole block as one unit, not per header line. De-duplication: if a marker already immediately precedes a unit (grep -B1 check), do not insert a second one -- this makes the rule idempotent. ss2(a) gives the exact regex: `PROVENANCE \\(historical, not current decision authority\\):` (also matches with plain `grep -F`). ss4 gives two worked before/after examples (docs/requirements.yaml SOURCE: line, and an inline-prose moduledoc paragraph) showing the original path text is preserved byte-identical, only one new line added. ss5 gives the verification method: (i) total-marked-count grep before/after must increase by exactly the number of citation units marked; (ii) `grep -c '\\.zig' <file>` before/after must be EQUAL per file (no path text lost); (iii) idempotency -- re-running the pass a second time produces zero new markers. docs/issues/*.yaml is YAML, so shape (4) may well apply here wherever a .zig citation sits inside a commented-out block, a sequence-item bullet, or a scalar key/value that cannot take a bare prose line directly above it without corrupting YAML syntax -- apply shape (4)'s sub-cases exactly as documented for docs/requirements.yaml. If a genuinely new citation-unit shape is found that does not match ANY of the four documented shapes, do NOT invent a fifth ad-hoc convention: flag it as a new issue for CODE-DESIGNER (the same process ISS-0510 was raised through -- describe the shape, cite the file/line, and note it in this handoff's result.issues at MAJOR or MINOR per your judgement of how many citations it affects) and apply the CLOSEST-MATCHING existing shape in the meantime with a clear note in your result.summary, per REVIEWER's own established precedent this session for exactly this situation (ISS-0510)."
+    },
+    "related_handoff_ids": ["WF02-REQ260-20260905-step-00"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ260-20260905/step00-git-setup.json",
+      "handoffs/WF02-REQ259-20260905/step01-doc-updater.json",
+      "handoffs/WF02-REQ257-20260905/step01-doc-updater.json"
+    ],
+    "owned_modules": [
+      "docs/issues/ISS-0001.yaml",
+      "docs/issues/ISS-0002.yaml",
+      "docs/issues/ISS-0005.yaml",
+      "docs/issues/ISS-0014.yaml",
+      "docs/issues/ISS-0045.yaml",
+      "docs/issues/ISS-0063.yaml",
+      "docs/issues/ISS-0075.yaml",
+      "docs/issues/ISS-0076.yaml",
+      "docs/issues/ISS-0077.yaml",
+      "docs/issues/ISS-0078.yaml",
+      "docs/issues/ISS-0079.yaml"
+    ]
+  },
+  "task": {
+    "description": "Claim this handoff (status -> IN_PROGRESS only). You are on branch feature/WF02-REQ260-20260905 already (verify with `git branch --show-current`; STOP and report FAIL if it is not this branch). Implement REQ-260 exactly per its acceptance_criteria below, applying REQ-237's PROVENANCE marking convention (context.source_text above) to EXACTLY these 11 files and no others: docs/issues/ISS-0001.yaml, docs/issues/ISS-0002.yaml, docs/issues/ISS-0005.yaml, docs/issues/ISS-0014.yaml, docs/issues/ISS-0045.yaml, docs/issues/ISS-0063.yaml, docs/issues/ISS-0075.yaml, docs/issues/ISS-0076.yaml, docs/issues/ISS-0077.yaml, docs/issues/ISS-0078.yaml, docs/issues/ISS-0079.yaml. Scope is additive marker insertion ONLY -- do not alter any other field in these files (status, resolution_note, severity, or anything else), do not touch CLAUDE.md/README.md/docs/migration/README.md, and do not touch any docs/issues/*.yaml file outside this 11-file list even if it also carries a .zig reference (it belongs to a sibling chunk: REQ-261 covers ISS-0085-0100, REQ-262 covers ISS-0101-0439). This is a mechanical apply-step -- no CODE-DESIGNER step precedes this, the convention is already CODE-DESIGN-VALIDATOR-passed. No mix compile/test is applicable (docs-only YAML files) -- your verification is grep-based per the acceptance criteria's own commands. On completion, set status to COMPLETED (or FAILED), fill result fully per HANDOFF_PROTOCOL.md, commit your changes on this branch, and set next_action to 'Route to REVIEWER (Step 2d)'.",
+    "acceptance_criteria": [
+      "before starting, run REQ-237's finalized marker-detection regex against docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml`, summed)",
+      "after the change, every .zig source-path citation in docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts",
+      "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed",
+      "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat",
+      "the deliberate-divergence notes inside this chunk's scope (docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    ]
+  },
+  "result": {
+    "status": "PENDING",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

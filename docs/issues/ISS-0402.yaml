@@ -31,7 +31,9 @@ source: >
   handoffs/WF03-ISS0397-20260901/step-06-issue-fixer-close.json.
 queue_task_id: 402
 github_issue: 789
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0402-20260905
+resolved_at: "2026-09-05T02:55:00Z"
 scoping_note: >
   ISSUE-FIXER investigated (WF03-ISS0402-20260902, 2026-09-02) and
   recommended NOT implementing branch-level cancellation: ISS-0397's
@@ -52,5 +54,28 @@ scoping_note: >
   open (how completed sibling branches should be handled; whether
   cancelling a branch that spawned a REQ-062 SUB_PROCESS child should
   cascade) -- these need a product decision, not an improvised design.
-  Queue task 402 released back to open (not done) -- see
+  Queue task 402 released back to open (not done) on 2026-09-02 -- see
   handoffs/WF03-ISS0402-20260902/step-01-issue-fixer-diagnosis.json.
+resolution: >
+  ORCH (2026-09-05): the queue task resurfaced (get_next_task, LIFO)
+  after the 2026-09-02 scoping decision above was recorded but the
+  task was released status-unset rather than done, since no code/doc
+  fix had yet been applied. ISSUE-FIXER re-diagnosed independently
+  this run (handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-
+  diagnosis.json) and reconfirmed the 2026-09-02 verdict against the
+  current tree (join_counters persistence genuinely closed by ISS-0397,
+  R-Co architectural-parity finding independently still stands, no
+  caller/UAT/requirement needs branch-level cancellation today).
+
+  The actual outstanding gap was documentation, not code:
+  lib/letflow/design/req052-instance-cancellation.md's own OQ-2 entries
+  (section 4/table and section 11) still read as if join-counters
+  persistence were the primary/only blocker, without noting ISS-0397
+  closed it or that the architectural-parity finding (already recorded
+  in the design doc's own section 0, dated 2026-08-22) is the
+  independent, still-standing reason. Corrected both OQ-2 references
+  to state the current, accurate reasoning and cross-reference this
+  issue. Docs-only, sized as two independent single-file edits (this
+  file, req052-instance-cancellation.md) per ORCHESTRATOR.md Sec10,
+  done directly by ORCH. GH#789 to be closed with an evidence comment;
+  queue task 402 released status:done.

@@ -4734,11 +4734,29 @@
         "lib/letflow/routers/"
       ],
       "started_at": "2026-09-05T00:41:39Z",
-      "lock_released_at": null,
-      "released_lock": false,
+      "lock_released_at": "2026-09-05T02:20:00Z",
+      "released_lock": true,
       "backfilled": false,
-      "last_known_step": "REVIEWER passed (handoffs/WF02-REQ232-20260905/step-02d-reviewer.json), independently re-verified all grep/diff claims and 5 code-level spot-checks; TEST-DESIGNER skipped (pure comment/moduledoc rewrite, no behavior change, per ISS-0469 precedent). ORCH independently confirmed mix compile --warnings-as-errors and mix test test/letflow/routers/ pass. DOC-UPDATER flipped REQ-232 to done in docs/requirements.yaml and appended a requirement_status.v9.yaml event. PR #928 open on branch feature/WF02-REQ232-20260905, awaiting CI before Step Final merge.",
+      "last_known_step": "Step Final COMPLETED -- PR #928 squash-merged to main (76eb2db8) via --admin (structural attribution: known wasm_hang-class flake recurred on one duplicate CI run twice while the other duplicate passed cleanly; PR touched only lib/letflow/routers/*.ex comments and handoffs/ bookkeeping). Two handoff schema violations (H1 top-level status \"PASS\" instead of COMPLETED; H3 stray test_designer_call top-level key) caught by mix letflow.lint_handoffs on the first CI run and fixed before merge. Queue task 470 released status:done.",
       "note": "WF-02 run for REQ-232 (closes ISS-0424 part 2a, one of 10 requirements -- REQ-232..242 -- REQ-ANALYST drafted to close ISS-0424 parts 2/3 after Part 1's framing rewrite was done directly by ORCH). Retired all 35 R-Co-parity-justification phrasings across the 12 files in lib/letflow/routers/, restating 33 on Letflow's own merit and deleting 2 redundant ones, while preserving 2 deliberate-divergence notes and 88 .zig provenance citations byte/count-identical. Claimed via direct set_lock on queue task 470 rather than get_next_task, since ISS-0424 itself (still open, no queue-level depends_on tracking) kept resurfacing at the top of the LIFO queue ahead of its own now-ready follow-on requirements."
+    },
+    {
+      "run_id": "WF03-ISS0402-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": "REQ-052",
+      "issue_id": "ISS-0402",
+      "queue_task_id": 402,
+      "github_issue_number": 789,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/design/req052-instance-cancellation.md"
+      ],
+      "started_at": "2026-09-05T02:40:00Z",
+      "lock_released_at": "2026-09-05T02:55:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "ISSUE-FIXER re-diagnosed (handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-diagnosis.json) and reconfirmed the prior 2026-09-02 scoping decision: ISS-0397 genuinely closed the join_counters persistence gap OQ-2 cited, but the independent R-Co architectural-parity finding (design doc's own section 0) still stands, so branch-level cancellation remains correctly unimplemented. Corrected the design doc's stale OQ-2 phrasing (section 4 table, section 11) to state the current reasoning. Queue task 402 released status:done (it had previously been released status-unset after the 2026-09-02 scoping run, which is why it resurfaced via get_next_task).",
+      "note": "WF-03 issue-resolving run for ISS-0402, second pass. First pass (WF03-ISS0402-20260902) made the real scoping decision (do not implement branch-level cancellation) but released the queue task without a status, so it resurfaced. This run found no code change was needed -- only lib/letflow/design/req052-instance-cancellation.md's own OQ-2 text was stale (still framed join-counters persistence as the primary blocker without noting ISS-0397 closed it or that the architectural-parity finding is independent). Docs-only, sized as two single-file edits (this design doc, docs/issues/ISS-0402.yaml) per ORCHESTRATOR.md Sec10, done directly by ORCH after ISSUE-FIXER's diagnosis."
     }
   ]
 }

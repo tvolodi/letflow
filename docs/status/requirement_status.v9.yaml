@@ -648,3 +648,19 @@ history:
       mix test run (223 passed) before this status flip. This closes
       ISS-0424 Part 2 entirely (REQ-232, REQ-233, REQ-234, REQ-235,
       REQ-240, REQ-241, REQ-242 all done).
+  - req: REQ-243
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T11:10:33Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,
+      identity,instances,metrics_exposition,onboarding}.ex (closes ISS-0424
+      part 3b-1, queue task 481, GH#946, PR #976,
+      feature/WF02-REQ243-20260905). This is the first of eleven
+      REQ-238-replacement chunks (REQ-243..REQ-253) applying that
+      convention. REVIEWER passed the implementation
+      (handoffs/WF02-REQ243-20260905/step-02d-reviewer.json). ORCH
+      independently confirmed mix compile --warnings-as-errors, mix format
+      --check-formatted, and a targeted mix test run (258 passed) before
+      this status flip.

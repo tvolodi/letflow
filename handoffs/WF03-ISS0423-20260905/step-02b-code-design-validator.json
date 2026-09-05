@@ -1,0 +1,54 @@
+{
+  "handoff_id": "d2b8e4a1-9f3c-4e7d-8a2b-5c6d7e8f9a03",
+  "run_id": "WF03-ISS0423-20260905",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0423-20260905/step-02b-code-design-validator.json",
+  "created_at": "2026-09-05T01:20:00Z",
+  "started_at": "2026-09-05T01:20:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["c1a9d3f7-2b4e-4a8c-9d1f-6e7a8b9c0d12"],
+    "artifacts_in": [
+      "lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md",
+      "handoffs/WF03-ISS0423-20260905/step-02-code-designer.json",
+      "docs/issues/ISS-0113.yaml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/secrets_test.exs",
+      "test/letflow/webhooks_test.exs",
+      "test/letflow/service_catalog_test.exs",
+      "test/letflow/routers/onboarding_test.exs"
+    ],
+    "owned_modules": ["test/support/", "config/test.exs"]
+  },
+  "task": {
+    "description": "Hard gate on CODE-DESIGNER's design at lib/letflow/design/iss0113-tenant-fixture-sandbox-restore-opt-in.md. Re-derive your verdict independently -- do not accept CODE-DESIGNER's own result.summary claims at face value (core-directives.md: 'a validator that only reads the producer's result.summary and says PASS has not validated anything').\n\nSpecifically re-check, by reading the actual files yourself:\n\n1. Read test/letflow/secrets_test.exs and test/letflow/webhooks_test.exs YOURSELF in full. Independently verify, against ISS-0113's three named failure mechanisms, that neither file (a) calls Sandbox.checkout/1 itself, (b) spawns a second process doing concurrent real Postgres work, or (c) calls provision_tenant_schema!/replay_migrations!/provisioned_tenant! a second time within any test body. If you find ANY of these in either file, this is a BLOCKER -- CODE-DESIGNER's own classification was wrong and cannot ship.\n2. Read test/letflow/service_catalog_test.exs and test/letflow/routers/onboarding_test.exs yourself and confirm they are genuinely correctly EXCLUDED (i.e. confirm the Task.start/async row-lock claim for service_catalog_test.exs, and confirm onboarding_test.exs's own ad-hoc Sandbox.mode(:auto) call is real and out of this design's TenantFixture-scoped procedure).\n3. Re-derive the peak-concurrent-DBConnection-checkout arithmetic in design section 5 yourself -- confirm System.schedulers_online() is genuinely uncapped by any --max-cases override anywhere in this repo (grep test_helper.exs, mix.exs, config/test.exs, .github/workflows/ci.yml yourself), and confirm the pool_size figures (32 for plain mix test, 5 for a test_parallel.sh partition at N=16) are correct against config/test.exs and decision 0009's own formula, not merely copied from CODE-DESIGNER's summary.\n4. Confirm the opt-in mechanism (opts[:restore_sandbox], default false) as designed does NOT change behavior for any of the other 44 TenantFixture call sites -- re-read test/support/tenant_fixture.ex's current provisioned_tenant!/1 and confirm the design's described insertion point (after existing step 6, before return) and its on_exit/LIFO-ordering claim (new restore-to-:auto callback must run AFTER the existing schema-drop teardown, which was registered earlier -- confirm ExUnit's on_exit really is LIFO, this is a genuinely checkable factual claim, not just design prose).\n5. Confirm zero implementation code is present in the design doc (design artefacts carry signatures/@specs only).\n6. Confirm the design explicitly reconciles against decision 0009/ISS-0287 rather than merely asserting consistency.\n\nGate PASS only if every one of ISS-0423's original 6 acceptance criteria (task queue's own AC1-AC6, restated in your handoff's acceptance_criteria below) has a concrete design element you can point to, and if your own independent file reads in steps 1-2 above confirm CODE-DESIGNER's classification rather than merely trusting it.",
+    "acceptance_criteria": [
+      "Independently confirmed (own file read) that secrets_test.exs and webhooks_test.exs hit none of ISS-0113's three failure mechanisms",
+      "Independently confirmed that service_catalog_test.exs and onboarding_test.exs are correctly excluded, with the specific evidence (line/construct) cited",
+      "Independently re-derived (not copied) the peak-concurrent-checkout numbers and pool_size figures against real config/decision-0009 text",
+      "Confirmed the on_exit/LIFO ordering claim is factually correct for ExUnit",
+      "Confirmed zero implementation code appears in the design artefact",
+      "Confirmed decision 0009/ISS-0287 is explicitly and correctly reconciled",
+      "PASS or FAIL verdict stated with specific evidence per point, not a general impression"
+    ]
+  },
+  "result": {
+    "status": "BLOCKED",
+    "summary": "",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

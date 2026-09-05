@@ -1701,8 +1701,20 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 37
+    entries: 39
     note: >
+      Recounted to 39 by WF03-ISS0511-20260905's own closeout-bookkeeping
+      rebase onto main, which found main further advanced by
+      WF02-REQ258-20260905's own recount to 37 (its second Step Final
+      rebase, itself finding REQ-259's done-event append already landed)
+      -- no conflict on requirement_status.v9.yaml itself, this run's own
+      started+done SCOPE-CHANGE pair auto-merged cleanly onto the 37-entry
+      base. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 39 on-disk entries, rather
+      than carrying forward either side's independently-computed 37/38,
+      per this note's own recount-every-time rule. 1080 lines, 63213
+      bytes measured this append, well under the 1200-line/120000-byte
+      roll ceiling.
       Recounted to 37 by WF02-REQ258-20260905's second Step Final rebase,
       which found main further advanced by WF02-REQ259-20260905's own
       REQ-259 done-event append (landed via PR #997 while this branch's
@@ -1726,13 +1738,6 @@ volumes:
       docs/status/requirement_status.v9.yaml` = 35 on-disk entries, no
       rebase conflict on this file at the time it was written. (Superseded
       by the recount to 36 above.)
-      Incremented to 36 by WF02-REQ259-20260905 (ORCH)'s own REQ-259
-      done-event append -- `grep -c "^  - req:"
-      docs/status/requirement_status.v9.yaml` = 36 on-disk entries, well
-      under the 1200-line/120000-byte roll ceiling (1011 lines, 59366
-      bytes measured this append). No rebase was needed for this run
-      (main unchanged since branch point). (Superseded by the recount to
-      37 above.)
       Incremented to 35 by WF02-REQ257-20260905 (ORCH)'s own REQ-257
       done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 35 on-disk entries, no

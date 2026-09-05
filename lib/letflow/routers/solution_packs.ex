@@ -95,10 +95,11 @@ defmodule Letflow.Routers.SolutionPacks do
   ## Authorization gap — REQ-131 closes it
 
   Neither route calls `Letflow.Api.Authorization.evaluate_access/2`.
-  `endpoint_policy_key/2` has **no clause** for `POST /solution-packs/*`, and
-  R-Co's own `authorization.zig` has no entry for these paths either — so
-  there is nothing to port, and deciding what permission a pack install
-  requires is a policy question that belongs to **REQ-130/REQ-131**, not to a
+  `endpoint_policy_key/2` has **no clause** for `POST /solution-packs/*` —
+  there is no existing policy clause to extend (R-Co's `authorization.zig`
+  has no entry for these paths either), and deciding what
+  permission a pack install requires is a policy question that belongs to
+  **REQ-130/REQ-131**, not to a
   route-port requirement. Inventing a route-local permission check here was
   explicitly ruled out (REQ-069's whole point is one matrix).
 

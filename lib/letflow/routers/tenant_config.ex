@@ -90,9 +90,9 @@ defmodule Letflow.Routers.TenantConfig do
   So `?host=` is honoured syntactically and produces the default config —
   which is **byte-identical to what R-Co produces for an unbound hostname**
   (`tenant_config.zig:81-102` leaves `realm_id = "bpm-default"`). Since
-  Letflow has no bindings at all, every hostname is unbound, and R-Co's own
-  unbound-hostname answer is the one served. Graceful degradation, not a
-  functional non-port.
+  Letflow has no bindings at all, every hostname is unbound, and the default
+  config is the one served — a graceful degradation of an unimplemented
+  feature, not a functional non-port.
 
   This works today for the only caller:
   `web/src/auth/tenantConfig.ts:43-45` resolves a realm slug from

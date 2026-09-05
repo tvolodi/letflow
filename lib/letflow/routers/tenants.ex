@@ -3,9 +3,9 @@ defmodule Letflow.Routers.Tenants do
   Tenant-administration sub-router (REQ-075), mounted at `/tenants` directly
   by `Letflow.Plugs.ApiPipeline` (so full paths under `/api/v1` are
   `/api/v1/tenants`, `/api/v1/tenants/:slug`, etc). **Not** nested under
-  `Letflow.Routers.Identity`'s own `/identity` mount — R-Co's own route
-  table treats `tenants` as a top-level resource
-  (`resource == "tenants"`, `src/main.zig:1489`), a sibling of
+  `Letflow.Routers.Identity`'s own `/identity` mount — `tenants` is a
+  top-level resource (`resource == "tenants"`, `src/main.zig:1489`), a
+  sibling of
   `users`/`groups`/`identity`, not nested under it, and semantically these
   six handlers operate on the platform's tenant registry, categorically
   different from `Letflow.Routers.Identity`'s per-tenant user/group
@@ -89,10 +89,13 @@ defmodule Letflow.Routers.Tenants do
   request from that tenant's own (non-PLATFORM_ADMIN) caller with `403
   tenant_inactive`, checked in `Letflow.Plugs.TenantStatus` before the
   request reaches any sub-router — for every HTTP method, not only writes,
-  matching R-Co's own `enforceTenantActiveForOperation`/`isTenantInactive`
-  behavior (checked at `src/identity/service.zig:133-151` and
+  since a read against a deactivated tenant is exactly as much an
+  unauthorized operation as a write is; gating only writes would leave a
+  readable hole in the deactivation guarantee (checked historically at
+  `src/identity/service.zig:133-151` and
   `src/api/middleware/auth.zig:1663-1674`). PLATFORM_ADMIN callers are
-  exempt from this check, also matching R-Co (`service.zig:138`,
+  exempt from this check, consistent with their platform-wide administrative
+  scope (`service.zig:138`,
   `auth.zig:1663`).
 
   ## Ordering guarantee (design §6.1)

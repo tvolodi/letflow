@@ -11,7 +11,7 @@ defmodule Letflow.Routers.Tasks do
   * GET  /tasks/inbox       -> `Letflow.Tasks.list_tasks/2`, forced per-principal scope (`:TasksList` policy key)
   * GET  /tasks/:id         -> `Letflow.Tasks.get_task/2` (`:TasksGetById` policy key)
   * POST /tasks/:id/complete -> `Letflow.Engine.complete_task/3` (`:TasksComplete` policy key) — the ONLY call this router makes to drive completion; zero `Repo.` calls anywhere in this module (INV-TW85-2). Completion is an engine transition (output variables merge, token advances) — a handler that flipped the `tasks` row to `COMPLETED` directly would leave the owning instance permanently stalled.
-  * POST /tasks/:id/claim   -> `Letflow.Tasks.claim_task/3` (`:TasksComplete` policy key, REQ-085 design §2 — not `:TasksAssign`, matching R-Co's own `handleClaim`)
+  * POST /tasks/:id/claim   -> `Letflow.Tasks.claim_task/3` (`:TasksComplete` policy key, REQ-085 design §2 — not `:TasksAssign`, since claiming your own inbox item is a completion-track action, not an assignment one)
   * POST /tasks/:id/assign  -> `Letflow.Tasks.assign_task/4` (`:TasksAssign` policy key)
   * POST /tasks/:id/reassign -> `Letflow.Tasks.reassign_task/4` (`:TasksAssign` policy key — `required_permission/1` maps both `:TasksAssign`/`:TasksReassign` endpoint keys to the same `:TasksAssign` permission)
 
@@ -45,18 +45,21 @@ defmodule Letflow.Routers.Tasks do
   segment `"inbox"` as `id = "inbox"`, which would then fail
   `Ecto.UUID.cast/1` and misreport as `{:error, :invalid_id}` (400) instead of
   serving the inbox. `get "/inbox"` is declared textually **before**
-  `get "/:id"` below, matching R-Co's own `main.zig` dispatch order and
-  `Plug.Router`'s documented first-match-wins semantics.
+  `get "/:id"` below, so `Plug.Router`'s documented first-match-wins
+  semantics resolve the literal path before the parameterized one gets a
+  chance to swallow it (`main.zig`'s dispatch order does the same for the
+  same reason).
 
   ## `endpoint_policy_key/2` — one new clause on `Letflow.Api.Authorization` (OQ-8)
 
   `Letflow.Api.Authorization.endpoint_policy_key/2` had no `("GET",
   "/tasks/inbox")` clause before this requirement — one was added, mapping to
-  the same `:TasksList` policy key `GET /tasks` already uses. This is a
-  direct, narrow port of R-Co's own delegation: `handleInbox` builds a
-  `ListTasksParams` and calls `handleList`, which is where the *only*
-  `evaluateAccess` call for this whole flow happens (`tasks.zig` L960-982) —
-  `handleInbox` performs no authorization call of its own. Additive-only,
+  the same `:TasksList` policy key `GET /tasks` already uses, since inbox
+  listing is only a forced-scope variant of the same list operation and has
+  no reason to be gated by a different permission (the historical
+  `handleInbox` delegates to `handleList` the same way, with the *only*
+  `evaluateAccess` call for that whole flow happening inside it —
+  `tasks.zig` L960-982). Additive-only,
   changes no existing clause's behavior (every existing `endpoint_policy_key/2`
   call site is pattern-matched by exact string).
 
@@ -70,10 +73,10 @@ defmodule Letflow.Routers.Tasks do
   be widened by a request-supplied `assignee_id`/`status`/`instance_id`
   param). For any other caller (operator, designer, admin), `GET
   /tasks/inbox` returns `:unfiltered` — **every** task in the tenant, not
-  merely "assigned to me." This matches R-Co's own `handleInbox` behavior
-  exactly (`actor.is_operator_or_above` sets `effective_assignee_id = null`)
-  — a deliberate, real R-Co behavior being ported, not a bug: an
-  operator's "inbox" is the whole queue.
+  merely "assigned to me." This is deliberate, not a bug: an operator sits
+  above individual assignment, so an operator's "inbox" is the whole queue,
+  not a per-principal filter that would hide work from the people
+  responsible for the tenant's whole task backlog.
 
   ## Response allowlists (INV-2, AC5)
 
@@ -229,8 +232,11 @@ defmodule Letflow.Routers.Tasks do
   end
 
   # `status`/`instance_id`/`assignee_id` query params, if present, are
-  # silently ignored for this endpoint -- R-Co's own handleInbox never reads
-  # them either (main.zig's inbox branch never populates them).
+  # silently ignored for this endpoint -- inbox's assignee scope is always
+  # forced (per-principal or unfiltered, see INV-2 above), so a
+  # caller-supplied filter on these fields would have no effect regardless
+  # (main.zig's inbox branch never populates them either, for the same
+  # reason).
   defp build_inbox_assignee_scope(conn, user_id, opts) do
     roles = Authorization.roles_from_strings(conn.assigns.auth_context.roles)
 

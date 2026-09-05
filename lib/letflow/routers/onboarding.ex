@@ -56,10 +56,10 @@ defmodule Letflow.Routers.Onboarding do
   scoped to the caller's own tenant) might suggest otherwise. Two independent
   reasons, both confirmed by direct inspection, not assumed:
 
-    1. R-Co's own `handleGetOnboardingByHostname` (`onboarding.zig:379-409`) opens
-       with the identical `actor.role != .PLATFORM_ADMIN` gate as its two
-       siblings — there is no pre-authentication branch in R-Co's own source
-       for this handler.
+    1. The historical Zig `handleGetOnboardingByHostname` (`onboarding.zig:379-409`)
+       opens with the identical `actor.role != .PLATFORM_ADMIN` gate as its two
+       siblings — confirmed by direct inspection, there is no pre-authentication
+       branch anywhere in that handler.
     2. The frontend's only real caller of this endpoint
        (`web/src/api/onboarding.ts`'s `getOnboardingByHostname`, from
        `OnboardingResultPage.tsx`) is reached exclusively via the

@@ -520,3 +520,14 @@ history:
       comment citing the run, the artefact path, and all three gate
       passes, stating plainly this is a design decision, not a shipped
       feature. Queue task 430 released status:"done".
+  - req: REQ-232
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-05T01:29:34Z
+    note: >
+      Retired parity-justification phrasing in lib/letflow/routers/* (closes
+      ISS-0424 part 2a, queue task 470, GH#917, PR #928,
+      feature/WF02-REQ232-20260905). REVIEWER passed the implementation
+      (handoffs/WF02-REQ232-20260905/step-02d-reviewer.json); ORCH
+      independently confirmed mix compile --warnings-as-errors and the
+      routers test suite pass before this status flip.

@@ -46,16 +46,17 @@ defmodule Letflow.Routers.Identity do
 
   ## Role registry constraint (REQ-076 AC6)
 
-  `POST /roles`'s `name` field accepts any role name outside R-Co's own
-  five-value `auth.Role` enum — confirmed by direct read of R-Co's
-  `src/identity/role_registry.zig`, which validates only a **format**
+  `POST /roles`'s `name` field accepts any role name, not restricted to a
+  closed enum (R-Co's `src/identity/role_registry.zig` validates only the
+  same format constraint, never enum membership, confirmed by direct
+  read). `Letflow.Identity.RoleRegistry.upsert_role/2` (REQ-020,
+  unchanged by this requirement) already enforces exactly a **format**
   constraint (non-empty, ≤128 Unicode codepoints, no ASCII control
-  characters), never enum membership. `Letflow.Identity.RoleRegistry.upsert_role/2`
-  (REQ-020, unchanged by this requirement) already enforces exactly this
-  format-only constraint. `POST /roles` returns **200**, not 201 — an upsert,
-  not strictly a create, matching R-Co's own `handleUpsertRole`'s literal
-  `.status_code = 200` (design doc §10 OQ-5 — deliberate, not a status-code
-  bug).
+  characters), never enum membership, and this route adds no stricter
+  check on top of it. `POST /roles` returns **200**, not 201 — an upsert,
+  not strictly a create, so the response code reflects that update
+  semantic rather than resource-creation semantics (design doc §10 OQ-5 —
+  deliberate, not a status-code bug).
 
   ## Group member listing: one served endpoint, not two (REQ-074 AC6)
 
@@ -77,13 +78,13 @@ defmodule Letflow.Routers.Identity do
   R-Co-only `PLATFORM_ADMIN`-exclusive gate (`identity.zig:533`) — this
   route is gated by the same shared `:GroupsManage` policy as every other
   group route, not a handler-local role literal. Flagged as OQ-3 for
-  REVIEWER: a real behavioral narrowing-removal versus R-Co's own (unrouted
-  but real) stricter gate.
+  REVIEWER: this is a real behavioral narrowing versus that unrouted-but-real
+  stricter gate, not an accidental relaxation.
 
   ## Group member removal: single-member, not R-Co's live bulk-remove-all (REQ-074 AC6)
 
   `handleRemoveGroupMember` (single `(group_id, user_id)` removal,
-  `identity.zig:551`) is also unrouted in R-Co's own table —
+  `identity.zig:551`) is also unrouted in R-Co's route table —
   `grep -n "handleRemoveGroupMember" src/main.zig` has zero hits. What
   R-Co's route table actually serves at its bodyless `DELETE
   /groups/:id/members` is an **inline bulk remove-all-members** operation
@@ -93,8 +94,8 @@ defmodule Letflow.Routers.Identity do
   from single-member removal.
 
   This module ports `handleRemoveGroupMember`'s single-member semantics at
-  `DELETE /groups/:id/members/:user_id` instead — a route R-Co's own table
-  never actually binds to that handler, but whose path shape is implied by
+  `DELETE /groups/:id/members/:user_id` instead — a route R-Co's route
+  table never actually binds to that handler, but whose path shape is implied by
   the handler's own `(group_id, user_id)` signature and is the only
   sensible single-member REST verb; no acceptance criterion here names bulk
   removal. Flagged as **OQ-1** for REVIEWER: whether single-member removal
@@ -767,9 +768,10 @@ defmodule Letflow.Routers.Identity do
   defp iso8601_or_nil(nil), do: nil
   defp iso8601_or_nil(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
-  # Design §9's ad hoc add-member response shape (matches R-Co's own
-  # serializeGroupMemberResult, identity.zig:1017-1023) -- not group_map/1 or
-  # user_map/1. OQ-9 (ELIXIR-DEV's call): "added_at" is omitted -- no
+  # Design §9's ad hoc add-member response shape (`group_id`/`user_id`/
+  # `created`, coinciding with `serializeGroupMemberResult`,
+  # identity.zig:1017-1023 -- not group_map/1 or user_map/1). OQ-9
+  # (ELIXIR-DEV's call): "added_at" is omitted -- no
   # acceptance criterion depends on its presence, and adding it would need
   # threading the just-inserted/just-fetched GroupMember's own inserted_at
   # through for no named requirement.

@@ -62,8 +62,8 @@ defmodule Letflow.Routers.Audit do
   | `pipeline_run_id` | **not supported — 422 if supplied non-empty** | `audit_entries` has no such column at all (see above) — an explicit 422 is honest; a silent empty page is not. |
 
   `from > to` is checked **in this route**, before any query, returning 422 —
-  matching R-Co's own handler-level `invalid_time_range` check
-  (`audit.zig:26-30`) rather than pushing it into the store.
+  a syntactic-validity check that belongs at the route boundary, not the
+  store layer, so a bad range never even reaches a query (`audit.zig:26-30`).
 
   ## Two deliberate cursor divergences from R-Co, and one non-port
 

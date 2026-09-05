@@ -19,6 +19,8 @@ defmodule Letflow.DataCase do
       Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, {:shared, self()})
     end
 
+    Process.put(:letflow_data_case_shared_mode?, !tags[:async])
+
     :ok
   end
 end

@@ -214,18 +214,46 @@ defmodule Letflow.TenantFixture do
   the full trace of why a second mid-test `Sandbox.mode/2` call on the SAME repo the
   caller already checked a connection out of is actively harmful.
 
-  ## Provisioning runs on a separate repo (ISS-0480 — design §10)
+  ## Provisioning runs on a separate repo for `async: true` callers (ISS-0480 — design §10)
 
-  Every step of provisioning (schema clone/replay, `assert_schema_complete!/2`,
-  teardown) now runs against `Letflow.Test.ProvisioningRepo` — a second, dedicated
-  `Ecto.Repo` with its own pool and `DBConnection.Ownership.Manager` — instead of
-  against `Letflow.Repo` directly. This function no longer calls
+  For an `async: true` caller, every step of provisioning (schema clone/replay,
+  `assert_schema_complete!/2`, teardown) runs against `Letflow.Test.ProvisioningRepo` —
+  a second, dedicated `Ecto.Repo` with its own pool and `DBConnection.Ownership.Manager`
+  — instead of against `Letflow.Repo` directly. This function no longer calls
   `Sandbox.mode(Letflow.Repo, :auto)` at all: `Letflow.Repo`'s pool is never touched by
-  provisioning, in either mode or connection terms, so nothing here can check in a
+  this path, in either mode or connection terms, so nothing here can check in a
   connection belonging to some other, unrelated test (including one with zero
   `TenantFixture` involvement) concurrently checked out from `Letflow.Repo`'s pool —
   the exact hazard ISS-0480 named. See the design doc's §10 for the full mechanism and
   the connection-budget reconciliation against decision 0009.
+
+  ## Dual-path dispatch for `async: false` callers (ISS-0480 rework — design §11)
+
+  Routing every caller through `ProvisioningRepo` fixed the original ISS-0480 hazard but
+  broke the overwhelming majority (44 of 47) of real callers, which are `async: false`:
+  their own later `Letflow.Repo` reads could no longer see the fixture's own writes,
+  because those writes committed on a different physical connection (ordinary Postgres
+  MVCC, not a sandbox defect — design §11.0). This function now dispatches per call,
+  based on a flag `Letflow.DataCase.setup/1` already sets from ExUnit's own `tags[:async]`
+  (`Process.get(:letflow_data_case_shared_mode?, false)` — no new `opts` key, zero
+  call-site edits):
+
+    * `template: :replay` (any `async:` value) → always `with_provisioning_repo/1`
+      (`ProvisioningRepo`), because `Ecto.Migrator.run/4`'s real two-connection
+      requirement cannot be satisfied by a single shared/sandboxed connection
+      (design §11.2.1).
+    * `template: :clone` (default) and the caller is `async: false` →
+      `provision_via_shared_connection/1`: runs provisioning directly against
+      `Letflow.Repo`, on the same connection the caller's test process is already
+      using, issuing **no** `Sandbox.mode/2` call of any kind — so whichever mode is
+      already ambient (`{:shared, self()}`, or `:auto` if a later `setup` callback
+      changed it) is left completely undisturbed (design §11.2/§11.4).
+    * `template: :clone` and the caller is `async: true` (or the flag is unset, e.g. a
+      caller that never ran through `Letflow.DataCase.setup/1`) → `with_provisioning_repo/1`
+      (`ProvisioningRepo`), unchanged from design §10.
+
+  See the design doc's §11 for the full re-diagnosis, the dispatch rule, and why
+  defaulting the flag's absence to the `ProvisioningRepo` path is the safe choice.
   """
   @spec provisioned_tenant!(opts()) :: tenant_fixture()
   def provisioned_tenant!(opts \\ []) do
@@ -236,17 +264,26 @@ defmodule Letflow.TenantFixture do
     template = Keyword.get(opts, :template, :clone)
     owner = owning_test()
 
+    # design §11.1/§11.2.1: template: :replay always needs ProvisioningRepo's own :auto
+    # connection (Ecto.Migrator.run/4's real two-connection requirement); otherwise an
+    # async: false caller (DataCase.setup/1 set the flag) reuses its own connection.
+    connection_wrap =
+      if template == :clone and Process.get(:letflow_data_case_shared_mode?, false) do
+        &provision_via_shared_connection/1
+      else
+        &with_provisioning_repo/1
+      end
+
     {tenant, schema_name} =
-      with_provisioning_repo(fn ->
-        # The Tenant row must be inserted on THIS same connection, not the caller's own
-        # (ambient, sandboxed) one: TenantProvisioning/TenantTemplate's own INSERTs into
+      connection_wrap.(fn ->
+        # The Tenant row must be inserted on THIS same connection, not necessarily the
+        # caller's own: TenantProvisioning/TenantTemplate's own INSERTs into
         # tenant_schemas carry a `tenant_id` FK to `tenants`, and provisioning runs on
-        # Letflow.Test.ProvisioningRepo's own, separate, non-sandboxed connection from
-        # this point on. An uncommitted insert on the caller's own sandboxed
-        # Letflow.Repo connection would be invisible to that FK check -- committing it
-        # here, on ProvisioningRepo, is what makes it visible (real, cross-connection
-        # visible data, exactly like every other write this fixture already makes under
-        # :auto mode -- see the moduledoc's note on why this is not a new leak).
+        # whichever connection `connection_wrap` selected for the rest of this call. An
+        # uncommitted insert on a DIFFERENT connection than the one provisioning uses
+        # would be invisible to that FK check -- inserting here, under `connection_wrap`,
+        # is what makes it visible on whichever connection provisioning subsequently
+        # runs on.
         tenant =
           %Tenant{}
           |> Tenant.create_changeset(
@@ -259,7 +296,11 @@ defmodule Letflow.TenantFixture do
           |> Repo.insert!()
 
         if Keyword.get(opts, :teardown, true) do
-          on_exit(fn -> with_provisioning_repo(fn -> teardown(tenant.id, owner) end) end)
+          # design §11.3: teardown must close over the SAME dispatch decision made for
+          # this call's provisioning above -- they must never diverge, or teardown's
+          # DROP SCHEMA/DELETE would run against a different connection than the one
+          # provisioning committed to.
+          on_exit(fn -> connection_wrap.(fn -> teardown(tenant.id, owner) end) end)
         end
 
         schema_name = provision_schema!(template, tenant.id)
@@ -294,6 +335,38 @@ defmodule Letflow.TenantFixture do
 
     try do
       Repo.put_dynamic_repo(Letflow.Test.ProvisioningRepo)
+      fun.()
+    after
+      Repo.put_dynamic_repo(previous)
+    end
+  end
+
+  # -----------------------------------------------------------------------------------
+  # design §11.2: the async: false path. Runs `fun` directly against Letflow.Repo, on
+  # whichever connection the caller's own test process is already using -- issuing NO
+  # Sandbox.mode/2 call of any kind, on any repo, ever. That absence is the single
+  # load-bearing property: a code path that never calls Sandbox.mode/2 cannot trigger
+  # the ORIGINAL ISS-0113/ISS-0480 hazard (a global, empty-exclusion-list check-in),
+  # structurally, regardless of how many times it runs or how many processes call it
+  # concurrently (design §11.4). Whatever mode is already ambient at call time --
+  # ordinarily {:shared, self()} from DataCase.setup/1, or :auto if a later `setup`
+  # callback in the same module changed it since (e.g.
+  # tenant_fixture_dispatch_test.exs's own local setup, design §11.2/§11.4) -- is left
+  # completely undisturbed, and every Repo. call `fun` makes simply reuses the
+  # already-checked-out connection for this process (DBConnection.Ownership.Manager's
+  # {status, _ref, proxy} when status in [:owner, :allowed] rule, design §9.3).
+  #
+  # Repo.put_dynamic_repo(Letflow.Repo) is a no-op in the ordinary case, stated
+  # explicitly (not assumed) so this path's own behavior does not depend on what a
+  # PRIOR call in the same test process may have left the dynamic-repo binding pointed
+  # at -- the same defensive-explicitness discipline with_provisioning_repo/1's own
+  # `after` block already applies in the other direction.
+  # -----------------------------------------------------------------------------------
+  defp provision_via_shared_connection(fun) do
+    previous = Repo.get_dynamic_repo()
+
+    try do
+      Repo.put_dynamic_repo(Letflow.Repo)
       fun.()
     after
       Repo.put_dynamic_repo(previous)

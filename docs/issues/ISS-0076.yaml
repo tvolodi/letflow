@@ -56,6 +56,7 @@ description: >
 
   THREE ITEMS DESERVE ACTION BEYOND A DOCS SWEEP:
 
+  PROVENANCE (historical, not current decision authority):
   (1) SHIPPED OPEN QUESTIONS THAT ARE NOW ANSWERABLE -- the highest-value
   item. These were deferred specifically because R-Co could not be read, and
   their source files exist and are readable today
@@ -81,6 +82,7 @@ description: >
   defect was created. Fix this even if every other occurrence is judged
   acceptable: it is the only one that reproduces itself.
 
+  PROVENANCE (historical, not current decision authority):
   (3) req062-sub-process-runtime.md:11 IS UNVERIFIED BY CONSTRUCTION -- it
   states that ALL of its instance.zig/transition.zig line citations came
   verbatim from handoff text rather than a direct read. REQ-062 is shipped,
@@ -170,6 +172,7 @@ status: resolved
 resolved_in_run: bookkeeping-20260820
 resolved_at: "2026-08-20T08:10:00Z"
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   All four items of the recommended_sequencing below are complete, each via
   its own requirement rather than a single docs sweep, per this issue's own
   guidance not to bundle items 3/4 into item 1/2's docs-only edits:

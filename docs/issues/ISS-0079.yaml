@@ -36,19 +36,23 @@ description: >
   REQ-059 shipped against it. R-Co's source is now readable and the
   mechanism DOES differ materially, on a shipped S3 instance-start path.
 
+  PROVENANCE (historical, not current decision authority):
   R-CO'S ACTUAL MECHANISM (all lines read directly this run in
   c:\Users\tvolo\dev\ai-dala\R-Co\src\engine\pin_resolver.zig):
 
+  PROVENANCE (historical, not current decision authority):
   - Overrides arrive as raw caller-supplied JSON on `ResolutionInput`
     (`pin_overrides: ?[]const u8`, pin_resolver.zig:206) shaped
     `{kind, ref, version}[]` -- there is NO `resolved_id` in the wire form.
     R-Co derives `resolved_id` itself from its own catalog lookup.
 
+  PROVENANCE (historical, not current decision authority):
   - Overrides are applied as Step 5 (pin_resolver.zig:296-299), AFTER full
     normal resolution (Steps 2/3 at :254-290) has already run and produced
     every pin with `.source = .resolved` (:265). An override is an OVERLAY
     onto an already-resolved pin set, never a substitute for resolving.
 
+  PROVENANCE (historical, not current decision authority):
   - `applyPinOverrides()` (pin_resolver.zig:602-691) VERIFIES each override
     before applying it. For `catalog_entry` it calls
     `resolveServiceCatalogRef()` and requires the override's `version` to
@@ -56,20 +60,24 @@ description: >
     (:648-661). For `variable_schema` it recomputes the current hash and
     requires an exact match, else `UnresolvedPinOverride` (:670-683).
 
+  PROVENANCE (historical, not current decision authority):
   - `kind: module` overrides are rejected UNCONDITIONALLY
     (pin_resolver.zig:642: "a module override can never verify --
     UnresolvedPinOverride").
 
+  PROVENANCE (historical, not current decision authority):
   - An override naming a ref that is NOT in the enumerated pin set is an
     ERROR, not a no-op: `applyOverrideToPins()` returns false when no pin
     matches (pin_resolver.zig:707-723, the `return false` at :723), and both
     call sites turn that into `UnresolvedPinOverride` (:662-664, :684-686).
 
+  PROVENANCE (historical, not current decision authority):
   - `UnresolvedPinOverride` is a first-class member of `ResolutionError`
     (pin_resolver.zig:189-190, documented "pin_overrides names a version that
     does not exist (PIN-01 AC4). HTTP 422"), and aborts resolution ENTIRELY
     with no partial pin set kept (:598-601).
 
+  PROVENANCE (historical, not current decision authority):
   - `.source = .override` is set by exactly one line on this path:
     `applyOverrideToPins()` at pin_resolver.zig:719, only after verification
     succeeded.
@@ -116,6 +124,7 @@ description: >
   the record is not lost; these are NOT the override mechanism and each needs
   its own assessment rather than being assumed to travel with it:
 
+  PROVENANCE (historical, not current decision authority):
   (a) DEDUPLICATION. Letflow deduplicates enumerated refs with `Enum.uniq()`
   (pin_resolver.ex:292), so two `SERVICE_TASK` nodes sharing one `service_id`
   yield ONE pin entry. R-Co appends one pin per node with no dedup whatsoever
@@ -124,6 +133,7 @@ description: >
   Letflow's behaviour is arguably the better one; it is nonetheless a
   divergence from the port and was never flagged as a deliberate deviation.
 
+  PROVENANCE (historical, not current decision authority):
   (b) SORT ORDER. Letflow sorts by `Atom.to_string(kind)`
   (pin_resolver.ex:383-385), giving catalog_entry < module < variable_schema.
   R-Co sorts by `@intFromEnum(kind)` (`pinLessThan`, pin_resolver.zig:730-735)
@@ -137,13 +147,21 @@ description: >
   the moment a real `module_lookup` is supplied. PIN-01 AC5 makes ordering
   load-bearing, so it should be settled deliberately rather than inherited.
 r_co_evidence:
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:206 -- pin_overrides is raw {kind,ref,version}[] JSON, no resolved_id"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:296-299 -- Step 5 applies overrides AFTER resolution"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:602-691 -- applyPinOverrides() verifies every override"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:642 -- module overrides always UnresolvedPinOverride"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:659-661, 681-683 -- version must equal currently-resolvable version"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:662-664, 684-686, 707-723 -- override naming an unknown ref is an error"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:189-190 -- UnresolvedPinOverride, HTTP 422"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:719 -- the single line that sets .source = .override on this path"
 letflow_evidence:
   - "lib/letflow/engine/pin_resolver.ex:317-328 -- resolve_one_ref/4 takes the override verbatim, skips lookup"
@@ -159,6 +177,7 @@ affected_files:
 status: resolved
 resolved_at: "2026-08-20T14:05:00Z"
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Decided and fixed per lib/letflow/design/iss-0079-pin-override-verification.md,
   verified against R-Co directly (pin_resolver.zig:206, :254-299, :602-735) rather
   than trusting this record. R-Co's real semantic is narrower than "override" implies:

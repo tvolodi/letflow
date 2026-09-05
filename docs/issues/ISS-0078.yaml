@@ -21,6 +21,7 @@ description: >
   entry. Letflow's `merge_effective_pins/2` does not, and diverges on three
   further points in the same function.
 
+  PROVENANCE (historical, not current decision authority):
   R-CO (c:\Users\tvolo\dev\ai-dala\R-Co\src\engine\pin_resolver.zig,
   `mergeEffectivePins()`, all lines read directly this run):
 
@@ -92,10 +93,15 @@ description: >
   neither requirement owned the seam. Worth naming in the fix design so the
   same seam is not re-opened.
 r_co_evidence:
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:90-95 -- mergeEffectivePins() signature, takes started_event_id"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:107-118 -- seeds source_event_id from the INSTANCE_STARTED id"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:130-139 -- rebind sets resolved_id, version, source = .override, source_event_id"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:143-160 -- unknown-ref rebind is APPENDED (source = .override at :156), never dropped"
+  # PROVENANCE (historical, not current decision authority):
   - "src/engine/pin_resolver.zig:914 -- unit test asserts PinSource.override after a rebind"
 letflow_evidence:
   - "lib/letflow/engine/pin_resolver.ex:450-466 -- apply_rebind_event/2 updates only version and source_event_id"
@@ -142,6 +148,7 @@ scoping_note: >
   zero changes to engine behaviour so the finding survives as a record and
   the fix passes through CODE-DESIGNER, SECURITY-REVIEWER and REVIEWER.
 
+  PROVENANCE (historical, not current decision authority):
   ROUTE THROUGH WF-03. Separable decisions the fix design must settle:
     1. Does a rebound pin's `source` become `:override` (matching R-Co and
        its test at pin_resolver.zig:914), or does Letflow introduce a
@@ -171,6 +178,7 @@ scoping_note: >
   Item 2 is the clearest case in this issue where copying R-Co would be
   copying a defect. Do not treat "match R-Co" as the default answer.
 
+  PROVENANCE (historical, not current decision authority):
   TEST-DESIGNER note for the eventual WF-03 Step 4: R-Co's own test at
   pin_resolver.zig:898-914 is a directly portable fail-first regression case
   for item 1 -- seed a pin with source :resolved, fold one rebind, assert the

@@ -1146,3 +1146,53 @@ history:
       now-stale filenames), and a clean real-tree scan (0 new violations,
       64 async:true files scanned, 0 permitted exceptions currently
       exercised) before this status flip.
+
+  - req: REQ-260
+    event: started
+    agent: ORCH
+    at: "2026-09-05T21:39:20Z"
+    note: >
+      WF02-REQ260-20260905 started (queue task 498, agent_id
+      letflow-ee-orch). Chunk 239f of REQ-239's replacement set: applies
+      REQ-237's .zig PROVENANCE-marker convention (as amended 2026-09-05,
+      ISS-0510) to docs/issues/*.yaml, ISS-0001 through ISS-0079 subset
+      carrying a .zig reference -- 11 named files (ISS-0001, 0002, 0005,
+      0014, 0045, 0063, 0075, 0076, 0077, 0078, 0079). Branch
+      feature/WF02-REQ260-20260905 created off main@4f7c7596. Dispatching
+      to DOC-UPDATER next.
+
+  - req: REQ-260
+    event: done
+    agent: ORCH
+    at: "2026-09-05T22:17:21Z"
+    note: >
+      WF02-REQ260-20260905 done. DOC-UPDATER applied REQ-237's PROVENANCE
+      marker convention to the 11 named docs/issues/ISS-*.yaml files
+      (ISS-0001, 0002, 0005, 0014, 0045, 0063, 0075, 0076, 0077, 0078,
+      0079) -- 53 additive marker lines covering all 71 pre-existing .zig
+      citation lines, zero deletions, zero non-marker field changes.
+      Two citation-unit shapes exercised: paragraph (folded-scalar prose)
+      and YAML comment-line/sequence-item shape 4(a), including its
+      mechanical extension to r_co_evidence:/letflow_evidence: sequence
+      items (not literally named in REQ-237's design doc but structurally
+      identical to its documented acceptance_criteria-bullet case).
+      REVIEWER independently re-derived the diff-based checks (scope,
+      zero .zig-line alterations, no non-marker field changes, YAML
+      validity) rather than trusting DOC-UPDATER's self-report, and
+      PASSed (handoffs/WF02-REQ260-20260905/step02-reviewer.json).
+      Rebased cleanly onto main (one registry.json bookkeeping conflict,
+      resolved by composing both sides' entries, no content loss). PR
+      #1004: both CI runs' Backend gate initially failed on the same
+      already-tracked flake (ISS-0340, `Letflow.Api.Context.scoped_repo_opts/1`
+      full-suite-ordering race, test/letflow/api/context_test.exs:103-104)
+      -- structural non-overlap confirmed (diff touches only the 11
+      docs/issues/*.yaml files plus bookkeeping, zero touch to
+      lib/letflow/api/context.ex or its test). main's branch protection
+      has enforce_admins: true, so an actual admin-bypass merge is not
+      available here (unlike the historical wasm_hang/ISS-0418
+      precedent, which had in fact always resolved via a clean retry,
+      not a true bypass) -- reran both failed Backend gate jobs via
+      `gh run rerun --failed`; both passed on retry with no code change,
+      confirming the flake rather than a real regression. Merged as
+      eaf17c1391af2878941cbb62ced00ce55ba22c6b (squash, PR #1004).
+      Queue task 498 released status:done. Local main synced.

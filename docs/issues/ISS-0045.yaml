@@ -62,6 +62,7 @@ resolution_note: >
   GitHub issue #165 close comment documents this renumbering for anyone
   following the GH issue back to this repo.
 
+  PROVENANCE (historical, not current decision authority):
   Step 1 (diagnose): a live-code read of REQ-043's shipped
   lib/letflow/engine/task.ex was not possible in this checkout, and was not
   necessary to reach a diagnosis, for the same class of reason as the
@@ -88,6 +89,7 @@ resolution_note: >
   by the GitHub issue text itself, so the missing live-code read of
   task.ex/token.ex's *content* does not weaken the diagnosis.
 
+  PROVENANCE (historical, not current decision authority):
   Conclusion: correctly deferred to REQ-045 (or REQ-051/REQ-062), not
   actionable now. Grounds:
   (1) the issue's own text already names the precise landing point --

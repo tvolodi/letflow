@@ -1,5 +1,6 @@
 defmodule Letflow.Identity.Group do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Ecto schema for the `groups` table. This is a minimal table added by
   REQ-015 itself — Letflow had no prior `groups` migration to port
   directly. Shape precedent is R-Co `src/design/adp-04-user-tenant-binding.md`'s
@@ -40,6 +41,7 @@ defmodule Letflow.Identity.Group do
   @type t :: %__MODULE__{}
 
   @doc """
+  PROVENANCE (historical, not current decision authority):
   Builds the insert changeset for `Letflow.Identity.create_group/2` (design
   §8 gap 1). `display_name` defaults to `name` when omitted or an empty
   string, so a group without a distinct display name still shows something

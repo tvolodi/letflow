@@ -1,5 +1,6 @@
 defmodule Letflow.Identity.TenantRole do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Ecto schema for the `tenant_role` table. Shaped to match R-Co
   `src/identity/role_registry.zig`'s `TenantRoleStore` (`list_roles`,
   `upsert_role`), which REQ-020 implements against this schema.

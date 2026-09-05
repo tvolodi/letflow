@@ -1,5 +1,6 @@
 defmodule Letflow.Oidc.IdentityContext do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Pure data shape holding the result of mapping verified OIDC claims onto
   Letflow-internal identity fields. Ported from `src/oidc/claim_mapping.zig`'s
   `IdentityContext` struct (lines 65-72) — see `Letflow.Oidc.ClaimMapping` for

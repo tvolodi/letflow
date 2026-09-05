@@ -1,5 +1,6 @@
 defmodule Letflow.Identity do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for the identity domain. `provision_oidc_user/4` (below) ports
   the JIT (just-in-time) user-provisioning orchestration from
   `src/oidc/jit_provisioning.zig` together with the actual upsert from
@@ -8,6 +9,7 @@ defmodule Letflow.Identity do
   per-tenant-schema per REQ-063 (`opts[:prefix]` selects the target schema — see
   `provision_oidc_user/4`'s own @doc).
 
+  PROVENANCE (historical, not current decision authority):
   `resolve_tenant_by_realm/1`, `resolve_realm_by_tenant/1`, and
   `verify_realm_ownership/2` (below) port `src/oidc/realm_tenant_binding.zig`
   and the realm-ownership guard from
@@ -519,6 +521,7 @@ defmodule Letflow.Identity do
   for this requirement calls for cursor pagination on this endpoint, unlike
   `list_group_members/3`).
 
+  PROVENANCE (historical, not current decision authority):
   Ordered by `name` ascending (OQ-5 — this design's own reasonable default,
   not confirmed against `registry.zig`'s own `listGroups` ordering).
 
@@ -581,6 +584,7 @@ defmodule Letflow.Identity do
   `GroupMember.inserted_at` ascending, then `user_id` ascending (tiebreaker,
   OQ-4 — same OQ-1-shaped choice as `list_users/2`).
 
+  PROVENANCE (historical, not current decision authority):
   Cursor prefix is `"G:"` (distinct from `list_users/2`'s `"U:"` — the
   distinct namespace stops a cursor minted for one listing endpoint from
   being replayed against the other), using the same cursor-prefix literal
@@ -1428,6 +1432,7 @@ defmodule Letflow.Identity do
     |> DateTime.to_naive()
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # The upsert algorithm — select-first / INSERT ... ON CONFLICT ... DO
   # NOTHING / re-select-on-conflict, matching registry.zig lines 843-912
   # exactly. Deliberately not Ecto.Multi (this is one logical conditional

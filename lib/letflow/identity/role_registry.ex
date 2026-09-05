@@ -1,5 +1,6 @@
 defmodule Letflow.Identity.RoleRegistry do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Ports R-Co `src/identity/role_registry.zig`'s `TenantRoleStore` (`list_roles`,
   `upsert_role`) and `resolveRoleInTx` — see also
   `src/design/idn05-role-registry.md`, the design doc `role_registry.zig` itself points

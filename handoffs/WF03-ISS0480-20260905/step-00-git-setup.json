@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0480-20260905-step-00",
+  "run_id": "WF03-ISS0480-20260905",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0480-20260905/step-00-git-setup.json",
+  "created_at": "2026-09-05T15:45:00Z",
+  "started_at": "2026-09-05T15:45:00Z",
+  "completed_at": "2026-09-05T15:55:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0480"],
+    "artifacts_in": [
+      "docs/issues/ISS-0480.yaml",
+      "test/letflow/row_approval_test.exs",
+      "test/letflow/definitions/pack_update_migration_test.exs",
+      "test/support/data_case.ex"
+    ],
+    "branch_name": "fix/ISS-0480-sandbox-checkout-race-20260905",
+    "owned_modules": [
+      "test/letflow/row_approval_test.exs",
+      "test/letflow/definitions/pack_update_migration_test.exs"
+    ]
+  },
+  "task": {
+    "description": "Git setup for ISS-0480 (MAJOR): a load-dependent Ecto.Adapters.SQL.Sandbox checkout race affecting RowApprovalTest and PackUpdateMigrationTest under heavy concurrent async load. Selected on the user's instruction to take architecture items; both nominated architecture MAJORs (ISS-0425 supervision layering, ISS-0430 LISTEN/NOTIFY) turned out to be ALREADY RESOLVED by sibling sessions, so ORCH re-derived the open MAJOR set from current main rather than trusting its own earlier survey -- which had gone stale.\n\nSIZING VERDICT (ORCHESTRATOR.md section 10): FAILS -- full WF-03 chain. Two files at minimum, a concurrency defect whose root cause is not yet established (the issue itself only says 'structural evidence points to'), and the remedy is genuinely undecided between narrowing async, fixing a shared-state leak, or changing the fixture. That is a real design decision, not a mechanical edit.\n\nSTALE-LOCK RECOVERY, disclosed and materially different from the ISS-0418 case: task 480 was LOCKED BY A DIFFERENT AGENT. ORCH investigated before touching it. origin/feature/WF03-ISS0480-20260905 exists but its HEAD commit is tagged [WF03-ISS0423-20260905] and reads 'log final self-correction and confirm run complete' -- it is ISS-0423's OWN branch, 0 commits ahead of main, fully merged via PR #934, with its handoffs/WF03-ISS0423-20260905/ directory present on disk. So a sibling filed ISS-0480 as an incidental finding DURING the ISS-0423 run, locked task 480, completed and merged ISS-0423, and never released 480 because 480 was not the task it was actually working. The lock is orphaned by a COMPLETED run, not held by a live one. Force-released and claimed on that evidence, per the standing rule that disposition of a dead sibling session is ORCH's discretion provided it is reported."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 480 force-released (orphaned by the completed WF03-ISS0423-20260905 run) then locked by letflow-2-orch, GH#933. Branch created from main e5d07019 and pushed.\n\nFACTS ORCH ESTABLISHED FOR THE DIAGNOSIS, so downstream agents need not rediscover them:\n  - BOTH implicated files declare `use Letflow.DataCase, async: true` -- row_approval_test.exs:2 and pack_update_migration_test.exs:36. That is the shared precondition for the hypothesised race.\n  - THE TWO FILES DO SHARE TABLES: both reference solution_pack_artefact_bases and pack_update_resolutions. This matters because the issue's own framing treats them as two independent symptoms; a shared-table overlap is a candidate common mechanism rather than a coincidence, and the diagnosis should test that explicitly.\n  - The reported failures are DIFFERENT SHAPES: RowApprovalTest failed on an assertion immediately after create() returned {:error, :not_found}; PackUpdateMigrationTest failed with an Ecto.ConstraintError on solution_pack_artefact_bases_tenant_id_fkey. Both are consistent with a row being invisible to, or absent from, the connection the test expects -- i.e. a checkout/visibility problem rather than logic -- but they are not the same failure and the diagnosis must not assume one cause without evidence.\n  - REPRODUCIBILITY IS THE MAIN RISK TO THIS RUN: the issue records two full-suite runs on the SAME commit producing 3 failures and 1 failure respectively. So this is load-dependent and intermittent, and any 'it passes now' result proves nothing. This project has been bitten repeatedly this session by exactly that inference (ISS-0446, ISS-0427, ISS-0418 all required structural rather than green-run evidence).\n  - PRIOR ART WORTH READING: ISS-0113 is cited on the ISS-0423 branch as a 'sandbox-mode leak' fix that enabled real async: true for two TenantFixture files. If a sandbox-mode leak is the mechanism here too, that issue's own fix is the closest precedent.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

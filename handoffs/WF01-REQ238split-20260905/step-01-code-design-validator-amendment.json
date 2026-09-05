@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF01-REQ238split-20260905-step-01-code-design-validator-amendment",
+  "run_id": "WF01-REQ238split-20260905",
+  "workflow_id": "WF-01",
+  "step": "amendment-validate",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T10:14:21Z",
+  "context": {
+    "requirement_text": "REQ-237 amendment: add missing lib/letflow/design/ chunking to §6 (100 .zig-citing files never chunked despite being in REQ-239's original pre-split scope).",
+    "prior_state": "REQ-237 status: done. Original §1-5 and §6 (docs/ and lib/ chunking) already passed CODE-DESIGN-VALIDATOR twice (initial pass + rework-1 for file-count accuracy, commit fa67b102)."
+  },
+  "task": {
+    "description": "Independently validate CODE-DESIGNER's amendment to lib/letflow/design/req237-zig-provenance-marking-convention.md, which adds a §6 chunking plan for lib/letflow/design/'s 100 .zig-citing files (a scope gap found while REQ-ANALYST drafted REQ-239's chunk-level replacement requirements).",
+    "acceptance_criteria": [
+      "100-file total for lib/letflow/design/ is independently re-confirmed",
+      "8 new chunks (239-design-a..h) are each <=13 files, union covers all 100 exactly, no drop/double-count",
+      "boundary rule is unambiguous for a future ELIXIR-DEV/DOC-UPDATER turn",
+      "amendment note is clearly dated and distinguished from original passed content",
+      "no other content in the file changed vs last-passed commit",
+      "OQ-4 given a reasoned recommendation, not left as a bare open flag"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "verification_performed": [
+      "grep -rl '\\.zig' lib/letflow/design/ | wc -l => 100 (matches claimed total)",
+      "Built full alphabetical file listing (100 files) and manually mapped it against all 8 chunk definitions in §6's new table: 239-design-a (13, explicit list, rows 1-13), 239-design-b (req017-req029, 13, rows 14-26), 239-design-c (req030-req048, 13, rows 27-39, gaps 034/036/037/042/046/047 confirmed genuinely absent), 239-design-d (req049-req066, 13, rows 40-52), 239-design-e (req068-req081, 13, rows 53-65), 239-design-f (req083-req171, 13, rows 66-78), 239-design-g (req178-req202, 13, rows 79-91), 239-design-h (req205-req237 + 3 lowercase files, 9, rows 92-100). Sum 13*7+9=100 with zero overlap and zero gap across the full alphabetical list -- confirmed by direct row-range accounting, not just trusting the document's own sum-check line.",
+      "Boundary rule (alphabetical filename sort, sliced into groups of <=13) is unambiguous: chunk a and h give explicit file lists (covering all non-reqNNN-named files), chunks b-g give reqNNN-to-reqNNN ranges over a mostly-contiguous alphabetical space where any future re-grep + sort reproduces the identical grouping without judgement calls.",
+      "Amendment note is a clearly delimited block at the top of the file, dated 2026-09-05, separated from the original document by a horizontal rule, and explicitly states 'Nothing else in this document was re-litigated or reopened; REQ-237 itself remains status: done' -- unambiguous for a future reader.",
+      "git diff fa67b102 666f356d -- lib/letflow/design/req237-zig-provenance-marking-convention.md: confirmed the only additions are (1) the top amendment note, (2) the new lib/letflow/design/ table and surrounding prose inserted after the existing REQ-239 docs/ chunking in §6, (3) new OQ-4 appended after existing OQ-3. Sections 1-5 and the original §6 docs/lib chunking tables are byte-identical -- zero lines removed or modified anywhere in the diff."
+    ],
+    "oq4_recommendation": "OQ-4 should be resolved as: mark it. This design's own §2 placement rule and §3 coverage confirmation are explicitly structural/mechanical with no per-file exemption clause -- the convention's entire selling point (§2's justification c, and OQ-3's precedent of marking index-table citations uniformly) is that no citation unit is judgement-called out based on what kind of prose surrounds it. Carving out this design doc itself as 'meta-documentation, not real content' reintroduces exactly the per-citation judgement call §2 was built to eliminate, and sets a precedent that other lib/letflow/design/*.md docs quoting .zig paths in their own worked examples (there may be others besides req237) could also claim exemption, silently shrinking the swept surface. The worked-example citations in §4 are themselves quoted R-Co paths, structurally indistinguishable from any other citation unit in the corpus -- marking them costs nothing (the marker only adds a preceding line, per-file-count and content are otherwise unaffected) and preserves the single, uniform, no-exceptions rule that is this design's core strength. Recommend 239-design-h's owning requirement text instruct marking req237's own worked-example citations like any other unit, and note explicitly that this is not circular (the marker only demotes citation authority framing; it does not alter or remove the marker-defining prose itself)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

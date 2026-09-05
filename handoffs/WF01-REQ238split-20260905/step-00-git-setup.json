@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF01-REQ238split-20260905-step-00",
+  "run_id": "WF01-REQ238split-20260905",
+  "workflow_id": "WF-01",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "REQ-ANALYST",
+  "file": "handoffs/WF01-REQ238split-20260905/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T10:10:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-238", "REQ-239"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-238 and REQ-239 entries)",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (REQ-237's finalized design, §6 chunking plan)"
+    ],
+    "branch_name": "feature/WF01-REQ238split-20260905",
+    "base_commit": "62ba734b"
+  },
+  "task": {
+    "description": "WF-01 Step 00: claimed queue task 478 (REQ-238) via get_next_task. REQ-238's own text explicitly requires splitting per REQ-237's chunking recommendation once finalized, recording the split as a follow-on REQ-ANALYST pass rather than a partial unrecorded sweep. This applies equally to REQ-239 (same family, same design doc). Dispatching REQ-ANALYST to replace both REQ-238 and REQ-239 with chunk-level requirements matching REQ-237's §6 table exactly."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF01-REQ238split-20260905 created off main @ 62ba734b (post REQ-242 merge, ISS-0424 Part 2 fully complete). This is a requirement-drafting/splitting run (WF-01 shape), not an implementation run -- no ELIXIR-DEV/REVIEWER/SECURITY-REVIEWER step. Outcome: REQ-238/239 deleted, replaced by REQ-243..271 (29 requirements), plus a real design gap found and fixed (REQ-237's own §6 amended to cover lib/letflow/design/'s 100 files, independently re-verified by CODE-DESIGN-VALIDATOR), all 29 REQ-VALIDATOR-passed and registered with letflow-queue (queue tasks 481-509, GH#946-974)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

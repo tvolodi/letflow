@@ -1,3 +1,16 @@
+**AMENDMENT 2026-09-05:** added §6's `lib/letflow/design/` chunking table below (8 new
+chunks, 239-design-a through 239-design-h). This is a scope gap found during REQ-239's
+chunk-level split: REQ-239's original requirement text (pre-split, see `git show
+main:docs/requirements.yaml | grep -n "id: REQ-239" -A 30` or REQ-ANALYST's commit
+`da716b4c` on branch `feature/WF01-REQ238split-20260905`) explicitly included
+`lib/letflow/design/*.md` in scope, and this design's own §3 confirms the same marking
+convention applies there, but the original §6 (CODE-DESIGN-VALIDATOR-passed, unchanged
+below) only chunked `docs/` and `docs/requirements.yaml` — it never produced a chunk for
+`lib/letflow/design/`'s 100 `.zig`-carrying files. Nothing else in this document was
+re-litigated or reopened; REQ-237 itself remains `status: done`.
+
+---
+
 # Design: REQ-237 — `.zig` provenance-citation marking convention (closes ISS-0424 part 3a)
 
 **Requirement:** REQ-237 (this run's handoff `context.requirement_text.REQ-237`, stage S6,
@@ -343,6 +356,41 @@ keeps every third at 11, under the ceiling with room for count drift.
 Sum check for REQ-239's file-based chunks: 239e1(8)+239e2(7)+239f(11)+239g(11)+239h(11)+239i(10)
 = 58, matching the re-derived 58-file `docs/` (excl. `requirements.yaml`) total exactly.
 
+**`lib/letflow/design/` (added 2026-09-05 amendment) — 100 files carry a `.zig` reference
+today** (`grep -rl '\.zig' lib/letflow/design/*.md | wc -l`, re-derive at fix time). This
+directory was in REQ-239's original pre-split scope (see the AMENDMENT note at the top of
+this document) but was never chunked by the table above, which covered only `docs/`. It is
+sized on the same 13-file ceiling as every REQ-238/REQ-239 chunk, boundary rule:
+**alphabetical filename sort** (the same sort order `ls lib/letflow/design/*.md` /
+`grep -rl` already produce), sliced into consecutive groups of at most 13. Because nearly
+every file in this directory is named `reqNNN-*.md` with a zero-padded 3-digit requirement
+number, alphabetical sort here coincides with ascending REQ-id order, so most chunk
+boundaries are also clean REQ-id ranges — the small number of non-`reqNNN`-named files
+(decision docs `0001-*`/`0002-*`/`0003-*`, and lowercase-named files like `api-pagination.md`,
+`export_import.md`, `search.md`, `service_task*.md`) sort in alongside them and are called
+out explicitly per chunk below. These chunks are not yet owned by a numbered requirement —
+REQ-ANALYST assigns REQ ids to them next; the labels below (`239-design-a` .. `h`) are
+placeholders identifying the chunk, not requirement ids.
+
+| Chunk | Scope (alphabetical filename range) | Real file count (re-grepped this session) |
+|---|---|---|
+| 239-design-a | `0001-web-framework-addendum-req065.md`, `0001-web-framework-decision.md`, `0002-oidc-integration-decision.md`, `0003-ecto-schema-strategy-decision.md`, `api-pagination.md`, `export_import.md`, `identity-schema.md`, `iss-0047-username-race-conflict-target.md`, `iss-0078-pin-rebind-provenance.md`, `iss-0079-pin-override-verification.md`, `iss0438-entity-subsystem-scoping.md`, `promotion_plan.md`, `promotion_review_state_machine.md` | 13 |
+| 239-design-b | `req017-claim-mapping.md` through `req029-node-attribute-edge-condition-validators.md` (req017–req029, 13 consecutive `reqNNN-*.md` files) | 13 |
+| 239-design-c | `req030-definition-store-crud.md` through `req048-task-completion.md` (req030–req048, 13 files; not every number in range exists — 034/036/037/042/046/047 have no design doc) | 13 |
+| 239-design-d | `req049-variable-merge.md` through `req066-api-error-response.md` (req049–req066, 13 files, same non-contiguous-numbering caveat) | 13 |
+| 239-design-e | `req068-validation.md` through `req081-definition-routes-read.md` (req068–req081, 13 files) | 13 |
+| 239-design-f | `req083-task-routes-read.md` through `req171-wasm-host-api-read.md` (req083–req171, 13 files, sparse numbering) | 13 |
+| 239-design-g | `req178-dlq-routes.md` through `req202-artifact-repository.md` (req178–req202, 13 files) | 13 |
+| 239-design-h | `req205-simulation-harness-foundation.md` through `req215-service-task-engine-wiring.md`, `req237-zig-provenance-marking-convention.md`, `search.md`, `service_task_dispatcher.md`, `service_task.md` (req205–req237 plus 3 lowercase-named files) | 9 |
+
+Sum check: 13×7 + 9 = 100, matching the re-derived 100-file `lib/letflow/design/` total
+exactly — every file assigned to exactly one chunk, none dropped, none duplicated. Note
+`239-design-h` includes this document itself (`req237-zig-provenance-marking-convention.md`,
+which cites `.zig` paths in its own worked example in §4) — REQ-ANALYST/ELIXIR-DEV should
+confirm at fix time whether self-referential citations in this design doc are in scope for
+the marking convention or excluded as meta-documentation of the convention itself; this is
+also captured as a new open question in §8.
+
 ---
 
 ## 7. Acceptance-criteria traceability
@@ -386,3 +434,11 @@ for REVIEWER to confirm this reading is correct: marking an index table's `.zig`
 "historical, not current decision authority" is harmless (the table's factual content, which
 R-Co file a router module corresponds to, is unaffected either way), but it is a deliberate
 choice not to special-case index-shaped units differently from justification-shaped ones.
+
+**OQ-4 (MINOR, added 2026-09-05 amendment).** `239-design-h` (§6) assigns this document
+itself, `req237-zig-provenance-marking-convention.md`, to a chunk, since its own §4 worked
+examples quote real `.zig` citations verbatim. Whether this design document's own citations
+should be marked under the convention it defines (meta-documentation of the convention) or
+left unmarked as a reference copy of the original phrasing is not resolved here — flagged for
+REQ-ANALYST/REVIEWER to decide when `239-design-h`'s owning requirement is drafted, rather
+than silently excluding or including this file.

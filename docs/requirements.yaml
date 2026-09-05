@@ -14177,89 +14177,1476 @@ requirements:
     depends_on: []
     impl_order: 474  # letflow-queue task id
 
-  - id: REQ-238
-    title: Apply the .zig provenance-marking convention across lib/ (excluding lib/letflow/design/) (closes ISS-0424 part 3b)
+  - id: REQ-243
+    title: Apply the .zig provenance-marking convention to lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex (closes ISS-0424 part 3b-1)
     owner: ELIXIR-DEV
     status: pending
     stage: S6
     description: >
-      Applies REQ-237's design decision (the provenance-marking convention
-      and its exact regex) to every .zig source-path citation in lib/,
-      excluding lib/letflow/design/ (design docs are REQ-239's scope, kept
-      separate because they are markdown, not moduledoc, and REQ-237 may
-      have recommended a different chunking once the actual convention is
-      fixed -- follow REQ-237's own chunking recommendation over this
-      requirement's file list if the two conflict, and flag the conflict
-      rather than silently picking one).
-      SEQUENCING: files touched by REQ-232 through REQ-236 (parity-phrase
-      rewrites) may overlap with files touched here (a file can carry both
-      a parity-justification sentence AND a .zig citation). This
-      requirement must run AFTER REQ-232 through REQ-236 land, so a
-      provenance-marker edit does not collide with or get silently
-      overwritten by a concurrent parity-phrase edit to the same
-      moduledoc paragraph.
-      MEASURED SCOPE AT DRAFT TIME (2026-09-04, re-derive at fix time using
-      REQ-237's actual finalized regex, not this placeholder count): a
-      rough proxy grep (`grep -rl '\.zig' lib/ | grep -v '^lib/letflow/design/'`)
-      found .zig citations present in roughly 180-190 lib/ files outside
-      lib/letflow/design/ (exact count is sensitive to the proxy pattern;
-      re-derive with REQ-237's real regex before starting, and quote that
-      count as this requirement's actual "before").
-      If this proves too wide for one ELIXIR-DEV turn once REQ-237's
-      chunking recommendation is known, split further per that
-      recommendation (e.g. by lib/letflow/ subdirectory) and record the
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238a1 = lib/letflow/router.ex and
+      lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/router.ex and
+      lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 8 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/router.ex lib/letflow/routers/audit.ex
+      lib/letflow/routers/definitions.ex lib/letflow/routers/dlq.ex
+      lib/letflow/routers/identity.ex lib/letflow/routers/instances.ex
+      lib/letflow/routers/metrics_exposition.ex
+      lib/letflow/routers/onboarding.ex`), matching REQ-237's design doc
+      section 6 table exactly. If this still proves too wide for one
+      ELIXIR-DEV turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,identity,instances,metrics_exposition,onboarding}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 7 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/routers/metrics_exposition.ex:67) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/router.ex lib/letflow/routers/audit.ex lib/letflow/routers/definitions.ex lib/letflow/routers/dlq.ex lib/letflow/routers/identity.ex lib/letflow/routers/instances.ex lib/letflow/routers/metrics_exposition.ex lib/letflow/routers/onboarding.ex` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 481  # letflow-queue task id
+
+  - id: REQ-244
+    title: Apply the .zig provenance-marking convention to lib/letflow/routers/{promotions,services,solution_packs,tasks,tenant_config,tenants,webhooks}.ex (closes ISS-0424 part 3b-2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238a2 =
+      lib/letflow/routers/{promotions,services,solution_packs,tasks,tenant_config,tenants,webhooks}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside
+      lib/letflow/routers/{promotions,services,solution_packs,tasks,tenant_config,tenants,webhooks}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 7 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/routers/promotions.ex
+      lib/letflow/routers/services.ex lib/letflow/routers/solution_packs.ex
+      lib/letflow/routers/tasks.ex lib/letflow/routers/tenant_config.ex
+      lib/letflow/routers/tenants.ex lib/letflow/routers/webhooks.ex`),
+      matching REQ-237's design doc section 6 table exactly. If this still
+      proves too wide for one ELIXIR-DEV turn by fix time, split further and
+      record the split as a follow-on REQ-ANALYST pass rather than doing a
+      partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/routers/{promotions,services,solution_packs,tasks,tenant_config,tenants,webhooks}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 6 citations across at least 3 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/routers/promotions.ex:409) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/routers/promotions.ex lib/letflow/routers/services.ex lib/letflow/routers/solution_packs.ex lib/letflow/routers/tasks.ex lib/letflow/routers/tenant_config.ex lib/letflow/routers/tenants.ex lib/letflow/routers/webhooks.ex` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 482  # letflow-queue task id
+
+  - id: REQ-245
+    title: Apply the .zig provenance-marking convention to lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex (closes ISS-0424 part 3b-3)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238b1 = lib/letflow/engine.ex and
+      lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/engine.ex and
+      lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 9 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/engine.ex
+      lib/letflow/engine/execution_error.ex lib/letflow/engine/expr.ex
+      lib/letflow/engine/instance_state.ex lib/letflow/engine/join_counter.ex
+      lib/letflow/engine/pin_rebind.ex lib/letflow/engine/pin_resolver.ex
+      lib/letflow/engine/plugin_interface.ex
+      lib/letflow/engine/plugin_registry.ex`), matching REQ-237's design doc
+      section 6 table exactly. If this still proves too wide for one
+      ELIXIR-DEV turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 8 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/engine/execution_error.ex:7, lib/letflow/engine/pin_resolver.ex:141) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine.ex lib/letflow/engine/execution_error.ex lib/letflow/engine/expr.ex lib/letflow/engine/instance_state.ex lib/letflow/engine/join_counter.ex lib/letflow/engine/pin_rebind.ex lib/letflow/engine/pin_resolver.ex lib/letflow/engine/plugin_interface.ex lib/letflow/engine/plugin_registry.ex` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 483  # letflow-queue task id
+
+  - id: REQ-246
+    title: Apply the .zig provenance-marking convention to lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex (closes ISS-0424 part 3b-4)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238b2 =
+      lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside
+      lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 9 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/engine/reconstruction.ex
+      lib/letflow/engine/service_task.ex lib/letflow/engine/snapshot_writer.ex
+      lib/letflow/engine/sub_process.ex lib/letflow/engine/task.ex
+      lib/letflow/engine/token.ex lib/letflow/engine/transition.ex
+      lib/letflow/engine/variable_merge.ex
+      lib/letflow/engine/variable_schema.ex`), matching REQ-237's design doc
+      section 6 table exactly. If this still proves too wide for one
+      ELIXIR-DEV turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/engine/{reconstruction,service_task,snapshot_writer,sub_process,task,token,transition,variable_merge,variable_schema}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 8 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "no divergence line from REQ-232 through REQ-242's own known list falls inside this chunk's file list, but `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine/reconstruction.ex lib/letflow/engine/service_task.ex lib/letflow/engine/snapshot_writer.ex lib/letflow/engine/sub_process.ex lib/letflow/engine/task.ex lib/letflow/engine/token.ex lib/letflow/engine/transition.ex lib/letflow/engine/variable_merge.ex lib/letflow/engine/variable_schema.ex` is still run before and after this requirement's commits and diffed (byte-identical expected, quoted) in case one exists that the draft-time survey missed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 484  # letflow-queue task id
+
+  - id: REQ-247
+    title: Apply the .zig provenance-marking convention to lib/letflow/engine/lua/* and lib/letflow/engine/wasm/* (closes ISS-0424 part 3b-5)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238c = lib/letflow/engine/lua/* and lib/letflow/engine/wasm/*.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/engine/lua/* and lib/letflow/engine/wasm/* under
+      this requirement, even if they also carry a .zig citation -- they belong
+      to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 4 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/engine/lua/* lib/letflow/engine/wasm/*`),
+      matching REQ-237's design doc section 6 table exactly. If this still
+      proves too wide for one ELIXIR-DEV turn by fix time, split further and
+      record the split as a follow-on REQ-ANALYST pass rather than doing a
+      partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/engine/lua/* and lib/letflow/engine/wasm/* for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 3 citations across at least 2 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "no divergence line from REQ-232 through REQ-242's own known list falls inside this chunk's file list, but `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/engine/lua/* lib/letflow/engine/wasm/*` is still run before and after this requirement's commits and diffed (byte-identical expected, quoted) in case one exists that the draft-time survey missed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 485  # letflow-queue task id
+
+  - id: REQ-248
+    title: Apply the .zig provenance-marking convention to lib/letflow/definitions.ex and lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex (closes ISS-0424 part 3b-6)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238d1 = lib/letflow/definitions.ex and
+      lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/definitions.ex and
+      lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 8 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/definitions.ex
+      lib/letflow/definitions/export_import.ex
+      lib/letflow/definitions/graph.ex
+      lib/letflow/definitions/process_definition.ex
+      lib/letflow/definitions/promotion.ex
+      lib/letflow/definitions/promotion_artifact.ex
+      lib/letflow/definitions/promotion_assertion_run.ex
+      lib/letflow/definitions/promotion_conflict.ex`), matching REQ-237's
+      design doc section 6 table exactly. If this still proves too wide for
+      one ELIXIR-DEV turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/definitions.ex and lib/letflow/definitions/{export_import,graph,process_definition,promotion,promotion_artifact,promotion_assertion_run,promotion_conflict}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 7 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/definitions/process_definition.ex:34) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/definitions.ex lib/letflow/definitions/export_import.ex lib/letflow/definitions/graph.ex lib/letflow/definitions/process_definition.ex lib/letflow/definitions/promotion.ex lib/letflow/definitions/promotion_artifact.ex lib/letflow/definitions/promotion_assertion_run.ex lib/letflow/definitions/promotion_conflict.ex` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 486  # letflow-queue task id
+
+  - id: REQ-249
+    title: Apply the .zig provenance-marking convention to lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex (closes ISS-0424 part 3b-7)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238d2 =
+      lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside
+      lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 7 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/definitions/promotion_digest.ex
+      lib/letflow/definitions/promotion_plan.ex
+      lib/letflow/definitions/promotion_review_store.ex
+      lib/letflow/definitions/service_scope_validator.ex
+      lib/letflow/definitions/snapshot_store.ex
+      lib/letflow/definitions/solution_pack.ex
+      lib/letflow/definitions/sub_process_interface.ex`), matching REQ-237's
+      design doc section 6 table exactly. If this still proves too wide for
+      one ELIXIR-DEV turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 6 citations across at least 3 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "no divergence line from REQ-232 through REQ-242's own known list falls inside this chunk's file list, but `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/definitions/promotion_digest.ex lib/letflow/definitions/promotion_plan.ex lib/letflow/definitions/promotion_review_store.ex lib/letflow/definitions/service_scope_validator.ex lib/letflow/definitions/snapshot_store.ex lib/letflow/definitions/solution_pack.ex lib/letflow/definitions/sub_process_interface.ex` is still run before and after this requirement's commits and diffed (byte-identical expected, quoted) in case one exists that the draft-time survey missed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 487  # letflow-queue task id
+
+  - id: REQ-250
+    title: Apply the .zig provenance-marking convention to lib/letflow/api/* and lib/letflow/plugs/* (closes ISS-0424 part 3b-8)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238e = lib/letflow/api/* and lib/letflow/plugs/*. This chunk
+      excludes lib/letflow/design/ (out of scope for both REQ-238's original
+      split and this chunk -- design docs are covered, where they are covered
+      at all, by REQ-239's replacement chunks, not this one; see this report's
+      own flagged gap if lib/letflow/design/ is not yet covered by any live
+      requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/api/* and lib/letflow/plugs/* under this
+      requirement, even if they also carry a .zig citation -- they belong to a
+      sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 10 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/api/* lib/letflow/plugs/*`), matching
+      REQ-237's design doc section 6 table exactly. If this still proves too
+      wide for one ELIXIR-DEV turn by fix time, split further and record the
       split as a follow-on REQ-ANALYST pass rather than doing a partial,
       unrecorded sweep.
     acceptance_criteria:
-      - "before starting, run REQ-237's finalized marker-detection regex against lib/ (excluding lib/letflow/design/) for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
-      - "after the change, every .zig source-path citation in lib/ (excluding lib/letflow/design/) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
-      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files) shows only the marker added, no path text altered or removed"
-      - "the deliberate-divergence lines re-verified in REQ-232 through REQ-236 (e.g. engine/execution_error.ex:7, definitions/process_definition.ex:34, event_store/registry/validation_failure.ex:21, sandbox_pool/fixture_loader.ex:11, repository/artifact.ex:13, api/response.ex:27, routers/promotions.ex:409, routers/metrics_exposition.ex:67, engine/pin_resolver.ex:141) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/` before and after and diffing (byte-identical expected), quoted"
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/api/* and lib/letflow/plugs/* for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 9 citations across at least 2 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/api/response.ex:27) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/api/* lib/letflow/plugs/*` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
-    impl_order: 478  # letflow-queue task id
+    impl_order: 488  # letflow-queue task id
 
-  - id: REQ-239
-    title: Apply the .zig provenance-marking convention across docs/ (including docs/migration/ and lib/letflow/design/) (closes ISS-0424 part 3c)
+  - id: REQ-251
+    title: Apply the .zig provenance-marking convention to lib/letflow/identity.ex, lib/letflow/identity/*, and lib/letflow/oidc/* (closes ISS-0424 part 3b-9)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238f = lib/letflow/identity.ex, lib/letflow/identity/*, and
+      lib/letflow/oidc/*. This chunk excludes lib/letflow/design/ (out of
+      scope for both REQ-238's original split and this chunk -- design docs
+      are covered, where they are covered at all, by REQ-239's replacement
+      chunks, not this one; see this report's own flagged gap if
+      lib/letflow/design/ is not yet covered by any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/identity.ex, lib/letflow/identity/*, and
+      lib/letflow/oidc/* under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 9 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/identity.ex lib/letflow/identity/*
+      lib/letflow/oidc/*`), matching REQ-237's design doc section 6 table
+      exactly. If this still proves too wide for one ELIXIR-DEV turn by fix
+      time, split further and record the split as a follow-on REQ-ANALYST pass
+      rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/identity.ex, lib/letflow/identity/*, and lib/letflow/oidc/* for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 8 citations across at least 2 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "no divergence line from REQ-232 through REQ-242's own known list falls inside this chunk's file list, but `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/identity.ex lib/letflow/identity/* lib/letflow/oidc/*` is still run before and after this requirement's commits and diffed (byte-identical expected, quoted) in case one exists that the draft-time survey missed"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 489  # letflow-queue task id
+
+  - id: REQ-252
+    title: Apply the .zig provenance-marking convention to lib/letflow/event_store.ex and lib/letflow/event_store/* (closes ISS-0424 part 3b-10)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238g = lib/letflow/event_store.ex and lib/letflow/event_store/*.
+      This chunk excludes lib/letflow/design/ (out of scope for both REQ-238's
+      original split and this chunk -- design docs are covered, where they are
+      covered at all, by REQ-239's replacement chunks, not this one; see this
+      report's own flagged gap if lib/letflow/design/ is not yet covered by
+      any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/event_store.ex and lib/letflow/event_store/* under
+      this requirement, even if they also carry a .zig citation -- they belong
+      to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 5 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/event_store.ex
+      lib/letflow/event_store/*`), matching REQ-237's design doc section 6
+      table exactly. If this still proves too wide for one ELIXIR-DEV turn by
+      fix time, split further and record the split as a follow-on REQ-ANALYST
+      pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/event_store.ex and lib/letflow/event_store/* for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 4 citations across at least 2 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/event_store/registry/validation_failure.ex:21) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/event_store.ex lib/letflow/event_store/*` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 490  # letflow-queue task id
+
+  - id: REQ-253
+    title: Apply the .zig provenance-marking convention to lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex (closes ISS-0424 part 3b-11)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4) to this chunk of REQ-238's
+      original scope, per that design's section 6 chunking recommendation:
+      chunk 238h = lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and
+      lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex,
+      lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and
+      lib/letflow/instances.ex. This chunk excludes lib/letflow/design/ (out
+      of scope for both REQ-238's original split and this chunk -- design docs
+      are covered, where they are covered at all, by REQ-239's replacement
+      chunks, not this one; see this report's own flagged gap if
+      lib/letflow/design/ is not yet covered by any live requirement).
+
+      This is one of eleven requirements replacing REQ-238 (deleted, too wide
+      for one ELIXIR-DEV turn at 84 files): REQ-243 (238a1), REQ-244 (238a2),
+      REQ-245 (238b1), REQ-246 (238b2), REQ-247 (238c), REQ-248 (238d1),
+      REQ-249 (238d2), REQ-250 (238e), REQ-251 (238f), REQ-252 (238g), REQ-253
+      (238h). Each sibling covers a disjoint file list; do not touch files
+      outside lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and
+      lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex,
+      lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and
+      lib/letflow/instances.ex under this requirement, even if they also carry
+      a .zig citation -- they belong to a sibling chunk.
+
+      SEQUENCING (carried forward from REQ-238's own depends_on): files in
+      this chunk may overlap with files touched by REQ-232 through REQ-235 and
+      REQ-240 through REQ-242 (parity-phrase rewrites) -- a single moduledoc
+      paragraph can carry both a parity-justification sentence and a .zig
+      citation. This requirement must run after REQ-232, REQ-233, REQ-234,
+      REQ-235, REQ-237, REQ-240, REQ-241, and REQ-242 land, so a
+      provenance-marker insertion does not collide with, or get silently
+      overwritten by, a concurrent parity-phrase edit to the same paragraph.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 8 files in this chunk's scope carry a .zig reference today
+      (`grep -l '\.zig' lib/letflow/repository/* lib/letflow/sandbox_pool.ex
+      lib/letflow/sandbox_pool/* lib/letflow/scheduler.ex lib/letflow/tasks.ex
+      lib/letflow/tenant_provisioning.ex lib/letflow/instances.ex`), matching
+      REQ-237's design doc section 6 table exactly. If this still proves too
+      wide for one ELIXIR-DEV turn by fix time, split further and record the
+      split as a follow-on REQ-ANALYST pass rather than doing a partial,
+      unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex for both the OLD (unmarked) citation form and confirm zero pre-existing instances of the NEW marker (proving this is genuinely a before-state); quote the count"
+      - "after the change, every .zig source-path citation in this chunk's file list matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and the before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 7 citations across at least 3 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "the deliberate-divergence line(s) known to fall inside this chunk's file list (lib/letflow/sandbox_pool/fixture_loader.ex:11, lib/letflow/repository/artifact.ex:13) are unmodified by this requirement's commits -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/repository/* lib/letflow/sandbox_pool.ex lib/letflow/sandbox_pool/* lib/letflow/scheduler.ex lib/letflow/tasks.ex lib/letflow/tenant_provisioning.ex lib/letflow/instances.ex` before and after and diffing (byte-identical expected), quoted; also re-run the same grep with no line-list assumption in case a divergence line was added to this chunk's files since draft time"
+      - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
+    depends_on: [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]
+    impl_order: 491  # letflow-queue task id
+
+  - id: REQ-254
+    title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-011 through REQ-050 entry range (closes ISS-0424 part 3c-1)
     owner: DOC-UPDATER
     status: pending
     stage: S6
     description: >
-      Applies REQ-237's design decision (the provenance-marking convention
-      and its exact regex, or its markdown-specific variant if REQ-237's
-      design states the two contexts need different markers) to every
-      .zig source-path citation under docs/ -- including
-      docs/migration/*.md (explicitly in scope: these are the historical
-      migration record ISS-0424 part 1 already reframed as non-live, and
-      their .zig citations are exactly the provenance content that record
-      exists to preserve) and lib/letflow/design/*.md (the per-requirement
-      design artefacts, excluded from REQ-232 through REQ-236's
-      parity-phrase sweep because that sweep is scoped to production
-      lib/ code, not design docs -- but .zig citations inside design docs
-      are still provenance and still in this requirement's scope).
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239a = docs/requirements.yaml,
+      the REQ-011 through REQ-050 entry range.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/requirements.yaml, the REQ-011 through REQ-050 entry range
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
       Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
-      already-completed Part 1 framing edits (ORCH's direct-action commit
-      on this branch) -- if either of those three files also contains a
-      raw .zig citation, confirm with a grep first; ISS-0424 Part 1's own
-      measured scope (7+8+9 mentions) did not call one out, so none is
-      expected, but do not assume.
-      MEASURED SCOPE AT DRAFT TIME (2026-09-04): a rough proxy grep found
-      .zig citations across roughly 20 files under docs/ outside
-      lib/letflow/design/, plus the ~200-file lib/+docs/ combined figure
-      cited in REQ-237/REQ-238 includes an unknown split between the two
-      -- re-derive the real docs/-only count at fix time with REQ-237's
-      finalized regex before starting, and quote it as this requirement's
-      actual "before" (do not trust this placeholder).
-      If this proves too wide for one DOC-UPDATER turn, split further
-      per REQ-237's chunking recommendation (e.g. docs/migration/ vs
-      lib/letflow/design/ as two separate requirements) and record the
-      split as a follow-on REQ-ANALYST pass rather than doing a partial,
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): ~144 matching lines (of 538 total in the whole file) fell inside
+      the REQ-011..REQ-050 entry range. If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/requirements.yaml, restricted to the REQ-011 through REQ-050 entry block for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -n '\\.zig' docs/requirements.yaml` restricted to lines belonging to entries REQ-011 through REQ-050)"
+      - "after the change, every .zig source-path citation in docs/requirements.yaml, restricted to the REQ-011 through REQ-050 entry block matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 5 citations across at least 3 distinct REQ- entries inside the REQ-011..REQ-050 range) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/requirements.yaml (scoped to the REQ-011..REQ-050 entry range)) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 492  # letflow-queue task id
+
+  - id: REQ-255
+    title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-051 through REQ-078 entry range (closes ISS-0424 part 3c-2)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239b = docs/requirements.yaml,
+      the REQ-051 through REQ-078 entry range.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/requirements.yaml, the REQ-051 through REQ-078 entry range
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): ~142 matching lines (of 538 total in the whole file) fell inside
+      the REQ-051..REQ-078 entry range. If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/requirements.yaml, restricted to the REQ-051 through REQ-078 entry block for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -n '\\.zig' docs/requirements.yaml` restricted to lines belonging to entries REQ-051 through REQ-078)"
+      - "after the change, every .zig source-path citation in docs/requirements.yaml, restricted to the REQ-051 through REQ-078 entry block matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 5 citations across at least 3 distinct REQ- entries inside the REQ-051..REQ-078 range) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/requirements.yaml (scoped to the REQ-051..REQ-078 entry range)) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 493  # letflow-queue task id
+
+  - id: REQ-256
+    title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-079 through REQ-188 entry range (closes ISS-0424 part 3c-3)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239c = docs/requirements.yaml,
+      the REQ-079 through REQ-188 entry range.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/requirements.yaml, the REQ-079 through REQ-188 entry range
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): ~120 matching lines (of 538 total in the whole file) fell inside
+      the REQ-079..REQ-188 entry range. If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/requirements.yaml, restricted to the REQ-079 through REQ-188 entry block for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -n '\\.zig' docs/requirements.yaml` restricted to lines belonging to entries REQ-079 through REQ-188)"
+      - "after the change, every .zig source-path citation in docs/requirements.yaml, restricted to the REQ-079 through REQ-188 entry block matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 5 citations across at least 3 distinct REQ- entries inside the REQ-079..REQ-188 range) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/requirements.yaml (scoped to the REQ-079..REQ-188 entry range)) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 494  # letflow-queue task id
+
+  - id: REQ-257
+    title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-189 through REQ-242 entry range (closes ISS-0424 part 3c-4)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239d = docs/requirements.yaml,
+      the REQ-189 through REQ-242 entry range.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/requirements.yaml, the REQ-189 through REQ-242 entry range
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): ~132 matching lines (of 538 total in the whole file) fell inside
+      the REQ-189..REQ-242 entry range. If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/requirements.yaml, restricted to the REQ-189 through REQ-242 entry block for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -n '\\.zig' docs/requirements.yaml` restricted to lines belonging to entries REQ-189 through REQ-242)"
+      - "after the change, every .zig source-path citation in docs/requirements.yaml, restricted to the REQ-189 through REQ-242 entry block matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 5 citations across at least 3 distinct REQ- entries inside the REQ-189..REQ-242 range) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/requirements.yaml (scoped to the REQ-189..REQ-242 entry range)) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 495  # letflow-queue task id
+
+  - id: REQ-258
+    title: Apply the .zig provenance-marking convention to docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md (closes ISS-0424 part 3c-5)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239e1 =
+      docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside
+      docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md
+      under this requirement, even if they also carry a .zig citation -- they
+      belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 8 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/migration/decisions/0001-web-framework.md
+      docs/migration/decisions/0002-oidc-integration.md
+      docs/migration/decisions/0003-ecto-schema-strategy.md
+      docs/migration/decisions/0007-variable-merge-validates-new-keys.md
+      docs/migration/decisions/0010-openapi-spec-strategy.md
+      docs/migration/decisions/0013-authorization-role-set.md
+      docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md
+      docs/migration/decisions/0016-secrets-storage-backend.md`). If this
+      still proves too wide for one DOC-UPDATER turn by fix time, split
+      further and record the split as a follow-on REQ-ANALYST pass rather than
+      doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/migration/decisions/0001-web-framework.md docs/migration/decisions/0002-oidc-integration.md docs/migration/decisions/0003-ecto-schema-strategy.md docs/migration/decisions/0007-variable-merge-validates-new-keys.md docs/migration/decisions/0010-openapi-spec-strategy.md docs/migration/decisions/0013-authorization-role-set.md docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md docs/migration/decisions/0016-secrets-storage-backend.md`, summed)"
+      - "after the change, every .zig source-path citation in docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 7 citations across at least 4 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/migration/decisions/0001-web-framework.md docs/migration/decisions/0002-oidc-integration.md docs/migration/decisions/0003-ecto-schema-strategy.md docs/migration/decisions/0007-variable-merge-validates-new-keys.md docs/migration/decisions/0010-openapi-spec-strategy.md docs/migration/decisions/0013-authorization-role-set.md docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md docs/migration/decisions/0016-secrets-storage-backend.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/migration/decisions/0001-web-framework.md docs/migration/decisions/0002-oidc-integration.md docs/migration/decisions/0003-ecto-schema-strategy.md docs/migration/decisions/0007-variable-merge-validates-new-keys.md docs/migration/decisions/0010-openapi-spec-strategy.md docs/migration/decisions/0013-authorization-role-set.md docs/migration/decisions/0014-scripting-plugin-runtime-strategy.md docs/migration/decisions/0016-secrets-storage-backend.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 496  # letflow-queue task id
+
+  - id: REQ-259
+    title: Apply the .zig provenance-marking convention to docs/migration/stage-{1,2,3,4,5,6,7}-*.md (closes ISS-0424 part 3c-6)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239e2 =
+      docs/migration/stage-{1,2,3,4,5,6,7}-*.md.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/migration/stage-{1,2,3,4,5,6,7}-*.md under this
+      requirement, even if they also carry a .zig citation -- they belong to a
+      sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 7 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/migration/stage-1-identity.md
+      docs/migration/stage-2-event-store-definitions.md
+      docs/migration/stage-3-instance-engine.md
+      docs/migration/stage-4-api-surface.md
+      docs/migration/stage-5-scripting-plugins.md
+      docs/migration/stage-6-operational-cross-cutting.md
+      docs/migration/stage-7-simulation-uat-parity.md`). If this still proves
+      too wide for one DOC-UPDATER turn by fix time, split further and record
+      the split as a follow-on REQ-ANALYST pass rather than doing a partial,
       unrecorded sweep.
     acceptance_criteria:
-      - "before starting, run REQ-237's finalized marker-detection regex against docs/ (including lib/letflow/design/) for the OLD (unmarked) citation form and quote the count"
-      - "after the change, every .zig source-path citation under docs/ (including lib/letflow/design/) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
-      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, including at least one from docs/migration/ and one from lib/letflow/design/) shows only the marker added, no path text altered or removed"
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/migration/stage-{1,2,3,4,5,6,7}-*.md for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/migration/stage-1-identity.md docs/migration/stage-2-event-store-definitions.md docs/migration/stage-3-instance-engine.md docs/migration/stage-4-api-surface.md docs/migration/stage-5-scripting-plugins.md docs/migration/stage-6-operational-cross-cutting.md docs/migration/stage-7-simulation-uat-parity.md`, summed)"
+      - "after the change, every .zig source-path citation in docs/migration/stage-{1,2,3,4,5,6,7}-*.md matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 6 citations across at least 3 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
       - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
-      - "the 38-49 deliberate-divergence notes repo-wide (per ISS-0424's own count and ISSUE-FIXER's re-verification) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/migration/stage-1-identity.md docs/migration/stage-2-event-store-definitions.md docs/migration/stage-3-instance-engine.md docs/migration/stage-4-api-surface.md docs/migration/stage-5-scripting-plugins.md docs/migration/stage-6-operational-cross-cutting.md docs/migration/stage-7-simulation-uat-parity.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/migration/stage-1-identity.md docs/migration/stage-2-event-store-definitions.md docs/migration/stage-3-instance-engine.md docs/migration/stage-4-api-surface.md docs/migration/stage-5-scripting-plugins.md docs/migration/stage-6-operational-cross-cutting.md docs/migration/stage-7-simulation-uat-parity.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
     depends_on: [REQ-237]
-    impl_order: 479  # letflow-queue task id
+    impl_order: 497  # letflow-queue task id
+
+  - id: REQ-260
+    title: Apply the .zig provenance-marking convention to docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) (closes ISS-0424 part 3c-7)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239f = docs/issues/*.yaml,
+      ISS-0001 through ISS-0079 (the subset of that range carrying a .zig
+      reference).
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of
+      that range carrying a .zig reference) under this requirement, even if
+      they also carry a .zig citation -- they belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 11 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml
+      docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml
+      docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml
+      docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml
+      docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml
+      docs/issues/ISS-0079.yaml`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml`, summed)"
+      - "after the change, every .zig source-path citation in docs/issues/*.yaml, ISS-0001 through ISS-0079 (the subset of that range carrying a .zig reference) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/issues/ISS-0001.yaml docs/issues/ISS-0002.yaml docs/issues/ISS-0005.yaml docs/issues/ISS-0014.yaml docs/issues/ISS-0045.yaml docs/issues/ISS-0063.yaml docs/issues/ISS-0075.yaml docs/issues/ISS-0076.yaml docs/issues/ISS-0077.yaml docs/issues/ISS-0078.yaml docs/issues/ISS-0079.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 498  # letflow-queue task id
+
+  - id: REQ-261
+    title: Apply the .zig provenance-marking convention to docs/issues/*.yaml, ISS-0085 through ISS-0100 (the subset of that range carrying a .zig reference) (closes ISS-0424 part 3c-8)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239g = docs/issues/*.yaml,
+      ISS-0085 through ISS-0100 (the subset of that range carrying a .zig
+      reference).
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/issues/*.yaml, ISS-0085 through ISS-0100 (the subset of
+      that range carrying a .zig reference) under this requirement, even if
+      they also carry a .zig citation -- they belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 11 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/issues/ISS-0085.yaml docs/issues/ISS-0086.yaml
+      docs/issues/ISS-0087.yaml docs/issues/ISS-0093.yaml
+      docs/issues/ISS-0094.yaml docs/issues/ISS-0095.yaml
+      docs/issues/ISS-0096.yaml docs/issues/ISS-0097.yaml
+      docs/issues/ISS-0098.yaml docs/issues/ISS-0099.yaml
+      docs/issues/ISS-0100.yaml`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/issues/*.yaml, ISS-0085 through ISS-0100 (the subset of that range carrying a .zig reference) for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/issues/ISS-0085.yaml docs/issues/ISS-0086.yaml docs/issues/ISS-0087.yaml docs/issues/ISS-0093.yaml docs/issues/ISS-0094.yaml docs/issues/ISS-0095.yaml docs/issues/ISS-0096.yaml docs/issues/ISS-0097.yaml docs/issues/ISS-0098.yaml docs/issues/ISS-0099.yaml docs/issues/ISS-0100.yaml`, summed)"
+      - "after the change, every .zig source-path citation in docs/issues/*.yaml, ISS-0085 through ISS-0100 (the subset of that range carrying a .zig reference) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/issues/ISS-0085.yaml docs/issues/ISS-0086.yaml docs/issues/ISS-0087.yaml docs/issues/ISS-0093.yaml docs/issues/ISS-0094.yaml docs/issues/ISS-0095.yaml docs/issues/ISS-0096.yaml docs/issues/ISS-0097.yaml docs/issues/ISS-0098.yaml docs/issues/ISS-0099.yaml docs/issues/ISS-0100.yaml) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/issues/ISS-0085.yaml docs/issues/ISS-0086.yaml docs/issues/ISS-0087.yaml docs/issues/ISS-0093.yaml docs/issues/ISS-0094.yaml docs/issues/ISS-0095.yaml docs/issues/ISS-0096.yaml docs/issues/ISS-0097.yaml docs/issues/ISS-0098.yaml docs/issues/ISS-0099.yaml docs/issues/ISS-0100.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 499  # letflow-queue task id
+
+  - id: REQ-262
+    title: Apply the .zig provenance-marking convention to docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of that range carrying a .zig reference) (closes ISS-0424 part 3c-9)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239h = docs/issues/*.yaml,
+      ISS-0101 through ISS-0439 (the subset of that range carrying a .zig
+      reference).
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of
+      that range carrying a .zig reference) under this requirement, even if
+      they also carry a .zig citation -- they belong to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 11 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/issues/ISS-0101.yaml docs/issues/ISS-0102.yaml
+      docs/issues/ISS-0103.yaml docs/issues/ISS-0104.yaml
+      docs/issues/ISS-0105.yaml docs/issues/ISS-0278.yaml
+      docs/issues/ISS-0402.yaml docs/issues/ISS-0411.yaml
+      docs/issues/ISS-0424.yaml docs/issues/ISS-0438.yaml
+      docs/issues/ISS-0439.yaml`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of that range carrying a .zig reference) for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/issues/ISS-0101.yaml docs/issues/ISS-0102.yaml docs/issues/ISS-0103.yaml docs/issues/ISS-0104.yaml docs/issues/ISS-0105.yaml docs/issues/ISS-0278.yaml docs/issues/ISS-0402.yaml docs/issues/ISS-0411.yaml docs/issues/ISS-0424.yaml docs/issues/ISS-0438.yaml docs/issues/ISS-0439.yaml`, summed)"
+      - "after the change, every .zig source-path citation in docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of that range carrying a .zig reference) matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/issues/ISS-0101.yaml docs/issues/ISS-0102.yaml docs/issues/ISS-0103.yaml docs/issues/ISS-0104.yaml docs/issues/ISS-0105.yaml docs/issues/ISS-0278.yaml docs/issues/ISS-0402.yaml docs/issues/ISS-0411.yaml docs/issues/ISS-0424.yaml docs/issues/ISS-0438.yaml docs/issues/ISS-0439.yaml) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/issues/ISS-0101.yaml docs/issues/ISS-0102.yaml docs/issues/ISS-0103.yaml docs/issues/ISS-0104.yaml docs/issues/ISS-0105.yaml docs/issues/ISS-0278.yaml docs/issues/ISS-0402.yaml docs/issues/ISS-0411.yaml docs/issues/ISS-0424.yaml docs/issues/ISS-0438.yaml docs/issues/ISS-0439.yaml` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 500  # letflow-queue task id
+
+  - id: REQ-263
+    title: Apply the .zig provenance-marking convention to docs/status/*, docs/frontend/*, and docs/anti-patterns.md (closes ISS-0424 part 3c-10)
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), and the two
+      worked before/after examples in section 4, including the REQ-231
+      cursor.zig worked example that lives inside docs/requirements.yaml
+      itself) to this chunk of REQ-239's original scope, per that design's
+      section 6 chunking recommendation: chunk 239i = docs/status/*,
+      docs/frontend/*, and docs/anti-patterns.md.
+
+      This is one of ten requirements replacing REQ-239 (deleted, too wide for
+      one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
+      lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
+      (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
+      covers a disjoint scope; do not touch files or requirements.yaml entries
+      outside docs/status/*, docs/frontend/*, and docs/anti-patterns.md under
+      this requirement, even if they also carry a .zig citation -- they belong
+      to a sibling chunk.
+
+      Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
+      already-completed Part 1 framing edits -- carried forward unchanged from
+      REQ-239's own out-of-scope note; confirm with a grep first if either
+      file also contains a raw .zig citation, but none is expected.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 11 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' docs/status/requirement_status.v2.yaml
+      docs/status/requirement_status.v3.yaml
+      docs/status/requirement_status.v4.yaml
+      docs/status/requirement_status.v5.yaml
+      docs/status/requirement_status.v6.yaml
+      docs/status/requirement_status.v7.yaml
+      docs/status/requirement_status.v9.yaml
+      docs/status/requirement_status.yaml
+      docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md
+      docs/anti-patterns.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/status/*, docs/frontend/*, and docs/anti-patterns.md for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md`, summed)"
+      - "after the change, every .zig source-path citation in docs/status/*, docs/frontend/*, and docs/anti-patterns.md matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 501  # letflow-queue task id
+
+  - id: REQ-264
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-a: the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (closes ISS-0424 part 3c-11)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-a = lib/letflow/design/, the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs and non-reqNNN-named files that sort before req017).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/0001-web-framework-addendum-req065.md lib/letflow/design/0001-web-framework-decision.md lib/letflow/design/0002-oidc-integration-decision.md lib/letflow/design/0003-ecto-schema-strategy-decision.md lib/letflow/design/api-pagination.md lib/letflow/design/export_import.md lib/letflow/design/identity-schema.md lib/letflow/design/iss-0047-username-race-conflict-target.md lib/letflow/design/iss-0078-pin-rebind-provenance.md lib/letflow/design/iss-0079-pin-override-verification.md lib/letflow/design/iss0438-entity-subsystem-scoping.md lib/letflow/design/promotion_plan.md lib/letflow/design/promotion_review_state_machine.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/0001-web-framework-addendum-req065.md lib/letflow/design/0001-web-framework-decision.md lib/letflow/design/0002-oidc-integration-decision.md lib/letflow/design/0003-ecto-schema-strategy-decision.md lib/letflow/design/api-pagination.md lib/letflow/design/export_import.md lib/letflow/design/identity-schema.md lib/letflow/design/iss-0047-username-race-conflict-target.md lib/letflow/design/iss-0078-pin-rebind-provenance.md lib/letflow/design/iss-0079-pin-override-verification.md lib/letflow/design/iss0438-entity-subsystem-scoping.md lib/letflow/design/promotion_plan.md lib/letflow/design/promotion_review_state_machine.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/0001-web-framework-addendum-req065.md lib/letflow/design/0001-web-framework-decision.md lib/letflow/design/0002-oidc-integration-decision.md lib/letflow/design/0003-ecto-schema-strategy-decision.md lib/letflow/design/api-pagination.md lib/letflow/design/export_import.md lib/letflow/design/identity-schema.md lib/letflow/design/iss-0047-username-race-conflict-target.md lib/letflow/design/iss-0078-pin-rebind-provenance.md lib/letflow/design/iss-0079-pin-override-verification.md lib/letflow/design/iss0438-entity-subsystem-scoping.md lib/letflow/design/promotion_plan.md lib/letflow/design/promotion_review_state_machine.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/0001-web-framework-addendum-req065.md lib/letflow/design/0001-web-framework-decision.md lib/letflow/design/0002-oidc-integration-decision.md lib/letflow/design/0003-ecto-schema-strategy-decision.md lib/letflow/design/api-pagination.md lib/letflow/design/export_import.md lib/letflow/design/identity-schema.md lib/letflow/design/iss-0047-username-race-conflict-target.md lib/letflow/design/iss-0078-pin-rebind-provenance.md lib/letflow/design/iss-0079-pin-override-verification.md lib/letflow/design/iss0438-entity-subsystem-scoping.md lib/letflow/design/promotion_plan.md lib/letflow/design/promotion_review_state_machine.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 502  # letflow-queue task id
+
+  - id: REQ-265
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-b: req017-claim-mapping.md through req029-node-attribute-edge-condition-validators.md (closes ISS-0424 part 3c-12)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-b = lib/letflow/design/, req017-claim-mapping.md through req029-node-attribute-edge-condition-validators.md (req017-req029, 13 consecutive files).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req017-claim-mapping.md lib/letflow/design/req018-jit-provisioning.md lib/letflow/design/req019-tenant-realm-binding.md lib/letflow/design/req020-role-registry.md lib/letflow/design/req021-auth-plug-pipeline.md lib/letflow/design/req022-tenant-schema-provisioning.md lib/letflow/design/req023-event-store-schema.md lib/letflow/design/req024-event-type-registry.md lib/letflow/design/req025-event-append.md lib/letflow/design/req026-event-read-archive-platform-sentinels.md lib/letflow/design/req027-definition-core-schema.md lib/letflow/design/req028-graph-structural-validator.md lib/letflow/design/req029-node-attribute-edge-condition-validators.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req017-claim-mapping.md lib/letflow/design/req018-jit-provisioning.md lib/letflow/design/req019-tenant-realm-binding.md lib/letflow/design/req020-role-registry.md lib/letflow/design/req021-auth-plug-pipeline.md lib/letflow/design/req022-tenant-schema-provisioning.md lib/letflow/design/req023-event-store-schema.md lib/letflow/design/req024-event-type-registry.md lib/letflow/design/req025-event-append.md lib/letflow/design/req026-event-read-archive-platform-sentinels.md lib/letflow/design/req027-definition-core-schema.md lib/letflow/design/req028-graph-structural-validator.md lib/letflow/design/req029-node-attribute-edge-condition-validators.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req017-claim-mapping.md lib/letflow/design/req018-jit-provisioning.md lib/letflow/design/req019-tenant-realm-binding.md lib/letflow/design/req020-role-registry.md lib/letflow/design/req021-auth-plug-pipeline.md lib/letflow/design/req022-tenant-schema-provisioning.md lib/letflow/design/req023-event-store-schema.md lib/letflow/design/req024-event-type-registry.md lib/letflow/design/req025-event-append.md lib/letflow/design/req026-event-read-archive-platform-sentinels.md lib/letflow/design/req027-definition-core-schema.md lib/letflow/design/req028-graph-structural-validator.md lib/letflow/design/req029-node-attribute-edge-condition-validators.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req017-claim-mapping.md lib/letflow/design/req018-jit-provisioning.md lib/letflow/design/req019-tenant-realm-binding.md lib/letflow/design/req020-role-registry.md lib/letflow/design/req021-auth-plug-pipeline.md lib/letflow/design/req022-tenant-schema-provisioning.md lib/letflow/design/req023-event-store-schema.md lib/letflow/design/req024-event-type-registry.md lib/letflow/design/req025-event-append.md lib/letflow/design/req026-event-read-archive-platform-sentinels.md lib/letflow/design/req027-definition-core-schema.md lib/letflow/design/req028-graph-structural-validator.md lib/letflow/design/req029-node-attribute-edge-condition-validators.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 503  # letflow-queue task id
+
+  - id: REQ-266
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-c: req030-definition-store-crud.md through req048-task-completion.md (closes ISS-0424 part 3c-13)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-c = lib/letflow/design/, req030-definition-store-crud.md through req048-task-completion.md (req030-req048, 13 files; not every number in range exists -- 034/036/037/042/046/047 have no design doc).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req030-definition-store-crud.md lib/letflow/design/req031-service-scope-validator.md lib/letflow/design/req032-sub-process-interface-contract.md lib/letflow/design/req033-snapshot-store.md lib/letflow/design/req035-promotion-reviews-schema.md lib/letflow/design/req038-promotion-rollback.md lib/letflow/design/req039-sandbox-pool-fixture-loader.md lib/letflow/design/req040-promotion-assertion-rerun.md lib/letflow/design/req041-pack-update-diff-schema.md lib/letflow/design/req043-instance-engine-schema.md lib/letflow/design/req044-transition-kernel.md lib/letflow/design/req045-instance-start-engine-shell.md lib/letflow/design/req048-task-completion.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req030-definition-store-crud.md lib/letflow/design/req031-service-scope-validator.md lib/letflow/design/req032-sub-process-interface-contract.md lib/letflow/design/req033-snapshot-store.md lib/letflow/design/req035-promotion-reviews-schema.md lib/letflow/design/req038-promotion-rollback.md lib/letflow/design/req039-sandbox-pool-fixture-loader.md lib/letflow/design/req040-promotion-assertion-rerun.md lib/letflow/design/req041-pack-update-diff-schema.md lib/letflow/design/req043-instance-engine-schema.md lib/letflow/design/req044-transition-kernel.md lib/letflow/design/req045-instance-start-engine-shell.md lib/letflow/design/req048-task-completion.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req030-definition-store-crud.md lib/letflow/design/req031-service-scope-validator.md lib/letflow/design/req032-sub-process-interface-contract.md lib/letflow/design/req033-snapshot-store.md lib/letflow/design/req035-promotion-reviews-schema.md lib/letflow/design/req038-promotion-rollback.md lib/letflow/design/req039-sandbox-pool-fixture-loader.md lib/letflow/design/req040-promotion-assertion-rerun.md lib/letflow/design/req041-pack-update-diff-schema.md lib/letflow/design/req043-instance-engine-schema.md lib/letflow/design/req044-transition-kernel.md lib/letflow/design/req045-instance-start-engine-shell.md lib/letflow/design/req048-task-completion.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req030-definition-store-crud.md lib/letflow/design/req031-service-scope-validator.md lib/letflow/design/req032-sub-process-interface-contract.md lib/letflow/design/req033-snapshot-store.md lib/letflow/design/req035-promotion-reviews-schema.md lib/letflow/design/req038-promotion-rollback.md lib/letflow/design/req039-sandbox-pool-fixture-loader.md lib/letflow/design/req040-promotion-assertion-rerun.md lib/letflow/design/req041-pack-update-diff-schema.md lib/letflow/design/req043-instance-engine-schema.md lib/letflow/design/req044-transition-kernel.md lib/letflow/design/req045-instance-start-engine-shell.md lib/letflow/design/req048-task-completion.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 504  # letflow-queue task id
+
+  - id: REQ-267
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-d: req049-variable-merge.md through req066-api-error-response.md (closes ISS-0424 part 3c-14)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-d = lib/letflow/design/, req049-variable-merge.md through req066-api-error-response.md (req049-req066, 13 files, same non-contiguous-numbering caveat).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req049-variable-merge.md lib/letflow/design/req050-exclusive-gateway-cel.md lib/letflow/design/req051-parallel-gateway-split-join.md lib/letflow/design/req052-instance-cancellation.md lib/letflow/design/req053-state-reconstruction.md lib/letflow/design/req054-instance-state-snapshots.md lib/letflow/design/req057-plugin-interface-registry.md lib/letflow/design/req058-lua-script-audit.md lib/letflow/design/req059-pin-resolver.md lib/letflow/design/req060-pin-rebind.md lib/letflow/design/req061-execution-error-handling.md lib/letflow/design/req062-sub-process-runtime.md lib/letflow/design/req066-api-error-response.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req049-variable-merge.md lib/letflow/design/req050-exclusive-gateway-cel.md lib/letflow/design/req051-parallel-gateway-split-join.md lib/letflow/design/req052-instance-cancellation.md lib/letflow/design/req053-state-reconstruction.md lib/letflow/design/req054-instance-state-snapshots.md lib/letflow/design/req057-plugin-interface-registry.md lib/letflow/design/req058-lua-script-audit.md lib/letflow/design/req059-pin-resolver.md lib/letflow/design/req060-pin-rebind.md lib/letflow/design/req061-execution-error-handling.md lib/letflow/design/req062-sub-process-runtime.md lib/letflow/design/req066-api-error-response.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req049-variable-merge.md lib/letflow/design/req050-exclusive-gateway-cel.md lib/letflow/design/req051-parallel-gateway-split-join.md lib/letflow/design/req052-instance-cancellation.md lib/letflow/design/req053-state-reconstruction.md lib/letflow/design/req054-instance-state-snapshots.md lib/letflow/design/req057-plugin-interface-registry.md lib/letflow/design/req058-lua-script-audit.md lib/letflow/design/req059-pin-resolver.md lib/letflow/design/req060-pin-rebind.md lib/letflow/design/req061-execution-error-handling.md lib/letflow/design/req062-sub-process-runtime.md lib/letflow/design/req066-api-error-response.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req049-variable-merge.md lib/letflow/design/req050-exclusive-gateway-cel.md lib/letflow/design/req051-parallel-gateway-split-join.md lib/letflow/design/req052-instance-cancellation.md lib/letflow/design/req053-state-reconstruction.md lib/letflow/design/req054-instance-state-snapshots.md lib/letflow/design/req057-plugin-interface-registry.md lib/letflow/design/req058-lua-script-audit.md lib/letflow/design/req059-pin-resolver.md lib/letflow/design/req060-pin-rebind.md lib/letflow/design/req061-execution-error-handling.md lib/letflow/design/req062-sub-process-runtime.md lib/letflow/design/req066-api-error-response.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 505  # letflow-queue task id
+
+  - id: REQ-268
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-e: req068-validation.md through req081-definition-routes-read.md (closes ISS-0424 part 3c-15)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-e = lib/letflow/design/, req068-validation.md through req081-definition-routes-read.md (req068-req081, 13 files).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req068-validation.md lib/letflow/design/req069-authorization.md lib/letflow/design/req070-router-decomposition.md lib/letflow/design/req072-tenant-request-context.md lib/letflow/design/req073-identity-user-routes.md lib/letflow/design/req074-identity-group-routes.md lib/letflow/design/req075-tenant-administration-routes.md lib/letflow/design/req076-identity-tokens-roles-onboarding.md lib/letflow/design/req077-promotion-pipeline-routes.md lib/letflow/design/req078-supporting-routes.md lib/letflow/design/req079-instance-write-routes.md lib/letflow/design/req080-instance-routes-read.md lib/letflow/design/req081-definition-routes-read.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req068-validation.md lib/letflow/design/req069-authorization.md lib/letflow/design/req070-router-decomposition.md lib/letflow/design/req072-tenant-request-context.md lib/letflow/design/req073-identity-user-routes.md lib/letflow/design/req074-identity-group-routes.md lib/letflow/design/req075-tenant-administration-routes.md lib/letflow/design/req076-identity-tokens-roles-onboarding.md lib/letflow/design/req077-promotion-pipeline-routes.md lib/letflow/design/req078-supporting-routes.md lib/letflow/design/req079-instance-write-routes.md lib/letflow/design/req080-instance-routes-read.md lib/letflow/design/req081-definition-routes-read.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req068-validation.md lib/letflow/design/req069-authorization.md lib/letflow/design/req070-router-decomposition.md lib/letflow/design/req072-tenant-request-context.md lib/letflow/design/req073-identity-user-routes.md lib/letflow/design/req074-identity-group-routes.md lib/letflow/design/req075-tenant-administration-routes.md lib/letflow/design/req076-identity-tokens-roles-onboarding.md lib/letflow/design/req077-promotion-pipeline-routes.md lib/letflow/design/req078-supporting-routes.md lib/letflow/design/req079-instance-write-routes.md lib/letflow/design/req080-instance-routes-read.md lib/letflow/design/req081-definition-routes-read.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req068-validation.md lib/letflow/design/req069-authorization.md lib/letflow/design/req070-router-decomposition.md lib/letflow/design/req072-tenant-request-context.md lib/letflow/design/req073-identity-user-routes.md lib/letflow/design/req074-identity-group-routes.md lib/letflow/design/req075-tenant-administration-routes.md lib/letflow/design/req076-identity-tokens-roles-onboarding.md lib/letflow/design/req077-promotion-pipeline-routes.md lib/letflow/design/req078-supporting-routes.md lib/letflow/design/req079-instance-write-routes.md lib/letflow/design/req080-instance-routes-read.md lib/letflow/design/req081-definition-routes-read.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 506  # letflow-queue task id
+
+  - id: REQ-269
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-f: req083-task-routes-read.md through req171-wasm-host-api-read.md (closes ISS-0424 part 3c-16)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-f = lib/letflow/design/, req083-task-routes-read.md through req171-wasm-host-api-read.md (req083-req171, 13 files, sparse numbering).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req083-task-routes-read.md lib/letflow/design/req085-task-routes-write.md lib/letflow/design/req109-variable-schemas.md lib/letflow/design/req135-keycloak-provider-port-boundary.md lib/letflow/design/req137-realm-provisioning.md lib/letflow/design/req148-lua-runtime-spike.md lib/letflow/design/req151-lua-sandbox.md lib/letflow/design/req152-lua-time-denial.md lib/letflow/design/req154-lua-instruction-budget.md lib/letflow/design/req157-lua-capability-model.md lib/letflow/design/req158-lua-manifest-validation.md lib/letflow/design/req163-wasm-abi-choice.md lib/letflow/design/req171-wasm-host-api-read.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req083-task-routes-read.md lib/letflow/design/req085-task-routes-write.md lib/letflow/design/req109-variable-schemas.md lib/letflow/design/req135-keycloak-provider-port-boundary.md lib/letflow/design/req137-realm-provisioning.md lib/letflow/design/req148-lua-runtime-spike.md lib/letflow/design/req151-lua-sandbox.md lib/letflow/design/req152-lua-time-denial.md lib/letflow/design/req154-lua-instruction-budget.md lib/letflow/design/req157-lua-capability-model.md lib/letflow/design/req158-lua-manifest-validation.md lib/letflow/design/req163-wasm-abi-choice.md lib/letflow/design/req171-wasm-host-api-read.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req083-task-routes-read.md lib/letflow/design/req085-task-routes-write.md lib/letflow/design/req109-variable-schemas.md lib/letflow/design/req135-keycloak-provider-port-boundary.md lib/letflow/design/req137-realm-provisioning.md lib/letflow/design/req148-lua-runtime-spike.md lib/letflow/design/req151-lua-sandbox.md lib/letflow/design/req152-lua-time-denial.md lib/letflow/design/req154-lua-instruction-budget.md lib/letflow/design/req157-lua-capability-model.md lib/letflow/design/req158-lua-manifest-validation.md lib/letflow/design/req163-wasm-abi-choice.md lib/letflow/design/req171-wasm-host-api-read.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req083-task-routes-read.md lib/letflow/design/req085-task-routes-write.md lib/letflow/design/req109-variable-schemas.md lib/letflow/design/req135-keycloak-provider-port-boundary.md lib/letflow/design/req137-realm-provisioning.md lib/letflow/design/req148-lua-runtime-spike.md lib/letflow/design/req151-lua-sandbox.md lib/letflow/design/req152-lua-time-denial.md lib/letflow/design/req154-lua-instruction-budget.md lib/letflow/design/req157-lua-capability-model.md lib/letflow/design/req158-lua-manifest-validation.md lib/letflow/design/req163-wasm-abi-choice.md lib/letflow/design/req171-wasm-host-api-read.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 507  # letflow-queue task id
+
+  - id: REQ-270
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-g: req178-dlq-routes.md through req202-artifact-repository.md (closes ISS-0424 part 3c-17)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-g = lib/letflow/design/, req178-dlq-routes.md through req202-artifact-repository.md (req178-req202, 13 files).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 13 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req178-dlq-routes.md lib/letflow/design/req181-webhooks-core.md lib/letflow/design/req182-webhooks-routes.md lib/letflow/design/req184-webhook-deliveries-route.md lib/letflow/design/req185-scheduler-firing-architecture.md lib/letflow/design/req188-recurring-timers-and-retention.md lib/letflow/design/req192-service-catalog-routes.md lib/letflow/design/req194-prometheus-metrics.md lib/letflow/design/req195-audit-entry-storage.md lib/letflow/design/req197-expr-arithmetic-and-errors.md lib/letflow/design/req198-expr-builtin-functions.md lib/letflow/design/req200-instance-timeline-rendering.md lib/letflow/design/req202-artifact-repository.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req178-dlq-routes.md lib/letflow/design/req181-webhooks-core.md lib/letflow/design/req182-webhooks-routes.md lib/letflow/design/req184-webhook-deliveries-route.md lib/letflow/design/req185-scheduler-firing-architecture.md lib/letflow/design/req188-recurring-timers-and-retention.md lib/letflow/design/req192-service-catalog-routes.md lib/letflow/design/req194-prometheus-metrics.md lib/letflow/design/req195-audit-entry-storage.md lib/letflow/design/req197-expr-arithmetic-and-errors.md lib/letflow/design/req198-expr-builtin-functions.md lib/letflow/design/req200-instance-timeline-rendering.md lib/letflow/design/req202-artifact-repository.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req178-dlq-routes.md lib/letflow/design/req181-webhooks-core.md lib/letflow/design/req182-webhooks-routes.md lib/letflow/design/req184-webhook-deliveries-route.md lib/letflow/design/req185-scheduler-firing-architecture.md lib/letflow/design/req188-recurring-timers-and-retention.md lib/letflow/design/req192-service-catalog-routes.md lib/letflow/design/req194-prometheus-metrics.md lib/letflow/design/req195-audit-entry-storage.md lib/letflow/design/req197-expr-arithmetic-and-errors.md lib/letflow/design/req198-expr-builtin-functions.md lib/letflow/design/req200-instance-timeline-rendering.md lib/letflow/design/req202-artifact-repository.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req178-dlq-routes.md lib/letflow/design/req181-webhooks-core.md lib/letflow/design/req182-webhooks-routes.md lib/letflow/design/req184-webhook-deliveries-route.md lib/letflow/design/req185-scheduler-firing-architecture.md lib/letflow/design/req188-recurring-timers-and-retention.md lib/letflow/design/req192-service-catalog-routes.md lib/letflow/design/req194-prometheus-metrics.md lib/letflow/design/req195-audit-entry-storage.md lib/letflow/design/req197-expr-arithmetic-and-errors.md lib/letflow/design/req198-expr-builtin-functions.md lib/letflow/design/req200-instance-timeline-rendering.md lib/letflow/design/req202-artifact-repository.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+    depends_on: [REQ-237]
+    impl_order: 508  # letflow-queue task id
+
+  - id: REQ-271
+    title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-h: req205-simulation-harness-foundation.md through req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md (closes ISS-0424 part 3c-18)"
+    owner: DOC-UPDATER
+    status: pending
+    stage: S6
+    description: >
+      Applies REQ-237's design decision
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
+      PROVENANCE marker text and structural placement rule in section 2, the
+      single-regex greppability justification in section 2(a), the two worked
+      before/after examples in section 4, and the 2026-09-05 amendment's section 6
+      lib/letflow/design/ chunking recommendation, alphabetical-filename-sort,
+      13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-h = lib/letflow/design/, req205-simulation-harness-foundation.md through req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md (req205-req215 plus 3 lowercase-named files, plus this design document itself).
+
+      This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch
+      files outside this chunk's file list under this requirement, even if they also carry a
+      .zig citation -- they belong to a sibling chunk.
+
+      lib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/
+      chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly);
+      do not touch any file outside lib/letflow/design/ under this requirement,
+      even if it also carries a .zig citation -- that belongs to one of REQ-243
+      through REQ-253.
+
+      Per CODE-DESIGN-VALIDATOR's OQ-4 resolution (mark it, no special
+      exemption): this chunk's file list includes
+      req237-zig-provenance-marking-convention.md itself, and its own .zig
+      citations inside its worked examples (section 4) are IN SCOPE for this
+      requirement -- the design document describing the convention is not
+      exempt from the convention it describes.
+
+      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
+      REQ-237's actual finalized regex before starting -- do not trust this
+      count): 9 files in this chunk carry a .zig reference today (`grep -rl
+      '\.zig' lib/letflow/design/req205-simulation-harness-foundation.md lib/letflow/design/req206-swiftroute-scenario-execution.md lib/letflow/design/req207-vortex-scenario-execution.md lib/letflow/design/req209-expr-differential-corpus-regression.md lib/letflow/design/req215-service-task-engine-wiring.md lib/letflow/design/req237-zig-provenance-marking-convention.md lib/letflow/design/search.md lib/letflow/design/service_task_dispatcher.md lib/letflow/design/service_task.md`). If this still proves too wide for one
+      DOC-UPDATER turn by fix time, split further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep.
+    acceptance_criteria:
+      - "before starting, run REQ-237's finalized marker-detection regex against this chunk's files for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' lib/letflow/design/req205-simulation-harness-foundation.md lib/letflow/design/req206-swiftroute-scenario-execution.md lib/letflow/design/req207-vortex-scenario-execution.md lib/letflow/design/req209-expr-differential-corpus-regression.md lib/letflow/design/req215-service-task-engine-wiring.md lib/letflow/design/req237-zig-provenance-marking-convention.md lib/letflow/design/search.md lib/letflow/design/service_task_dispatcher.md lib/letflow/design/service_task.md`, summed)"
+      - "after the change, every .zig source-path citation in this chunk's files matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
+      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 9 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's list are untouched by this requirement's commits -- confirmed by git diff --stat"
+      - "the deliberate-divergence notes inside this chunk's scope (lib/letflow/design/req205-simulation-harness-foundation.md lib/letflow/design/req206-swiftroute-scenario-execution.md lib/letflow/design/req207-vortex-scenario-execution.md lib/letflow/design/req209-expr-differential-corpus-regression.md lib/letflow/design/req215-service-task-engine-wiring.md lib/letflow/design/req237-zig-provenance-marking-convention.md lib/letflow/design/search.md lib/letflow/design/service_task_dispatcher.md lib/letflow/design/service_task.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' lib/letflow/design/req205-simulation-harness-foundation.md lib/letflow/design/req206-swiftroute-scenario-execution.md lib/letflow/design/req207-vortex-scenario-execution.md lib/letflow/design/req209-expr-differential-corpus-regression.md lib/letflow/design/req215-service-task-engine-wiring.md lib/letflow/design/req237-zig-provenance-marking-convention.md lib/letflow/design/search.md lib/letflow/design/service_task_dispatcher.md lib/letflow/design/service_task.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+      - "req237-zig-provenance-marking-convention.md's own section-4 worked-example .zig citations are confirmed marked (not skipped as meta-documentation) -- quote the specific lines before and after, per OQ-4's resolution"
+    depends_on: [REQ-237]
+    impl_order: 509  # letflow-queue task id
+

@@ -1,0 +1,50 @@
+id: ISS-0480
+title: "RowApprovalTest/PackUpdateMigrationTest: load-dependent Sandbox checkout race under heavy concurrent async load"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0423-20260905
+discovered_at: "2026-09-05T03:44:03Z"
+severity: MAJOR
+description: >
+  Discovered during WF03-ISS0423-20260905's required double full-suite
+  verification (plain `mix test`, no scripts/test_parallel.sh). Two full-suite
+  runs on the SAME commit produced inconsistent results: run 1 had 3 failures
+  (Letflow.RowApprovalTest, Letflow.Definitions.PackUpdateMigrationTest,
+  Mix.Tasks.Letflow.LintHandoffsTest), run 2 had only 1
+  (Mix.Tasks.Letflow.LintHandoffsTest -- filed separately, see ISS-0445).
+
+  Letflow.RowApprovalTest ("finance then ops reaches :approved",
+  test/letflow/row_approval_test.exs:11) failed with an assertion right after
+  create() returned {:error, :not_found}. Letflow.Definitions.PackUpdateMigrationTest
+  ("AC3 ... classifies :clean_update", test/letflow/definitions/pack_update_migration_test.exs:301)
+  failed with an Ecto.ConstraintError foreign_key_constraint on
+  solution_pack_artefact_bases_tenant_id_fkey. Both failed in run 1 only, not
+  run 2.
+
+  Both files show an EMPTY `git diff` against main (confirmed independently by
+  ORCH, not merely by the discovering run) -- untouched by ISS-0423's branch --
+  and both already declared `async: true` before that branch existed.
+  test/support/data_case.ex (the shared sandbox setup) is also empty-diffed
+  vs main.
+
+  Structural evidence points to a load-dependent Ecto.Adapters.SQL.Sandbox
+  checkout race on plain public-schema tables (approvals,
+  solution_pack_artefact_bases, pack_update_resolutions) under heavy
+  concurrent async load -- unrelated to any recent change and not caused by
+  ISS-0423's own 2-file async conversion, which shares no code path or table
+  with either failing test.
+
+  Full raw logs (test_run_1.log, test_run_2.log, ~684k lines each) were
+  generated locally on the diagnosing host during WF03-ISS0423-20260905 but
+  were NOT committed (local working-tree artifacts, not preserved) -- a fresh
+  reproduction attempt (multiple plain `mix test` runs under load) will be
+  needed to gather new evidence.
+affected_files:
+  - test/letflow/row_approval_test.exs
+  - test/letflow/definitions/pack_update_migration_test.exs
+  - test/support/data_case.ex
+related:
+  - ISS-0423
+  - ISS-0445
+queue_task_id: 480
+github_issue: 933
+status: open

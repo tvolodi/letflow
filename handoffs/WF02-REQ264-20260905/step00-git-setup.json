@@ -1,0 +1,68 @@
+{
+  "handoff_id": "WF02-REQ264-20260905-step-00",
+  "run_id": "WF02-REQ264-20260905",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ264-20260905/step00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T22:27:56Z",
+  "started_at": "2026-09-05T22:27:56Z",
+  "completed_at": "2026-09-05T22:27:56Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-264"],
+    "requirement_text": {
+      "REQ-264": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-a = lib/letflow/design/, the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs and non-reqNNN-named files that sort before req017).\n\nThis is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch files outside this chunk's file list under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nlib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/ chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly); do not touch any file outside lib/letflow/design/ under this requirement, even if it also carries a .zig citation -- that belongs to one of REQ-243 through REQ-253.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 13 files in this chunk carry a .zig reference today (`grep -rl '\\.zig' lib/letflow/design/0001-web-framework-addendum-req065.md lib/letflow/design/0001-web-framework-decision.md lib/letflow/design/0002-oidc-integration-decision.md lib/letflow/design/0003-ecto-schema-strategy-decision.md lib/letflow/design/api-pagination.md lib/letflow/design/export_import.md lib/letflow/design/identity-schema.md lib/letflow/design/iss-0047-username-race-conflict-target.md lib/letflow/design/iss-0078-pin-rebind-provenance.md lib/letflow/design/iss-0079-pin-override-verification.md lib/letflow/design/iss0438-entity-subsystem-scoping.md lib/letflow/design/promotion_plan.md lib/letflow/design/promotion_review_state_machine.md`). If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "source_text": {
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md": "See §2 (marker text + placement rule: single citation line / paragraph / table / YAML comment-line-sequence-item -- four shapes as of the 2026-09-05 ISS-0510 amendment), §2(a) (regex), §3 (coverage confirmation), §4 (two worked before/after examples), §5 (verification method: total-marked-count grep, no-path-text-lost grep, idempotency check), §6 (2026-09-05 amendment: lib/letflow/design/ chunking table, chunk 239-design-a = alphabetically-sorted first 13 files). These files are Markdown design docs (not YAML), so the primary applicable shapes are (1) single citation line, (2) paragraph, and (3) table -- the YAML comment-line/sequence-item shape (4) is not expected to apply here since none of these files are YAML, but check anyway in case a file embeds a YAML code fence. If a genuinely new citation-unit shape not covered by any of the four documented ones is found (e.g. something specific to Markdown code-fence blocks or nested list/table structures unique to design docs), do NOT invent a fifth ad-hoc convention -- flag it as a new issue for CODE-DESIGNER (same process ISS-0510 was raised through) and apply the closest-matching existing convention in the meantime with a clear note in this run's handoff, per REVIEWER's own established precedent this session (ISS-0510)."
+    },
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ260-20260905/step01-doc-updater.json",
+      "handoffs/WF02-REQ260-20260905/step02-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/0001-web-framework-addendum-req065.md",
+      "lib/letflow/design/0001-web-framework-decision.md",
+      "lib/letflow/design/0002-oidc-integration-decision.md",
+      "lib/letflow/design/0003-ecto-schema-strategy-decision.md",
+      "lib/letflow/design/api-pagination.md",
+      "lib/letflow/design/export_import.md",
+      "lib/letflow/design/identity-schema.md",
+      "lib/letflow/design/iss-0047-username-race-conflict-target.md",
+      "lib/letflow/design/iss-0078-pin-rebind-provenance.md",
+      "lib/letflow/design/iss-0079-pin-override-verification.md",
+      "lib/letflow/design/iss0438-entity-subsystem-scoping.md",
+      "lib/letflow/design/promotion_plan.md",
+      "lib/letflow/design/promotion_review_state_machine.md"
+    ],
+    "queue_task_id": 502,
+    "queue_agent_id": "letflow-ee-orch",
+    "branch_name": "feature/WF02-REQ264-20260905",
+    "base_commit": "960e7ee8ca03b9489170d1d47cdc4b0af7aa5527",
+    "pre_start_checks": {
+      "registry_scanned": true,
+      "registry_findings": "grep -n 'REQ-264|WF02-REQ264' handoffs/registry.json -> no matches (exit 1). git branch -a and git log --all --oneline grepped for '264' -> only unrelated hits (ISS-0480 rework commit hash prefix 6c4264f1, WF03-ISS0216, an ISS-0264 fix from 2026-08-22) -- none refer to REQ-264 or this chunk. No existing WF02-REQ264-* branch or registry entry anywhere.",
+      "sibling_chunk_note": "This run implements chunk 239-design-a (lib/letflow/design/, alphabetically-sorted first 13 .zig-carrying files: 2 decision-doc-numbered files, 2 lowercase-named files (api-pagination.md, export_import.md), identity-schema.md, 2 iss-00NN-named files, iss0438-entity-subsystem-scoping.md, promotion_plan.md, promotion_review_state_machine.md, plus 0001-web-framework-addendum-req065.md/0001-web-framework-decision.md/0002-oidc-integration-decision.md/0003-ecto-schema-strategy-decision.md). Sibling chunks 239-design-b through -h (REQ-265..271) cover disjoint alphabetical ranges of the same directory (req017 onward) -- no file-path overlap with this run's 13 named files. No sibling REQ-265..271 run found active in the registry as of this check.",
+      "concurrency_conclusion": "Clear to proceed -- no evidence of another session working REQ-264 specifically. Will re-read handoffs/registry.json immediately before appending this run's own entry (ORCHESTRATOR.md section 7.1), and will rebase onto current main immediately before merging since main has been moving frequently today from concurrent sibling REQ-25x/26x work."
+    }
+  },
+  "task": {
+    "description": "WF-02 Step 00: claim queue task 502 (REQ-264), chunk 239-design-a of REQ-237's lib/letflow/design/ 2026-09-05 amendment scope -- applies REQ-237's .zig provenance-marking convention (design doc lib/letflow/design/req237-zig-provenance-marking-convention.md, including both 2026-09-05 amendments) to exactly these 13 files: lib/letflow/design/0001-web-framework-addendum-req065.md, lib/letflow/design/0001-web-framework-decision.md, lib/letflow/design/0002-oidc-integration-decision.md, lib/letflow/design/0003-ecto-schema-strategy-decision.md, lib/letflow/design/api-pagination.md, lib/letflow/design/export_import.md, lib/letflow/design/identity-schema.md, lib/letflow/design/iss-0047-username-race-conflict-target.md, lib/letflow/design/iss-0078-pin-rebind-provenance.md, lib/letflow/design/iss-0079-pin-override-verification.md, lib/letflow/design/iss0438-entity-subsystem-scoping.md, lib/letflow/design/promotion_plan.md, lib/letflow/design/promotion_review_state_machine.md. No CODE-DESIGNER step -- the convention is already designed and CODE-DESIGN-VALIDATOR-passed; this is a mechanical apply-step, same shape as REQ-254/256/257/259/260 before it. Dispatching straight to DOC-UPDATER, then REVIEWER.",
+    "acceptance_criteria": []
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "git pull origin main --ff-only (already up to date at 960e7ee8). Created and checked out feature/WF02-REQ264-20260905 from main @ 960e7ee8. Pre-flight grep -c '\\.zig' confirmed non-zero counts in all 13 named files (0001-web-framework-addendum-req065.md:18, 0001-web-framework-decision.md:15, 0002-oidc-integration-decision.md:65, 0003-ecto-schema-strategy-decision.md:2, api-pagination.md:21, export_import.md:2, identity-schema.md:6, iss-0047-username-race-conflict-target.md:1, iss-0078-pin-rebind-provenance.md:5, iss-0079-pin-override-verification.md:2, iss0438-entity-subsystem-scoping.md:30, promotion_plan.md:9, promotion_review_state_machine.md:5 -- sum 181), matching the requirement's own draft-time expectation that all 13 named files carry at least one reference.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Dispatch DOC-UPDATER to implement REQ-264 (the 13 named lib/letflow/design/ files only) per REQ-237's design doc."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

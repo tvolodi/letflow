@@ -1333,9 +1333,54 @@ described anywhere:**
 - ❌ NOT CLAIMED, unchanged from every prior revision: that production WASM dispatch
   is capped. It is not. It does not call this module.
 
+**A LIMIT ON MY OWN ARGUMENT (REVIEWER Step 3c, MINOR — accepted).** REVIEWER
+pointed out that the reasoning above proves less than it sounds like it proves,
+and that is fair. Falsifying the DETERMINISTIC model (8 leaks into 4 slots must
+fail every run) does NOT falsify a PROBABILISTIC version of the same concern —
+that each additional slot-consuming dispatch raises the failure probability, in
+which case 6 is still better than 8 but not necessarily *safe*, and a
+measurement-derived threshold could still be meaningful in expectation. What the
+CI data establishes is narrower than "the constraint does not bind": it
+establishes that the constraint does not bind DETERMINISTICALLY, which is all
+that is needed to reject a hard >6 gate. The practical decision is unchanged —
+ship a strict reduction, do not claim closure, keep the issue open — but the
+argument should not be read as proving the residual risk is absent. It is not.
+
 **Falsifiable prediction, recorded so this can be checked rather than believed:** if
 the model is merely pessimistic rather than wrong in kind, the `wasm_hang` subprocess
 should now fail materially LESS often than the measured pre-change baseline of 3
 failures in 6 attempts. If post-merge CI shows no improvement, that falsifies the
 concurrent-contention diagnosis itself and ISS-0418 needs re-diagnosis, not more
 reduction.
+
+
+## 11. DISPATCH COUNT RECONCILIATION (REVIEWER Step 3c, MAJOR — closed by ORCH)
+
+REVIEWER counted **seven** raw hang-dispatch call sites in the shipped tests
+(AC2 = 2, `host_api_write` = 1, AC5 = 1, AC3 = 1, AC4 = 2) against this design's
+stated **six**, and correctly flagged that no single location reconciles the two.
+Since OQ-E's threshold and §10's entire argument are stated in terms of that one
+number, an ambiguous count is a real defect in the record even though the code is
+right. Reconciled here explicitly:
+
+**Seven call sites. Six independent leaks. Both numbers are correct.**
+
+The reconciliation is §0's own established mechanism — *one permanently-blocked
+task per **Store**, not per call* (verified at `store_executor.rs:60-76`, whose
+executor task runs a `while let ... recv().await` loop). `call_timeout_test.exs`'s
+AC2 dispatches twice, but its **second call deliberately reuses the pid wedged by
+its first** — that is the whole point of that call, which exists to prove §1.2's
+"the Store stays wedged" claim. A second command sent to an already-wedged Store's
+executor does not spawn a second executor task, so it consumes **no additional
+pool slot**.
+
+So: 7 call sites − 1 reused-Store call = **6 slot-consuming dispatches**, which is
+the number OQ-E's threshold and §10's comparison are stated against. This is also
+exactly why §6.2 specifies that AC2's second call does NOT take its own lease —
+the lease tracks slot consumption, not call count, and issuing a second lease for
+a call that consumes no slot would overcount.
+
+**Whoever next changes this suite:** the count that matters is
+slot-consuming dispatches, not call sites. Adding a call that reuses an
+already-wedged Store does not increase the footprint; adding one that starts a
+fresh Store does.

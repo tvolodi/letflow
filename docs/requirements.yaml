@@ -14892,7 +14892,7 @@ requirements:
   - id: REQ-254
     title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-011 through REQ-050 entry range (closes ISS-0424 part 3c-1)
     owner: DOC-UPDATER
-    status: in_progress
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

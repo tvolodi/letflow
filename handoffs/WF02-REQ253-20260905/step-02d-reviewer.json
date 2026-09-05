@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ253-20260905-step-02d-reviewer",
+  "run_id": "WF02-REQ253-20260905",
+  "workflow_id": "WF-02",
+  "step": "2d",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "lib/letflow/repository/canonicaliser.ex, lib/letflow/repository/artifact.ex, lib/letflow/sandbox_pool.ex, lib/letflow/sandbox_pool/fixture_loader.ex, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, lib/letflow/instances.ex",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "created_at": "2026-09-05T15:17:08Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-253"]
+  },
+  "task": {
+    "description": "Idiom/scope review gate on REQ-253 (chunk 238h, final chunk of REQ-238's original lib/ scope) applying REQ-237's PROVENANCE marker convention to lib/letflow/repository/*, sandbox_pool.ex+*, scheduler.ex, tasks.ex, tenant_provisioning.ex, instances.ex."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-verified all claims. (1) grep -l '.zig' across the full 15-file glob confirms exactly 8 files carry a citation (canonicaliser.ex, artifact.ex, sandbox_pool.ex, fixture_loader.ex, scheduler.ex, tasks.ex, tenant_provisioning.ex, instances.ex); the other 7 (repository/{activation,activation_group,activation_history,artifact_kind,artifact_version,attachment,attachments}.ex) have none. (2) Both known divergence lines (fixture_loader.ex line 12, shifted from 11 by the file's own marker insertion; artifact.ex line 13, unshifted) are byte-identical to main via direct diff. (3) Full diff read end to end: only 13 '+' marker lines added across the 8 files plus the two handoff JSON files (step-00, step-02) -- no citation text, code logic, or out-of-scope files touched; 80 insertions total matches 13 code lines + 67 JSON lines. (4) Spot-checked 8 placements across 4 files (tasks.ex x3 incl. the self-citing '## src/tasks/store.zig boundary' heading correctly treated as its own citation-line unit distinct from the paragraph below it; scheduler.ex's numbered-list item x1; canonicaliser.ex x2; sandbox_pool.ex x2) -- all match design doc section 2's line/paragraph unit rule, marker immediately precedes each unit, no per-citation judgement call violated. (5) No scope creep -- pure text insertion, no new abstractions or behaviours introduced; TEST-DESIGNER routing SKIP is correct (no code logic changed, ORCH-verified mix compile/format/test already clean). (6) Closing full-tree sanity check (regex for the OLD/unmarked form across all of lib/ excl. lib/letflow/design/, all 11 chunk file-lists REQ-243..253): found 28 residual unmarked .zig lines, but all 28 fall exclusively within the 9 files owned by REQ-245 (engine.ex + engine/{execution_error,expr,instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,plugin_registry}.ex, chunk 238b1) -- confirmed via docs/requirements.yaml that REQ-245 alone among REQ-243..253 is still status: pending (REQ-243/244/246-252 all done). This is not a boundary gap or defect in REQ-253's own work -- it is a sibling requirement that has not yet been dispatched. Reporting explicitly per instruction: ISS-0424 part 3b is NOT yet fully closed until REQ-245 lands; REQ-253's own scope is complete and correct.",
+    "findings": [
+      "Idiomatic: pure text-insertion change, no gen_statem/supervision/OTP surface touched -- not applicable to idiom checks 1-2 this turn.",
+      "No type-safety gap introduced (comment/moduledoc-only change).",
+      "No scope creep -- change is exactly REQ-237's design-doc convention applied to the assigned file list, nothing more.",
+      "Closing sanity check: REQ-245 (chunk 238b1, 9 engine/*.ex files) remains status: pending in docs/requirements.yaml and is not yet marked -- ORCH should not treat the .zig provenance-marking initiative (ISS-0424 part 3b) as fully closed on REQ-253 landing alone; route REQ-245 for dispatch."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

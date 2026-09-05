@@ -829,3 +829,56 @@ history:
       1st of ten REQ-239-replacement chunks (REQ-254..REQ-263) applying the
       convention to docs/requirements.yaml itself; owner is DOC-UPDATER, not
       ELIXIR-DEV, since the edited file is docs/requirements.yaml, not lib/.
+
+  - req: REQ-254
+    event: done
+    agent: ORCH
+    at: "2026-09-05T16:23:54Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      docs/requirements.yaml's REQ-011 through REQ-050 entry range (closes
+      ISS-0424 part 3c-1, queue task 492, PR #988,
+      feature/WF02-REQ254-20260905). This is chunk 239a of ten
+      REQ-239-replacement chunks (REQ-254..REQ-263) applying the convention
+      to docs/requirements.yaml itself; owner DOC-UPDATER, not ELIXIR-DEV,
+      since the edited file is docs/requirements.yaml, not lib/.
+      DOC-UPDATER implemented (70 PROVENANCE markers inserted, 0 deletions
+      beyond this run's own status-flip line, 152 .zig lines preserved
+      before/after); REVIEWER independently re-verified marker text,
+      additive-only diff, scope boundaries (re-located REQ-011/REQ-051
+      fresh), divergence-note byte-identity, and YAML validity
+      (handoffs/WF02-REQ254-20260905/step-2d-reviewer.json), PASS, with one
+      MINOR non-blocking finding recommending REQ-237's design doc be
+      amended to enumerate the YAML-comment-line marker case explicitly
+      before sibling chunks REQ-255/256/257 hit the same contexts.
+      CI: both frontend gate checks passed on every attempt. Backend gate
+      failed on the push-event run's own duplicate check twice in a row
+      (once pre-retry, once on a re-run) on
+      test/letflow/engine/wasm/call_timeout_test.exs:79 and, on the second
+      attempt, also host_api_write_test.exs:461 -- both ExUnit.TimeoutError,
+      matching ISS-0418's own already-open wasm_hang recurrence signature
+      verbatim; the concurrent pull_request-event run's backend gate passed
+      clean on its only attempt. Structurally cleared: `git diff --stat
+      main...feature/WF02-REQ254-20260905` touches only docs/requirements.yaml,
+      docs/status/requirement_status.index.yaml,
+      docs/status/requirement_status.v9.yaml, and handoffs/* -- zero files
+      under lib/letflow/engine/wasm/ or test/letflow/engine/wasm/, so this
+      branch cannot be causal; recorded in the PR body and merged via
+      `gh pr merge --squash --delete-branch --admin` per GIT_MERGE.md step
+      8b's documented-attribution override path. PR #988 merged as commit
+      04930c9f. Also fixed in the same branch: CI's own A9 invariant test
+      caught that Step 00's own REQ-254 started-event append to this volume
+      (29 -> 30 on-disk entries) had not been mirrored into
+      requirement_status.index.yaml's declared entries: count -- corrected
+      before merge (commit 20538080).
+      NOTE ON CONCURRENT SIBLING ACTIVITY: while this run awaited PR #988's
+      CI, a separate ORCH-role session shared this working tree and
+      independently logged the same wasm_hang recurrence to ISS-0418 as its
+      own ad-hoc task (branch chore/ISS0418-recurrence-20260905, its own PR
+      #989) -- unrelated to REQ-254 itself, observed and left alone per
+      ORCHESTRATOR.md section 7.1's concurrent-sibling-session guidance; not
+      folded into this entry beyond this note, since #989 is that other
+      run's own artifact to land. That session's checkout of its own branch
+      in this shared working tree also transiently clobbered this entry's
+      first draft before it was committed; redone here from a fresh append.
+      Queue task 492 released status:done (letflow-ee-orch).

@@ -65,10 +65,11 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
 
   Whoever wires a real hook (via `build/1`) into `Letflow.Definitions.activate/2` before S3/S6
   ship MUST supply a `Lookup` backed by something else (a hardcoded map, a stub) -- there is
-  no default, production-ready `Lookup` in this codebase yet. This mirrors R-Co's own design,
-  which already makes the validator an optional injectable field on `Store`
-  (`service_scope_validator: ?*ServiceScopeValidator = null`) -- carrying that same
-  optionality through, not inventing new complexity.
+  no default, production-ready `Lookup` in this codebase yet. The optionality is
+  intentional, not an oversight: forcing a production-ready `Lookup` to exist before
+  ServiceCatalog/PluginRegistry are ported would mean inventing a throwaway one now
+  only to replace it later, for no benefit (R-Co's `Store` makes the equivalent field
+  optional the same way: `service_scope_validator: ?*ServiceScopeValidator = null`).
   """
 
   alias Letflow.Definitions.Graph
@@ -78,7 +79,7 @@ defmodule Letflow.Definitions.ServiceScopeValidator do
 
   @typedoc """
   One `Lookup` function's successful resolution. `owner_tenant_id` is `nil` iff
-  `scope == :global`; expected non-`nil` iff `scope == :tenant` (mirrors R-Co's
+  `scope == :global`; expected non-`nil` iff `scope == :tenant` (per
   `ServiceCatalogRecord.owner_tenant_id: ?[16]u8` — "null when scope = global",
   `src/design/svc-01-04-service-scope.md` §2.1). A `:tenant` record whose
   `owner_tenant_id` is `nil` is a malformed-lookup-result case, handled DIFFERENTLY per

@@ -22,10 +22,10 @@ defmodule Letflow.Definitions.SolutionPackInstall do
   This table, `solution_pack_artefact_bases`, and `pack_update_resolutions` are all
   GLOBAL (public/default schema, no schema-per-tenant `:prefix`) -- prm-batch1's
   explicit classification for these three specifically ("install records are
-  cross-tenant infrastructure"), the same kind of classification R-Co's own
-  service_catalog carries (per svc-01-04-service-scope.md, cited by REQ-041 in
-  docs/requirements.yaml: "service_catalog is a public-schema routing/registry
-  table (TNT-01 confirmed)").
+  cross-tenant infrastructure"), consistent with the TNT-01-confirmed
+  classification of a public-schema routing/registry table (per
+  svc-01-04-service-scope.md, cited by REQ-041 in docs/requirements.yaml:
+  "service_catalog is a public-schema routing/registry table (TNT-01 confirmed)").
 
   OPEN QUESTION, explicitly not resolved here: neither
   docs/migration/decisions/0003-ecto-schema-strategy.md nor any other Letflow

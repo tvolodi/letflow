@@ -13948,7 +13948,7 @@ requirements:
   - id: REQ-234
     title: Retire parity-justification phrasing in lib/letflow/definitions.ex, lib/letflow/definitions/*, and lib/letflow/routers/definitions.ex -- restate on merit or delete (closes ISS-0424 part 2c)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the definitions slice of ISS-0424/GH#828 part 2, same

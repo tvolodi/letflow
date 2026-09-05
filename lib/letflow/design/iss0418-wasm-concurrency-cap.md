@@ -1283,3 +1283,59 @@ body executes at a time, at most one lease is ever held at once regardless of wh
 this design does not add one, to avoid implying the numeric value of `cap` is what does
 the serializing work here (it is the WIRING — one acquire/release pair per dispatch,
 never overlapped — that does it, per §6.3's own precise statement).
+
+
+## 10. OQ-E RESOLUTION (ORCH, 2026-09-05) — measured unfavourably, shipped anyway, with the claim narrowed
+
+**The measurement was taken and it did NOT clear the gate.** ELIXIR-DEV measured
+`N=4 (source: nproc)` inside real `ubuntu-latest` jobs across three CI runs; ORCH
+independently confirmed N=4 on two of them. OQ-E's threshold was "strictly greater
+than 6". It is not met, and ELIXIR-DEV correctly escalated rather than asserting
+closure or cutting coverage further to manufacture a passing number.
+
+**ORCH's decision: ship, and narrow the claim.** Not because the measurement is
+dismissed — it stands — but because ORCH checked what §6.3.1's model actually
+*predicts* against what CI actually *does*, and the model is quantitatively wrong:
+
+| CI run | dispatches | wasm_hang result |
+|---|---|---|
+| 33905976557 | 8 (pre-change) | **7 passed** |
+| 33919969026 | 8 (pre-change) | 6/7 |
+| 33920791791 | 8 (pre-change) | 5/7 |
+| 33921150205 | 8 (pre-change) | 5/7 |
+
+If the strict model held — 8 permanent, unrecoverable leaks into a 4-slot pool —
+dispatches #5–8 would fail on **every** run, deterministically. They do not. The
+subprocess passes outright some runs. So at least one of the model's premises is
+too strong: either the effective pool is larger than `available_parallelism()`
+implies, or some slots do recover, or not every dispatch leaks a slot for the
+full subprocess lifetime.
+
+**What this means for the ">6" threshold specifically:** it was derived FROM that
+model. A threshold inherited from a model whose predictions are contradicted by
+measurement cannot itself gate a decision. Blocking here would reject a change
+that strictly reduces the failure surface (8 dispatches → 6, plus serialization
+that provably closes the concurrent-contention race) on the strength of arithmetic
+that observably overstates the constraint.
+
+**THE CLAIM IS NARROWED ACCORDINGLY, and this is binding on how this work is
+described anywhere:**
+
+- ✅ CLAIMED, and independently verified: the concurrent-contention race
+  ISS-0418's recurrence log documents is closed by construction (§6.3, gate-confirmed).
+- ✅ CLAIMED: the hang-dispatch footprint is reduced 8 → 6 with zero coverage lost
+  (gate-verified, both reductions attacked and neither broke).
+- ⚠️ **NOT CLAIMED: that this closes ISS-0418's CI flake.** It reduces the failure
+  surface and removes one documented mechanism. Whether the residual sequential
+  exhaustion still fires on a 4-core runner is an EMPIRICAL question that only
+  post-merge CI observation answers. ISS-0418 therefore stays OPEN pending that
+  observation rather than being closed on this run's authority.
+- ❌ NOT CLAIMED, unchanged from every prior revision: that production WASM dispatch
+  is capped. It is not. It does not call this module.
+
+**Falsifiable prediction, recorded so this can be checked rather than believed:** if
+the model is merely pessimistic rather than wrong in kind, the `wasm_hang` subprocess
+should now fail materially LESS often than the measured pre-change baseline of 3
+failures in 6 attempts. If post-merge CI shows no improvement, that falsifies the
+concurrent-contention diagnosis itself and ISS-0418 needs re-diagnosis, not more
+reduction.

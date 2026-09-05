@@ -4915,6 +4915,31 @@
       "recovery_note": "No handoff directory (handoffs/WF03-ISS0510-20260905/) existed on disk or in branch feature/WF03-ISS0510-20260905 when this session resumed, despite a prior CODE-DESIGNER pass and a CODE-DESIGN-VALIDATOR FAIL verdict already having occurred on this branch (per the resume instruction) -- (a-2) ORCH reconstruction: this registry entry and the rework-1 handoff step files are being written now, retroactively, from the branch diff and the resume instruction's description of the FAIL verdict, since no prior handoff JSON survives to amend.",
       "last_known_step": "Step Final COMPLETED PASS -- PR #994 squash-merged (b2e27d68) via gh pr merge --admin (one of two duplicate Backend-gate CI runs failed on Letflow.Routers.Req077PromotionPipelineTest AC3, structurally unrelated -- this branch's diff touches only the design doc and handoffs/ bookkeeping; the other duplicate run and both frontend gates passed clean, attributed as test-infra flake in the PR). Independently verified post-merge on main: sub-case (a) now reads 'the marker precedes the `title:` line' with no residual 'precedes the `id:`' text. Queue task 510 released status:done. docs/issues/ISS-0510.yaml flipped to status: resolved. GH#991 closed (auto-closed via PR body 'Closes #991') with an evidence comment appended.",
       "note": "WF-03 run for ISS-0510 (queue task 510, GH#991): REVIEWER's MINOR finding from WF02-REQ254-20260905 asking for a fourth citation-unit shape (YAML comment-line/sequence-item) to be enumerated in lib/letflow/design/req237-zig-provenance-marking-convention.md section 2, ahead of sibling chunks REQ-255/257/258/259/260/261/262/263 hitting the same contexts. Docs-only, additive design-doc amendment -- no lib/ or priv/ touched, ground truth is the already-merged REQ-254 application in docs/requirements.yaml, not something to change. CODE-DESIGNER produced the amendment; CODE-DESIGN-VALIDATOR FAILed rework-0 on an inverted sub-case (a) citation (id: vs. title:) -- reconstructed retroactively since no handoff file for that pass survived. Rework-1: CODE-DESIGNER corrected only the REQ-021 clause (verified against docs/requirements.yaml:806-808 directly); CODE-DESIGN-VALIDATOR's focused re-check PASSed, confirming the citation now matches the real file and that no other part of the document changed since the FAIL. Merged, queue released, issue file and GH issue closed out."
+    },
+    {
+      "run_id": "WF02-REQ253-20260905",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-253",
+      "issue_id": "ISS-0424",
+      "queue_task_id": 491,
+      "queue_agent_id": "ai-dala-orch",
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/repository/artifact.ex",
+        "lib/letflow/repository/canonicaliser.ex",
+        "lib/letflow/sandbox_pool.ex",
+        "lib/letflow/sandbox_pool/fixture_loader.ex",
+        "lib/letflow/scheduler.ex",
+        "lib/letflow/tasks.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "lib/letflow/instances.ex"
+      ],
+      "started_at": "2026-09-05T15:08:00Z",
+      "lock_released_at": "2026-09-05T17:53:05Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final COMPLETED PASS -- PR #986 squash-merged (a7d71bfe) after four rebases onto sibling/concurrent chunks landing during CI wait (REQ-245 done, REQ-254 started+done, REQ-256 started+done, ISS-0510) -- all non-overlapping file scope, each requirement_status.v9.yaml conflict resolved as a chronological composition, requirement_status.index.yaml's volume 9 entry count recounted from the composed file at each step (29->30->31->32->34). Merged via gh pr merge --admin after two rerun cycles: known ISS-0224-class SandboxPoolTest flake, known :wasm_hang class (CallTimeoutTest/HostApiWriteTest), and one Letflow.Api.ContextTest failure confirmed as CI-load/DB-contention noise (11/11 passing in an isolated local rerun) -- all structurally attributed as unrelated to this PR's comment-only diff and documented in a PR comment before the admin merge. Queue task 491 released status:done.",
+      "note": "WF-02 run for REQ-253 (queue task 491), chunk 238h of REQ-238's 11-way split (ISS-0424 part 3b-11, the last of the eleven): applied REQ-237's .zig provenance-marking convention to lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex, lib/letflow/tenant_provisioning.ex, and lib/letflow/instances.ex. Same established pattern as prior chunks: no CODE-DESIGNER/SECURITY-REVIEWER/TEST-DESIGNER, straight to ELIXIR-DEV then REVIEWER, both PASS (handoffs/WF02-REQ253-20260905/step-02d-reviewer.json). ORCH independently confirmed mix compile --warnings-as-errors, mix format --check-formatted, and a targeted mix test run (202 passed) before the pre-merge status flip. Diff confirmed comment-only (PROVENANCE marker insertions, zero logic changes) throughout every rebase, which mattered directly when attributing all CI failures during the merge wait as unrelated flakes rather than real regressions. With this merge, all 11 REQ-238-replacement chunks (REQ-243..253) are complete; ISS-0424 Part 3b (lib/) is fully closed, leaving only Part 3c (REQ-254..271, docs/) outstanding."
     }
   ]
 }

@@ -1384,3 +1384,49 @@ a call that consumes no slot would overcount.
 slot-consuming dispatches, not call sites. Adding a call that reuses an
 already-wedged Store does not increase the footprint; adding one that starts a
 fresh Store does.
+
+
+## 12. FIRST POST-IMPLEMENTATION CI EVIDENCE (ORCH, 2026-09-05) — the prediction is not yet confirmed
+
+§10 recorded a falsifiable prediction: the `wasm_hang` subprocess should fail
+*materially less often* than its measured pre-change baseline of 3 failures in 6
+attempts. **First evidence is in, and it does not confirm that.**
+
+PR #927's CI, across three cycles on this branch:
+
+| cycle | backend gate | wasm_hang result |
+|---|---|---|
+| 1 | pass ×2 | — |
+| 2 | pass ×2 | — |
+| 3 (post-rebase) | **fail ×2** | **4/5 passed** (AC2 timed out at 180s) |
+
+Combined: **4 passes, 2 failures in 6 attempts**, against a baseline of 3 in 6.
+50% → 33% on six samples is **well inside noise**. It is not improvement, and it
+is not claimed as improvement.
+
+**What the failing run does establish, and it is not nothing:**
+
+- The footprint reduction SHIPPED and took effect — "Result: 4/5" confirms 5 tagged
+  tests where there were 7.
+- The main parallel suite passed **3231/3231** and the ISS-0428 gate reported
+  correctly in the same run, so neither regressed.
+- The failing test is **AC2** — the design's most-loaded case, the only one that
+  dispatches twice (its second call deliberately reusing the wedged Store to prove
+  §1.2). If sequential slot pressure is the live mechanism, AC2 is exactly where it
+  would surface first, which is weak corroboration for the gate's own
+  sequential-exhaustion BLOCKER rather than for §10's rebuttal of it.
+
+**Status of the prediction: NOT falsified, NOT confirmed.** Six samples cannot
+settle it in either direction. What would settle it is post-merge CI history across
+many runs on `main`, which is precisely why ISS-0418 stays open.
+
+**What is still honestly claimable, unchanged:** the concurrent-contention race is
+closed by construction (gate-verified), and the footprint is reduced 8→6
+slot-consuming dispatches with zero coverage lost (gate-verified). **What is not
+claimable, and now has evidence against it rather than merely absent evidence for
+it: that this improves the CI failure rate.**
+
+If post-merge history shows no improvement, §10's own instruction stands — that
+falsifies the concurrent-contention diagnosis as the *dominant* mechanism and
+ISS-0418 needs re-diagnosis, with sequential exhaustion (the gate's BLOCKER, which
+ORCH overrode on model-vs-measurement grounds) as the leading alternative.

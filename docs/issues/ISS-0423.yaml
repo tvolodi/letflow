@@ -1,70 +1,252 @@
 id: ISS-0423
-title: >
-  ExUnit suite runs 99.2% serially (1790s of 1805s) -- a ~30 min gate on every
-  requirement is a pipeline throughput ceiling
+title: "ExUnit suite runs 99.2% serially (1790s of 1805s) -- a ~30 min gate on every requirement is a pipeline throughput ceiling"
 discovered_by: ORCH
-discovered_in_run: ORCH-adhoc-20260902
-discovered_at: "2026-09-02T17:38:55Z"
-severity: MAJOR
+discovered_in_run: ORCH-adhoc-20260902-arch-review
+discovered_at: "2026-09-02T17:39:00Z"
+severity: MINOR
+tags: [testing, performance, ci, pipeline-throughput, s6]
 description: >
-  MEASURED, not estimated. Full mix test on main (letflow-3,
-  MIX_TEST_PARTITION=3, 2026-09-02), exit 0: "Finished in 1805.1 seconds
-  (14.8s async, 1790.2s sync)" / "Result: 3060 passed (6 properties, 3054
-  tests), 10 excluded". 99.2% of wall-clock is the synchronous portion. On a
-  16-core machine the suite effectively uses about one core.
+  MEASURED, not estimated. Full `mix test` on main (letflow-3,
+  MIX_TEST_PARTITION=3, 2026-09-02), exit 0:
 
-  ROOT CAUSE (structural, not incidental): Letflow state lives in per-tenant
-  Postgres schemas, not in processes, so tests cannot set async: true without
-  contending on shared schemas and the engine's own FOR UPDATE locks. The
-  test-support tenant fixture provisions and drops a REAL schema per test, and
-  each provisioning replays the full tenant-scoped migration set
-  (Letflow.SandboxPool moduledoc measures this at 411ms at its very fastest,
-  for 31 migrations; priv/repo/migrations/ now holds 69 files).
+    Finished in 1805.1 seconds (14.8s async, 1790.2s sync)
+    Result: 3060 passed (6 properties, 3054 tests), 10 excluded
 
-  WHY IT MATTERS: mix letflow.check runs the full suite and is the gate on
-  EVERY requirement and issue run in a humanless pipeline. A ~30 min serial
-  gate bounds how many runs per day the pipeline can complete, and it grows
-  linearly with the suite. It also actively caused a defect in a review
-  session: a 900s timeout on the suite killed it at exit 143 with zero output,
-  producing an initially wrong "still running" report. ISS-0419's own evidence
-  independently measured the same thing in CI ("Finished in 694.2 seconds
-  (23.5s async, 670.7s sync)") and concluded the suite, not the wasmex NIF
-  build, accounts for ~694s of a ~720s CI job -- already the dominant cost in
-  CI too, confirmed twice from different directions.
+  99.2% of wall-clock is the synchronous portion. On a 16-core machine the
+  suite effectively uses about one core.
 
-  Suggested direction, NOT prescribed -- CODE-DESIGNER decides scope and
-  whether it is worth it: Letflow already owns Letflow.SandboxPool, a
-  quota-bounded pool of pre-provisioned, migration-scaffolded schemas built
-  for exactly this shape (claim/release, owner-monitored, at-most-one-DB-op-
-  in-flight). Backing the test tenant fixture with pooled pre-provisioned
-  schemas could allow async: true for the large share of tests that need only
-  an isolated schema and touch no global table. HARD CONSTRAINT: any change
-  must not raise peak concurrent DBConnection checkouts past what the test
-  Repo pool can serve -- that is the exact hazard ISS-0224 fixed in the pool
-  itself, and decision 0009-test-parallel-pool-sizing.md already governs this
-  area and must be read first. A partial result (a subset of modules made
-  async) is a legitimate outcome; so is a reasoned "not worth it" with the
-  measurement recorded.
+  ROOT CAUSE (structural, not incidental): Letflow's state lives in
+  per-tenant Postgres schemas, not in processes, so tests cannot set
+  `async: true` without contending on shared schemas and the engine's own
+  FOR UPDATE locks. The test-support tenant fixture provisions and drops a
+  REAL schema per test -- visible throughout the run log as
+  LETFLOW_TENANT_FIXTURE phase=teardown lines -- and each provisioning
+  replays the full tenant-scoped migration set (Letflow.SandboxPool's
+  moduledoc measures this at 411 ms at its very fastest for 31 migrations;
+  priv/repo/migrations/ now holds 69 files).
 
-  NOTE (ORCH, at filing time 2026-09-05): since this issue's 2026-09-02
-  numbers were recorded, ISS-0427 landed and changed the tenant fixture's
-  default provisioning mechanism from migration replay to schema CLONE
-  (Letflow.Test.TenantTemplate, test/support/tenant_template.ex) -- a
-  materially different starting point than this filing describes
-  (69 migrations replayed per test). ISSUE-FIXER's Step 1 diagnosis must
-  re-verify the CURRENT baseline first-hand (a fresh mix test run, quoted
-  verbatim) rather than trusting either this filing's or ISS-0419's numbers
-  as still current, and must re-describe the fixture's actual current shape
-  before any design work proceeds.
+  WHY IT MATTERS: `mix letflow.check` runs the full suite and is the gate
+  on EVERY requirement and issue run in a humanless pipeline. A ~30 min
+  serial gate bounds how many runs per day the pipeline can complete, and
+  it grows linearly with the suite. It also caused a real defect during
+  this review: a 900s timeout on the suite killed it at exit 143 with zero
+  output, producing an initially wrong "still running" report to the user.
+  ISS-0419's own evidence independently measured the same thing in CI
+  ("Finished in 694.2 seconds (23.5s async, 670.7s sync)") and concluded
+  the suite -- not the wasmex NIF build -- accounts for ~694s of a ~720s
+  CI job. Confirmed twice, from different directions.
+
+  Suggested direction, NOT prescribed (CODE-DESIGNER decides scope and
+  whether it is worth it): Letflow already owns Letflow.SandboxPool, a
+  quota-bounded pool of pre-provisioned, migration-scaffolded schemas
+  built for exactly this shape (claim/release, owner-monitored,
+  at-most-one-DB-op-in-flight). Backing the test tenant fixture with
+  pooled pre-provisioned schemas could allow `async: true` for the large
+  share of tests needing only an isolated schema and touching no global
+  table. HARD CONSTRAINT: must not raise peak concurrent DBConnection
+  checkouts past what the test Repo pool can serve -- the exact hazard
+  ISS-0224 fixed in the pool itself. decision
+  0009-test-parallel-pool-sizing.md governs this area and must be read
+  first. A partial result (a subset of modules made async) is a legitimate
+  outcome; so is a reasoned "not worth it" with the measurement recorded.
 affected_files:
-  - test/support/tenant_fixture.ex
-  - test/support/tenant_template.ex
-  - lib/letflow/sandbox_pool.ex
-  - docs/migration/decisions/0009-test-parallel-pool-sizing.md
+  - test/support/
+  - config/test.exs
+  - mix.exs
 related:
   - ISS-0224
   - ISS-0419
-  - ISS-0427
+  - REQ-039
+source: >
+  User-requested architecture review of the backend, 2026-09-02
+  (ORCH-adhoc). Timing quoted verbatim from a real full `mix test` run
+  completed in this session (exit 0). Migration count from
+  `ls priv/repo/migrations | wc -l` (69); per-provisioning cost quoted
+  from Letflow.SandboxPool's own moduledoc measurement.
 queue_task_id: 423
 github_issue: 827
+
 status: open
+
+# ── Measurement update, 2026-09-02T18:18:49Z (ORCH-adhoc-20260902-arch-review) ──
+# Added after filing: the causes were measured rather than left as hypothesis.
+# This does NOT change the issue's status (still open) -- it narrows the scope.
+measured_causes:
+  parallel_runner_already_exists: >
+    scripts/test_parallel.sh (REQ-113) already implements N-way partitioned
+    parallel running with correct pool sizing against Postgres max_connections
+    (decision 0009). It was NOT being used for the 1805s baseline. Measured on
+    this 16-core host: TEST_PARALLEL_N=6 completed in 616s wall clock vs 1805s
+    serial -- a 2.9x speedup with ZERO code change. This is the cheapest
+    available win and largely pre-empts the "make tests async" work this issue
+    originally proposed.
+  async_is_defeated_globally: >
+    86 test files already declare `async: true`, yet the serial run reported
+    only 14.8s async of 1805.1s. Root cause identified: Letflow.TenantFixture's
+    provisioned_tenant!/1 calls Sandbox.mode(Letflow.Repo, :auto)
+    (test/support/tenant_fixture.ex:191), which is a GLOBAL per-repo setting,
+    not per-test. 46 test files call it. Letflow.DataCase itself is correct
+    (checkout + {:shared, self()} only when not async, data_case.ex:16-20) --
+    it is the fixture that overrides it. This is ALREADY FILED as ISS-0113
+    (queue task 181, GH#367), which describes the same call as a CORRECTNESS
+    hazard (silent unsandboxed writes) but never connected it to the
+    performance cost. ISS-0113 and this issue want to land together or in a
+    deliberate order.
+  schema_provisioning_dominates: >
+    755 distinct tenant schemas are provisioned and dropped in one full suite
+    run (counted from the run log's LETFLOW_TENANT_FIXTURE teardown lines).
+    Each replays the full 52-entry @tenant_scoped_migration_manifest via
+    Ecto.Migrator.run/4 (lib/letflow/tenant_provisioning.ex:334) -- roughly
+    39,000 migration executions per suite run. At the 411 ms/provisioning
+    figure Letflow.SandboxPool's own moduledoc measures, that is ~310s, ~17%
+    of the serial runtime. A template-schema clone (provision once, then
+    CREATE SCHEMA from a template) would attack this directly and is worth
+    evaluating alongside the SandboxPool-backed approach this issue already
+    proposes.
+  not_a_cause_sleeps: >
+    RULED OUT: only 22 Process.sleep call sites exist across the whole test
+    tree, totalling ~825 ms. Sleep-based waiting is not a meaningful
+    contributor and needs no work.
+discovered_side_effect:
+  - >
+      Running 6-way parallel surfaced exactly one failure not seen serially,
+      a wall-clock-sensitive Lua executor test. Filed separately as ISS-0426
+      (queue task 426, GH#830) -- it must be fixed before parallel running is
+      adopted as the default, or CI will look intermittently red.
+
+# ── Adoption feasibility probe, 2026-09-02T18:28:44Z (ORCH-adhoc-20260902) ──
+# Answers "how would we actually adopt each lever?" with measured numbers.
+# Status unchanged (open); this narrows the design space for CODE-DESIGNER.
+adoption_notes:
+  test_parallel_adoption_point: >
+    The adoption point is Mix.Tasks.Letflow.Check.Test (lib/mix/tasks/
+    letflow.check.test.ex), NOT .github/workflows/ci.yml. CI deliberately
+    runs exactly one `mix letflow.check` step (REQ-136's own stated design:
+    "hence exactly one `run: mix letflow.check` step below, and nothing
+    hand-rolled alongside it"), so switching the runner inside check.test
+    changes local and CI behaviour together with no workflow edit.
+    CONSTRAINT that must survive: check.test does not merely run the suite --
+    it CAPTURES combined stdout+stderr and fails if the ISS-0069 warning
+    substring ("default values for the optional arguments") appears anywhere,
+    and it runs a SECOND `mix test --only wasm_hang` subprocess in a fresh
+    BEAM (ISS-0352). scripts/test_parallel.sh writes each partition's output
+    to its own log file under a mktemp dir, so the substring check must be
+    re-pointed at those N logs rather than at one captured stream, or the
+    ISS-0069 gate silently stops gating.
+  ci_gives_almost_nothing: >
+    IMPORTANT NEGATIVE RESULT: .github/workflows/ci.yml runs on
+    `ubuntu-latest`, which is a 2-vCPU runner. test_parallel.sh derives N
+    from nproc, so N=2 there -- the 2.9x measured on this 16-core
+    workstation does NOT transfer to CI, and ISS-0219/ISS-0222 already
+    record that over-provisioning N relative to the host's CPU/Postgres
+    budget crashes partitions outright at ecto.create/migrate time. Worse,
+    parallel running is exactly what surfaces ISS-0426's wall-clock flake,
+    and a 2-vCPU runner contends harder than this workstation did. Adopting
+    the parallel runner is therefore primarily a LOCAL developer-loop and
+    self-hosted-runner win; treat any CI gain as unproven until measured on
+    the actual runner. Do not assume it speeds up the 12-15 min CI job.
+  template_schema_measured: >
+    MEASURED on the real 52-migration tenant schema (38 tables), same host,
+    letflow_test9:
+      - Ecto.Migrator.run replay:              2259 ms  (52 migrations, ~31 ms each)
+      - CREATE SCHEMA alone:                     36 ms
+      - clone via CREATE TABLE (LIKE ... INCLUDING ALL) x38 tables:
+                                                460 ms  (avg over 5 clones)
+    i.e. a 4.9x improvement per provisioning, ~1.8 s saved per test that
+    provisions a tenant. At 755 provisionings per suite run that is the
+    single largest remaining lever after parallelism.
+    METHOD LIMITATION, stated: an earlier attempt to benchmark a pg_dump
+    based clone measured 44 ms/clone on a TOY 2-table schema and 0 bytes on
+    the real one -- because `mix run` holds everything in an uncommitted
+    transaction even under Sandbox.mode(:auto), so the schema is invisible to
+    any external process (verified: 38 tables visible in-connection, 0 to a
+    separate psql). The 460 ms figure above is the trustworthy one; it was
+    measured entirely in-connection via Repo.query!. A pg_dump/template-database
+    approach may still beat 460 ms but CANNOT be benchmarked from inside a
+    sandboxed connection and was not measured.
+    DESIGN CONSTRAINT this implies: `LIKE ... INCLUDING ALL` copies columns,
+    defaults, indexes, constraints and identity/sequence definitions, but does
+    NOT copy foreign keys between tables (Postgres omits FK constraints from
+    LIKE). A correct implementation must either re-add FKs from the template's
+    catalog, or use a pg_dump/restore-based clone, or accept that the cloned
+    schema is not FK-identical -- the last is NOT acceptable, since
+    assert_schema_complete!/2 and several tests depend on real constraint
+    behaviour. Verify constraint parity against the template explicitly.
+
+# ── Scope split, 2026-09-02T18:34:00Z (ORCH-adhoc-20260902) ──
+# This issue's own acceptance criteria cover parallelisation and
+# `async: true` ONLY. The template-schema lever described in
+# `measured_causes.schema_provisioning_dominates` and
+# `adoption_notes.template_schema_measured` above is NOT covered by any
+# criterion here -- an agent could satisfy every AC on this issue and never
+# touch it. Split out rather than left implicit:
+#
+#   ISS-0427 (queue task 427, GH#831) -- tenant test-schema provisioning
+#   replays 52 migrations (2259 ms) per schema, 755x per run; clone from a
+#   prepared template instead. Carries its own acceptance criteria,
+#   including the foreign-key parity constraint that LIKE ... INCLUDING ALL
+#   does not satisfy.
+#
+# The two are complementary and should be designed together or in a
+# deliberate order: the SandboxPool angle proposed here decides WHEN a
+# schema is available, ISS-0427's template decides HOW CHEAPLY one is made.
+split_out_to:
+  - ISS-0427
+  - ISS-0428
+
+# ── Second scope split, 2026-09-02T18:40:41Z (ORCH-adhoc-20260902) ──
+# `adoption_notes.test_parallel_adoption_point` above describes wiring
+# scripts/test_parallel.sh into Mix.Tasks.Letflow.Check.Test, but no
+# acceptance criterion on THIS issue requires it either -- the same gap
+# that ISS-0427 was split out for. Filed separately:
+#
+#   ISS-0428 (queue task 428, GH#832) -- test_parallel.sh is wired into
+#   docs/agents/workflows/ by REQ-114 but NOT into mix letflow.check,
+#   check.test, mix.exs or ci.yml, so the gate every requirement and CI
+#   actually runs is still plain `mix test`. Carries the ISS-0069
+#   silent-gate-loss hazard and the 2-vCPU CI caveat as its own criteria.
+
+# ── Re-opened for a second pass, 2026-09-05T00:07:55Z (ADHOC-ISS0423-20260905) ──
+# This run was dispatched with a task description implying this file did not
+# exist yet, and with a re-scoped set of acceptance criteria (see the queue
+# task 423 description this run's own handoff carries) that is broader than
+# this record's original split-driven scope: it now explicitly wants a
+# before/after mix test timing quoted from real runs, a stated peak-DBConnection
+# figure if anything goes async, and an explicit reconciliation against decision
+# 0009 -- all framed as if starting fresh. THE FILE ALREADY EXISTED (git blame:
+# ORCH-adhoc-20260902-arch-review filed it, six commits of measurement and two
+# scope-splits followed) and this run's own first pass overwrote it without
+# reading it first -- caught and reverted per HANDOFF_PROTOCOL.md section 1.1
+# (a handoff's factual premises are checkable and may be wrong) before this
+# note was appended, rather than left destroyed.
+#
+# RECONCILED STATE OF THE THREE SPLIT-OUT ISSUES, checked directly against
+# docs/issues/ rather than assumed, since two of the three main levers this
+# record originally deferred have since landed:
+#   ISS-0427 (template-schema clone)          -- status: resolved. Confirmed
+#     live in test/support/tenant_template.ex (Letflow.Test.TenantTemplate),
+#     and Letflow.TenantFixture.provisioned_tenant!/1 now defaults
+#     opts[:template] to :clone, i.e. every existing call site already gets
+#     this speedup without having asked for it by name.
+#   ISS-0428 (wire test_parallel.sh into mix letflow.check) -- status: resolved.
+#   ISS-0426 (parallel-run wall-clock flake)  -- status: resolved.
+#   ISS-0113 (Sandbox.mode(:auto) global leak, async_is_defeated_globally's
+#     named root cause) -- status: STILL OPEN. This is the one item on this
+#     record's own original causal chain that was never closed, and it is the
+#     literal blocker for converting any of TenantFixture's 46 call sites to
+#     async: true safely (a global Sandbox.mode(:auto) makes every other
+#     concurrently-running test's connection unsandboxed the moment one
+#     fixture call sets it, regardless of that other test's own async
+#     declaration).
+#
+# This run treats the above as its Step 1 (ISSUE-FIXER) starting point rather
+# than re-deriving it from scratch, and re-measures the CURRENT baseline
+# (mix test on today's main, post-ISS-0427/0428/0426) fresh rather than
+# quoting the 2026-09-02 numbers above as still current -- ISS-0427 landing
+# changes the provisioning-cost half of this record's own
+# schema_provisioning_dominates finding materially, and ISS-0428 landing
+# means mix letflow.check's own default runner may no longer be plain
+# serial mix test, which the queue task's framing ("30 min gate on every
+# requirement") assumed.
+reopened_for_run: ADHOC-ISS0423-20260905
+reopened_at: "2026-09-05T00:07:55Z"

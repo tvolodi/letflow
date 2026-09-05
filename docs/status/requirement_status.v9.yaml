@@ -550,3 +550,16 @@ history:
       attribution: wasm_hang-class flake, unrelated to this docs-only
       diff). Queue task 422 released status:done, GH#826 best-effort
       closed.
+  - req: REQ-233
+    event: done
+    agent: DOC-UPDATER
+    at: 2026-09-05T06:46:25Z
+    note: >
+      Retired parity-justification phrasing in lib/letflow/engine.ex,
+      lib/letflow/engine/*, engine/wasm/*, engine/lua/* (closes ISS-0424
+      part 2b, queue task 471, GH#917, PR #939,
+      feature/WF02-REQ233-20260905). REVIEWER passed the implementation
+      (handoffs/WF02-REQ233-20260905/step-02d-reviewer.json); ORCH
+      independently confirmed mix compile --warnings-as-errors, mix
+      format --check-formatted, and mix test test/letflow/engine/
+      (977/977 passed) before this status flip.

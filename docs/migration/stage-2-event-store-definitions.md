@@ -7,6 +7,7 @@ REQ-040, REQ-041, REQ-042 (`docs/requirements.yaml`) all done.
 
 ## Scope
 
+PROVENANCE (historical, not current decision authority):
 Port `src/event_store/` (3 files: `store.zig`, `platform.zig`,
 `registry.zig`) and `src/definition/` (16 files, corrected from an
 earlier stale 12-file count — confirmed directly against

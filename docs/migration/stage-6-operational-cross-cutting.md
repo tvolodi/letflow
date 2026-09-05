@@ -123,6 +123,7 @@ reopen or contradict the sentence above; S6's originally-scoped batches
 were and remain complete, and this is an additional, later-discovered
 subsystem in the same stage.
 
+PROVENANCE (historical, not current decision authority):
 **Note added 2026-09-04, after the note above (append, not an edit — same
 convention):** REQ-225 through REQ-231 were drafted, closing ISS-0438
 ("port R-Co's dynamic entity/data-model subsystem into Letflow"). CODE-DESIGNER's
@@ -195,6 +196,7 @@ rendering — actor display names and descriptions, OBS-04); REQ-201
 (Content-addressed artifact store and the REPO-04 canonicaliser); REQ-203
 (Per-tenant artifact activation with atomic groups and history).
 
+PROVENANCE (historical, not current decision authority):
 REQ-200 and REQ-201 were added in the batch's **rework 1**
 (REQ-VALIDATOR gate, 2026-08-29): `src/obs/timeline.zig` and
 `src/obs/alerts.zig` had been left unscoped while this doc asserted
@@ -206,6 +208,7 @@ the REQ-080 route emits), and `alerts.zig` had no external blocker
 because all four of its triggers are produced by this stage's own
 requirements.
 
+PROVENANCE (historical, not current decision authority):
 REQ-202 and REQ-203 were added in **rework 2** (same gate, same defect
 class one subsystem over): the rework-1 exhaustiveness assertion was
 false for `src/repository`, where `artifacts.zig`, `canonicaliser.zig`,
@@ -222,18 +225,21 @@ REQ-202 creates, so it became deferral item 4 below.
 Port the remaining cross-cutting subsystems not covered by earlier
 stages:
 
+PROVENANCE (historical, not current decision authority):
 File counts below were re-verified directly against
 `c:\Users\tvolo\dev\ai-dala\R-Co\` on 2026-08-29 while expanding the
 second batch; a few differ from this doc's original estimates, which
 predated R-Co being reachable from a drafting session.
 
 - `src/scheduler` (6 files) — owned by REQ-185–188
+PROVENANCE (historical, not current decision authority):
 - `src/secrets` (6 files) + `src/secrets/integration` (1) — all seven
   under REQ-189 (the decision) and REQ-190 (the implementation):
   `store.zig`, `crypto.zig`, `reference.zig`, `resolver.zig`,
   `redaction.zig` and `mod.zig`, plus
   `integration/webhook_keys.zig`, whose behaviour is REQ-190's webhook
   HMAC key reconciliation
+PROVENANCE (historical, not current decision authority):
 - `src/obs` (5 files) — observability/metrics — named per file,
   because a range alone previously asserted coverage two of them did
   not have (REQ-VALIDATOR, rework 1): `logger.zig` → REQ-193;
@@ -242,6 +248,7 @@ predated R-Co being reachable from a drafting session.
   (`obs/dlq` equivalent, OBS-05, is REQ-176–178)
 - `src/webhook` (3 files) — REQ-181–184
 - `src/dlq` (1 file) — dead-letter queue — REQ-176–178
+PROVENANCE (historical, not current decision authority):
 - `src/repository` (7 files) — named per file, for the same reason
   `src/obs` is (a bare range here concealed four unowned files until
   REQ-VALIDATOR caught it in rework 2): `service_catalog.zig` →
@@ -250,6 +257,7 @@ predated R-Co being reachable from a drafting session.
   behaviour of its own; `schemas.zig` and `process_module_catalog.zig`
   are deferrals, both listed below.
 - `src/expr` (7 files) — expression evaluation — REQ-197–198
+PROVENANCE (historical, not current decision authority):
 - `src/ordering` (5 files) — all five under REQ-199: `consumer.zig`,
   `cursor.zig`, `sweeper.zig`, `observability.zig` (ORD-04's lag
   measurement; its contention-driven consumer reduction is deferred
@@ -265,19 +273,23 @@ interchangeable or low-effort individually.
 
 Five items, each with a named blocker:
 
+PROVENANCE (historical, not current decision authority):
 1. **`src/scheduler/partition_maintenance.zig` and
    `partition_retention.zig`** — both operate on a partitioned `events`
    table Letflow does not have. Blocked by decision 0003 Decision C's
    partitioning deferral, reaffirmed by ISS-0014's adopted option (a).
    See Decisions. Stated in REQ-188.
+PROVENANCE (historical, not current decision authority):
 2. **`src/expr/benchmark.zig`** — a DSL-13 latency harness (1,000
    warm-up + 10,000 measured iterations against a 10 us target), output
    via debug print, imported by nothing. No production behaviour to
    port. Stated in REQ-197.
+PROVENANCE (historical, not current decision authority):
 3. **`src/repository/process_module_catalog.zig`** (PLC-01/PLC-02) —
    greenfield and unscoped to any Letflow stage; `SUB_PROCESS`
    `module_ref` resolution would need a definitions-side change first.
    Stated in REQ-191.
+PROVENANCE (historical, not current decision authority):
 4. **`src/repository/schemas.zig`** (REPO-05, form-schema indexing) —
    blocked on REQ-202. It is a field-level search/discovery index over
    form artifacts **keyed to `artifact_versions`**, which is exactly the
@@ -286,6 +298,7 @@ Five items, each with a named blocker:
    warns that grepping "form schema" lands here first and "would build
    the wrong mechanism" — that warning stands, and is why this is a
    deferral rather than an oversight.
+PROVENANCE (historical, not current decision authority):
 5. **The repository HTTP surface** (R-Co REPO-11–14,
    `POST /repository/artifacts` and friends) — no consumer contract
    exists to build to, and there is nothing upstream to port: verified
@@ -296,6 +309,7 @@ Five items, each with a named blocker:
    only service-catalog handlers). Letflow has no SPA consumer either.
    Stated in REQ-202.
 
+PROVENANCE (historical, not current decision authority):
 This list is exhaustive, and deliberately falsifiable — that
 falsifiability is the only reason the gaps in items 4–5 were ever
 found. Every other `.zig` file in the subsystems above has a named
@@ -427,6 +441,7 @@ this, **REQ-185, REQ-186, REQ-187 and REQ-188 are all done: S6's
 scheduler half is complete.** S6's secrets half (REQ-189 onward) is a
 separate track and remains open.
 
+PROVENANCE (historical, not current decision authority):
 **Deliberately deferred, blocker named:** `partition_maintenance.zig`
 and `partition_retention.zig` are **not** ported. Both need a
 partitioned `events` table, which Letflow does not have. Decision

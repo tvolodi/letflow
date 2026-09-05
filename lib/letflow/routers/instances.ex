@@ -18,6 +18,7 @@ defmodule Letflow.Routers.Instances do
 
   ## Route ordering — `rebind-pins`/`cancel`/`reconstruct` MUST precede any future `POST /instances/:id`
 
+  PROVENANCE (historical, not current decision authority):
   `Plug.Router` matches in
   declaration order, so a `post "/:id"` declared **above** these three would
   swallow all of them (`src/main.zig:848` documents the same ordering
@@ -56,6 +57,7 @@ defmodule Letflow.Routers.Instances do
 
   ## Reconstruct always write-backs, and has no route-local permission check
 
+  PROVENANCE (historical, not current decision authority):
   `write_back: true` is hardcoded, not a request option — there is no
   caller-facing flag to make it optional. No `endpoint_policy_key/2` clause
   exists for this route (R-Co's `authorization.zig` has no entry for it
@@ -72,6 +74,7 @@ defmodule Letflow.Routers.Instances do
 
   ## Idempotency-key convention — the FIRST in this codebase (REQ-079/080 must adopt it)
 
+  PROVENANCE (historical, not current decision authority):
   `Letflow.Engine.PinRebind.rebind_attrs()` **requires** `:idempotency_key`.
   R-Co's request body has none (`pin_rebind.zig:26-30`), so the route must
   source one, and no other Letflow router reads an idempotency header —
@@ -119,6 +122,7 @@ defmodule Letflow.Routers.Instances do
 
   ## Authorization gap — REQ-131 closes it
 
+  PROVENANCE (historical, not current decision authority):
   This route does not call `Letflow.Api.Authorization.evaluate_access/2`.
   `endpoint_policy_key/2` has no clause for
   `POST /instances/:id/rebind-pins` — there is no existing policy clause to
@@ -313,6 +317,7 @@ defmodule Letflow.Routers.Instances do
   @idempotency_key_header "idempotency-key"
   @max_idempotency_key_bytes 255
 
+  # PROVENANCE (historical, not current decision authority):
   # Letflow.Engine.PinResolver.kind() rendered as the three strings R-Co's
   # parsePinKind accepts (pin_rebind.zig:165-170).
   @pin_kinds ["catalog_entry", "variable_schema", "module"]

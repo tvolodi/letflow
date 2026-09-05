@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Identity do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Identity user-CRUD sub-router (REQ-073), extended by REQ-074 with
   group-management and group-membership routes, mounted at `/identity` by
   `Letflow.Plugs.ApiPipeline` (so full paths under `/api/v1` are
@@ -46,6 +47,7 @@ defmodule Letflow.Routers.Identity do
 
   ## Role registry constraint (REQ-076 AC6)
 
+  PROVENANCE (historical, not current decision authority):
   `POST /roles`'s `name` field accepts any role name, not restricted to a
   closed enum (R-Co's `src/identity/role_registry.zig` validates only the
   same format constraint, never enum membership, confirmed by direct
@@ -60,6 +62,7 @@ defmodule Letflow.Routers.Identity do
 
   ## Group member listing: one served endpoint, not two (REQ-074 AC6)
 
+  PROVENANCE (historical, not current decision authority):
   R-Co defines two member-listing handlers: `handleListGroupMembersArray`
   (bare JSON array, fixed `page_size: 200`, no cursor — the one actually
   wired to `GET /groups/:id/members` at `main.zig:1393`) and
@@ -74,6 +77,7 @@ defmodule Letflow.Routers.Identity do
   divergence shape REQ-073 already made for `list_users/2` replacing R-Co's
   offset pagination.
 
+  PROVENANCE (historical, not current decision authority):
   This port also does **not** carry forward `handleListGroupMembers`'s
   R-Co-only `PLATFORM_ADMIN`-exclusive gate (`identity.zig:533`) — this
   route is gated by the same shared `:GroupsManage` policy as every other
@@ -83,6 +87,7 @@ defmodule Letflow.Routers.Identity do
 
   ## Group member removal: single-member, not R-Co's live bulk-remove-all (REQ-074 AC6)
 
+  PROVENANCE (historical, not current decision authority):
   `handleRemoveGroupMember` (single `(group_id, user_id)` removal,
   `identity.zig:551`) is also unrouted in R-Co's route table —
   `grep -n "handleRemoveGroupMember" src/main.zig` has zero hits. What
@@ -768,6 +773,7 @@ defmodule Letflow.Routers.Identity do
   defp iso8601_or_nil(nil), do: nil
   defp iso8601_or_nil(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
+  # PROVENANCE (historical, not current decision authority):
   # Design §9's ad hoc add-member response shape (`group_id`/`user_id`/
   # `created`, coinciding with `serializeGroupMemberResult`,
   # identity.zig:1017-1023 -- not group_map/1 or user_map/1). OQ-9

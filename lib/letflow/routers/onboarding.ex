@@ -1,5 +1,6 @@
 defmodule Letflow.Routers.Onboarding do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Tenant self-service onboarding sub-router (REQ-076), mounted at `/onboarding`
   directly by `Letflow.Plugs.ApiPipeline` (so full paths under `/api/v1` are
   `/api/v1/onboarding`, `/api/v1/onboarding/:id`). Ports `src/api/routes/onboarding.zig`'s
@@ -56,6 +57,7 @@ defmodule Letflow.Routers.Onboarding do
   scoped to the caller's own tenant) might suggest otherwise. Two independent
   reasons, both confirmed by direct inspection, not assumed:
 
+    PROVENANCE (historical, not current decision authority):
     1. The historical Zig `handleGetOnboardingByHostname` (`onboarding.zig:379-409`)
        opens with the identical `actor.role != .PLATFORM_ADMIN` gate as its two
        siblings — confirmed by direct inspection, there is no pre-authentication

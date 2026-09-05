@@ -4964,7 +4964,7 @@
       "workflow_id": "WF-02",
       "requirement_ids": ["REQ-259"],
       "stage": "S6",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "owned_modules": [
         "docs/migration/stage-1-identity.md",
         "docs/migration/stage-2-event-store-definitions.md",
@@ -4975,11 +4975,11 @@
         "docs/migration/stage-7-simulation-uat-parity.md"
       ],
       "lock_acquired_at": "2026-09-05T00:00:00Z",
-      "lock_released_at": null,
-      "released_lock": false,
-      "last_known_step": "Step 00",
+      "lock_released_at": "2026-09-05T18:20:30Z",
+      "released_lock": true,
+      "last_known_step": "Step Final",
       "backfilled": false,
-      "note": "letflow-ee-orch, queue task 497. Applying REQ-237's .zig provenance-marking convention (chunk 239e2) to the 7 named docs/migration/stage-*.md files only. Disjoint scope from concurrent sibling WF02-REQ258-20260905 (chunk 239e1, docs/migration/decisions/*.md)."
+      "note": "letflow-ee-orch, queue task 497. Applied REQ-237's .zig provenance-marking convention (chunk 239e2) to the 7 named docs/migration/stage-*.md files only -- 51 marker lines covering 148 .zig citation lines. Disjoint scope from concurrent sibling WF02-REQ258-20260905 (chunk 239e1, docs/migration/decisions/*.md). REVIEWER PASSed with no findings (handoffs/WF02-REQ259-20260905/step-2d-reviewer.json). No fourth/novel citation shape found; DOC-UPDATER's list-item paragraph-unit judgment call was independently verified by REVIEWER as a defensible, conservative extension, consistent with ISS-0510/REQ-257 precedent."
     }
   ]
 }

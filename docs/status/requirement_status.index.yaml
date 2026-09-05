@@ -1701,9 +1701,15 @@ volumes:
     path: docs/status/requirement_status.v9.yaml
     status: current
     opened: 2026-09-04
-    entries: 35
+    entries: 36
     note: >
-      Incremented to 35 by WF02-REQ257-20260905 (ORCH)'s own REQ-257
+      Incremented to 36 by WF02-REQ259-20260905 (ORCH)'s own REQ-259
+      done-event append -- `grep -c "^  - req:"
+      docs/status/requirement_status.v9.yaml` = 36 on-disk entries, well
+      under the 1200-line/120000-byte roll ceiling (1011 lines, 59366
+      bytes measured this append). No rebase was needed for this run
+      (main unchanged since branch point).
+      Previously incremented to 35 by WF02-REQ257-20260905 (ORCH)'s own REQ-257
       done-event append -- `grep -c "^  - req:"
       docs/status/requirement_status.v9.yaml` = 35 on-disk entries, no
       rebase conflict on this file (this run's requirements.yaml/registry

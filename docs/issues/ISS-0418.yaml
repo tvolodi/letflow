@@ -275,3 +275,41 @@ partial_fix_20260905: >
   with sequential exhaustion as the leading alternative. Whoever picks this up
   next should gather that history FIRST rather than assuming either the fix
   worked or that more reduction is the answer.
+
+recurrence_2026_09_05: >
+  ANOTHER RECURRENCE, observed live by ORCH during WF02-REQ254-20260905's Step
+  Final CI wait, PR #988 (docs/requirements.yaml PROVENANCE-marker convention
+  applied to REQ-011..REQ-050, plus docs/status/* and handoffs/* bookkeeping --
+  zero lib/ or test/ files, confirmed via `git diff --stat main...HEAD`).
+
+  Two duplicate CI runs on the same commit: push-event run 33976202784 failed
+  the isolated `mix test --only wasm_hang` stage TWICE (its first attempt and
+  its rerun via `gh run rerun --failed`); the concurrent pull_request-event run
+  33976205676 passed clean on its only attempt. Frontend gate passed on both.
+
+  First attempt (job 101333220771): 1 failure --
+  test/letflow/engine/wasm/call_timeout_test.exs:79 (AC2 wasmex
+  interrupt-and-keep-Store claim), ExUnit.TimeoutError after 180000ms, hung in
+  Wasmex.start_link/1 via :proc_lib.sync_start/2 -- same shape as
+  recurrence_2026_09_03's call_timeout_test.exs:78 hit (never reached the call
+  under test). Also observed in this run: two `GenServer.call(...,
+  {:call_function, "hang", ...})` timeout task crashes, and repeated Keycloak
+  metadata-fetch `econnrefused` noise (localhost:8082) during the run --
+  environmental runner noise alongside the documented flake, not shown to be
+  causal on its own.
+
+  Rerun (job 101334890316, same commit): 2 failures this time --
+  test/letflow/engine/wasm/host_api_write_test.exs:461 AND
+  test/letflow/engine/wasm/call_timeout_test.exs:79, both ExUnit.TimeoutError
+  after 180000ms. Both files/lines match this issue's own recurring signature
+  set verbatim (recurrence_2026_09_03, recurrence_2026_09_04,
+  recurrence_2026_09_04_b all cite the same two files at the same lines).
+
+  PR #988's diff independently confirmed to touch zero files under
+  lib/letflow/engine/wasm/, test/letflow/engine/wasm/, or
+  lib/letflow/engine/lua/ -- structurally cleared, cannot be causal. Merged
+  past the red gate on that basis, same documented judgement as every prior
+  recurrence in this issue's history. Taking the recurrence count well past
+  ELEVEN; post-partial-fix (e5d07019) samples continue to show the flake at
+  materially the same rate as the pre-fix baseline, consistent with this
+  issue's own orch_note_20260905 observation above.

@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.SolutionPack do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Solution-pack export and install — the backing context for
   `Letflow.Routers.SolutionPacks` (REQ-078, design
   `lib/letflow/design/req078-supporting-routes.md` §8). Ports the parts of
@@ -8,6 +9,7 @@ defmodule Letflow.Definitions.SolutionPack do
 
   ## This module had to be BUILT, not merely routed to
 
+  PROVENANCE (historical, not current decision authority):
   REQ-078's description called all six of its route modules "a one-to-three
   handler surface over existing context functions". That was true of five of
   them and false of this one: R-Co's two solution-pack handlers are thin only
@@ -23,6 +25,7 @@ defmodule Letflow.Definitions.SolutionPack do
 
   ## What a Letflow pack document carries, and what it drops
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `SolutionPackDocument` (`src/api/routes/solution_packs.zig:153-351`)
   has four content arrays. Letflow supports two:
 
@@ -79,6 +82,7 @@ defmodule Letflow.Definitions.SolutionPack do
   was inserted by that call; any that was not aborted the transaction before a
   result map existed.
 
+  PROVENANCE (historical, not current decision authority):
   Consequence: **re-installing a pack whose `(name, version)` pairs already
   exist in the caller's schema is a 409, not a no-op.** This is a real
   behavioural divergence from R-Co, whose `buildIdempotentResult`
@@ -89,6 +93,7 @@ defmodule Letflow.Definitions.SolutionPack do
   a deliberate non-port, not left as an accident. If idempotent re-install is
   wanted later it needs its own requirement; it is not smuggled in here.
 
+  PROVENANCE (historical, not current decision authority):
   `status` is nonetheless kept as a field rather than dropped, so the response
   shape stays compatible with R-Co's `serializeInstallResult`
   (`solution_packs.zig:426-463`) and a future idempotent-install requirement
@@ -96,6 +101,7 @@ defmodule Letflow.Definitions.SolutionPack do
 
   ## `VARIABLE_SCHEMA_CONFLICT` is a deliberate non-port — and it is unreachable
 
+  PROVENANCE (historical, not current decision authority):
   R-Co pre-checks for a conflicting `variable_schemas` row before install
   (`store.zig:419-441`). Letflow has nothing to check, and the branch could
   not fire if it existed:
@@ -121,13 +127,16 @@ defmodule Letflow.Definitions.SolutionPack do
 
   ## Other deliberate non-ports
 
+    PROVENANCE (historical, not current decision authority):
     * **`409 CATALOG_CONFLICT`** (`solution_packs.zig:135`) — there is no
       catalog to conflict with (S6 service catalog).
+    PROVENANCE (historical, not current decision authority):
     * **`409 TenantInactive`** (`solution_packs.zig:127-134`) —
       `Letflow.Plugs.TenantStatus` runs in `Letflow.Plugs.ApiPipeline`, before
       any sub-router, and rejects an inactive tenant's request with
       `403 tenant_inactive` for every method. A 409 branch here could never
       fire.
+    PROVENANCE (historical, not current decision authority):
     * **`MODULE_NON_EXPORTABLE`** (`solution_packs.zig:83`) — Letflow has no
       process-module packaging (`process_modules.zig`, S5).
     * **503 `PoolExhausted`** — Ecto/DBConnection surfaces pool exhaustion as
@@ -163,6 +172,7 @@ defmodule Letflow.Definitions.SolutionPack do
         }
 
   @typedoc """
+  PROVENANCE (historical, not current decision authority):
   One variable-schema row inside a pack document. `schema_content` is a JSON
   *string* in R-Co's wire format (`solution_packs.zig:299`), not a decoded
   document.
@@ -280,6 +290,7 @@ defmodule Letflow.Definitions.SolutionPack do
   document never reaches the database:
 
     1. `service_catalog_entries` non-empty -> `{:error, :unsupported_pack_section}`.
+    PROVENANCE (historical, not current decision authority):
     2. `bpm_export_schema_version` mismatch ->
        `{:error, {:unknown_schema_version, actual}}` (R-Co:
        `INVALID_PACK_DOCUMENT`, `solution_packs.zig:168-172`).
@@ -300,6 +311,7 @@ defmodule Letflow.Definitions.SolutionPack do
     6. `Letflow.Definitions.create/2` per packed definition, with
        `name: process_key` and `created_by: actor_id`, recording the
        `source_definition_id -> new_definition_id` mapping.
+    PROVENANCE (historical, not current decision authority):
     7. `Letflow.Definitions.register_variable_schemas/3` — **the single shared
        insert path into `variable_schemas`, which REQ-082's import also
        calls** — once per installed definition, with the entries whose
@@ -704,6 +716,7 @@ defmodule Letflow.Definitions.SolutionPack do
     end)
   end
 
+  # PROVENANCE (historical, not current decision authority):
   # Read-only and advisory: no role is created, none is bound, and the
   # checklist never affects whether the install succeeds. This is a NARROWED
   # analogue of R-Co's `checkRoleGate` (`src/solution/store.zig:589`): that

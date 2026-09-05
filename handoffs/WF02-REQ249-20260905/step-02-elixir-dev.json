@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF02-REQ249-20260905-step-02-elixir-dev",
+  "run_id": "WF02-REQ249-20260905",
+  "workflow_id": "WF-02",
+  "step": "2a",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ249-20260905/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "created_at": "2026-09-05T00:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-249"]
+  },
+  "task": {
+    "description": "Apply REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, section 2 placement rule) to chunk 238d2 of REQ-238's original scope: lib/letflow/definitions/{promotion_digest,promotion_plan,promotion_review_store,service_scope_validator,snapshot_store,solution_pack,sub_process_interface}.ex (7 files). For every .zig source-path citation, insert the fixed literal line 'PROVENANCE (historical, not current decision authority):' immediately above the smallest enclosing citation unit (single citation line, whole prose paragraph, numbered/bulleted list item, or whole table -- never per-table-row), without altering any existing citation text. Mechanical apply-step, no code logic change."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "28 PROVENANCE markers inserted across the 7 in-scope files (before: 0 pre-existing markers, confirmed by regex; after: 28, one per citation unit). Every .zig citation's per-file raw-occurrence count is unchanged before/after (promotion_digest:1, promotion_plan:1, promotion_review_store:1, service_scope_validator:11, snapshot_store:1, solution_pack:14, sub_process_interface:5). git diff on all 7 files shows insertions only (28 insertions, 0 deletions, 0 modifications) -- sample-diffed and manually verified citation text is byte-identical in promotion_digest.ex, promotion_plan.ex, promotion_review_store.ex, snapshot_store.ex, service_scope_validator.ex (9 units), solution_pack.ex (13 units), and sub_process_interface.ex (2 units) -- well over the required 6-citation/3-file sample. Divergence-phrase grep ('unlike R-Co|deliberately diverges|diverges from R-Co') across this chunk's 7 files returned zero matches both before and after (byte-identical, both empty). No Elixir/mix toolchain is available in this sandboxed environment (`which mix` failed) -- mix compile --warnings-as-errors and mix test were NOT run; this is stated explicitly rather than assumed to pass, per the no-speculation rule. REVIEWER/TEST-RUNNER should run these on a host with the toolchain before this chunk is considered fully verified.",
+    "before_marker_count": 0,
+    "after_marker_count": 28,
+    "zig_citation_counts_unchanged": true,
+    "divergence_phrase_grep_before_after_identical": true,
+    "toolchain_available": false,
+    "mix_compile_run": false,
+    "mix_test_run": false,
+    "files_changed": [
+      "lib/letflow/definitions/promotion_digest.ex",
+      "lib/letflow/definitions/promotion_plan.ex",
+      "lib/letflow/definitions/promotion_review_store.ex",
+      "lib/letflow/definitions/service_scope_validator.ex",
+      "lib/letflow/definitions/snapshot_store.ex",
+      "lib/letflow/definitions/solution_pack.ex",
+      "lib/letflow/definitions/sub_process_interface.ex"
+    ],
+    "commit": "e05bfb61"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

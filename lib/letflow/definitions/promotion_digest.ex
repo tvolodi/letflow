@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.PromotionDigest do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Computes and verifies a deterministic SHA-256 digest over a
   `Letflow.Definitions.PromotionPlan.t()`'s `entries`. Ported from R-Co's
   `src/definition/promotion_digest.zig` (PRM-03), per

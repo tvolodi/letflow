@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.PromotionReviewStore do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Context module for `promotion_reviews`' state-machine transition functions
   (`insert_review/2`, `approve_review/4`, `reject_review/3`,
   `mark_review_applied/2`, `mark_review_failed/2`, `supersede_review/3`), ported

@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.SubProcessInterface do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Definition-time (SPC-02) half of a `:SUB_PROCESS` node's optional
   `interface` attribute: parses and validates the well-formedness of the
   `inputs`/`outputs` entry lists and each entry's `json_schema`. Ported from
@@ -9,6 +10,7 @@ defmodule Letflow.Definitions.SubProcessInterface do
   `Letflow.Definitions.Graph`'s CHK-18 (`check_sub_process_interface/1`),
   hooked into REQ-029's PD-05 node-attribute validation pass.
 
+  PROVENANCE (historical, not current decision authority):
   This module ports only the SPC-02 (definition-time) half of R-Co's
   `src/definition/sub_process_interface.zig`, per
   `src/design/spc-01-sub-process-interface-contract.md` — the file's own

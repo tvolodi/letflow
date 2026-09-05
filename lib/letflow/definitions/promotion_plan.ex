@@ -1,5 +1,6 @@
 defmodule Letflow.Definitions.PromotionPlan do
   @moduledoc """
+  PROVENANCE (historical, not current decision authority):
   Computes a promotion plan — a diff of one process's ACTIVE definition
   between a source tenant and a target tenant, across 5 dimensions. Ported
   from R-Co's `src/definition/promotion_plan.zig` (PRM-01), per

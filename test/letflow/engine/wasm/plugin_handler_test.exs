@@ -17,6 +17,7 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   alias Letflow.Engine.PluginInterface
   alias Letflow.Engine.PluginInterface.ExecutionContext
   alias Letflow.Engine.Wasm.CallTimeout
+  alias Letflow.Engine.Wasm.InvocationLease
   alias Letflow.Engine.Wasm.PluginHandler
 
   defp context(overrides \\ %{}) do
@@ -152,6 +153,20 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
     @tag :wasm_hang
     @tag timeout: 180_000
     test "surfaces as {:error, reason} naming the outer timeout, no rescue/catch needed" do
+      # ISS-0418 (design iss0418-wasm-concurrency-cap.md §6.2 Shape A): this lease is
+      # TEST-SIDE ONLY -- production dispatch does not acquire one yet (design doc
+      # §0/§7). This test process IS invoke/2,3's own caller, exactly the position
+      # §2/§8.1 specify for a production caller -- never the process
+      # Task.shutdown(:brutal_kill) targets (that always targets the INNER task
+      # invoke/2,3 itself spawns). Released via on_exit/1, not a bare try/after, so a
+      # later assertion failure cannot skip the release and leak a lease slot into
+      # the next test in this file. This dispatch is also now the SOLE surviving
+      # live proof of the outer-timeout-fires-and-no-exit-reaches-the-caller
+      # mechanism, and the sole live source call_timeout_test.exs's own synthetic
+      # replay (§6.3.1 item 2) captures its string from.
+      {:ok, lease} = InvocationLease.try_acquire()
+      on_exit(fn -> InvocationLease.release(lease) end)
+
       hang_context =
         context(%{
           node_config: %{"wasm_fixture" => "wasm_fixtures/req165_hang.wat", "export" => "hang"}
@@ -345,39 +360,21 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
   # handling turns into a clean {:error, reason} for the caller.
   # ---------------------------------------------------------------------
 
-  describe "REQ-170 AC1: configured timeout_ms bounds the caller's wait" do
-    # ISS-0352: genuinely, permanently hangs a wasmex native thread -- see
-    # the tag note above (AC5 describe block).
-    # ISS-0406: raised @tag timeout -- see the mitigation note on the AC5
-    # describe block above.
-    @tag :wasm_hang
-    @tag timeout: 180_000
-    test "returns {:error, reason} within the configured timeout_ms, not the outer default" do
-      hang_context =
-        context(%{
-          node_config: %{
-            "wasm_fixture" => "wasm_fixtures/req170_hang.wat",
-            "export" => "hang",
-            "timeout_ms" => 500
-          }
-        })
-
-      {elapsed_us, result} =
-        :timer.tc(fn -> PluginInterface.invoke(PluginHandler, hang_context) end)
-
-      elapsed_ms = System.convert_time_unit(elapsed_us, :microsecond, :millisecond)
-
-      assert {:error, reason} = result
-      assert is_binary(reason)
-      # Generous upper bound: comfortably bounded by the configured 500ms,
-      # nowhere near PluginInterface's own outer 30_000ms default.
-      assert elapsed_ms < 10_000,
-             "expected the call to be bounded by the configured 500ms timeout_ms, " <>
-               "not the outer 30_000ms default; took #{elapsed_ms}ms"
-
-      assert CallTimeout.classify(result) == :wall_clock_timeout
-    end
-  end
+  # ---------------------------------------------------------------------
+  # REQ-170 AC1: DELETED (ISS-0418, design iss0418-wasm-concurrency-cap.md
+  # §6.3.1 item 1) -- merged into REQ-170 AC4's own first (300ms) dispatch below,
+  # one of the two dispatches removed from the isolated wasm_hang subprocess
+  # (8 -> 6, zero coverage loss). AC1's own four assertions ({:error, reason},
+  # is_binary(reason), the absolute elapsed_ms < 10_000 bound, and
+  # CallTimeout.classify(result) == :wall_clock_timeout) were checked against
+  # this describe block's own req170_hang.wat/PluginInterface.invoke/2 dispatch
+  # at 500ms timeout_ms. AC4's own first dispatch (unchanged fixture, unchanged
+  # call shape, only the configured timeout_ms differs -- 300ms vs 500ms, both
+  # comfortably inside the same < 10_000ms loose bound, design req170 §5.5's own
+  # "loose tolerance, not exact millisecond values" discipline) is structurally
+  # identical in every respect these assertions test, so they are ADDED to
+  # AC4's own first-dispatch assertions below rather than re-dispatched here.
+  # ---------------------------------------------------------------------
 
   # ---------------------------------------------------------------------
   # REQ-170 AC3: the outer PluginInterface.invoke/3 supervised-task
@@ -404,6 +401,20 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
             "timeout_ms" => 60_000
           }
         })
+
+      # ISS-0418 (design iss0418-wasm-concurrency-cap.md §6.2 Shape B): this test
+      # does not call invoke/2,3 at all -- it reimplements invoke/2,3's own
+      # async_nolink/yield/shutdown algorithm inline, so THIS test process plays
+      # exactly the role invoke/2,3 plays in production: the process that calls
+      # Task.shutdown(:brutal_kill), never the process targeted by it. The lease
+      # is TEST-SIDE ONLY (production dispatch does not acquire one yet, design
+      # doc §0/§7); acquired before Task.Supervisor.async_nolink/2 is called and
+      # released via on_exit/1 (guaranteed even if a later assertion raises),
+      # immediately after -- not around -- the existing Task.shutdown(:brutal_kill)
+      # call below, mirroring Shape A/C's placement outside anything
+      # Task.shutdown(:brutal_kill) targets.
+      {:ok, lease} = InvocationLease.try_acquire()
+      on_exit(fn -> InvocationLease.release(lease) end)
 
       # Mirrors PluginInterface.invoke/3's own async_nolink/yield/shutdown
       # shape directly so the dispatched task's pid is observable to this
@@ -482,8 +493,21 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
         })
       end
 
+      # ISS-0418 (design iss0418-wasm-concurrency-cap.md §6.2 Shape A): this lease
+      # is TEST-SIDE ONLY -- production dispatch does not acquire one yet (design
+      # doc §0/§7). Acquired and released ONCE per dispatch (not once around
+      # both) -- each call is an independent admission event, and the second call
+      # must not be admitted until the first's lease (and, more importantly, the
+      # first's own outer bound) has actually returned. Released via on_exit/1
+      # (guaranteed even if a later assertion raises).
+      {:ok, lease_short} = InvocationLease.try_acquire()
+      on_exit(fn -> InvocationLease.release(lease_short) end)
+
       {short_elapsed_us, short_result} =
         :timer.tc(fn -> PluginInterface.invoke(PluginHandler, build_context.(300)) end)
+
+      {:ok, lease_long} = InvocationLease.try_acquire()
+      on_exit(fn -> InvocationLease.release(lease_long) end)
 
       {long_elapsed_us, long_result} =
         :timer.tc(fn -> PluginInterface.invoke(PluginHandler, build_context.(7_000)) end)
@@ -493,6 +517,22 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
 
       short_elapsed_ms = System.convert_time_unit(short_elapsed_us, :microsecond, :millisecond)
       long_elapsed_ms = System.convert_time_unit(long_elapsed_us, :microsecond, :millisecond)
+
+      # REQ-170 AC1 (deleted, ISS-0418 design doc §6.3.1 item 1): these three
+      # assertions did NOT previously exist on this dispatch -- they are ADDED
+      # here, checked against this dispatch's own already-captured
+      # short_result/short_elapsed_ms, per §6.2's own explicit merge instruction.
+      # AC1's own claim (inner bound fires, elapsed time reflects the configured
+      # value not the outer default, classify/1 recognizes it) is exactly as true
+      # of this 300ms dispatch as it was of AC1's own former 500ms dispatch.
+      assert {:error, short_reason} = short_result
+      assert is_binary(short_reason)
+
+      assert short_elapsed_ms < 10_000,
+             "expected the call to be bounded by the configured 300ms timeout_ms, " <>
+               "not the outer 30_000ms default; took #{short_elapsed_ms}ms"
+
+      assert CallTimeout.classify(short_result) == :wall_clock_timeout
 
       assert short_elapsed_ms < long_elapsed_ms,
              "expected the 300ms-configured call (#{short_elapsed_ms}ms) to bind sooner than " <>

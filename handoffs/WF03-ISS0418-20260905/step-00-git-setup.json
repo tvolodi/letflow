@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF03-ISS0418-20260905-step-00",
+  "run_id": "WF03-ISS0418-20260905",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0418-20260905/step-00-git-setup.json",
+  "created_at": "2026-09-04T22:31:26Z",
+  "started_at": "2026-09-04T22:31:26Z",
+  "completed_at": "2026-09-04T22:40:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0418"],
+    "artifacts_in": [
+      "docs/issues/ISS-0418.yaml",
+      "docs/issues/ISS-0352.yaml",
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "lib/letflow/engine/wasm/call_timeout.ex",
+      "docs/migration/decisions/0014-test-parallelism.md"
+    ],
+    "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
+    "owned_modules": ["lib/letflow/engine/wasm/"]
+  },
+  "task": {
+    "description": "Git setup for ISS-0418 (MAJOR): implement OQ-5's operator-configurable cap on concurrently in-flight WASM invocations, so the isolated `mix test --only wasm_hang` subprocess cannot exhaust wasmex's shared node-global Tokio worker-thread pool.\n\nSELECTED because ORCH measured the CI gate at a 44% pass rate (14 failures / 11 successes across the last 25 runs) with EVERY classifiable failure being this exact flake -- not one was a real defect. Reliability, not speed, is now the binding constraint on this pipeline.\n\nSIZING VERDICT (ORCHESTRATOR.md section 10): FAILS -- full WF-03 chain. This touches lib/letflow/engine/wasm/ (production plugin-execution code, a tenant-data path), requires a real design decision about where and how to bound concurrency, and its own issue record says the fix has been deferred across eight-plus recurrences precisely because it is not mechanical.\n\nSTALE-LOCK RECOVERY, disclosed: queue task 418 was LOCKED BY A DIFFERENT AGENT when ORCH first tried to claim it, and ORCH correctly declined to force it, reporting to the user instead. The user then observed from their own session visibility that nobody was actually working it. ORCH re-checked with evidence rather than taking that at face value: origin/feature/WF03-ISS0418-20260902 is THREE DAYS STALE, carries exactly ONE commit (a Step 00 git-setup), is not merged, and has NO registry entry and NO handoffs/ directory -- i.e. the run died immediately after claiming the lock and recorded nothing. Two apparent signs of life were false positives ORCH checked and dismissed: the only recent commit mentioning 0418 was ORCH'S OWN log entry about the lock, and the only 0418 branch is the stale one. On that evidence ORCH force-released the abandoned lock and claimed it, per the standing rule that disposition of a dead sibling session is ORCH's discretion provided it is reported."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Queue task 418 force-released (stale) then locked by letflow-2-orch, GH#816. Branch fix/ISS-0418-wasm-concurrency-cap-20260905 created from main 2985e510 and pushed.\n\nTHE DEFECT IS WORSE THAN A TEST FLAKE, and downstream agents should size it accordingly. Per lib/letflow/design/req170-wasm-wallclock-timeout.md, live-verified against wasmex's own Rust source (deps/wasmex/native/wasmex/src/{instance,store_executor,engine}.rs): the interrupt path EXISTS in wasmex (with_deadline, epoch ticking, store.epoch_deadline_callback) but NEVER FIRES for a genuinely hanging guest, and once dispatched to wasmex's internal node-global Tokio worker pool the guest 'runs forever with no BEAM-side mechanism able to reach or cancel it -- not a process kill, not a link death, not dropping the owning resource.' The design calls this 'a permanently leaked, uncancellable native compute resource per timed-out invocation', and notes enough of them exhaust a pool SHARED BY EVERY TENANT'S WASM CALLS ON THE NODE. So this is a production availability defect that currently manifests as a CI flake -- the cap is not test tooling.\n\nWHAT call_timeout.ex ALREADY DOES, so the design does not re-litigate it: it bounds the CALLER via an outer GenServer.call timeout, deliberately, because wasmex's own inner timeout does not interrupt the guest. That is the correct existing half. What is missing is any bound on HOW MANY such abandoned native executions can accumulate concurrently.\n\nMEASURED FREQUENCY DATA already on the issue from ORCH's ISS-0428 run, for whoever sizes the fix: on PR #899 alone the isolated wasm_hang subprocess failed 3 of 6 attempts (5/7, 5/7, 6/7) while the 3223-test parallel suite passed 6 of 6 in the same runs. The asymmetry is the diagnosis -- the flake lives in the isolated subprocess, not the suite.\n\nENVIRONMENT NOTE: wasmex ~> 0.15.1 (mix.exs:67). The WASM surface is lib/letflow/engine/wasm/{call_timeout,capability_gate,host_api,memory_guard,module_registry,module_version_registry,plugin_handler,resource_limits}.ex.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

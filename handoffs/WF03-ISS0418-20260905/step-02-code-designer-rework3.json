@@ -1,0 +1,52 @@
+{
+  "handoff_id": "WF03-ISS0418-20260905-step-02-rework3",
+  "run_id": "WF03-ISS0418-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0418-20260905/step-02-code-designer-rework3.json",
+  "created_at": "2026-09-04T23:49:55Z",
+  "started_at": "2026-09-04T23:49:55Z",
+  "completed_at": "2026-09-04T23:49:55Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator-regate.json",
+      "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
+      "docs/issues/ISS-0418.yaml",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/host_api_write_test.exs",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
+  },
+  "task": {
+    "description": "Rework 3 of 3 (FINAL iteration, max_rework: 3) for WF-03 Step 2 (design) of ISS-0418, per CODE-DESIGN-VALIDATOR's second FAIL at step-02b-regate. BLOCKER: this design wires 8 sequential, permanently-unrecoverable native leaks into one isolated wasm_hang subprocess, but ISS-0418's own measured real CI runner (GitHub ubuntu-latest, N=4 vCPU, confirmed from a real CI log, not inferred) cannot hold 8 leaks regardless of how well concurrent admission is serialized -- dispatches #5-8 are predicted to hang against an already-exhausted pool, the same failure class ISS-0418 exists to fix, just relocated from a concurrent to a sequential trigger. Gate named two levers (reduce footprint to <= runner pool size, or measure the real pool size rather than inferring it) and invited a genuinely better third case; a further FAIL forces ORCH into escalation rather than a fourth cycle."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/iss0418-wasm-concurrency-cap.md updated in place. I judged the gate's finding correct on inspection (8 leaks cannot fit a ~4-slot pool regardless of sequencing, and 'no past recurrence shows this shape' is exactly what you'd expect to see before the concurrent-contention masking failure is removed, not evidence of safety) and did not push back a third time -- this is a real arithmetic problem, not a disagreement about scope or framing like the prior two rounds.\n\nCHOSE A COMBINATION OF BOTH OFFERED LEVERS, not a single one, because working lever (a) through honestly could not reach the runner's actual measured pool size (4) without deleting real coverage, and the gate's own instruction was explicit that reduction must not weaken what the tests verify.\n\n=== LEVER (a) APPLIED CONCRETELY: 8 dispatches -> 6, zero coverage lost ===\n\nRe-examined all 8 dispatches (re-confirmed the real 7-tagged-tests/8-dispatches count directly against source, matching the gate's own re-derivation) against two questions: does another dispatch already produce everything this one's assertions need, and can this dispatch be converted to a synthetic captured-string replay (the exact lever this same test file's own AC5 test already uses once) without losing the property under test.\n\nFound two genuine reductions:\n  1. plugin_handler_test.exs:353 (AC1, inner-bound-fires, 1 dispatch) MERGES into plugin_handler_test.exs:472 (AC4)'s own EXISTING first (300ms) dispatch. AC1's four assertions ({:error, reason}, is_binary(reason), elapsed_ms < 10_000, classify == :wall_clock_timeout) are all checkable against data AC4's own 300ms call already produces as a byproduct -- both dispatch req170_hang.wat through PluginInterface.invoke/2 with only an inner timeout_ms configured, structurally identical in every respect the assertions test. AC1's own test body is deleted; a comment at AC4's call site documents what merged and why, mirroring AC4's own existing 3-dispatch-to-2-dispatch reduction precedent comment.\n  2. call_timeout_test.exs:155 (AC5 sibling, 1 dispatch, proving classify/1 recognizes the OUTER Task.yield timeout's reason-string shape) CONVERTS to a synthetic captured-string replay. This test's claim is a pure string-pattern-match fact about classify/1, not live timing -- and the exact live mechanism it depends on (outer bound firing, producing that literal reason string) is ALREADY proven live by two other dispatches in this rework's own wiring (plugin_handler_test.exs:152 AC5, and plugin_handler_test.exs:393 AC3). Capturing the string one of those already produces and asserting classify/1 against it is the SAME technique this very file already uses once (its own line ~113 test, captured from 'one real run' per its own comment) -- not a new invention, applied a second time to the shape that duplicates coverage.\nThe remaining 6 dispatches (AC2's 2, host_api_write's 1, AC3's 1, AC5's 1, AC4's 2) were each checked and found genuinely irreducible -- reasons given per-dispatch in the design (section 6.3.1 item 3): AC2 is the canonical live-verification test for wasmex's false interrupt claim and cannot be replayed without defeating its purpose; host_api_write tests a distinct module (HostApi write-staging) with no duplicate; AC3 is the sole proof of outer-bound-independent-of-a-LONGER-inner-bound and the only Shape B dispatch; AC5 (post-conversion) is now the sole live source of the outer-timeout-safety mechanism and cannot itself convert without leaving zero live proof of it; AC4's 2 dispatches are an irreducible ordering comparison, per that test's own already-documented history.\n\n=== LEVER (b) APPLIED ON TOP: the 'closes the flake' claim is now measurement-gated, not asserted ===\n\n6 is still not proven to fit ISS-0418's own measured runner (N=4 vCPU is a vCPU count, not a confirmed available_parallelism() measurement INSIDE a real wasm_hang subprocess on that exact runner -- and section 5.5 already states no BEAM API reads that quantity directly, so a second unverified analogy would repeat exactly the mistake the gate is right to distrust). New section 6.3.1's closing subsection makes this explicit and gating: before this design's implementation may be described as having closed ISS-0418's CI flake, ELIXIR-DEV/TEST-RUNNER must measure available_parallelism() (or an equivalent proxy, e.g. a diagnostic script mirroring test_parallel.sh's own existing 'N=4 (source: nproc)' line) inside an actual mix test --only wasm_hang-shaped job on ubuntu-latest, and confirm it exceeds 6. Both outcomes are stated explicitly rather than only the favorable one: if it exceeds 6, the closes-the-flake claim may be made WITH the measured number cited as evidence; if it does not, TEST-RUNNER/ELIXIR-DEV must escalate rather than merge silently, choosing between pushing reduction further (at a now-explicit coverage cost, since this design's own analysis found no further reduction without one) or reverting to the rework-1 fallback (ship the primitive honestly unproven against the flake, let ORCH decide). This design does not pre-choose between those two for ORCH -- new OQ-E names this as the one thing that cannot be decided without the measurement existing first.\n\n=== SECTIONS UPDATED FOR CONSISTENCY (not just section 6.3.1 in isolation) ===\n\nSection 0's headline (the CI-fix bullet) rewritten to state the reduction, the measurement gate, and that the claim is conditional rather than settled by this design alone. Section 6's own title and opening rework-3 note. Section 6.1's table: added a 'disposition after reduction' column showing which two rows were removed/merged and why, with an AS-FOUND (8) vs AFTER-REDUCTION (6) total stated explicitly so neither count is mistaken for the other. Section 6.2's Shape A description and the row-7 lease-acquisition note updated to reflect AC1's merge. Section 6.6's honesty clause extended to require TEST-RUNNER's own verification report record the measured pool-size number, not just a green test run. Section 9: OQ-D marked resolved-then-refined: new OQ-E states the undecided ≤6 contingency explicitly. Section 10's traceability row and section 11's file-touch inventory rewritten to reflect that call_timeout_test.exs and plugin_handler_test.exs now involve a genuine test-body deletion/conversion, not purely additive wiring -- both documented as coverage-neutral per section 6.3.1, not silently glossed as 'just wiring' anymore.\n\nNo production code touched. No implementation code in the design doc -- the AC1/AC4 merge and the AC5-sibling synthetic-replay conversion are both specified in prose (which assertions move where, which string gets captured from which live dispatch) rather than as literal Elixir bodies, consistent with this design doc's existing convention.",
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a fresh, final Step 2b gate pass. This is the last rework iteration -- if this specific BLOCKER (8-vs-4 arithmetic) is genuinely resolved on re-derivation (verify: does 6 actually reduce from 8 with the two named changes, re-check that AC1's merge and the AC5-sibling conversion do not silently drop a real assertion, and confirm the measurement-gate language in sections 0/6.3.1/6.6/9-OQ-E is consistent and does not overclaim that 6 is already known to be sufficient), the design should PASS; if a genuinely new defect is found, ORCH's own escalation path (docs/agents/ORCHESTRATOR.md §5) applies rather than a fourth rework, per the gate's own stated ceiling.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
+      "handoffs/WF03-ISS0418-20260905/step-02-code-designer-rework3.json"
+    ]
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

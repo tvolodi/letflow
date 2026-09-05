@@ -1,0 +1,54 @@
+{
+  "handoff_id": "WF03-ISS0418-20260905-step-02-rework1",
+  "run_id": "WF03-ISS0418-20260905",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0418-20260905/step-02-code-designer-rework1.json",
+  "created_at": "2026-09-04T23:25:30Z",
+  "started_at": "2026-09-04T23:25:30Z",
+  "completed_at": "2026-09-04T23:25:30Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [
+      "REQ-170"
+    ],
+    "issue_ids": [
+      "ISS-0418",
+      "ISS-0352",
+      "ISS-0437"
+    ],
+    "artifacts_in": [
+      "handoffs/WF03-ISS0418-20260905/step-02b-code-design-validator.json",
+      "handoffs/WF03-ISS0418-20260905/step-01-issue-fixer-diagnosis.json",
+      "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
+      "lib/letflow/admission.ex",
+      "lib/letflow/sandbox_pool.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/host_api_write_test.exs"
+    ],
+    "branch_name": "fix/ISS-0418-wasm-concurrency-cap-20260905",
+    "owned_modules": [
+      "lib/letflow/engine/wasm/"
+    ]
+  },
+  "task": {
+    "description": "Rework 1 of 3 for WF-03 Step 2 (design) of ISS-0418, per CODE-DESIGN-VALIDATOR's FAIL at step-02b. Fix the BLOCKER (false wasm_hang-determinism claim vs. the design's own §1/§8.1 scope boundary) and the MAJOR (§5.5 default-cap formula non-protective on the design's own worked example), plus a MINOR SandboxPool line-number citation fix."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "lib/letflow/design/iss0418-wasm-concurrency-cap.md updated in place. All three findings addressed; the BLOCKER's route decision is the headline item.\n\n=== BLOCKER: ROUTE (b) TAKEN -- kept the §1/§8.1 scope boundary, deleted the false determinism claim ===\n\nAccepted the validator's finding in full, without qualification: every real :wasm_hang-tagged test (plugin_handler_test.exs:152,353,393,472; call_timeout_test.exs:76,155; host_api_write_test.exs:458) calls PluginInterface.invoke/2,3 or PluginHandler.handle_node/1 directly from the test process, and this design's own §1/§8.1 forbid modifying any of those three, deferring the only specified lease-acquiring call site to a future, unbuilt dispatch-integration requirement (OQ-C). Nothing this design builds is ever called from the flaking tests' actual call graph, so a cap:1 test override (as the prior revision proposed) gates nothing. That claim is retracted, not softened -- rewritten §6 states plainly, in its own heading, that 'this design, as scoped, does NOT fix ISS-0418's CI flake,' and §0's headline bullet list was corrected to match (it previously repeated the same claim independently and would have survived a §6-only fix unnoticed).\n\nWHY ROUTE (b) OVER ROUTE (a): route (a) (widen scope to touch invoke/2,3/PluginHandler/handle_node/1, or rewrite all seven wasm_hang tests to call a new wrapper) re-opens a scope boundary this design deliberately drew around REQ-057/165/170's own shipped, gate-approved algorithm -- ISSUE-FIXER's own diagnosis characterized the missing piece as 'no bound on concurrent accumulation,' which is what the primitive (§5) answers, not 'the tests need reshaping.' Route (b) preserves that boundary and states the resulting limitation honestly instead.\n\nNOT SILENTLY DECIDED, SURFACED TO ORCH INSTEAD (new §6.4): a narrower third option exists between the gate's two -- rewrite ONLY the wasm_hang tests to acquire/release a lease around their own existing direct invoke/2,3 calls (reusing §2's crash-safety reasoning verbatim, since a test process is never the process Task.shutdown(:brutal_kill) targets, same as a real future caller). This would close the CI flake immediately without waiting for OQ-C's production call site, at the cost of leaving production WASM dispatch itself uncapped until that caller exists. This is a real prioritization call ORCH is better positioned to make than CODE-DESIGNER unilaterally re-widening scope after a gate FAIL (ORCH selected this issue specifically because of the 44% CI pass rate) -- so it is named explicitly in §6.4/OQ-D as an open, undecided question for ORCH, not chosen silently in either direction.\n\nWHAT THIS DESIGN DOES DELIVER, stated affirmatively (new §6.1): a correctly-specified admission primitive whose brutal-kill-safe placement passed the gate's own independent re-derivation; a contract a future dispatch-integration requirement (OQ-C, most plausibly REQ-056) must follow without re-deriving the hazard; and full unit coverage of the primitive itself, provable today with zero dependency on wasmex or on the future call site existing. Nothing else -- explicitly no change to the wasm_hang tests' pass/fail behavior and no claim of one.\n\n=== MAJOR: §5.5 DEFAULT-CAP FORMULA FIXED ===\n\nAccepted the validator's arithmetic and its correction of my own prior citation (available_parallelism()=8 was REQ-170's ORIGINAL design-session host's figure, not this rework's host -- re-measured THIS host directly this session: nproc=16, System.schedulers_online()=16, matching the validator's own measurement). The prior formula max(schedulers_online()-2,1) gave 14 against REQ-170's cited pool of 8 -- a proven no-op on the design's own worked example, exactly the failure mode the same section warns against one paragraph earlier.\n\nFIX: replaced the fixed-subtraction formula with a fixed-fraction one, max(div(System.schedulers_online(),2),1), which degrades proportionally rather than becoming a no-op as the schedulers_online()/available_parallelism() divergence widens. Checked against all three known data points: REQ-170's divergent host (16 vs 8) now gives div(16,2)=8, exactly AT (not proven strictly below) the real pool -- stated explicitly as a boundary case, not oversold as fixed; this rework's own convergent host (16 vs 16) gives 8, comfortably below; a small CI runner (~4 vCPU, ISS-0418's own recurrence evidence) gives 2, below ~4. Addressed the no-BEAM-API-for-native-pool-size problem head-on per the validator's explicit instruction: stated plainly that no :erlang.system_info/1-based or other in-BEAM equivalent of available_parallelism() exists anywhere in this codebase or wasmex's own surface, that the formula is therefore a heuristic over an unmeasurable quantity and not a guarantee, and that an operator running BEAM with scheduler count set (+S/+SDcpu) to significantly exceed real logical core count -- the specific divergence this default cannot detect -- must override cap manually using an OS-level measurement (e.g. nproc) outside the BEAM.\n\n=== MINOR: SandboxPool citations corrected ===\n\nRead sandbox_pool.ex directly again: Process.monitor(owner_pid) in reserve_slot/2 is at line 566 (not 567 as previously cited); the demonitor+flush inside the {ref, result} handle_info/2 clause is at line 407 (not 406). Both corrected in place at their two citation sites.\n\nNo production code touched. No implementation code in the design doc. Design doc is the only file modified besides this handoff.",
+    "issues": [],
+    "next_action": "Route to CODE-DESIGN-VALIDATOR for a fresh Step 2b gate pass over the revised design, in particular re-reading §0/§6/§6.1-§6.4/§9 OQ-D/§11 for internal consistency with the retracted determinism claim, and §5.5 for the corrected default-cap formula and its boundary-case honesty. ORCH should also be made aware, via this handoff surfacing it, that §6.4/OQ-D leaves an explicit, undecided prioritization question (wait for OQ-C's production integration vs. a narrower interim test-only wiring) that this design does not resolve on its own authority.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0418-wasm-concurrency-cap.md",
+      "handoffs/WF03-ISS0418-20260905/step-02-code-designer-rework1.json"
+    ]
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

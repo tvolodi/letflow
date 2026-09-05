@@ -4,7 +4,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   `Letflow.Application`'s own top-level children list is exactly the 3 new
   supervisor modules (none of the original 20 leaf children remain direct
   children of `Letflow.Supervisor`), and that
-  `Letflow.Supervisor.Infrastructure` owns the 17 expected children, in
+  `Letflow.Supervisor.Infrastructure` owns the 18 expected children, in
   order, including the ISS-0224 SandboxPool.TaskSupervisor-before-SandboxPool
   ordering.
 
@@ -13,7 +13,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
   `Letflow.Supervisor.Pollers` and before `Letflow.Supervisor.Http` -- the
   top-level children-count assertion below is updated to match; nothing
   else in this module changes, since `PollersBreaker` does not touch
-  `Letflow.Supervisor.Infrastructure`'s own 17-child list or ordering.
+  `Letflow.Supervisor.Infrastructure`'s own 18-child list or ordering.
 
   Read-only against the already-running, application-supervised singletons
   -- no restart, no config mutation, safe to run `async: true`.
@@ -50,7 +50,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
     refute Letflow.Scheduler.Poller in ids
   end
 
-  test "Letflow.Supervisor.Infrastructure owns the 17 expected children, in order" do
+  test "Letflow.Supervisor.Infrastructure owns the 18 expected children, in order" do
     children = Supervisor.which_children(Letflow.Supervisor.Infrastructure)
 
     ids =
@@ -69,6 +69,10 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Letflow.SandboxPool.TaskSupervisor,
              Letflow.SandboxPool,
              Letflow.Engine.PluginTaskSupervisor,
+             # ISS-0418: WASM invocation concurrency cap. No ordering dependency --
+             # it holds only its own lease state and is not consulted by any
+             # sibling's start_link.
+             Letflow.Engine.Wasm.InvocationLease,
              Letflow.Engine.PluginRegistry,
              Letflow.Engine.Lua.TaskSupervisor,
              Letflow.Engine.Wasm.ModuleRegistryTaskSupervisor,
@@ -78,7 +82,7 @@ defmodule Letflow.Supervisor.InfrastructureTest do
              Letflow.Obs.Alerts.TaskSupervisor
            ]
 
-    assert length(ids) == 17
+    assert length(ids) == 18
   end
 
   test "ISS-0224: SandboxPool.TaskSupervisor precedes SandboxPool" do

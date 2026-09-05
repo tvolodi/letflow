@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0389-20260905-step-03c",
+  "run_id": "WF03-ISS0389-20260905",
+  "workflow_id": "WF-03",
+  "step": "03c",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0389-20260905/step-03c-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T06:05:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-208", "REQ-209"],
+    "issue_ids": ["ISS-0389"],
+    "related_handoff_ids": ["WF03-ISS0389-20260905-step-03", "WF03-ISS0389-20260905-step-03b"],
+    "artifacts_in": [
+      "lib/letflow/scheduler.ex",
+      "lib/letflow/routers/instances.ex",
+      "lib/letflow/api/authorization.ex"
+    ],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0389-20260905",
+    "base_commit": "b5fe974c",
+    "head_commit": "280ce695"
+  },
+  "task": {
+    "description": "WF-03 Step 2d: REVIEWER idiom/scope/decision-record gate on ISS-0389's advance-timer route, resolve_advance_target/3, and InstancesAdvanceTimer permission, after SECURITY-REVIEWER PASS."
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "resolve_advance_target/3 is idiomatic: two guarded clauses (nil vs binary timer_id) dispatching on pattern match, Ecto.Query pipe with where/Repo.all/Repo.one scoped by prefix: tenant_schema, single-pass case on pending_timers list length (0/1/2+), and the explicit-timer_id branch folds not-found/not-pending/wrong-instance into one {:error, :no_pending_timer} via a struct pattern match with pinned ^instance_id -- exactly the design's spec, no case-do-hand-rolled-state-machine crutch (there is no state machine here to begin with, just a lookup). Router handler follows the router's own `with` idiom used elsewhere in instances.ex, issues zero Repo.* calls (INV-RT-1 respected), and delegates the actual mutation to the pre-existing fire_timer/2 untouched. No supervision concerns -- this is a stateless query/route addition, not a new process. No scope creep: exactly the 5 authorization.ex edit sites, the 1 route, and the 1 context function the design specified; no extra abstractions, no premature generalization. Decision-record consistency confirmed: :InstancesAdvanceTimer is wired through the full permission/endpoint_policy_key/required_permission/role_allows? path with no @allowlist entry, correctly avoiding the rebind-pins/reconstruct ad-hoc pattern instances.ex's own moduledoc rules out as closed -- verified by reading the actual diff, not just ELIXIR-DEV's claim. Two 'extra' stale-test fixes are both genuinely necessitated, not scope creep: authorization_test.exs's permissions/0 test asserted an exact, closed list -- adding any new permission mechanically breaks it regardless of which requirement adds the permission, so updating the literal list to append :InstancesAdvanceTimer is a required consequence, not a design choice. scheduler_test.exs's REQ-186-era guard asserted zero lib/letflow/api|routers files reference the scheduler -- true and correct until this issue's own design deliberately adds the first such reference; removing it with a SUPERSEDED comment (kept the narrower still-valid guard on scheduler modules not defining routes) is correct, matches the REQ-212 precedent this file already set, and does not hide any coverage the design didn't already retire. The req206_swiftroute_test.exs absence-assertion removal is correct: read the prior test body -- it did a literal grep for 'advance-timer'/'advance_timer' strings in router.ex/instances.ex and asserted their absence as machine-verifiable evidence for the file's own moduledoc UNIMPLEMENTED finding #1 (this exact issue, ISS-0389). That finding is now resolved by this diff, so the assertion would fail correctly (not as a regression) the moment this route exists; removing it with a SUPERSEDED comment matches the REQ-212 attachments precedent in the same file. No coverage loss: the scenario's actual behavioral assertions (step 2 exercising the real route) are TEST-DESIGNER's follow-up per AC5/AC10, not something this removal was standing in for. On the full-suite gap: the change's blast radius is one new route, one new context function with two Repo calls scoped identically to every existing handler in this router, and one new permission threaded through existing generic authorization plumbing -- no shared/global state touched, no changes to any other router, engine, or scheduler behavior. The 91+45 targeted tests cover every file this diff touches plus the enforcement/role-realm suites that walk all declared routes/permissions generically (so they'd catch a permission-table regression anywhere, not just here). This is sufficient; a full mix test is not required as a blocking condition before TEST-DESIGNER proceeds. AC5/AC10's fixture step-2 un-skip (via:skip -> via:api in shipment-ops-timeout-escalation.yaml, plus the accompanying describe block assertions) is correctly assigned to TEST-DESIGNER by the design doc, not something ELIXIR-DEV should have absorbed -- it is genuinely new test-scenario authoring (unskipping and asserting real behavior), not a mechanical consequence of the code change the way the two stale-test fixes above were.",
+    "issues": []
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

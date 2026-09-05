@@ -24,11 +24,12 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   Finding #1 as originally filed here — `POST /api/v1/instances/:id/advance-timer`
   absent — was ISS-0389 (queue task 389, GH#768); the route now exists
   (`lib/letflow/routers/instances.ex`'s `authz_post "/:id/advance-timer"`, see
-  `lib/letflow/design/iss0389-advance-timer-endpoint.md`). The scenario
-  fixture's step 2 SKIP/MINOR fallback and this file's own ops-timeout-
-  escalation test still reflect the pre-fix shape as of this commit —
-  un-skipping that step is TEST-DESIGNER's follow-up, not done here (design
-  doc AC5/AC10).
+  `lib/letflow/design/iss0389-advance-timer-endpoint.md`). TEST-DESIGNER has
+  since un-skipped `shipment-ops-timeout-escalation.yaml` step 2 (`via: skip`
+  -> `via: api`) and added a real `ops-escalation-timer` TIMER node to
+  `process_shipment_dispatch.yaml` so the scenario has an actual pending
+  timer to force-fire — see the `swiftroute-shipment-ops-timeout-escalation`
+  describe block below (design doc AC5/AC10).
 
   Real Postgres, `async: false` — tenant provisioning needs `Sandbox.mode(:auto)`.
   """
@@ -422,10 +423,31 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
   # ─── AC3: swiftroute-shipment-ops-timeout-escalation ────────────────────
 
   describe "swiftroute-shipment-ops-timeout-escalation" do
-    test "step 1 :ok, step 2 :skip/:minor (advance-timer absent), step 3 :ok", %{
+    # ISS-0389 un-skip: step 2 previously ran `via: skip`/`severity: MINOR`
+    # because `POST /instances/:id/advance-timer` did not exist
+    # (handoffs/WF03-ISS0389-20260905/step-03-elixir-dev.json). The route now
+    # ships, and `process_shipment_dispatch.yaml` gained a real
+    # `ops-escalation-timer` TIMER node (forked in parallel with
+    # `ops-assessment`/`finance-estimate`, feeding `parallel-join`) so this
+    # scenario has an actual, single pending timer to force-fire -- design
+    # doc AC5/AC10 (`lib/letflow/design/iss0389-advance-timer-endpoint.md`).
+    #
+    # Also fixes a pre-existing bug in this test's own `definitions` pattern:
+    # it destructured `%{approval: definition}` (the unrelated
+    # SimpleShipmentApproval graph used by the high-value-happy scenario
+    # above) instead of `%{dispatch: definition}` (`process_shipment_dispatch.yaml`,
+    # the "Driver Incident Report" process this scenario's own header comment
+    # and `initial_variables: injury_involved` actually target). That bug was
+    # inert while step 2 was a no-op :skip (neither graph has an
+    # `ops-escalation-timer` TIMER node before this change, and step
+    # 1/3 only ever checked instance ACTIVE status, which both graphs
+    # satisfy identically) -- it stops being inert now that step 2 must
+    # resolve a real pending timer against the real graph this scenario is
+    # documented to exercise.
+    test "step 1 :ok, step 2 :ok (timer force-fired, token off TIMER node), step 3 :ok", %{
       schema_name: schema_name,
       actors: actors,
-      definitions: %{approval: definition}
+      definitions: %{dispatch: definition}
     } do
       scenario_raw =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "shipment-ops-timeout-escalation.yaml"))
@@ -446,21 +468,43 @@ defmodule Letflow.Simulation.Req206SwiftrouteTest do
       assert step1.outcome == :ok,
              "step 1 (POST /instances) failed — detail: #{inspect(step1.detail)}"
 
-      # Step 2: SKIP/MINOR — advance-timer endpoint absent (grep-confirmed)
-      assert step2.outcome == :skip,
-             "step 2 expected :skip, got #{inspect(step2.outcome)}"
+      # Step 2: POST .../advance-timer — real route, real force-fire (ISS-0389)
+      assert step2.outcome == :ok,
+             "step 2 (POST advance-timer) failed — detail: #{inspect(step2.detail)}"
 
-      assert step2.severity == :minor,
-             "step 2 expected severity :minor, got #{inspect(step2.severity)}"
+      assert step2.captured["timer_status"] == "fired",
+             "expected timer_status \"fired\", got: #{inspect(step2.captured)}"
 
-      assert step2.captured == nil
-      assert step2.detail =~ "advance-timer"
+      assert step2.captured["node_id"] == "ops-escalation-timer",
+             "expected the fired timer's node_id to be the ops-escalation-timer TIMER node, got: #{inspect(step2.captured)}"
 
-      # Step 3: instance still ACTIVE (harness coherent despite step 2 SKIP)
+      assert step2.captured["instance_id"] == step1.detail["instance_id"]
+
+      # Step 3: GET /instances/:id — instance still ACTIVE (ops-assessment and
+      # finance-estimate are still outstanding HUMAN_TASKs, so parallel-join
+      # cannot fire yet). GET's own response shape (`instance_map/1`,
+      # lib/letflow/routers/instances.ex) carries no `tokens` field (only
+      # `POST /:id/reconstruct` does) -- proving the escalation timer's own
+      # token genuinely moved off the TIMER node therefore reads
+      # `current_nodes` directly off the real `instance_projections` row,
+      # rather than through this step's own captured JSON.
       assert step3.outcome == :ok,
              "step 3 (GET /instances) failed — detail: #{inspect(step3.detail)}"
 
-      # Both expected_outcomes: instance ACTIVE (1 before skip, 1 after)
+      assert step3.captured["status"] == "ACTIVE"
+
+      instance_id = step1.detail["instance_id"]
+
+      current_nodes =
+        Repo.get!(Letflow.EventStore.InstanceProjection, instance_id, prefix: schema_name).current_nodes
+
+      refute "ops-escalation-timer" in current_nodes,
+             "expected the fired timer's token to have moved off ops-escalation-timer, current_nodes: #{inspect(current_nodes)}"
+
+      assert "ops-assessment" in current_nodes
+      assert "finance-estimate" in current_nodes
+
+      # Both expected_outcomes: instance ACTIVE (1 before advance-timer, 1 after)
       assert length(report.outcome_results) == 2
 
       assert Enum.all?(report.outcome_results, &(&1.outcome == :pass)),

@@ -675,4 +675,123 @@ defmodule Letflow.SchedulerTest do
     # narrower guard above (no Plug.Router/controller/route construct
     # *inside* the scheduler modules themselves) still holds and is kept.
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0389 -- Letflow.Scheduler.resolve_advance_target/3 (design §3)
+  #
+  # Pure targeting-resolution query, no mutation and no engine re-entry (that
+  # happens separately, in the caller's own follow-up `fire_timer/2` call --
+  # see `lib/letflow/routers/instances.ex`'s `handle_advance_timer/2`). Every
+  # branch below is exercised directly against `timers` rows, with no need
+  # for a real started instance/live token (`resolve_advance_target/3` never
+  # joins `instance_projections` or `tokens` -- confirmed by reading its own
+  # `Timer |> where(...)` implementation, `lib/letflow/scheduler.ex`), so
+  # these use bare `Ecto.UUID.generate()` instance ids, matching this file's
+  # own documented "organic fire attempt fails" precedent in the moduledoc
+  # above for tests that don't need a real engine-started instance.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0389: resolve_advance_target/3 -- timer_id absent (0/1/2+ pending)" do
+    test "zero pending timers for the instance -> {:error, :no_pending_timer}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+
+      assert Scheduler.resolve_advance_target(instance_id, nil, schema_name) ==
+               {:error, :no_pending_timer}
+    end
+
+    test "exactly one pending timer -> {:ok, timer}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      timer = arm_timer!(schema_name, instance_id, %{})
+
+      assert {:ok, resolved} = Scheduler.resolve_advance_target(instance_id, nil, schema_name)
+      assert resolved.id == timer.id
+    end
+
+    test "a pending timer belonging to a DIFFERENT instance is not counted -- still 0 for this instance" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      other_instance_id = Ecto.UUID.generate()
+      arm_timer!(schema_name, other_instance_id, %{})
+
+      assert Scheduler.resolve_advance_target(instance_id, nil, schema_name) ==
+               {:error, :no_pending_timer}
+    end
+
+    test "a non-pending (already fired) timer for the instance is not counted -- still 0" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      timer = arm_timer!(schema_name, instance_id, %{})
+
+      assert {:ok, _} =
+               timer
+               |> Timer.fire_changeset(%{
+                 status: "fired",
+                 fired_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+               })
+               |> Repo.update(prefix: schema_name)
+
+      assert Scheduler.resolve_advance_target(instance_id, nil, schema_name) ==
+               {:error, :no_pending_timer}
+    end
+
+    test "two or more pending timers -> {:error, :ambiguous_pending_timers}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      arm_timer!(schema_name, instance_id, %{node_id: "timer-a"})
+      arm_timer!(schema_name, instance_id, %{node_id: "timer-b"})
+
+      assert Scheduler.resolve_advance_target(instance_id, nil, schema_name) ==
+               {:error, :ambiguous_pending_timers}
+    end
+  end
+
+  describe "ISS-0389: resolve_advance_target/3 -- timer_id present (same-404 fold)" do
+    test "matches a real, pending timer on the same instance -> {:ok, timer}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      timer = arm_timer!(schema_name, instance_id, %{})
+
+      assert {:ok, resolved} =
+               Scheduler.resolve_advance_target(instance_id, timer.id, schema_name)
+
+      assert resolved.id == timer.id
+    end
+
+    test "timer_id does not exist at all -> {:error, :no_pending_timer}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+
+      assert Scheduler.resolve_advance_target(instance_id, Ecto.UUID.generate(), schema_name) ==
+               {:error, :no_pending_timer}
+    end
+
+    test "timer_id exists but is not pending (already fired) -> {:error, :no_pending_timer}" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_id = Ecto.UUID.generate()
+      timer = arm_timer!(schema_name, instance_id, %{})
+
+      assert {:ok, _} =
+               timer
+               |> Timer.fire_changeset(%{
+                 status: "fired",
+                 fired_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+               })
+               |> Repo.update(prefix: schema_name)
+
+      assert Scheduler.resolve_advance_target(instance_id, timer.id, schema_name) ==
+               {:error, :no_pending_timer}
+    end
+
+    test "timer_id exists, is pending, but belongs to a DIFFERENT instance -> {:error, :no_pending_timer} (cross-instance guard)" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      instance_a = Ecto.UUID.generate()
+      instance_b = Ecto.UUID.generate()
+      timer = arm_timer!(schema_name, instance_a, %{})
+
+      assert Scheduler.resolve_advance_target(instance_b, timer.id, schema_name) ==
+               {:error, :no_pending_timer}
+    end
+  end
 end

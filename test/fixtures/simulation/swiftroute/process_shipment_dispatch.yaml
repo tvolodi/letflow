@@ -1,6 +1,39 @@
 # Ported from R-Co tests/simulation/companies/swiftroute/process_incident_report.yaml (ISS-0388).
 # Filename kept as process_shipment_dispatch.yaml to avoid breaking test references.
 # Graph translated from R-Co's YAML node/edge format to Letflow's native graph schema.
+#
+# ISS-0389 (2026-09-05, TEST-DESIGNER): added the `ops-escalation-timer` TIMER
+# node below, forked in parallel with `ops-assessment`. The pre-existing
+# `timeout-ops-assessment` edge (a comment-only "on_timeout" annotation on a
+# HUMAN_TASK) was never a real timer in this engine's architecture -- REQ-187's
+# design (lib/letflow/design/req187-timer-engine-wiring.md) only arms a timer
+# for a genuine `node_type: TIMER` node; a HUMAN_TASK has no boundary-timer
+# mechanism at all. This addition is what actually lets
+# `shipment-ops-timeout-escalation.yaml` step 2 exercise a real, armed,
+# force-fireable timer (`POST /instances/:id/advance-timer`, ISS-0389) end to
+# end, matching this file's own top-of-file description ("Exercises: parallel
+# fork/join, timer escalation") for the first time. The old
+# `timeout-ops-assessment` edge is left untouched -- out of this issue's scope,
+# and no test exercises completing the `ops-assessment` HUMAN_TASK today.
+#
+# Also fixes a genuine, independent, pre-existing structural bug this same
+# TEST-DESIGNER pass uncovered while un-skipping the scenario: `parallel-fork`
+# had in_degree 2 (both `injury-check`'s false-branch edge and
+# `safety-notification`'s edge converged directly onto it) AND out_degree 2+
+# (its own fork edges) -- `Letflow.Engine.Transition`'s own
+# `gateway_role/2` (lib/letflow/engine/transition.ex) classifies any
+# PARALLEL_GATEWAY with both in_degree > 1 and out_degree > 1 as
+# `:combined_unsupported`, which `Engine.create/2` rejects with
+# `{:error, {:activation_failed, {:combined_split_join_not_supported, "parallel-fork"}}}`.
+# This was never caught before because no test ever actually dispatched this
+# specific graph through a real `Engine.create/2` call end to end (this
+# file's own req206_swiftroute_test.exs had an independent bug -- see that
+# file's own comment on its `swiftroute-shipment-ops-timeout-escalation`
+# describe block -- that silently substituted an unrelated graph instead).
+# Fixed here with a new pure-merge `injury-check-merge` EXCLUSIVE_GATEWAY
+# (in_degree 2, out_degree 1, no condition needed on its own single outgoing
+# edge) inserted between the injury-check branches and `parallel-fork`, so
+# `parallel-fork` itself is now a pure split (in_degree 1, out_degree 3).
 name: Driver Incident Report
 version: "1.0"
 description: >
@@ -13,6 +46,8 @@ graph:
       node_type: START
     - id: injury-check
       node_type: EXCLUSIVE_GATEWAY
+    - id: injury-check-merge
+      node_type: EXCLUSIVE_GATEWAY
     - id: safety-notification
       node_type: SERVICE_TASK
       attributes:
@@ -24,6 +59,10 @@ graph:
       node_type: HUMAN_TASK
       attributes:
         role: role-ops-manager
+    - id: ops-escalation-timer
+      node_type: TIMER
+      attributes:
+        duration_iso8601: "P1D"
     - id: finance-estimate
       node_type: HUMAN_TASK
       attributes:
@@ -57,17 +96,30 @@ graph:
       condition: "variables.injury_involved == true"
     - id: e2
       source: injury-check
-      target: parallel-fork
+      target: injury-check-merge
       condition: "variables.injury_involved == false"
     - id: e3
       source: safety-notification
+      target: injury-check-merge
+    - id: e3b
+      source: injury-check-merge
       target: parallel-fork
+      is_default: true
     - id: e4
       source: parallel-fork
       target: ops-assessment
     - id: e5
       source: parallel-fork
       target: finance-estimate
+    # ISS-0389: parallel-fork's 3rd branch -- a real, armed TIMER node
+    # feeding straight into parallel-join, forcing this AND-join to wait on
+    # it exactly like the other two branches.
+    - id: e12
+      source: parallel-fork
+      target: ops-escalation-timer
+    - id: e13
+      source: ops-escalation-timer
+      target: parallel-join
     - id: e6
       source: ops-assessment
       target: parallel-join

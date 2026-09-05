@@ -14083,7 +14083,7 @@ requirements:
   - id: REQ-242
     title: Retire parity-justification phrasing in lib/letflow/repository/artifact.ex, sandbox_pool/fixture_loader.ex, webhooks/subscription.ex, and lib/mix/tasks/ -- restate on merit or delete (closes ISS-0424 part 2e-3)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       Closes the repository+sandbox_pool+webhooks+lib/mix/tasks slice of

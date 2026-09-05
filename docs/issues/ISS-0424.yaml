@@ -115,3 +115,14 @@ orch_routing_note: >
   This record stays open, status unchanged, pending those 10
   requirements' completion -- closing it directly would misrepresent
   Parts 2 and 3 as done when only Part 1 has landed.
+
+  DOC-UPDATER (2026-09-05, WF02-REQ242-20260905): Part 2 is now FULLY
+  COMPLETE -- all seven of its requirements are done:
+  REQ-232 (routers, PR #928), REQ-233 (engine/wasm/lua, PR #939),
+  REQ-234 (definitions, PR #940), REQ-235 (event_store, PR #941),
+  REQ-240 (api/plugs, PR #943), REQ-241 (identity cluster, PR #944),
+  and REQ-242 (repository/sandbox_pool/webhooks/lib/mix/tasks, PR #945,
+  this run). Of Part 3, REQ-237 (the .zig provenance-marking design) is
+  also done; REQ-238 (apply in lib/) and REQ-239 (apply in docs/) remain
+  pending -- those two are the only work left before this whole issue
+  can close. status stays open, unchanged, pending REQ-238/REQ-239.

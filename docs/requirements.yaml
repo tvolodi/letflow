@@ -15597,7 +15597,7 @@ requirements:
   - id: REQ-266
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-c: req030-definition-store-crud.md through req048-task-completion.md (closes ISS-0424 part 3c-13)"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

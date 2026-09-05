@@ -167,3 +167,27 @@
 
 
 history:
+  - req: REQ-266
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-05T23:11:24Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/design/req030-definition-store-crud.md through
+      req048-task-completion.md (13 files, not every number in range
+      exists) (closes ISS-0424 part 3c-13, queue task 504,
+      feature/WF02-REQ266-20260905). This is chunk 239-design-c of eight
+      lib/letflow/design/-scope chunks (REQ-264..271). 111 markers
+      inserted across 13 files (19+17+9+4+1+5+23+14+6+4+7+1+1), 0
+      deletions; 144 .zig citation lines identical before/after.
+      REVIEWER independently re-verified every marker count, re-diffed
+      citation text (marker-stripped) for byte-identical preservation,
+      spot-checked table-unit placement (one marker per table, not per
+      row, on 5 distinct multi-row tables in req031/req039), confirmed
+      no YAML frontmatter in any of the 13 files, and confirmed
+      CLAUDE.md/README.md/docs/migration/README.md/sibling design files
+      untouched -- PASS
+      (handoffs/WF02-REQ266-20260905/step-02d-reviewer.json). Docs-only,
+      no mix compile/format/test applicable. ORCH will merge and release
+      queue task 504 status:done. First entry in this volume (opened by
+      WF02-REQ265-20260905's roll).

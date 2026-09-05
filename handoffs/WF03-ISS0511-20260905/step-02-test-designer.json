@@ -1,0 +1,55 @@
+{
+  "handoff_id": "c4a2c6f3-7b3e-4d2f-af1b-2e5d8f3b0511",
+  "run_id": "WF03-ISS0511-20260905",
+  "workflow_id": "WF-03",
+  "step": "2",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF03-ISS0511-20260905/step-02-test-designer.json",
+  "created_at": "2026-09-05T18:39:44Z",
+  "started_at": "2026-09-05T18:39:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "context": {
+    "stage": null,
+    "requirement_ids": [],
+    "requirement_text": {},
+    "source_text": {},
+    "related_handoff_ids": ["handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json"],
+    "artifacts_in": [
+      "docs/issues/ISS-0511.yaml",
+      "test/letflow/simulation/req207_vortex_test.exs",
+      "handoffs/WF03-ISS0511-20260905/step-01-issue-fixer.json"
+    ],
+    "owned_modules": ["test/letflow/simulation/req207_vortex_test.exs"]
+  },
+  "task": {
+    "description": "Implement ISSUE-FIXER's fully-specified fix for ISS-0511 in test/letflow/simulation/req207_vortex_test.exs. Read step-01-issue-fixer.json's `result.summary` in full for the confirmed root cause and exact fix requirement before touching code; this is restated below for convenience but that file is the source of truth.\n\nRoot cause: in the 'vortex-entity-list-filter-and-page' test (around lines 879-915), for each docs/requirements.yaml line whose title: matches /entit(y|ies)/i, line 908 does `Enum.at(title_lines, idx - 1)` -- a single-line, exact-adjacency walk-back assuming the id: line is always exactly one line above title:. REQ-257 correctly inserted a `# PROVENANCE (historical, not current decision authority):` comment line between id: and title: for REQ-225, REQ-227, REQ-228, REQ-229, REQ-230, REQ-231 (per the REQ-237/ISS-0510 convention -- correct, must NOT be reverted, and docs/requirements.yaml must NOT be modified by this step). For those 6 entries, idx - 1 now lands on the PROVENANCE comment line instead of id:, failing the assertion.\n\nRequired fix (replace lines ~906-909's mapping logic): walk upward from idx - 1, skipping lines that are blank or match a comment pattern once trimmed of trailing \\r and leading/trailing whitespace (`/^#/` after trim -- docs/requirements.yaml has CRLF line endings, confirmed live: the captured PROVENANCE line ends in a literal \\r, so trim \\r explicitly, not just \\n/whitespace that may not cover it), stopping at the first non-blank, non-comment line. That line is the one checked against `allowed_ids`, exactly as today's `Enum.any?(allowed_ids, &(preceding_line =~ \"id: #{&1}\"))` assertion already does -- do not change the assertion itself, only how `preceding_line` is obtained.\n\nCritical constraint (defect-detection intent must survive this fix): the walk-back must be a BOUNDED skip-comments-only search, not an unbounded search for the nearest id: anywhere above. If the first non-comment/non-blank line found (after skipping any leading blank/comment lines) is not an id: line -- or the walk-back runs off the start of the file/list -- the test must still fail via the existing assertion, exactly as it does today for a genuinely wrong or missing id:. Do not add logic that keeps searching upward past a real content line looking for an id: further up; that would silently defeat the test's regression-catching purpose.\n\nSuggested shape (you decide exact implementation, this is illustrative not prescriptive): a small private helper, e.g. `nearest_preceding_id_line(title_lines, idx)`, that loops `idx - 1`, `idx - 2`, ... while `Enum.at(title_lines, i)` trimmed is blank or comment-matching, and returns the first line that is neither (or nil/the untouched line if none found before index 0, so the existing assertion still fails naturally on that value). Keep the change minimal and scoped to this one test file.\n\nAfter implementing, do NOT run mix test yourself as the final gate (TEST-RUNNER does the authoritative full-suite gate next) but you may run `mix test test/letflow/simulation/req207_vortex_test.exs` locally to sanity-check your own change compiles and the targeted test passes 4/4 before handing off -- core-directives.md's No Speculation rule applies to your own claim of done just as much as anyone else's.",
+    "acceptance_criteria": [
+      "test/letflow/simulation/req207_vortex_test.exs is the only file changed",
+      "docs/requirements.yaml is untouched",
+      "The walk-back skips blank and comment lines (trimmed of \\r and whitespace, matching /^#/) between a title: match and the nearest real content line above it",
+      "The walk-back does NOT skip past a real (non-blank, non-comment) content line searching further up -- a genuinely wrong or missing id: line must still fail the test",
+      "`mix test test/letflow/simulation/req207_vortex_test.exs` passes 4/4 (quote actual output in result.summary, not a claim)",
+      "result.next_action routes to REVIEWER"
+    ]
+  },
+  "completed_at": "2026-09-05T23:41:40Z",
+  "result": {
+    "status": "PASS",
+    "summary": "Implemented the bounded walk-back fix in test/letflow/simulation/req207_vortex_test.exs's 'vortex-entity-list-filter-and-page' test. Replaced the single-line `Enum.at(title_lines, idx - 1)` lookup (old line 908) with a call to a new private helper `nearest_preceding_id_line/2`, added near the other private helpers after `find_child_by_parent_instance_id/2`:\n\n  defp nearest_preceding_id_line(title_lines, idx) when idx >= 0 do\n    line = Enum.at(title_lines, idx)\n    trimmed = line |> to_string() |> String.trim_trailing(\"\\r\") |> String.trim()\n\n    if trimmed == \"\" or Regex.match?(~r/^#/, trimmed) do\n      nearest_preceding_id_line(title_lines, idx - 1)\n    else\n      line\n    end\n  end\n\n  defp nearest_preceding_id_line(_title_lines, idx) when idx < 0, do: nil\n\nCall site changed from `Enum.at(title_lines, idx - 1)` to `nearest_preceding_id_line(title_lines, idx - 1)`; the downstream `Enum.any?(allowed_ids, &(preceding_line =~ \"id: #{&1}\"))` assertion is untouched. The helper walks upward starting at idx - 1, skipping only lines that are blank or match /^#/ after trimming a trailing \\r (docs/requirements.yaml has CRLF endings) and surrounding whitespace, and returns the FIRST non-blank, non-comment line it finds (or nil if it runs off the start of the file) -- it never continues past a real content line searching further up, so a genuinely wrong or missing id: line still surfaces to the existing assertion and still fails it, preserving the test's original defect-detection intent.\n\nRan `mix test test/letflow/simulation/req207_vortex_test.exs` (real Postgres) as a local sanity check. Actual output (tail):\n\n  .\n  Finished in 25.4 seconds (0.00s async, 25.4s sync)\n\n  Result: 4 passed\n\nNo compiler warnings were emitted for this file during the run (grepped the full captured output for 'warning' -- no matches). `git diff` confirms test/letflow/simulation/req207_vortex_test.exs is the only file with content changes (docs/requirements.yaml untouched, per `git status --porcelain` showing only the test file and this handoff as modified).",
+    "artifacts_out": ["test/letflow/simulation/req207_vortex_test.exs"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0511-20260905",
+      "commit_sha_list": ["013a0303a9d996da343de1945c71b9839298407f"],
+      "remote_branch": "origin/feature/WF03-ISS0511-20260905",
+      "push_status": "pushed",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER to review the bounded walk-back fix in test/letflow/simulation/req207_vortex_test.exs, then TEST-RUNNER for the authoritative full-suite gate."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

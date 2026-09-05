@@ -2564,3 +2564,25 @@ the neighbouring id is a retired duplicate, so a later reader finding two near-i
 issues does not go looking for a second requirement that never existed. This was done for
 449/450 the same minute; total exposure was under two minutes, with neither task ever
 dispatched to a workflow.
+
+## Drafting a new requirement with a blank `impl_order:` field instead of the deferred marker
+
+On 2026-09-05, REQ-ANALYST drafted 10 new requirements (REQ-232..242, ISS-0424 parts 2/3)
+directly into `docs/requirements.yaml` without registering them via `letflow-queue`'s
+`register_task` first (reasonable -- REQ-VALIDATOR hadn't gated them yet). But instead of
+using the documented deferred-marker form for an unregistered entry
+(`# impl_order: UNREGISTERED -- <rationale>`, already used elsewhere by REQ-223/REQ-224),
+each entry was left with a bare `impl_order:` key and no value. `mix
+letflow.check_requirements_registration` classifies that as `:unclassified` (R2, hard
+fail) rather than `:deferred` (visible debt, does not gate) — it matches neither
+recognised shape. REQ-ANALYST and REQ-VALIDATOR both worked from the requirement's content
+and never ran `mix letflow.check_requirements_registration` (or the full `mix
+letflow.check`) locally before ORCH committed and pushed, so the PR's first CI run failed
+in ~45 seconds on this, not on any test.
+
+**Any requirement drafted before its `letflow-queue` registration must use the deferred-
+marker comment form, never a bare `impl_order:` key with no value.** Whoever drafts or
+validates a new `docs/requirements.yaml` entry should run `mix
+letflow.check_requirements_registration` locally before handing it off or committing —
+it's fast (no network, no queue call) and would have caught this in seconds instead of a
+full CI round-trip.

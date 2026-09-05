@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF01-REQ238split-20260905-step02",
+  "run_id": "WF01-REQ238split-20260905",
+  "workflow_id": "WF-01",
+  "step": "02",
+  "from_agent": "REQ-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "docs/requirements.yaml",
+  "status": "COMPLETED",
+  "priority": "normal",
+  "created_at": "2026-09-05T10:21:21Z",
+  "context": {
+    "requirements_validated": ["REQ-243","REQ-244","REQ-245","REQ-246","REQ-247","REQ-248","REQ-249","REQ-250","REQ-251","REQ-252","REQ-253","REQ-254","REQ-255","REQ-256","REQ-257","REQ-258","REQ-259","REQ-260","REQ-261","REQ-262","REQ-263","REQ-264","REQ-265","REQ-266","REQ-267","REQ-268","REQ-269","REQ-270","REQ-271"],
+    "design_doc": "lib/letflow/design/req237-zig-provenance-marking-convention.md (incl. 2026-09-05 amendment, section 6)",
+    "source_commits": ["da716b4c", "37977cf1"]
+  },
+  "task": {
+    "description": "Independently validate all 29 requirements (REQ-243..271) replacing deleted REQ-238/REQ-239 against WF-01 Step 2's five checks (testability, consistency, depends_on, sizing, stage fit), plus file-list accuracy vs the design doc's §6 chunking table, owner correctness, OQ-4 resolution, orphan/dangling-reference check, and registration-state confirmation."
+  },
+  "result": {
+    "status": "PASS",
+    "findings": [
+      "File-list accuracy: REQ-243..253's file lists match design doc §6's REQ-238 table (238a1..238h) exactly, byte-for-byte. REQ-254..263's file lists match §6's REQ-239 docs/ table (239a..239i) exactly. REQ-264..271's file lists match the 2026-09-05 amendment's lib/letflow/design/ table (239-design-a..h) exactly, including REQ-271 carrying req237-zig-provenance-marking-convention.md itself.",
+      "Coverage/overlap: sums reconcile to design doc totals (84 lib files, 58 non-requirements.yaml docs files + 538 lines, 100 design files); no file assigned to two requirements, none dropped, per direct textual comparison against all three §6 tables.",
+      "Testability spot-check (9 of 29 re-run directly against current tree): REQ-243 (8), REQ-247 (4), REQ-250 (10), REQ-253 (8), REQ-258 (8), REQ-260 (11), REQ-264 (13), REQ-271 (9) all matched their cited draft-time counts exactly. Note real-tree drift exists at the aggregate level (lib/letflow/design/ total still 100 and lib/ excl-design still 84, but docs/ non-yaml total is now 59 not 58, and docs/requirements.yaml now has 728 not 538 matching lines) -- this is exactly the kind of drift the design doc's OQ-2 already anticipated and explicitly told fix-time implementers to re-derive rather than trust; every requirement's own text already carries 'MEASURED SCOPE AT DRAFT TIME ... re-derive at fix time ... do not trust this count' language, so this is not a defect in the requirement text itself.",
+      "depends_on: sampled 8 of 29 (REQ-243,245,248,251,253 for lib/ chunks; REQ-254,258,264,271 for docs/design chunks) -- lib/ chunks all carry exactly [REQ-232, REQ-233, REQ-234, REQ-235, REQ-237, REQ-240, REQ-241, REQ-242]; all docs/design chunks carry exactly [REQ-237]. Matches spec.",
+      "Sizing: max file count observed across all 29 is 13 (REQ-264..270), all others lower; no requirement exceeds the 13-file ceiling.",
+      "Owner: REQ-243..253 = ELIXIR-DEV, REQ-254..271 = DOC-UPDATER, confirmed for all 29 by direct read.",
+      "OQ-4: REQ-271's description explicitly states 'Per CODE-DESIGN-VALIDATOR's OQ-4 resolution (mark it, no special exemption) ... its own .zig citations inside its worked examples (section 4) are IN SCOPE for this requirement' and carries a dedicated acceptance criterion requiring the specific lines be quoted before/after. Correctly resolved, not exempted.",
+      "Orphan check: `grep -n \"id: REQ-238\\b|id: REQ-239\\b\"` returns zero matches -- both fully deleted. No `depends_on` list anywhere in the file targets REQ-238 or REQ-239 (only prose/comment mentions remain, all in historical/explanatory context, none load-bearing).",
+      "Registration state: all 29 requirements carry the `# impl_order: UNREGISTERED` deferred-marker comment (confirmed by direct grep count = 29, matching the REQ-243..271 id count exactly). No Elixir/mix toolchain is available in this environment to run `mix letflow.check_deferral_staleness` directly, so that specific command's STALE-count output could not be independently executed -- reporting this limitation explicitly rather than assuming the tool's report. The marker-based proxy check (29 UNREGISTERED comments matching 29 ids) corroborates REQ-ANALYST's reported count. This is ORCH's registration gap to close, not a REQ-ANALYST defect, per the task's own framing."
+    ]
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

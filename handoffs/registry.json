@@ -4757,6 +4757,42 @@
       "backfilled": false,
       "last_known_step": "ISSUE-FIXER re-diagnosed (handoffs/WF03-ISS0402-20260905/step-01-issue-fixer-diagnosis.json) and reconfirmed the prior 2026-09-02 scoping decision: ISS-0397 genuinely closed the join_counters persistence gap OQ-2 cited, but the independent R-Co architectural-parity finding (design doc's own section 0) still stands, so branch-level cancellation remains correctly unimplemented. Corrected the design doc's stale OQ-2 phrasing (section 4 table, section 11) to state the current reasoning. Queue task 402 released status:done (it had previously been released status-unset after the 2026-09-02 scoping run, which is why it resurfaced via get_next_task).",
       "note": "WF-03 issue-resolving run for ISS-0402, second pass. First pass (WF03-ISS0402-20260902) made the real scoping decision (do not implement branch-level cancellation) but released the queue task without a status, so it resurfaced. This run found no code change was needed -- only lib/letflow/design/req052-instance-cancellation.md's own OQ-2 text was stale (still framed join-counters persistence as the primary blocker without noting ISS-0397 closed it or that the architectural-parity finding is independent). Docs-only, sized as two single-file edits (this design doc, docs/issues/ISS-0402.yaml) per ORCHESTRATOR.md Sec10, done directly by ORCH after ISSUE-FIXER's diagnosis."
+    },
+    {
+      "run_id": "WF03-ISS0399-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0399",
+      "queue_task_id": 399,
+      "github_issue_number": 781,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "started_at": "2026-09-05T03:15:00Z",
+      "lock_released_at": "2026-09-05T03:33:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "ISSUE-FIXER recheck: deferred AV-scanning trigger condition (a less-trusted-than-authenticated-tenant-user upload path) still not met -- REQ-212 landed the actual route surface since the prior 2026-09-01 recheck, but at the same authenticated/tenant-scoped/permission-gated trust level this issue already treats as non-blocking. Webhooks subsystem checked as the other candidate: outbound-only, no inbound receiver. No code change. Queue task 399 released status:blocked (correctly reused per TASK_QUEUE.md's 'terminally stopped, not resolved' convention -- deliberately deferred, not a defect, not actionable now) rather than left open, to stop it resurfacing via get_next_task's LIFO ordering ahead of genuinely actionable work.",
+      "note": "Second periodic recheck of ISS-0399 (deferred AV/content-scanning follow-up on instance attachments, REQ-211). No implementation; docs-only recheck note appended to docs/issues/ISS-0399.yaml."
+    },
+    {
+      "run_id": "WF03-ISS0389-20260905",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0389",
+      "queue_task_id": 389,
+      "github_issue_number": 768,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/scheduler.ex",
+        "lib/letflow/routers/instances.ex",
+        "lib/letflow/api/authorization.ex"
+      ],
+      "started_at": "2026-09-05T03:35:00Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "TEST-RUNNER confirmed real full-suite aggregate (mix letflow.check.test's 8-way parallel partition results summed manually: 3243 tests, 3241 passed, 2 pre-existing rustc-toolchain-gap failures unrelated to this branch) after TEST-DESIGN-VALIDATOR's re-check PASSed a rework cycle (AC3's PLATFORM_ADMIN/AGENT_RUNNER role coverage was missing on the first pass; TEST-DESIGNER added direct assertions for all four AC3 roles). Full chain: ISSUE-FIXER sized (new API surface, CODE-DESIGNER needed) -> CODE-DESIGNER designed POST /instances/:id/advance-timer (targeting semantics, new :InstancesAdvanceTimer permission, production-route decision) -> CODE-DESIGN-VALIDATOR PASSed (independently verified all cited file/line claims) -> ELIXIR-DEV implemented (Letflow.Scheduler.resolve_advance_target/3 + router handler + full authz wiring, plus 2 incidental stale-test fixes) -> SECURITY-REVIEWER PASSed (tenant isolation, authz-before-mutation, INV-RT-1, same-404 discipline, no injection surface, no force-fire ordering hazard) -> REVIEWER PASSed (idiom, no scope creep, the 2 incidental stale-test fixes judged genuine not scope creep) -> TEST-DESIGNER added coverage + un-skipped REQ-206's shipment-ops-timeout-escalation scenario step 2 (also fixed 2 pre-existing fixture bugs blocking that dispatch) -> TEST-DESIGN-VALIDATOR rework cycle 1 (AC3 gap) -> re-check PASS -> TEST-RUNNER confirmed. Ready for Step Final merge.",
+      "note": "WF-03 issue-resolving run for ISS-0389: no POST /api/v1/instances/:id/advance-timer endpoint existed, blocking REQ-206/207/208's own simulation scenarios from exercising timer-escalation paths for real. Full 8-step pipeline run, one real rework cycle at the test-design-validation gate."
     }
   ]
 }

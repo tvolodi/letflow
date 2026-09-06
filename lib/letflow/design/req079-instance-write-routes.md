@@ -9,6 +9,7 @@ error-mapping table for all three `_error()` types, request-body validation sche
 content outline, route-ordering placement, changed-file list, traceability, open questions.
 **No implementation code** — no function bodies, no `.ex`/`.exs` files.
 
+PROVENANCE (historical, not current decision authority):
 R-Co source read in full: `c:/Users/tvolo/dev/ai-dala/R-Co/src/api/routes/instances.zig` lines
 30-420 (`handleCreate` L48-233, `handleCancel` L235-284, `handleReconstruct` L286-397).
 
@@ -54,6 +55,7 @@ the moduledoc for REQ-080 or any later route addition to inherit correctly.
 
 ## 3. Permission gating
 
+PROVENANCE (historical, not current decision authority):
 | Route | `endpoint_policy_key/2` clause | Existing? |
 |---|---|---|
 | `POST /instances` | `:InstancesStart` | yes — `authorization.ex:196` |

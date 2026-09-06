@@ -1,5 +1,6 @@
 # REQ-072 — Tenant-scoped request context and the cross-tenant 404 mechanism
 
+PROVENANCE (historical, not current decision authority):
 **Module:** `Letflow.Api.Context` (new), `lib/letflow/api/context.ex`.
 **Depends on:** `Letflow.TenantProvisioning.schema_name_for_tenant/1` (REQ-022),
 `Letflow.Plugs.AuthPipeline` (REQ-071, populates `conn.assigns[:auth_context]`),
@@ -25,6 +26,7 @@ module to do once its one field (`pipeline_run_id`) is just another
 requirement's own text says so explicitly; the moduledoc must repeat the
 reasoning, not just the conclusion).
 
+PROVENANCE (historical, not current decision authority):
 `pipeline_context.zig`'s `pipeline_run_id` has **no current Letflow caller** —
 grep confirms no S1–S3 module reads or writes a pipeline-run correlation id yet.
 This module reserves the `conn.assigns[:pipeline_run_id]` key name (documented,
@@ -62,6 +64,7 @@ is the shape AC6/INV-1 exist to prevent.
 ```
 @spec assign_trace_id(Plug.Conn.t()) :: Plug.Conn.t()
 ```
+PROVENANCE (historical, not current decision authority):
 A plug-shaped function (same `conn -> conn` signature as a function plug, callable
 as `plug :assign_trace_id` or `plug &Letflow.Api.Context.assign_trace_id/1` from
 `Letflow.Plugs.ApiPipeline`), not a `@behaviour Plug` module — matches this
@@ -78,6 +81,7 @@ where it must go and why.
 ```
 @spec generate_trace_id() :: String.t()
 ```
+PROVENANCE (historical, not current decision authority):
 Private-or-public pure helper: a UUID v4 string, matching `trace.zig`'s
 `generateUuidV4/1` (36-char canonical form). Uses `Ecto.UUID.generate/0` (already
 a project dependency via `ecto`) rather than hand-rolled byte-twiddling — Elixir
@@ -86,10 +90,12 @@ Elixir-idiomatic reason to survive the port.
 
 ### 2.2 Behavior
 
+PROVENANCE (historical, not current decision authority):
 1. Read the `x-trace-id` request header (Plug lower-cases header names; R-Co's
    `X-Trace-Id` request header name is preserved on the **response** side, see
    below — R-Co's own convention, confirmed directly from `trace.zig`'s module
    doc and `MAX_TRACE_ID_LEN` constant).
+PROVENANCE (historical, not current decision authority):
 2. If present and non-empty: propagate it as-is, **truncated to 256 bytes**
    (`trace.zig`'s `MAX_TRACE_ID_LEN`) — no UUID-shape validation, matching
    `extractOrGenerate/2`'s explicit "no UUID validation is performed on incoming
@@ -115,6 +121,7 @@ Elixir-idiomatic reason to survive the port.
 6. `Logger.metadata/1` is per-process and Plug/Bandit does not guarantee the
    request is handled on a fresh process per call in every adapter configuration
    — **open question below (OQ-1)**, not silently resolved.
+PROVENANCE (historical, not current decision authority):
 7. Response header: set `x-trace-id` (Plug downcases; emitted on the wire as
    `x-trace-id`, matching R-Co's own convention of a `X-Trace-Id`-named header,
    case differences being purely an HTTP/1.1 wire convention Plug enforces) to
@@ -391,6 +398,7 @@ different number of telemetry events for a `Repo.get/3` primary-key lookup.
 The moduledoc for `Letflow.Api.Context` must state, in substance (CODE-DESIGN-VALIDATOR
 checks for presence of each point, not verbatim wording):
 
+PROVENANCE (historical, not current decision authority):
 1. **§0's threadlocal-to-assigns translation reasoning** (AC1): R-Co's
    `tenant_context.zig`/`trace_context.zig`/`pipeline_context.zig` all use Zig
    `threadlocal` storage because Zig has no per-request object; Elixir's
@@ -449,6 +457,7 @@ checks for presence of each point, not verbatim wording):
   that is route-specific and left to each of the fifteen route requirements,
   or to a future shared convention if one becomes clearly common across all of
   them.
+PROVENANCE (historical, not current decision authority):
 - **OQ-3 (`StorageMode`/`LEGACY_RLS` non-port).** `tenant_context.zig`'s
   `StorageMode` enum (`LEGACY_RLS`/`SCHEMA`) and its resolved-once-per-request
   tracking are **not ported** — Letflow has no legacy-RLS storage mode

@@ -1,0 +1,86 @@
+{
+  "handoff_id": "WF02-REQ268-20260906-step-01",
+  "run_id": "WF02-REQ268-20260906",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ268-20260906/step01-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T00:20:34Z",
+  "started_at": "2026-09-06T00:20:34Z",
+  "completed_at": "2026-09-06T05:30:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-268"],
+    "requirement_text": {
+      "REQ-268": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-e = lib/letflow/design/, req068-validation.md through req081-definition-routes-read.md (req068-req081, 13 files).\n\nThis is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch files outside this chunk's file list under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nlib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/ chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly); do not touch any file outside lib/letflow/design/ under this requirement, even if it also carries a .zig citation -- that belongs to one of REQ-243 through REQ-253.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 13 files in this chunk carry a .zig reference today. If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "related_handoff_ids": ["WF02-REQ268-20260906-step-00"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ268-20260906/step00-git-setup.json",
+      "handoffs/WF02-REQ267-20260906/step01-doc-updater.json",
+      "handoffs/WF02-REQ267-20260906/step02-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req068-validation.md",
+      "lib/letflow/design/req069-authorization.md",
+      "lib/letflow/design/req070-router-decomposition.md",
+      "lib/letflow/design/req072-tenant-request-context.md",
+      "lib/letflow/design/req073-identity-user-routes.md",
+      "lib/letflow/design/req074-identity-group-routes.md",
+      "lib/letflow/design/req075-tenant-administration-routes.md",
+      "lib/letflow/design/req076-identity-tokens-roles-onboarding.md",
+      "lib/letflow/design/req077-promotion-pipeline-routes.md",
+      "lib/letflow/design/req078-supporting-routes.md",
+      "lib/letflow/design/req079-instance-write-routes.md",
+      "lib/letflow/design/req080-instance-routes-read.md",
+      "lib/letflow/design/req081-definition-routes-read.md"
+    ]
+  },
+  "task": {
+    "description": "Apply REQ-237's PROVENANCE marker convention (lib/letflow/design/req237-zig-provenance-marking-convention.md) to every .zig-citation unit in the 13 files listed in owned_modules. Insert the marker line immediately above each citation unit per REQ-237 section 2's placement rule (single citation line, paragraph, table, or nested-list shapes), extending to new edge cases encountered by closest-matching existing rule rather than inventing a fifth convention, each flagged in this handoff. Additive only: no .zig path text, line number, or citation content may be removed or altered -- confirmed via per-file grep -c '\\.zig' before/after equality.",
+    "acceptance_criteria": [
+      "All 13 files in owned_modules show a net-additive diff (git diff --stat) -- no deletions of citation content, only PROVENANCE marker insertions.",
+      "Per-file grep -c '\\.zig' count is identical before and after for all 13 files (baseline from step-00: req068:18, req069:2, req070:22, req072:13, req073:6, req074:34, req075:17, req076:23, req077:76, req078:122, req079:2, req080:6, req081:4; sum 345).",
+      "No file outside the 13-file owned_modules list, and no CLAUDE.md / README.md / docs/migration/README.md, is touched.",
+      "Every .zig citation unit in each file carries a PROVENANCE (historical, not current decision authority): marker placed per REQ-237 section 2's rule, including edge cases handled via closest-matching existing rule.",
+      "Divergence-note text ('unlike R-Co' / 'deliberately diverges' / 'diverges from R-Co') is present and word-for-word unchanged before/after in every file that carries it."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied REQ-237's PROVENANCE marker convention to all 13 files in owned_modules via 5 parallel sub-agent batches: Batch A (req069,req079,req081,req073,req080) 19 markers; Batch B (req068,req072,req075) 34 markers; Batch C (req070,req074,req076) 40 markers, one new edge case (bare code fence not immediately preceded by a heading, treated as a paragraph-like unit with marker above the fence); Batch D (req077) 44 markers, count unchanged 76->76; Batch E (req078) 83 markers, count unchanged 122->122, two new edge cases (a heading section whose .zig citation lives inside a blockquote below it -- marker placed above the heading/intro line rather than `>`-prefixed inside the blockquote itself, since altering blockquote syntax was avoided; and a heading followed by intervening prose then a code fence -- marker placed above the intervening prose, not the heading). Total 220 markers, 220 insertions, 0 deletions across all 13 files.\n\nORCH independently re-verified rather than trusting the batch summaries: git status/git diff --stat confirms exactly these 13 files modified (13 files changed, 220 insertions(+), 0 deletions(-)), nothing else in the working tree. Per-file grep -c '\\.zig' re-run post-edit: req068:18, req069:2, req070:22, req072:13, req073:6, req074:34, req075:17, req076:23, req077:76, req078:122, req079:2, req080:6, req081:4 -- sum 345, identical to step-00's pre-flight baseline in every file, confirming no citation lost or duplicated. Confirmed CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this 13-file list are untouched (git status --short shows only the 13 named files). Hand-read the full diffs of req070, req077, and req078 directly (not summarized) to spot-check the three newly-flagged edge cases: (1) req074's bare-code-fence case -- the fence (a route table dump) is preceded by ordinary prose ending '...handler file alone):', correctly treated as a paragraph unit with the marker placed above that prose, not fabricating a heading; (2) req078's 'heading whose citation lives in a blockquote below it' case (S7.4 'Moduledoc obligation... validation.zig distinction', S8.1) -- confirmed the .zig citation inside the blockquote is covered by a marker placed above the section heading rather than inserting a `>`-prefixed line inside the blockquote (which would have been syntactically valid but was avoided in favor of the less invasive placement); cross-checked the other 9 unmarked blockquotes in req078 and confirmed each contains no .zig citation of its own, so correctly received no marker; (3) req078's 'heading then intervening prose then code fence' case (S6.5 'New context function') -- confirmed correctly OUT of scope, since the cited path there (event_store.ex) is not a .zig file, so no marker was required, and none was added. Divergence-note check: `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` over all 13 files, before (git show HEAD:<file>) and after (working tree) -- per-file counts identical (req076: 2/2, req078: 1/1, all others 0/0; total 3/3), and the matched line text is byte-identical before and after in every case (confirmed by diffing the concatenated grep output). No genuinely new FIFTH marking convention was needed; every edge case was resolved via the closest-matching existing rule (paragraph/table/heading-scope), each flagged above rather than silently invented, consistent with the ISS-0510 precedent.",
+    "artifacts_out": [
+      "lib/letflow/design/req068-validation.md",
+      "lib/letflow/design/req069-authorization.md",
+      "lib/letflow/design/req070-router-decomposition.md",
+      "lib/letflow/design/req072-tenant-request-context.md",
+      "lib/letflow/design/req073-identity-user-routes.md",
+      "lib/letflow/design/req074-identity-group-routes.md",
+      "lib/letflow/design/req075-tenant-administration-routes.md",
+      "lib/letflow/design/req076-identity-tokens-roles-onboarding.md",
+      "lib/letflow/design/req077-promotion-pipeline-routes.md",
+      "lib/letflow/design/req078-supporting-routes.md",
+      "lib/letflow/design/req079-instance-write-routes.md",
+      "lib/letflow/design/req080-instance-routes-read.md",
+      "lib/letflow/design/req081-definition-routes-read.md"
+    ],
+    "issues": [
+      "Two new citation-unit edge case shapes encountered beyond the four documented in REQ-237/REQ-264/REQ-267 precedent: (a) a bare code fence not immediately preceded by a heading (req074) -- handled as a paragraph-like unit, marker above the fence; (b) a section heading whose only .zig citation lives inside a blockquote body (req078, S7.4/S8.1) -- handled by placing the marker above the heading/intro line rather than inside the blockquote with a `>` prefix, to avoid altering blockquote syntax. Flagged per REQ-268's own instruction rather than silently applying an unrecorded fifth convention; recommend CODE-DESIGNER fold both into REQ-237's design doc as documented shapes for the remaining sibling chunks (REQ-269/270/271) to follow consistently."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ268-20260906",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ268-20260906",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch REVIEWER to gate this diff independently against REQ-237's convention and the acceptance criteria above, paying particular attention to the two new edge cases."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

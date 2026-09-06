@@ -74,6 +74,7 @@ Requests to `/api/v1/instances/abc` arrive at `ApiPipeline` with path `/instance
 
 2. Deferred route table — all eleven modules with owning stage:
 
+   PROVENANCE (historical, not current decision authority):
    | Letflow module (pending) | R-Co source | Owning stage |
    |---|---|---|
    | `Letflow.Routers.Dlq` | `dlq.zig` | S6 (dead-letter queue subsystem) |
@@ -89,6 +90,7 @@ Requests to `/api/v1/instances/abc` arrive at `ApiPipeline` with path `/instance
    | `Letflow.Routers.AgentEvents` | `agent_artifacts.zig` et al. | post-S6 (runtime-agent subsystem) |
 
 3. Readiness statement:  
+   PROVENANCE (historical, not current decision authority):
    `Readiness endpoint (R-Co routes/health.zig handleReady, backed by
    src/api/health/readiness.zig + subsystems.zig) is deliberately not ported — it
    requires S6 observability subsystem probes that do not yet exist. Only the liveness
@@ -179,6 +181,7 @@ routes to sub-routers; `Plug.Router` composes `Plug.Builder`'s plug macro into i
 **Deferred plugs** (listed in `ApiPipeline`'s moduledoc, not declared until owning
 requirements land):
 
+PROVENANCE (historical, not current decision authority):
 | Deferred plug | R-Co source | Owning stage |
 |---|---|---|
 | `Letflow.Plugs.Trace` | `trace.zig` | S6 (observability infrastructure) |
@@ -323,6 +326,7 @@ The requirement specifies "Plug.Parsers (JSON, :length-capped)" but does not nam
 limit. The current `lib/letflow/router.ex` has no `:length` option on `Plug.Parsers`.
 **ELIXIR-DEV must choose a value** when implementing `Letflow.Plugs.ApiPipeline`.
 
+PROVENANCE (historical, not current decision authority):
 Suggested default: `length: 2_000_000` (2 MB). Rationale: this is Plug's own default
 (`Plug.Parsers` source: default `:length` is 8 MB, but stricter is safer until R-Co's
 `content_type.zig` / `validate.zig` ports specify the actual envelope).  

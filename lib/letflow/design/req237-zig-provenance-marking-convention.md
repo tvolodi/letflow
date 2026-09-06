@@ -9,6 +9,21 @@ below) only chunked `docs/` and `docs/requirements.yaml` — it never produced a
 `lib/letflow/design/`'s 100 `.zig`-carrying files. Nothing else in this document was
 re-litigated or reopened; REQ-237 itself remains `status: done`.
 
+**AMENDMENT 2026-09-06 (REQ-263 rework):** added §2.5, a mandatory frozen-volume carve-out
+this design failed to state before now. Root cause: §6's `239i` chunk row recommended
+`docs/status/*` as a chunk without ever checking whether any file under `docs/status/` is
+subject to a competing invariant. It is: `docs/status/requirement_status.index.yaml` pins a
+`frozen_prefix_lines`/`frozen_prefix_sha256` per closed volume, enforced by
+`test/docs/requirement_status_invariants_test.exs` (assertion A6). REQ-263's DOC-UPDATER run
+followed this design's §2 unit-shape rules mechanically and inserted the marker into 8 closed
+volumes' frozen prefixes (`docs/status/requirement_status.yaml`, `.v2`, `.v3`, `.v4`, `.v5`,
+`.v6`, `.v7`, `.v9`), breaking A6 on 4 of the invariants test's 20 assertions — a purely
+additive, comment-equivalent insertion still corrupts a byte-frozen prefix, since the frozen
+mechanism hashes exact line content, not semantic meaning. §2.5 below states the carve-out as
+a mechanical rule; it also corrects REQ-263's own in-scope file list from 11 files down to 3.
+Nothing else in this document is re-litigated: §2's marker text/regex, §1/§3-§5's unit-shape
+rules, §6's other chunk rows, and REQ-237's own `status: done` are all unchanged.
+
 **AMENDMENT 2026-09-05 (ISS-0510):** added a fourth citation-unit shape to §2 —
 "YAML comment-line/sequence-item" — covering two patterns DOC-UPDATER already applied in
 `docs/requirements.yaml` (a `#`-prefixed comment line above an `acceptance_criteria` bullet
@@ -216,6 +231,75 @@ This is an accepted cost of constraint (a)'s "one literal string, no per-context
 requirement — flagged as OQ-1 (§8) for REVIEWER to confirm the trade-off (greppability over
 visual styling) is the right one, since the reverse choice (bold/heading styling, two regex
 branches) was also a legitimate design and is not obviously worse.
+
+---
+
+## 2.5. Mandatory carve-out — closed/frozen `docs/status/` volumes are OUT OF SCOPE entirely
+(added 2026-09-06 amendment, REQ-263 rework)
+
+**This section overrides §2's placement rule wherever the two conflict.** It exists because
+§2 as originally written had no awareness that a target file could be subject to a *second,
+competing* invariant that outranks this convention — `docs/status/requirement_status*.yaml`
+volumes are exactly that case.
+
+**The rule, mechanical and unambiguous:**
+
+1. Before applying this convention (inserting the `PROVENANCE (historical, not current
+   decision authority):` marker anywhere) to any file under `docs/status/`, first read
+   `docs/status/requirement_status.index.yaml`'s `volumes:` list.
+2. If the target file's path matches a `volumes:` entry whose `status:` field is `closed`,
+   the file is **OUT OF SCOPE for this convention, entirely, permanently** — do not insert
+   the marker anywhere within that entry's `frozen_prefix_lines` (i.e., anywhere in the file,
+   for every volume closed to date, since the frozen prefix is the file's full historical
+   content up to its closure point). This holds **even if**:
+   - the insertion would otherwise be purely additive (a new standalone line, nothing
+     deleted or altered — §2(b)'s "never deletes or alters existing text" guarantee does
+     not make an insertion safe here);
+   - the insertion would be phrased as a `#`-prefixed YAML comment per §2's fourth
+     (YAML comment-line/sequence-item) unit shape — that shape's regex/marker-text
+     compatibility is irrelevant to this rule, since the objection here is not to the marker
+     text but to touching a byte-frozen prefix at all;
+   - every other §2 unit-shape rule (line/paragraph/table/YAML-comment) would otherwise
+     apply cleanly and unambiguously to the citation in question.
+
+   **"It's just a comment insertion" is explicitly not a valid exception.** The frozen-prefix
+   mechanism (`test/docs/requirement_status_invariants_test.exs` assertion A6) verifies each
+   closed volume's `frozen_prefix_lines` against its pinned `frozen_prefix_sha256` — a
+   content hash over exact line bytes, not over semantic/decision-authority meaning. Any
+   inserted line, regardless of how inert its content is to a human reader, changes the hash
+   and fails A6. This convention has no authority to modify a byte-frozen file: the
+   frozen-prefix invariant pre-dates this convention (REQ-237) and was never contemplated by
+   §1-§5's design, which surveyed citation phrasing shapes but never surveyed competing
+   file-level invariants. Where the two conflict, the frozen-prefix mechanism wins
+   unconditionally.
+3. A file under `docs/status/` is only in scope for this convention if either:
+   - it matches a `volumes:` entry whose `status:` is `current` (as of 2026-09-06, that is
+     `docs/status/requirement_status.v10.yaml` alone — re-check the index at fix time, since
+     the current volume rolls over); or
+   - it does not appear in the index's `volumes:` list at all (a one-off, non-run-history
+     doc under `docs/status/`, e.g. `docs/status/S1-release-2026-08-16.yaml` — such files
+     carry no frozen-prefix guarantee and this convention's ordinary §2 rules apply to them
+     unmodified).
+
+**Corrected REQ-263 scope (actionable, for DOC-UPDATER/ORCH to apply directly, not a new
+requirement):** REQ-263's `acceptance_criteria` as drafted names 11 files. Applying the rule
+above, only **3 files are actually in scope**:
+
+- `docs/status/S1-release-2026-08-16.yaml` (not a `volumes:` entry — a one-off release doc)
+- `docs/frontend/contract-gaps.md` (not under `docs/status/` — unaffected by this carve-out)
+- `docs/anti-patterns.md` (not under `docs/status/` — unaffected by this carve-out)
+
+**Excluded — permanently out of scope for this convention, each a closed `volumes:` entry:**
+`docs/status/requirement_status.yaml` (volume 1), `.v2` (volume 2), `.v3` (volume 3), `.v4`
+(volume 4), `.v5` (volume 5), `.v6` (volume 6), `.v7` (volume 7), and `.v9` (volume 9) — all
+eight carry `status: closed` in the index and a pinned `frozen_prefix_sha256`; none may be
+marked, in whole or in part, by this convention, regardless of any future revision to this
+design's §2 unit shapes.
+
+This narrows REQ-263 from an 11-file to a 3-file requirement. Per this run's dispatching
+ORCH, this is a scope correction narrow enough to apply directly without a new
+REQ-ANALYST/REQ-VALIDATOR pass — flagged here for REVIEWER/ORCH to confirm that reading if
+disputed, rather than silently assumed.
 
 ---
 

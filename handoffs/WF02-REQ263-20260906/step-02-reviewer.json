@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ263-20260906-step-02",
+  "run_id": "WF02-REQ263-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ263-20260906/step-02-reviewer.json",
+  "created_at": "2026-09-06T00:00:00Z",
+  "started_at": "2026-09-06T00:00:00Z",
+  "completed_at": "2026-09-06T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-263"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ263-20260906/step-01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "branch_name": "feature/WF02-REQ263-20260906",
+    "base_commit": "b12898cb"
+  },
+  "result": {
+    "status": "FAIL",
+    "summary": "Independently re-derived (own grep/diff, not DOC-UPDATER's numbers): scope, additive-only, and CLAUDE.md/README.md/docs/migration/README.md-untouched claims all confirmed correct. `git diff --stat b12898cb..HEAD` touches exactly the 11 named files plus handoffs/{orchestrator.log,registry.json,WF02-REQ263-20260906/step-00-git-setup.json,step-01-doc-updater.json} -- no docs/requirements.yaml changes, no files outside the 11 named ones, no docs/status or docs/frontend files beyond the ones named. `git diff --numstat` per file: v2=12/0, v3=3/0, v4=4/0, v5=3/0, v6=5/0, v7=3/0, v9=22/0, requirement_status.yaml=57/0, S1-release=4/0, contract-gaps.md=2/0, anti-patterns.md=2/0 -- 0 deletions everywhere, matching DOC-UPDATER's additive-only claim, including the two closed run-history volumes (v9.yaml, requirement_status.yaml vol.1), both spot-checked line-by-line to confirm no reordering/timestamp/existing-note-text changes beyond the inserted marker lines. `git diff b12898cb..HEAD -- CLAUDE.md README.md docs/migration/README.md` is empty (0 lines). Marker text 'PROVENANCE (historical, not current decision authority):' matches REQ-237 section 2 verbatim everywhere sampled (v2/v3/v4/v5/v6/v7/v9/requirement_status.yaml folded-scalar PARAGRAPH-shape insertions, and S1-release's YAML comment-line shapes for both the evidence: bullets and the REQ-021 id:/title: pair) -- all placed with zero blank line between marker and the unit's first content line, matching section 4's worked examples and matching merged precedent in docs/migration/stage-1-identity.md, stage-2-event-store-definitions.md, and stage-3-instance-engine.md (git grep -n -B1 -A1 '^PROVENANCE (historical' main -- these three files: marker line immediately followed by the citation content line in every instance, no blank line, confirming this is the correct, established placement). FAIL REASON: two of the 11 files deviate from that placement rule by inserting a spurious blank line between the marker and the unit it marks, contradicting both REQ-237 section 2's 'immediately above the ... unit' rule and section 4's worked examples (verified via direct Read of both files post-edit): (1) docs/anti-patterns.md lines 637-639 -- marker inserted after list item 2's text, then a blank line, then item 3 ('REQ-111's premise...') starts. This detaches the marker from the paragraph/list-item unit it is supposed to sit immediately above and, worse, interleaves a bare non-list-item text line into the middle of a markdown ordered list (items 1, 2, [marker line], [blank], 3) -- this is very likely to break ordered-list continuity/renumbering in standard Markdown rendering (GitHub included), since a paragraph line inserted between list items without proper indentation is not parsed as part of the same list. DOC-UPDATER's own step-01 summary admits this explicitly: 'marker plus blank line inserted immediately above the list item, preserving its explicit 3. numbering' -- the stated justification (preserving the explicit numbering) does not actually require a blank line, and the design doc's own worked examples (section 4) never use a separating blank line. (2) docs/frontend/contract-gaps.md lines 98-100 -- marker inserted after the route-inventory prose paragraph, then a blank line, then the route table's header row. Section 2's TABLE rule says 'insert this line ... immediately above the smallest enclosing citation unit' (the table, from header through last row) -- a blank line between marker and header row is a deviation from that placement rule and from precedent (no merged sibling table-shape or paragraph-shape citation carries a separating blank line; checked docs/migration/stage-{1,2,3}-*.md, all merged 239e2/predecessor work). Both deviations are confined to files that had zero pre-existing PROVENANCE markers before this run (confirmed via `git show b12898cb:docs/anti-patterns.md | grep PROVENANCE` and same for contract-gaps.md, both empty) -- there is no prior local precedent excusing the blank line; it is a new mistake introduced by this DOC-UPDATER turn. Recommend: route back to DOC-UPDATER to remove the extraneous blank line in both files (2 one-line deletions, no other change needed) and re-submit for REVIEWER re-gate. Not a scope-creep, supervision, or type-safety finding -- this gate's normal OTP-idiom questions 1-3 do not apply to a doc-only change; question 4 (scope creep) found none: the change stays exactly within the 11 named files and applies only the marker convention, no extra abstraction introduced.",
+    "artifacts_out": [
+      "docs/anti-patterns.md",
+      "docs/frontend/contract-gaps.md"
+    ],
+    "blocking_findings": [
+      {
+        "file": "docs/anti-patterns.md",
+        "lines": "637-639",
+        "issue": "Marker line followed by a blank line before the numbered-list item it marks, deviating from REQ-237 section 2/4's no-blank-line placement rule and risking broken ordered-list rendering.",
+        "fix": "Delete the blank line between the PROVENANCE marker and '3. **REQ-111's premise.**' so the marker sits immediately above item 3 with no separating blank line."
+      },
+      {
+        "file": "docs/frontend/contract-gaps.md",
+        "lines": "98-100",
+        "issue": "Marker line followed by a blank line before the table header row it marks, deviating from REQ-237 section 2's TABLE-shape placement rule and from merged precedent.",
+        "fix": "Delete the blank line between the PROVENANCE marker and the '| # | Route ...' header row so the marker sits immediately above the table with no separating blank line."
+      }
+    ]
+  }
+}

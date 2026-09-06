@@ -1,0 +1,58 @@
+{
+  "handoff_id": "WF02-REQ263-20260906-step-08",
+  "run_id": "WF02-REQ263-20260906",
+  "workflow_id": "WF-02",
+  "step": "08",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ263-20260906/step-08-reviewer.json",
+  "created_at": "2026-09-06T06:15:00Z",
+  "started_at": "2026-09-06T06:15:00Z",
+  "completed_at": "2026-09-06T06:15:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "task": {
+    "description": "Full re-gate (not focused) of REQ-263's corrected 3-file scope after the frozen-volume BLOCKER fix: independently re-derive diff isolation, invariants-test pass count, marker placement correctness, design-doc amendment soundness, and requirements.yaml scope-update status.",
+    "acceptance_criteria": [
+      "git diff origin/main --stat shows only the 3 in-scope files + design doc amendment + handoff/registry bookkeeping; 8 closed volumes show zero diff",
+      "mix test test/docs/requirement_status_invariants_test.exs re-run independently: 20/20",
+      "3 in-scope files' PROVENANCE markers correctly placed, additive-only, .zig counts unchanged, divergence notes untouched",
+      "design doc §2.5 amendment reads correctly, no contradiction with prior amendments",
+      "docs/requirements.yaml REQ-263 entry scope-update status confirmed"
+    ]
+  },
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-263"],
+    "branch_name": "feature/WF02-REQ263-20260906",
+    "base_commit": "c952f6b3",
+    "artifacts_in": [
+      "handoffs/WF02-REQ263-20260906/step-06-code-design-validator.json",
+      "handoffs/WF02-REQ263-20260906/step-07-elixir-dev.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "docs/status/S1-release-2026-08-16.yaml",
+      "docs/frontend/contract-gaps.md",
+      "docs/anti-patterns.md",
+      "docs/requirements.yaml (REQ-263 entry)"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Full independent re-gate performed, not a trust-and-stamp of prior PASSes. All five checks pass; one non-blocking gap noted for ORCH (item 5, requirements.yaml scope text).\n\n1. DIFF ISOLATION: `git fetch origin main` then `git diff origin/main --stat` shows exactly: docs/anti-patterns.md (+1), docs/frontend/contract-gaps.md (+1), docs/status/S1-release-2026-08-16.yaml (+4), lib/letflow/design/req237-zig-provenance-marking-convention.md (+84, the §2.5 amendment), plus handoffs/WF02-REQ263-20260906/step-00..07*.json and handoffs/{orchestrator.log,registry.json} bookkeeping. Independently ran `git diff origin/main -- <each of the 8 closed volumes>` (requirement_status.yaml, .v2-.v7, .v9) one at a time: every single one returned zero diff lines. The 8-volume revert (commit c952f6b3) is confirmed complete and clean, not just claimed.\n\n2. TEST RE-RUN: ran `mix test test/docs/requirement_status_invariants_test.exs` myself on this branch (did not reuse ELIXIR-DEV's or CODE-DESIGN-VALIDATOR's reported counts) -- output: `Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]` / `....................` / `Finished in 1.1 seconds` / `Result: 20 passed`. 20/20 confirmed independently.\n\n3. MARKER PLACEMENT (re-verified from raw bytes via `sed -n ... | cat -A`, not just `git diff` context lines): (a) docs/frontend/contract-gaps.md -- marker sits on its own line immediately after one blank line following the route-inventory prose, immediately above the table's header row (`| # | Route ...`), zero blank line between marker and header -- correct per design §2's table-unit rule, and matches step-04 REVIEWER's prior confirmation that the blank-line defect between marker and table header was removed. (b) docs/anti-patterns.md -- marker sits with zero blank lines directly above numbered list item 3 ('**REQ-111's premise.**'), immediately after item 2's last line with no blank line -- correct: each numbered list item is its own smallest-enclosing citation unit here (item 3 alone carries the instance.zig/transition.zig citations at lines 639/643, confirmed via grep), consistent with step-04's prior confirmation of this exact fix. (c) docs/status/S1-release-2026-08-16.yaml -- 4 markers, all `# `-prefixed YAML comments (correct per §2's fourth YAML-comment-line unit shape, since this is YAML), each placed immediately above the specific evidence: bullet or id:/title: pair carrying a .zig citation (REQ-015, REQ-017, REQ-018, and before REQ-021's id: key, matching the design's own REQ-021 worked-precedent for id:/title: pairs). All three files: `.zig` counts confirmed identical before (origin/main) vs after (working tree) -- S1-release 6/6, contract-gaps.md 4/4, anti-patterns.md 2/2 -- confirming additive-only, no path text lost. Divergence-note grep (`unlike R-Co|deliberately diverges|diverges from R-Co`) against all 3 files returned zero matches both directions -- no divergence notes present to corrupt, consistent with REQ-263's own acceptance criterion for this check.\n\n4. DESIGN DOC §2.5 RE-READ IN FULL (own pass, not trusting CODE-DESIGN-VALIDATOR's step-06 summary): the amendment is mechanical and unambiguous -- read the index's volumes: list, closed status is permanent+total exclusion (explicitly rejects the 'it's just a comment insertion' escape hatch that caused the original defect), current/absent-from-index files stay in ordinary §2 scope. It states the corrected 3-file/8-excluded-file list by name. Cross-checked against both prior 2026-09-05 amendments (ISS-0510 YAML-comment shape, and the lib/letflow/design/ chunking table): no overlap or contradiction -- §2.5 touches only docs/status/ frozen-volume scoping, the ISS-0510 amendment touches only §2's YAML-comment unit shape (different concern, and §2.5 explicitly disclaims relevance to that shape's regex/marker-text), and the chunking amendment touches a different directory (lib/letflow/design/) entirely. REQ-237's own status: done is untouched by any of the three amendments. No implementation code present anywhere in the amendment. This independently reproduces CODE-DESIGN-VALIDATOR's step-06 conclusion rather than just accepting it.\n\n5. REQUIREMENTS.YAML SCOPE UPDATE -- GAP NOTED, NOT BLOCKING: read REQ-263's live entry directly (`awk '/^  - id: REQ-263$/,/^  - id: REQ-264$/'`). It still reads `status: pending` and its description/acceptance_criteria still name the original 11-file scope (all 7 .v-volumes + requirement_status.yaml + the 3 correct files) -- it has NOT yet been updated to reflect the §2.5 carve-out's corrected 3-file scope. This is expected at this point in the pipeline (DOC-UPDATER/DOC-UPDATER-equivalent status-flip step per CLAUDE.md's 'After finishing a requirement' rule runs after REVIEWER's gate, not before), so it is not a gate FAIL, but it is a required follow-up before REQ-263 can be flipped to done: whoever performs the status-flip must rewrite REQ-263's acceptance_criteria/description to the corrected 3-file scope (citing this design's §2.5) rather than leaving the stale 11-file text standing next to a status: done, which would misrepresent what was actually verified.\n\n6. COMPILE/FORMAT (re-run independently): `mix compile --warnings-as-errors` exit 0, no warnings. `mix format --check-formatted` exit 0, clean.\n\nNo idiom/OTP/supervision/scope-creep concerns apply to this run -- it is pure docs/design-doc content, no lib/ or supervision-tree code touched. No new type-safety-shaped issue to file under docs/issues/ for the same reason.",
+    "artifacts_out": [
+      "docs/status/S1-release-2026-08-16.yaml",
+      "docs/frontend/contract-gaps.md",
+      "docs/anti-patterns.md",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "issues": [
+      {
+        "severity": "MEDIUM",
+        "description": "docs/requirements.yaml's REQ-263 entry still states status: pending with the original 11-file description/acceptance_criteria -- must be rewritten to the corrected 3-file scope (per design §2.5) as part of the status-flip step, before REQ-263 is marked done, so the record does not misstate what was verified."
+      }
+    ],
+    "next_action": "merge: rebase feature/WF02-REQ263-20260906 onto current origin/main, then plain `gh pr merge` (no --admin). After merge, route to DOC-UPDATER to rewrite REQ-263's requirements.yaml entry to the corrected 3-file scope (citing design §2.5) and flip status to done, then append the run-history event per CLAUDE.md."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

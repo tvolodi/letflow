@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-11",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "11",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-11-elixir-dev-rework4.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T18:22:31Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03",
+      "WF03-ISS0515-20260906-step-04",
+      "WF03-ISS0515-20260906-step-05",
+      "WF03-ISS0515-20260906-step-06",
+      "WF03-ISS0515-20260906-step-07",
+      "WF03-ISS0515-20260906-step-08",
+      "WF03-ISS0515-20260906-step-09",
+      "WF03-ISS0515-20260906-step-10"
+    ],
+    "artifacts_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "PR #1033 failed CI a FOURTH time with the identical DBConnection.ConnectionError signature, despite rework 3's `services.postgres.command: postgres -c max_connections=200` override, and that run's own Postgres logs showed both 'too many clients already' and 'selecting default max_connections ... 100' -- proving the override never took effect. ORCH abandoned the services.command approach after four consecutive failures and directed a fundamentally different, locally-verifiable fix: make the ISS-0426 nested subprocess skip the tenant_template pre-build entirely, since its own moduledoc already guarantees its 11 tests need no DB access."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "FIX IMPLEMENTED (root cause removed, not budget reslicing):\n1. test/letflow/engine/lua/executor_test.exs: the ISS-0426 self-check's System.cmd/3 call now also passes env: [{\"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD\", \"1\"}] alongside the existing {\"TEST_POOL_SIZE\", \"4\"}. Added a detailed comment explaining why this is safe by construction (module's own moduledoc guarantees the 11 :lua_wallclock_race tests are DB-access-free; the tenant_template schema was already built by the enclosing partition before this nested process could exist; the nested re-attempt only happens because :persistent_term is per-BEAM-VM) and why TEST_POOL_SIZE=4 is kept, not removed (test_helper.exs's sweep_orphans/0 and sweep_service_catalog_orphans/1 remain unconditional and still open real Repo checkouts in this subprocess regardless of the new flag).\n2. test/test_helper.exs: wrapped the ISS-0515 Letflow.Test.TenantTemplate.ensure_template!() call in `if System.get_env(\"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD\") != \"1\" do ... end`. Comment makes clear this is a narrow, one-call-site escape hatch (not a general opt-out) -- every other invocation shape (plain `mix test`, `mix test <path>`, scripts/test_parallel.sh partitions, `mix letflow.check.test`) is unaffected and still runs the pre-build unconditionally, preserving design doc §7's original 'unconditional, not gated' reasoning for all real invocations.\n3. .github/workflows/ci.yml: REVERTED rework 3's services.postgres.command: postgres -c max_connections=200 key and the 'Run backend gate' step's TEST_MAX_CONNECTIONS: \"200\" env var back to the pre-rework-3 state. Chose full revert over 'leave as harmless no-op' because live CI evidence (the too-many-clients + selecting-default-max_connections-100 log lines from the actual failed 4th run) proves the override never took effect at all -- leaving disproven, misleading config/comments in place would actively mislead a future reader into thinking the mechanism works. Replaced the old comment block with an honest post-mortem: what was tried, the exact log evidence it didn't work, that the root mechanism failure was not conclusively diagnosed, and a pointer to the actual fix and the decision record's new addendum.\n4. Pool-size tuning (TEST_POOL_SIZE=4, TEST_NONPOOL_CONNECTION_RESERVE default=5) from reworks 1/2: KEPT, not simplified away. Justification: the pre-build skip only removes ensure_template!/0's advisory-lock-contending DB path from the nested subprocess -- test_helper.exs's sweep_orphans/0 and sweep_service_catalog_orphans/1 remain unconditional in that same subprocess and still perform real Repo checkouts, so the subprocess is NOT DB-work-free overall and a pool of 0 or removing TEST_POOL_SIZE entirely (falling back to an uncapped schedulers_online()*2-sized pool) would reopen the original ISS-0515/ISS-0426 addendum-2 problem this value already fixed. TEST_POOL_SIZE=4 was never wrong for that residual load; kept as-is.\n5. docs/migration/decisions/0009-test-parallel-pool-sizing.md: added a fourth addendum (2026-09-06, ISS-0515 fourth rework) recording (a) the live CI log evidence disproving rework 3's fix (quoted verbatim: 'FATAL: sorry, too many clients already' and 'selecting default max_connections ... 100'), explicitly marking rework 3's approach DISPROVEN rather than deleting its history, (b) the root-cause re-examination and the actual fix taken (skip flag), (c) why TEST_POOL_SIZE=4 is kept unchanged, and (d) full verification output. Also appended a one-line 'UPDATE' pointer at the end of the third addendum so a reader scanning top-to-bottom immediately sees rework 3 was reverted before reaching the old, now-superseded text.\n\nVERIFICATION (own output, this turn):\n- `python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\"`: parses clean, no `command:` key or `TEST_MAX_CONNECTIONS` present under services.postgres/backend env.\n- `mix compile --warnings-as-errors`: exit 0, no output (clean).\n- `mix format --check-formatted`: exit 0 (clean).\n- `mix test test/letflow/engine/lua/executor_test.exs` run TWICE: both runs 'Result: 45 passed, 11 excluded', 0 failures -- the ISS-0426 self-check (spawning the nested subprocess with the new skip flag) passed both times, confirming the skip logic itself works and the 11 tests still pass via the nested subprocess with the pre-build skipped.\n- `mix test test/support/tenant_template_test.exs`: 'Result: 7 passed' -- confirms the original ISS-0515 mechanism, still used unconditionally by every OTHER invocation shape, is untouched.\n\nNON-REPRODUCTION NOTE (same caveat as all three prior reworks): the original failure is CI-specific connection scarcity under real N-way partition concurrency and does not reproduce in this local sandbox (more headroom than a busy CI runner). This fix's correctness rests on removing a demonstrably unnecessary DB-touching call from the nested subprocess (verified by the test module's own moduledoc invariant and by the fact the enclosing partition must have already built tenant_template for this nested process to exist at all), not on a local repro of the exhaustion itself.\n\nCONFIDENCE: high that the skip logic is correct and safe (backed by the moduledoc invariant, by-construction reasoning about build ordering, and passing local tests). Moderate-high (not absolute) that this resolves the CI-specific scarcity, since it removes one real, previously-unaccounted-for source of Postgres connection pressure (ensure_template!/0's advisory-lock-check queries plus the risk of it deciding to actually rebuild) from the nested subprocess, without needing to reproduce the exact CI-only race locally. If CI fails a fifth time with the same signature, the next-most-likely remaining pressure sources are the still-unconditional sweep_orphans/0 and sweep_service_catalog_orphans/1 calls in test_helper.exs (could gate those behind the same flag too) or genuine outer-N-partition saturation unrelated to this one nested subprocess at all."
+  },
+  "rework_count": 4,
+  "max_rework": 5
+}

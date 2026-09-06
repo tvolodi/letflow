@@ -1470,7 +1470,35 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
           "mix",
           ["test", "--only", "lua_wallclock_race", "test/letflow/engine/lua/executor_test.exs"],
           stderr_to_stdout: true,
-          env: [{"TEST_POOL_SIZE", "4"}]
+          env: [
+            {"TEST_POOL_SIZE", "4"},
+            # ISS-0515, fourth rework (2026-09-06): PR #1033 failed CI four times in a
+            # row with the identical DBConnection.ConnectionError signature even after
+            # doubling Postgres's own max_connections (see this file's env var and
+            # docs/migration/decisions/0009-test-parallel-pool-sizing.md's fourth
+            # addendum for the live CI evidence that the `services.postgres.command`
+            # override did NOT actually raise the server-side ceiling). Rather than
+            # attempt a fifth reslice/raise of a connection budget this subprocess
+            # never needed to touch in the first place, this env var tells
+            # test/test_helper.exs to skip its `Letflow.Test.TenantTemplate
+            # .ensure_template!/0` pre-build call entirely inside THIS one nested
+            # subprocess. That is safe by construction: this module's own moduledoc
+            # already states the 11 `:lua_wallclock_race`-tagged tests need "No
+            # database access required ... short-circuit before any Repo insert" --
+            # they have no tenant fixture dependency for `ensure_template!/0` to have
+            # ever protected them from in the first place. The tenant_template schema
+            # was, in any case, already built by THIS partition's own enclosing
+            # test_helper.exs run before this test process could even exist -- the
+            # nested subprocess re-doing that work from its own empty
+            # `:persistent_term` was always pure overhead, never a genuine
+            # correctness requirement. `TEST_POOL_SIZE=4` above is left in place
+            # (not reduced further) because test_helper.exs's `sweep_orphans/0` and
+            # `sweep_service_catalog_orphans/1` calls remain unconditional and still
+            # open real `Letflow.Repo` checkouts in this subprocess regardless of
+            # this flag -- it removes the heaviest, advisory-lock-contending DB path
+            # (`ensure_template!/0`), not all DB access from this process.
+            {"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD", "1"}
+          ]
         )
 
       assert exit_code == 0,

@@ -385,3 +385,123 @@ Postgres server's `max_connections` in CI via `services.postgres.command`,
 and (b) sets `TEST_MAX_CONNECTIONS=200` in the same CI step so this script's
 arithmetic uses the real, raised ceiling instead of continuing to compute
 against the old, unchanged 100 default while the real server allows more.
+
+**UPDATE (2026-09-06, fourth rework): the third rework's fix above did NOT
+work, and has been reverted — see the addendum below.**
+
+## Addendum (2026-09-06, ISS-0515 fourth rework) — the `services.command`
+   ceiling raise was disproven by live CI evidence; fix the actual root
+   cause instead
+
+PR #1033 failed CI a **fourth** time, with the identical
+`DBConnection.ConnectionError` signature as all three prior failures, despite
+the third rework's `max_connections=200` override supposedly doubling the
+server-side ceiling. This time the CI run's own Postgres container logs were
+inspected directly, and they settle the question conclusively:
+
+- `FATAL: sorry, too many clients already` — repeated many times in the
+  Postgres container's log for this run, confirming the server was still
+  being driven into real connection exhaustion.
+- `selecting default max_connections ... 100` — from the SAME container's own
+  `initdb` bootstrap log, i.e. the server itself started at the untouched
+  default of 100, not 200.
+
+This is direct, live evidence that `command: postgres -c
+max_connections=200` did **not** take effect at the server level in this
+actual runner/image invocation, despite REVIEWER independently confirming
+from GitHub's own documentation (in the third rework) that the
+`services.<id>.command` YAML key is real, is Linux-runner-supported, and
+should — per that documentation — have worked exactly this way. Two
+independent, correctly-cited sources being right about the mechanism's
+existence does not guarantee the mechanism actually fires in every runner
+image/version combination; something about this specific invocation (a YAML
+subtlety, a runner-version gap, or a precedence issue with an implicit
+default `CMD`/entrypoint winning over the declared `command:`) prevented the
+override from reaching the running `postgres` process. The exact mechanism
+was NOT conclusively identified — ORCH made the deliberate call to stop
+debugging `services.command` itself after four consecutive identical
+failures and pursue a different, locally-verifiable fix instead, rather than
+spend a fifth rework chasing the same non-working lever.
+
+**This addendum records the disproven attempt rather than deleting it**, so
+a future session facing the same `too many clients` symptom does not
+re-attempt `services.postgres.command` expecting a different result without
+first understanding why it failed here.
+
+**Fix actually taken: eliminate the nested subprocess's need for the
+connection budget entirely, rather than continuing to try to enlarge or
+reslice it.** `.github/workflows/ci.yml`'s `services.postgres.command` key
+and the "Run backend gate" step's `TEST_MAX_CONNECTIONS: "200"` env var have
+both been **removed** (reverted to the pre-third-rework state), since live
+evidence shows the override never actually changed server behavior and
+leaving it in place would misleadingly document a mechanism as working when
+it demonstrably was not in this environment.
+
+Root-cause re-examination: the actual, avoidable cost every prior rework
+worked around rather than removed was `test/test_helper.exs`'s unconditional
+`Letflow.Test.TenantTemplate.ensure_template!()` call running a second time
+inside executor_test.exs's ISS-0426 nested `mix test --only
+lua_wallclock_race` subprocess (see this file's first ISS-0515 addendum
+above for the original root-cause writeup). That subprocess's own 11 tagged
+tests are, by this test module's own moduledoc, guaranteed DB-access-free —
+they have no tenant-fixture dependency for `ensure_template!/0` to protect in
+the first place — and the tenant_template schema it builds was, by
+construction, ALREADY built by the enclosing partition's own test_helper.exs
+run before this nested test process could even exist (the nested subprocess
+only re-attempts the advisory-lock-check path because its own fresh
+`:persistent_term` cache is per-BEAM-VM and starts empty). Every prior
+rework treated the resulting extra connection pressure as a budget-sizing
+problem to be resolved with a bigger or better-sliced pool; this rework
+instead removes the unnecessary work generating that pressure.
+
+`test/letflow/engine/lua/executor_test.exs`'s `System.cmd/3` call (the one
+spawning the nested subprocess) now also passes
+`env: [{"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD", "1"}]` alongside the
+existing `{"TEST_POOL_SIZE", "4"}`. `test/test_helper.exs` checks this env
+var and skips its `ensure_template!()` call when set — an explicitly narrow,
+one-call-site escape hatch (not a general opt-out; every other invocation
+shape this project uses — plain `mix test`, `mix test <path>`,
+`scripts/test_parallel.sh` partitions, `mix letflow.check.test` — is
+unaffected and still runs the pre-build unconditionally, per this file's
+original design §7 reasoning).
+
+**Why `TEST_POOL_SIZE=4` is left unchanged, not reduced further or removed.**
+`test/test_helper.exs`'s `sweep_orphans/0` and
+`sweep_service_catalog_orphans/1` calls remain unconditional regardless of
+this new flag — they still open real `Letflow.Repo` checkouts inside the
+nested subprocess. Skipping `ensure_template!/0` removes the heaviest,
+advisory-lock-contending DB path from that subprocess, not all DB access
+from it, so a zero-size or removed pool is not safe here. `TEST_POOL_SIZE=4`
+was never wrong for the residual load these two sweep calls plus Ecto
+Sandbox/DBConnection checkout+checkin overlap can still transiently need
+(per the second addendum above); it remains correct and is kept as-is.
+
+**Verification (this rework, own output):**
+- `mix compile --warnings-as-errors`: clean.
+- `mix format --check-formatted`: clean.
+- `mix test test/letflow/engine/lua/executor_test.exs` (run twice locally):
+  the ISS-0426 self-check test passed both times, confirming the nested
+  subprocess still reports `Result: 11 passed` with the pre-build skipped —
+  the skip logic itself is correct and does not affect the 11 tagged tests'
+  own pass/fail outcome (consistent with their documented DB-independence).
+- `mix test test/support/tenant_template_test.exs`: passed, confirming the
+  original ISS-0515 mechanism — still used unconditionally by every OTHER
+  invocation shape — is untouched by this change.
+- As with every prior rework, the original CI-only connection-scarcity
+  failure does not reproduce in this local sandbox (more headroom than a
+  busy CI runner); this fix's correctness rests on removing a demonstrably
+  unnecessary DB-touching call from the nested subprocess, not on a local
+  repro of the exhaustion.
+
+**What this addendum does not change.** `TEST_POOL_SIZE=4` for the nested
+subprocess; `TEST_NONPOOL_CONNECTION_RESERVE`'s default of 5;
+`TEST_SUPERUSER_RESERVED`, `TEST_CONNECTION_HEADROOM`, `TEST_MIN_POOL_SIZE`'s
+meanings and defaults; `N`-derivation; `Letflow.Test.TenantTemplate
+.ensure_template!/0`'s own logic (correct, unmodified — it is skipped at one
+call site, not changed); the ISS-0515 `test_helper.exs` pre-build mechanism
+for every other invocation shape. This addendum (a) reverts the third
+rework's `services.postgres.command`/`TEST_MAX_CONNECTIONS=200` CI change,
+recording why with live evidence, and (b) adds a narrowly-scoped
+`LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD` env-var escape hatch used by exactly
+one call site (the ISS-0426 nested subprocess) to remove its one avoidable
+source of real DB connection pressure.

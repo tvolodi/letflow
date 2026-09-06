@@ -505,3 +505,50 @@ history:
       timeout, then ISS-0453 poller antagonist-contention); the
       sibling workflow run on the same commit passed backend gate
       cleanly throughout. Queue task 499 released status:done.
+  - req: REQ-263
+    event: done
+    agent: ORCH
+    at: "2026-09-06T07:00:40Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md,
+      and docs/anti-patterns.md, closing ISS-0424 part 3c-10, queue task
+      501, feature/WF02-REQ263-20260906, PR #1024 (merge commit b55bf2fd).
+      This is chunk 239i of ten REQ-239-replacement chunks
+      (REQ-254..263) -- WITH THIS MERGE, ALL TEN ARE NOW DONE, closing out
+      the REQ-239 split entirely.
+
+      SCOPE CORRECTION DISCOVERED AND FIXED WITHIN THIS RUN: this chunk's
+      draft-time scope in docs/requirements.yaml originally named 11 files,
+      including all 7 closed docs/status/requirement_status.v2..v7,v9
+      volumes plus docs/status/requirement_status.yaml. ELIXIR-DEV's first
+      pass applied the marker to all 11; REVIEWER's gate caught that this
+      violates a frozen-volume invariant REQ-237's design never addressed
+      -- closed run-history volumes must never be modified after closure,
+      including by additive-only marker insertion. The 8-volume
+      application was reverted (commit c952f6b3) and REVIEWER's subsequent
+      full re-gate independently re-confirmed, file by file, zero diff
+      against origin/main for all 8. CODE-DESIGNER amended
+      lib/letflow/design/req237-zig-provenance-marking-convention.md with
+      a new section 2.5, permanently and totally excluding closed
+      docs/status/ volumes from this convention (not deferred --
+      excluded outright). CODE-DESIGN-VALIDATOR gated the amendment PASS.
+      REQ-263's own requirements.yaml entry was rewritten to the
+      corrected 3-file scope, citing section 2.5, before this done-flip.
+      Filed for the historical record as docs/issues/ISS-0514.yaml
+      (status: resolved -- the gap was found and fixed within this same
+      run, no further action needed), GitHub issue #1025.
+
+      Full evidence trail: handoffs/WF02-REQ263-20260906/step-05
+      (design amendment) through step-08 (REVIEWER's full independent
+      re-gate: diff isolation confirmed, invariant suite 20/20, marker
+      placement byte-verified in all 3 corrected files, design section
+      2.5 confirmed sound). Merged via PR #1024 (plain merge) after two
+      CI reruns hit the known ISS-0418 wasm_hang isolated-subprocess
+      flake (ExUnit.TimeoutError after 180000ms in
+      host_api_write_test.exs/call_timeout_test.exs, byte-for-byte
+      matching that issue's own recurrence log) with zero structural
+      overlap to this docs-only diff (confirmed via git diff --stat --
+      no lib/letflow/engine/wasm/, test/letflow/engine/wasm/, or
+      lib/letflow/engine/lua/ files touched); the third rerun passed both
+      backend gate runs clean. Queue task 501 released status:done.

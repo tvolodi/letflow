@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-059 — Dependency pin resolution, recording and inheritance
 # (`pin_resolver.zig`, PIN-01/02/03/04)
 
@@ -15,6 +16,7 @@ log is the only place a pin ever lives.
 
 ## 0. Sources read for this design
 
+PROVENANCE (historical, not current decision authority):
 `docs/agents/instructions/core-directives.md`,
 `docs/agents/workflows/WF-02_requirement_implementation.md` Step 1,
 `docs/anti-patterns.md`, `.claude/agents/code-designer.md`,
@@ -99,6 +101,7 @@ already-shipped Letflow code; §9 flags every place this matters.
 
 ### Moduledoc — required content (verbatim-in-substance, per this design)
 
+PROVENANCE (historical, not current decision authority):
 1. Ports `pin_resolver.zig` (R-Co, PIN-01..PIN-04).
 
    **Sourcing note — this is a factual record, not required moduledoc content.**
@@ -113,6 +116,7 @@ already-shipped Letflow code; §9 flags every place this matters.
    second, independent read of R-Co by this design itself.
 2. **SCOPE GAP statement (AC8, verbatim structure required)** — must state, explicitly,
    with the future stage each belongs to:
+   PROVENANCE (historical, not current decision authority):
    - PIN-01 AC1 (`service_catalog` version resolution) and PIN-01 AC2 (`module_ref`
      resolution against PLC-01) are **not satisfiable in Letflow today**: this module
      resolves `catalog_entry` and `module` references only against an **injectable**
@@ -544,6 +548,7 @@ Three new private functions in `engine.ex`, called from `start_instance/5` (§3)
 
 ## 9. Open questions (explicit, not silently resolved)
 
+PROVENANCE (historical, not current decision authority):
 - **OQ-1 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
   disposition `divergent_behavioural`.** This OQ originally recorded that every claim
   in this document came from REQ-059's own requirement text or shipped Letflow code

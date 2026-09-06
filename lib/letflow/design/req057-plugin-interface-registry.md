@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-057 — Plugin handler interface and registry contract (`plugin_interface.zig` +
 `plugin_registry.zig`, EXT-03)
 
@@ -124,6 +125,7 @@ unchanged from the version CODE-DESIGN-VALIDATOR reviewed.
 - `docs/anti-patterns.md` (current entries) — no entry bears directly on this module's own
   construction.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap at time of writing — since resolved for OQ-2 (GH#327, ISS-0099):** this environment
 had no `R-Co/src/engine/plugin_interface.zig`, `R-Co/src/engine/plugin_registry.zig`, or
 `R-Co/src/design/engine.md` reachable — confirmed via `find / -iname "plugin_*.zig"` and
@@ -226,6 +228,7 @@ Field-by-field, matching this run's own text's list exactly:
 @callback handle_node(context :: ExecutionContext.t()) :: outcome()
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Mapping note (required moduledoc content, per this run's own text — "note that mapping in the
 moduledoc"):** R-Co's `plugin_interface.zig` expresses a handler as a function-pointer union
 type (a C-ABI-shaped tagged union distinguishing a `COMPLETE`/`ERROR` result at the type level).
@@ -392,6 +395,7 @@ its own outside what routes into REQ-061's shared sink.
 
 ### 3.2 Scope and key type — the REQ-031 reconciliation, stated explicitly (§10 OQ-2)
 
+PROVENANCE (historical, not current decision authority):
 This run's own text asks this registry to be keyed by "node_type" (registration rejects "a
 duplicate node_type, an invalid node_type"; `resolve_node_handler_kind` operates on node types)
 **and** to wire in REQ-031's already-shipped `plugin_lookup_fun :: (plugin_handler :: String.t(),
@@ -408,6 +412,7 @@ the string a `SERVICE_TASK` node's `attributes["plugin_handler"]` value would ho
 depending on which requirement's vocabulary is talking about it. §5.3 states the adapter that
 makes this literal, not merely analogous.
 
+PROVENANCE (historical, not current decision authority):
 **Confirmed against R-Co source (GH#327, ISS-0099, resolves OQ-2):**
 `R-Co/src/engine/plugin_registry.zig` was read directly. `RegisterPluginHandlerInput.node_type`
 and `PluginRegistration.node_type` (L23–41) are both typed `[]const u8` — Zig's string-slice
@@ -462,6 +467,7 @@ what "the registry's currently supported API version" means is stated at §10 OQ
       | {:error, :duplicate_node_type}
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Seven distinct, pattern-matchable errors** — the five this run's own text names for
 `register_plugin_handler/1` itself (`duplicate_node_type`, `invalid_node_type`, `nil_handler`,
 `incompatible_api_version`, `registry_frozen`) plus the two SVC-02 scoping errors this run's own
@@ -636,6 +642,7 @@ unimplemented-fallback type.
         {:ok, registration()} | {:error, :not_registered}
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Resolution order (this design's own explicit rule, since `plugin_registry.zig`'s literal
 precedence is unverifiable, §10 OQ-1):**
 
@@ -937,6 +944,7 @@ unmodified by this requirement.
 
 ## 10. Open questions — explicitly listed, not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (MAJOR).** §4's storage-mechanism decision (`GenServer` + private ETS, reads bypassing
 the process) is this design's own resolution of the handoff's own explicitly-left-open tension,
 reasoned from `stage-3-instance-engine.md`'s own cited finding — **not verified against
@@ -946,6 +954,7 @@ per the stage doc's own escalation framing, since a plugin-registry storage choi
 the kind of "introduces a new dependency or a platform-wide rule" decision that doc anticipates
 might need one.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-2 — RESOLVED (GH#327, ISS-0099, 2026-08-20).** §3.2's reconciliation — treating this
 registry's `handler_key` as an open `String.t()` (not `Graph.node_type()`'s 8-atom enum)
 specifically so the same namespace serves both this requirement's own "node_type" vocabulary
@@ -963,6 +972,7 @@ its own `@callback` contract) is a design addition beyond this run's own five/se
 included because `outcome()` is not statically enforced across a behaviour dispatch, but flagged
 so REVIEWER can confirm it is a legitimate defensive addition, not undisclosed scope creep.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 (MINOR).** `supported_api_version/0`'s own fixed value (`1`, §6.1 step 5) and the default
 `api_version` applied when a registration omits it (also `1`) are this design's own choice —
 `plugin_registry.zig`'s real versioning scheme (what values are "compatible," whether it is a
@@ -980,6 +990,7 @@ unreachable from outside, since no other process can send it a message before `S
 finishes starting it, but stated here rather than asserted as impossible without tracing it).
 Flagged for REVIEWER to confirm this operational guarantee is sufficient for AC4's own wording.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-6 (MINOR).** `@default_timeout_ms`'s own value (§2.4.1 step 2) is not fixed by this design
 — left as an implementation constant ELIXIR-DEV chooses (a reasonable default, e.g. in the
 low-tens-of-seconds range, matching typical HTTP-call-shaped SERVICE_TASK/plugin latencies this

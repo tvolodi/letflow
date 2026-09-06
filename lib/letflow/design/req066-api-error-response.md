@@ -1,5 +1,6 @@
 # REQ-066 — `Letflow.Api.Error` / `Letflow.Api.Response`
 
+PROVENANCE (historical, not current decision authority):
 Design for the RFC 9457 Problem Details builder and the conn-threading response
 helpers that every S4 route will use. Ports `src/api/errors.zig` (272 lines) and
 `src/api/response.zig` (69 lines). No implementation code below — signatures and
@@ -9,6 +10,7 @@ type shapes only.
 
 ### 0.1 JSON library
 
+PROVENANCE (historical, not current decision authority):
 **Jason.** Already a direct dependency (`mix.exs`: `{:jason, "~> 1.4"}`) and already
 in use in `lib/letflow/router.ex` (`Jason.encode!/1`) and
 `lib/letflow/plugs/tenant_status.ex`. No new dependency. This is also a genuine
@@ -25,6 +27,7 @@ Zig source" so nobody "fixes" Jason back to raw interpolation later.
 **Port only the generic HTTP-status family now; do not port the nine domain-specific
 constructors in this requirement.**
 
+PROVENANCE (historical, not current decision authority):
 Ported now (10 constructors, covering every status code `errors.zig` maps to a
 *generic* HTTP meaning): `bad_request/1` (400), `unauthorized/1` (401),
 `forbidden/1` (403), `not_found/0` (404 — no detail param, see §0.4), `conflict/1`
@@ -141,6 +144,7 @@ not by convention or a lint rule:
 
 ## 1. `Letflow.Api.Error`
 
+PROVENANCE (historical, not current decision authority):
 **File:** `lib/letflow/api/error.ex` (new). **Pure** — no `Plug.Conn` dependency,
 no I/O. Ports `errors.zig`'s `ProblemDetails` struct, its per-status constructors,
 and `serialise/2`.
@@ -157,10 +161,12 @@ and `serialise/2`.
       }
 ```
 
+PROVENANCE (historical, not current decision authority):
 Defined via `defstruct [:type, :title, :status, :detail, trace_id: ""]` — mirrors
 `ProblemDetails`'s field set 1:1, including `trace_id`'s `""` default
 (`errors.zig`'s own default).
 
+PROVENANCE (historical, not current decision authority):
 `@problems_base` — module attribute,
 `Application.compile_env(:letflow, :problems_base_uri, "https://bpm.example.com/problems/")`.
 Ported as a **configured** base (per the handoff's explicit requirement) rather
@@ -184,6 +190,7 @@ derived for the struct — CODE-DESIGN-VALIDATOR should confirm whichever the
 implementer picks compiles; either is a valid `Jason` usage, not a design
 ambiguity that changes the output shape).
 
+PROVENANCE (historical, not current decision authority):
 No `error{OutOfMemory}` equivalent — Elixir has no caller-managed allocator, so
 `errors.zig`'s allocator-failure fallback body (the hand-written literal 500 JSON
 string in `response.zig`'s `problemResponse`) has no Elixir analogue and is not
@@ -205,6 +212,7 @@ silent drop.
 @spec service_unavailable(String.t())   :: t()   # 503
 ```
 
+PROVENANCE (historical, not current decision authority):
 Each constructor sets `type` to `@problems_base <> "<slug>"` (e.g.
 `"bad-request"`, `"not-found"`, `"unauthorized"`, `"forbidden"`, `"conflict"`,
 `"unsupported-media-type"`, `"unprocessable-entity"`, `"rate-limited"`,
@@ -215,6 +223,7 @@ the source excerpts in the handoff). `trace_id` is left at its struct default
 
 ### 1.4 Trace ID resolution
 
+PROVENANCE (historical, not current decision authority):
 `errors.zig`'s `serialise/2` resolves `trace_id` itself (checking a thread-local
 `trace_context.get()` if the struct's own field is empty). Per
 `docs/migration/stage-4-api-surface.md`'s explicit guidance ("Prefer
@@ -231,6 +240,7 @@ until that requirement lands.)
 
 ## 2. `Letflow.Api.Response`
 
+PROVENANCE (historical, not current decision authority):
 **File:** `lib/letflow/api/response.ex` (new). Conn-threading — every function
 takes a `Plug.Conn.t()` and returns a `Plug.Conn.t()`, replacing `response.zig`'s
 `HandlerResult` value-returning shape. State this translation explicitly in the
@@ -239,6 +249,7 @@ result carrier... `response.zig`'s `HandlerResult` struct is replaced by
 conn-threading functions because Zig returns a value having no conn to thread
 through; Elixir's `Plug.Conn` already is that carrier."*
 
+PROVENANCE (historical, not current decision authority):
 ### 2.1 Success helpers (ports `response.zig`'s `ok`/`created`/`noContent`)
 
 ```
@@ -253,15 +264,18 @@ through; Elixir's `Plug.Conn` already is that carrier."*
   single generalization of `router.ex`'s existing private `send_json/3` (already
   named identically and shaped identically) — see §0.3's note that `router.ex`
   should delegate to this instead of keeping its own copy.
-- `ok/2` and `created/2` are thin `send_json/3` wrappers at fixed status codes,
+- PROVENANCE (historical, not current decision authority):
+  `ok/2` and `created/2` are thin `send_json/3` wrappers at fixed status codes,
   mirroring `response.zig`'s `ok`/`created` (which likewise just fix the status
   code onto the same body-passthrough shape).
-- `no_content/1` takes **no body parameter** (mirrors `noContent()` taking no
+- PROVENANCE (historical, not current decision authority):
+  `no_content/1` takes **no body parameter** (mirrors `noContent()` taking no
   argument in `response.zig`) — it always sends an empty string body at 204.
   AC5 requires a test asserting the body is literally empty; `no_content/1`'s
   signature makes any non-empty body impossible to pass in, not just
   discouraged.
 
+PROVENANCE (historical, not current decision authority):
 ### 2.2 Error-sending (ports `response.zig`'s `problemResponse`)
 
 ```
@@ -289,6 +303,7 @@ constructor then `send_problem/2`):
 @spec service_unavailable(Plug.Conn.t(), String.t())   :: Plug.Conn.t()  # 503
 ```
 
+PROVENANCE (historical, not current decision authority):
 Callers needing `WWW-Authenticate` (401) or `Retry-After` (429) set the header
 themselves before calling, since `put_resp_header/3` composes ahead of
 `send_resp/3` in the conn pipeline — e.g.
@@ -302,10 +317,12 @@ by this requirement's scope).
 
 ### 2.3 Content-Type divergence — stated explicitly per the handoff's requirement
 
+PROVENANCE (historical, not current decision authority):
 **Success responses:** `Content-Type: application/json` (unchanged from R-Co;
 `response.zig`'s `CONTENT_TYPE_JSON = "application/json"` is the default on every
 `HandlerResult`, including the success ones).
 
+PROVENANCE (historical, not current decision authority):
 **Error responses:** `Content-Type: application/problem+json`. **This diverges
 from R-Co.** Re-reading `response.zig`'s `problemResponse/2` directly: its
 returned `HandlerResult` literal (`.{ .status_code = pd.status, .body = body }`)

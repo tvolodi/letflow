@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-052 — Instance cancellation (`instance.zig` `cancelInstance`, EE-08)
 
 **Requirement:** REQ-052 (this run's handoff `context.requirement_text.REQ-052`, stage S3)
@@ -108,6 +109,7 @@ design element. No implementation code — signatures/shapes only, matching
   - `test/letflow/parallel_approval_test.exs` (existence confirmed via `grep -rl`, not read
     in full — its removal is ELIXIR-DEV's job alongside the module's own deletion, per §2).
 
+PROVENANCE (historical, not current decision authority):
 **Access gap — RESOLVED 2026-08-22, GH#326 (WF03-ISS0278-20260822).** At design time this
 environment had no `R-Co/src/engine/instance.zig` reachable, so OQ-1 and OQ-2 below were
 left as this design's own unverified resolutions. `R-Co/src/engine/instance.zig` is
@@ -589,6 +591,7 @@ Also states, per §2's own required content: the `Letflow.ParallelApproval`/
 
 ## 11. Open questions — explicitly listed, not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (MINOR) — RESOLVED 2026-08-22, GH#326.** `cancel_attrs()` (§3) carries no
 cancellation-reason/note field. R-Co's own literal `cancelInstance` signature
 (`R-Co/src/engine/instance.zig:2513`) confirms this: its parameter list is

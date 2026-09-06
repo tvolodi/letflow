@@ -155,6 +155,7 @@ own header warning.
 
 ## 4. `Letflow.Engine.SnapshotWriter` — new module, `lib/letflow/engine/snapshot_writer.ex`
 
+PROVENANCE (historical, not current decision authority):
 Ports `snapshot_writer.zig` (R-Co's ISS-601, design artefact `src/design/iss601_state_snapshots.md`).
 Sibling placement to `reconstruction.ex`/`transition.ex`/`instance_state.ex` under
 `lib/letflow/engine/`.
@@ -206,6 +207,7 @@ silently assumed.
       ) :: {:ok, :snapshotted | :skipped} | {:error, term()}
 ```
 
+PROVENANCE (historical, not current decision authority):
 `interval` defaults to `1000` (`snapshot_writer.zig`'s `DEFAULT_SNAPSHOT_INTERVAL`,
 per the requirement text) when omitted from `opts`. Cadence check: snapshot when
 `current_sequence_number` reaches or crosses a multiple of `interval` relative to the
@@ -273,6 +275,7 @@ queries gain a `where([e], e.sequence_number > ^(min_sequence_number - 1))` clau
 
 ### 5.2 `replay/3`'s new first step: replay-source selection
 
+PROVENANCE (historical, not current decision authority):
 Ports `reconstruction.zig`'s `determineReplaySourceForSnapshot()`. Inserted as a new
 first branch in `replay/3`, **before** its existing `SnapshotStore.get_by_instance_id/2`
 call (§5.1 of the REQ-053 design) — that call remains, unchanged, for graph

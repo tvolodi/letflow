@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-060 — Explicit instance pin rebind (`pin_rebind.zig`, PIN-05)
 
 **Requirement:** REQ-060 (stage S3, `depends_on: [REQ-059 (done)]`)
@@ -78,6 +79,7 @@ register-your-own-event-type precedent by direct example, lines 63-97).
   that. REQ-060's own text explicitly wants the **opposite** — `:error` IS terminal
   for rebind purposes. **This module must NOT call `InstanceProjection.terminal?/1`
   at all** — it defines its own, differently-scoped eligibility predicate (§4 M2).
+PROVENANCE (historical, not current decision authority):
 - **`EventStore.append/2` requires its `event_type` to already be registered in
   `event_type_registry` for the calling tenant, or the whole append fails with
   `{:error, :unknown_event_type}`** (`event_store.ex:186`'s
@@ -149,6 +151,7 @@ placement).
 
 ### Moduledoc — required content (verbatim-in-substance, per this design)
 
+PROVENANCE (historical, not current decision authority):
 1. Ports `pin_rebind.zig` (R-Co, 388 lines, PIN-05).
 
    **Sourcing note — this is a factual record, NOT required moduledoc
@@ -495,6 +498,7 @@ this unwrap is a pure pass-through, not a second translation layer.
   call's own `instance_id` — never wider, matching REQ-055's own
   zero-cross-instance-contention bar and every other lock `engine.ex`'s EE-12
   section already inventories (§1, §2 point 5).
+PROVENANCE (historical, not current decision authority):
 - **Contention shape**: `NOWAIT`, not blocking — a concurrent `rebind_pins/3`
   call (same instance) or a concurrent `complete_task/3`/`cancel_instance/3`
   call that has already acquired this same row's lock (via their own plain
@@ -613,6 +617,7 @@ already fixes structurally.
   (`R-Co/src/api/routes/pin_rebind.zig:128`), matching §6's shape.
   §6's statement at the call site above resolves with this one, on the same
   evidence.
+PROVENANCE (historical, not current decision authority):
 - **OQ-5 — RESOLVED 2026-08-19 (REQ-110 audit, run `WF03-REQ110-20260819`):
   disposition `divergent_doc_only`.** This OQ formerly stood as a blanket
   caveat that R-Co's source was believed unreachable, and that every claim

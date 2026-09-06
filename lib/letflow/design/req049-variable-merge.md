@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-049 — Variable scoping and merge (instance.zig mergeVariables, EE-09)
 
 **Requirement:** REQ-049 (`docs/requirements.yaml`, stage S3)
@@ -52,6 +53,7 @@ function bodies, no `.ex`/`.exs` code block contains real logic.
   event's payload shape), not a per-variable business-value check — the two are orthogonal, and
   keeping them distinct is load-bearing for §7's resolution.
 - `docs/guides/backend_developer_guide.md` (full) — §3.5's ordinary error-shape convention.
+PROVENANCE (historical, not current decision authority):
 - `docs/migration/stage-3-instance-engine.md` (full) — EE-09's scope boundary within S3, and
   confirmation that `src/engine/instance.zig`/`src/design/engine.md` are the (unreachable, see
   below) R-Co sources this requirement ports.
@@ -64,6 +66,7 @@ function bodies, no `.ex`/`.exs` code block contains real logic.
   otherwise, and this design does not invent one.
 - `docs/anti-patterns.md` (current entries) — no entry currently bears on this module.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap, stated explicitly rather than silently worked around, matching REQ-044 design doc
 §0's precedent exactly:** this environment has no `R-Co/src/engine/instance.zig` or
 `R-Co/src/design/engine.md` reachable (searched the whole filesystem for `instance.zig`/
@@ -178,6 +181,7 @@ inside `{:error, _}`.
 
 ### 3.1 Algorithm, described (not implemented)
 
+PROVENANCE (historical, not current decision authority):
 **Step 3 corrected 2026-08-20, `docs/migration/decisions/0007-variable-merge-validates-new-keys.md`
 (GH#300/ISS-0077).** The original text below validated `overwrite_keys` only, exempting a
 brand-new key from its own registered schema on the one write most likely to be malformed.
@@ -198,6 +202,7 @@ why.
    - `overwrite_keys` — keys already present in `current_variables`. This partition is used only
      in step 4, to decide which keys' application emits a `VARIABLE_OVERWRITTEN` event — **not**
      to decide which keys get validated in step 3.
+PROVENANCE (historical, not current decision authority):
 3. **Validation pass, over `all_keys` — new and overwrite alike — in sorted order**
    (`instance.zig:2389-2430`'s Phase 1: iterates every key of `output_variables`, checking
    `schema_map.get(key)` unconditionally, with no comparison against `current_vars` at all).
@@ -232,6 +237,7 @@ why.
 
 ### 3.2 Whole-batch atomicity — a reasoned reconstruction, flagged
 
+PROVENANCE (historical, not current decision authority):
 **All-or-nothing: one rejected key aborts the entire `incoming_variables` batch, not just that
 key.** This reading is chosen because AC3 says the rejection "leaves **the variable map**
 unchanged" (not "leaves that one key unchanged") and "transitions **the instance** to ERROR" — an
@@ -564,6 +570,7 @@ likely: abort the whole task-completion flow with its own distinct fault path, n
 
 ### 13.3 Whole-batch atomicity on rejection (§3.2) — reconstructed, not verified
 
+PROVENANCE (historical, not current decision authority):
 Flagged inline at §3.2. Re-check against `instance.zig`'s literal `mergeVariables()` if R-Co
 source ever becomes reachable in this environment.
 

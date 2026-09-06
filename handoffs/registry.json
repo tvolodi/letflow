@@ -5109,7 +5109,7 @@
       "queue_agent_id": "letflow-ee-orch",
       "lock_acquired_at": "2026-09-05T23:48:30Z",
       "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 49ecdd26, pre-flight .zig counts confirmed non-zero in all 13 files (sum 141). Dispatching DOC-UPDATER next.",
+      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 49ecdd26, pre-flight .zig counts confirmed non-zero in all 13 files (sum 141). Step 01 (DOC-UPDATER) COMPLETED PASS -- 92 PROVENANCE markers inserted across all 13 files via 4 parallel batches, .zig counts unchanged (sum 141), divergence-note text unchanged, no other file touched -- independently verified by ORCH before commit. Dispatching REVIEWER next.",
       "note": "Chunk 239-design-d of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- req049-variable-merge.md through req066-api-error-response.md (req049-req066, 13 files, non-contiguous numbering). Sibling chunks 239-design-a/b/c (REQ-264/265/266) precede this range and are done/pending; 239-design-e/f/g/h (REQ-268/269/270/271) follow. No overlap confirmed at registry-scan time (no existing REQ-267 entry found before this one)."
     }
   ]

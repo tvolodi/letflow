@@ -634,6 +634,8 @@ was reachable the whole time and said something different.
    pattern, so list and pattern were self-consistent and blind together. It missed four
    files including a fourth shipped moduledoc (`lib/letflow/engine/execution_error.ex`).
    Its "30 occurrences" counted `docs/`, i.e. the record counting itself.
+PROVENANCE (historical, not current decision authority):
+
 3. **REQ-111's premise.** ORCH scoped a whole requirement around auditing
    `req062-sub-process-runtime.md`'s `instance.zig`/`transition.zig` line citations,
    inherited from ISS-0076's framing. There are **zero** such citations — the file

@@ -594,6 +594,7 @@ history:
     agent: ORCH
     at: 2026-08-14T09:15:49Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       User confirmed (in-session, not a REQ) that RoCo's mission
       expands from "disposable G1-G4 pilot" (all done as of REQ-009)
       to a full staged migration of R-Co to Elixir. Verified R-Co's
@@ -673,6 +674,7 @@ history:
     agent: ORCH
     at: 2026-08-14T15:17:50Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       User asked to remove "pilot" and Zig-vs-Elixir-competition
       framing project-wide: Letflow is committed as the migration
       target outright, not something under evaluation for whether it
@@ -800,6 +802,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-14T21:26:34Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       docs/migration/decisions/0001-web-framework.md records an explicit decision:
       Letflow migrates to Phoenix (router pipelines, controllers) rather than
       continuing to hand-roll on plain Plug/Bandit, effective at S4. RELEASE-VALIDATOR
@@ -866,6 +869,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-15T15:59:29Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       docs/migration/decisions/0002-oidc-integration.md records an explicit partial-
       adoption decision: Letflow adopts ueberauth_oidcc ({:ueberauth_oidcc, "~> 0.4"},
       pulling in {:oidcc, "~> 3.7"}) for the token-verification/JWKS-caching layer only
@@ -1242,6 +1246,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-16T00:18:56Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Built a new lib/letflow/oidc/ namespace: Letflow.Oidc.IdentityContext (the
       target struct — external_user_id, tenant_id, realm, roles, email,
       preferred_username, display_name), Letflow.Oidc.ClaimMappingConfig (the
@@ -1314,6 +1319,7 @@ history:
     agent: ORCH
     at: 2026-08-16T00:26:10Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF-02 Step 00 (git setup) PASSed via ELIXIR-DEV: created and pushed
       feature/WF02-REQ018-20260816 from up-to-date main. Both dependencies
       (REQ-015 users/tenants schema, REQ-017 pure claim-mapping module) are
@@ -1333,6 +1339,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-16T01:38:38Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Built Letflow.Identity.provision_oidc_user/3 (context module), backed by
       Letflow.Oidc.JitProvisioningConfig (per-realm config struct: enabled,
       default_status, default_roles falling back to VIEWER) and
@@ -1426,6 +1433,7 @@ history:
     agent: ELIXIR-DEV
     at: 2026-08-16T03:49:31Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ019-20260816 run started. feature/WF02-REQ019-20260816 branch
       created and pushed (Step 00 git setup PASS). Beginning CODE-DESIGNER
       design step for tenant<->realm binding (resolveTenantByRealm/
@@ -1435,6 +1443,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-16T05:15:33Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Built Letflow.Identity.resolve_tenant_by_realm/1, resolve_realm_by_tenant/1,
       and verify_realm_ownership/2, porting src/oidc/realm_tenant_binding.zig's
       resolveTenantByRealm/resolveRealmByTenant plus adp-04a's realm-ownership
@@ -1489,6 +1498,7 @@ history:
     agent: ORCH
     at: 2026-08-16T05:20:47Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF-02 run WF02-REQ020-20260816 started. Step 00 git setup PASS
       (ELIXIR-DEV): branch feature/WF02-REQ020-20260816 created from
       up-to-date main and pushed. Scope: port
@@ -1502,6 +1512,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-16T06:01:41Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Letflow.Identity.RoleRegistry (list_roles/0, upsert_role/2,
       resolve_role_in_tx/1) ported from src/identity/role_registry.zig,
       all 5 acceptance criteria verified, 110/110 full suite passing.
@@ -1546,6 +1557,7 @@ history:
     agent: ELIXIR-DEV
     at: 2026-08-16T06:08:10Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF-02 run WF02-REQ021-20260816 started. Wiring REQ-016 (ueberauth_oidcc
       verification worker) + REQ-017 (claim mapping) + REQ-019 (tenant/realm
       resolution + ownership guard) + REQ-018 (JIT provisioning) into one
@@ -1557,6 +1569,7 @@ history:
     agent: ELIXIR-DEV
     at: 2026-08-16T06:57:35Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Built lib/letflow/plugs/auth_pipeline.ex and lib/letflow/plugs/tenant_status.ex,
       wiring REQ-016's ueberauth_oidcc verification, REQ-017's claim mapping, REQ-019's
       tenant<->realm resolution + realm-ownership guard, and REQ-018's JIT provisioning
@@ -1730,6 +1743,7 @@ history:
     agent: ORCH
     at: 2026-08-16T10:50:50Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Claimed from letflow-queue via a real get_next_task call (task id 37,
       locked_by: tvolodi-orch), depends_on: [] so it's eligible with no S2
       predecessor required. WF-02 Step 00 (git setup) complete:
@@ -1740,6 +1754,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-16T12:04:09Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Graph structural validator shipped: Letflow.Definitions.Graph
       (lib/letflow/definitions/graph.ex), a pure function (zero Repo/database
       calls anywhere in its call graph, confirmed by RELEASE-VALIDATOR grep +
@@ -2620,6 +2635,7 @@ history:
     agent: ORCH
     at: 2026-08-17T08:03:14Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ039-20260817 -- Sandbox pool and fixture loader
       (sandbox_pool.zig + fixture_loader.zig, PRM-06 section 3). First
       requirement (not issue) picked up this session; the letflow-queue
@@ -2666,6 +2682,7 @@ history:
     agent: ORCH
     at: 2026-08-17T08:28:00Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ041-20260817 started (hetzner-orch, queue task 43, GH#51,
       depends_on REQ-015 done). Branch feature/WF02-REQ041-20260817
       created and pushed from freshly pulled main (ec9422f). Solution-pack
@@ -2766,6 +2783,7 @@ history:
     agent: ORCH
     at: 2026-08-17T10:14:25Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ029-20260817 -- Node-attribute and edge-condition
       validators (graph.zig, PD-05/PD-06), extending REQ-028's
       Letflow.Definitions.Graph module in place. Claimed via letflow-queue
@@ -2781,6 +2799,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-17T10:53:37Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ029-20260817 complete. Shipped: validate_node_attributes/1
       and the edge-condition checks (CHK-09..CHK-16ish, per
       lib/letflow/design/req029-node-attribute-edge-condition-validators.md)
@@ -2820,6 +2839,7 @@ history:
     agent: ORCH
     at: 2026-08-17T10:58:58Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ025-20260817 -- Event append (store.zig's append,
       ES-01/02/03/05/08/DB-03). Claimed via letflow-queue task 45
       (agent_id hetzner-orch), depends_on REQ-023 (done) and REQ-024
@@ -2839,6 +2859,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-17T13:17:54Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ025-20260817 complete. Shipped: Letflow.EventStore.append/2
       (new context module, lib/letflow/event_store.ex) -- store.zig's
       Store.append() ported as one atomic Ecto.Multi spanning
@@ -2899,6 +2920,7 @@ history:
     agent: ORCH
     at: "2026-08-17T13:24:35Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Definition snapshot store (snapshot.zig, PD-08) -- claimed from
       letflow-queue task 46 (agent_id hetzner-orch), depends_on REQ-027
       satisfied. Letflow.Definitions.SnapshotStore.create/2 +
@@ -2910,6 +2932,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T14:02:54Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-033 (Letflow.Definitions.SnapshotStore,
       snapshot.zig PD-08) -- create/2 (SELECT ... FOR SHARE + insert in one
       transaction, ON CONFLICT (instance_id) DO NOTHING idempotency,
@@ -2937,6 +2960,7 @@ history:
     agent: ORCH
     at: 2026-08-17T17:08:06Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Sub-process interface contract, definition-time half only
       (sub_process_interface.zig, SPC-02) -- parseInterface/1 and
       validateSchemaShape/2, hooked into REQ-029's PD-05 node-attribute
@@ -2948,6 +2972,7 @@ history:
     agent: ORCH
     at: 2026-08-17T17:40:14Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ030-20260817 -- Definition store CRUD
       (store.zig, PD-01/PD-03/PD-04/PD-07): create/1, get_by_id/1,
       get_active_by_name/1, list/1, activate/1 (atomic deprecate-then-
@@ -2968,6 +2993,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T17:43:30Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-032 (Sub-process interface contract,
       definition-time half only, sub_process_interface.zig SPC-02) -- new
       SUB_PROCESS node_type plus CHK-18
@@ -3010,6 +3036,7 @@ history:
     agent: ORCH
     at: 2026-08-17T17:50:32Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Event read paths, archive, and platform sentinels
       (store.zig's read/readGlobal/pointInTime/archive + platform.zig).
       Also creates event_retention_policies (its own migration, per
@@ -3023,6 +3050,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T18:42:44Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-026 (Event read paths, archive, and
       platform sentinels -- store.zig's read/readGlobal/pointInTime/archive
       plus platform.zig's three sentinels) -- read/2 returns an instance's
@@ -3087,6 +3115,7 @@ history:
     agent: ORCH
     at: "2026-08-17T18:01:34Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ036-20260817 -- Promotion plan computation, conflict
       preflight, and plan digest (promotion_plan.zig PRM-01 +
       promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03):
@@ -3108,6 +3137,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T18:50:04Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-036 (Promotion plan computation, conflict
       preflight, and plan digest -- promotion_plan.zig PRM-01 +
       promotion_conflict.zig PRM-02 + promotion_digest.zig PRM-03): 3 new
@@ -3133,6 +3163,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-17T19:38:36Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ030-20260817 complete, RELEASE-VALIDATOR PASSed (handoff
       eee9b754-47ef-4326-93ee-7d91784a1542). Shipped: 7 new
       Letflow.Definitions functions (lib/letflow/definitions.ex) porting
@@ -3244,6 +3275,7 @@ history:
     agent: ORCH
     at: "2026-08-17T18:59:40Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Started WF02-REQ037-20260817 -- Promotion review state machine and
       base promote (promotion_review.zig PRM-04 + promotion.zig ENV-03):
       insert_review/1, approve_review/4 (self-approval/digest/row_version
@@ -3264,6 +3296,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T20:10:59Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-037 (Promotion review state machine and
       base promote -- promotion_review.zig PRM-04 + promotion.zig ENV-03):
       2 new modules (Letflow.Definitions.PromotionReviewStore,
@@ -3304,6 +3337,7 @@ history:
     agent: ORCH
     at: "2026-08-17T20:30:32Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ034-20260817 started (letflow-queue task 52, claimed by
       hetzner-wt2-orch). Branch feature/WF02-REQ034-20260817 created from
       freshly-fetched origin/main (worktree variant, this checkout is
@@ -3315,6 +3349,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T21:06:08Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-034 (Definition export/import --
       export_import.zig PD-09): 1 new module
       (Letflow.Definitions.ExportImport, export/2 + import/3) in
@@ -3352,6 +3387,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-17T21:25:31Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ031-20260817 complete, RELEASE-VALIDATOR independently
       re-verified and PASSed (handoff
       handoffs/WF02-REQ031-20260817/step-05-release-validator.json,
@@ -3520,6 +3556,7 @@ history:
     agent: ORCH
     at: "2026-08-17T21:15:44Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ042-20260817 started (letflow-queue task 53, claimed by
       hetzner-wt2-orch). Branch feature/WF02-REQ042-20260817 created from
       freshly-fetched origin/main (worktree variant) and pushed. Scope:
@@ -3532,6 +3569,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T21:57:46Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       RELEASE-VALIDATOR PASSed REQ-042 (Definition full-text search --
       store.zig's Store.search(), PD-10): Letflow.Definitions.search/2
       (lib/letflow/definitions.ex, ranked ILIKE full-text search against
@@ -3623,6 +3661,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-17T23:24:23Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Promotion rollback (rollback.zig, PRM-08) shipped:
       Letflow.Definitions.rollback_definition_version/4 plus helpers
       (do_rollback/6, run_rollback_transaction/4, swap_active_pointer/3,
@@ -3789,6 +3828,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-18T02:00:26Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       Promotion assertion re-run orchestration shipped: Letflow.Definitions
       .apply_promotion_assertion_rerun/6 (lib/letflow/definitions.ex), plus
       lib/letflow/definitions/promotion_assertion_run.ex and
@@ -3964,6 +4004,7 @@ history:
     agent: ORCH
     at: "2026-08-18T06:00:57Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ044-20260818 (hetzner-wt2-orch), claimed via letflow-queue
       get_next_task (task id 88). Pure transition kernel core types and
       dispatch skeleton (transition.zig, EE-02) -- first Stage 3
@@ -3975,6 +4016,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-18T06:46:26Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ044-20260818 complete, RELEASE-VALIDATOR PASSed
       (handoffs/WF02-REQ044-20260818/step-05-release-validator.json):
       pure transition kernel core types and dispatch skeleton shipped
@@ -4011,6 +4053,7 @@ history:
     agent: ORCH
     at: "2026-08-18T07:04:44Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ049-20260818 (hetzner-wt2-orch), claimed via letflow-queue
       get_next_task (task id 92). Variable scoping and merge (instance.zig
       mergeVariables, EE-09). Depends on REQ-044 (done) and REQ-024 (done).
@@ -4058,6 +4101,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-18T07:39:04Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ043-20260818 Step 6. All prior gates passed: CODE-DESIGN-VALIDATOR
       (design gate), SECURITY-REVIEWER (INV-1/INV-8), REVIEWER (idiom), TEST-DESIGN-
       VALIDATOR, TEST-RUNNER (725/725 green), and RELEASE-VALIDATOR (independently
@@ -4220,6 +4264,7 @@ history:
     agent: ORCH
     at: "2026-08-18T18:29:11Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Claimed via letflow-queue get_next_task (agent_id hetzner-orch, queue
       task id 94). WF02-REQ050-20260818 started, branch
       feature/WF02-REQ050-20260818 pushed (Step 00 PASS). Ports
@@ -4264,6 +4309,7 @@ history:
     agent: hetzner-wt2-orch
     at: "2026-08-18T18:57:37Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Parallel gateway split and join (transition.zig EE-06/EE-07). Depends
       on REQ-044 (done) and REQ-049 (done); REQ-052 (instance cancellation)
       is not a dependency by design -- REQ-052's own description states the
@@ -4608,6 +4654,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-19T00:30:04Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ058-20260818. Shipped Letflow.Engine.LuaScriptAudit (LUA-07's
       minimal audit persistence path, R-Co's lua_script_audit.zig): a
       deliberately narrow injectable-executor call path that validates
@@ -4908,6 +4955,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-19T03:53:01Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ056-20260819. Service task configuration, retry
       classification and dispatch contract (service_task.zig, EXT-01)
       shipped as lib/letflow/engine/service_task.ex, the pure
@@ -5002,6 +5050,7 @@ history:
     agent: ELIXIR-DEV
     at: 2026-08-19T04:36:41Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ062-20260819. Porting SPC-01's runtime half (child
       instance creation via createWithParentInheritance, parent-token
       waiting_child_instance_id wait/clear, input filtering/output
@@ -5096,6 +5145,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-19T08:58:00Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ059-20260819. Dependency pin resolution, recording and
       inheritance (pin_resolver.zig port, PIN-01..04) shipped as
       Letflow.Engine.PinResolver: resolve/4 enumerates every versioned
@@ -5149,6 +5199,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-19T09:35:27Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ060-20260819. Explicit instance pin rebind (pin_rebind.zig,
       PIN-05) shipped as Letflow.Engine.PinRebind.rebind_pins/N: the sole
       write path to a running instance's effective pin set after
@@ -5297,6 +5348,7 @@ history:
     agent: ISSUE-FIXER
     at: "2026-08-20T02:49:21Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF03-REQ110-20260820. Verified this run: the substantive audit
       (commit d483d98, "audit(REQ-110): pin OQs verified against R-Co -- 2
       behavioural divergences", run WF03-REQ110-20260819) had already
@@ -5352,6 +5404,7 @@ history:
     agent: ISSUE-FIXER
     at: "2026-08-20T02:56:16Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF03-REQ111-20260820. Same bookkeeping-gap pattern as REQ-110's
       cdc8f8c closeout: the substantive REQ-111 audit had already landed on
       main (commit 29676de, "audit(REQ-111): CEL verified against R-Co --
@@ -5515,6 +5568,7 @@ history:
     agent: ORCH
     at: 2026-08-20T05:00:26Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       GH#325 (ISS-0097, OQ-3 from req041-pack-update-diff-schema.md sweep) resolved by
       reading R-Co source directly: migrations/1157_prm09_solution_pack_update.sql
       declares installed_version as TEXT NOT NULL; src/definition/pack_update.zig
@@ -5543,6 +5597,7 @@ history:
     agent: ORCH
     at: "2026-08-20T12:30:00Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       GH#300 (ISS-0077): design doc section 3.1 step 3 restricted schema
       validation to overwrite candidates (keys already present in
       current_variables); a brand-new key with a registered schema was
@@ -5680,6 +5735,7 @@ history:
     agent: ORCH
     at: 2026-08-20T19:31:22Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ066-20260820, claimed via letflow-queue get_next_task (task id 133).
       Port src/api/errors.zig + src/api/response.zig as Letflow.Api.Error /
       Letflow.Api.Response (RFC 9457 problem-details contract, S4). Step 00 (git
@@ -5690,6 +5746,7 @@ history:
     agent: DOC-UPDATER
     at: 2026-08-20T21:15:15Z
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ066-20260820 complete; RELEASE-VALIDATOR Step 5 PASS at cf82968 with all
       six acceptance criteria independently re-verified, two of them by mutation testing.
       Letflow.Api.Error (lib/letflow/api/error.ex) and Letflow.Api.Response

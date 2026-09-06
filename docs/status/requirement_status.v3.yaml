@@ -729,6 +729,7 @@ history:
     agent: ISSUE-FIXER
     at: "2026-08-22T15:18:38Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF03-ISS0278-20260822 (queue task 278, GH#549) done. Reconciled four
       GitHub issues closed COMPLETED with zero comment while their local
       docs/issues/ISS-NNNN.yaml records still said status: open: GH#329
@@ -768,6 +769,7 @@ history:
     agent: REVIEWER
     at: "2026-08-22T16:19:49Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF03-ISS0096-20260822 (queue task 280, GH#324) done. REVIEWER decided
       the OQ-6 naming divergence flagged by WF03-ISS0278-20260822 should be
       RECONCILED to R-Co's naming (option a: rename
@@ -1140,6 +1142,7 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-23T00:35:00Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ081-20260823. Definition routes 1/2 -- read path
       (definitions.zig handleGetById/List/GetActiveByName/Search/Export).
       Depends on REQ-072 (done), reuses REQ-042's search rank logic and

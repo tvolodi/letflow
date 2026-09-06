@@ -592,6 +592,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T08:13:39Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Defined the .zig provenance-citation marking convention -- demote from
       decision-authority framing to clearly-marked historical provenance
       (closes ISS-0424 part 3a design, queue task 474, GH#921, PR #942,
@@ -653,6 +654,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T11:10:33Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/router.ex and lib/letflow/routers/{audit,definitions,dlq,
       identity,instances,metrics_exposition,onboarding}.ex (closes ISS-0424
@@ -669,6 +671,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T11:34:53Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/routers/{promotions,services,solution_packs,tasks,
       tenant_config,tenants,webhooks}.ex (closes ISS-0424 part 3b-2, queue
@@ -684,6 +687,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T12:16:20Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/engine/{reconstruction,service_task,snapshot_writer,
       sub_process,task,token,transition,variable_merge,variable_schema}.ex
@@ -701,6 +705,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T12:40:56Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/engine/lua/* and lib/letflow/engine/wasm/* (closes ISS-0424
       part 3b-5, queue task 485, GH#950, PR #979,
@@ -716,6 +721,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T13:08:21Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/definitions.ex and lib/letflow/definitions/{export_import,
       graph,process_definition,promotion,promotion_artifact,
@@ -732,6 +738,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T13:32:09Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/definitions/{promotion_digest,promotion_plan,
       promotion_review_store,service_scope_validator,snapshot_store,
@@ -749,6 +756,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T13:57:01Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/api/* and lib/letflow/plugs/* (closes ISS-0424 part 3b-8,
       queue task 488, GH#953, PR #982, feature/WF02-REQ250-20260905). This
@@ -763,6 +771,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T14:27:36Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/identity.ex, lib/letflow/identity/*, and lib/letflow/oidc/*
       (closes ISS-0424 part 3b-9, queue task 489, GH#954, PR #983,
@@ -778,6 +787,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T14:49:29Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/event_store.ex and lib/letflow/event_store/* (closes
       ISS-0424 part 3b-10, queue task 490, GH#955, PR #984,
@@ -793,6 +803,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T15:18:39Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/engine.ex and lib/letflow/engine/{execution_error,expr,
       instance_state,join_counter,pin_rebind,pin_resolver,plugin_interface,
@@ -820,6 +831,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T15:18:45Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/repository/*, lib/letflow/sandbox_pool.ex and
       lib/letflow/sandbox_pool/*, lib/letflow/scheduler.ex, lib/letflow/tasks.ex,
@@ -844,6 +856,7 @@ history:
     agent: ORCH
     at: "2026-09-05T15:31:17Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF-02 run WF02-REQ254-20260905 (queue task 492, agent_id
       letflow-ee-orch), applying REQ-237's .zig provenance-marking
       convention to docs/requirements.yaml, the REQ-011 through REQ-050
@@ -858,6 +871,7 @@ history:
     agent: ORCH
     at: "2026-09-05T16:23:54Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       docs/requirements.yaml's REQ-011 through REQ-050 entry range (closes
       ISS-0424 part 3c-1, queue task 492, PR #988,
@@ -911,6 +925,7 @@ history:
     agent: ORCH
     at: "2026-09-05T16:38:50Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF-02 run WF02-REQ256-20260905 (queue task 494, agent_id
       letflow-ee-orch), applying REQ-237's .zig provenance-marking
       convention to docs/requirements.yaml, the REQ-079 through REQ-188
@@ -928,6 +943,7 @@ history:
     agent: ORCH
     at: "2026-09-05T16:49:55Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ256-20260905 complete. DOC-UPDATER applied REQ-237's .zig
       PROVENANCE-marker convention to docs/requirements.yaml's REQ-079
       through REQ-188 entry range: 60 marker lines inserted covering 112
@@ -952,6 +968,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T18:01:58Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       docs/migration/decisions/{0001,0002,0003,0007,0010,0013,0014,0016}-*.md
       (closes ISS-0424 part 3c-5, queue task 496, GH#961,
@@ -974,6 +991,7 @@ history:
     agent: ORCH
     at: "2026-09-05T18:05:05Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ257-20260905 complete. DOC-UPDATER applied REQ-237's .zig
       PROVENANCE-marker convention (as amended 2026-09-05, ISS-0510) to
       docs/requirements.yaml's REQ-189 through REQ-242 entry range: 56
@@ -1004,6 +1022,7 @@ history:
     agent: ORCH
     at: "2026-09-05T18:20:30Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ259-20260905 complete. DOC-UPDATER applied REQ-237's .zig
       PROVENANCE-marker convention to docs/migration/stage-{1..7}-*.md
       (chunk 239e2, the 7 named stage docs): 51 marker lines inserted
@@ -1152,6 +1171,7 @@ history:
     agent: ORCH
     at: "2026-09-05T21:39:20Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ260-20260905 started (queue task 498, agent_id
       letflow-ee-orch). Chunk 239f of REQ-239's replacement set: applies
       REQ-237's .zig PROVENANCE-marker convention (as amended 2026-09-05,
@@ -1166,6 +1186,7 @@ history:
     agent: ORCH
     at: "2026-09-05T22:17:21Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       WF02-REQ260-20260905 done. DOC-UPDATER applied REQ-237's PROVENANCE
       marker convention to the 11 named docs/issues/ISS-*.yaml files
       (ISS-0001, 0002, 0005, 0014, 0045, 0063, 0075, 0076, 0077, 0078,
@@ -1201,6 +1222,7 @@ history:
     agent: DOC-UPDATER
     at: "2026-09-05T22:48:51Z"
     note: >
+      PROVENANCE (historical, not current decision authority):
       Applied REQ-237's .zig provenance-marking convention to
       lib/letflow/design/req017-claim-mapping.md through
       req029-node-attribute-edge-condition-validators.md (closes ISS-0424

@@ -23,6 +23,7 @@ requirements_checked:
     independent_verdict: PASS
     evidence:
       - "priv/repo/migrations/20260816000001_create_tenants.exs through ..000004_create_users.exs read directly; all apply cleanly (mix test's ecto.create/ecto.migrate --quiet step succeeded as part of this run)"
+      # PROVENANCE (historical, not current decision authority):
       - "lib/letflow/identity/{tenant,user,group,tenant_role}.ex all exist with @moduledoc citations: tenant.ex and user.ex cite adp-04/adp-04a/adp-04b; group.ex cites adp-04's Group struct; tenant_role.ex cites src/identity/role_registry.zig and src/design/idn05-role-registry.md (the source REQ-015's own description names for that table -- see note below)"
       - "users migration has unique_index(:users, [:external_realm, :external_id], where: \"external_id IS NOT NULL\", name: :users_external_identity_partial_index) -- confirmed partial, not plain unique"
       - "no DB CHECK constraint for auth_source-vs-external-fields consistency in either the migration or the schema; both explicitly state this is an application-level (changeset) invariant"
@@ -56,6 +57,7 @@ requirements_checked:
       - "lib/letflow/oidc/claim_mapping.ex read function-by-function: map_verified_claims/3, resolve_claim_path/2, resolve_optional_string_claim/3, resolve_roles/2 -- no Repo, HTTP, File, or Application.get_env/fetch_env! call found anywhere in the module"
       - "given claims missing every optional field: email->\"\", preferred_username->subject value, roles->[], display_name->nil, tenant_id->nil -- confirmed by reading the default-handling branches directly, matching Key Invariant 3"
       - "subject in [nil, \"\"] is the sole {:error, :sub_claim_missing} branch -- confirmed by reading map_verified_claims/3's guard"
+      # PROVENANCE (historical, not current decision authority):
       - "@moduledoc cites src/oidc/claim_mapping.zig"
     findings: []
 
@@ -67,6 +69,7 @@ requirements_checked:
       - "lib/letflow/identity.ex's provision_oidc_user/3 -> upsert_by_external_identity/3 -> insert_or_fetch/3 implements select-first / Repo.insert(on_conflict: :nothing, conflict_target: {:unsafe_fragment, \"(external_realm, external_id) WHERE external_id IS NOT NULL\"}) / re-select-on-conflict -- not Ecto.Multi, not insert-then-rescue"
       - "User.jit_changeset/2 (lib/letflow/identity/user.ex) sets password_hash to the literal \"__OIDC_ONLY__\" and auth_source: :oidc via put_change/3 unconditionally, after cast/3 -- IdentityContext has no such fields, so no caller input can override them"
       - "test/letflow/identity_test.exs's concurrent-race test (two Task.async barrier-synchronized calls, Ecto.Adapters.SQL.Sandbox.allow/3'd onto the same connection) re-run by this validator: passed, resolved to exactly one row, both callers succeeded, no unhandled exception"
+      # PROVENANCE (historical, not current decision authority):
       - "@moduledoc cites src/oidc/jit_provisioning.zig and src/identity/registry.zig's createOrGetJitOidcUser (lines ~843-912)"
     findings: []
 
@@ -94,6 +97,7 @@ requirements_checked:
       - "@moduledoc states no alias/call to any Letflow.Oidc.* module or to Letflow.Identity's OIDC-pipeline functions -- confirmed true by inspection of role_registry.ex's own alias list (Group, TenantRole, Repo only)"
     findings: []
 
+  # PROVENANCE (historical, not current decision authority):
   - id: REQ-021
     title: Wire identity into the Plug request pipeline (auth.zig/tenant_status.zig equivalent)
     status_in_requirements_yaml: done

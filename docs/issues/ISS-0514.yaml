@@ -1,0 +1,70 @@
+id: ISS-0514
+title: "REQ-237's original design never addressed the docs/status/ frozen-volume invariant, causing REQ-263 to corrupt 8 closed run-history volumes"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ263-20260906
+discovered_at: "2026-09-06T05:40:00Z"
+severity: MAJOR
+tags: [design-gap, docs, requirements-yaml, frozen-volume, s6]
+description: >
+  During WF02-REQ263-20260906 (chunk 239i of the REQ-239 provenance-marking
+  split), ELIXIR-DEV applied REQ-237's .zig PROVENANCE-marker convention
+  (lib/letflow/design/req237-zig-provenance-marking-convention.md) to the
+  original 11-file draft-time scope recorded for this chunk in
+  docs/requirements.yaml, which included all 7 closed
+  docs/status/requirement_status.v2 through .v7 and .v9 volumes plus
+  docs/status/requirement_status.yaml -- 8 files total.
+
+  REVIEWER's gate caught that this violates a frozen-volume invariant that
+  REQ-237's original design never addressed: closed run-history volumes
+  (tracked in docs/status/requirement_status.index.yaml, `status: closed`)
+  must never be modified after closure, including by additive-only marker
+  insertion, because closure asserts byte-for-byte immutability of the
+  historical record -- the same append/never-rewrite discipline that
+  governs the entire docs/status/ run-history system. REQ-237's design
+  never considered docs/status/ as a distinct scope with its own
+  immutability rule; it treated every .zig-citing file uniformly.
+
+  RESOLUTION (same run): the 8-volume marker application was reverted
+  (commit c952f6b3), and REVIEWER's subsequent full re-gate independently
+  re-confirmed, file by file, that all 8 closed volumes show zero diff
+  against origin/main. CODE-DESIGNER then amended
+  lib/letflow/design/req237-zig-provenance-marking-convention.md with a new
+  section 2.5, declaring closed docs/status/ volumes permanently and
+  totally excluded from this convention -- not deferred to a future chunk,
+  excluded outright, since the convention cannot be applied to a closed
+  volume without violating its closure. CODE-DESIGN-VALIDATOR gated the
+  amendment PASS. REQ-263's own docs/requirements.yaml entry was corrected
+  to the resulting 3-file scope (docs/status/S1-release-2026-08-16.yaml,
+  docs/frontend/contract-gaps.md, docs/anti-patterns.md), and the
+  requirement shipped via PR #1024 (merge commit b55bf2fd).
+
+  No further action is needed: the gap was found, the corruption reverted
+  and independently confirmed clean, the design amended to close the gap
+  structurally, and the corrected requirement delivered -- all within this
+  same run.
+affected_files:
+  - lib/letflow/design/req237-zig-provenance-marking-convention.md
+  - docs/requirements.yaml
+  - docs/status/requirement_status.v2.yaml
+  - docs/status/requirement_status.v3.yaml
+  - docs/status/requirement_status.v4.yaml
+  - docs/status/requirement_status.v5.yaml
+  - docs/status/requirement_status.v6.yaml
+  - docs/status/requirement_status.v7.yaml
+  - docs/status/requirement_status.v9.yaml
+  - docs/status/requirement_status.yaml
+related:
+  - REQ-237
+  - REQ-263
+source: >
+  handoffs/WF02-REQ263-20260906/step-05-code-designer.json (design section
+  2.5 amendment), step-06-code-design-validator.json (amendment gate PASS),
+  step-07-elixir-dev.json (8-volume revert plus corrected 3-file
+  application), and step-08-reviewer.json (full independent re-gate PASS,
+  re-confirming the 8-volume revert's zero-diff state file by file and the
+  amendment's soundness against prior amendments).
+queue_task_id: 514
+github_issue: 1025
+status: resolved
+resolved_in_run: WF02-REQ263-20260906
+resolved_at: "2026-09-06T07:01:16Z"

@@ -1969,14 +1969,39 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 12
+    entries: 13
     note: >
+      Recounted to 13 by chore/ISS0424-resolved-20260906's Step Final
+      rebase, which found main further advanced by
+      WF02-REQ263-20260906's own closeout append (REQ-263 done,
+      07:00:40Z, landed via PR #1026 while this branch's own ISS-0424
+      SCOPE-CHANGE append, independently computing 12, was already
+      committed). Composed in chronological `at:` order in
+      requirement_status.v10.yaml itself -- REQ-263 done (07:00:40Z)
+      before ISS-0424 done (07:09:08Z). Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v10.yaml` = 13
+      on-disk entries, rather than carrying forward either side's
+      independently-computed 12, per this note's own recount-every-time
+      rule.
       Incremented to 12 by ORCH's own ISS-0424 SCOPE-CHANGE done-event
       append -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 12 on-disk entries, no
       rebase conflict on this file. 533 lines, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
-      Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
+      (Superseded by the recount to 13 above.)
+      Recounted to 12 by WF02-REQ263-20260906's closeout append (REQ-263
+      done, 07:00:40Z), which found the declared count still at 11 from
+      the prior WF02-REQ262-20260906 recount below -- the closeout
+      commit updated the count in the same commit as the append, per
+      HOW-TO-APPEND step 6, after CI caught the drift live (A9 invariant
+      failure on PR #1026, `mix letflow.check`, run 34018087236) rather
+      than before. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v10.yaml` = 12
+      on-disk entries, no rebase pending at the time of this recount.
+      (Separate, concurrently-landed count of 12; also superseded by
+      the recount to 13 above.)
+
+      PRIOR NOTE (recount to 11): Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
       found main further advanced by WF02-REQ261-20260906's own REQ-261
       done-event append (landed via PR #1023 while this branch's own
       recount to 10 was already committed). Composed in chronological

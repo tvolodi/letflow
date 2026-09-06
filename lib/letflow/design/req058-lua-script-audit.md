@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-058 — Lua script execution audit path (`lua_script_audit.zig`, LUA-07)
 
 **Requirement:** REQ-058 (handoff `context.requirement_text`, stage S3)
@@ -20,6 +21,7 @@ code**. No function bodies, no `.ex` files.
   `core-directives.md`'s "Load Scoped Context, Not Whole Files").
 - `docs/guides/backend_developer_guide.md` §2 (project structure), §3.1 (naming), §3.5
   (error shapes), §3.6 (parameterized SQL), §3.7 (migration shape).
+PROVENANCE (historical, not current decision authority):
 - `docs/migration/stage-3-instance-engine.md` — confirms `lua_script_audit.zig` (201
   lines, R-Co) maps to REQ-058, "LUA-07's minimal audit path," and that S3 covers only
   the non-EE engine files including this one.
@@ -87,6 +89,7 @@ code**. No function bodies, no `.ex` files.
   consequence is what this design needs and is already confirmed by the shipped schema
   files themselves).
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source of truth**, per the requirement text's own quotation (not independently
 re-read — the handoff's `requirement_text` already carries the load-bearing quotation
 verbatim): `src/engine/lua_script_audit.zig` (201 lines), its header's narrowness
@@ -112,6 +115,7 @@ per Unblock-Everything — see §0).
 
 **Explicitly NOT built here, not silently papered over (AC5, AC6):**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Real dependency | Belongs to |
 |---|---|---|
 | A real Lua interpreter/host that actually runs a Lua script and produces a manifest hash | `src/lua/executor.zig`, `src/lua/manifest.zig`, `src/lua/errors.zig` — all of `src/lua/` (29 files) | **S5** (scripting & plugins) — `docs/migration/stage-5-scripting-plugins.md` states this stage "has not started" and "needs its own decision record before requirements are expanded: build-vs-bind — Elixir NIFs/Ports/Rustler wrapping existing Lua/WASM runtimes, vs. reimplementing." This design does not choose, imply, or partially pre-build either option. |

@@ -5053,7 +5053,7 @@
     {
       "run_id": "WF02-REQ264-20260905",
       "workflow_id": "WF-02",
-      "status": "IN_PROGRESS",
+      "status": "COMPLETED",
       "stage": "S6",
       "requirement_ids": [
         "REQ-264"
@@ -5077,9 +5077,40 @@
       "queue_task_id": 502,
       "queue_agent_id": "letflow-ee-orch",
       "lock_acquired_at": "2026-09-05T22:27:56Z",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED -- PR #1006 merged to main (b64d832f), closeout PR #1011 merged (49ecdd26). Queue task 502 released done, REQ-264 done.",
+      "note": "Chunk 239-design-a of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs 0001-0003 and non-reqNNN-named files sorting before req017). Sibling chunks 239-design-b..h (REQ-265..271) are disjoint alphabetical ranges of the same directory; no overlap confirmed at registry-scan time (no existing REQ-264..271 entries found). CORRECTION (WF02-REQ267-20260906, ORCH): this entry was found still marked IN_PROGRESS/released_lock:false despite git evidence (origin/main log: 4b0712ff REVIEWER PASS, b64d832f PR #1006 merge, 7de0c121 closeout commit, 49ecdd26 PR #1011 closeout merge) showing the run fully completed and merged. Corrected here rather than left stale for the next session to trip over -- docs/requirements.yaml already independently shows REQ-264 status: done."
+    },
+    {
+      "run_id": "WF02-REQ267-20260906",
+      "workflow_id": "WF-02",
+      "status": "IN_PROGRESS",
+      "stage": "S6",
+      "requirement_ids": [
+        "REQ-267"
+      ],
+      "owned_modules": [
+        "lib/letflow/design/req049-variable-merge.md",
+        "lib/letflow/design/req050-exclusive-gateway-cel.md",
+        "lib/letflow/design/req051-parallel-gateway-split-join.md",
+        "lib/letflow/design/req052-instance-cancellation.md",
+        "lib/letflow/design/req053-state-reconstruction.md",
+        "lib/letflow/design/req054-instance-state-snapshots.md",
+        "lib/letflow/design/req057-plugin-interface-registry.md",
+        "lib/letflow/design/req058-lua-script-audit.md",
+        "lib/letflow/design/req059-pin-resolver.md",
+        "lib/letflow/design/req060-pin-rebind.md",
+        "lib/letflow/design/req061-execution-error-handling.md",
+        "lib/letflow/design/req062-sub-process-runtime.md",
+        "lib/letflow/design/req066-api-error-response.md"
+      ],
+      "branch_name": "feature/WF02-REQ267-20260906",
+      "queue_task_id": 505,
+      "queue_agent_id": "letflow-ee-orch",
+      "lock_acquired_at": "2026-09-05T23:48:30Z",
       "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 960e7ee8, pre-flight .zig counts confirmed non-zero in all 13 files (sum 181). Dispatching DOC-UPDATER next.",
-      "note": "Chunk 239-design-a of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- the alphabetically-sorted first 13 lib/letflow/design/ files carrying a .zig reference (decision docs 0001-0003 and non-reqNNN-named files sorting before req017). Sibling chunks 239-design-b..h (REQ-265..271) are disjoint alphabetical ranges of the same directory; no overlap confirmed at registry-scan time (no existing REQ-264..271 entries found)."
+      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 49ecdd26, pre-flight .zig counts confirmed non-zero in all 13 files (sum 141). Step 01 (DOC-UPDATER) COMPLETED PASS -- 92 PROVENANCE markers inserted across all 13 files via 4 parallel batches, .zig counts unchanged (sum 141), divergence-note text unchanged, no other file touched -- independently verified by ORCH before commit. Dispatching REVIEWER next.",
+      "note": "Chunk 239-design-d of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- req049-variable-merge.md through req066-api-error-response.md (req049-req066, 13 files, non-contiguous numbering). Sibling chunks 239-design-a/b/c (REQ-264/265/266) precede this range and are done/pending; 239-design-e/f/g/h (REQ-268/269/270/271) follow. No overlap confirmed at registry-scan time (no existing REQ-267 entry found before this one)."
     }
   ]
 }

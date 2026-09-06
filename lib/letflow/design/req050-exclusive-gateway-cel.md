@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-050 — Exclusive gateway dispatch + CEL-subset expression evaluator (transition.zig EE-05)
 
 **Requirement:** REQ-050 (stage S3), extends REQ-044's already-shipped `Letflow.Engine.Transition`
@@ -19,6 +20,7 @@ or a plain-English/pseudocode algorithm description, never a working function bo
 > directly. The rules below were originally taken second-hand from REQ-050's
 > requirement text; two of them are wrong in ways that change gateway routing.
 
+PROVENANCE (historical, not current decision authority):
 - This handoff's `context.requirement_text.REQ-050` (quoted in full where load-bearing — the
   requirement text itself already restates `evaluateGatewayCondition()`'s and
   `translateCelToExpr()`'s literal rewrite/boundary rules verbatim, which this design took as
@@ -52,6 +54,7 @@ or a plain-English/pseudocode algorithm description, never a working function bo
   build-vs-adopt decision record is needed here (R-Co has a real reference implementation, not a
   stub, to port); confirmed by inspection — no decision file added by this design.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap — CLOSED, and it was not harmless.** This section previously stated that the R-Co
 checkout (`transition.zig`, `src/expr/`) was not present on this host, and that the design was
 built entirely from `context.requirement_text.REQ-050`'s own inline restatement of the Zig
@@ -60,11 +63,13 @@ read `src/engine/transition.zig` and `src/design/iss602_cel_expr_differential.md
 
 ### 0.1 REQ-111 audit result — what the second-hand sourcing got wrong
 
+PROVENANCE (historical, not current decision authority):
 Sources actually read: `R-Co/src/engine/transition.zig:1118-1157`
 (`evaluateGatewayCondition`), `:1164-1205` (`translateCelToExpr`), `:1210-1241`
 (`hasCelUnsupportedFeatures` + `isCelIdentChar`), `R-Co/src/expr/lexer.zig:46-48`, and
 `R-Co/src/design/iss602_cel_expr_differential.md:236-278`.
 
+PROVENANCE (historical, not current decision authority):
 | Location | Disposition | Detail |
 |---|---|---|
 | §4.3 rule 1 — strip `variables.` | `confirmed` | `transition.zig:1171-1174` |
@@ -81,6 +86,7 @@ Sources actually read: `R-Co/src/engine/transition.zig:1118-1157`
 **Rolled-up disposition for §4.3's rules and §4.2/§5.2's boundary rules:
 `divergent_behavioural`** (most severe of the per-rule dispositions).
 
+PROVENANCE (historical, not current decision authority):
 Note this design's §4.3 already reasons that "rule ordering within the 4 does not observably
 matter" because the rules touch disjoint token shapes. That reasoning is sound and survives the
 audit — it is simply orthogonal to the spacing question, which the design never raised. R-Co
@@ -186,6 +192,7 @@ to gateway dispatch (`stage-3-instance-engine.md`'s scope note below states a fu
 surface, if a later stage needs one, extends this module rather than replacing it), so it earns
 its own file rather than living inside `transition.ex`.
 
+PROVENANCE (historical, not current decision authority):
 **Scope note (moduledoc-carried, AC8):** this module ports the *subset* of R-Co's `src/expr/`
 surface that `translateCelToExpr` can actually produce for a gateway condition — variable
 references, the 6 comparison operators, boolean `and`/`or`/`not`, and literal values (numbers,
@@ -254,6 +261,7 @@ string transformation, matching the Zig original being "small and fully specifie
 | 3 | `\|\|` → `" or "` (with surrounding spaces) | `variables.a\|\|variables.b` | `a or b` |
 | 4 | `!` → `not ` (`!=` passes through unchanged) | `!variables.approved`, `variables.status != "x"` | `not approved`, `status != "x"` |
 
+PROVENANCE (historical, not current decision authority):
 **Rules 2/3's spaces are load-bearing, not cosmetic (ISS-0085 / GH#302):** `transition.zig:1177`/
 `:1183` emit `" and "`/`" or "` with surrounding spaces, matching rule 4's own `"not "` (which
 already carried its trailing space, `transition.zig:1194`, and was already ported correctly at
@@ -499,6 +507,7 @@ process-mailbox call anywhere in `translate_cel_to_expr/1`, `parse/1`, `eval/2`,
 `evaluate_condition/2`'s call graphs. `dispatch_exclusive_gateway/4`'s own call graph is pure by
 the same argument, since its only new callee is `Expr.evaluate_condition/2`.
 
+PROVENANCE (historical, not current decision authority):
 **Determinism:** every one of `Expr`'s 4 functions is a pure function of its typed arguments alone
 — no external state, no randomness, no `:ets`/mailbox read anywhere in `Expr`'s call graph; two
 calls with `==`-equal arguments return `==`-equal results, both times, matching REQ-044 design doc
@@ -538,11 +547,13 @@ collection functions, ternary). The exact detection algorithm (regex vs. hand-wr
 precisely how string-literal spans are tracked so a literal `?` inside a quoted CEL string value is
 never mistaken for the ternary operator) was left to ELIXIR-DEV, not pinned by this design.
 
+PROVENANCE (historical, not current decision authority):
 **This section asked to be re-checked once R-Co source access became available. REQ-111 has now
 done so, reading `R-Co/src/engine/transition.zig:1210-1241` directly.** Rolled-up disposition:
 **`divergent_behavioural`**. Per-category dispositions are tabulated in §0.1; what follows is
 what the source actually says and which parts matter.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's actual detection**, `transition.zig:1210-1234`, in four steps:
 
 1. `:1211` — method-form markers, plain substring, no boundary guard:
@@ -560,6 +571,7 @@ R-Co's hand-written scan are different mechanisms, and this design deliberately 
 mechanism open — that difference is out of scope and is not recorded as a divergence. Two
 *outcome* differences are in scope:
 
+PROVENANCE (historical, not current decision authority):
 **(a) `matches(` is absent from Letflow's marker list, and it does not fail safe.** Most
 marker-set differences are harmless: an unlisted construct survives translation, then fails to
 parse, and §5.2's catch-false folds it to `false` — the same answer R-Co reaches by rejecting it
@@ -624,6 +636,7 @@ TEST-DESIGNER should still cover it if practical, though no AC explicitly demand
 
 ### 9.3 Zero-outgoing-edge gateway — degenerate case, not separately named by an AC
 
+PROVENANCE (historical, not current decision authority):
 §5.4's closing note (a gateway with no conditioned edges and no default at all) is this design's
 own totality-completing extension, matching REQ-044 design doc §6.6/§12.5's precedent for
 catch-all totality additions beyond the literal ACs. Not separately verified against
@@ -631,6 +644,7 @@ catch-all totality additions beyond the literal ACs. Not separately verified aga
 
 ### 9.4 Comparison of mismatched-but-both-scalar types under `==`/`!=` — this design's own call
 
+PROVENANCE (historical, not current decision authority):
 §4.6 states `:eq`/`:neq` never error even across differently-typed operands (e.g. comparing a
 string to a number always yields `false` for `==`, never a type-mismatch error), reasoning by
 analogy to CEL's own general equality semantics. This is this design's own interpretive choice for
@@ -640,6 +654,7 @@ error case for the **ordering** comparisons, `<`/`<=`/`>`/`>=`) — not verified
 
 ## 10. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-050 task acceptance criterion | Concrete design element |
 |---|---|
 | "a gateway whose second declared edge is the first to evaluate true routes the token down that edge, not the first or third" | §5.1 (declared-order `conditioned_edges` list) + §5.2 (first-true-wins loop, short-circuit on first `true`) |

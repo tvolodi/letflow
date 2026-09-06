@@ -79,6 +79,7 @@ Prior gate-approved designs: `req023-event-store-schema.md`, `req026-event-read-
 
 ### Moduledoc — required content (verbatim-in-substance, per this design)
 
+PROVENANCE (historical, not current decision authority):
 1. Ports `reconstruction.zig`'s `reconstructInstance()` (EE-11,
    `src/design/engine.md` "Section EE-11: State Reconstruction", L5237).
 2. States the four confirmed-not-assumed findings of §1 above: `read/2` does not
@@ -273,6 +274,7 @@ literally issues no write statement).
 - Runs inside its own `Repo.transaction/2` (matching `ExecutionError.append_multi/3`'s
   sibling pattern for the fetch, but this function *does* open its own transaction —
   it has no caller-supplied `Multi` to append to, unlike `ExecutionError`).
+PROVENANCE (historical, not current decision authority):
 - `InstanceProjection |> where(instance_id: ^instance_id) |> lock("FOR UPDATE NOWAIT") |> repo.one(prefix: prefix)`
   — `NOWAIT` (not plain `FOR UPDATE`) is the deliberate mechanism that turns
   contention into an **immediate, distinct error** instead of the transaction

@@ -1,0 +1,84 @@
+{
+  "handoff_id": "WF02-REQ267-20260906-step-01",
+  "run_id": "WF02-REQ267-20260906",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ267-20260906/step01-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T23:59:10Z",
+  "started_at": "2026-09-05T23:59:10Z",
+  "completed_at": "2026-09-05T23:59:10Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-267"],
+    "requirement_text": {
+      "REQ-267": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-d = lib/letflow/design/, req049-variable-merge.md through req066-api-error-response.md (req049-req066, 13 files, same non-contiguous-numbering caveat).\n\nThis is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6 -- a scope gap found during REQ-239's own split, since lib/letflow/design/ was in REQ-239's original pre-split scope but was never chunked by REQ-239's own table, which covered only docs/): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch files outside this chunk's file list under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nlib/letflow/design/ is out of scope for REQ-243 through REQ-253 (the lib/ chunks of REQ-238's split, which exclude lib/letflow/design/ explicitly); do not touch any file outside lib/letflow/design/ under this requirement, even if it also carries a .zig citation -- that belongs to one of REQ-243 through REQ-253.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 13 files in this chunk carry a .zig reference today. If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "related_handoff_ids": ["WF02-REQ267-20260906-step-00"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ267-20260906/step00-git-setup.json",
+      "handoffs/WF02-REQ264-20260905/step01-doc-updater.json",
+      "handoffs/WF02-REQ264-20260905/step02-reviewer.json"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req049-variable-merge.md",
+      "lib/letflow/design/req050-exclusive-gateway-cel.md",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "lib/letflow/design/req052-instance-cancellation.md",
+      "lib/letflow/design/req053-state-reconstruction.md",
+      "lib/letflow/design/req054-instance-state-snapshots.md",
+      "lib/letflow/design/req057-plugin-interface-registry.md",
+      "lib/letflow/design/req058-lua-script-audit.md",
+      "lib/letflow/design/req059-pin-resolver.md",
+      "lib/letflow/design/req060-pin-rebind.md",
+      "lib/letflow/design/req061-execution-error-handling.md",
+      "lib/letflow/design/req062-sub-process-runtime.md",
+      "lib/letflow/design/req066-api-error-response.md"
+    ]
+  },
+  "task": {
+    "description": "Apply REQ-237's PROVENANCE marker convention (lib/letflow/design/req237-zig-provenance-marking-convention.md) to every .zig-citation unit in the 13 files listed in owned_modules. Insert the marker line immediately above each citation unit per REQ-237 section 2's placement rule (one of: single citation line, paragraph, table, or the two REQ-264-established edge cases -- H1-title citation as the file's literal first line, and a heading immediately followed by a bare fenced code block treated as one unit with the marker above the fence). Additive only: no .zig path text, line number, or citation content may be removed or altered -- confirm via per-file grep -c '\\.zig' before/after equality.",
+    "acceptance_criteria": [
+      "All 13 files in owned_modules show a net-additive diff (git diff --stat) -- no deletions of citation content, only PROVENANCE marker insertions.",
+      "Per-file grep -c '\\.zig' count is identical before and after for all 13 files (baseline from step-00: req049:9, req050:28, req051:12, req052:4, req053:2, req054:3, req057:17, req058:5, req059:9, req060:17, req061:3, req062:11, req066:21; sum 141).",
+      "No file outside the 13-file owned_modules list is touched.",
+      "Every .zig citation unit in each file carries a PROVENANCE (historical, not current decision authority): marker placed per REQ-237 section 2's rule, including the two REQ-264-established edge-case shapes where applicable.",
+      "Divergence-note text ('unlike R-Co' / 'deliberately diverges' / 'diverges from R-Co') is present and word-for-word unchanged before/after in every file that carries it."
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied REQ-237's PROVENANCE marker convention to all 13 files in owned_modules via 4 parallel sub-agent batches (batch 1: req049/050/051, 31 markers; batch 2: req052/053/054, 8 markers; batch 3: req057/058/059/060, 25 markers; batch 4: req061/062/066, 28 markers -- 92 total). Independently re-verified rather than trusting the sub-agent reports: git status confirms exactly these 13 files modified, nothing else in the working tree (CLAUDE.md, README.md, docs/migration/README.md, and every other lib/letflow/design/ file are untouched). git diff --stat over the 13 files shows 98 insertions / 6 deletions total, net additive -- the 6 apparent deletions (all in req062-sub-process-runtime.md) are line-rewrap of existing multi-line citation bullets to make room for an inline marker, not content loss: hand-read the full req062 diff and confirmed every removed line's text reappears verbatim on the following added line, just re-indented under the new PROVENANCE prefix. Hand-read req059 and req053 diffs directly (not summarized) -- both are pure single-line marker insertions above existing paragraph/bullet citation units, no adjacent content touched. Re-ran grep -c '\\.zig' per file post-edit: 9/28/12/4/2/3/17/5/9/17/3/11/21 (sum 141) -- identical to step-00's pre-flight baseline in every file, confirming no citation was dropped or duplicated. Counted PROVENANCE marker lines added across the diff (git diff | grep -c of the marker text): 92, matching the sum of the four batch reports (31+8+25+28). Ran the divergence-note check requested: grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' over all 13 files, before (git show HEAD:<file>) and after (working tree) -- the single-line regex itself returns zero matches in both states because the one instance (req066-api-error-response.md, 'This diverges from R-Co.') wraps across a markdown line break in both versions; re-ran with newlines collapsed to spaces and confirmed the surrounding 80-char window of text is character-for-character identical before and after. No genuinely new citation-unit shape was found beyond the 4 documented shapes plus the 2 REQ-264 edge-case precedents (H1-title-as-first-line, heading-plus-bare-fence-as-one-unit); several files exercised the sub-bullet nested-indentation variant of the paragraph shape, handled consistently by matching the citation's own indentation level.",
+    "artifacts_out": [
+      "lib/letflow/design/req049-variable-merge.md",
+      "lib/letflow/design/req050-exclusive-gateway-cel.md",
+      "lib/letflow/design/req051-parallel-gateway-split-join.md",
+      "lib/letflow/design/req052-instance-cancellation.md",
+      "lib/letflow/design/req053-state-reconstruction.md",
+      "lib/letflow/design/req054-instance-state-snapshots.md",
+      "lib/letflow/design/req057-plugin-interface-registry.md",
+      "lib/letflow/design/req058-lua-script-audit.md",
+      "lib/letflow/design/req059-pin-resolver.md",
+      "lib/letflow/design/req060-pin-rebind.md",
+      "lib/letflow/design/req061-execution-error-handling.md",
+      "lib/letflow/design/req062-sub-process-runtime.md",
+      "lib/letflow/design/req066-api-error-response.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ267-20260906",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch REVIEWER to gate this diff independently against REQ-237's convention and the acceptance criteria above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,5 +1,6 @@
 # REQ-062 — SPC-01 sub-process runtime half (design)
 
+PROVENANCE (historical, not current decision authority):
 Ports the runtime half of `src/definition/sub_process_interface.zig` /
 `src/engine/instance.zig`'s SUB_PROCESS handling that REQ-032 explicitly
 deferred to S3: `createWithParentInheritance()` (internal-only child
@@ -13,11 +14,13 @@ and this disclaimer previously said it was not. REQ-111 audited that claim
 and established that **this document makes no R-Co line citations at all**,
 so the disclaimer guarded nothing. Measured by REQ-111:
 
+PROVENANCE (historical, not current decision authority):
 ```bash
 grep -oE "(instance|transition)\.zig:[0-9]+" lib/letflow/design/req062-sub-process-runtime.md
 # no matches; likewise for any `*.zig:N` pattern
 ```
 
+PROVENANCE (historical, not current decision authority):
 `instance.zig` and `transition.zig` are named in prose only (lines 3, 4 and
 12 above). The 55 `file:line` citations this document does carry all point
 at **Letflow** files (`sub_process.ex`, `engine.ex`, `execution_error.ex`,
@@ -703,14 +706,17 @@ resolve fresh," which is REQ-059's own concern to state, not this one's.
   `divergent_doc_only`.** R-Co keys a child definition on a different
   attribute, with a different resolution mechanism:
 
-  * `R-Co/src/engine/transition.zig:1903` — the SUB_PROCESS node's
+  * PROVENANCE (historical, not current decision authority):
+    `R-Co/src/engine/transition.zig:1903` — the SUB_PROCESS node's
     `attributes` JSON is parsed for the key **`child_definition_id`**:
     `parsed.value.object.get("child_definition_id") orelse return
     error.InvalidSubProcessConfig`. `:1904` requires it to be a non-empty
     string. The attribute is therefore **mandatory** in R-Co, not optional.
-  * `R-Co/src/engine/transition.zig:1448` — that value is carried onto the
+  * PROVENANCE (historical, not current decision authority):
+    `R-Co/src/engine/transition.zig:1448` — that value is carried onto the
     `sub_process_start` event as `.child_definition_id`.
-  * `R-Co/src/engine/instance.zig:4681` — the consumer parses it as a
+  * PROVENANCE (historical, not current decision authority):
+    `R-Co/src/engine/instance.zig:4681` — the consumer parses it as a
     **UUID** (`parseUuid(sp.child_definition_id)`), and `:4707-4712` passes
     it straight to `createWithParentInheritance(... child_definition_id
     ...)`. It is a definition **id**, never a name.
@@ -737,12 +743,14 @@ resolve fresh," which is REQ-059's own concern to state, not this one's.
   legitimate product decision either way; it is flagged here so a later
   stage chooses it deliberately rather than inheriting it by accident.
 
+  PROVENANCE (historical, not current decision authority):
   No structural graph validator (CHK-09..19) checks this attribute's
   presence/shape at definition time — §3.2.3's defensive
   `SUB_PROCESS_DEFINITION_NOT_FOUND` code exists because of that gap, not
   despite it. R-Co closes the equivalent gap at `transition.zig:1903-1904`
   by rejecting the config outright.
-* **OQ-2 — RESOLVED 2026-08-20, GH#329.** Should the parent's own
+* PROVENANCE (historical, not current decision authority):
+  **OQ-2 — RESOLVED 2026-08-20, GH#329.** Should the parent's own
   registered variable-type schemas (`Letflow.Engine.VariableSchema`, the
   same lookup `complete_task/3`'s `merge_output_variables/7` already uses,
   REQ-109) also apply to a sub-process output merge, the way they already

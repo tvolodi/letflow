@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-061 — Execution error handling (`instance.zig` `setInstanceError`, EE-10)
 
 **Requirement:** REQ-061 (this run's handoff `context.requirement_text.REQ-061`, stage S3)
@@ -109,6 +110,7 @@ silently resolved. No implementation code — signatures/shapes only, matching
 - `docs/anti-patterns.md` (current entries) — no entry bears directly on this module's own
   logic.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap — resolved (GH#328, ISS-0100):** `R-Co/src/engine/instance.zig` is reachable in
 this environment; the earlier "unreachable" framing below (and OQ-1, §12) no longer holds and
 is kept only as a record of what this design was built without at the time. Read directly:
@@ -733,6 +735,7 @@ moduledoc — reading ERROR as terminal is the easy mistake"):
 
 ## 12. Open questions — explicitly listed, not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 — RESOLVED (GH#328, ISS-0100, 2026-08-20).** R-Co's own `setInstanceError()`
 (L3078–3182), `SetInstanceErrorArgs` (L289–306), and error-code switch (~L4060–4071 inside
 `buildExecutionErrorPayload/3`) were read directly against `R-Co/src/engine/instance.zig`.

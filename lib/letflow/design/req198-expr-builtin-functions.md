@@ -57,7 +57,8 @@ function body (no `def ... do ... end`, no `defmodule`, anywhere in this documen
   implementation code in a design doc" lesson embedded in REQ-197's own commit history
   (`3680243`, `290c6b2` — two prior reworks of req197's own design doc for exactly this defect),
   which this document is written to avoid from the start rather than fix after a FAIL.
-- **R-Co source access:** confirmed still unreachable from this sandbox (no `R-Co`/`ai-dala`
+- PROVENANCE (historical, not current decision authority):
+  **R-Co source access:** confirmed still unreachable from this sandbox (no `R-Co`/`ai-dala`
   checkout, no `*.zig` file anywhere on this host — same gap REQ-197 §0 and REQ-050 §0 recorded).
   Every semantic rule below is taken from REQ-198's own requirement text, which itself quotes
   specific R-Co behaviours (`src/expr/lexer.zig` L17-39, `src/expr/evaluator.zig`) as its source of
@@ -68,6 +69,7 @@ function body (no `def ... do ... end`, no `defmodule`, anywhere in this documen
 
 ### 1.1 Design principle: extend the existing identifier-classification functions, add no new tokenizer byte-dispatch clause
 
+PROVENANCE (historical, not current decision authority):
 The requirement text (quoting R-Co's `src/expr/lexer.zig` L17-39) states: *"a name in the
 whitelist becomes a builtin-function token, anything else is an identifier, and an identifier
 followed by an opening parenthesis is a hard parse error. There is no user-defined function
@@ -92,6 +94,7 @@ existing 6-clause classification functions, **before** the final catch-all `{:va
 # identifier_token_kv(ident) -> {:var, String.split(ident, ".")} catch-all.
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Why this correctly implements "at LEX time," not parse time:** the classification happens
 inside the tokenizer's own identifier-scanning clause, before any token reaches the parser at all
 — by the time `parse_primary/1`/`parse_primary_p/2` ever see a token, it already carries the
@@ -548,7 +551,8 @@ database. No purity concern arises from adding them (unlike `now()`, deliberatel
 
 ## 9. Open questions
 
-- **OQ-1 (§3.3, `trim/1`'s ASCII-vs-Unicode whitespace set) — low-risk, flagged for REVIEWER's
+- PROVENANCE (historical, not current decision authority):
+  **OQ-1 (§3.3, `trim/1`'s ASCII-vs-Unicode whitespace set) — low-risk, flagged for REVIEWER's
   awareness, not blocking:** this design specifies the same 4-byte ASCII whitespace set
   `do_tokenize/2` already uses (space, tab, `\n`, `\r`) for consistency with this module's one
   existing definition of "whitespace," rather than Elixir's `String.trim/1` default (broader,
@@ -557,7 +561,8 @@ database. No purity concern arises from adding them (unlike `now()`, deliberatel
   `trim`, so this is untested either way; a future reader with real R-Co source access should
   confirm R-Co's exact whitespace-byte set for `trim()` before treating this as ported rather than
   reasoned (mirroring REQ-197 OQ-4's own "low-risk, non-blocking, no AC depends on it" framing).
-- **OQ-2 (§3.4, byte-substring vs. grapheme/codepoint semantics for `contains`/`startsWith`/
+- PROVENANCE (historical, not current decision authority):
+  **OQ-2 (§3.4, byte-substring vs. grapheme/codepoint semantics for `contains`/`startsWith`/
   `endsWith`) — low-risk, flagged for REVIEWER's awareness, not blocking:** `String.contains?/2`
   and friends operate on Elixir's UTF-8 binary representation directly (a substring match found
   mid-multi-byte-codepoint is not possible for valid UTF-8, so this is not a correctness gap for

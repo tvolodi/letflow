@@ -7,6 +7,7 @@ Closes the gap between REQ-080's already-shipped `GET
 what one timeline item *contains*; the route, its auth, its pagination and
 its 404 behaviour are unchanged (see §5).
 
+PROVENANCE (historical, not current decision authority):
 Ports R-Co's `src/obs/timeline.zig` `resolveActorDisplayName` (L287-317)
 and `renderDescription` (L320+), reshaped for Letflow's per-page N+1
 avoidance requirement (R-Co does one `queryRow` per entry; this design

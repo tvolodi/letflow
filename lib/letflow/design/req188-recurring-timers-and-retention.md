@@ -13,7 +13,8 @@ REQ-026 (`Letflow.EventStore.archive/1`, `event_retention_policies`).
 Two things are explicitly OUT of scope for this requirement, and the reason each is out
 of scope must be stated in the moduledoc, not silently omitted:
 
-1. **R-Co's `src/scheduler/partition_maintenance.zig` and `partition_retention.zig` are
+1. PROVENANCE (historical, not current decision authority):
+   **R-Co's `src/scheduler/partition_maintenance.zig` and `partition_retention.zig` are
    NOT ported.** Both operate on a `PARTITION BY RANGE` events table via
    `DETACH`/`ATTACH`/`DROP`. Letflow's `events` table is not partitioned —
    `docs/migration/decisions/0003-ecto-schema-strategy.md`'s Dimension C, point 2

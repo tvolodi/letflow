@@ -7,6 +7,7 @@ matrix), REQ-072 (INV-5 cross-tenant-404 mechanism).
 
 ## 0. Contract source (mandatory disclosure, AC6)
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `webhooks.zig` was **not inspected** while drafting this design — R-Co lives
 at a Windows path (`c:\Users\tvolo\dev\ai-dala\R-Co\`) unreachable from this
 drafting sandbox, verified absent, not assumed covered. The binding contract
@@ -343,7 +344,8 @@ accounted for above:
 1. What this module is (REQ-182, this design file's path), what it is mounted
    at, and that it is route/controller layer only atop REQ-181's
    `Letflow.Webhooks` — no schema/context change.
-2. **Contract source** (§0 above, verbatim disclosure): R-Co's `webhooks.zig`
+2. PROVENANCE (historical, not current decision authority):
+   **Contract source** (§0 above, verbatim disclosure): R-Co's `webhooks.zig`
    not inspected, unreachable from the drafting environment; binding contract
    is `web/src/api/dlq.ts`'s `webhooksApi` and `web/src/types/api.ts`'s
    `WebhookSubscription`.

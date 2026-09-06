@@ -13,6 +13,7 @@ core/route split and, more directly, REQ-182's own route-layer idiom in
 
 ## 0. Contract source (mandatory disclosure, AC6)
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `webhooks.zig` was **not inspected** while drafting this design — R-Co lives
 at a Windows path (`c:\Users\tvolo\dev\ai-dala\R-Co\`) unreachable from this drafting
 sandbox, verified absent (per REQ-182 and REQ-183's own precedent), not assumed

@@ -13,7 +13,8 @@ never a working function body (no `def ... do ... end` anywhere in this document
 
 ## 0. Sources read for this design, and the R-Co access gap (OPEN — inherited from REQ-050 §0)
 
-- This handoff's `context.requirement_text` for REQ-197 (queue task 370, GH#716), read in full —
+- PROVENANCE (historical, not current decision authority):
+  This handoff's `context.requirement_text` for REQ-197 (queue task 370, GH#716), read in full —
   quoted verbatim at load-bearing points below rather than paraphrased, since the requirement text
   itself already restates R-Co's `src/expr/ast.zig`, `lexer.zig`, and `error.zig` findings (line
   ranges, whitelist contents, semantics) as its own source of record.
@@ -53,7 +54,8 @@ never a working function body (no `def ... do ... end` anywhere in this document
   free-text report must not be named `step-*` unless it is the `.json` handoff itself — observed
   when preparing this run's step-01b handoff), and the "test helper default argument goes dead"
   entry (not directly applicable here, no test code is written by this role).
-- **THE GAP, restated honestly (mirrors req050 §0's own framing):** R-Co's actual source tree
+- PROVENANCE (historical, not current decision authority):
+  **THE GAP, restated honestly (mirrors req050 §0's own framing):** R-Co's actual source tree
   (`src/expr/ast.zig`, `lexer.zig`, `evaluator.zig`, `error.zig`) is **not reachable from this
   sandbox** — confirmed by a filesystem search finding no `R-Co`/`ai-dala` checkout and no
   `*.zig` file anywhere on this host. Every semantic rule below is therefore taken from
@@ -67,6 +69,7 @@ never a working function body (no `def ... do ... end` anywhere in this document
 
 ## 1. Scope recap (from the requirement text, restated for traceability)
 
+PROVENANCE (historical, not current decision authority):
 REQ-197 extends `expr.ex` with: (1) binary arithmetic `+ - * / %` and unary negation, at R-Co's
 stated precedence; (2) R-Co's exact arithmetic semantics (int/float promotion, by-zero behaviour,
 the null-in-comparison-vs-null-in-arithmetic asymmetry); (3) a structured parse-error surface
@@ -624,7 +627,8 @@ decision.**
 **Reasoning, stated in full per the requirement's own instruction to decide with reasons rather
 than leave it open:**
 
-1. R-Co's own `evaluator.zig` documents, in its own comment (quoted by the requirement text),
+1. PROVENANCE (historical, not current decision authority):
+   R-Co's own `evaluator.zig` documents, in its own comment (quoted by the requirement text),
    that `now()` is "inherently impure; all other built-ins are pure." This is not a Letflow
    invention — R-Co's own authors already singled out exactly this one builtin (plus the two that
    depend on it) as the one impure member of an otherwise-pure 11-function whitelist.
@@ -669,6 +673,8 @@ Three moduledoc passages this requirement's acceptance criteria require, each ma
 that names it (ELIXIR-DEV writes the actual prose; this design specifies exactly what fact each
 passage must state so nothing is left to improvisation):
 
+PROVENANCE (historical, not current decision authority):
+
 | AC | Required moduledoc content |
 |---|---|
 | AC9 | States that `now()` is not added; that R-Co's own evaluator documents `now()` as the one inherently-impure builtin while every other builtin is pure; that adding it would break both this module's grep-verified purity contract and REQ-050's determinism guarantee; and states the decided disposition (§8: a future injected-evaluation-timestamp mechanism, clock reads permanently ruled out) rather than leaving the builtin's fate open. |
@@ -698,7 +704,8 @@ scattered across the requirement text:
   `contains_bare_question_mark?` translation-time rejections (unchanged by this requirement)
   continue to reject all of them at the CEL-translation layer, before this requirement's grammar
   ever runs.
-- **No port of `src/expr/benchmark.zig`** (§9/AC10) — a Zig latency-measurement harness with no
+- PROVENANCE (historical, not current decision authority):
+  **No port of `src/expr/benchmark.zig`** (§9/AC10) — a Zig latency-measurement harness with no
   production behaviour and no Elixir equivalent; already recorded as deliberately unported in the
   existing moduledoc (REQ-050), restated rather than newly decided by this requirement.
 - **No `now()`, `date_add()`, or `date_diff()`** — §8's decision, not a deferral-without-reasoning.
@@ -711,6 +718,8 @@ scattered across the requirement text:
   (`transition.ex:671`) is untouched; this requirement's entire surface is internal to `expr.ex`.
 
 ## 11. Traceability — every REQ-197 acceptance criterion to a concrete design element
+
+PROVENANCE (historical, not current decision authority):
 
 | # | Acceptance criterion (verbatim, abbreviated) | Design element |
 |---|---|---|
@@ -729,7 +738,8 @@ scattered across the requirement text:
 
 ## 12. Open questions (§8's decision above is final and NOT one of these — listed separately since it required its own reasoning, not a guess)
 
-- **OQ-1 (§4.3) — genuine open question, needs REVIEWER's explicit sign-off before ELIXIR-DEV
+- PROVENANCE (historical, not current decision authority):
+  **OQ-1 (§4.3) — genuine open question, needs REVIEWER's explicit sign-off before ELIXIR-DEV
   implements it, carried forward unchanged from iteration 0:** the signed-infinity / NaN-for-
   `0.0/0.0` 3-way split for float division by zero is this design's own reasoned extension of the
   requirement text's single un-signed phrase ("yields the IEEE infinity"). Not independently
@@ -763,7 +773,8 @@ scattered across the requirement text:
   a guess awaiting confirmation. (Noted as a candidate for a *future requirement* if REQ-198 or a
   later consumer ever needs an eval-time structured surface — but that is a scope-expansion
   proposal for later, not an unresolved question about *this* requirement's own scope.)
-- **OQ-4 (§4.3 row A, `/` and `%`) — low-risk, flagged for REVIEWER's awareness only, not blocking,
+- PROVENANCE (historical, not current decision authority):
+  **OQ-4 (§4.3 row A, `/` and `%`) — low-risk, flagged for REVIEWER's awareness only, not blocking,
   carried forward unchanged from iteration 0:** the truncate-toward-zero (`div/2`/`rem/2`-style)
   rounding direction for integer division/modulo with **negative** operands (e.g. `-7 / 2`,
   `-7 % 2`) is this design's own decision, chosen as the most common convention among

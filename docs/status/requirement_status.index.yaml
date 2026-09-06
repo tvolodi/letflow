@@ -1969,24 +1969,21 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 16
+    entries: 17
     note: >
-      Incremented to 16 by ORCH's own ISS-0515 SCOPE-CHANGE done-event
-      append (WF03-ISS0515-20260906) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v10.yaml` = 16 on-disk entries, no
-      rebase conflict at the time it was written. 715 lines, well under
-      the 1200-line/120000-byte roll ceiling, so no roll triggered.
-      Previously incremented to 15 by ELIXIR-DEV's own REQ-227 done-event append
-      (WF02-REQ227-20260906, branched before REQ-226's own PR #1029
-      merged -- this branch's copy of this file predates REQ-226's
-      append, so this count is local to this branch and will be
-      recomposed chronologically against REQ-226's own append at merge
-      time, per this file's own established recipe) -- `grep -c "^  -
-      req:" docs/status/requirement_status.v10.yaml` = 15 on-disk
-      entries on this branch, no rebase conflict at the time it was
-      written. 672 lines, well under the 1200-line/120000-byte roll
-      ceiling, so no roll triggered.
-      Previously incremented to 14 by ELIXIR-DEV's own REQ-225
+      Recomposed to 17 during feature/WF02-REQ226-20260906's rebase onto
+      main post-ISS-0515 merge: this branch's own REQ-226 append (15,
+      counted before REQ-227/ISS-0515 existed on main) was reordered
+      chronologically ahead of REQ-227's (16) and ISS-0515's (17, the
+      tip of main at rebase time) entries, all disjoint, none dropped --
+      `grep -c "^  - req:" docs/status/requirement_status.v10.yaml` = 17
+      on-disk entries after composition. 786 lines, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
+      Previously incremented to 16 by ORCH's own ISS-0515 SCOPE-CHANGE
+      done-event append (WF03-ISS0515-20260906) -- 715 lines at that
+      point. Previously incremented to 15 by ELIXIR-DEV's own REQ-227
+      done-event append (WF02-REQ227-20260906) -- 672 lines at that
+      point. Previously incremented to 14 by ELIXIR-DEV's own REQ-225
       done-event append (WF02-REQ225-20260906) -- 621 lines at that
       point, well under the roll ceiling.
       Recounted to 13 by chore/ISS0424-resolved-20260906's Step Final

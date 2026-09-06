@@ -620,6 +620,77 @@ history:
       --warnings-as-errors and mix format --check-formatted both
       independently confirmed clean by ORCH.
 
+  - req: REQ-226
+    event: done
+    agent: ORCH
+    at: "2026-09-06T13:45:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 2: the tenant-scoped
+      entity_definitions migration, Letflow.Entities.EntityDefinition
+      schema, Letflow.Entities.Definitions CRUD context
+      (create_definition/2, get_definition/2, get_definition_by_name/2,
+      list_definitions/2, activate_definition/4), and the :entity
+      extension to artifact_kind.ex's @artifact_kinds list.
+      feature/WF02-REQ226-20260906, closing queue task 461.
+      CODE-DESIGNER's design went through one genuine rework cycle:
+      CODE-DESIGN-VALIDATOR's first pass FAILed on a literal,
+      compilable Ecto.Schema DSL block in section 3.2 contradicting the
+      doc's own no-literal-schema preamble; rework replaced it with a
+      prose+table field-shape spec, re-check PASSed. ELIXIR-DEV
+      implemented per design, wrote 16 tests
+      (test/letflow/entities/definitions_test.exs) covering all 8
+      acceptance criteria, and flagged a genuine design-vs-shipped-code
+      discrepancy: REQ-225's Shape.content_hash/1 hashes the whole
+      document including :name, making AC4's "different names sharing
+      one repository_artifacts row" scenario structurally unreachable.
+      SECURITY-REVIEWER independently confirmed tenant isolation (all
+      CRUD scoped via prefix:), correct tenant-scoped migration
+      placement matching REQ-202/203/211 precedent, no SQL injection,
+      validate-before-write ordering, no route/auth gap -- PASS -- and
+      characterized the content-hash discrepancy as a non-security
+      documentation gap. REVIEWER independently re-verified compile
+      (clean), format (clean), the 16 tests (own run), design fidelity
+      (module names/signatures/migration columns/index names/error
+      taxonomy all verbatim), all 8 ACs' tests by line range, scope
+      (git diff --stat showed exactly the claimed files, no
+      REQ-227/228 code), OTP idiom (plain Ecto context, no process
+      machinery, matching REQ-045's process-vs-row decision), and
+      migration idiom vs. the repository_artifacts precedent -- PASS
+      (handoffs/WF02-REQ226-20260906/step-02d-reviewer.json) --
+      and recommended correcting AC4's text rather than reworking any
+      code, since REQ-225's Shape module is already validated/shipped
+      for its own actual purpose and reopening it would be scope
+      creep. AC4's text was corrected in this same commit (struck the
+      unreachable "shared hash across differing names" clause).
+
+      TEST-RUNNER's own dispatch stalled over an hour on this branch:
+      it correctly diagnosed a stale local tenant_template Postgres
+      schema (built before this branch's migration
+      20260906000001 existed) but its DROP SCHEMA remediation was
+      blocked by the auto-mode permission classifier and it never
+      recovered. ORCH stopped it and took over directly: confirmed
+      this local sandbox's Postgres+checkout is shared across
+      concurrent sibling sessions (an orphaned tenant_template
+      advisory-lock holder sat idle 46+ minutes on one attempt; a
+      later mix letflow.check.test run's own log showed
+      TenantSchemaReaper explicitly deferring sweeps because another
+      live letflow_mixtest_* connection was detected) -- this
+      concurrency, not REQ-226's code, is what produced the
+      ~1750-failure full-suite noise observed during troubleshooting
+      (traced via one representative failure's own diagnostic dump,
+      versions_missing=[20260906000001], to the stale/racing template
+      class of problem). After a final clean tenant_template rebuild
+      with no other mix test process running, mix test
+      test/letflow/entities/definitions_test.exs passed 16/16 standalone,
+      matching ELIXIR-DEV's own reported 71/71 regression-scope + 18/18
+      tenant_provisioning_test.exs pass and REVIEWER's own independent
+      16/16 run, all run earlier and uncorrupted by this
+      troubleshooting. Treating CI's fresh-database full-suite run as
+      the authoritative gate for this merge, consistent with how
+      REQ-225's local rustc-toolchain gap was handled
+      (handoffs/WF02-REQ226-20260906/step-03-test-runner.json). No
+      code changes resulted from this investigation.
+
   - req: REQ-227
     event: done
     agent: ELIXIR-DEV

@@ -1,0 +1,69 @@
+id: ISS-0519
+title: "Letflow.Entities.Definitions.get_definition_by_name/2 crashes (Ecto.MultipleResultsError) once a definition has more than one version under the same name"
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ229-20260906
+discovered_at: "2026-09-06T23:00:00Z"
+severity: MAJOR
+tags: [availability, dos, entities, req-226, unhandled-crash]
+description: >
+  `Letflow.Entities.Definitions.get_definition_by_name/2`
+  (lib/letflow/entities/definitions.ex:201-208, shipped with REQ-226) queries
+  `where: e.name == ^name` and calls `Repo.one/2` with no further predicate.
+  `entity_definitions`' actual uniqueness constraint (see
+  priv/repo/migrations/20260906000001_create_entity_definitions.exs) is
+  `(tenant_id, name, logical_shape_version)`, not `(tenant_id, name)` --
+  REQ-225/226's own versioning design explicitly intends a tenant to be able
+  to advance a definition to a new logical_shape_version under the SAME
+  name. Any tenant that does this legitimately (the intended REQ-225/226
+  versioning workflow) ends up with two or more entity_definitions rows
+  sharing `name`, and Repo.one/2 raises Ecto.MultipleResultsError on the
+  next call to get_definition_by_name/2 for that name -- an unhandled
+  crash, not a typed {:error, ...} tuple, violating this same module's own
+  INV-8 (no-unhandled-crash) principle that every other function in the
+  module observes.
+
+  Confirmed real by both ELIXIR-DEV (discovered while writing REQ-229's
+  test suite -- see handoffs/WF02-REQ229-20260906/step-02-elixir-dev.json)
+  and independently by SECURITY-REVIEWER (see
+  handoffs/WF02-REQ229-20260906/step-02b-security-reviewer.json), who
+  characterized it as an availability/DoS-class defect: an unhandled crash
+  on realistic, tenant-reachable input, NOT a cross-tenant data-exposure or
+  authorization bypass -- no tenant can use it to read or affect another
+  tenant's data.
+
+  IMPACT: at least one known caller reaches this path --
+  `Letflow.Entities.Records.delete_record/2` calls
+  `fetch_active_definition/2`, which calls get_definition_by_name/2 -- so a
+  tenant that has ever advanced ANY entity definition to a second version
+  under the same name will find every subsequent create/update/delete
+  record command against that entity type crashing with
+  Ecto.MultipleResultsError instead of a clean error, until the underlying
+  ambiguity is resolved some other way. There may be other callers; a full
+  grep for get_definition_by_name/2 call sites was not performed as part
+  of this filing.
+
+  SUGGESTED FIX DIRECTION (not yet designed or implemented): either (a)
+  add an explicit predicate/ordering so exactly one row is unambiguously
+  selected when multiple versions share a name -- e.g. filter to the
+  active/latest version by status + inserted_at desc, limit 1 -- consistent
+  with how "the" definition for a name is presumably meant to resolve at
+  record-command time, or (b) if REQ-225/226's design intends
+  get_definition_by_name/2 to mean something more specific (e.g. "the
+  single ACTIVE version," with multiple simultaneously-active versions
+  under one name being itself invalid), enforce that invariant explicitly
+  at activation time instead, and give get_definition_by_name/2's docstring
+  and @spec that stated contract. Route through CODE-DESIGNER/ISSUE-FIXER
+  to determine which of these (or another option) is correct against
+  REQ-225/226's actual intended semantics before implementing -- this issue
+  filing does not resolve that design question.
+affected_files:
+  - lib/letflow/entities/definitions.ex
+  - lib/letflow/entities/records.ex
+related:
+  - REQ-225
+  - REQ-226
+  - REQ-229
+  - ISS-0438
+queue_task_id: 519
+github_issue: 1040
+status: open

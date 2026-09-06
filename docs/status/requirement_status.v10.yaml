@@ -411,3 +411,39 @@ history:
       notes returned 0 matches before and after (byte-identical, none
       exist in this chunk). Docs-only, no mix compile/format/test
       applicable. Next: route to REVIEWER for independent verification.
+  - req: REQ-255
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-06T04:45:12Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention within
+      docs/requirements.yaml, restricted to the REQ-051 through REQ-078
+      entry range (closes ISS-0424 part 3c-2, queue task 493,
+      feature/WF02-REQ255-20260906). This is chunk 239b of ten
+      REQ-239-replacement chunks (REQ-254..263) applying the convention
+      to docs/requirements.yaml itself. Queue task 493 (and its 3
+      siblings, REQ-261/262/263, tasks 499/500/501) had been force-
+      released after being confirmed genuinely stuck -- locked for over
+      an hour with zero branch/commit/PR activity anywhere in the repo
+      for any of the four, while other concurrent sibling work (PR
+      #1009, REQ-271's own closeout) confirmed the broader queue
+      ecosystem was alive; the specific holder of these 4 locks was
+      genuinely dead, not merely slow. 58 markers inserted, 142 .zig
+      citation lines in range identical before/after, 0 deletions;
+      whole-file .zig total unchanged at 728 (out-of-range count 586
+      before/after, confirming zero leakage into sibling chunks'
+      scope). Insertion shapes followed REQ-256's established
+      precedent for this exact file: `# `-prefixed comments above
+      title:/acceptance_criteria citations, a bare marker line as the
+      first line of a folded description: scalar containing a
+      citation, and one marker covering the whole commented-out S4
+      section-header block (not per-line). REVIEWER independently
+      re-derived the exact REQ-051/REQ-079 line-range boundaries,
+      confirmed every inserted marker falls strictly inside them,
+      re-validated YAML parseability, sample-diffed 9 entries for
+      byte-identical citation text, confirmed the divergence-note
+      grep and out-of-range .zig count both byte/count-identical, and
+      confirmed CLAUDE.md/README.md/docs/migration/README.md untouched
+      -- PASS (handoffs/WF02-REQ255-20260906/step-02d-reviewer.json).
+      Docs-only, no mix compile/format/test applicable. ORCH will
+      merge and release queue task 493 status:done.

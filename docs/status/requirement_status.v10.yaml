@@ -505,3 +505,29 @@ history:
       timeout, then ISS-0453 poller antagonist-contention); the
       sibling workflow run on the same commit passed backend gate
       cleanly throughout. Queue task 499 released status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-06T07:09:08Z"
+    note: >
+      ISS-0424 fully resolved (GH#828 closed): "Establish Letflow as an
+      independent product." All three parts complete -- Part 1
+      (framing rewrite, PR #916), Part 2 (131 parity-justifications
+      restated or removed across 47 lib/ files, 7 requirements:
+      REQ-232/233/234/235/240/241/242), Part 3 (.zig citations demoted
+      to marked historical provenance across lib/ and docs/, 30
+      requirements total: REQ-237's design plus 29 apply-chunks
+      REQ-243..271, after REQ-238/239 were each found too wide for one
+      turn and split further). All 40 requirements this issue spawned
+      (REQ-232..271) are done. Notable finding during the final chunk
+      (REQ-263): a real design gap let markers get inserted into 8
+      closed, SHA-256-frozen-prefix docs/status/requirement_status
+      volumes -- invisible to every prior chunk's own acceptance
+      criteria, which checked citation-text preservation but not the
+      separate frozen-prefix invariant
+      (test/docs/requirement_status_invariants_test.exs assertion A6).
+      REVIEWER FAILed the first pass, routed to CODE-DESIGNER for a
+      design amendment (REQ-237's design doc §2.5, "closed docs/status/
+      volumes are OUT OF SCOPE entirely"), the insertions were
+      reverted, REVIEWER's full re-gate PASSed. docs/issues/ISS-0424.yaml
+      flipped to status: resolved.

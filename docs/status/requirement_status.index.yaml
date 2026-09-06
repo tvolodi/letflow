@@ -1969,8 +1969,13 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 11
+    entries: 12
     note: >
+      Incremented to 12 by ORCH's own ISS-0424 SCOPE-CHANGE done-event
+      append -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 12 on-disk entries, no
+      rebase conflict on this file. 533 lines, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
       Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
       found main further advanced by WF02-REQ261-20260906's own REQ-261
       done-event append (landed via PR #1023 while this branch's own

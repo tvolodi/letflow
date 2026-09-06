@@ -784,3 +784,79 @@ history:
       SECURITY-REVIEWER needed (test-support-only, no production/tenant
       data path). feature/WF03-ISS0515-20260906. Once merged, PR #1029
       (REQ-226) will be rebased/retried against this fix.
+
+  - req: REQ-228
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-06T21:25:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 4: entity event registration
+      (ENTITY_RECORD_CREATED/UPDATED/DELETED via
+      Letflow.EventStore.Registry.register_type/2) and create/update/delete
+      record commands (Letflow.Entities.Records), new tenant-scoped tables
+      entity_record_latest and entity_type_instances,
+      ISS-0159/GH#480 idempotency-key parity, synthetic-instance-per-
+      entity-type mapping. feature/WF02-REQ228-20260906, closing queue
+      task 516 (registered fresh this run -- the requirement's original
+      impl_order: 463 placeholder was never actually registered in
+      letflow-queue; corrected via a small chore PR #1035 before this
+      run started). CODE-DESIGNER's design went through one genuine
+      rework cycle: CODE-DESIGN-VALIDATOR's first pass FAILed on a real
+      naming defect -- the design named the EventStore Multi step key
+      as :claim_idempotency (actually only the private helper
+      function's name) instead of the real :idempotency, which would
+      have broken AC3's duplicate-record parity if implemented
+      verbatim; rework corrected all 5 occurrences, re-check PASSed.
+      The design's central architectural finding: Letflow.EventStore.
+      append/2 commits its own transaction internally, so a new
+      append_multi/3 was designed (mirroring the existing
+      Letflow.Engine.TaskActivation.append_multi/6 "extend a
+      caller-supplied open Multi" idiom) to compose event-append with
+      the entity_record_latest projection update in one atomic
+      transaction. ELIXIR-DEV implemented exactly per design, wrote 21
+      tests covering all 8 acceptance criteria, and flagged 4 honest
+      discrepancies rather than silently resolving or hiding them: (a)
+      entity_type_instance_guard implemented as an eager pre-Multi call
+      rather than a lazy Multi.run/3 step (structural design
+      inconsistency between its own sections); (b) entity_def_version
+      is string/hex-encoded, not integer as the design's table
+      literally stated (the design's own already-named open question);
+      (c) a definition_document/1 conversion helper bridging REQ-226's
+      string-keyed Postgres-returned JSON and REQ-227's atom-keyed
+      Definition.t() -- a real interface gap the design never
+      mentioned, using String.to_existing_atom/1 to fail closed; (d) a
+      redundant unique_index removed (the primary key already enforces
+      the uniqueness). SECURITY-REVIEWER independently verified tenant
+      isolation (both new tables genuinely schema-per-tenant, not
+      shared+tenant_id), confirmed append/2 and append_platform_event/2
+      are provably byte-identical after the append_multi/3 extraction
+      (zero regression across the entire event-sourcing core), checked
+      all 4 discrepancies for security implications (no TOCTOU gap, no
+      injection/bypass risk, fail-closed atom conversion, PK still
+      enforces uniqueness) -- PASS. REVIEWER independently re-verified
+      design fidelity, all 8 ACs by line range, assessed all 4
+      discrepancies as the right engineering call (not just safe ones),
+      confirmed append_multi/3 is a clean single-source-of-truth
+      refactor not a duplicated near-copy, and proactively forced a
+      fresh tenant_template rebuild to preempt the fixture-completeness
+      gap that hit REQ-226 twice -- PASS
+      (handoffs/WF02-REQ228-20260906/step-02d-reviewer.json). No
+      TEST-DESIGNER dispatch needed per established precedent.
+      TEST-RUNNER's first full-suite run found 744 failures across all
+      8 partitions, correctly root-caused (not REQ-228's own code) to
+      stale per-partition tenant_template schemas on this shared local
+      Postgres instance -- built before REQ-228's migrations existed,
+      a distinct staleness class from ISS-0515's build-race (confirmed
+      no orphan/staging debris, atomic build-then-rename held; the
+      existence-only fast-path check simply never invalidates against
+      manifest drift). ORCH dropped tenant_template in all 8
+      per-partition databases directly (pre-authorized, idempotent,
+      self-rebuilding test-cache operation) and reran: 7/8 partitions
+      100% clean, the 8th had only the pre-existing, unrelated
+      rustc-toolchain gap (2 tests, :enoent, no rustc binary in this
+      sandbox) -- confirming zero regression from REQ-228's own code or
+      the append_multi/3 refactor once the cache staleness (a
+      local-sandbox-only artifact, structurally impossible on CI) was
+      cleared. mix compile --warnings-as-errors and mix format
+      --check-formatted independently confirmed clean by ELIXIR-DEV,
+      SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.

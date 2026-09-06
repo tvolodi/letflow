@@ -217,7 +217,7 @@ Step order:
    | (none — first event) | `"ENTITY_RECORD_UPDATED"` or `"ENTITY_RECORD_DELETED"` | `{:error, {:corrupt_event_stream, {:missing_created_event, record_id}}}` — a record's stream must always begin with `ENTITY_RECORD_CREATED` (REQ-228's command path never appends any other event type first); any other first event means the log itself is inconsistent, not a case to silently tolerate. |
    | not deleted | `"ENTITY_RECORD_CREATED"` (a second one) | `{:error, {:corrupt_event_stream, {:duplicate_created_event, record_id}}}` — `record_id` is minted once per record (REQ-228 design §5.1 step 3) and never reused; a second `CREATED` for the same `record_id` cannot happen via the command path. |
    | not deleted | `"ENTITY_RECORD_UPDATED"` | `field_values` replaced wholesale with `payload["field_values"]` (whole-document semantics, REQ-228 design §5.2), `entity_def_version` re-decoded from this event's own payload (a record's definition version can advance across updates, REQ-228 design §5.2's third bullet), `deleted` unchanged (`false`), `last_event_*` fields advanced to this event. |
-   | not deleted | `"ENTITY_RECORD_DELETED"` | `deleted: true`; `field_values` and `entity_def_version` **left unchanged** at their pre-delete values (§3.4 justifies this against REQ-228's own already-shipped write path); `last_event_*` fields advanced to this event. |
+   | not deleted | `"ENTITY_RECORD_DELETED"` | `deleted: true`; `field_values` **left unchanged** at its pre-delete value; `entity_def_version` **re-decoded from this DELETE event's own payload** (identical rule to the `UPDATED` clause above — a record's definition version can still advance between its last update and its deletion, and the DELETE event's own payload already carries the definition version active at delete time, §3.4 justifies this against REQ-228's own already-shipped write path); `last_event_*` fields advanced to this event. |
    | already deleted (`deleted: true`) | any of the three | `{:error, {:corrupt_event_stream, {:event_after_delete, record_id, event.event_type}}}` — REQ-228's command path structurally forbids updating a deleted record (`ensure_not_deleted/2`) and treats deleting an already-deleted record as a no-op that appends **no** new event (`delete_record/2`'s own no-op branch, §0) — so a well-formed log never has any event after a `DELETED` for the same `record_id`. Surfacing this as corruption (rather than silently taking the later event, or silently keeping the delete) matches `Letflow.Engine.Reconstruction`'s own stated discipline of never silently tolerating a log shape the command path is not supposed to produce (§0). |
    | any | any `event_type` string not one of the three registered entity event types | `{:error, {:corrupt_event_stream, {:unrecognized_event_type, event.event_type, event.event_id}}}` — mirrors `Letflow.Engine.Reconstruction`'s own unrecognized-event-type discipline verbatim (§0), for the same reason: a later requirement that adds a fourth entity event type must add its own fold clause here explicitly, never fall through silently.
 
@@ -225,30 +225,56 @@ Step order:
 
 ### 3.4 Deleted-record snapshot representation — AC2's own explicit choice
 
-**Choice: a `deleted: true` flag on the same row/snapshot, `field_values`
-retained at its last pre-delete value.** No tombstone row, no removal from
+**Choice: a `deleted: true` flag on the same row/snapshot. `field_values`
+is retained at its last pre-delete value; `entity_def_version` is
+re-decoded from the DELETE event's own payload, not carried forward from
+whatever it was before the delete.** No tombstone row, no removal from
 `entity_record_latest`, no separate table.
 
 **Justification against REQ-228's already-shipped write path (not a fresh
 design-time choice — a consistency requirement):** `Letflow.Entities.Records.upsert_record_latest/3`'s
-`:delete` clause (§0) already does exactly this on the live command path —
-`Latest.update_changeset(%{field_values: ctx.field_values, deleted: true,
-...})`, where `ctx.field_values` is deliberately the **existing** record's
-last-known `field_values` (`delete_record/2`'s own `ctx` construction reuses
-`existing_record.field_values` unchanged, §0), not an emptied/nulled value.
+`:delete` clause (§0, `records.ex` ~line 289) already does exactly this on
+the live command path — `Latest.update_changeset(%{field_values:
+ctx.field_values, deleted: true, entity_def_version:
+ctx.definition.logical_shape_version, ...})`. The two fields follow
+**different** rules there, and `replay_record/3`'s fold must mirror both
+exactly:
+
+- `ctx.field_values` is deliberately the **existing** record's last-known
+  `field_values` (`delete_record/2`'s own `ctx` construction reuses
+  `existing_record.field_values` unchanged, §0) — genuinely carried forward,
+  not recomputed from the delete event.
+- `ctx.definition` is **not** carried forward from the pre-delete row.
+  `delete_record/2` calls `fetch_active_definition/2` fresh, the exact same
+  currently-active-definition lookup the `:update` clause uses (§0) — so
+  `entity_def_version` on delete reflects whatever definition version is
+  active *at delete time*, which may have advanced since the record's last
+  update. `base_payload/1` is called unconditionally for all three event
+  kinds (§0, `records.ex` ~lines 259–266), so the `ENTITY_RECORD_DELETED`
+  event's own payload already carries this freshly-computed
+  `entity_def_version` value — the fold has everything it needs to re-decode
+  it exactly as the `UPDATED` clause does, and must do so rather than
+  treating it as unchanged.
+
 If `replay_record/3` chose a different representation for a deleted record
-(e.g. `field_values: %{}`, or omitting the row entirely), REQ-229's own AC1
-("replaying a record's full event stream... produces a snapshot matching
-the record's actual current field_values") and AC3 ("rebuildProjection...
-restores exactly the state the replay function would independently compute")
-would both be internally contradictory with what `entity_record_latest`
-already, observably contains for a deleted record today. Matching REQ-228's
-existing behavior is therefore not a preference — it is the only choice
-under which "replay matches the live projection" is even a coherent
-statement. This is the requirement's own explicit representation, stated
-here and restated verbatim in `Letflow.Entities.Record.Projector`'s
-moduledoc, per AC2's own instruction that it be "named explicitly in the
-moduledoc."
+(e.g. `field_values: %{}`, omitting the row entirely, or carrying forward
+the pre-delete `entity_def_version` instead of re-decoding the DELETE
+event's own value), REQ-229's own AC1 ("replaying a record's full event
+stream... produces a snapshot matching the record's actual current
+field_values") and AC3 ("rebuildProjection... restores exactly the state
+the replay function would independently compute") would both be internally
+contradictory with what `entity_record_latest` already, observably contains
+for a deleted record today — including, specifically, a deleted record
+whose entity type's active definition advanced between that record's last
+update and its deletion. Matching REQ-228's existing behavior field-by-field
+is therefore not a preference — it is the only choice under which "replay
+matches the live projection" is even a coherent statement. This is the
+requirement's own explicit representation — `field_values` frozen at its
+last non-delete value, `entity_def_version` always reflecting the
+definition active at the time of the **last event affecting the record**
+(create, update, or delete, whichever came last) — stated here and restated
+verbatim in `Letflow.Entities.Record.Projector`'s moduledoc, per AC2's own
+instruction that it be "named explicitly in the moduledoc."
 
 ## 4. `rebuild_projection/2` — full re-projection (scope item 3)
 

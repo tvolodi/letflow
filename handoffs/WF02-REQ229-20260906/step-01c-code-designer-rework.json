@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ229-20260906-step-01c",
+  "run_id": "WF02-REQ229-20260906",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ229-20260906/step-01c-code-designer-rework.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T22:59:30Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-229"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ229-20260906-step-01b"],
+    "artifacts_in": ["lib/letflow/entities/records.ex"],
+    "artifacts_out": ["lib/letflow/design/req229-entity-record-projection-replay.md"],
+    "branch_name": "feature/WF02-REQ229-20260906",
+    "base_commit": "9613d348"
+  },
+  "task": {
+    "description": "Rework: correct the entity_def_version DELETE-case fold defect flagged by CODE-DESIGN-VALIDATOR's FAIL verdict -- entity_def_version must be re-decoded from the DELETE event's own payload (like UPDATE), not carried forward unchanged; only field_values is genuinely carried forward."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Fixed the ENTITY_RECORD_DELETED fold rule in section 3.3's fold table (line 220) and rewrote section 3.4's justification (lines 226-274) to correctly state: field_values is carried forward from existing_record.field_values, but entity_def_version is re-decoded from the DELETE event's own payload (identical rule to UPDATE), since records.ex's upsert_record_latest/3 :delete clause sets entity_def_version from a freshly-fetched active definition (same as :update), and base_payload/1 unconditionally includes the current entity_def_version in every event's payload including DELETE. Verified against the real lib/letflow/entities/records.ex code (upsert_record_latest/3 lines 277-298, base_payload/1 lines 259-265). Self-checked: grepped all 9 entity_def_version occurrences in the doc, confirmed the DELETE-case rule is now stated correctly and consistently in the fold table, choice statement, justification, and closing summary; grepped for defmodule/def/schema-do patterns, zero matches, no executable code introduced or existed. No other content touched."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

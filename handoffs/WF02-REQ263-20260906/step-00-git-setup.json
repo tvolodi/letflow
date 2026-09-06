@@ -1,0 +1,72 @@
+{
+  "handoff_id": "WF02-REQ263-20260906-step-00",
+  "run_id": "WF02-REQ263-20260906",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ263-20260906/step-00-git-setup.json",
+  "created_at": "2026-09-06T05:30:54Z",
+  "started_at": "2026-09-06T05:30:54Z",
+  "completed_at": "2026-09-06T05:30:54Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-263"],
+    "requirement_text": {
+      "REQ-263": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), and the two worked before/after examples in section 4, including the REQ-231 cursor.zig worked example that lives inside docs/requirements.yaml itself) to this chunk of REQ-239's original scope, per that design's section 6 chunking recommendation: chunk 239i = docs/status/*, docs/frontend/*, and docs/anti-patterns.md.\n\nThis is one of ten requirements replacing REQ-239 (deleted, too wide for one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256 (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260 (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling covers a disjoint scope; do not touch files or requirements.yaml entries outside docs/status/*, docs/frontend/*, and docs/anti-patterns.md under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk.\n\nDo NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own already-completed Part 1 framing edits -- carried forward unchanged from REQ-239's own out-of-scope note; confirm with a grep first if either file also contains a raw .zig citation, but none is expected.\n\nMEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with REQ-237's actual finalized regex before starting -- do not trust this count): 11 files in this chunk carry a .zig reference today. If this still proves too wide for one DOC-UPDATER turn by fix time, split further and record the split as a follow-on REQ-ANALYST pass rather than doing a partial, unrecorded sweep."
+    },
+    "related_handoff_ids": ["WF02-REQ261-20260906", "WF02-REQ262-20260906"],
+    "artifacts_in": [
+      "docs/requirements.yaml (REQ-263 entry, full read, incl. acceptance_criteria)",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md"
+    ],
+    "owned_modules": [
+      "docs/status/requirement_status.v2.yaml",
+      "docs/status/requirement_status.v3.yaml",
+      "docs/status/requirement_status.v4.yaml",
+      "docs/status/requirement_status.v5.yaml",
+      "docs/status/requirement_status.v6.yaml",
+      "docs/status/requirement_status.v7.yaml",
+      "docs/status/requirement_status.v9.yaml",
+      "docs/status/requirement_status.yaml",
+      "docs/status/S1-release-2026-08-16.yaml",
+      "docs/frontend/contract-gaps.md",
+      "docs/anti-patterns.md"
+    ],
+    "branch_name": "feature/WF02-REQ263-20260906",
+    "base_commit": "b12898cb"
+  },
+  "task": {
+    "description": "WF-02 Step 00->1: claimed queue task 501 (REQ-263, agent_id letflow-ee-orch, already locked -- do not re-claim), chunk 239i (11 files: docs/status/*, docs/frontend/*, docs/anti-patterns.md) of REQ-239's 10-way split applying REQ-237's .zig provenance-marking convention. This is the LAST/10th sibling of the split (REQ-254..263) -- all 9 other siblings are already done. No CODE-DESIGNER step needed -- convention already designed (REQ-237, done) and validated. Dispatching straight to DOC-UPDATER, then REVIEWER.",
+    "acceptance_criteria": [
+      "before starting, run REQ-237's finalized marker-detection regex against the 11 named files for the OLD (unmarked) citation form and quote the count",
+      "after the change, every .zig source-path citation in the 11 named files matches REQ-237's PROVENANCE marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts",
+      "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed",
+      "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat",
+      "the deliberate-divergence notes inside this chunk's scope are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co'` across the 11 named files before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts",
+      "IMPORTANT: docs/status/requirement_status.v9.yaml is CLOSED (status: closed per docs/status/requirement_status.index.yaml, closed 2026-09-05) and docs/status/requirement_status.yaml (volume 1) is also long-closed -- neither is being actively appended to by any concurrent session, so no special append-only rebase composition is expected on those two specifically, but re-check docs/status/requirement_status.index.yaml immediately before merging in case that has changed",
+      "docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, and docs/anti-patterns.md are ordinary files with no append-only/volume convention -- edit them directly",
+      "use the YAML comment-line/sequence-item placement shape (marker inserted as a `# `-prefixed comment line) for any citation living inside a YAML file's comment, plain scalar, or sequence-item context per REQ-237 design doc section 2's 4th shape -- required for the .yaml files in this chunk's scope",
+      "pre-flight measured counts (re-verify, do not trust blindly): docs/status/requirement_status.v2.yaml=16, v3.yaml=5, v4.yaml=6, v5.yaml=3, v6.yaml=8, v7.yaml=3, v9.yaml=36, requirement_status.yaml=86, S1-release-2026-08-16.yaml=6, docs/frontend/contract-gaps.md=4, docs/anti-patterns.md=2 (total 175 raw .zig occurrences via `grep -c '\\.zig'` per file); zero pre-existing PROVENANCE markers confirmed in all 11 files at Step 00"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Pulled main --ff-only (already up to date at b12898cb, REQ-261 closeout). Created branch feature/WF02-REQ263-20260906 off main @ b12898cb. Pre-flight: confirmed all 11 named files exist and carry a .zig reference (175 total raw occurrences, per-file counts in acceptance_criteria above), zero pre-existing PROVENANCE markers in any of the 11 files (`grep -rc 'PROVENANCE (historical, not current decision authority):'` = 0 across all 11). Confirmed CLAUDE.md/README.md/docs/migration/README.md carry zero .zig references (nothing to accidentally touch). Confirmed via docs/status/requirement_status.index.yaml that volume 9 (requirement_status.v9.yaml, in this chunk's scope) is status: closed (closed 2026-09-05) -- append-immune, no concurrent-writer risk for that file specifically; volume 10 (current) is NOT in this chunk's scope, so ongoing v10 appends from sibling sessions do not affect this run. No SECURITY-REVIEWER needed (docs-only citation-marker comments, no tenant-data path, no migration, no lib/ or web/ change).",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ263-20260906",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Dispatch DOC-UPDATER (Step 01) to apply the PROVENANCE marker to the 11 named files per acceptance_criteria above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

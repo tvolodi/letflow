@@ -1969,8 +1969,13 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 9
+    entries: 10
     note: >
+      Incremented to 10 by ORCH's own REQ-261 done-event append
+      (WF02-REQ261-20260906) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 10 on-disk entries,
+      no rebase conflict on this file. 475 lines, well under the
+      1200-line/120000-byte roll ceiling, so no roll triggered.
       Incremented to 9 by DOC-UPDATER's own REQ-255 done-event append
       (WF02-REQ255-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 9 on-disk entries, no

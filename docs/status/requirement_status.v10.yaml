@@ -447,3 +447,29 @@ history:
       -- PASS (handoffs/WF02-REQ255-20260906/step-02d-reviewer.json).
       Docs-only, no mix compile/format/test applicable. ORCH will
       merge and release queue task 493 status:done.
+  - req: REQ-261
+    event: done
+    agent: ORCH
+    at: "2026-09-06T05:21:54Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      docs/issues/ISS-0085.yaml through ISS-0100.yaml (the 11 files in
+      this range carrying a .zig reference), closing ISS-0424 part
+      3c-8, queue task 499, feature/WF02-REQ261-20260906. This is
+      chunk 239g of ten REQ-239-replacement chunks (REQ-254..263).
+      DOC-UPDATER applied additive-only PROVENANCE markers (11 files,
+      0 .zig-bearing lines otherwise touched); REVIEWER independently
+      re-verified scope (only the 11 named files + bookkeeping
+      changed), additive-only diff, and that the r_co_sources
+      sequence-item marker shape was a defensible, non-inventive
+      continuation of REQ-260's own precedent, with YAML still valid
+      and no doubled markers -- PASS
+      (handoffs/WF02-REQ261-20260906/step02-reviewer.json). Doc-only
+      mechanical marker insertion, no code/test coverage applicable,
+      so no TEST-DESIGNER step was run. Merged via PR #1021 (plain
+      merge, fast-forward to main at 43cedb3f) after two CI reruns on
+      a duplicate/stale workflow trigger hit known flakes with no
+      structural overlap to this doc-only diff (ISS-0418 wasm_hang
+      timeout, then ISS-0453 poller antagonist-contention); the
+      sibling workflow run on the same commit passed backend gate
+      cleanly throughout. Queue task 499 released status:done.

@@ -108,7 +108,7 @@ defmodule Letflow.Entities.Record.ProjectorTest do
     %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
-  defp valid_definition(overrides \\ %{}) do
+  defp valid_definition(overrides) do
     Map.merge(
       %{
         name: "customer",

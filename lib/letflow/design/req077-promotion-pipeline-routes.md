@@ -1,5 +1,6 @@
 # REQ-077 — Promotion pipeline routes (S4)
 
+PROVENANCE (historical, not current decision authority):
 Ports six R-Co route modules as one requirement: `src/api/routes/promotion_review.zig`
 (940 / 5 handlers), `promotions.zig` (288), `promotion_read.zig` (169),
 `promotion_assertion.zig` (203), `promotion.zig` (111), `definition_rollback.zig` (133).
@@ -53,11 +54,13 @@ downstream agents will otherwise re-derive them the hard way.
 
 ### F-1 — Four of R-Co's six modules are unreachable dead code; two are wired
 
+PROVENANCE (historical, not current decision authority):
 `src/main.zig` imports exactly two of the six (`L90` `promotion.zig`, `L91`
 `promotions.zig`). `promotion_review.zig`, `promotion_read.zig`,
 `promotion_assertion.zig` and `definition_rollback.zig` are **not imported at all** and
 no request can reach them. Concretely:
 
+PROVENANCE (historical, not current decision authority):
 | R-Co module/handler | Header-doc claimed path | Actually wired? | Evidence |
 |---|---|---|---|
 | `promotions.zig::handleCreatePromotionPlan` | `POST /api/v1/promotions` | **YES** | `main.zig:1567,1576-1577` (`resource=="promotions" and seg4.len==0 and method==.POST`) |
@@ -79,6 +82,7 @@ is called out. Same shape REQ-074 already hit and documented in
 
 Two handlers claim the same path and do materially different things:
 
+PROVENANCE (historical, not current decision authority):
 | | `handleCreatePromotionPlan` (`promotions.zig:52`) | `handleSubmitPromotion` (`promotion_review.zig:72`) |
 |---|---|---|
 | body | `source_tenant_id`, `target_tenant_id`, `process_key` | the same three **plus required `base_version`** |
@@ -107,6 +111,7 @@ Rationale, in order of weight:
 4. Nothing outside R-Co consumes either contract today (`web/` has no promotion client —
    this is a greenfield API surface), so there is no compatibility cost.
 
+PROVENANCE (historical, not current decision authority):
 **This must be stated in `Letflow.Routers.Promotions`' `@moduledoc` as a deliberate
 divergence**, naming both R-Co handlers and both paths, so a reader diffing against
 `promotions.zig` does not "fix" the preview back onto `/promotions`.
@@ -132,6 +137,7 @@ would otherwise propagate into the implementation.
 Called out so a reviewer diffing handler bodies does not read their absence as an
 oversight. Each is a real behavioural divergence.
 
+PROVENANCE (historical, not current decision authority):
 | # | R-Co behaviour | Evidence | Letflow |
 |---|---|---|---|
 | D-1 | `handleGetPromotionContext` discards `actor` entirely (`promotion_review.zig:270` `_ = actor;`) — any caller knowing a review UUID gets the full stored plan, cross-tenant | `:270` | every route is auth-gated **and** `:prefix`-scoped (§3, §5) |
@@ -257,6 +263,7 @@ vacuously. §10 states the greps that actually verify the property, over both di
 Ten routes across three sub-routers. "Letflow path" is the full path under `/api/v1`;
 "router path" is what the `Plug.Router` macro declares after `forward/2` strips the mount.
 
+PROVENANCE (historical, not current decision authority):
 | # | Method | Letflow path | Router path | Sub-router | Handler | Context fn(s) | Policy key | Success | Response body keys | R-Co source |
 |---|---|---|---|---|---|---|---|---|---|---|
 | R1 | POST | `/promotions` | `/` | `Letflow.Routers.Promotions` | `handle_submit/2` | `PromotionPlan.compute_promotion_plan/5` → `PromotionConflict.reject_if_conflicts/4` → `PromotionDigest.compute_plan_digest/1` → `PromotionReviewStore.insert_review/2` | `:Unknown` (§4) | **201** | `review_id`, `plan_digest` | `promotion_review.zig:72-245` (`:238-242`, `:244`) |
@@ -270,6 +277,7 @@ Ten routes across three sub-routers. "Letflow path" is the full path under `/api
 | R9 | POST | `/definitions/:process_key/rollback` | `/:process_key/rollback` | `Letflow.Routers.Definitions` (§2.3) | `handle_rollback/2` | `Definitions.rollback_definition_version/4` | `:Unknown` | **200** | `definition_id`, `version`, `rolled_back_from_version`, `superseded_review_id`, `event_id` | `definition_rollback.zig:41-118` (`:96-114`, `:117`) |
 | R10 | POST | `/tenants/:test_tenant_id/promote/:process_key` | `/:test_tenant_id/promote/:process_key` | `Letflow.Routers.Tenants` (§2.4) | `handle_promote/2` | `Promotion.promote_active_definition/5` **(NEW §9.5)** | `:Unknown` | **201** | `definition_id`, `version`, `status`, `warnings` | `promotion.zig:22-96` (`:70-91`, `:95`) |
 
+PROVENANCE (historical, not current decision authority):
 All six R-Co modules are covered (AC1): `promotion_review.zig`→R1,R4,R5,R6,R7;
 `promotions.zig`→R2; `promotion_read.zig`→R3; `promotion_assertion.zig`→R8;
 `definition_rollback.zig`→R9; `promotion.zig`→R10.
@@ -307,6 +315,7 @@ Justification:
   documentation references**, `req070-router-decomposition.md:131` and `:200`, which the
   paragraph below already requires updating. **Zero test references, zero other callers.**
   The stub serves no route, so no URL contract exists to preserve.
+PROVENANCE (historical, not current decision authority):
 * **`/promotions` is R-Co's path** (`main.zig:1567`, and all six modules' header docs).
   Keeping `/promotion` would diverge every path in §1 from R-Co for no reason, and would
   make `POST /promotion` read as an action rather than a collection.
@@ -349,6 +358,7 @@ review (§5).
 
 ### 2.3 R9 (rollback) lives in `Letflow.Routers.Definitions` — one delimited route
 
+PROVENANCE (historical, not current decision authority):
 R-Co's path is `POST /api/v1/definitions/{process_key}/rollback`
 (`definition_rollback.zig:3,31`). `Letflow.Plugs.ApiPipeline` already forwards
 `/definitions` to `Letflow.Routers.Definitions`, a stub reserved for REQ-081/082.
@@ -363,6 +373,7 @@ purely organisational reason — worse on both counts.
 **Ownership boundary, stated as a build requirement.** `Letflow.Routers.Definitions`'
 `@moduledoc` MUST carry this text in substance:
 
+PROVENANCE (historical, not current decision authority):
 > This module is REQ-081/082's. It contains exactly **one** route contributed by REQ-077 —
 > `POST /:process_key/rollback` (PRM-08, ports `src/api/routes/definition_rollback.zig`) —
 > placed here only because `Letflow.Plugs.ApiPipeline` forwards `/definitions` here and
@@ -375,6 +386,7 @@ The stub's `match _` 404 fallback stays exactly as it is.
 
 ### 2.4 R10 (ENV-03) lives in `Letflow.Routers.Tenants` — one delimited route
 
+PROVENANCE (historical, not current decision authority):
 Same reasoning: R-Co's path is `POST /api/v1/tenants/:test_tenant_id/promote/:definition_name`
 (`promotion.zig:3`, wired at `main.zig:1555-1557`) and `Letflow.Routers.Tenants` (REQ-075)
 already owns `/tenants`. Its `match _` currently 404s everything unmatched, so the route
@@ -389,6 +401,7 @@ one extra sentence that matters for REQ-075's own AC6 risk statement:
 > `:prefix`-scoped like every other S4 route (the target tenant is the caller's own, from
 > `Letflow.Api.Context.scoped_repo_opts/1`).
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's path segment is `:definition_name`; Letflow's is `:process_key`.** Same value —
 `promotion.zig:29-34` passes `seg6` to `promoteDefinition` as the definition name, and
 Letflow's whole promotion stack calls that value `process_key`
@@ -506,6 +519,7 @@ deciding argument is §4.2 point 4, which neither of us had raised.
 
 ### 4.2 Why Option A wins on evidence
 
+PROVENANCE (historical, not current decision authority):
 1. **It matches R-Co's actual effective behaviour.** R-Co performs no finer-grained
    promotion permission check at the route layer at all: `main.zig:1571` constructs the
    actor for the `promotions` resource with `.role = .PLATFORM_ADMIN` hardcoded (`:1497`
@@ -540,6 +554,7 @@ deciding argument is §4.2 point 4, which neither of us had raised.
 source unable to distinguish "we chose PLATFORM_ADMIN-only" from "we forgot to add a
 clause." Two build requirements close that gap without touching REQ-069:
 
+PROVENANCE (historical, not current decision authority):
 1. **`Letflow.Routers.Promotions`' `@moduledoc` states it in substance:** *every route in
    this module resolves to `Letflow.Api.Authorization.endpoint_policy_key/2`'s catch-all
    `:Unknown` clause, deliberately and not by omission.* `evaluate_access/2`'s **first**
@@ -569,6 +584,7 @@ function unchanged.
 
 ### 4.4 `actor_id`
 
+PROVENANCE (historical, not current decision authority):
 Every context call needing an actor passes `conn.assigns.auth_context.user_id` — never a
 body field, never a header. R-Co's `handleApproveReview` explicitly rejects an `approved_by`
 body field for this reason (`promotion_review.zig:398-406`, 422 `UNKNOWN_FIELD`). Letflow
@@ -634,6 +650,7 @@ cannot vary with the outcome. R3 reaches the same guarantee by a different route
 on every path, including the not-found one — see the paragraph below), which is why it is
 argued separately.
 
+PROVENANCE (historical, not current decision authority):
 **R3's `null`-vs-404 distinction, stated because it is easy to get wrong.** R-Co's
 `promotion_read.zig:79-83` returns **200** `{"assertion_run": null}` when the query finds no
 row, and it filters on `review_id` alone with no tenant scoping (`:63-73`). Letflow splits
@@ -655,6 +672,7 @@ path including the not-found one, so the round-trip count does not vary with the
 These arise only for a review the caller **can** see, so INV-5 does not apply and hiding
 them would be actively unhelpful.
 
+PROVENANCE (historical, not current decision authority):
 | Context error | Status | Problem `type` slug | `detail` (exact literal) | R-Co |
 |---|---|---|---|---|
 | `:self_approval_forbidden` (R5) | **403** | `forbidden` | `"a reviewer cannot approve their own promotion request"` | 403 `SELF_APPROVAL_FORBIDDEN`, `promotion_review.zig:438` — **matches** |
@@ -804,6 +822,7 @@ Composition (each step short-circuits):
 | `{:error, :invalid_schema_name}` (4) | 500 | `Response.internal_error(conn)` — `opts[:prefix]` came from `scoped_repo_opts/1` |
 | `{:error, %Ecto.Changeset{}}` (4) | 500 | `Response.internal_error(conn)` — no caller-supplied field reaches `insert_changeset/2` unvalidated |
 
+PROVENANCE (historical, not current decision authority):
 `conflicts` extension-member element shape: **use `PromotionConflict`'s own
 `@type conflict_detail` field names** (`lib/letflow/definitions/promotion_conflict.ex:34-40`),
 not R-Co's — that module is the authority for what the tuple actually carries. R-Co's
@@ -821,16 +840,19 @@ computed one.
 `PromotionPlan.compute_promotion_plan/5`, same opts as R1. Success → **200**,
 `%{"entries" => [plan_entry_map(e) | e <- plan.entries]}` — **exactly 1 top-level key**.
 
+PROVENANCE (historical, not current decision authority):
 `plan_entry_map/1`, **exactly 5 keys**, ported from `promotions.zig:145-163`: `"type"`
 (`Atom.to_string/1`, one of `graph_node|graph_edge|variable_schema|service_binding|module_ref`),
 `"id"`, `"change_kind"` (`Atom.to_string/1`, one of `added|modified|removed`), `"before"`,
 `"after"`.
 
+PROVENANCE (historical, not current decision authority):
 `before`/`after` are `map() | String.t() | nil` per `PromotionPlan.plan_entry/0` and are
 emitted as-is (JSON object, string, or `null`). R-Co stringifies both
 (`promotions.zig:145-163` uses `appendJsonStr`); Letflow does not, because the underlying
 values are already structured and stringifying them would lose information for no gain.
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `"human_readable"` key is **not ported** (D-9, OQ-6). R-Co's `"permission_rule"`
 `type` value (`promotions.zig:177-186`) has no counterpart in
 `PromotionPlan.entry_type/0`'s five values, so it cannot occur; not ported.
@@ -879,11 +901,13 @@ Errors: `{:error, :review_not_found}` → **404** (§5). The only error case.
    (§5.2's rationale for why this read comes first).
 2. `Definitions.get_latest_assertion_run(id, opts)` (NEW §9.2).
 
+PROVENANCE (historical, not current decision authority):
 | Result | Status | Body |
 |---|---|---|
 | `{:error, :not_found}` | **200** | `%{"assertion_run" => nil}` — R-Co's `promotion_read.zig:79-83` shape, ported |
 | `{:ok, run}` | **200** | `%{"assertion_run" => assertion_run_map(run)}` |
 
+PROVENANCE (historical, not current decision authority):
 `assertion_run_map/1`, **exactly 7 keys**, ported from `promotion_read.zig:102-149`:
 `"run_id"` (`run.id`), `"status"` (`Atom.to_string/1`), `"sandbox_id"` (string or `nil`),
 `"teardown_error"` (string or `nil`), `"assertions_passed"` (integer),
@@ -897,6 +921,7 @@ across roles, but it would silently become one the moment a later requirement wi
 access — excluded deliberately, with the reason stated in the moduledoc so the exclusion
 survives that widening.
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `"unknown"` status fallback (`promotion_read.zig:92`) is **not ported** —
 `PromotionAssertionRun.status` is an `Ecto.Enum` over
 `[:running, :passed, :failed, :teardown_failed]` on a NOT NULL column, so the null case
@@ -974,6 +999,7 @@ the defaults above so they are discoverable rather than implicit.
 | `{:error, {:idempotency_lookup_failed, :sidecar_row_missing}}` | **500** | `Response.internal_error(conn)` |
 | `{:error, %Ecto.Changeset{}}` / other | **500** | `Response.internal_error(conn)` |
 
+PROVENANCE (historical, not current decision authority):
 **The 200/422 split keys on `assertions_failed`, not on `status`** — a deliberate divergence
 from R-Co's `result.status != .failed` check (`promotion_assertion.zig:177-179`).
 `Letflow.Definitions.apply_promotion_assertion_rerun/6`'s own `@doc` states the gate
@@ -983,6 +1009,7 @@ green gate."* Porting R-Co's status check would 200 a `:teardown_failed` run and
 differently — but it would also mean the HTTP layer disagrees with the documented gate
 condition, which is exactly the kind of drift that produces a wrong promotion decision later.
 
+PROVENANCE (historical, not current decision authority):
 `assertion_rerun_map/1`, **exactly 6 keys**, ported from `promotion_assertion.zig:145-170`:
 `"run_id"`, `"status"` (`Atom.to_string/1`), `"assertions_passed"`, `"assertions_failed"`,
 `"failing_assertion_ids"`, `"sandbox_id"` (string or `nil`).
@@ -997,6 +1024,7 @@ emits none of them either; `teardown_error` is reachable through R3).
 — §7.9 (`permission_checker`) and OQ-1 (`event_appender`); both are `Keyword.fetch!`'d with
 no default.
 
+PROVENANCE (historical, not current decision authority):
 Success → **200**, `rollback_map/1`, **exactly 5 keys**, ported from
 `definition_rollback.zig:96-114`: `"definition_id"`, `"version"` (string — below),
 `"rolled_back_from_version"` (string), `"superseded_review_id"` (string or `nil`),
@@ -1013,6 +1041,7 @@ Error map, matching `req038-promotion-rollback.md:773`'s own forward-specified t
 | `{:error, :invalid_schema_name}` | 500 | `Response.internal_error(conn)` |
 | other | 500 | `Response.internal_error(conn)` |
 
+PROVENANCE (historical, not current decision authority):
 **`version` is a string, not a number — a divergence worth stating.** R-Co parses
 `target_version` as a `u32` and emits both versions as JSON numbers
 (`definition_rollback.zig:69-74`, `:96-114`). Letflow's `process_definitions.version` is
@@ -1027,6 +1056,7 @@ codebase already permits.
 `Promotion.promote_active_definition(actor_id, test_tenant_id, target_tenant_id, process_key, opts)`
 (NEW §9.5).
 
+PROVENANCE (historical, not current decision authority):
 **`target_tenant_id` is `conn.assigns.auth_context.tenant_id` — never a path, query or body
 value.** The caller is authenticated *into* the production tenant and promotes a definition
 *from* the named test tenant into their own. This is R-Co's semantics (`promotion.zig`
@@ -1038,6 +1068,7 @@ the one mechanism Letflow has for "which tenant is this request about," and it m
 `test_tenant_id` **is** caller-supplied and **is** a cross-tenant read — §7.9 is required
 reading before implementing this route.
 
+PROVENANCE (historical, not current decision authority):
 Success → **201**, `promote_map/1`, **exactly 4 keys**, ported from `promotion.zig:70-91`:
 `"definition_id"`, `"version"` (string, per §7.6's reasoning — R-Co already emits this one
 as a JSON string, `promotion.zig:76`), `"status"` (`Atom.to_string(row.status)`, i.e.
@@ -1049,6 +1080,7 @@ building one is a domain feature. The key is kept rather than dropped so the res
 stays R-Co-compatible and a later requirement can populate it without a breaking change.
 **OQ-6.**
 
+PROVENANCE (historical, not current decision authority):
 Error map, from `promotion.zig:37-61` mapped onto `promote_error/0`:
 
 | Result | Status | Detail |
@@ -1170,6 +1202,7 @@ second row. The route's obligations are exactly three, and all three are *omissi
    repeat (`true`). Emitting it would make the two responses non-identical and fail AC2 by
    construction. Every other key in the map is read from the same persisted row on both
    calls, so byte-identity follows.
+PROVENANCE (historical, not current decision authority):
 3. **Do not port R-Co's `ALREADY_RECORDED` branch** (`promotion_assertion.zig:133`), which
    returns HTTP 200 with the *error* envelope `{"error":"ALREADY_RECORDED","message":…}` and
    no `run_id` (D-5). It is a defect: it breaks AC2 outright and gives a client a 200 it
@@ -1240,10 +1273,12 @@ returns `{:ok, attrs}` with **string** keys (it is `Map.take(body, field_names)`
 (`20260816193001_create_process_definitions.exs:77`) — Ecto's default `varchar(255)` — and
 matches `Definitions.fetch_name/1`'s own 255-byte guard.
 
+PROVENANCE (historical, not current decision authority):
 `base_version` is `:string`, diverging from R-Co's "JSON integer or decimal string parsed as
 u32" (`promotion_review.zig:116-123`) — same reasoning as §7.6: Letflow versions are
 free-form text.
 
+PROVENANCE (historical, not current decision authority):
 **R2 — `@plan_schema`**: the first three rows of `@submit_schema`, no `base_version` (R-Co's
 `handleCreatePromotionPlan` does not take one, `promotions.zig:74-88`).
 
@@ -1271,6 +1306,7 @@ a 32-byte digest hex-encoded to 64 lowercase characters.
 against every call site; no other route in §1 does. So these two schemas are the complete
 set of places this guard is load-bearing.
 
+PROVENANCE (historical, not current decision authority):
 **R6 — `@reject_schema` = `[]`** (empty list). `validate([], body)` still runs the structural
 checks (`check_is_object/1`, `check_no_null_bytes/1`) and then returns `{:ok, %{}}`,
 discarding every field. That reproduces R-Co's "empty body is legal, any field is rejected"
@@ -1286,6 +1322,7 @@ completely absent body; `Plug.Parsers` yields `body_params == %{}` for that, whi
 | `"plan_digest"` | `true` | `:string` | as above |
 | `"artifact"` | `true` | `:object` | — |
 
+PROVENANCE (historical, not current decision authority):
 **`tenant_id` is NOT accepted** — R-Co requires it in the body
 (`promotion_assertion.zig:77-81`) and this design refuses it. INV-1: the tenant comes from
 `conn.assigns[:auth_context][:tenant_id]` via `scoped_repo_opts/1` and from nowhere else;
@@ -1299,9 +1336,11 @@ it dropped by `Map.take/2` — it cannot reach any code path. State this in the 
 |---|---|---|---|
 | `"target_version"` | `true` | `:string` | `reject_empty_string: true`, `max_length: 64` |
 
+PROVENANCE (historical, not current decision authority):
 **`tenant_id` is NOT accepted** — same reasoning; R-Co requires it
 (`definition_rollback.zig:64-68`). `:string` rather than R-Co's integer-only, per §7.6.
 
+PROVENANCE (historical, not current decision authority):
 **R10 — no schema.** Both inputs are path segments; R-Co parses no body
 (`promotion.zig:22-96`). `conn.body_params` is ignored if present.
 
@@ -1350,6 +1389,7 @@ there for consistency, not in the schema module.
 * `Ecto.UUID.cast/1` first, as §9.1.
 * Query: `where review_id == ^uuid`, `order_by [desc: :started_at, desc: :id]`, `limit: 1`,
   fetched with `prefix: prefix`. No row → `{:error, :not_found}`.
+PROVENANCE (historical, not current decision authority):
 * **`started_at` is `read_after_writes: true`** on the schema (a DB default), so two runs
   inserted in the same transaction can share a timestamp — the `:id` tiebreaker makes the
   ordering total and the result deterministic. Check R-Co's own `ORDER BY`
@@ -1527,8 +1567,10 @@ how: add the constructor to `Letflow.Api.Error` following the identical five-lin
 @spec invalid_promotion_source(String.t()) :: t()   # 422, type <base>"invalid-promotion-source", title "Invalid Promotion Source"
 ```
 
+PROVENANCE (historical, not current decision authority):
 Both match `src/api/errors.zig:254-272` exactly (slug, title, status 422).
 
+PROVENANCE (historical, not current decision authority):
 The third is **not** deferred-by-REQ-066 and is a genuine addition: R1/R7/R10's conflict
 response must carry the `conflicts` array (`promotion_review.zig:197-209`), and
 `Letflow.Api.Error`'s only extension member today is `errors`, whose shape is
@@ -1685,6 +1727,7 @@ appearing in a gate report is a proposal, not an assignment.
 
 ### OQ-1's consequence — acceptance-criterion reachability
 
+PROVENANCE (historical, not current decision authority):
 | AC | Reachable before the appender requirement lands? |
 |---|---|
 | **AC1** (all six modules; five `promotion_review.zig` handlers each) | **NO** — R7 (apply) is blocked, and `promotion.zig` (R10), `promotion_assertion.zig` (R8) and `definition_rollback.zig` (R9) are each blocked in full, which means three of the six modules have no reachable route at all. R1/R2/R5/R6 are reachable. |
@@ -1827,6 +1870,7 @@ specifically about denial (§12.8, §12.9).
 be written against a working route until the platform-event-appender requirement lands
 (§11 OQ-1). TEST-DESIGNER should expect to build this suite in two passes, not one.
 
+PROVENANCE (historical, not current decision authority):
 ### 12.1 AC1 — one end-to-end test per route module, five for `promotion_review.zig`
 
 Ten happy-path tests, one per §1 row, each asserting the HTTP status **and** the exact

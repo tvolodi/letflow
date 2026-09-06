@@ -1,5 +1,6 @@
 # REQ-074 — Identity routes 2/4: groups and group membership
 
+PROVENANCE (historical, not current decision authority):
 Design for extending `lib/letflow/routers/identity.ex` (currently REQ-073's five
 user-CRUD routes) with seven group-management routes, porting
 `src/api/routes/identity.zig`'s `handleCreateGroup` (L343), `handleAddGroupMember`
@@ -31,11 +32,13 @@ this requirement and needs no change.
 
 ## 1. Finding: `handleListGroupMembers` vs `handleListGroupMembersArray` (AC6)
 
+PROVENANCE (historical, not current decision authority):
 **Evidence — R-Co's actual route table**, `src/main.zig:1377-1442` (the `groups`
 resource dispatch block, confirmed the canonical route-registration point per
 REQ-073's own design precedent of reading `routes.zig`/`main.zig` rather than the
 handler file alone):
 
+PROVENANCE (historical, not current decision authority):
 ```
 GET    /groups                       -> identity_routes.handleListGroups        (main.zig:1380)
 POST   /groups                       -> identity_routes.handleCreateGroup       (main.zig:1384)
@@ -49,6 +52,7 @@ DELETE /groups/:id/members           -> INLINE bulk-remove-all-members logic    
 DELETE /groups/:id                   -> identity_routes.handleDeleteGroup       (main.zig:1436)
 ```
 
+PROVENANCE (historical, not current decision authority):
 `grep -n "handleListGroupMembers(\|handleRemoveGroupMember" src/main.zig` (full
 file, not just this block) returns **zero** registration hits for either symbol —
 only `handleListGroupMembersArray` and the inline bulk-delete block appear. Both
@@ -65,6 +69,7 @@ cursor, no `next_cursor`. `handleListGroupMembers` is real, tested, working code
 that is **never wired to any route** — dead from the route table's perspective,
 the same "implemented but not served" shape AC6 warned about.
 
+PROVENANCE (historical, not current decision authority):
 **Design decision, following REQ-073's own established precedent (§2.2 of
 `req073-identity-user-routes.md`, which replaced R-Co's offset pagination with
 cursor pagination for the same reason):** REQ-074's own AC4 requires "listing
@@ -83,6 +88,7 @@ every other group route, already gates this uniformly).
 
 This must ship in the `@moduledoc` verbatim (AC6), e.g.:
 
+PROVENANCE (historical, not current decision authority):
 > R-Co defines two member-listing handlers, `handleListGroupMembersArray`
 > (bare array, served at `GET /groups/:id/members`, `main.zig:1393`) and
 > `handleListGroupMembers` (cursor-paginated, never routed —
@@ -93,6 +99,7 @@ This must ship in the `@moduledoc` verbatim (AC6), e.g.:
 
 ## 1b. Finding: `handleRemoveGroupMember` is also unrouted (flagged, not silently resolved)
 
+PROVENANCE (historical, not current decision authority):
 Same evidence as §1: `handleRemoveGroupMember` (single `(group_id, user_id)`
 removal) has no route in `main.zig`. What R-Co's route table actually serves at
 `DELETE /groups/:id/members` (no `:user_id` segment) is a **bulk remove-all**
@@ -181,6 +188,7 @@ function, called with a different `path_template` literal per route.
    ]
    ```
    `{:errors, _}` → `Response.send_problem(conn, Validation.problem(field_errors))`.
+PROVENANCE (historical, not current decision authority):
 3. `display_name` defaults to `name` when omitted or empty (matches R-Co's
    `handleCreateGroup`, `identity.zig:361-371`: `if (dn) |v| if (v.len==0) name else v else name`)
    — this default is applied by `Identity.create_group/2` itself (§7.1), not the
@@ -190,6 +198,7 @@ function, called with a different `path_template` literal per route.
    - `{:error, :duplicate_group_name}` → `Response.conflict(conn, "group name already exists")`
    - `{:error, %Ecto.Changeset{}}` → `Response.unprocessable(conn, "validation failed")`
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `description` field: empty string is normalized to `nil` at the handler
 layer (`identity.zig:373-380`) — same normalization applies here, inside
 `Identity.create_group/2`'s changeset (`nil`-if-empty), not the router.
@@ -197,6 +206,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
 ### 3.2 — `POST /groups/:id/members` (add member)
 
 1. (steps 1-2)
+PROVENANCE (historical, not current decision authority):
 2. Validate body: accepts either `"user_id"` (string) or `"user_ids"` (array,
    first element only — matching R-Co's exact `identity.zig:415-430` fallback
    shape, ported verbatim since AC list doesn't call out a divergence here):
@@ -213,6 +223,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
    this dual-shape body-parsing fallback is worth preserving vs. simplifying to
    `"user_id"`-only, since Letflow has no existing caller depending on the
    `"user_ids"` array shape — flagged, not silently simplified.
+PROVENANCE (historical, not current decision authority):
 3. `Identity.add_group_member(group_id, user_id, opts)` (NEW, §7.2) →
    - `{:ok, %{member: member, created: created?}}` → `Response.send_json(conn,
      (if created?, do: 201, else: 200), member_map)` — R-Co returns 200 on an
@@ -232,6 +243,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
    total}}` (never an error tuple — R-Co's own `handleListGroups` has no error
    branch besides `Forbidden`/`PoolExhausted`, both already handled by step 2's
    authorization gate and by the standard `Repo` call not itself failing).
+PROVENANCE (historical, not current decision authority):
 3. `Response.ok(conn, %{"items" => Enum.map(groups, &group_map/1), "total" =>
    total})`. **Not** cursor-paginated — R-Co's own `handleListGroups` is a flat,
    unpaginated list (fixed `page: 1, page_size: 200` in its response,
@@ -257,6 +269,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
 ### 3.5 — `GET /groups/:id/members` (list members, cursor-paginated — §1 finding)
 
 1. (steps 1-2)
+PROVENANCE (historical, not current decision authority):
 2. Parse query params: `page_size` (via `Pagination.parse_page_size_param/1` +
    `validate_page_size/1`, same as REQ-073's `list_users/2`), `cursor` (opaque
    string, optional, new prefix `"G:"` for **G**roup-members, distinct from
@@ -265,6 +278,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
    reuses R-Co's own prefix literal rather than inventing a new one).
 3. If `cursor` present: `Pagination.decode_cursor(cursor, "G:", byte_size("G:"))`
    → `{:error, _}` → `Response.bad_request(conn, "invalid cursor")`.
+PROVENANCE (historical, not current decision authority):
 4. `Identity.list_group_members(group_id, %{cursor: decoded_or_nil, page_size:
    page_size}, opts)` (NEW, §7.5) →
    - `{:ok, %{members: users, next_cursor: next_cursor}}` →
@@ -285,6 +299,7 @@ layer (`identity.zig:373-380`) — same normalization applies here, inside
      port because the scoping mechanism itself prevents ever reaching a
      cross-tenant row in the first place — see §4**)
 
+PROVENANCE (historical, not current decision authority):
 **Not ported: R-Co's `handleListGroupMembers`'s own `actor.role !=
 .PLATFORM_ADMIN → 403` gate** (`identity.zig:533`). This design's route uses the
 same `:GroupsManage` policy key as every other group route (§0), gated
@@ -299,6 +314,7 @@ dropped, listed for REVIEWER.
 ### 3.6 — `DELETE /groups/:id/members/:user_id` (remove member — §1b finding)
 
 1. (steps 1-2)
+PROVENANCE (historical, not current decision authority):
 2. `Identity.remove_group_member(group_id, user_id, opts)` (NEW, §7.6) →
    - `:ok` → `Response.no_content(conn)` (204) — idempotent: removing a
      non-member of an existing group is still `:ok` (matches R-Co's
@@ -354,6 +370,7 @@ ordering, not merely the test, is what guarantees zero rows on the failure path.
 
 ## 5. Delete-with-members test design (AC5)
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's observed behavior, evidenced (§1b/registry.zig:1178-1217):**
 `deleteGroupIfEmpty` runs `DELETE FROM groups WHERE id = $1 AND NOT EXISTS
 (SELECT 1 FROM group_members WHERE group_id = groups.id) RETURNING 1`. If the
@@ -530,6 +547,7 @@ Repo-backed, no business logic beyond a changeset and a query"):
    be reused, not re-derived, since it is already a documented, empirically-
    verified solution in this same module.**
 
+PROVENANCE (historical, not current decision authority):
 3. **`list_groups(opts) :: {:ok, %{groups: [Group.t()], total: non_neg_integer()}}`**
    — `Repo.all(Group, opts)` + `Repo.aggregate(Group, :count, opts)`, ordered
    by `name` ascending (no ordering specified by R-Co's handler beyond whatever
@@ -538,6 +556,7 @@ Repo-backed, no business logic beyond a changeset and a query"):
    scope; `name` ascending is this design's own reasonable default, flagged as
    unconfirmed against R-Co).
 
+PROVENANCE (historical, not current decision authority):
 4. **`delete_group(id, opts) :: :ok | {:error, :not_found_or_has_members}`** —
    **cannot** be expressed as a plain `Repo.delete/2` (which has no `WHERE NOT
    EXISTS` guard) — needs either (a) a raw parameterized `Repo.query/3` mirroring
@@ -647,6 +666,7 @@ add :display_name, :string; add :description, :string end` +
 `create unique_index(:groups, [:name], prefix: prefix())`), tenant-scoped,
 same `if prefix() do` guard.
 
+PROVENANCE (historical, not current decision authority):
 **Not added: `is_system` and `member_count` columns** (both present on R-Co's
 `Group` struct, `identity.zig:990-1015`'s `serializeGroup`). `is_system` has no
 setter anywhere in these seven handlers (nothing in this handler group ever
@@ -686,6 +706,7 @@ unchanged (§3.5) — no separate member-shaped response type exists, matching
 R-Co's own choice to serialize a member as a full `User` (`serializeUser/1`
 called from both `handleListGroupMembersArray` and the paginated variant).
 
+PROVENANCE (historical, not current decision authority):
 Add-member's 200/201 response (§3.2) is a small ad hoc map, not `group_map/1`
 or `user_map/1` — matches R-Co's own `serializeGroupMemberResult`
 (`identity.zig:1017-1023`):
@@ -720,6 +741,7 @@ acceptance criterion depends on this field's presence.)
 - **OQ-4** — cursor tiebreak field for `list_group_members/3` (`user_id`,
   matching `list_users/2`'s own OQ-1 shape) — same category of unconfirmed
   choice, not re-litigated per-endpoint.
+PROVENANCE (historical, not current decision authority):
 - **OQ-5** (§8.3) — `list_groups/1`'s sort order (`name` ascending, this
   design's own choice) not confirmed against `registry.zig`'s `listGroups` SQL,
   out of this requirement's named source-file scope.

@@ -1,5 +1,6 @@
 # REQ-068 — `Letflow.Api.Validation` / `Letflow.Plugs.ContentType` / `Letflow.Plugs.SafeJsonParser`
 
+PROVENANCE (historical, not current decision authority):
 Design for the request-body validation and typed-rejection contract. Ports
 `src/api/validation.zig` (592 lines), `src/api/middleware/content_type.zig` (119
 lines), `src/api/middleware/validate.zig` (86 lines). No implementation code below —
@@ -12,6 +13,7 @@ signatures and type shapes only.
 Three modules, not one, matching R-Co's own three-file split but adapted to Plug's
 request lifecycle:
 
+PROVENANCE (historical, not current decision authority):
 - **`Letflow.Api.Validation`** — pure (no `Plug.Conn`, no I/O). Ports `validation.zig`
   1:1: `FieldConstraint`, `FieldError`, `validate/2`. This is where
   `middleware/validate.zig`'s thin wrapper (`enforceValidation/4`) collapses to —
@@ -24,6 +26,7 @@ request lifecycle:
   (REQ-066) already own JSON serialisation and `trace_id` resolution; duplicating
   that here would be the second-statement-of-one-rule problem this doc set warns
   against elsewhere.
+PROVENANCE (historical, not current decision authority):
 - **`Letflow.Plugs.ContentType`** — ports `content_type.zig`. A real `Plug`
   (`init/1` + `call/2`), since Content-Type enforcement is inherently
   conn-and-header-shaped, not a pure value transform.
@@ -38,6 +41,7 @@ request lifecycle:
 
 ### 0.2 Content-Type decision table — ported verbatim
 
+PROVENANCE (historical, not current decision authority):
 `checkContentType/3`'s table (content_type.zig:34-41) is ported exactly, including
 the PUT-with-no-body → 400 case (not 415) that a naive reading of the requirement's
 own prose ("POST/PUT/PATCH without Content-Type → 415") would miss:
@@ -51,6 +55,7 @@ own prose ("POST/PUT/PATCH without Content-Type → 415") would miss:
 | POST/PUT/PATCH | true | absent or ≠ `application/json` | 415 |
 | POST/PUT/PATCH | true | `application/json` | pass |
 
+PROVENANCE (historical, not current decision authority):
 `stripParams/1` (content_type.zig:114) — strip everything from the first `;`
 onward, trim trailing whitespace — is ported so `application/json; charset=utf-8`
 passes. This plug reads `conn.method` and the raw `content-type` request header via
@@ -105,6 +110,7 @@ need it. `Letflow.Api.Response.payload_too_large/2` added to match.
 
 ### 0.5 `Letflow.Api.Error` gains an `errors` field (RFC 9457 extension member)
 
+PROVENANCE (historical, not current decision authority):
 `validation.zig`'s `serialiseValidationErrors/2` hand-builds a Problem Details JSON
 object with a non-standard `errors` array appended after the four RFC 9457 members
 (content_type.zig / errors.zig's `ProblemDetails` struct has no such field — this
@@ -123,6 +129,7 @@ guaranteed" contract on `.errors`).
 
 ### 0.6 `FieldConstraint` — one real addition over R-Co: `:uuid` as its own type
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `JsonType` enum has no `:uuid` variant — `validation.zig` was going to
 express "this field must look like a UUID" via `expected_type: .string` plus
 `pattern: "..."`, but `pattern` is a documented no-op in the ported source
@@ -142,6 +149,7 @@ reviving unreachable Zig dead code.
 
 ### 0.7 `reject_empty_string` default
 
+PROVENANCE (historical, not current decision authority):
 R-Co defaults `reject_empty_string: false` (`validation.zig:82`, an opt-in per
 `FieldConstraint`). Ported as the same explicit opt-in with the same default —
 not every empty string is invalid (e.g. an optional `description` field), so this
@@ -161,6 +169,7 @@ ported, and R-Co's stub is not evidence the feature is unwanted.
 
 ### 0.9 Structural safety layer — INV-8, applies before any `FieldConstraint` runs
 
+PROVENANCE (historical, not current decision authority):
 Four checks that do not depend on the schema, run once per request body, ported as
 `Letflow.Api.Validation.validate/2`'s first phase (mirrors `validate/4`
 (`validation.zig:369-386`)'s own "must be a JSON object" check, which is schema-
@@ -168,6 +177,7 @@ independent, plus the requirement's explicit INV-8 list):
 
 1. **Not valid JSON** — never reaches `Letflow.Api.Validation` at all; caught by
    `Letflow.Plugs.SafeJsonParser` per §0.3 before validation runs.
+PROVENANCE (historical, not current decision authority):
 2. **Valid JSON, not an object** (e.g. a top-level array or scalar) — ported
    exactly as `validate/4`'s existing `(root)`/`type.object` error
    (`validation.zig:377-386`).
@@ -207,6 +217,7 @@ independent, plus the requirement's explicit INV-8 list):
    convention (§0.10 below applies the same discipline to the rate-limit/quota
    omission).
 
+PROVENANCE (historical, not current decision authority):
 ### 0.10 Scope boundary — `rate_limit.zig` / `quota_enforcement.zig`
 
 Not ported by this requirement. Both need per-tenant counter storage (`Letflow`

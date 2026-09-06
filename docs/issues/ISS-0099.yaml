@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MAJOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. OQ-2 (MAJOR): treating this registry's
   handler_key as an open String.t() (not Graph.node_type()'s 8-atom enum),
@@ -28,6 +29,7 @@ status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"
   summary: >
+    PROVENANCE (historical, not current decision authority):
     R-Co/src/engine/plugin_registry.zig read directly. RegisterPluginHandlerInput.node_type
     and PluginRegistration.node_type (L23-41) are both []const u8 (Zig's open string-slice
     type), and PluginRegistry.entries is std.StringHashMap(PluginRegistration) (L51), keyed

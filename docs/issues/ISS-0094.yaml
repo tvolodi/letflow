@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. PRM-02 defines a promotion conflict as
   target_active_version > base_version, an ordinal comparison.
@@ -28,6 +29,7 @@ status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"
   summary: >
+    PROVENANCE (historical, not current decision authority):
     R-Co tree read directly at c:\Users\tvolo\dev\ai-dala\R-Co.
     R-Co/src/definition/promotion.zig L286-318 (the sole writer of
     process_definitions.version) computes the next version via

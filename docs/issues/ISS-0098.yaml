@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. Two related, still-open questions: (a)
   OQ-1 -- cancel_attrs() carries no cancellation-reason/note field, and
@@ -27,6 +28,7 @@ status: resolved
 resolved_in_run: WF03-ISS0278-20260822
 resolved_at: "2026-08-22T15:14:15Z"
 resolution_note: >
+  PROVENANCE (historical, not current decision authority):
   GH#326 was closed 2026-08-20T05:02:31Z with zero comment and no PR
   reference in its own GitHub timeline -- an undocumented closure, not
   something evidenced at the time. Verified for real during ORCH's
@@ -35,12 +37,14 @@ resolution_note: >
   written (§0's stated access gap), but the tree is reachable now at
   `c:\Users\tvolo\dev\ai-dala\R-Co` and settles both open questions.
 
+  PROVENANCE (historical, not current decision authority):
   OQ-1 (reason/note field): `cancelInstance`'s real signature
   (`instance.zig:2513`) is
   `(self, allocator, task_store, instance_id, actor_id) CancelInstanceError!void`
   -- no reason/note parameter. `cancel_attrs()`'s omission (design §3) matches
   R-Co exactly.
 
+  PROVENANCE (historical, not current decision authority):
   OQ-2 (branch-teardown mechanism): the doc-commented 8-step
   `cancelInstance` algorithm (steps d/e, `instance.zig:2578-2634`) issues
   plain SQL `UPDATE tasks SET status='CANCELLED' ... WHERE status='PENDING'`

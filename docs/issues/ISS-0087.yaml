@@ -14,6 +14,7 @@ tags:
   - string-literal-boundary
   - r-co-verification
 description: >
+  PROVENANCE (historical, not current decision authority):
   BEHAVIOURAL DIVERGENCE IN SHIPPED CODE, narrow but real, found during
   REQ-111's audit of req050-exclusive-gateway-cel.md:490 against
   `R-Co/src/engine/transition.zig:1210-1234`.
@@ -29,6 +30,7 @@ description: >
   on gateway routing. This entry records an OUTCOME difference. The
   mechanisms differ too, but that is not what is being reported.
 
+  PROVENANCE (historical, not current decision authority):
   THE COMMON CASE AGREES -- stated so this is not read as broader than it
   is. For an ordinary literal question mark both engines classify the
   condition as SUPPORTED and evaluate it:
@@ -45,6 +47,7 @@ description: >
   WHERE THEY DIVERGE. A string literal containing a BACKSLASH-ESCAPED
   QUOTE followed by a `?`.
 
+  PROVENANCE (historical, not current decision authority):
   R-Co, `transition.zig:1224-1232`, tracks quote spans by simple toggling
   with NO escape handling:
       var in_double = false; var in_single = false;
@@ -115,9 +118,13 @@ affected_files:
   - lib/letflow/engine/expr.ex
   - lib/letflow/design/req050-exclusive-gateway-cel.md
 r_co_sources:
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1224-1232 (quote-toggle span scan, no escape handling)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1230 (`?` outside any span => unsupported)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1165 (translateCelToExpr returns null when unsupported)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1124 (evaluateGatewayCondition `orelse return false`)"
 related:
   - ISS-0085

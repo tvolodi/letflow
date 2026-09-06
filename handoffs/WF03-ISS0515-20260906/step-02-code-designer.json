@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-02",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0515-20260906/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T16:38:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515"],
+    "related_handoff_ids": ["WF03-ISS0515-20260906-step-01"],
+    "artifacts_in": [
+      "test/support/tenant_template.ex",
+      "test/support/tenant_fixture.ex",
+      "test/support/tenant_template_test.exs",
+      "test/test_helper.exs",
+      "scripts/test_parallel.sh"
+    ],
+    "artifacts_out": ["lib/letflow/design/iss0515-tenant-template-build-race-fix.md"],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "base_commit": "468079c4"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0515's directly-reproduced test-harness race (concurrent first-callers of tenant_template's advisory-lock-guarded build hit Ecto's default 15s query timeout, 100% reproducible)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Design doc written to lib/letflow/design/iss0515-tenant-template-build-race-fix.md. Chosen direction: STRUCTURAL pre-build (not the timeout-bump alternative) -- add one synchronous Letflow.Test.TenantTemplate.ensure_template!() call in test/test_helper.exs, placed after ExUnit.start(exclude: [...]), before ExUnit.after_suite/1. Because ExUnit.start/1 only registers the eventual run via System.at_exit/1 rather than triggering it inline, this call is guaranteed to finish -- building and marking tenant_template ready via the existing persistent_term marker -- before any test process in that OS process can exist to race it. Rejected the timeout-bump alternative because the diagnosis's own control-probe anomaly (waiters not visibly granted the lock ~12s after release inside the full ensure_template!/0 flow) means a bigger timeout is not provably safe, and even if safe would only widen the same recurring race window rather than removing it. Per-partition scope confirmed correct (each test_parallel.sh partition is a separate mix test OS process against its own Postgres database -- advisory locks are per-database, so cross-partition contention was already structurally impossible; per-partition-process serialization is sufficient). tenant_fixture.ex's one-shot/no-retry contract is untouched -- after pre-build, every real test's ensure_template!/0 call hits the existing fast path for the rest of that partition's life. Atomic build-then-rename design (INV-8) is unmodified -- the fix adds a new early caller of the existing, unmodified ensure_template!/0, not a new build path. Sandbox.mode/2 interaction theory left explicitly unconfirmed/unrefuted but stated as moot for this fix (pre-build is always the sole, uncontested lock caller in the normal path), with a written trigger condition for revisiting it if a future change reintroduces a second concurrent first-caller. Verified against actual code: no test ever drops the literal tenant_template schema; tenant_template_test.exs is async: false, so nothing reintroduces the race today. Doc's own section 8 specifies concrete re-verification ELIXIR-DEV must run: a post-fix variant of the diagnosis's own concurrency repro (expecting all callers to take the fast path), two consecutive clean mix letflow.check.test runs on the previously-failing commit, a timing sanity check against the ~1.8-1.9s baseline, and a tenant_template_test.exs regression run. Self-checked: no defmodule/def/schema-do patterns or code fences in the doc; prose and citation-heavy against real line numbers."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

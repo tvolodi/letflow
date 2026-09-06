@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-051 — Parallel gateway split and join (transition.zig EE-06/EE-07)
 
 **Requirement:** REQ-051 (`docs/requirements.yaml`, stage S3)
@@ -40,6 +41,7 @@ implementation code, no function bodies, no `.ex`/`.exs` code block contains rea
   nil) :: merge_result()`), its `:ok`/`:rejected` return shape, and its §9 empty-map no-op case
   (`merge(vars, %{}, nil)` always returns `{:ok, vars, []}`) — load-bearing for §6 below's join-time
   reuse call.
+PROVENANCE (historical, not current decision authority):
 - `lib/letflow/definitions/graph.ex` (full) — `Graph.Edge.t()`'s `id`/`source`/`target` fields, and
   `lib/letflow/design/req028-graph-structural-validator.md` (targeted read, its Edge field table
   and CHK-01..CHK-08 list) — confirmed **no structural check enforces edge-id uniqueness**
@@ -53,6 +55,7 @@ implementation code, no function bodies, no `.ex`/`.exs` code block contains rea
   is superseded by REQ-051+REQ-052 together (REQ-052's own job, not touched here).
 - `docs/anti-patterns.md` (current entries) — no entry currently bears on this module.
 
+PROVENANCE (historical, not current decision authority):
 **Access gap, stated explicitly, matching REQ-044/REQ-049's design docs' own precedent:** this
 environment has no `R-Co/src/engine/transition.zig` or `R-Co/src/design/engine.md` reachable
 (re-confirmed: `find / -iname "transition.zig"` and `find / -iname "engine.md" -path "*design*"`
@@ -101,6 +104,7 @@ defstruct [
       }
 ```
 
+PROVENANCE (historical, not current decision authority):
 Ports `transition.zig`'s `JoinCounter` (`received_count`/`expected_from_branches`, "added by
 R-Co's ISS-105" per the requirement text) as a **set-based**, not count-based, representation:
 `expected_from_branches`/`received_from_branches` are `MapSet.t(String.t())` of `branch_id`s, not
@@ -235,6 +239,7 @@ explicitly rather than attempting (out of scope) to design REQ-047's transaction
 
 ### 3.2 Why child token/branch ids are derived, not minted — a necessary divergence from REQ-044 §8, stated explicitly
 
+PROVENANCE (historical, not current decision authority):
 REQ-044 §8's purity/determinism bar states "every id (`token_id`, `instance_id`) is always
 supplied by the caller, never minted here" — true of every dispatch clause REQ-044 itself shipped
 (`:START`/`:END`/`:HUMAN_TASK` never create a new token). **This requirement is the first case
@@ -248,6 +253,7 @@ as a deliberate, necessary interpretation of "ids supplied by the caller," not a
 RELEASE-VALIDATOR to re-check if R-Co source ever becomes reachable, matching REQ-044/REQ-049's own
 precedent for similarly-reconstructed, similarly-flagged mechanisms.
 
+PROVENANCE (historical, not current decision authority):
 **Declaration-order index, not `edge.id`, is the uniqueness source — stated explicitly why:** §0
 confirms no structural check (CHK-01..CHK-08) enforces `edge.id` uniqueness, not even within one
 node's own outgoing edges ("`graph.zig` itself has none either" per `req028-graph-structural-
@@ -616,6 +622,7 @@ construct turns out to be a real graph shape Letflow needs to support.
 
 ### 12.2 `:combined_split_join_not_supported` — a `PARALLEL_GATEWAY` node with both `in_degree > 1` and `out_degree > 1`
 
+PROVENANCE (historical, not current decision authority):
 §3's `gateway_role/2` refuses to guess a semantics for a single node acting as both split and join
 simultaneously and returns a named error instead. Not verified against `transition.zig`'s literal
 source whether R-Co supports this shape at all (§0's access gap) — flagged for
@@ -623,6 +630,7 @@ REVIEWER/RELEASE-VALIDATOR if source ever becomes reachable.
 
 ### 12.3 Deterministic id-derivation formula (§3.2, §4.3 step 2) — reasoned necessity, not verified
 
+PROVENANCE (historical, not current decision authority):
 The `parent_token_id <> "/" <> index` / `origin_token_id <> "/" <> join_node_id <> "/joined"`
 formulas are this design's own resolution of a genuine purity constraint (§3.2), not a literal port
 of `transition.zig`'s own id-generation approach (unreachable, §0). If R-Co source becomes
@@ -640,6 +648,7 @@ for REQ-028/029's own CODE-DESIGNER to consider adding a check for, not resolved
 
 ### 12.5 "Variables merging at the join" — honest resolution given no branch-local scoping exists
 
+PROVENANCE (historical, not current decision authority):
 §4.3 step 1 calls `VariableMerge.merge/3` with `incoming_variables: %{}`, making it a no-op given
 `InstanceState.variables`' current single-global-map shape (no per-branch overlay field exists on
 `Token` or `InstanceState` anywhere in this codebase today, §0). Under this design's reading,

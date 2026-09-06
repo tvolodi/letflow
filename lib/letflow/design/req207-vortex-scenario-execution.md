@@ -187,7 +187,8 @@ same role-attribution shape REQ-206 already hit.
 
 Checked this session, two independent ways:
 
-1. `lib/letflow/router.ex`'s own router-inventory table (read directly):
+1. PROVENANCE (historical, not current decision authority):
+   `lib/letflow/router.ex`'s own router-inventory table (read directly):
    ```
    | `Letflow.Routers.Entities`    | `entities.zig`     | S5/S6 (entity/data-model subsystem)   |
    | `Letflow.Routers.EntityQuery` | `entity_query.zig` | S5/S6 (same, plus query compiler)     |
@@ -195,7 +196,8 @@ Checked this session, two independent ways:
    Both rows are in the **reserved, unbuilt** section of that table (same section
    REQ-205 §0 already confirmed contains `Letflow.Routers.SimulationTest`) — not
    mounted.
-2. `grep -n -i "entit" docs/requirements.yaml` — every match is either an unrelated
+2. PROVENANCE (historical, not current decision authority):
+   `grep -n -i "entit" docs/requirements.yaml` — every match is either an unrelated
    word (`identity`) or a *mention* of `entities.zig`/`entity_query.zig` inside S5's
    scope-survey comment block (`docs/requirements.yaml:3673-3674`, `:4004-4005`) and
    inside REQ-207's own requirement text (`:11749`). **No `docs/requirements.yaml`
@@ -205,6 +207,7 @@ Checked this session, two independent ways:
    expanded into their own `REQ-NNN` id yet either (S5/S6 have not reached that part
    of their own scope survey).
 
+PROVENANCE (historical, not current decision authority):
 **Conclusion, stated explicitly per the requirement's own instruction:** the
 entity/entity-query subsystem **has not landed** — no REQ id builds it, no router
 mounts it, no context module exists under `lib/letflow/` for it (also independently
@@ -640,6 +643,8 @@ for this scenario — this is a hand-built report entry, not a harness output)**
 keep this requirement's own report (§6) structurally uniform across all 4 scenarios
 despite this one never touching `Runner`:
 
+PROVENANCE (historical, not current decision authority):
+
 ```
 %{
   scenario_id: "vortex-entity-list-filter-and-page",
@@ -717,6 +722,8 @@ A single YAML report, `test/reports/req207-vortex-scenario-findings.yaml` (match
 this project's YAML-for-everything-except-handoffs convention,
 `core-directives.md`'s "Output File Format Rules"), stating a closed disposition for
 all 4 scenarios — no step or scenario left unaddressed (AC5's literal requirement):
+
+PROVENANCE (historical, not current decision authority):
 
 ```yaml
 requirement: REQ-207

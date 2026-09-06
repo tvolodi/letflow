@@ -294,3 +294,83 @@ history:
       files -- PASS (handoffs/WF02-REQ269-20260906/step-02d-reviewer.json).
       Docs-only, no mix compile/format/test applicable. ORCH will merge
       and release queue task 507 status:done.
+  - req: REQ-271
+    event: started
+    agent: ORCH
+    at: "2026-09-06T02:03:01Z"
+    note: >
+      Starting chunk 239-design-h (LAST/8th sibling of the
+      lib/letflow/design/ .zig provenance-marking split, REQ-264..271) --
+      req205-simulation-harness-foundation.md, req206-swiftroute-scenario-
+      execution.md, req207-vortex-scenario-execution.md, req209-expr-
+      differential-corpus-regression.md, req215-service-task-engine-
+      wiring.md, req237-zig-provenance-marking-convention.md (the design
+      doc itself, in scope per CODE-DESIGN-VALIDATOR's OQ-4 resolution),
+      search.md, service_task_dispatcher.md, service_task.md (9 files).
+      Branch feature/WF02-REQ271-20260906 off main@43f0a56e, queue task
+      509 (already claimed to letflow-ee-orch, not re-claimed). Pre-flight
+      .zig grep -c sum across the 9 files: 84 (req205=4, req206=4,
+      req207=12, req209=4, req215=1, req237=47, search.md=4,
+      service_task_dispatcher.md=1, service_task.md=7).
+  - req: REQ-271
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-06T02:12:35Z"
+    note: >
+      Applied REQ-237's PROVENANCE marker convention to chunk 239-design-h
+      (LAST/8th sibling of the lib/letflow/design/ .zig provenance-marking
+      split, REQ-264..271): req205-simulation-harness-foundation.md,
+      req206-swiftroute-scenario-execution.md,
+      req207-vortex-scenario-execution.md,
+      req209-expr-differential-corpus-regression.md,
+      req215-service-task-engine-wiring.md,
+      req237-zig-provenance-marking-convention.md (the design doc itself,
+      in scope per CODE-DESIGN-VALIDATOR's OQ-4 resolution), search.md,
+      service_task_dispatcher.md, service_task.md (9 files, closes
+      ISS-0424 part 3c-18, queue task 509, feature/WF02-REQ271-20260906).
+      27 markers inserted (req205=3, req206=4, req207=5, req209=2,
+      req215=1, req237=1, search.md=4, service_task_dispatcher.md=1,
+      service_task.md=6), 0 deletions; per-file .zig counts unchanged
+      before/after (sum 84: req205=4, req206=4, req207=12, req209=4,
+      req215=1, req237=47, search.md=4, service_task_dispatcher.md=1,
+      service_task.md=7). req237-zig-provenance-marking-convention.md
+      special handling per OQ-4/task step 3: section 4's two worked
+      before/after/diff fenced-code illustrations (the cursor.zig/
+      field_grants.zig SOURCE: example and the identity.ex moduledoc
+      paragraph example) were left completely untouched, since they
+      exist specifically to demonstrate the unmarked/marked states;
+      only one genuine live citation was found in req237's own prose
+      outside those fences and outside section 1's phrasing-variety
+      survey table / section 6's chunking-recommendation tables (both
+      of which cite other files' .zig paths purely as illustrative
+      documentation, not as this file's own provenance claims) -- the
+      "Sources read" bullet in section 0 citing REQ-231's cursor.zig
+      and REQ-181's webhooks.zig, now marked. Two passages were judged
+      genuinely ambiguous and flagged as MINOR rather than resolved by
+      guessing: (1) section 4's own narration prose immediately
+      surrounding the fenced examples (the "Real citation, quoted
+      exactly..." paragraph naming cursor.zig, and the post-diff
+      "Exactly one line is added..." commentary) -- these quote the
+      same citation the adjacent protected fence already illustrates,
+      and marking them separately seemed likely to fragment one worked
+      example rather than mark a second independent citation; (2) the
+      document's own H1 title and the two AMENDMENT paragraphs at the
+      top, which use ".zig" only in generic/meta-descriptive phrasing
+      ("100 .zig-carrying files", "the .zig provenance-citation marking
+      convention") with no specific R-Co path named, so they were read
+      as not being citations at all rather than unmarked citations.
+      New-unit shapes used this turn, none requiring a design-doc
+      amendment: a marker line placed immediately above a fenced code
+      block that is itself the citation unit (proposed literal YAML
+      scenario-fixture content in req206, a hand-built report map/YAML
+      report in req207, both left as a standalone marker line before
+      the fence rather than inside it, so the fence's own literal
+      content stays byte-identical); a marker placed above a `>`
+      blockquote in search.md for the same reason (the quoted text is
+      prescribed verbatim moduledoc content for ELIXIR-DEV to copy).
+      git diff --stat confirms exactly these 9 files changed under
+      lib/letflow/design/ and CLAUDE.md/README.md/docs/migration/
+      README.md are untouched; grep -rnE for deliberate-divergence
+      notes returned 0 matches before and after (byte-identical, none
+      exist in this chunk). Docs-only, no mix compile/format/test
+      applicable. Next: route to REVIEWER for independent verification.

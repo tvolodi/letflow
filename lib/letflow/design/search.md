@@ -1,3 +1,5 @@
+PROVENANCE (historical, not current decision authority):
+
 # Design: REQ-042 — Definition full-text search (`store.zig`'s `Store.search()`, PD-10)
 
 **Requirement:** REQ-042 (`docs/requirements.yaml:2000-2050`, stage S2, `depends_on: [REQ-030]`)
@@ -123,7 +125,8 @@ reasoned decision — not a silent one.**
 
 Two pieces of this exact task's instructions point in different directions on arity:
 
-- **Naming precedent** (`req030-…md` §1, this task's title): calls it "`search/1`,"
+- PROVENANCE (historical, not current decision authority):
+  **Naming precedent** (`req030-…md` §1, this task's title): calls it "`search/1`,"
   inherited from R-Co's `src/definition/store.zig`'s `Store.search(options:
   SearchOptions)` — a genuinely single-argument Zig call (one struct bundling `query`,
   `limit`, `offset`).
@@ -354,7 +357,8 @@ own empty-list behavior on zero matches satisfies this directly — no additiona
 
 ## 9. Invariants
 
-- **INV-SR-1 — No new migration, table, or index.** This design adds zero
+- PROVENANCE (historical, not current decision authority):
+  **INV-SR-1 — No new migration, table, or index.** This design adds zero
   `priv/repo/migrations/` files and zero indexes. The query is a plain sequential-scan
   `ILIKE` over the existing `process_definitions` table, with no `idx_def_name` or
   `idx_def_fts`/GIN index to accelerate it — matching `req027-…md`'s own scope-table
@@ -393,6 +397,8 @@ subsection stating the no-new-migration boundary explicitly. Required text (verb
 enough to satisfy AC6's "explicitly citing definition.md's PD-10 section for that
 boundary" — the exact prose is ELIXIR-DEV's to finalize, but it must state these three
 facts together, in one place, not scattered):
+
+PROVENANCE (historical, not current decision authority):
 
 > `search/2` (REQ-042) adds definition full-text search over `process_definitions`'
 > `name`/`description` columns via `ILIKE` ranking, ported from `store.zig`'s

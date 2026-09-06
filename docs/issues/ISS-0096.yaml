@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. resolution is a bare atom-list
   Ecto.Enum over [:keep_theirs, :take_incoming, :custom] -- this design's
@@ -24,6 +25,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/324
 status: in_progress
 resolution_note: >
+  PROVENANCE (historical, not current decision authority):
   REVIEWER decision (WF03-ISS0096-20260822, run WF03-ISS0096-20260822): chose
   option (a) -- rename Letflow's pack_update_resolutions.resolution
   Ecto.Enum values to match R-Co's ResolutionKind naming
@@ -70,6 +72,7 @@ reconciliation_note: >
   closure; this local record's status is left `open` per WF-03 Step 5's
   outcome (b), NOT resolved.
 
+  PROVENANCE (historical, not current decision authority):
   R-Co WAS checked this run (R-Co/src/definition/pack_update.zig, reachable at
   c:\Users\tvolo\dev\ai-dala\R-Co, lines 1-30), and it surfaces a REAL,
   previously-unverified divergence rather than confirming the design's

@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. This is the location ISS-0076's own
   affected_files list omitted -- a SHIPPED moduledoc, not just a design doc.
@@ -32,6 +33,7 @@ status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"
   summary: >
+    PROVENANCE (historical, not current decision authority):
     R-Co/src/engine/instance.zig read directly. setInstanceError() confirmed
     at L3078-3182 (signature: pub fn setInstanceError(self: *InstanceStore,
     allocator: std.mem.Allocator, args: SetInstanceErrorArgs)

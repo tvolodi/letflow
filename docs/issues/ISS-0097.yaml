@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. installed_version/base_version/
   target_version are :string, not :integer. No R-Co source confirms
@@ -22,6 +23,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/325
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Verified against R-Co source. migrations/1157_prm09_solution_pack_update.sql
   declares solution_pack_installs.installed_version as TEXT NOT NULL;
   src/definition/pack_update.zig carries base_pack_version/incoming_pack_version

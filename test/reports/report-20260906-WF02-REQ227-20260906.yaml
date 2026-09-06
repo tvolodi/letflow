@@ -1,0 +1,135 @@
+# Test run report -- WF-02 Step 4 (REQ-227: Entity Record Payload Validation)
+# Full regression gate ahead of RELEASE-VALIDATOR.
+
+workflow: WF-02
+step: "04 (TEST-RUNNER)"
+agent: TEST-RUNNER
+run_id: WF02-REQ227-20260906
+requirement_ids: [REQ-227]
+date_utc: "2026-09-06T14:15:00Z to ~14:22:00Z (docker up + compile/format checks +
+  full suite + isolated re-run)"
+
+verdict: PASS
+
+git:
+  branch: feature/WF02-REQ227-20260906
+  base_commit: 3bcfc54a
+  diff_scope: >
+    lib/letflow/entities/record/validator.ex (new),
+    test/letflow/entities/record/validator_test.exs (new),
+    lib/letflow/design/req227-entity-record-payload-validation.md (new),
+    plus this run's own handoffs/ bookkeeping. No other lib/ or test/ file
+    touched by this branch (per REVIEWER's step-02d diff --stat, unchanged since).
+
+environment:
+  toolchain: "local (asdf shims on PATH: elixir/mix/rustc lookup)"
+  containers: letflow-1-postgres-1 (port 5463, matches .env LETFLOW_DB_PORT) and
+    letflow-1-keycloak-1, already running; `sudo docker compose up -d` confirmed
+    both Running (this session's own user is not in the docker group, sudo is
+    passwordless for docker in this sandbox).
+  rustc: NOT PRESENT (`which rustc` -> exit 127). Known, documented gap.
+  run_mode: foreground, blocking Bash calls only. No background/Monitor wait used
+    for `mix letflow.check.test`; it ran to completion in a single blocking call.
+
+step_1_compile:
+  command: "mix compile --warnings-as-errors --force"
+  result: "Compiling 196 files (.ex) / Generated letflow app -- exit 0, zero
+    warnings"
+
+step_2_format:
+  command: "mix format --check-formatted"
+  result: "clean, no output, exit 0"
+
+step_3_full_suite:
+  command: "mix letflow.check.test"
+  mechanism: "scripts/test_parallel.sh, 8 partitions (mix test --partitions 8),
+    each partition running the full `test` alias (ecto.create/ecto.migrate --quiet
+    + mix test) against the shared test DB"
+  per_partition_results:
+    - {partition: 1, result: "533/535 passed", failed: 2}
+    - {partition: 2, result: "318 passed, 1 excluded", failed: 0}
+    - {partition: 3, result: "359 passed", failed: 0}
+    - {partition: 4, result: "449 passed (1 property, 448 tests), 14 excluded", failed: 0}
+    - {partition: 5, result: "392 passed (4 properties, 388 tests), 3 excluded", failed: 0}
+    - {partition: 6, result: "417 passed (1 property, 416 tests)", failed: 0}
+    - {partition: 7, result: "501/502 passed, 1 excluded", failed: 1}
+    - {partition: 8, result: "341 passed, 3 excluded", failed: 0}
+  combined_tally: "3313 tests total, 3310 passed, 3 failed, 21 excluded"
+  exit_status: "mix letflow.check.test itself exits nonzero (scripts/test_parallel.sh
+    exited 1) because of the 3 real failures below -- this is the umbrella task's
+    correct behavior, not a tooling problem."
+
+failures_detail:
+  - name: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row
+      naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    partition: 1
+    raw_error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\",
+      [\"--version\"], ...) inside running_rust_raw/0 (test file line 69)"
+    root_cause: "No Rust toolchain installed in this environment (`which rustc` ->
+      not found). Pre-existing, environment-caused, matches this project's own
+      documented rustc-toolchain-gap baseline seen in prior sessions' reports
+      (e.g. report-20260904-WF03-ISS0469-20260904.yaml)."
+    attribution: "NOT in this branch's diff -- test/mix/tasks/letflow_check_toolchain_test.exs
+      is untouched by feature/WF02-REQ227-20260906."
+  - name: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch
+      (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    partition: 1
+    raw_error: "Same :enoent via running_rust_raw/0, same missing rustc binary."
+    attribution: "Same as above -- untouched file, environment gap."
+  - name: "test provisioning does not block the pool's mailbox (ISS-0224 regression)
+      RT-6 (death path c): the provisioning worker Task crashing fails the claim
+      without taking the pool, a slot or a schema with it (Letflow.SandboxPoolTest)"
+    location: "test/letflow/sandbox_pool_test.exs:1085 (assertion at :1118)"
+    partition: 7
+    raw_error: "Expected false or nil, got true -- refute MapSet.member?(final,
+      o_schema) failed: final = MapSet.new([\"sandbox_d68716f4b30846978903a4ee14bf9cbe\",
+      \"sandbox_fdc20c2bc0d64c2f810f60dd78a25f09\"]), o_schema =
+      \"sandbox_d68716f4b30846978903a4ee14bf9cbe\""
+    attribution: "test/letflow/sandbox_pool_test.exs is NOT in this branch's diff.
+      Not the documented LETFLOW_TENANT_FIXTURE phase=incomplete_schema hazard
+      symptom (grepped both failing partitions' full logs for that string: zero
+      matches) -- so this was not waved away on suspicion alone."
+    isolation_rerun:
+      command: "mix test test/letflow/sandbox_pool_test.exs --seed 0"
+      result: "Result: 23 passed -- 0 failures, including this exact test"
+      supporting_evidence: "The isolated run's own log shows ~17
+        TenantSchemaReaper.sweep_orphans/2 warnings for malformed
+        schema_name=\"tenant_template_build_*\" rows left behind in tenant_schemas
+        -- i.e. leftover state from other build/session activity against this
+        same shared Postgres instance, consistent with this host's known
+        sibling-session-sharing hazard, though not the exact incomplete_schema
+        symptom string named in this run's dispatch instructions."
+    conclusion: "Flaky under the full-suite's parallel/shared-DB contention, passes
+      cleanly in isolation. Unrelated to REQ-227's diff (validator.ex touches
+      no sandbox/pool code at all)."
+
+entities_and_event_store_scoped_check:
+  note: "REQ-227's own module and dependency surface, run directly (uncontended):"
+  command: "mix test test/letflow/entities/ test/letflow/event_store/"
+  not_rerun_separately_this_session: >
+    Not re-run as a standalone command this session -- REVIEWER's step-02d already
+    confirmed these directly (validator_test.exs: 10 passed; test/letflow/entities/:
+    47 passed; test/letflow/event_store/: 150 passed, all 0 failures), and this
+    session's own full-suite run (partitions above) exercises the same files as
+    part of the 3310-passed total with no failures attributed to any entities/ or
+    event_store/ test.
+
+overall_verdict: >
+  PASS. `mix compile --warnings-as-errors` and `mix format --check-formatted` are
+  both clean. The full partitioned suite collected 3313 tests (3310 passed, 3
+  failed, 21 excluded): 2 failures are the pre-existing, environment-caused
+  (missing rustc) Mix.Tasks.Letflow.CheckToolchainTest failures untouched by this
+  branch; the 3rd (Letflow.SandboxPoolTest, ISS-0224 regression) is confirmed
+  flaky under shared-DB contention -- it passed cleanly (23/23) in an isolated
+  re-run and its file is untouched by this branch's diff. None of the 3 failures
+  are in REQ-227's own scope (lib/letflow/entities/record/validator.ex or its
+  test file), which show 0 failures throughout. No destructive Postgres DDL was
+  run or attempted.
+
+next_action: >
+  Route to RELEASE-VALIDATOR to independently re-verify REQ-227's acceptance
+  criteria; RELEASE-VALIDATOR should expect to see the same 2 rustc-gap failures
+  plus possible recurrence of the SandboxPoolTest flake under full-suite
+  contention, both pre-existing and unrelated to this branch.

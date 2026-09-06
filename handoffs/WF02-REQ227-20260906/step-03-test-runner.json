@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ227-20260906-step-03",
+  "run_id": "WF02-REQ227-20260906",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ227-20260906/step-03-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T14:23:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-227"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ227-20260906-step-00",
+      "WF02-REQ227-20260906-step-01",
+      "WF02-REQ227-20260906-step-01b",
+      "WF02-REQ227-20260906-step-02",
+      "WF02-REQ227-20260906-step-02d"
+    ],
+    "artifacts_in": [
+      "lib/letflow/entities/record/validator.ex",
+      "test/letflow/entities/record/validator_test.exs"
+    ],
+    "artifacts_out": [
+      "handoffs/WF02-REQ227-20260906/step-03-test-runner.json",
+      "test/reports/report-20260906-WF02-REQ227-20260906.yaml"
+    ],
+    "branch_name": "feature/WF02-REQ227-20260906",
+    "base_commit": "3bcfc54a"
+  },
+  "task": {
+    "description": "Run the project's full regression test gate (mix letflow.check.test) plus mix compile --warnings-as-errors and mix format --check-formatted for REQ-227, and report real pass/fail results."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "`mix compile --warnings-as-errors --force`: clean, 'Compiling 196 files (.ex) / Generated letflow app', exit 0, zero warnings. `mix format --check-formatted`: clean, no output, exit 0. `mix letflow.check.test` (scripts/test_parallel.sh, 8 partitions): per-partition results were partition-1 '533/535 passed' (2 failed), partition-2 '318 passed, 1 excluded', partition-3 '359 passed', partition-4 '449 passed (1 property, 448 tests), 14 excluded', partition-5 '392 passed (4 properties, 388 tests), 3 excluded', partition-6 '417 passed (1 property, 416 tests)', partition-7 '501/502 passed, 1 excluded' (1 failed), partition-8 '341 passed, 3 excluded'. Combined: 3313 tests total, 3310 passed, 3 failed, 21 excluded. All 3 failures are pre-existing and unrelated to REQ-227's diff (which touches only lib/letflow/entities/record/validator.ex, test/letflow/entities/record/validator_test.exs, and the design doc -- confirmed via REVIEWER's own step-02d diff --stat, unchanged since). Failure 1+2 (partition 1): 'test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row...' and 'a matching rust pin reports OK with no mismatch' (Mix.Tasks.Letflow.CheckToolchainTest, test/mix/tasks/letflow_check_toolchain_test.exs:289 and :274) -- both raise Erlang :enoent from System.cmd(\"rustc\", [\"--version\"], ...) because this environment has no Rust toolchain installed (`which rustc` -> exit 127); this file is untouched by this branch, matches this project's documented rustc-toolchain-gap baseline seen in prior sessions (e.g. report-20260904-WF03-ISS0469-20260904.yaml also hit exactly these 2 same tests for the same reason). Failure 3 (partition 7): 'test provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c)...' (Letflow.SandboxPoolTest, test/letflow/sandbox_pool_test.exs:1085/:1118) -- 'Expected false or nil, got true: refute MapSet.member?(final, o_schema)' with final containing the just-dropped sandbox schema. Checked both failing partitions' full logs for the documented LETFLOW_TENANT_FIXTURE phase=incomplete_schema hazard-symptom string -- zero matches, so this was not waved away on suspicion of that specific known hazard. Instead re-ran in isolation: `mix test test/letflow/sandbox_pool_test.exs --seed 0` -> 'Result: 23 passed', 0 failures, including this exact test; that isolated run's own log shows ~17 TenantSchemaReaper.sweep_orphans/2 warnings for malformed schema_name=\"tenant_template_build_*\" rows in tenant_schemas, evidence of leftover state from other build/session activity against this same shared Postgres instance (port 5463, shared docker compose stack, sudo-only docker access confirmed this session's own user lacks docker-group membership). Conclusion: flaky under the full-suite's parallel/shared-DB contention, passes cleanly in isolation, and its file (test/letflow/sandbox_pool_test.exs) is not part of this branch's diff at all. No destructive Postgres DDL (no DROP SCHEMA CASCADE or similar) was run or attempted by this agent at any point -- postgres/keycloak containers were already running and were left as-is via `sudo docker compose up -d` (idempotent, both already Running). Full details, per-partition breakdown, and root-cause analysis written to test/reports/report-20260906-WF02-REQ227-20260906.yaml. Verdict: PASS -- REQ-227's own scope (validator.ex + its test file) shows 0 failures anywhere in this run; the 3 observed failures are all pre-existing, environment- or contention-caused, and unrelated to this branch."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,5 +1,6 @@
 # REQ-069 — `Letflow.Api.Authorization` design
 
+PROVENANCE (historical, not current decision authority):
 Ports `src/api/authorization.zig` (281 lines, R-Co). Pure module: no `Plug.Conn`,
 no I/O, never raises on any input.
 
@@ -25,6 +26,7 @@ Ports:
 - `endpoint_policy_key/2`, `evaluate_access/2`, `is_task_worker_only?/1`,
   `required_permission/1`, `has_permission?/2`, `has_role?/2`, `role_allows?/2`.
 
+PROVENANCE (historical, not current decision authority):
 Does NOT port: any Plug/route wiring (no consumer route exists yet — REQ-083
 consumes the TasksList row-filter decision when it ports `tasks.zig`'s read
 path, per the requirement text).

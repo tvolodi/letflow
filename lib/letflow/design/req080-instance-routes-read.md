@@ -1,5 +1,6 @@
 # REQ-080 design — Instance routes 2/2 (read path)
 
+PROVENANCE (historical, not current decision authority):
 Ports the read half of `src/api/routes/instances.zig`: `handleGetById`
 (L422), `handleList` (L586), `handleHistory` (L839), `handleTimeline`
 (L1067), `handleGetPins` (L1265). Sibling to REQ-079 (write path, shipped
@@ -17,6 +18,7 @@ idiom this requirement reuses verbatim, not reinvents):
   prefix-scoped. `{:error, :not_found}` on absent-or-cross-tenant, same
   single code path (INV-5), matching `Letflow.Tasks.get_task/2`'s own
   established convention.
+PROVENANCE (historical, not current decision authority):
 - `list/2` — cursor-paginated `InstanceProjection` query. Filters: `status`,
   `definition_id`, `correlation_key`, `started_after`/`started_before`
   (date range) — **wider than R-Co's own `handleList`**, which filters only
@@ -36,6 +38,7 @@ idiom this requirement reuses verbatim, not reinvents):
   (unique per instance by construction, REQ-025) — simpler than `list/2`'s
   compound key since no tie-break is needed.
 
+  PROVENANCE (historical, not current decision authority):
   **Deliberate non-port: `pipeline_run_id` filter (`instances.zig`
   `HistoryParams.pipeline_run_id`, ADP-06).** No ADP-06 pipeline-run
   correlation concept exists anywhere in Letflow yet (`grep -rn
@@ -51,6 +54,7 @@ idiom this requirement reuses verbatim, not reinvents):
   `payload["task_id"]`, both already-established per-event-type payload keys
   — no new extraction logic, a plain `Map.get/2`).
 
+  PROVENANCE (historical, not current decision authority):
   **Deliberate non-port: `actor_display_name`/`description` synthesis**
   (`instances.zig` handleTimeline body, ~L1067-1160). R-Co's timeline
   handler resolves `actor_id` to a human display name and synthesizes a
@@ -115,6 +119,7 @@ variables, started_at, completed_at, cancelled_at, error_detail}` — the
 uppercase mapping (reuse `status_string/1` already defined in this router by
 REQ-079, exposed as a shared private helper — do not duplicate it).
 
+PROVENANCE (historical, not current decision authority):
 `list`/`history`/`timeline`: the standard `Letflow.Api.Pagination.Page`
 envelope (`items`, `next_cursor`, `count`) — `list`'s items are the same
 shape as `get_by_id` minus `variables`/`error_detail` (list rows omit large
@@ -172,6 +177,7 @@ methodology `Letflow.Tasks`'s own list_tasks pagination tests already use
 
 ## Open question resolved: `RESTORED_ORPHAN` status (R-Co 5th status)
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `InstanceProjection.status` enum has five values
 (`instances.zig:459`: `ACTIVE`/`COMPLETED`/`CANCELLED`/`ERROR`/
 `RESTORED_ORPHAN`). Letflow's `Letflow.EventStore.InstanceProjection.status`

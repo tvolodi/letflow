@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-081 — Definition routes 1/2, read path (`definitions.zig`'s `handleGetById`/`handleList`/`handleGetActiveByName`/`handleSearch`/`handleExport`)
 
 **Requirement:** REQ-081 (`docs/requirements.yaml:4573-4609`, stage S4, `depends_on: [REQ-072]`)
@@ -61,6 +62,7 @@ implementation code** — no function bodies, no `.ex` files.
   reuse this idiom, not `Letflow.Instances.list/2`'s older one (which puts the domain
   timestamp `started_at_us` directly in the expiry-checked slot — a divergence not
   revisited here since fixing it is out of REQ-081's scope).
+PROVENANCE (historical, not current decision authority):
 - R-Co `src/api/routes/definitions.zig` (read `handleGetById`, `handleList`,
   `handleGetActiveByName`, `handleSearch`, `handleExport`, and their three serializers
   `serializeDefinition`/`serializeListResponse`/`serializeSearchResults`/
@@ -278,6 +280,7 @@ function, per this requirement's own instructed structural template.
 
 ## 4. Router — `lib/letflow/routers/definitions.ex`
 
+PROVENANCE (historical, not current decision authority):
 Adds five `GET` routes to the existing module (which currently owns only
 `POST /:id/validate`). **Route-ordering constraint**, same hazard class as
 `Letflow.Routers.Instances`'s `/:id/history` note and R-Co's own `handleSearch` doc

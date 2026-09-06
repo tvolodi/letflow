@@ -37,6 +37,7 @@ REQ-078's description asserts that all six modules are "a one-to-three-handler s
 existing context functions". Grep-verified against this worktree, that is true of five of them
 and **false of the sixth**:
 
+PROVENANCE (historical, not current decision authority):
 | Module | Backing context in Letflow today | Verdict |
 |---|---|---|
 | `audit.zig` | `Letflow.EventStore.read_global/1` (`event_store.ex:761`) — exists; needs four additive filter opts | thin ✅ |
@@ -46,6 +47,7 @@ and **false of the sixth**:
 | `metrics.zig` | nothing exists; needs three `COUNT(*)`-shaped context functions | thin ✅ |
 | **`solution_packs.zig`** | **NOTHING.** `grep -rn "export_pack\|install_pack\|SolutionPackDocument" lib/` → **zero hits.** `Letflow.Definitions.SolutionPackInstall`'s entire public surface is `insert_changeset/2` (`solution_pack_install.ex:83`) — it is an Ecto schema, not an engine. REQ-041 delivered the *three-way diff* (`compute_pack_update_plan/5`, `definitions.ex:250`) plus three tables, **not** export/install. `Letflow.Definitions.ExportImport.export/2`/`import/3` (`export_import.ex:87/120`) are **single-definition**, not multi-definition pack documents. | **NOT thin ❌** |
 
+PROVENANCE (historical, not current decision authority):
 R-Co's two solution-pack handlers are thin **only because** they delegate to
 `src/solution/store.zig`'s `exportPack` (L46) and `installPack` (L284) — roughly 700 lines that
 Letflow has ported none of. Porting the routes means **building that context module**
@@ -111,6 +113,7 @@ half-built `install/3` would produce exactly the half-built write path AC8 exist
 
 ### Letflow (this worktree)
 
+PROVENANCE (historical, not current decision authority):
 | File | Lines cited | Used for |
 |---|---|---|
 | `docs/requirements.yaml` | REQ-078 entry in full (description + all **eight** acceptance criteria + `depends_on`) | §1, §12 |
@@ -170,6 +173,7 @@ boundaries — giving constant offsets of **+60** for `router.ex`, **+115** for 
 is why every *substantive* claim was still correct: the text was read accurately, only the
 coordinates were mislabelled.
 
+PROVENANCE (historical, not current decision authority):
 **Round 2 correction, and it matters more than the original defect.** The first remediation
 claimed "every citation in this table has since been re-derived". That was true of the
 **Letflow** table above and **false of the R-Co table below it**, which had not been touched —
@@ -190,6 +194,7 @@ endpoints were derived, not estimated.
 each file. Read one file per command, or use `grep -n`, which always reports per-file line
 numbers. This is the single root cause of every citation defect in both rounds.
 
+PROVENANCE (historical, not current decision authority):
 **Round 2 also removed a fabricated identifier.** §8.3.1 cited R-Co's
 `buildIdempotentInstallResult`. **No such function exists anywhere in R-Co.** The real one is
 `buildIdempotentResult`, declared at `src/solution/store.zig:682` and called from `:337`. The
@@ -210,6 +215,7 @@ place.
 
 ### R-Co (`C:\Users\tvolo\dev\ai-dala\R-Co\`)
 
+PROVENANCE (historical, not current decision authority):
 | File | Lines cited | Used for |
 |---|---|---|
 | `src/api/routes/audit.zig` | **146 lines.** `ListAuditParams` **10**; `handleList` **21**-52 incl. `invalid_time_range` **28** and the error map **42-45** (`InvalidCursor`->422, `CursorExpired`->**410**, `InvalidFilter`->422, `PoolExhausted`->503); `serializeList` **54** (the `{items,next_cursor,count}` body); `appendItem` **79** (the nine per-entry keys) | §6.1 |
@@ -223,6 +229,7 @@ place.
 | `src/api/routes/metrics.zig` | **59 lines.** `handleMetrics` `pub fn` **8**, its `metrics.collectGlobalPrometheusText(allocator)` call **9**; `// /metrics is intentionally unauthenticated (OBS-02).` **20**; `content_type = metrics.PROMETHEUS_CONTENT_TYPE` **24**. Metric names appear only in this file's own tests: `bpm_active_instances_total` **39**/**57**, `bpm_task_completions_total{definition_id=...}` **58** | §11 |
 | `src/main.zig` | Module registrations **20** (`validation_routes`), **53** (`metrics_routes`), **54** (`tenant_config_routes`), **55** (`audit_routes`), **93** (`pin_rebind_routes`), **100** (`solution_pack_routes`); call sites **457** (`/metrics`), **463** (`/api/tenant-config`, commented "public -- no auth required"), **784** (`POST .../definitions/:id/validate`), **849** (`POST .../instances/:id/rebind-pins`), **1189** (`GET /api/v1/audit` branch, with the hardcoded `.role = .PLATFORM_ADMIN` at **1192** and the consequently-dead `actor.role != .PLATFORM_ADMIN -> 403` at **1198**), **1547**/**1551** (solution-pack export/install) | §2, §4 |
 
+PROVENANCE (historical, not current decision authority):
 **Not read, and why:** `src/api/routes/sandbox_access.zig` — deliberately out of scope, see §13.
 
 ---
@@ -241,6 +248,7 @@ builds because REQ-082 has not (verified: `lib/letflow/definitions.ex` and
 
 ## 2. Mount-point decisions — the single table (§2.7 is the summary)
 
+PROVENANCE (historical, not current decision authority):
 REQ-070's roster (`lib/letflow/design/req070-router-decomposition.md:126-136`) assigned four
 of these six a mount point **by Elixir module name, not by R-Co URL**. Checked against
 `src/main.zig`, three of those four assignments are wrong about the URL, and one is wrong
@@ -249,6 +257,7 @@ mount point to any of the six, so these are genuinely open and are decided here.
 
 ### 2.1 Audit — `Letflow.Routers.Audit` at `/audit` — **stub kept as-is** ✅
 
+PROVENANCE (historical, not current decision authority):
 R-Co: `GET /api/v1/audit` (`main.zig:1189-1214` (branch head `:1189`)). Letflow: `GET /api/v1/audit`. Identical.
 `Letflow.Api.Authorization.endpoint_policy_key("GET", "/audit")` already returns `:AuditRead`
 (`authorization.ex:227`), and `web/src/api/audit.ts:59` already calls exactly this path.
@@ -256,6 +265,7 @@ Nothing changes about the mount.
 
 ### 2.2 Metrics — `Letflow.Routers.Metrics` at `/metrics` — **stub kept, with two named divergences**
 
+PROVENANCE (historical, not current decision authority):
 R-Co: top-level `GET /metrics`, **unauthenticated** (`main.zig:457`; `metrics.zig:20` says so
 verbatim), Prometheus exposition text, platform-global in-memory registry.
 Letflow: `GET /api/v1/metrics`, **authenticated** (it sits behind `Letflow.Plugs.AuthPipeline`,
@@ -270,6 +280,7 @@ in Letflow would therefore have to be either empty or cross-tenant. It stays aut
 
 ### 2.3 Definition validation — **moves to `Letflow.Routers.Definitions`; `Letflow.Routers.Validation` is deleted**
 
+PROVENANCE (historical, not current decision authority):
 R-Co: `POST /api/v1/definitions/:id/validate` (`main.zig:777-784`, `validation.zig:6`).
 R-Co has **no `/validation` URL prefix anywhere.** The `Letflow.Routers.Validation` stub at
 `/validation` is an artefact of REQ-070 grouping by Zig **filename** (`routes/validation.zig`)
@@ -295,6 +306,7 @@ The same note applies to `Letflow.Routers.Instances` (§2.5) and REQ-079/080.
 
 ### 2.4 Tenant config — **moves out of the authenticated pipeline to the top-level router**
 
+PROVENANCE (historical, not current decision authority):
 R-Co: `GET /api/tenant-config?host=…` (or `?realm=…`), **explicitly public**
 (`tenant_config.zig:3`: "Public endpoint (no auth required)"; `main.zig:462` carries the
 same comment). Its purpose is login-page bootstrap: the SPA calls it to learn which OIDC
@@ -319,6 +331,7 @@ is therefore a **load-bearing behaviour to port, not an R-Co quirk to tidy up.**
 
 ### 2.5 Pin rebind — **routes onto `Letflow.Routers.Instances`; no new sub-router**
 
+PROVENANCE (historical, not current decision authority):
 R-Co: `POST /api/v1/instances/:id/rebind-pins` (`pin_rebind.zig:1-3`, `main.zig:847-849`).
 This is an instances route. `Plug.Router`'s `forward/2` is prefix-exclusive, so a separate
 `Letflow.Routers.PinRebind` **cannot** be mounted at `/instances`; it would force an invented
@@ -329,6 +342,7 @@ declares no other instances route, so the constraint is recorded for REQ-079.
 
 ### 2.6 Solution packs — **new `Letflow.Routers.SolutionPacks` at `/solution-packs`; the path `tenant_id` is dropped**
 
+PROVENANCE (historical, not current decision authority):
 R-Co: `POST /api/v1/tenants/{tenant_id}/solution-packs/export` and `.../install`
 (`solution_packs.zig:1-5`, `main.zig:1541-1553`). The `{tenant_id}` is **caller-supplied in
 the path**.
@@ -353,6 +367,7 @@ inside the PLATFORM_ADMIN-only tenant-administration router — the wrong permis
 
 ### 2.7 The single mount table
 
+PROVENANCE (historical, not current decision authority):
 | # | R-Co source | R-Co path | Letflow method + path | Sub-router module | Mounted from | Authenticated? | Permission key | Divergence justification |
 |---|---|---|---|---|---|---|---|---|
 | 1 | `routes/audit.zig` `handleList` (L21) | `GET /api/v1/audit` | `GET /api/v1/audit` | `Letflow.Routers.Audit` | `ApiPipeline` (existing forward, `api_pipeline.ex:46`) | yes | **`:AuditRead`** (route-local call, §4) | none |
@@ -496,6 +511,7 @@ clause for `POST /definitions/:id/validate`, `POST /solution-packs/*`, or
 `:Unknown`, and `evaluate_access/2`'s `:Unknown` branch (L274-279) allows **PLATFORM_ADMIN
 only**.
 
+PROVENANCE (historical, not current decision authority):
 Adding `endpoint_policy_key/2` clauses for them would be **inventing new authorization
 policy** — R-Co's own `authorization.zig` has no entries for these paths either, so there is
 nothing to port. Deciding what permission a pack install or a pin rebind requires is a policy
@@ -510,6 +526,7 @@ explicitly, naming REQ-131, so the gap is visible rather than silent. Recorded a
 
 ### 4.4 404 vs 403 — the per-endpoint rule (Decision 5)
 
+PROVENANCE (historical, not current decision authority):
 | Situation | Status | Mechanism |
 |---|---|---|
 | Caller lacks `:AuditRead` on `GET /audit` | **403** | `evaluate_access/2` → `:Deny403` → `Response.forbidden/2`. A *permission* answer about a resource class, not a question about a specific row's existence. |
@@ -549,6 +566,7 @@ design and reads only the **global** `tenants` table (§12).
 
 ### 6.1 Contract
 
+PROVENANCE (historical, not current decision authority):
 | Item | Value |
 |---|---|
 | R-Co source | `src/api/routes/audit.zig:21-52` (`handleList`), body shape at L54-126; backing store `src/obs/audit.zig:74-231` |
@@ -557,6 +575,7 @@ design and reads only the **global** `tenants` table (§12).
 | Permission | `:AuditRead`, via the route-local `with_authorization/4` (§4.2) — **403** on `:Deny403` |
 | Delegate | `Letflow.EventStore.read_global/1` (**extended**, §6.3) |
 
+PROVENANCE (historical, not current decision authority):
 **The backing store is different from R-Co's, and this must be stated.** R-Co reads a dedicated
 `audit_entries` table (`obs/audit.zig:107`). Letflow has **no such table** — verified:
 `grep -rn "audit_entries\|audit_log" priv/repo/ lib/` returns only a comment in
@@ -570,6 +589,7 @@ from the tenant-scoped `events` table via `read_global/1`.
 `sequence_number`, `idempotency_key`, `metadata`, `global_seq`
 (`lib/letflow/event_store/event.ex:79-90`).
 
+PROVENANCE (historical, not current decision authority):
 | R-Co key (`audit.zig:79-126`) | Letflow value | Note |
 |---|---|---|
 | `audit_id` | `event.event_id` | |
@@ -583,6 +603,7 @@ from the tenant-scoped `events` table via `read_global/1`.
 | `after_state` | **always `null`** | same |
 | — (**Letflow addition**) | `payload` — `event.payload` verbatim | The tenant's own event payload, returned to a caller inside that tenant holding `:AuditRead`. Without it the response carries no information about *what* changed, which would make the endpoint useless. Named as an addition so it is not mistaken for R-Co's `after_state`. |
 
+PROVENANCE (historical, not current decision authority):
 Response body (matching `audit.zig:54-77` and `web/src/api/audit.ts:36-40`):
 
 ```
@@ -595,6 +616,7 @@ Response body (matching `audit.zig:54-77` and `web/src/api/audit.ts:36-40`):
 
 ### 6.3 Filters — what has backing, and what does not (do not silently drop)
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `ListAuditParams` (`audit.zig:10-19`) carries eight params. Disposition:
 
 | Param | Letflow | How |
@@ -649,6 +671,7 @@ earlier draft conflated them:
 codebase — `tenants.ex:276`, `identity.ex:295`, `identity.ex:550` — all three are
 `Response.bad_request(conn, "invalid cursor")`. `/audit` matches them.
 
+PROVENANCE (historical, not current decision authority):
 **Two deliberate divergences from R-Co follow, and both must be in the moduledoc (§6.7):**
 
 * R-Co maps `InvalidCursor` → **422** (`audit.zig:42`); Letflow returns **400**. Uniform
@@ -700,6 +723,7 @@ new opts:
 * Composed with `Ecto.Query` and bound parameters only; no SQL string interpolation (INV-7).
 * Ordering (`asc: global_seq`), `:prefix` scoping and `$ref` payload resolution are unchanged.
 
+PROVENANCE (historical, not current decision authority):
 **The `from > to` case is the route's, not the store's.** R-Co checks it in the handler
 (`audit.zig:26-30`) and returns 422 `invalid_time_range`. Letflow does the same: the route
 compares the two parsed `DateTime`s with `DateTime.compare/2` before calling the store, and
@@ -722,6 +746,7 @@ returns 422 on `:gt` — no query issued.
 | `{:error, {:payload_resolution_failed, _}}` / any other `{:error, term()}` | 500 | `Response.internal_error/1` (INV-4 — no detail slot) |
 | success | 200 | `Response.ok/2` |
 
+PROVENANCE (historical, not current decision authority):
 **No 503 branch.** R-Co maps `PoolExhausted` → 503 (`audit.zig:45`). Ecto/DBConnection surfaces
 pool exhaustion as a raised `DBConnection.ConnectionError`, not an `{:error, :pool_exhausted}`
 tuple, so there is no tuple to match. Porting a 503 clause would create a branch nothing can
@@ -732,6 +757,7 @@ applies to every other 503 in this requirement (§8.5, §10.3).
 
 1. Route table row (method, path, delegate, permission, response), matching `tenants.ex:18-25`.
 2. The temporary route-local authorization paragraph, verbatim intent from §4.2.
+PROVENANCE (historical, not current decision authority):
 3. **"Served from the event store, not an audit-entry table"** — naming
    `src/obs/audit.zig`'s `audit_entries` as R-Co's backing table and stating Letflow has none.
 4. The full filter-disposition table from §6.3, including the two unsupported params and why
@@ -750,6 +776,7 @@ applies to every other 503 in this requirement (§8.5, §10.3).
 
 ### 7.1 Contract
 
+PROVENANCE (historical, not current decision authority):
 | Item | Value |
 |---|---|
 | R-Co source | `src/api/routes/validation.zig:75-139` (`handleValidate`); header L1-31 |
@@ -815,6 +842,7 @@ Behaviour contract:
 }
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Divergence from R-Co, deliberate.** R-Co emits `"status":"semantically_valid"` plus
 `"compiler_version"` (`validation.zig:115-118`, `src/validation/wire.zig:200-214`), because its
 VLD-01/02/03 pipeline performs expression type-checking and its VLD-04 gate persists a verdict
@@ -848,6 +876,7 @@ mapping, not a redaction. **Note for ELIXIR-DEV:** `Error.serialise/1`'s
 `errors: [_ | _]` clause passes the list straight to `Jason.encode!/1`, so the elements must
 already be plain maps with string keys — do not pass `%Violation{}` structs.
 
+PROVENANCE (historical, not current decision authority):
 ### 7.4 Moduledoc obligation (AC6) — the `validation.zig` distinction
 
 `Letflow.Routers.Definitions`'s moduledoc must carry a section that reads, in substance:
@@ -869,6 +898,7 @@ already be plain maps with string keys — do not pass `%Violation{}` structs.
 The same paragraph (or a one-line pointer to it) must also appear in `Letflow.Api.Validation`'s
 own moduledoc, so a reader arriving from either side finds the distinction.
 
+PROVENANCE (historical, not current decision authority):
 Additional moduledoc obligations for this module: the deleted `/validation` stub and why
 (§2.3); the deliberate exclusion of `ServiceScopeValidator` (§7.2 step 5); the `"valid"` vs
 `"semantically_valid"` divergence (§7.3); the INV-5 404 rule, citing `validation.zig:31`'s own
@@ -878,6 +908,7 @@ file.
 
 ### 7.5 Error → status map
 
+PROVENANCE (historical, not current decision authority):
 | Condition | Status | Helper |
 |---|---|---|
 | `:id` not UUID-shaped (`Ecto.UUID.cast/1` fails, checked in the route before any call) | 422 | `Response.unprocessable(conn, "invalid id format")` (R-Co `validation.zig:83-85`) |
@@ -907,6 +938,7 @@ context functions". **For solution packs that is not true.**
 
 Verified this run:
 
+PROVENANCE (historical, not current decision authority):
 * R-Co's handlers are thin because they delegate to `src/solution/store.zig`'s
   `SolutionPackStore.exportPack` (L46) and `installPack` (L284) — roughly 700 lines.
 * Letflow ported **none** of that. REQ-041 ported the *pack-update three-way diff*
@@ -942,8 +974,10 @@ packs** (§20 C-2), so the next reader is not misled the way this run was.
 
 ### 8.2 Pack document — what Letflow supports, and what it drops
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `SolutionPackDocument` (`solution_packs.zig:153-351`) has four content arrays:
 
+PROVENANCE (historical, not current decision authority):
 | R-Co array | Letflow | Reason |
 |---|---|---|
 | `definitions` | **supported** | `process_definitions` exists (REQ-027/030) |
@@ -951,10 +985,12 @@ R-Co's `SolutionPackDocument` (`solution_packs.zig:153-351`) has four content ar
 | `service_catalog_entries` | **NOT supported** | Letflow has no service catalog — `services.zig` is group (b), owning stage **S6** (`stage-4-api-surface.md:104`). Export emits `[]`; install **rejects a non-empty array with 422 `UNSUPPORTED_PACK_SECTION`** rather than silently discarding tenant-supplied content. |
 | `manifest.required_roles` | **supported, read-only** | Checked against the closed role set `Letflow.Api.Authorization.roles/0` (`authorization.ex:124-125`); produces the `role_mapping_checklist` (§8.4). No role is created. |
 
+PROVENANCE (historical, not current decision authority):
 Consequence: R-Co's `409 CATALOG_CONFLICT` (`solution_packs.zig:135`) is **not ported** — there
 is no catalog to conflict with, so the branch would be unreachable. **Stated in the moduledoc
 as a deliberate non-port.**
 
+PROVENANCE (historical, not current decision authority):
 Likewise R-Co's `409 TenantInactive` (`solution_packs.zig:127-134`) is **not ported**:
 `Letflow.Plugs.TenantStatus` runs at `api_pipeline.ex:35`, before any sub-router, and rejects an
 inactive tenant's request with `403 tenant_inactive` for every method
@@ -1070,6 +1106,7 @@ def install(document, actor_id, opts)
 Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
 
 1. Reject `document.service_catalog_entries != []` → `{:error, :unsupported_pack_section}`.
+PROVENANCE (historical, not current decision authority):
 2. Reject `document.bpm_export_schema_version != @export_schema_version` →
    `{:error, {:unknown_schema_version, actual}}` (R-Co: `INVALID_PACK_DOCUMENT`,
    `solution_packs.zig:168-172`).
@@ -1077,6 +1114,7 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
    `schema_content` is decoded with `Jason.decode/1` and checked by
    `Letflow.Definitions.JsonSchemaShape.check/1`. Any failure aborts the whole transaction
    with `{:error, {:malformed_variable_schema, variable_key, reason}}`. **Nothing is written.**
+PROVENANCE (historical, not current decision authority):
 4. **No conflict pre-check. `VARIABLE_SCHEMA_CONFLICT` is a deliberate non-port** — see
    §8.3.2 for the proof of unreachability. R-Co's check at `store.zig:419-441` has no
    Letflow analogue to perform.
@@ -1092,6 +1130,7 @@ Behaviour, in one `Ecto.Multi` executed by `Letflow.Repo.transaction/2`:
    `name: process_key`, `version`, `graph`, `created_by: actor_id`, and `opts` — so every
    definition lands in the caller's schema and nowhere else. Record the mapping
    `source_definition_id -> new_definition_id`.
+PROVENANCE (historical, not current decision authority):
 7. For each `packed_variable_schema`, resolve its `definition_id` through that mapping (an
    entry whose `definition_id` matches no packed definition is **skipped and reported in
    `warnings`**, matching R-Co's `continue` at `store.zig:483`), then call
@@ -1117,6 +1156,7 @@ never both succeed and the loser gets that error. §8.5 maps that error to a **4
 the whole install**. So every packed definition that reaches the result map was inserted by
 this call, and any that was not aborted the transaction before a result map existed.
 
+PROVENANCE (historical, not current decision authority):
 Consequence, which must be stated in `Letflow.Routers.SolutionPacks`'s moduledoc:
 **re-installing a pack whose `(name, version)` pairs already exist in the caller's schema is a
 409, not a no-op.** This is a real behavioural divergence from R-Co, whose
@@ -1127,6 +1167,7 @@ already-installed pack. Letflow has no such path today; `uq_solution_pack_instal
 its R-Co counterpart, not left as an accident.** If idempotent re-install is wanted later it
 needs its own requirement — it is not smuggled in here.
 
+PROVENANCE (historical, not current decision authority):
 `status` is nonetheless kept as a field rather than dropped, so the response shape stays
 compatible with R-Co's `serializeInstallResult` (`solution_packs.zig:426-463`) and so a future
 idempotent-install requirement has a place to put `"skipped"` without changing the wire shape.
@@ -1177,6 +1218,7 @@ sentence belongs in the moduledoc too.
 closed role atoms `Letflow.Api.Authorization.roles/0` returns (`authorization.ex:125`),
 compared as strings.
 
+PROVENANCE (historical, not current decision authority):
 **Read-only: no role is created, none is bound, and the checklist never affects whether the
 install succeeds.** It is advisory output for the operator. This is a narrowed port of
 `store.zig:589`'s `checkRoleGate` — R-Co's gate can *reject* an install; Letflow's reports and
@@ -1189,6 +1231,7 @@ be read as an enforced precondition.
 
 Request schema (`[%FieldConstraint{}]`, `Letflow.Api.Validation.validate/2`):
 
+PROVENANCE (historical, not current decision authority):
 | Field | Required | Type | Constraints |
 |---|---|---|---|
 | `definition_ids` | yes | `:array` | `min_items: 1` |
@@ -1207,6 +1250,7 @@ Element-level "every id is a string" is checked in the route after `validate/2` 
 | `scoped_repo_opts/1` `{:error, _}` / `common_error()` | 500 | `Response.internal_error/1` | `internal_error` |
 | success | 200 | `Response.ok/2` (the pack document) | — |
 
+PROVENANCE (historical, not current decision authority):
 `MODULE_NON_EXPORTABLE` (`solution_packs.zig:83`) is **not ported** — Letflow has no
 process-module packaging (`process_modules.zig` is group (b), S5). Named as a non-port.
 
@@ -1277,6 +1321,7 @@ it.**
 
 ### 9.2 The contract
 
+PROVENANCE (historical, not current decision authority):
 Added to `lib/letflow/definitions.ex`.
 
 ```
@@ -1336,6 +1381,7 @@ Behaviour contract:
    checked before any insert (the DB's `uq_variable_schema_definition_key` would otherwise
    surface it as an opaque changeset error mid-transaction).
 5. **Well-formedness check on every entry** — §9.3. First failure aborts; nothing is written.
+PROVENANCE (historical, not current decision authority):
 6. Insert via `Letflow.Engine.VariableSchema.changeset/2` (`variable_schema.ex:164`) —
    **reusing REQ-109's changeset, not inventing a second one**, exactly as its `@doc`
    (`variable_schema.ex:145-162`) anticipates — with
@@ -1487,6 +1533,7 @@ closed** — do not reopen it; reference it in the closing note instead.
 
 ### 10.1 Contract
 
+PROVENANCE (historical, not current decision authority):
 | Item | Value |
 |---|---|
 | R-Co source | `src/api/routes/pin_rebind.zig:45-163`; documented contract at L24-44; registration `main.zig:847-849` |
@@ -1516,6 +1563,7 @@ with (`pin_rebind.ex:99-136`)
 @type rebind_result :: %{instance_id: Ecto.UUID.t(), changed: [changed_entry()], rebound_at: DateTime.t()}
 ```
 
+PROVENANCE (historical, not current decision authority):
 `entry_kind()` is `Letflow.Engine.PinResolver.kind()` = `:catalog_entry | :variable_schema | :module`
 (`pin_resolver.ex:179`) — the same three strings R-Co's `parsePinKind` accepts
 (`pin_rebind.zig:165-170`). The route passes `kind` through as the **raw string**;
@@ -1524,6 +1572,7 @@ with (`pin_rebind.ex:99-136`)
 
 ### 10.2 The `idempotency_key` gap
 
+PROVENANCE (historical, not current decision authority):
 `rebind_attrs()` **requires** `:idempotency_key`. R-Co's request body has none
 (`pin_rebind.zig:26-30`). So the route must source one. No other Letflow router reads an
 idempotency header — `grep -rn "Idempotency-Key\|idempotency_key" lib/letflow/api/ lib/letflow/routers/`
@@ -1546,6 +1595,7 @@ Request schema (`Letflow.Api.Validation.validate/2`):
 Per-element shape (`kind`/`ref`/`version` all present, all strings; `kind` one of the three) is
 checked in the route after `validate/2`, mapping any failure to R-Co's `422 INVALID_INPUT`.
 
+PROVENANCE (historical, not current decision authority):
 | Condition | Status | Helper | R-Co code (`pin_rebind.zig:35-43`) |
 |---|---|---|---|
 | body not a JSON object | 400 | `Response.bad_request(conn, "request body must be a JSON object")` | `400 MALFORMED_JSON` |
@@ -1567,6 +1617,7 @@ No 503 (§6.6).
 
 ### 10.4 Response shape
 
+PROVENANCE (historical, not current decision authority):
 Porting `pin_rebind.zig:33` plus one Letflow addition:
 
 ```
@@ -1587,6 +1638,7 @@ Porting `pin_rebind.zig:33` plus one Letflow addition:
 
 ### 10.5 Moduledoc obligations — `Letflow.Routers.Instances`
 
+PROVENANCE (historical, not current decision authority):
 Route table row; the idempotency-key convention (§10.2, OQ-6); the note that this route must
 precede any future `post "/:id"` (`main.zig:848`); the INV-5 404 rule; the REQ-131 gap; an
 "Ordering guarantee" section; and a note that REQ-079/080 co-own this file.
@@ -1606,11 +1658,13 @@ So "expose whatever counters exist today" has the literal answer **none**. The h
 available are `COUNT(*)`-style aggregates over tables that already exist inside a tenant schema.
 Producing them requires **three new context functions** (§11.4) — not a metrics subsystem.
 
+PROVENANCE (historical, not current decision authority):
 ### 11.2 The three divergences from `metrics.zig`, all deliberate
 
 Required as a moduledoc section headed **"Divergences from R-Co's `metrics.zig` — all three are
 deliberate"**, immediately followed by the AC7 statement (§11.5):
 
+PROVENANCE (historical, not current decision authority):
 | Dimension | R-Co (`metrics.zig`) | Letflow | Why |
 |---|---|---|---|
 | **Auth** | unauthenticated — `metrics.zig:20` says so verbatim; mounted top-level at `main.zig:457` | **authenticated** — `/api/v1/metrics`, behind `Letflow.Plugs.AuthPipeline` | Every Letflow figure comes from a tenant schema; reaching one requires `scoped_repo_opts/1`, which requires `conn.assigns[:auth_context]`. An unauthenticated endpoint could only be empty or cross-tenant. |
@@ -1622,6 +1676,7 @@ deliberate"**, immediately followed by the AC7 statement (§11.5):
 
 ### 11.3 The tenant-exposure rule (AC5) — required verbatim in the moduledoc
 
+PROVENANCE (historical, not current decision authority):
 > **Tenant-exposure rule: PER-TENANT-SCOPED.**
 >
 > Every counter this endpoint returns is computed **within the calling tenant's own schema**,
@@ -1731,6 +1786,7 @@ No 503 (§6.6).
 **AC7 statement, required verbatim-in-substance, placed immediately after the divergence
 table (§11.2):**
 
+PROVENANCE (historical, not current decision authority):
 > **No metrics subsystem is built here.** This endpoint computes a handful of `COUNT(*)`
 > aggregates over tables that already exist in the caller's tenant schema. It builds no
 > registry, no collector, no gauge, no histogram, no scrape target and no in-memory counter
@@ -1750,6 +1806,7 @@ Plus: the three-divergence table (§11.2), the tenant-exposure rule verbatim (§
 
 ### 12.1 Contract
 
+PROVENANCE (historical, not current decision authority):
 | Item | Value |
 |---|---|
 | R-Co source | `src/api/routes/tenant_config.zig:52-123` (`handleTenantConfig`); header L1-7; registration `main.zig:462-464` |
@@ -1758,6 +1815,7 @@ Plus: the three-divergence table (§11.2), the tenant-exposure rule verbatim (§
 | Auth | **none** — outside `ApiPipeline` entirely, like `GET /health` |
 | Delegate | `Letflow.Identity.get_tenant_by_slug/1` (`identity.ex:627`) — **the only delegate; no new context function** (§12.3) |
 
+PROVENANCE (historical, not current decision authority):
 Precedence, porting `tenant_config.zig:65-102`:
 
 1. If `?realm=<slug>` is present, resolve the tenant by slug; if it resolves and has a non-nil
@@ -1766,6 +1824,7 @@ Precedence, porting `tenant_config.zig:65-102`:
    through to the default realm**, which is R-Co's own answer for an unbound hostname.
 3. Else, or on any miss, or on **any** error: fall through to the default realm.
 
+PROVENANCE (historical, not current decision authority):
 Response, always **200**, always this exact two-key shape (`tenant_config.zig:26-29`,
 `web/src/auth/tenantConfig.ts:10-13`):
 
@@ -1773,6 +1832,7 @@ Response, always **200**, always this exact two-key shape (`tenant_config.zig:26
 %{"oidc_authority" => "<idp_base>/realms/<realm_id>", "client_id" => "<client_id>"}
 ```
 
+PROVENANCE (historical, not current decision authority):
 `idp_base` from `System.get_env("BPM_IDP_BASE_URL")`, falling back to
 `System.get_env("KEYCLOAK_BASE_URL")`, falling back to `"http://localhost:8081"`;
 `client_id` from `System.get_env("OIDC_CLIENT_ID")` falling back to `"bpm-platform-api"`;
@@ -1784,6 +1844,7 @@ resolution style follows INV-4 regardless.
 
 ### 12.2 The never-error rule is load-bearing (INV-5), not an R-Co quirk
 
+PROVENANCE (historical, not current decision authority):
 `tenant_config.zig:50-51` states it outright: *"Never returns an error to the caller — DB
 failures fall through to the default tenant config so the frontend login page always renders."*
 
@@ -1803,6 +1864,7 @@ non-default realm id — that is unavoidable, since telling the browser which re
 the endpoint's entire purpose, and it is the same information any user of that tenant sees on
 their own login page. The disclosure boundary must be stated in the moduledoc:
 
+PROVENANCE (historical, not current decision authority):
 > **What this endpoint discloses, and what it must never disclose.** It returns exactly two
 > values: an OIDC authority URL (which embeds a realm id) and a public client id. Both are
 > values the browser must learn *before* authenticating, and both are visible to any user of
@@ -1813,6 +1875,7 @@ their own login page. The disclosure boundary must be stated in the moduledoc:
 
 ### 12.3 The `?host=` branch — NO new table, NO migration, deferred with a named owner
 
+PROVENANCE (historical, not current decision authority):
 R-Co resolves `?host=` by joining `tenant_hostnames` → `tenant`
 (`tenant_config.zig:167-207`, its own helper comment: *"Query tenant_hostnames -> tenant to
 resolve idp_realm_id for a given hostname"*). **Letflow has no host→tenant binding of any
@@ -1835,11 +1898,13 @@ Three options were weighed:
 
 **Served behaviour:**
 
+PROVENANCE (historical, not current decision authority):
 1. `?realm=<slug>` — fully supported, via `Letflow.Identity.get_tenant_by_slug/1`
    (`identity.ex:627`), reading `tenant.idp_realm_id`. This is a faithful port of
    `tenant_config.zig:65-80`'s step 1, which does exactly the same slug lookup
    (`resolveTenantBySlug`, `tenant_config.zig:127-163`, `SELECT idp_realm_id FROM public.tenant
    WHERE slug = $1`). Nothing about this branch diverges from R-Co.
+PROVENANCE (historical, not current decision authority):
 2. `?host=<hostname>` — **accepted and, today, always falls through to the default realm.**
    Not an error, not a 404, not a 400: the parameter is honoured syntactically and produces the
    default config, which is byte-identical to what R-Co produces for an unbound hostname
@@ -1866,6 +1931,7 @@ requirement.**
 
 ### 12.4 Error map
 
+PROVENANCE (historical, not current decision authority):
 There is none by design: every path returns **200** with either the resolved config or the
 default config. Any `{:error, _}` from either lookup is caught, logged at `:warning` naming the
 slug/hostname (both caller-supplied, so safe to log) and **never** the exception, and falls
@@ -1894,18 +1960,22 @@ document). Recorded as **OQ-9**.
 
 ---
 
+PROVENANCE (historical, not current decision authority):
 ## 13. `sandbox_access.zig` — deliberately NOT ported (Decision 3)
 
+PROVENANCE (historical, not current decision authority):
 Stated in this design, and to be restated in `Letflow.Routers.SolutionPacks`'s moduledoc (the
 nearest module in this requirement) or in `stage-4-api-surface.md`'s group-(b) table, which
 already carries the row (`stage-4-api-surface.md:115`):
 
+PROVENANCE (historical, not current decision authority):
 `src/api/routes/sandbox_access.zig` (181 lines) is **not** ported by this requirement, for
 three independent reasons, any one of which would be sufficient:
 
 1. **It exports no `handle*` entry point.** Its three public functions are
    `checkPrincipalBound` (L41), `checkProbeRate` (L82) and `writeSentinelAudit` (L152) — guards
    a route calls, not a route. There is no HTTP surface here to port.
+PROVENANCE (historical, not current decision authority):
 2. **Its only consumer is post-S6.** `grep -rln sandbox_access src/` returns exactly one file,
    `routes/agent_sandboxes.zig`, which its own header names as the module it was extracted
    from. `agent_sandboxes.zig` is the runtime-agent subsystem, owning stage **post-S6**
@@ -1915,6 +1985,7 @@ three independent reasons, any one of which would be sufficient:
    which needs the per-tenant counter storage REQ-068's SCOPE BOUNDARY paragraph explicitly
    defers. Porting it here would smuggle in the exact mechanism this batch defers elsewhere.
 
+PROVENANCE (historical, not current decision authority):
 It moves with `agent_sandboxes.zig` to post-S6.
 
 ---
@@ -1930,12 +2001,14 @@ But `docs/issues/ISS-0088.yaml` is `status: resolved`, and
 `is_map(subschema)` guard with a comment naming "ISS-0088 / GH#305 fix". **Only GH#306
 (ISS-0089) remains open and is closed by this design (§9.4).** GH#305 must not be reopened.
 
+PROVENANCE (historical, not current decision authority):
 **C-2 — solution packs are not "a thin surface over existing context functions".** REQ-078's
 description asserts that all six modules are. For solution packs it is false: R-Co delegates to
 `src/solution/store.zig` (~700 lines), of which Letflow has ported **nothing**. See §8.1 and
 **OQ-1 — RULED: build it here, do not split** (§20). Nothing blocks Step 2a.
 **DOC-UPDATER: amend REQ-078's description sentence to except solution packs.**
 
+PROVENANCE (historical, not current decision authority):
 **C-3 — four of REQ-070's reserved mount points do not match R-Co's URLs.**
 `lib/letflow/design/req070-router-decomposition.md:133-136` reserves `/validation`,
 `/tenant-config`, `/audit` and `/metrics`. Checked against `src/main.zig`: only `/audit`
@@ -1970,6 +2043,7 @@ OQ-8) — it belongs to REQ-076, not to a route port.
 
 ### Changed
 
+PROVENANCE (historical, not current decision authority):
 | Path | Change |
 |---|---|
 | `lib/letflow/routers/audit.ex` | `GET /` handler, `with_authorization/4`, cursor helpers, full moduledoc (§6) |
@@ -2065,6 +2139,7 @@ MUST NOT add a second insert path.
 
 ## 18. Traceability — every acceptance criterion to a concrete element
 
+PROVENANCE (historical, not current decision authority):
 | # | Acceptance criterion (abbreviated) | Design element(s) | Test that discharges it |
 |---|---|---|---|
 | **AC1** | each of the six modules has ≥1 end-to-end test through the real router asserting status and response shape | §6 (`GET /api/v1/audit`), §7 (`POST /api/v1/definitions/:id/validate`), §12 (`GET /api/tenant-config`), §8 (`POST /api/v1/solution-packs/export` and `/install`), §10 (`POST /api/v1/instances/:id/rebind-pins`), §11 (`GET /api/v1/metrics`) — response shapes at §6.2, §7.3, §12.1, §8.3, §10.4, §11.5 | **T-01..T-07**: one `Plug.Test.conn/3` request per endpoint through `Letflow.Router` (**not** the sub-router directly — the tenant-config test in particular must go through `Letflow.Router` to prove it is reachable without a token), asserting status and the exact top-level key set |
@@ -2194,6 +2269,7 @@ copy** of the `tenants.ex:181-194` / `identity.ex:187-213` helper, not an extrac
 *First ruling (superseded):* "accepted, keep the collapse … 422", justified as "consistency with
 every existing `decode_cursor/4` call site beats R-Co fidelity".
 
+PROVENANCE (historical, not current decision authority):
 *Why it was withdrawn:* the stated rationale was false about the codebase it invoked. **Every
 existing call site returns 400, not 422** — `tenants.ex:276`, `identity.ex:295`,
 `identity.ex:550`, all `Response.bad_request(conn, "invalid cursor")` (re-verified this round).
@@ -2208,6 +2284,7 @@ achieves the thing the first ruling actually cared about — `/audit` does not b
 Letflow endpoint emitting **410** for an expired cursor, because expiry remains inside the
 `parse_cursor_param/1` collapse and surfaces as the same single error.
 
+PROVENANCE (historical, not current decision authority):
 *Consequence:* **two** divergences from `audit.zig` are now recorded, not one — 422→400 for
 `InvalidCursor` **and** 410→400 for `CursorExpired`. Design updated at §6.4 (which also no
 longer misattributes the *status* to `tenants.ex:280-290`; that range is the **collapse**, the
@@ -2236,6 +2313,7 @@ at top-level `/metrics`; this design serves JSON at `/api/v1/metrics`.
 follow-up. **Out of scope for REQ-078** (which is backend-only), but it is a real, known
 breakage and must not be discovered in UAT. ORCH should queue the follow-up.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-8 — the `?host=` branch has no Letflow binding — RULED: take the smaller option. NO table,
 NO Ecto schema, NO migration, NO new context function.** Serve `?realm=<slug>` only, via the
 existing `Letflow.Identity.get_tenant_by_slug/1` (`identity.ex:627`); `?host=` parses and always
@@ -2276,6 +2354,7 @@ reading it. Each is also folded inline at its own OQ (§19) and at the design se
 **These rulings are the operative instruction; where §0–§18 was written before a ruling, the
 ruling wins and the affected section has been updated to match.**
 
+PROVENANCE (historical, not current decision authority):
 | ID | Ruling | Where the design was updated |
 |---|---|---|
 | **OQ-1** | **(a) — accept the added scope; DO NOT split.** Splitting would strand AC3/AC8, and AC8 exists because an earlier requirement dropped the `variable_schemas` insert path and shipped the table empty (ISS-0063/GH#212) — splitting to tidy the port would re-create that exact failure mode. The two mitigating facts carry it: Letflow supports 2 of R-Co's 4 pack arrays, and both handlers compose functions that already exist plus the registration function §9 builds anyway. Amending the requirement text would need a separate WF-01 pass and would block queue task 145 indefinitely. **Condition: solution packs (§8) + the registration function (§9) are committed as their own commit, BEFORE the five thin routes** (§0.4). | §0 header, §0.3 heading, §0.4 |
@@ -2298,6 +2377,7 @@ ruling wins and the affected section has been updated to match.**
 First gate verdict: **FAIL**, six blocking findings. All six fixed; nothing the validator
 passed was restructured.
 
+PROVENANCE (historical, not current decision authority):
 | # | Finding | Fix | Sections |
 |---|---|---|---|
 | **F1** | §18 T-19 mandated a test asserting no route file contains the substrings `VariableSchema`/`variable_schemas` — but §8.6 item 4 mandates a moduledoc sentence containing both. The mandated test failed on the mandated moduledoc. | Restated as an **insert-path** rule, which is what AC8 actually asks. T-19 is now three mechanical checks (no `Repo.` call in the route layer; no changeset/insert call shapes there; exactly one insert against the schema in all of `lib/`), with comments and moduledoc prose **explicitly exempt**. | §18.1 (new), INV-VS-1 |
@@ -2334,11 +2414,13 @@ replaced with a contract sentence plus the R-Co narrowing note; §0.1's stale
 
 ### 20.0b Round-2 gate — the six findings and their fixes
 
+PROVENANCE (historical, not current decision authority):
 Second gate verdict: **FAIL**, six findings. Round-2 gate confirmed 5 of the 6 round-1 fixes
 genuinely landed, confirmed the three declines above were right to decline, and confirmed all
 eight ACs covered, no implementation code, `sandbox_access.zig` correctly excluded, and
 INV-1/INV-5 structurally discharged. The six below are fixed.
 
+PROVENANCE (historical, not current decision authority):
 | # | Finding | Fix | Sections |
 |---|---|---|---|
 | **R2-1** | **The round-1 remediation claim was broader than the work.** §0.5 said "every citation in this table has since been re-derived" — true of the Letflow table, **false of the R-Co table**, which still held a past-EOF citation of the same F6 kind (`tenant_config.zig:235` in a 207-line file). | **All ten R-Co rows re-derived with per-file `grep -n`**, single anchors throughout; inline cites fixed in §8.5, §11.5, §12.1, §12.2, §12.3; `L235` replaced with **59/60/62**. §0.5's claim rewritten to state what was actually done, on both tables, and to say plainly that over-claiming a remediation is worse than the original defect. | §0.5, §6.1, §8.5, §11.5, §12.1–12.3 |
@@ -2367,6 +2449,7 @@ likewise unchanged.
 
 ### 20.2 Sub-router files co-owned with pending requirements — for the queue
 
+PROVENANCE (historical, not current decision authority):
 | File | Gains from REQ-078 | Reserved for | Action |
 |---|---|---|---|
 | `lib/letflow/routers/definitions.ex` | **exactly one** route, `post "/:id/validate"` (§2.3, §7) | REQ-081 / REQ-082 (both `pending`) | **Sequence REQ-081/082 after REQ-078, or rebase them.** |

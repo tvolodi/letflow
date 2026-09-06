@@ -10,6 +10,7 @@ tenant to `:prefix`-scope by, because these handlers decide which tenants exist 
 the first place. The only protection is a role check. Get the role check wrong and
 the blast radius is every tenant on the platform, not one.
 
+PROVENANCE (historical, not current decision authority):
 Ports `src/api/routes/identity.zig`'s `handleCreateTenant` (L222),
 `handleListTenants` (L674), `handleGetTenant` (L695), `handlePatchTenant` (L713),
 `handleDeactivateTenant` (L822), `handleReactivateTenant` (L851).
@@ -86,6 +87,7 @@ def endpoint_policy_key("POST", "/tenants/:slug/reactivate"), do: :TenantsManage
 
 ### 1.2 R-Co's own route table hardcodes the actor role — this is NOT ported (flagged, not silently fixed)
 
+PROVENANCE (historical, not current decision authority):
 Checked `src/main.zig`'s live route table (per REQ-073/074's own precedent of
 verifying against the route table, not just the handler file), specifically the
 `resource == "tenants"` branch (`main.zig:1489-1533`) and the sibling
@@ -102,6 +104,7 @@ const actor = api_auth.AuthContext{
 };
 ```
 
+PROVENANCE (historical, not current decision authority):
 `user_id` itself is read from an unauthenticated `X-Bpm-User-Id` request header
 (`main.zig:302`), defaulting to the all-zero UUID if absent. So in R-Co's actual
 shipped route table, every one of `identity_service.getTenantAdmin`'s/
@@ -112,6 +115,7 @@ who the real caller is. This is very likely a legacy/scaffolding gap in R-Co
 (predating its own OIDC/Keycloak layer), not a pattern with any security intent
 behind it.
 
+PROVENANCE (historical, not current decision authority):
 **This is not ported.** Letflow's real gate must derive the caller's actual role
 from `conn.assigns[:auth_context][:roles]` (populated by `Letflow.Plugs.AuthPipeline`
 from the verified bearer token's claims, per REQ-069/REQ-021), on every request, and
@@ -161,6 +165,7 @@ this test immediately.
 
 ## 2. Route wiring — new module `lib/letflow/routers/tenants.ex`
 
+PROVENANCE (historical, not current decision authority):
 **Not added to `Letflow.Routers.Identity`.** R-Co's own route table treats `tenants`
 as a top-level resource (`resource == "tenants"`, `main.zig:1489`), a sibling of
 `users`/`groups`/`identity`, not nested under it — and semantically these six
@@ -232,6 +237,7 @@ minimum, these elements as literal text (not paraphrased):
    REQ-076's is the self-service signup path. Both must call the same
    `Letflow.TenantProvisioning` functions; neither reimplements schema creation or
    migration replay itself.*
+PROVENANCE (historical, not current decision authority):
 5. **AC5's deactivation-status statement**, stated explicitly (§4 below has the full
    analysis): *a tenant with `status: :inactive` rejects a subsequent authenticated
    request from that tenant's own (non-PLATFORM_ADMIN) caller with
@@ -246,6 +252,7 @@ minimum, these elements as literal text (not paraphrased):
 
 ## 3. AC3 — own-tenant access rule (determined from R-Co source, not assumed)
 
+PROVENANCE (historical, not current decision authority):
 **Read directly, in full:** `src/identity/service.zig` — `getTenantAdmin` (L505-520),
 `patchTenant` (L523-568), `createTenant` (L445-469), `listTenantsAdmin` (L490-503),
 and `applyTenantLifecycleAction` (L110-130, backing both deactivate and reactivate).
@@ -309,6 +316,7 @@ role only, never whether target == caller's own tenant.
 
 Two source locations settle this:
 
+PROVENANCE (historical, not current decision authority):
 * `src/identity/service.zig:133-151`, `enforceTenantActiveForOperation/3`:
   ```zig
   pub fn enforceTenantActiveForOperation(...) UpdateTenantStatusError!void {
@@ -317,6 +325,7 @@ Two source locations settle this:
       if (tenant.status == .INACTIVE) return error.TenantInactive;
   }
   ```
+PROVENANCE (historical, not current decision authority):
 * `src/api/middleware/auth.zig:1663-1674`, inside `authenticate/3` itself (i.e. run
   on **every** authenticated request, not gated to write methods):
   ```zig
@@ -343,6 +352,7 @@ deactivated can still act).
 - only runs for `@write_methods` (`POST/PUT/PATCH/DELETE`) — `call/2`'s first clause
   guard, `lib/letflow/plugs/tenant_status.ex:44`;
 - responds **503** with `Retry-After`, not 403;
+PROVENANCE (historical, not current decision authority):
 - has no PLATFORM_ADMIN exemption (R-Co's `:migrating` write-pause and its
   `:inactive` rule are two different mechanisms in R-Co too — `tenant_status.zig`'s
   write-pause has no PLATFORM_ADMIN carve-out either, so this asymmetry is not new).
@@ -539,6 +549,7 @@ route, and it's a 403-before-lookup case, not a 404-after-lookup case.)
    ```
    `{:errors, field_errors}` → `send_problem(conn, Validation.problem(field_errors))`.
 
+   PROVENANCE (historical, not current decision authority):
    **`slug` and `idp_realm_id` are deliberately absent from this schema** — mirrors
    R-Co's own explicit immutability rejection (`handlePatchTenant`'s `422
    immutable_field_update` for both fields, `identity.zig:713-810`). Letflow's
@@ -572,6 +583,7 @@ route, and it's a 403-before-lookup case, not a 404-after-lookup case.)
    - `{:error, :not_found}` → `not_found` (defensive race-window case, matching
      REQ-073's own precedent for the identical shape)
 
+PROVENANCE (historical, not current decision authority):
 **Not ported**: R-Co's `handlePatchTenant` also accepts `hostname`/`redirect_uris`
 and syncs them to Keycloak via a `provider_manager_mod.Manager` (`identity.zig:770-793`).
 Letflow has no equivalent Keycloak realm-management client module yet (Decision
@@ -769,6 +781,7 @@ precedent exactly:
 }
 ```
 
+PROVENANCE (historical, not current decision authority):
 **6 keys.** `Letflow.Identity.Tenant`'s full field list is `id`, `slug`,
 `display_name`, `status`, `idp_realm_id`, plus `inserted_at`/`updated_at`. **`idp_realm_id`
 is deliberately excluded** — it is an OIDC/Keycloak realm identifier, not secret
@@ -805,6 +818,7 @@ included.
 - **OQ-6** — whether `tenant_map/1` should include `idp_realm_id` (§8), not
   confirmed against R-Co's `serializeTenant` (out of this requirement's named
   source-file scope).
+PROVENANCE (historical, not current decision authority):
 - **OQ-7 (§4.2, the largest open question in this design)** — the exact shape of
   `Letflow.Plugs.TenantStatus`'s new `:inactive` check: this design recommends
   all-methods (not write-only), 403 (not 503), PLATFORM_ADMIN-exempt, matching

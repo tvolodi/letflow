@@ -1,5 +1,6 @@
 # REQ-073 — Identity routes 1/4: user CRUD and status
 
+PROVENANCE (historical, not current decision authority):
 Design for mounting five real handlers into `lib/letflow/routers/identity.ex`
 (currently a REQ-070 stub), porting `src/api/routes/identity.zig`'s
 `handleCreateUser` (L21), `handleListUsers` (L101), `handleGetUser` (L130),
@@ -25,6 +26,7 @@ correct, no change needed).
 
 ## 1. Route wiring — `lib/letflow/routers/identity.ex`
 
+PROVENANCE (historical, not current decision authority):
 R-Co's route table (checked in `src/api/routes.zig`'s registration, not just the
 handler file) binds these five handlers as:
 
@@ -132,6 +134,7 @@ fires for `:TasksList`.)
    ]
    ```
    `{:errors, field_errors}` → `Letflow.Api.Response.send_problem(conn, Letflow.Api.Validation.problem(field_errors))`.
+   PROVENANCE (historical, not current decision authority):
    No email-shape constraint beyond non-empty string — `validation.zig`'s
    `FieldConstraint` has no email-format checker and neither does
    `Letflow.Api.Validation`; email format is not checked at this layer (matches
@@ -476,6 +479,7 @@ module's existing style:
    `auth_source: :internal`, and — **open question** — what `password_hash` value
    an internally-created user gets, since this handler group has no password-setting
    endpoint of its own; R-Co's `identity_service.createUser` presumably has an
+   PROVENANCE (historical, not current decision authority):
    answer this design doesn't have visibility into without reading `identity/service.zig`,
    out of this requirement's named source-file scope. **OQ-3**: ELIXIR-DEV must pick
    a placeholder value (matching `jit_changeset/2`'s own `"__OIDC_ONLY__"` sentinel
@@ -535,6 +539,7 @@ Additionally, one gap outside `Letflow.Identity` itself:
 
 ## Open questions (not silently resolved)
 
+PROVENANCE (historical, not current decision authority):
 - **OQ-1** — cursor tiebreak field for `list_users/2`: this design uses `id` as the
   tiebreaker for two rows sharing an `inserted_at` value (§2.2). R-Co's own
   `pagination.zig` cursor-building helpers assume a distinct
@@ -551,6 +556,7 @@ Additionally, one gap outside `Letflow.Identity` itself:
   found.
 - **OQ-3** — placeholder `password_hash` value for an internally-created user
   (§7 gap 1).
+PROVENANCE (historical, not current decision authority):
 - **OQ-4** — exact field scope of the `search` query param for `list_users/2`
   (§7 gap 2) — this design's three-field (`username`/`display_name`/`email`) choice
   is not checked against R-Co's `identity_service.listUsers` implementation, which

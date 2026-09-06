@@ -26,6 +26,7 @@ No implementation code below — signatures, data shapes, and test specs only.
   `lib/letflow/routers/onboarding.ex` (REQ-070 stub), `lib/letflow/routers/tenant_config.ex`,
   `lib/letflow/router.ex`, `lib/letflow/plugs/api_pipeline.ex`,
   `lib/letflow/plugs/auth_pipeline.ex`, `lib/letflow/tenant_provisioning.ex`.
+PROVENANCE (historical, not current decision authority):
 - **REWORK (attempt 2) additions**: `lib/letflow/plugs/auth_pipeline.ex` (full, re-read
   for §3.5's wiring), `lib/letflow/plugs/api_pipeline.ex` (full, confirms
   `Letflow.Plugs.AuthPipeline` has no per-path bypass), `docs/agents/instructions/security-invariants.md`
@@ -65,6 +66,7 @@ No implementation code below — signatures, data shapes, and test specs only.
   (confirms `users`/`api_tokens` are schema-per-tenant, load-bearing for §12.2's argument);
   `req022-tenant-schema-provisioning.md` §3.2 (the "No implicit chaining invariant," read
   again in full for its literal wording, since AC9's own text quotes it).
+PROVENANCE (historical, not current decision authority):
 - **R-Co source, read directly** (not assumed): `src/api/routes/identity.zig`
   `handleCreateToken` (L570-632), `handleListTokens` (L634-649), `handleRevokeToken`
   (L651-666), `handleListRoles` (L1169-1199), `handleUpsertRole` (L1201-1246),
@@ -235,15 +237,18 @@ always derived from `Letflow.Api.Context.scoped_repo_opts/1`, never from request
    read it out of this tuple and place it directly into the 201 response body, never
    re-deriving or re-storing it.
 
+PROVENANCE (historical, not current decision authority):
 **Roles are snapshotted, not live-referenced** — matches R-Co's own documented behavior
 (`service.zig:1210-1212`'s comment: "roles are SNAPSHOTTED at call time... subsequent
 changes... do NOT affect this token's effective roles"). Ported as-is; no live
 role-lookup join exists on this table by design.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's `isIssuableTokenRole` allows exactly the same five roles this design's step 2
 checks against** (`.PLATFORM_ADMIN, .PROCESS_DESIGNER, .PROCESS_OPERATOR, .TASK_WORKER,
 .AGENT_RUNNER => true, else => false`) — confirmed by direct read (`service.zig:1566-1571`).
 
+PROVENANCE (historical, not current decision authority):
 **Deliberate non-port, flagged (not silent): R-Co's `VIEWER`-default-when-empty is NOT
 ported.** `service.zig:1224`'s own comment says empty `input.roles` defaults to
 `&.{auth.Role.VIEWER}` — but `VIEWER` is not a member of R-Co's own `isIssuableTokenRole`
@@ -263,6 +268,7 @@ than defaulting to anything.
 @spec list_tokens(opts :: opts()) :: {:ok, [ApiToken.t()]}
 ```
 
+PROVENANCE (historical, not current decision authority):
 `Repo.all(from(t in ApiToken, order_by: [desc: t.inserted_at]), prefix: prefix)` — matches
 R-Co's own `ORDER BY created_at DESC` (`service.zig:1343`). Unpaginated, matching R-Co's
 own `TokenListPage` (a flat `items` array, no cursor) — no acceptance criterion here asks
@@ -314,6 +320,7 @@ revocation timestamp with a later one); otherwise `Repo.update/2` setting
    fail the whole verification; wrap narrowly, log, and continue to step 7 regardless).
 7. `{:ok, %{user_id: token.user_id, roles: token.roles}}`.
 
+PROVENANCE (historical, not current decision authority):
 **REWORK (attempt 2): scope decision reversed — `Letflow.Plugs.AuthPipeline` wiring for
 API tokens IS in this requirement's scope; see §3.5.** Attempt 1 deferred this to a
 future requirement on the grounds that `src/api/middleware/auth.zig` is not one of
@@ -327,6 +334,7 @@ primitive; §3.5 is the minimal wiring that makes it reachable from a real reque
 
 ### 3.5 `Letflow.Plugs.AuthPipeline` wiring for API tokens (AC4, resolves OQ-1's narrow case)
 
+PROVENANCE (historical, not current decision authority):
 **Scope discipline, stated up front:** this section changes `Letflow.Plugs.AuthPipeline`
 (shipped under REQ-021/071, not a REQ-076 source file in the `identity.zig`/`onboarding.zig`
 sense) by exactly one new branch, added alongside the existing OIDC bearer-token branch,
@@ -443,6 +451,7 @@ itself does not care how its `prefix:` opt was derived).
 
 ## 4. `Letflow.Api.Authorization` additions (small, additive — matches REQ-073 gap-6/REQ-075's own precedent of touching this already-shipped module)
 
+PROVENANCE (historical, not current decision authority):
 1. **No change needed for tokens.** `:TokensManage` (permission), `:TokensManage`
    (endpoint policy key), and the `"/tokens" <> _rest` clause already exist and already
    resolve correctly: `role_allows?(:PLATFORM_ADMIN, _)` is the only clause granting
@@ -452,6 +461,7 @@ itself does not care how its `prefix:` opt was derived).
    error.Forbidden;` (confirmed, `service.zig:1221`/`:1319`/`:1397`) — PLATFORM_ADMIN
    only, no other role. **Zero code change to this module for the token routes.**
 
+PROVENANCE (historical, not current decision authority):
 2. **New permission + endpoint policy key for roles, required.** R-Co's
    `handleListRoles`/`handleUpsertRole` allow **PROCESS_DESIGNER OR PLATFORM_ADMIN**
    (confirmed, `identity.zig:1174`/`:1209`: `if (actor.role != .PROCESS_DESIGNER and
@@ -490,9 +500,11 @@ only adds the HTTP handler layer (request validation + response shaping) on top 
 
 ### 5.1 The AC6 constraint question, settled by direct read (not assumed)
 
+PROVENANCE (historical, not current decision authority):
 **Requirement text asks: "confirm whether R-Co's upsert can define a role outside
 authorization.zig's five-value Role enum, and port the actual constraint."**
 
+PROVENANCE (historical, not current decision authority):
 Read `src/identity/role_registry.zig` in full. `upsertRole/3`'s only two validations
 (L121-122) are `isValidRoleName(name)` and `isValidUuidHex(group_id)`. `isValidRoleName`
 (L224-237) checks: non-empty, ≤128 Unicode codepoints, no ASCII control characters
@@ -517,6 +529,7 @@ index) is REQ-020's own pre-existing constraint, unrelated to this question.
 
 ### 5.2 Flagged, not silently accepted: `RoleRegistry` is not tenant-scoped today
 
+PROVENANCE (historical, not current decision authority):
 `RoleRegistry.list_roles/0` and `upsert_role/2` take **no** `opts`/`:prefix` parameter —
 `tenant_role` still lives in the global default schema, predating REQ-063/064's
 per-tenant-schema cutover of `users`/`groups`/`tenant_role`'s siblings. **This design does
@@ -962,6 +975,7 @@ table ("a table with no writer is a partial backing subsystem shipped with no pr
 — the REQ-056 failure mode"). The same reasoning applies to a public route with no
 caller: don't build it.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co's own source confirms Reading B is not a misreading of a "pre-authentication"
 requirement — R-Co's actual code is PLATFORM_ADMIN-gated.** `onboarding.zig:379-409`
 (§0, re-read in full this pass): `handleGetOnboardingByHostname`'s **first** line is

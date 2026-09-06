@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ255-20260906-step-02",
+  "run_id": "WF02-REQ255-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ255-20260906/step-02-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T04:41:34Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-255"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ255-20260906-step-00"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-255, REQ-051..REQ-078 range)", "lib/letflow/design/req237-zig-provenance-marking-convention.md"],
+    "branch_name": "feature/WF02-REQ255-20260906",
+    "base_commit": "e3cfb4b0"
+  },
+  "task": {
+    "description": "Applied REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, including the ISS-0510 YAML comment-line/sequence-item amendment) to docs/requirements.yaml, restricted to the REQ-051 through REQ-078 entry range (lines 2757 up to but not including REQ-079). Inserted the fixed marker line 'PROVENANCE (historical, not current decision authority):' immediately above every citation unit containing a .zig source-path reference, following the exact precedent already established by REQ-256's application to the REQ-079..REQ-188 range: a '# '-prefixed YAML comment above any title: line citing a .zig path; a plain (unprefixed) marker line as the first line of any description: > folded-scalar body containing a .zig citation anywhere in its text, since the whole folded body is one paragraph-shaped citation unit under YAML folding semantics; a '# '-prefixed YAML comment above any individual acceptance_criteria bullet citing a .zig path; and one marker above the standalone commented-out S4 section-header block (the '# --- / # S4 -- api-surface / ...' block), per the design's commented-out-section-header-block sub-case, rather than one marker per header line. No citation text was altered, added, or removed. Did not touch CLAUDE.md, README.md, docs/migration/README.md, or any docs/requirements.yaml entry outside REQ-051..REQ-078."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Line-range boundaries used: REQ-051 starts at line 2757; REQ-079 starts at line 4574 before edits (line 4631 after edits, since 58 marker lines were inserted ahead of it) -- edits applied strictly to [2757, 4573] before REQ-079's original start. Before-state: `grep -n '.zig' docs/requirements.yaml` restricted to that range found 142 matching lines and zero pre-existing 'PROVENANCE (historical' markers (confirmed via `grep -c 'PROVENANCE (historical' ` on the same range = 0). After-state: the same range still has exactly 142 '.zig' matching lines (unchanged -- no citation line added/removed/altered) and now has 58 PROVENANCE markers (whole-file total went from 187 to 245, a delta of 58, matching exactly). Sample diff (git diff docs/requirements.yaml): checked REQ-051 through REQ-057 (7 distinct entries, well over the required 3) plus REQ-066/REQ-067/REQ-078 (acceptance_criteria-bullet cases) -- in every case the diff shows only a new marker line added (as a '+' line), with every pre-existing line, including the full R-Co path text, reproduced byte-identical with no '-' lines at all (`git diff --stat` confirms '1 file changed, 58 insertions(+)', zero deletions). Divergence-note check: `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/requirements.yaml` restricted to the REQ-051..REQ-078 line range returned the same single line, byte-identical text, both before and after this change (the REQ-066 acceptance-criteria line ending '...diverges from R-Co's'); whole-file count for that pattern is unchanged at 52 before and after. Scope check: `git diff --stat` shows only docs/requirements.yaml modified (58 insertions, 0 deletions) -- CLAUDE.md, README.md, docs/migration/README.md and every REQ- entry range outside REQ-051..REQ-078 are untouched; `grep -n '.zig' CLAUDE.md README.md docs/migration/README.md` returns no matches in any of the three (as expected, so no action was needed there). YAML validity: `python3 -c \"import yaml; yaml.safe_load(open('docs/requirements.yaml')); print('OK')\"` printed OK after every batch and again after the final commit. Commit: 749ae37c377b9dccdc7b8045ea77693641852511 on branch feature/WF02-REQ255-20260906. REQ-255's status in docs/requirements.yaml was intentionally left as 'pending' and no push/PR/merge was performed -- that is ORCH's job after REVIEWER passes this change."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

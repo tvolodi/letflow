@@ -2755,12 +2755,14 @@ requirements:
     depends_on: [REQ-044]
 
   - id: REQ-051
+    # PROVENANCE (historical, not current decision authority):
     title: Parallel gateway split and join (transition.zig, EE-06/EE-07)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 95  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/transition.zig's PARALLEL_GATEWAY branches (per
       src/design/engine.md "Section EE-06: Parallel Split", L2638 and "Section
       EE-07: Parallel Join", L2898) into REQ-044's transition dispatch. Pure,
@@ -2805,12 +2807,14 @@ requirements:
     depends_on: [REQ-044, REQ-049]
 
   - id: REQ-052
+    # PROVENANCE (historical, not current decision authority):
     title: Instance cancellation (instance.zig cancelInstance, EE-08) -- supersedes lib/letflow/parallel_approval.ex
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 96  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.cancelInstance() (per
       src/design/engine.md "Section EE-08: Cancellation", L3299) as
       cancel_instance/N. This is the caller-initiated path that drives a
@@ -2883,12 +2887,14 @@ requirements:
     depends_on: [REQ-048, REQ-051]
 
   - id: REQ-053
+    # PROVENANCE (historical, not current decision authority):
     title: State reconstruction by event replay (reconstruction.zig, EE-11)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 98  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/reconstruction.zig's reconstructInstance() (per
       src/design/engine.md "Section EE-11: State Reconstruction", L5237) as
       Letflow.Engine.Reconstruction.reconstruct_instance/2. This is the
@@ -2942,12 +2948,14 @@ requirements:
     depends_on: [REQ-052, REQ-061, REQ-026]
 
   - id: REQ-054
+    # PROVENANCE (historical, not current decision authority):
     title: Periodic instance state snapshots (snapshot_writer.zig, ISS-601)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 99  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/snapshot_writer.zig (348 lines -- R-Co's ISS-601, design
       artefact src/design/iss601_state_snapshots.md) as
       Letflow.Engine.SnapshotWriter, plus its instance_state_snapshots
@@ -3003,12 +3011,14 @@ requirements:
     depends_on: [REQ-053]
 
   - id: REQ-055
+    # PROVENANCE (historical, not current decision authority):
     title: Concurrent instance isolation guarantees (instance.zig locking, EE-12)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 100  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Establish and verify the concurrency-safety property R-Co's EE-12 states
       (per src/design/engine.md "Section EE-12: Concurrent Instance Safety",
       L5771) across the engine paths REQ-045/047/048/052 build. EE-12 adds
@@ -3050,12 +3060,14 @@ requirements:
     depends_on: [REQ-053]
 
   - id: REQ-056
+    # PROVENANCE (historical, not current decision authority):
     title: Service task configuration, retry classification and dispatch contract (service_task.zig, EXT-01)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 101  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/service_task.zig (420 lines, R-Co's EXT-01) as
       Letflow.Engine.ServiceTask -- the engine-side half of SERVICE_TASK node
       execution.
@@ -3115,12 +3127,14 @@ requirements:
     depends_on: [REQ-061]
 
   - id: REQ-057
+    # PROVENANCE (historical, not current decision authority):
     title: Plugin handler interface and registry contract (plugin_interface.zig + plugin_registry.zig, EXT-03)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 102  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/plugin_interface.zig (79 lines, the stable handler type)
       and src/engine/plugin_registry.zig (232 lines, the registration and
       resolution table) as Letflow.Engine.PluginInterface and
@@ -3190,12 +3204,14 @@ requirements:
     depends_on: [REQ-061]
 
   - id: REQ-058
+    # PROVENANCE (historical, not current decision authority):
     title: Lua script execution audit persistence path (lua_script_audit.zig, LUA-07 minimal path)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 103  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/lua_script_audit.zig (201 lines, R-Co's ISS-0176/GH#504
       -- LUA-07's second acceptance criterion) as
       Letflow.Engine.LuaScriptAudit, plus its lua_script_execution_audit
@@ -3247,12 +3263,14 @@ requirements:
     depends_on: [REQ-045]
 
   - id: REQ-059
+    # PROVENANCE (historical, not current decision authority):
     title: Dependency pin resolution, recording and inheritance (pin_resolver.zig, PIN-01/02/03/04)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 104  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/pin_resolver.zig (967 lines, R-Co's PIN-01..PIN-04) as
       Letflow.Engine.PinResolver -- the mechanism that freezes every versioned
       dependency an instance uses at start time, so a running instance is
@@ -3329,12 +3347,14 @@ requirements:
     depends_on: [REQ-045, REQ-053]
 
   - id: REQ-060
+    # PROVENANCE (historical, not current decision authority):
     title: Explicit instance pin rebind (pin_rebind.zig, PIN-05)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 105  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/pin_rebind.zig (388 lines, R-Co's PIN-05) as
       Letflow.Engine.PinRebind.rebind_pins/N -- the SOLE write path to an
       instance's effective pin set after INSTANCE_STARTED (PIN-05 AC5). Its
@@ -3382,12 +3402,14 @@ requirements:
     depends_on: [REQ-059]
 
   - id: REQ-061
+    # PROVENANCE (historical, not current decision authority):
     title: Execution error handling (instance.zig setInstanceError, EE-10)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 97  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/engine/instance.zig's InstanceStore.setInstanceError() (per
       src/design/engine.md "Section EE-10: Execution Error Handling", L4571)
       as set_instance_error/N -- the single, shared path every engine-internal
@@ -3439,12 +3461,14 @@ requirements:
     depends_on: [REQ-048, REQ-050]
 
   - id: REQ-062
+    # PROVENANCE (historical, not current decision authority):
     title: Sub-process invocation runtime half (instance.zig SPC-01 -- child start, parent-token wait, completion propagation)
     owner: ELIXIR-DEV
     status: done
     stage: S3
     impl_order: 106  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port SPC-01's RUNTIME half from src/engine/instance.zig -- the half
       shipped REQ-032 explicitly deferred to this stage. REQ-032's own
       description and acceptance criteria state that SPC-01 "belongs to S3
@@ -3657,6 +3681,7 @@ requirements:
     depends_on: [REQ-063]
 
 
+  # PROVENANCE (historical, not current decision authority):
   # ---------------------------------------------------------------
   # S4 — api-surface
   # Expanded once S3 (instance-engine) was fully done -- REQ-043..064
@@ -3783,6 +3808,7 @@ requirements:
     stage: S4
     impl_order: 132  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Letflow currently holds two mutually exclusive positions on the S4 web
       framework, and S4 cannot start until one of them is retired in writing.
       THE CONTRADICTION, stated precisely so it is not re-litigated from
@@ -3839,12 +3865,14 @@ requirements:
     depends_on: [REQ-010, REQ-064]
 
   - id: REQ-066
+    # PROVENANCE (historical, not current decision authority):
     title: RFC 9457 problem-details error contract and response builder (errors.zig + response.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 133  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/api/errors.zig (272 lines) and src/api/response.zig (69) as
       Letflow.Api.Error and Letflow.Api.Response -- the single response/error
       contract every S4 route emits. Nothing in this batch renders a response
@@ -3882,16 +3910,19 @@ requirements:
       - "a 500 produced from an unexpected exception has a detail string that is identical across two different underlying exception types, demonstrated by a test -- no exception message, module name, SQL fragment, or stack trace reaches the body (INV-4)"
       - "the 404 problem document produced for a resource that never existed and the one produced for a resource belonging to another tenant are byte-identical, demonstrated by a test comparing the two serialised bodies (INV-5)"
       - "Letflow.Api.Response's success helpers set 201 for creation and 204 with an empty body for deletion, each verified by a test asserting the status and (for 204) that the body is empty"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc states the Zig-to-Elixir translation explicitly: that response.zig's HandlerResult struct is replaced by conn-threading functions, and whether Letflow's problem+json content type diverges from R-Co's"
     depends_on: [REQ-065]
 
   - id: REQ-067
+    # PROVENANCE (historical, not current decision authority):
     title: Cursor pagination contract for every list endpoint (pagination.zig, API-06)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 134  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/api/pagination.zig (406 lines, R-Co's API-06) as
       Letflow.Api.Pagination -- the shared cursor encode/decode, prefix
       validation, expiry checking, page-size validation, and standardised page
@@ -3922,6 +3953,7 @@ requirements:
       PageResponse(T)) is the shape every list route in this batch returns.
     acceptance_criteria:
       - "MAX_PAGE_SIZE is 200, DEFAULT_PAGE_SIZE is 50, MIN_PAGE_SIZE is 1 and the cursor expiry window is 86_400_000_000 microseconds, each asserted against a named module attribute rather than a literal buried in a function"
+      # PROVENANCE (historical, not current decision authority):
       - "a page-size request of 201, of 0, and of a non-numeric string each produce the behaviour R-Co's pagination.zig produces (reject-with-400 or clamp, whichever the port confirms), with all three cases covered by explicit tests and the chosen behaviour named in the moduledoc"
       - "a cursor minted by one endpoint and submitted to a different endpoint is rejected on prefix mismatch, demonstrated by a test"
       - "a cursor whose timestamp is older than the 24-hour expiry window is rejected, demonstrated by a test that constructs an old cursor rather than by waiting"
@@ -3930,12 +3962,14 @@ requirements:
     depends_on: [REQ-066]
 
   - id: REQ-068
+    # PROVENANCE (historical, not current decision authority):
     title: Request-body validation and typed rejection contract (validation.zig + middleware/validate.zig + middleware/content_type.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 135  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/api/validation.zig (592 lines) plus the two thin middleware
       modules that front it -- src/api/middleware/content_type.zig (119) and
       src/api/middleware/validate.zig (86) -- as Letflow.Api.Validation and
@@ -3971,20 +4005,24 @@ requirements:
       or to S6 alongside the rest of the operational cross-cutting work; say
       so in the moduledoc rather than leaving the omission unremarked.
     acceptance_criteria:
+      # PROVENANCE (historical, not current decision authority):
       - "a POST with a body and no Content-Type header, and a POST with Content-Type: text/plain, are both rejected with the status R-Co's content_type.zig uses, before Plug.Parsers attempts to decode -- two explicit tests; a GET with no Content-Type is unaffected"
       - "a request body containing invalid JSON, a JSON array where an object is required, a 10-level-nested object, and a string field containing a NUL byte each return a typed 400/422 problem document, with each of the four cases covered by its own test and none producing a 500 or an unhandled exception (INV-8)"
       - "a request body exceeding the configured maximum size is rejected with 413 rather than being buffered, and the maximum is a named module attribute with a comment justifying the value"
       - "a body with three simultaneously invalid fields produces one problem document naming all three fields, not a document naming only the first -- demonstrated by a test asserting all three field names appear"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc states explicitly that rate_limit.zig and quota_enforcement.zig are NOT ported here, names the per-tenant counter storage they need as the reason, and names where they belong instead"
     depends_on: [REQ-066]
 
   - id: REQ-069
+    # PROVENANCE (historical, not current decision authority):
     title: Role/permission authorization matrix and 403 decision contract (authorization.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 136  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/api/authorization.zig (280 lines) as Letflow.Api.Authorization
       -- the role-to-permission matrix every route consults before doing work.
       Port R-Co's enums exactly, not a renamed approximation: Role is
@@ -4029,6 +4067,7 @@ requirements:
       moduledoc, because getting it backwards is the single easiest way to
       violate INV-5.
     acceptance_criteria:
+      # PROVENANCE (historical, not current decision authority):
       - "all five Role values and all fourteen Permission values from authorization.zig exist with R-Co's exact names, verified by a test enumerating each list against the expected set"
       - "the role-to-permission decision function has a test per role covering at least one permission it grants and one it denies, so no role's row is untested"
       - "all three AccessDecisionKind variants exist with R-Co's exact names (Allow, Deny403, AllowWithRowFilter), and each is returned by at least one decision-function test"
@@ -4047,6 +4086,7 @@ requirements:
     stage: S4
     impl_order: 137  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Replace lib/letflow/router.ex's single flat route table -- today GET
       /health plus a 404 catch-all, per its own moduledoc -- with the
       decomposed structure the rest of S4 mounts into. This resolves
@@ -4085,6 +4125,7 @@ requirements:
       - "the router is decomposed into at least one module per subsystem with no subsystem's paths declared inside another's, confirmed by inspection and by a test that mounts a sub-router in isolation and exercises one of its paths without the top-level router"
       - "a request to an unrouted path returns REQ-066's RFC 9457 404 problem document with Content-Type: application/problem+json, not the previous {\"error\":\"not_found\"} body -- an explicit test asserting both body shape and header"
       - "the shared middleware chain is declared in exactly one place and applied to every tenant-scoped sub-router, verified by grep showing a single declaration site rather than a repetition per sub-router"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc lists all eleven deferred route modules with their owning stage, and states that readiness (routes/health.zig handleReady, api/health/readiness.zig) is deliberately not ported here"
       - "the router change introduces no framework choice of its own -- it implements whichever position REQ-065's addendum settled, cited by name in the moduledoc"
     depends_on: [REQ-065, REQ-066]
@@ -4096,6 +4137,7 @@ requirements:
     stage: S4
     impl_order: 138  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Mount Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus (both
       built, compiled and tested by REQ-021, both explicitly "not mounted in
       front of any route today ... left available for S4" per their own
@@ -4139,12 +4181,14 @@ requirements:
     depends_on: [REQ-069, REQ-070]
 
   - id: REQ-072
+    # PROVENANCE (historical, not current decision authority):
     title: Tenant-scoped request context and the cross-tenant 404 mechanism (tenant_context.zig + trace_context.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 139  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig
       (55) as the per-request context every tenant-scoped handler reads, and
       build the single shared mechanism that turns a cross-tenant access into
@@ -4192,12 +4236,14 @@ requirements:
     depends_on: [REQ-071]
 
   - id: REQ-073
+    # PROVENANCE (historical, not current decision authority):
     title: Identity routes 1/4 -- user CRUD and status (identity.zig handleCreateUser/List/Get/Patch/UpdateUserStatus)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 140  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the user-management handler group of src/api/routes/identity.zig
       (1,868 lines / 23 handlers total -- too large for one agent turn, split
       four ways across REQ-073..076 along R-Co's own handler boundaries).
@@ -4230,12 +4276,14 @@ requirements:
     depends_on: [REQ-072]
 
   - id: REQ-074
+    # PROVENANCE (historical, not current decision authority):
     title: Identity routes 2/4 -- groups and group membership (identity.zig 7 group handlers)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 141  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the group-management handler group of src/api/routes/identity.zig:
       handleCreateGroup (L343), handleAddGroupMember (L399), handleListGroups
       (L447), handleDeleteGroup (L478), handleListGroupMembersArray (L495),
@@ -4264,12 +4312,14 @@ requirements:
     depends_on: [REQ-073]
 
   - id: REQ-075
+    # PROVENANCE (historical, not current decision authority):
     title: Identity routes 3/4 -- tenant administration (identity.zig 6 tenant handlers)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 142  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the tenant-administration handler group of
       src/api/routes/identity.zig: handleCreateTenant (L222), handleListTenants
       (L674), handleGetTenant (L695), handlePatchTenant (L713),
@@ -4312,12 +4362,14 @@ requirements:
     depends_on: [REQ-073]
 
   - id: REQ-076
+    # PROVENANCE (historical, not current decision authority):
     title: Identity routes 4/4 -- API tokens, role registry, and tenant onboarding (identity.zig tokens/roles + onboarding.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 143  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the final identity handler group plus the onboarding route:
       identity.zig's handleCreateToken (L570), handleListTokens (L634),
       handleRevokeToken (L651), handleListRoles (L1169), handleUpsertRole
@@ -4416,12 +4468,14 @@ requirements:
     depends_on: [REQ-075]
 
   - id: REQ-077
+    # PROVENANCE (historical, not current decision authority):
     title: Promotion pipeline routes (promotion_review.zig, promotions.zig, promotion_read.zig, promotion_assertion.zig, promotion.zig, definition_rollback.zig)
     owner: ELIXIR-DEV
     status: done
     stage: S4
     impl_order: 331  # letflow-queue task id (re-registered 2026-08-24; original task 144 expired)
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the six promotion-pipeline route modules as one requirement --
       they total 1,844 lines but 1,140 of that is promotion_review.zig's five
       handlers, and the other five modules are thin single-purpose routes over
@@ -4453,6 +4507,7 @@ requirements:
       SECURITY (INV-1, INV-5): every handler scopes through REQ-072; a review
       or plan id from another tenant is a 404.
     acceptance_criteria:
+      # PROVENANCE (historical, not current decision authority):
       - "each of the six route modules has at least one end-to-end test through the real router asserting status and response shape, with promotion_review.zig's five handlers each covered individually"
       - "POSTing the same assertion-run idempotency key twice produces one run and two identical successful responses, demonstrated by a test asserting the row count is 1 (REQ-040's contract)"
       - "two different tenants submitting a promotion with the same plan_digest each get their own review, demonstrated by a test seeding both tenants (REQ-064's per-tenant uniqueness)"
@@ -4468,6 +4523,7 @@ requirements:
     stage: S4
     impl_order: 145  # letflow-queue task id
     description: >
+      PROVENANCE (historical, not current decision authority):
       Port the six small route modules whose backing subsystems are all
       `done`, as one requirement (1,356 lines total, but every module is a
       one-to-three-handler surface over existing context functions):
@@ -4565,7 +4621,9 @@ requirements:
       - "a solution-pack export as a tenant A caller contains no tenant B artefact, and an install as tenant A writes only into tenant A's schema, verified by querying both schemas after the operation (INV-1)"
       - "the definition-validation endpoint returns the same validation outcome as calling REQ-028/029's validator directly for the same graph, demonstrated by a test comparing both paths -- proving the route adds no second validation rule"
       - "the metrics endpoint's tenant-exposure rule is stated in the moduledoc (aggregate-only or per-tenant-scoped) and enforced by a test that a tenant A caller sees no tenant B figure"
+      # PROVENANCE (historical, not current decision authority):
       - "the moduledoc distinguishes routes/validation.zig (definition-graph validation endpoint, ported here) from src/api/validation.zig (request-body validator, ported by REQ-068), so the two are not conflated"
+      # PROVENANCE (historical, not current decision authority):
       - "metrics.zig's moduledoc states that no metrics subsystem is built here and names S6 observability as its owner"
       - "installing a solution pack whose document carries variable_schemas entries writes the corresponding rows into the CALLING tenant's variable_schemas table (REQ-109's table) and none into any other tenant's schema, verified by reading both schemas back; and that write goes through the single shared Letflow.Definitions registration function REQ-082's import also calls, with grep confirming no second insert path into variable_schemas anywhere in the route layer"
     depends_on: [REQ-072, REQ-030, REQ-109]
@@ -15055,7 +15113,7 @@ requirements:
   - id: REQ-255
     title: Apply the .zig provenance-marking convention to docs/requirements.yaml, the REQ-051 through REQ-078 entry range (closes ISS-0424 part 3c-2)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

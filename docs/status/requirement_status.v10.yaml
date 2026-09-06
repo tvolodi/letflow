@@ -670,3 +670,46 @@ history:
       (handoffs/WF02-REQ227-20260906/step-03-test-runner.json). mix
       compile --warnings-as-errors and mix format --check-formatted
       both independently confirmed clean by REVIEWER and TEST-RUNNER.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-06T17:00:00Z"
+    note: >
+      ISS-0515 resolved: PR #1029 (REQ-226)'s backend CI gate had failed
+      twice reproducibly (~53min each) with 200+ cascading test failures
+      per partition. ORCH diagnosed the CI logs as matching a
+      tenant_template advisory-lock-timeout signature, filed ISS-0515
+      (GH#1031, PR #1032, merged) with a working hypothesis, then
+      dispatched ISSUE-FIXER for root-cause diagnosis
+      (WF03-ISS0515-20260906). ISSUE-FIXER CONFIRMED the hypothesis by
+      direct reproduction (not just log inference): 5 concurrent callers
+      of ensure_template!/0 against the same database -> 1 winner
+      succeeds in ~1.8s, 4 losers reliably fail at ~15s with the exact
+      Postgrex query_canceled signature seen in CI, 100% reproduction
+      rate across repeated runs -- and refined the causal story (REQ-226
+      added a new 472-line test module that raises the number of
+      concurrent first-callers racing for the lock at partition boot,
+      not migration-count-driven build time; the real build only takes
+      ~1.8-1.9s). CODE-DESIGNER designed a structural fix (pre-build
+      tenant_template synchronously in test/test_helper.exs before
+      ExUnit dispatches any test, verified against ExUnit's own source
+      to genuinely block dispatch -- not a timeout bump, which the
+      diagnosis's own unresolved Sandbox.mode/2 anomaly made unsafe to
+      trust alone) -- CODE-DESIGN-VALIDATOR independently re-verified the
+      load-bearing ExUnit.start/1 claim against real ExUnit source and
+      PASSed. ELIXIR-DEV implemented the one-statement fix
+      (test/test_helper.exs, +moduledoc-only note in
+      test/support/tenant_template.ex, zero production-path changes) and
+      confirmed the race structurally eliminated: post-fix concurrency
+      repro (5 concurrent callers, all take the fast path, ~0.04ms each)
+      plus two consecutive clean mix letflow.check.test runs. REVIEWER
+      independently re-verified everything from primary sources
+      (re-read ExUnit's own installed source, ran a fresh full
+      mix letflow.check.test to completion -- 3109/3111 passed, the 2
+      failures being the pre-existing unrelated rustc-toolchain gap,
+      zero occurrences of the ISS-0515 failure signature) -- PASS
+      (handoffs/WF03-ISS0515-20260906/step-04-reviewer.json). No
+      SECURITY-REVIEWER needed (test-support-only, no production/tenant
+      data path). feature/WF03-ISS0515-20260906. Once merged, PR #1029
+      (REQ-226) will be rebased/retried against this fix.

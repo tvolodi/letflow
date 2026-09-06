@@ -1969,9 +1969,14 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 15
+    entries: 16
     note: >
-      Incremented to 15 by ELIXIR-DEV's own REQ-227 done-event append
+      Incremented to 16 by ORCH's own ISS-0515 SCOPE-CHANGE done-event
+      append (WF03-ISS0515-20260906) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 16 on-disk entries, no
+      rebase conflict at the time it was written. 715 lines, well under
+      the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      Previously incremented to 15 by ELIXIR-DEV's own REQ-227 done-event append
       (WF02-REQ227-20260906, branched before REQ-226's own PR #1029
       merged -- this branch's copy of this file predates REQ-226's
       append, so this count is local to this branch and will be

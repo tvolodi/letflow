@@ -1428,13 +1428,34 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # "excluded everywhere, so it silently never runs or fails again" failure mode
     # the task description specifically calls out, at the point where it would
     # actually matter (the real isolated run, not just the tag count above).
+    # ISS-0515/ISS-0426 follow-up: this subprocess is a brand-new OS process/BEAM VM.
+    # It inherits TEST_POOL_SIZE (and every other env var, incl. MIX_TEST_PARTITION --
+    # System.cmd/3's :env option ADDS to the inherited environment, it doesn't replace
+    # it) from whichever scripts/test_parallel.sh partition spawned it, so left
+    # unset here it would start its OWN, separate Ecto pool sized identically to a
+    # full sibling partition's -- an entire extra partition's worth of live Postgres
+    # connections that scripts/test_parallel.sh's N*TEST_POOL_SIZE budget arithmetic
+    # never accounts for, on top of the parent partition's own pool (still open/idle,
+    # not closed, while this call blocks). That is what pushed CI over
+    # max_connections after ISS-0515 added a synchronous
+    # `Letflow.Test.TenantTemplate.ensure_template!()` pre-build call to every
+    # `mix test` invocation's test_helper.exs (this nested run included) -- see
+    # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515 addendum.
+    # This module's own moduledoc note (line ~7) already establishes these 11 tests
+    # short-circuit before any Repo insert, so 1 connection is genuinely enough: the
+    # pre-build call's advisory-lock check (template already built by the parent
+    # process moments earlier) and the 11 tests themselves need no concurrent DB
+    # access. Capping here, at the one call site that creates this extra process,
+    # is more precise than inflating the whole suite's non-pool reserve to cover an
+    # unbounded inherited pool size.
     @tag timeout: 60_000
     test "the isolated --only lua_wallclock_race partition runs and passes exactly 11 tests" do
       {output, exit_code} =
         System.cmd(
           "mix",
           ["test", "--only", "lua_wallclock_race", "test/letflow/engine/lua/executor_test.exs"],
-          stderr_to_stdout: true
+          stderr_to_stdout: true,
+          env: [{"TEST_POOL_SIZE", "1"}]
         )
 
       assert exit_code == 0,

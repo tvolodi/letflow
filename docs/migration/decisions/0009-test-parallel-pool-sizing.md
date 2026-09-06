@@ -192,3 +192,84 @@ for that host's own documented case.
 `test/letflow/engine_concurrency_test.exs` (both explicitly out of scope — see
 `lib/letflow/design/iss0287-connection-pool-headroom-fix.md`'s own scope
 statement).
+
+## Addendum (2026-09-06, ISS-0515/ISS-0426) — a second non-pooled source: the
+   isolated-partition self-check's nested `mix test` subprocess
+
+ISS-0515 (`feature/WF03-ISS0515-20260906`) fixed a `tenant_template` build race by
+adding one synchronous call, `Letflow.Test.TenantTemplate.ensure_template!()`, to
+`test/test_helper.exs` — run unconditionally, before any test dispatches, in
+**every** `mix test` invocation (see this file's own moduledoc and
+`lib/letflow/design/iss0515-tenant-template-build-race-fix.md`). That fix was
+independently re-verified correct (REVIEWER PASS,
+`handoffs/WF03-ISS0515-20260906/step-04-reviewer.json`) and passed local review,
+but its PR (#1033) then failed CI with a NEW `too_many_connections` failure not
+present before — isolated to exactly one test:
+`Letflow.Engine.Lua.ExecutorTest`'s ISS-0426 partition self-check
+(`test/letflow/engine/lua/executor_test.exs:1432`), which spawns a **nested**
+`mix test --only lua_wallclock_race ...` subprocess via `System.cmd/3` to prove
+that isolated partition still passes.
+
+Root cause: that nested subprocess is a genuinely separate OS process / BEAM VM.
+Before ISS-0515, it never touched `Letflow.Test.TenantTemplate` at all (the 11
+`:lua_wallclock_race`-tagged tests don't use a tenant fixture — see this test
+module's own moduledoc, "INV-LSA-1 / INV-LSA-2 paths short-circuit before any
+Repo insert"). After ISS-0515, `test_helper.exs`'s unconditional pre-build call
+now also runs inside that nested subprocess — and because `:persistent_term` is
+per-BEAM-VM, `template_ready?/0` (which only reads `:persistent_term`) is `false`
+there even though the template schema already physically exists in Postgres
+(built moments earlier by the parent process), forcing the nested subprocess down
+the advisory-lock-check path. That is a small, bounded query cost by itself —
+but the bigger and actually decisive cost is structural, not query-count: left
+unconfigured, that nested subprocess's own `Application` start sizes its own
+`Letflow.Repo` Ecto pool from `TEST_POOL_SIZE`, which it inherits from whichever
+`scripts/test_parallel.sh` partition spawned it (`System.cmd/3`'s `:env` option
+ADDS to the inherited environment; it does not replace it). That means the
+nested subprocess opened an entire EXTRA sibling-partition-sized pool of live
+Postgres connections — on top of its parent partition's own pool, which stays
+open/idle (not closed) for the whole time the parent test blocks on
+`System.cmd/3` — landing exactly when CI's connection budget was already fully
+booked by this decision's `N * TEST_POOL_SIZE` arithmetic, which has no term for
+an (N+1)th, unplanned pool.
+
+**This addendum does not reopen the ISS-0287 addendum's two-knob split, and does
+not change `ensure_template!/0` or the ISS-0515 `test_helper.exs` mechanism
+itself** — both are correct and out of scope here; this is purely a
+connection-budget-accounting follow-up to a fix that was otherwise right.
+
+**Fix, at the one call site that creates the extra process (not in this
+script or in `ensure_template!/0`):** `executor_test.exs`'s `System.cmd/3` call
+now passes `env: [{"TEST_POOL_SIZE", "1"}]`, capping the nested subprocess to a
+single-connection pool — genuinely sufficient, since (per the module's own
+moduledoc note above) neither the pre-build check nor the 11 tests need
+concurrent DB access. This turns an unbounded, inherited, sibling-partition-sized
+pool into the same small, fixed "1 extra connection" shape the ISS-0287 source
+above already has, rather than requiring `scripts/test_parallel.sh` to somehow
+account for an (N+1)th full-sized pool in its own arithmetic.
+
+`TEST_NONPOOL_CONNECTION_RESERVE`'s default is bumped from 2 to 3 in
+`scripts/test_parallel.sh`, to reserve room for both named non-pooled sources at
+once: the ISS-0287 reaper-test connection (at most 1 concurrently) and this
+now-capped nested-subprocess pool (exactly 1, by the cap above). They don't
+overlap in practice (different tests, and this one runs a single time near the
+end of one partition's own run), but the reserve is sized for the case where
+they do, not the common case.
+
+**Verification, at N=4 (this decision's documented remedy value), with the new
+default:** `usable_ceiling` = 100 − 3 = 97 (unchanged). `budget` = 97 − 10 − 3 =
+84 (nonpool_reserve now 3, was 85 before this addendum). `computed` = 84 / 4 = 21
+(integer division — unchanged from the ISS-0287 addendum's own N=4 verification,
+since 84/4 and 85/4 both floor to 21). `N × TEST_POOL_SIZE` = 84. Worst case —
+full N-partition saturation (84) + the ISS-0287 connection (1) + this
+addendum's capped nested pool (1) + full ad-hoc headroom (10) = 96 ≤ 97: still
+inside the true ceiling, with the same 1-connection margin the ISS-0287
+addendum's own pessimistic case already documented, now correctly covering a
+second real source instead of leaving it uncounted.
+
+**What this addendum does not change.** `TEST_SUPERUSER_RESERVED`'s meaning and
+default; `TEST_CONNECTION_HEADROOM`'s meaning; `TEST_MIN_POOL_SIZE`'s meaning and
+default; `N`-derivation; the ISS-0515 `test_helper.exs` pre-build mechanism
+itself (correct, unmodified); `Letflow.Test.TenantTemplate.ensure_template!/0`'s
+own logic (correct, unmodified) — this addendum only (a) caps one test's own
+nested-subprocess pool size at its own call site, and (b) updates this script's
+connection-budget accounting to reserve room for that now-bounded cost.

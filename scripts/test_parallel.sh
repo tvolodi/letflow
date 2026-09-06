@@ -123,6 +123,19 @@ fi
 # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0287
 # addendum for the full rationale and verification arithmetic.
 #
+# ISS-0515/ISS-0426: a second, distinct source now also falls outside this
+# arithmetic -- executor_test.exs's isolated-partition self-check spawns a
+# NESTED `mix test` subprocess (its own OS process/BEAM VM), which that
+# test's own System.cmd/3 call now caps to a single-connection Ecto pool
+# (TEST_POOL_SIZE=1 passed via :env) specifically so it costs exactly the same
+# "1 extra connection" shape as the ISS-0287 source above rather than an
+# entire uncapped sibling-partition-sized pool. TEST_NONPOOL_CONNECTION_RESERVE's
+# default is bumped from 2 to 3 to reserve room for both named sources at once
+# (each needs at most 1 concurrently; they never overlap in practice, but the
+# reserve is sized for the worst case, not the common case). See
+# docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515
+# addendum.
+#
 # TEST_POOL_SIZE, if the caller already set it, is never overridden here --
 # an explicit choice always wins over this clamp.
 if [ -z "${TEST_POOL_SIZE:-}" ]; then
@@ -130,7 +143,7 @@ if [ -z "${TEST_POOL_SIZE:-}" ]; then
   headroom="${TEST_CONNECTION_HEADROOM:-10}"
   min_pool="${TEST_MIN_POOL_SIZE:-2}"
   superuser_reserved="${TEST_SUPERUSER_RESERVED:-3}"
-  nonpool_reserve="${TEST_NONPOOL_CONNECTION_RESERVE:-2}"
+  nonpool_reserve="${TEST_NONPOOL_CONNECTION_RESERVE:-3}"
 
   if ! printf '%s' "$max_conn" | grep -Eq '^[1-9][0-9]*$'; then
     echo "test_parallel: ERROR TEST_MAX_CONNECTIONS='$max_conn' is not a positive integer" >&2

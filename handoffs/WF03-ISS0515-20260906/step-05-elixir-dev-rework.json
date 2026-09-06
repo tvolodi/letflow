@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-05",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-05-elixir-dev-rework.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T17:20:13Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03",
+      "WF03-ISS0515-20260906-step-04"
+    ],
+    "artifacts_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "PR #1033 (the REVIEWER-approved ISS-0515 tenant_template pre-build fix) passed local review but failed CI's backend gate with a NEW too_many_connections failure in Letflow.Engine.Lua.ExecutorTest's ISS-0426 isolated-partition self-check. Confirm ORCH's root-cause diagnosis and implement the minimal connection-budget-accounting follow-up, without touching the ISS-0515 mechanism itself."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Confirmed the diagnosis by reading the actual source, not by trusting the prompt.\n\nCONFIRMATION. test/test_helper.exs line 68 calls `Letflow.Test.TenantTemplate.ensure_template!()` unconditionally, before ExUnit.start/1 dispatches any test -- runs in EVERY `mix test` invocation, nested subprocesses included. `template_ready?/0` (test/support/tenant_template.ex ~line 152) reads only `:persistent_term`, which is per-BEAM-VM. executor_test.exs:1432-1438's ISS-0426 self-check spawns a nested `mix test --only lua_wallclock_race ...` subprocess via System.cmd/3 with no `:env` option -- so it inherits TEST_POOL_SIZE (and MIX_TEST_PARTITION, pointing at the SAME partition database) from whichever scripts/test_parallel.sh partition spawned it, per System.cmd/3's own semantics (`:env` ADDS to inherited environment, never replaces it). Before ISS-0515 this nested subprocess never touched Letflow.Repo's Ecto pool at all for anything tenant-template-related (module moduledoc: 'INV-LSA-1/INV-LSA-2 paths short-circuit before any Repo insert'). After ISS-0515, its own Application start now also sizes its OWN Ecto pool from the inherited TEST_POOL_SIZE -- i.e. an entire EXTRA sibling-partition-sized pool of live Postgres connections, on top of its parent partition's own pool (which stays open/idle, not closed, for the whole time the parent test blocks on System.cmd/3). This is structurally bigger than the '1-2 connections' framing in the original task prompt -- it scales with TEST_POOL_SIZE, not a fixed small constant -- which is why I did NOT simply bump TEST_NONPOOL_CONNECTION_RESERVE's default alone; that would have been insufficient and would have mis-documented the true cost as a fixed small number when it is not, absent capping the source itself.\n\nFIX (two parts, matching the design-doc precedent for connection-budget follow-ups):\n\n1. test/letflow/engine/lua/executor_test.exs's System.cmd/3 call (the one call site that creates the extra process) now passes `env: [{\"TEST_POOL_SIZE\", \"1\"}]`, capping the nested subprocess to a single-connection pool. Verified sufficient: the module's own moduledoc note establishes these 11 tests need no concurrent DB access, and the pre-build check inside the nested subprocess (template already built by the parent moments earlier) only needs the advisory-lock check-and-skip path, never the build path. This turns an unbounded, inherited, sibling-partition-sized cost into the same small fixed '1 extra connection' shape ISS-0287's existing reserve already models.\n\n2. scripts/test_parallel.sh: TEST_NONPOOL_CONNECTION_RESERVE's default bumped 2 -> 3, with an added comment block (mirroring the ISS-0287 comment's own shape) naming this as a second, distinct non-pooled source now capped to 1 by fix (1) above -- reserving room for both named sources (ISS-0287's reaper-test connection + this one) to be counted simultaneously in the worst case, even though they don't overlap in practice.\n\n3. docs/migration/decisions/0009-test-parallel-pool-sizing.md: added a full 'ISS-0515/ISS-0426' addendum section, matching the existing ISS-0287 addendum's structure -- root cause, fix, updated verification arithmetic at N=4 (budget 97-10-3=84, computed=84/4=21 unchanged from the ISS-0287 addendum's own N=4 value since 84/4 and 85/4 both floor to 21, worst-case accounted demand 84+1+1+10=96 <= 97), and an explicit 'what this addendum does not change' section confirming the ISS-0515 test_helper.exs mechanism and ensure_template!/0's own logic are untouched.\n\nDid NOT touch ensure_template!/0's logic, test_helper.exs, or the ISS-0515 mechanism itself -- confirmed by `git status --short` showing only the three files above changed.\n\nVERIFICATION (own output, this turn):\n- `MIX_ENV=test mix compile --warnings-as-errors`: exit 0, no output (clean).\n- `mix format --check-formatted`: exit 0 (clean).\n- `bash -n scripts/test_parallel.sh`: syntax OK.\n- `mix test test/letflow/engine/lua/executor_test.exs`: Result: 45 passed, 11 excluded (0 failures). Confirmed via --trace that the specific self-check test ('the isolated --only lua_wallclock_race partition runs and passes exactly 11 tests') ran and passed (11072.8ms) -- its nested subprocess, now capped to TEST_POOL_SIZE=1, still exits 0 and still reports exactly 11 passed.\n- `mix test test/support/tenant_template_test.exs`: Result: 7 passed (0 failures) -- ISS-0515 mechanism unaffected.\n- `mix letflow.check_toolchain`: same pre-existing rustc-not-found WARNING already noted in step-04-reviewer.json's independent run (this sandbox has no rustc binary); warning-only, never affects exit code, unrelated to and unaffected by this change.\n\nNOTE ON NON-REPRODUCTION: as expected, the original too_many_connections failure does NOT reproduce in this local sandbox (its Postgres has more connection headroom than CI's, per the task brief) -- I did not force a reproduction attempt (e.g. by artificially lowering max_connections), since the fix's correctness rests on the connection-budget arithmetic in docs/migration/decisions/0009-test-parallel-pool-sizing.md's new addendum, not on a local repro. That arithmetic is exact (integer, not probabilistic) and I re-derived it independently above rather than restating the task prompt's framing.\n\nScope: git diff --stat shows exactly 3 files, 117 insertions / 2 deletions -- test/letflow/engine/lua/executor_test.exs (+23/-2), scripts/test_parallel.sh (+15/-2... net +13 after the one-line default change), docs/migration/decisions/0009-test-parallel-pool-sizing.md (+81 new addendum section). No lib/letflow/ file touched, no migration, no application code."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

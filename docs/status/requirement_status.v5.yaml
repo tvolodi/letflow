@@ -267,7 +267,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-26T21:03:23Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ152-20260826 complete. Deny all four ambient Lua time sources
       (os.time, os.date, os.clock, os.difftime) from inside a script and
       implement platform.now() returning Letflow's authoritative time as an
@@ -362,7 +361,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-27T10:34:27Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ157-20260827 complete. Capability model and capability check at
       every gated host-function call site (LUA-05, LUA-06). Platform table
       exposes exactly the eight functions of R-Co's host_api/mod.zig matrix
@@ -490,7 +488,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-27T16:35:39Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ158-20260827 complete. Manifest representation (ported from
       R-Co/src/lua/manifest.zig, capability set + identity fields, with
       dropped fields named/justified in the moduledoc), a load-time

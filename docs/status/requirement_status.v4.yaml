@@ -208,7 +208,6 @@ history:
     agent: ORCH
     at: "2026-08-23T05:35:00Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       lib/letflow/design/req135-keycloak-provider-port-boundary.md written:
       measured R-Co's src/identity/provider/ directly (find ... -exec wc -l,
       4,193 total, no drift from the requirement's drafted number), produced
@@ -995,7 +994,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-24T10:22:38Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Renamed pack_update_resolutions.resolution Ecto.Enum:
       :keep_theirs->:keep_local, :custom->:merged. Migration
       20260824143417_rename_resolution_enum_values.exs (defensive; zero rows
@@ -1087,7 +1085,6 @@ history:
     agent: ORCH
     at: "2026-08-26T02:55:42Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ077-20260826 Step 00. Six promotion-pipeline route modules
       (promotion_review.zig, promotions.zig, promotion_read.zig,
       promotion_assertion.zig, promotion.zig, definition_rollback.zig).
@@ -1103,7 +1100,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-26T04:11:08Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ077-20260826 complete. Six R-Co promotion-pipeline route modules
       (promotion_review.zig, promotions.zig, promotion_read.zig,
       promotion_assertion.zig, promotion.zig, definition_rollback.zig) ported as

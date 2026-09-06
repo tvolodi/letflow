@@ -355,7 +355,6 @@ history:
     agent: ORCH
     at: 2026-08-21T14:54:57Z
     note: >
-      PROVENANCE (historical, not current decision authority):
       Picking up queue task 134 (GH#274) via get_next_task. Dependency REQ-066 confirmed
       done. Ports R-Co's src/api/pagination.zig (406 lines, API-06) as
       Letflow.Api.Pagination -- cursor encode/decode with prefix/expiry validation,
@@ -371,7 +370,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-21T15:34:10Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Ported validation.zig/content_type.zig/validate.zig as Letflow.Api.Validation,
       Letflow.Plugs.ContentType, Letflow.Plugs.SafeJsonParser. Added a real :uuid type
       check and enum-membership constraint (R-Co's own pattern-match validator was a
@@ -385,7 +383,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-21T15:46:31Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Ported authorization.zig as Letflow.Api.Authorization (5 Roles, 14 Permissions,
       3-variant AccessDecisionKind, R-Co's exact names as atoms). AllowWithRowFilter's
       scope is structurally derived only from AccessContext.user_id -- evaluate_access/2
@@ -435,7 +432,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-21T16:19:00Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       OpenAPI spec strategy decision record (OQ-2) -- docs/migration/decisions/
       0010-openapi-spec-strategy.md decides DEFER to S6: no spec hand-built, no
       open_api_spex adopted, none served in S4. R-Co's src/api/openapi/ (7
@@ -533,7 +529,6 @@ history:
     agent: ORCH
     at: "2026-08-21T20:53:32Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Picking up queue task 139 (GH#279) via get_next_task, immediately following
       REQ-071's close. Dependency REQ-071 (id 138) confirmed done on main. Ports
       R-Co's src/api/tenant_context.zig (104 lines) and src/api/trace_context.zig
@@ -627,7 +622,6 @@ history:
     agent: ORCH
     at: "2026-08-21T22:18:09Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Picking up queue task 140 (GH#280) via get_next_task, immediately following
       REQ-072's close. Dependency REQ-072 (id 139) confirmed done on main. First of
       four split requirements (REQ-073..076) porting identity.zig's 23-handler user-
@@ -699,7 +693,6 @@ history:
     agent: ORCH
     at: "2026-08-21T23:49:10Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Picking up queue task 141 (GH#281) via get_next_task, immediately following
       REQ-073's close. Dependency REQ-073 (id 140) confirmed done on main. Second
       of four split requirements (REQ-073..076) porting identity.zig's 23-handler
@@ -722,7 +715,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-22T01:12:25Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Shipped six new routes extending REQ-073's identity router for group
       management and group membership (lib/letflow/routers/identity.ex),
       backed by six new Letflow.Identity functions and a new group_members
@@ -759,7 +751,6 @@ history:
     agent: ORCH
     at: "2026-08-22T01:30:00Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Picking up queue task 142 (GH#282) via get_next_task, immediately following
       REQ-074's close. Dependency REQ-073 (id 140, not REQ-074) confirmed done on
       main. Third of four split requirements (REQ-073..076) porting identity.zig's
@@ -1047,7 +1038,6 @@ history:
     agent: ORCH
     at: "2026-08-22T04:58:01Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Run WF02-REQ078-20260822, queue task 145. Supporting routes -- audit,
       definition validation, tenant config, solution packs, pin rebind,
       metrics. CODE-DESIGNER produced
@@ -1113,7 +1103,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-22T05:23:40Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       ORCH dispatched WF-02 Step 00 (queue task 150, GH#290) for run
       WF02-REQ083-20260822. Ports the read half of src/api/routes/tasks.zig
       (handleList/handleGetById/handleInbox), split from REQ-085's write half.
@@ -1216,7 +1205,6 @@ history:
     agent: ELIXIR-DEV
     at: "2026-08-22T07:08:07Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Run WF02-REQ078-20260822, queue task 145, resumed after a model switch
       mid-run (implementation and one gate-finding-fix commit were already on
       the branch). Ported all six route surfaces -- audit, definition-graph

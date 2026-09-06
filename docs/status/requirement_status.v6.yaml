@@ -433,7 +433,6 @@ history:
     agent: ORCH
     at: "2026-08-29T04:57:23Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF01-S6-EXPANSION-20260829 complete -- Stage 6's SECOND batch expanded
       and registered: REQ-185..REQ-203 (19 requirements), letflow-queue tasks
       358-376. This closes the expansion of S6, which the first batch
@@ -557,7 +556,6 @@ history:
     agent: ORCH
     at: "2026-08-29T08:27:00Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ178-20260829 started (queue task 353, GH#698, stage S6).
       Third and last requirement of this batch's DLQ half -- the route
       layer atop REQ-176's core and REQ-177's landing sites (does NOT
@@ -583,7 +581,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-29T11:28:53Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ178-20260829 done (queue task 353, GH#698, stage S6). DLQ
       route layer shipped in lib/letflow/routers/dlq.ex atop REQ-176's
       core and REQ-177's landing sites: GET /api/v1/dlq (list, filterable
@@ -919,7 +916,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-30T00:53:33Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ188-20260829 done (queue task 361, GH#707, stage S6). Third
       and last requirement of S6's scheduler half: SCH-07 recurring timer
       re-arm shipped atop REQ-186/187's poll loop (a fired recurring timer
@@ -1070,7 +1066,6 @@ history:
     agent: DOC-UPDATER
     at: "2026-08-30T04:08:13Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF02-REQ191-20260830 done (queue task 364, GH#710, stage S6). Service
       catalog core shipped: Letflow.ServiceCatalog context module +
       Letflow.ServiceCatalog.Entry schema + GLOBAL (not per-tenant-schema)

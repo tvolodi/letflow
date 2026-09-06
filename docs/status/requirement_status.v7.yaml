@@ -344,7 +344,6 @@ history:
     agent: ORCH
     at: "2026-08-30T10:24:24Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Queue task 371, GH#717, stage S6. Second and last of S6's expr half,
       atop REQ-197's extended grammar. Adds a function-call form and 8 pure
       builtins (length, lower, upper, trim, contains, startsWith, endsWith,
@@ -442,7 +441,6 @@ history:
     agent: ORCH
     at: "2026-08-30T12:38:22Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       Queue task 373, GH#719, stage S6. Fixes a real broken contract: the
       already-shipped SPA's TimelineFeedItem.tsx reads actor_display_name,
       description, timestamp, sequence_num from GET /instances/:id/timeline
@@ -788,7 +786,6 @@ history:
     agent: ORCH
     at: "2026-08-31T07:34:33Z"
     note: >
-      PROVENANCE (historical, not current decision authority):
       WF-01 expanded S7 (simulation-and-uat-parity) into REQ-205..REQ-210, the
       last stage carrying zero requirements. Registered as queue tasks 382-387
       (GH#754-759) in dependency order so each depends_on resolved to a real

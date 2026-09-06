@@ -1969,20 +1969,48 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 5
+    entries: 6
     note: >
+      Recounted to 6 by WF02-REQ270-20260906's Step Final rebase, which
+      found main further advanced by WF02-REQ268-20260906's own closeout
+      (REQ-268 done-event, landed via PR #1015 while this branch's own
+      REQ-270 append, independently computing 5, was already committed)
+      -- no conflict on requirement_status.v10.yaml itself, it
+      auto-merged cleanly. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 6 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      5, per this note's own recount-every-time rule.
       Incremented to 5 by DOC-UPDATER's own REQ-270 done-event append
       (WF02-REQ270-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 5 on-disk entries, no
       rebase conflict on this file at the time it was written. 304
       lines, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered.
+      roll triggered. (Superseded by the recount to 6 above.)
+      Recounted to 5 by WF02-REQ268-20260906-closeout's Step Final rebase,
+      which found main further advanced by WF02-REQ269-20260906's own
+      done-event append (landed while this branch's own REQ-268 done-event
+      append, independently computing 4, was already committed) -- no
+      lost content: both REQ-268's and REQ-269's done-events are present
+      in requirement_status.v10.yaml after composing both sides
+      chronologically (REQ-268 at 00:48:06Z before REQ-269 at
+      01:22:17Z). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 5 on-disk entries, rather
+      than carrying forward either side's independently-computed 4, per
+      this note's own recount-every-time rule. 296 lines / 17442 bytes,
+      well under the 1200-line/120000-byte roll ceiling, so no roll
+      triggered. (Separate, concurrently-landed count of 5; also
+      superseded by the recount to 6 above.)
       Incremented to 4 by DOC-UPDATER's own REQ-269 done-event append
       (WF02-REQ269-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 4 on-disk entries, no
       rebase conflict on this file at the time it was written. 267 lines,
       well under the 1200-line/120000-byte roll ceiling, so no roll
-      triggered.
+      triggered. (Superseded by the recount to 5 above.)
+      Incremented to 4 by ORCH's own REQ-268 done-event append
+      (WF02-REQ268-20260906 closeout), independently computed against a
+      base declaring 3 -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 4 on-disk entries at that
+      point. (Superseded by the recount to 5 above.)
       Recounted to 3 by WF02-REQ266-20260905's second Step Final rebase,
       which found main further advanced by WF02-REQ267-20260906's own
       closeout (REQ-267 done-event, landed via PR #1013 while this

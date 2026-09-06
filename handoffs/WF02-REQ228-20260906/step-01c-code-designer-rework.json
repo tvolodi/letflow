@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ228-20260906-step-01c",
+  "run_id": "WF02-REQ228-20260906",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ228-20260906/step-01c-code-designer-rework.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T20:28:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-228"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ228-20260906-step-01b"],
+    "artifacts_in": ["lib/letflow/event_store.ex"],
+    "artifacts_out": ["lib/letflow/design/req228-entity-event-registration-commands.md"],
+    "branch_name": "feature/WF02-REQ228-20260906",
+    "base_commit": "ec8766d2"
+  },
+  "task": {
+    "description": "Rework: correct the :claim_idempotency -> :idempotency Multi-step-key naming defect flagged by CODE-DESIGN-VALIDATOR's FAIL verdict."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Fixed 5 occurrences of the Multi-step-key naming defect, confirmed against real lib/letflow/event_store.ex (Multi step key at line 463: Multi.run(:idempotency, ...), calling private claim_idempotency/3; error-tuple pattern at line 733-734: {:error, :idempotency, {:duplicate_idempotency_key, %Event{} = original_event}, _changes}). Corrected: line 23 (moduledoc restatement), line 166 (step list), line 365 (rollback description), line 367 (the AC3/ISS-0159/GH#480-critical error-tuple pattern), line 436 (rationale, reworded to keep both the Multi-step-key and the private-function-name facts correct and distinct). Left correctly unchanged: line 557-558's reference to the private helper function claim_idempotency itself. Self-checked: grepped for claim_idempotency/idempotency, confirmed every Multi-step-key reference now says :idempotency and the sole remaining claim_idempotency reference is the legitimate private-function name; re-scanned all 12 fenced code blocks, all contain only @spec/@type, no executable code. No other content touched."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

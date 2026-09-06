@@ -20,7 +20,7 @@
   contract (`tenant_id`, not a raw prefix, resolved internally via
   `Letflow.TenantProvisioning.Registration`).
 - `lib/letflow/event_store.ex` (REQ-025/REQ-140) — `append/2`'s full six-step
-  `Ecto.Multi` (`active_instance_guard`, `assign_sequence`, `claim_idempotency`,
+  `Ecto.Multi` (`active_instance_guard`, `assign_sequence`, `idempotency`,
   `insert_event`, `maybe_store_oversized_payload`, `update_projection`),
   `interpret_transaction_result/1`'s error shapes, and the critical structural
   fact this design turns on: **`append/2` opens and commits its own
@@ -163,7 +163,7 @@ already-committed transaction.
 (§0). `append/2` and `append_platform_event/2` are left completely unmodified
 — every existing caller of either is unaffected. `append_multi/3` factors the
 *same* M1–M4 steps (`active_instance_guard`, `assign_sequence`,
-`claim_idempotency`, `insert_event` — **not** M5/M6, see below) into a
+`idempotency`, `insert_event` — **not** M5/M6, see below) into a
 function that takes and returns an `Ecto.Multi.t()`, so `Letflow.Entities.Records`
 can add its own `entity_type_instance_guard` step before it and its own
 `update_entity_record_latest` step after it, then call `Repo.transaction/1`
@@ -362,9 +362,9 @@ own `@type violations :: [ValidationFailure.t()]`), cited here, not redefined.)
      uses to read a prior step's result, §0) and the validated `field_values`.
 5. `Repo.transaction/1` the composed `Multi` exactly once (AC2's atomicity:
    a forced failure injected at `:upsert_record_latest` rolls back
-   `:insert_event`/`:assign_sequence`/`:claim_idempotency` in the same
+   `:insert_event`/`:assign_sequence`/`:idempotency` in the same
    Postgres transaction — nothing commits).
-6. On `{:error, :claim_idempotency, {:duplicate_idempotency_key, original_event},
+6. On `{:error, :idempotency, {:duplicate_idempotency_key, original_event},
    _changes}` (the shape `append_multi/3` reuses verbatim from `append/2`'s
    own `interpret_transaction_result/1`, §3.1): **do not** re-run steps 3–5.
    Decode `original_event.payload` (already a JSON object — no re-parse of a
@@ -433,7 +433,8 @@ this design inventing a second sequencing scheme alongside `instance_sequence`.
 **The original-record lookup happens by decoding the ORIGINAL EVENT's own
 stored `payload`, not by a fresh `entity_record_latest` SELECT.**
 
-Rationale: `append_multi/3`'s reused `claim_idempotency` step (M3, §0) already
+Rationale: `append_multi/3`'s reused `:idempotency` step (M3, §0, which runs
+the private `claim_idempotency/3` helper) already
 performs the exact lookup ISS-0159/GH#480 needs — `IdempotencyRecord`'s
 `uq_event_idempotency_key` unique index round-trips a duplicate submission's
 `idempotency_key` back to the **first** successfully-committed `Event` row

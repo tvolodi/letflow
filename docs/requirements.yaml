@@ -15519,58 +15519,62 @@ requirements:
     impl_order: 500  # letflow-queue task id
 
   - id: REQ-263
-    title: Apply the .zig provenance-marking convention to docs/status/*, docs/frontend/*, and docs/anti-patterns.md (closes ISS-0424 part 3c-10)
+    title: Apply the .zig provenance-marking convention to docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, and docs/anti-patterns.md (closes ISS-0424 part 3c-10)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision
       (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the
       PROVENANCE marker text and structural placement rule in section 2, the
       single-regex greppability justification in section 2(a), and the two
-      worked before/after examples in section 4, including the REQ-231
-      cursor.zig worked example that lives inside docs/requirements.yaml
-      itself) to this chunk of REQ-239's original scope, per that design's
-      section 6 chunking recommendation: chunk 239i = docs/status/*,
-      docs/frontend/*, and docs/anti-patterns.md.
+      worked before/after examples in section 4) to this chunk's CORRECTED
+      scope: docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md,
+      and docs/anti-patterns.md -- three files only.
+
+      SCOPE CORRECTION (2026-09-06): the original draft-time scope for this
+      chunk (239i) additionally listed the 7 docs/status/requirement_status.v2
+      through .v7 and .v9 volumes plus docs/status/requirement_status.yaml --
+      11 files total. Applying the convention to those 8 additional files was
+      found during this run's REVIEWER gate to violate a frozen-volume
+      invariant that REQ-237's original design never addressed: those 8
+      volumes are closed run-history records (see
+      docs/status/requirement_status.index.yaml) and must not be modified
+      after closure, including by additive-only marker insertion. The
+      resulting corruption was reverted (8-volume revert, confirmed
+      zero-diff against origin/main at this run's REVIEWER re-gate), and
+      CODE-DESIGNER amended the design doc with a new section 2.5
+      (lib/letflow/design/req237-zig-provenance-marking-convention.md#2.5)
+      declaring closed docs/status/ volumes permanently and totally excluded
+      from this convention -- not deferred to a future chunk, excluded
+      outright, since the convention cannot be applied to a closed volume
+      without violating its closure. See
+      handoffs/WF02-REQ263-20260906/step-05-code-designer.json through
+      step-08-reviewer.json for the full discovery/fix/re-gate evidence
+      trail.
 
       This is one of ten requirements replacing REQ-239 (deleted, too wide for
       one DOC-UPDATER turn at 58 non-requirements.yaml files plus 538 matching
       lines inside requirements.yaml): REQ-254 (239a), REQ-255 (239b), REQ-256
       (239c), REQ-257 (239d), REQ-258 (239e1), REQ-259 (239e2), REQ-260
-      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i). Each sibling
-      covers a disjoint scope; do not touch files or requirements.yaml entries
-      outside docs/status/*, docs/frontend/*, and docs/anti-patterns.md under
-      this requirement, even if they also carry a .zig citation -- they belong
-      to a sibling chunk.
+      (239f), REQ-261 (239g), REQ-262 (239h), REQ-263 (239i, corrected to 3
+      files per the scope correction above). Each sibling covers a disjoint
+      scope; do not touch files or requirements.yaml entries outside this
+      corrected 3-file scope under this requirement, even if they also carry
+      a .zig citation -- they belong to a sibling chunk or are permanently
+      excluded per design section 2.5.
 
       Do NOT touch CLAUDE.md, README.md, or docs/migration/README.md's own
       already-completed Part 1 framing edits -- carried forward unchanged from
-      REQ-239's own out-of-scope note; confirm with a grep first if either
-      file also contains a raw .zig citation, but none is expected.
-
-      MEASURED SCOPE AT DRAFT TIME (2026-09-05, re-derive at fix time with
-      REQ-237's actual finalized regex before starting -- do not trust this
-      count): 11 files in this chunk carry a .zig reference today (`grep -rl
-      '\.zig' docs/status/requirement_status.v2.yaml
-      docs/status/requirement_status.v3.yaml
-      docs/status/requirement_status.v4.yaml
-      docs/status/requirement_status.v5.yaml
-      docs/status/requirement_status.v6.yaml
-      docs/status/requirement_status.v7.yaml
-      docs/status/requirement_status.v9.yaml
-      docs/status/requirement_status.yaml
-      docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md
-      docs/anti-patterns.md`). If this still proves too wide for one
-      DOC-UPDATER turn by fix time, split further and record the split as a
-      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
-      sweep.
+      REQ-239's own out-of-scope note; confirmed via grep that neither file
+      contains a raw .zig citation.
     acceptance_criteria:
-      - "before starting, run REQ-237's finalized marker-detection regex against docs/status/*, docs/frontend/*, and docs/anti-patterns.md for the OLD (unmarked) citation form and quote the count (draft-time proxy: `grep -c '\\.zig' docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md`, summed)"
-      - "after the change, every .zig source-path citation in docs/status/*, docs/frontend/*, and docs/anti-patterns.md matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts"
-      - "every citation's original file-path text is preserved verbatim -- a sampled diff (at least 10 citations across at least 5 different files, or across every file in this chunk if it has fewer) shows only the marker added, no path text altered or removed"
+      - "before starting, run REQ-237's finalized marker-detection regex against docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, and docs/anti-patterns.md for the OLD (unmarked) citation form and quote the count"
+      - "after the change, every .zig source-path citation in docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, and docs/anti-patterns.md matches REQ-237's new marker convention -- zero citations remain in the old, unmarked form; quote the grep command and before/after counts (verified: S1-release 6/6, contract-gaps.md 4/4, anti-patterns.md 2/2)"
+      - "every citation's original file-path text is preserved verbatim -- confirmed by sampled diff across all 3 files, marker added only, no path text altered or removed"
       - "CLAUDE.md, README.md, and docs/migration/README.md are untouched by this requirement's commits -- confirmed by git diff --stat"
-      - "the deliberate-divergence notes inside this chunk's scope (docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md) are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml docs/status/requirement_status.yaml docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md` before and after this requirement's commits and diffing (byte-identical expected), quoted with both counts"
+      - "the deliberate-divergence notes inside this chunk's corrected scope are unmodified -- confirmed by re-running `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md` before and after this requirement's commits (zero matches both directions, byte-identical)"
+      - "the 8 docs/status/ closed run-history volumes (requirement_status.yaml, .v2 through .v7, .v9) show zero diff against origin/main -- they are permanently excluded from this convention per design section 2.5, not deferred; confirmed by per-file `git diff origin/main --` at REVIEWER re-gate"
     depends_on: [REQ-237]
     impl_order: 501  # letflow-queue task id
 

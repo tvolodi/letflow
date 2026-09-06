@@ -1969,8 +1969,14 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 4
+    entries: 5
     note: >
+      Incremented to 5 by DOC-UPDATER's own REQ-270 done-event append
+      (WF02-REQ270-20260906) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 5 on-disk entries, no
+      rebase conflict on this file at the time it was written. 304
+      lines, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered.
       Incremented to 4 by DOC-UPDATER's own REQ-269 done-event append
       (WF02-REQ269-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 4 on-disk entries, no

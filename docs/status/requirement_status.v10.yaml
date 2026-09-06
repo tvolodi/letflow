@@ -265,3 +265,40 @@ history:
       files -- PASS (handoffs/WF02-REQ269-20260906/step-02d-reviewer.json).
       Docs-only, no mix compile/format/test applicable. ORCH will merge
       and release queue task 507 status:done.
+  - req: REQ-270
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-06T01:43:12Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/design/req178-dlq-routes.md through
+      req202-artifact-repository.md (13 files) (closes ISS-0424 part
+      3c-17, queue task 508, feature/WF02-REQ270-20260906). This is
+      chunk 239-design-g of eight lib/letflow/design/-scope chunks
+      (REQ-264..271). 31 marker lines inserted covering 37 .zig citation
+      lines (fewer markers than citations since several dense files have
+      multiple .zig citations sharing one paragraph/table/list-item
+      unit). Novel technique, first in this chunk series: for
+      bulleted/numbered list-item citations, the marker became the
+      item's new first line and the original citation prose was
+      reformatted as an indented continuation, rather than inserted as
+      a preceding bare line -- this produced 14 deletions (all prior
+      chunks were purely additive). Also 2 blockquote citations
+      (req178, req192) using the `> `-prefixed marker precedent from
+      REQ-269's req151, and 2 tables in req197 each getting one marker
+      above the header (not per-row). REVIEWER independently byte-diffed
+      every flagged list-item-merge instance (req182, req185, req188,
+      req197 x6, req198 x2, req202 x2) confirming citation prose
+      preserved verbatim as reindented continuations, no renumbering
+      needed (the marker replaced the existing item's first line rather
+      than inserting a new item), and continuation indent matching each
+      file's own pre-existing convention (spot-checked against req188's
+      unmodified item 2). Also independently re-verified per-file .zig
+      counts identical before/after (37=37, confirming the deletions are
+      pure reformatting of the same citations, none lost), the
+      blockquote/table cases, the one divergence-note line (req194)
+      byte-identical, and CLAUDE.md/README.md/docs/migration/README.md/
+      sibling design files untouched -- PASS
+      (handoffs/WF02-REQ270-20260906/step-02d-reviewer.json). Docs-only,
+      no mix compile/format/test applicable. ORCH will merge and release
+      queue task 508 status:done.

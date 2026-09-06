@@ -15753,7 +15753,7 @@ requirements:
   - id: REQ-270
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-g: req178-dlq-routes.md through req202-artifact-repository.md (closes ISS-0424 part 3c-17)"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

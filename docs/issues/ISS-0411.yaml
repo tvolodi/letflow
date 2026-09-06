@@ -51,6 +51,7 @@ related:
   - REQ-177
   - ISS-0104
 diagnosis_note: >
+  PROVENANCE (historical, not current decision authority):
   ISSUE-FIXER (2026-09-02): root cause confirmed by direct source read, not
   a hidden defect -- Letflow.Engine.Transition.dispatch_node/4
   (lib/letflow/engine/transition.ex:270-339) is a 7-way dispatch table

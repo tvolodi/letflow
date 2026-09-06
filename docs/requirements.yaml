@@ -15468,7 +15468,7 @@ requirements:
   - id: REQ-262
     title: Apply the .zig provenance-marking convention to docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of that range carrying a .zig reference) (closes ISS-0424 part 3c-9)
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

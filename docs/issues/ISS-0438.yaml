@@ -10,6 +10,7 @@ description: >
   but is not). Found while assessing whether Letflow needs 1C-style
   business-object templates.
 
+  PROVENANCE (historical, not current decision authority):
   WHAT IS DEFERRED. lib/letflow/router.ex's "Deferred routes (not yet
   mounted)" table names two unported routers and assigns them a stage:
     Letflow.Routers.Entities    | entities.zig     | S5/S6 (entity/data-model subsystem)
@@ -59,6 +60,7 @@ related:
   - ISS-0439
   - ISS-0428
 source: >
+  PROVENANCE (historical, not current decision authority):
   Found while answering the user's question about 1C-style business-object
   templates, 2026-09-02. Deferred-router rows read from lib/letflow/router.ex;
   R-Co subsystem sizes measured with ls/wc against

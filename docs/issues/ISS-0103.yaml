@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. OQ-1: REQ-029's CHK-10 requires the
   "endpoint" attribute to be present and non-blank unconditionally at
@@ -27,6 +28,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/331
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   R-Co/src/engine/service_task.zig's parseConfigFromNodeAttributes (lines
   84-100) confirms "url"/"endpoint" is fully optional whenever
   "service_id" is present (resolveCatalogEndpoint derives the real URL

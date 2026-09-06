@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T00:00:00Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Filed by DOC-UPDATER during REQ-112 (ISS-0076 item 2 sweep, GH#317).
   Deferred question (OQ-2): should the parent's own registered
   variable-type schemas (Letflow.EventStore.Registry, the schemas
@@ -26,6 +27,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/329
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   R-Co/src/engine/instance.zig's mergeVariables (called at line 4956 for
   the sub-process completion path) uses the exact same variable_schemas
   lookup, keyed only on definition_id, as every other merge call site

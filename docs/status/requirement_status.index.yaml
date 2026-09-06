@@ -1969,13 +1969,31 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 10
+    entries: 11
     note: >
+      Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
+      found main further advanced by WF02-REQ261-20260906's own REQ-261
+      done-event append (landed via PR #1023 while this branch's own
+      recount to 10 was already committed). Composed in chronological
+      `at:` order in requirement_status.v10.yaml itself -- REQ-262 done
+      (05:14:49Z) before REQ-261 done (05:21:54Z). Recounted directly
+      from `grep -c "^  - req:" docs/status/requirement_status.v10.yaml`
+      = 11 on-disk entries, rather than carrying forward either side's
+      independently-computed 10, per this note's own recount-every-time
+      rule.
+      Incremented to 10 by DOC-UPDATER's own REQ-262 done-event append
+      (WF02-REQ262-20260906) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 10 on-disk entries, no
+      rebase conflict on this file at the time it was written. 481
+      lines, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered. (Superseded by the recount to 11 above.)
       Incremented to 10 by ORCH's own REQ-261 done-event append
       (WF02-REQ261-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 10 on-disk entries,
       no rebase conflict on this file. 475 lines, well under the
       1200-line/120000-byte roll ceiling, so no roll triggered.
+      (Separate, concurrently-landed count of 10; also superseded by
+      the recount to 11 above.)
       Incremented to 9 by DOC-UPDATER's own REQ-255 done-event append
       (WF02-REQ255-20260906) -- `grep -c "^  - req:"
       docs/status/requirement_status.v10.yaml` = 9 on-disk entries, no

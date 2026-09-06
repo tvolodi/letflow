@@ -447,6 +447,38 @@ history:
       -- PASS (handoffs/WF02-REQ255-20260906/step-02d-reviewer.json).
       Docs-only, no mix compile/format/test applicable. ORCH will
       merge and release queue task 493 status:done.
+  - req: REQ-262
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-06T05:14:49Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      docs/issues/ISS-0101.yaml, ISS-0102.yaml, ISS-0103.yaml,
+      ISS-0104.yaml, ISS-0105.yaml, ISS-0278.yaml, ISS-0402.yaml,
+      ISS-0411.yaml, ISS-0424.yaml, ISS-0438.yaml, ISS-0439.yaml (11
+      files, the subset of ISS-0101..ISS-0439 carrying a .zig
+      reference) (closes ISS-0424 part 3c-9, queue task 500,
+      feature/WF02-REQ262-20260906). This is chunk 239h of ten
+      REQ-239-replacement chunks (REQ-254..263). This queue task had
+      been force-released earlier in this session after being
+      confirmed genuinely stuck alongside 3 siblings. DOC-UPDATER
+      re-derived the exact file scope fresh (grep -l '.zig' across all
+      159 files in the ISS-0101..ISS-0439 range) rather than trusting
+      the draft-time count, confirming the same 11 files. 23 markers
+      inserted, 0 deletions; 32 total .zig lines identical before/after.
+      ISS-0424's citation sits above its own `title:` key, needing a
+      `#`-prefixed YAML-comment marker (per the ISS-0510 amendment)
+      rather than a bare line, since a bare line above a top-level key
+      would break YAML. REVIEWER independently re-derived the same
+      11-file scope from scratch, confirmed per-file .zig counts and
+      citation-text preservation, verified the ISS-0424 comment-marker
+      technique is correct YAML, confirmed the one divergence-note
+      match (ISS-0424) byte-identical, confirmed
+      CLAUDE.md/README.md/docs/migration/README.md/sibling issue files
+      untouched, and independently re-validated all 11 files as valid
+      YAML -- PASS (handoffs/WF02-REQ262-20260906/step-02d-reviewer.json).
+      Docs-only, no mix compile/format/test applicable. ORCH will
+      merge and release queue task 500 status:done.
   - req: REQ-261
     event: done
     agent: ORCH

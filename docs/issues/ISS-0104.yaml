@@ -5,6 +5,7 @@ discovered_in_run: GH331-resolution-20260820
 discovered_at: "2026-08-20T00:00:00Z"
 severity: MAJOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Discovered incidentally while resolving GH#331 (OQ-1 in
   lib/letflow/design/service_task.md). R-Co's real source
   (R-Co/src/engine/service_task.zig, parseConfigFromNodeAttributes, lines
@@ -47,6 +48,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/334
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   check_service_task_endpoint/1 (lib/letflow/definitions/graph.ex) now
   filters out nodes with a non-blank "service_id" before flagging a
   missing "endpoint" -- CHK-10 only fires :missing_endpoint when both

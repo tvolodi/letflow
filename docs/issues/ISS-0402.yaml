@@ -35,6 +35,7 @@ status: resolved
 resolved_in_run: WF03-ISS0402-20260905
 resolved_at: "2026-09-05T02:55:00Z"
 scoping_note: >
+  PROVENANCE (historical, not current decision authority):
   ISSUE-FIXER investigated (WF03-ISS0402-20260902, 2026-09-02) and
   recommended NOT implementing branch-level cancellation: ISS-0397's
   fix does genuinely close OQ-2's literal cited blocker (join_counters

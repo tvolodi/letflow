@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ225-20260906-step-01d",
+  "run_id": "WF02-REQ225-20260906",
+  "workflow_id": "WF-02",
+  "step": "01d",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ225-20260906/step-01d-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T08:13:10Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ225-20260906-step-01c"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-225)", "lib/letflow/design/req225-entity-definition-schema-validation.md"],
+    "branch_name": "feature/WF02-REQ225-20260906",
+    "base_commit": "e13866da"
+  },
+  "task": {
+    "description": "Re-verify REQ-225's reworked design genuinely resolves the 11-vs-12 rule count discrepancy with a defensible, non-fabricated merge."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Independently recounted §3's table: 1,2,3,4,5,6,7,8a,8b,8c,9 = 11 rows, matching the claim (not 12, not an over-merged 10). Verified the FK+constraint combined-namespace premise is genuine and not fabricated for this rework: diffed e13866da against its parent (1f552284, the ORIGINAL, already-FAILED version) and found Rule 2's and Rule 5's detailed subsections were UNCHANGED by this rework -- Rule 2 scope (c) already read 'foreign_keys ∪ constraints combined ... they occupy one DB-constraint-name namespace in REQ-226's projection' and Rule 5 already covered 'constraints[].fields' under the same :fk_field_not_found atom, in the version that failed the first review. Only the §3 summary-table row LABELS were corrected in this rework (previously said 'separately indexes/FKs/constraints', contradicting the already-combined rule bodies -- now fixed to say 'combined'). So the premise this rework leans on is a real, pre-existing property of the design, not invented on the spot to force the arithmetic -- the prior failure mode (a fold that reduced nothing) does not repeat here. The merge itself is a principled, consistent extension of that same existing DB-constraint-name-namespace reasoning to cardinality, not an arbitrary pick chosen only to land on 11. §9 open question 1 and §10's AC2 row are both updated consistently with the 3-way split; grepped the full document for '8d', 'too_many_foreign_keys', 'too_many_constraints' -- zero hits, no stray references to the old 4-way split or a count of 12 anywhere except the rework-note's explicit, correctly-framed historical explanation of the prior FAIL. Fixturability re-confirmed: a fixture with e.g. 33 uniquely-named constraints, 0 foreign keys, and all constraint fields valid trips only :too_many_fk_or_constraints (Rule 8c) without tripping Rules 2/5/8a/8b/9; the atom is distinct from :too_many_fields/:too_many_indexes and specifically identifies rule 8c as the single combined check that fired, satisfying AC2's 'identifies which rule failed' for a rule that is, by design, one combined check rather than two. Regression checks: grepped for 'def ' / '  do$' patterns in the full document -- none found beyond @typedoc/@doc/@spec-only fenced blocks, no implementation code introduced; `git diff --stat e13866da^..e13866da -- lib/letflow/design/` touches only this one design doc (70 insertions/44 deletions, no new files); §1 (ownership model) and §4/§7 (canonicalisation-reuse citations) are untouched by this rework's diff and remain intact as previously verified in step-01b. No remaining discrepancies found. Design is ready to proceed to ELIXIR-DEV."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

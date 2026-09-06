@@ -578,3 +578,44 @@ history:
       volumes are OUT OF SCOPE entirely"), the insertions were
       reverted, REVIEWER's full re-gate PASSed. docs/issues/ISS-0424.yaml
       flipped to status: resolved.
+  - req: REQ-225
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-06T09:02:35Z"
+    note: >
+      Opens the entity/data-model subsystem port (ISS-0438) slice 1:
+      the EntityDefinition/FieldDef/IndexDef/FKDef/ConstraintDef JSON
+      shape, 11 structural validation rules, canonicalisation reuse
+      (Letflow.Repository.Canonicaliser, REQ-202), and logical-shape
+      versioning. New modules: lib/letflow/entities/definition.ex,
+      definition/validator.ex, definition/shape.ex, closing queue task
+      460, feature/WF02-REQ225-20260906. No persistence, no CRUD, no
+      routes (those are REQ-226/227/228). This task had not been
+      claimable via get_next_task (a queue-level depends_on on task
+      375 not reflected by docs/requirements.yaml's own satisfied
+      REQ-202 dependency) but was successfully claimed via direct
+      set_lock. CODE-DESIGNER's design went through one genuine rework
+      cycle: CODE-DESIGN-VALIDATOR's first pass FAILed on a real
+      arithmetic defect (12 rules specified while claiming 11, via a
+      fold that didn't actually apply); rework merged the FK-count and
+      constraint-count cardinality ceilings into one rule (Rule 8c),
+      reusing an existing shared-namespace pattern already present in
+      Rules 2/5 -- CODE-DESIGN-VALIDATOR's re-check confirmed this
+      merge was genuine, not fabricated to force the count, and PASSed.
+      ELIXIR-DEV implemented exactly per the validated design (11
+      rules: 1,2,3,4,5,6,7,8a,8b,8c,9), wrote 37 tests covering all 7
+      acceptance criteria including independent per-rule fixtures.
+      REVIEWER independently re-verified design fidelity, all 11
+      rules' independent fixturability, canonicalisation-reuse (no
+      second algorithm), the logical-shape-versioning tests, and scope
+      (exactly 5 files, no migration/persistence/route) -- PASS
+      (handoffs/WF02-REQ225-20260906/step-02d-reviewer.json). No
+      SECURITY-REVIEWER gate applies (pure functional module, no Repo
+      call, no route). TEST-RUNNER ran the full suite: 3304/3306
+      passed; the 2 failures are Mix.Tasks.Letflow.CheckToolchainTest's
+      rust-pin checks failing on :enoent from this local sandbox
+      having no rustc binary at all (confirmed via which rustc),
+      unrelated to this diff -- CI's real rustc toolchain will
+      validate that check for real. mix compile
+      --warnings-as-errors and mix format --check-formatted both
+      independently confirmed clean by ORCH.

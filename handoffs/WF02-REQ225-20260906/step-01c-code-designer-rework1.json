@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ225-20260906-step-01c",
+  "run_id": "WF02-REQ225-20260906",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ225-20260906/step-01c-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T08:10:58Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ225-20260906-step-01b"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-225)", "handoffs/WF02-REQ225-20260906/step-01b-code-design-validator.json"],
+    "branch_name": "feature/WF02-REQ225-20260906",
+    "base_commit": "0a6fef56"
+  },
+  "task": {
+    "description": "Rework REQ-225's design to resolve the 11-vs-12 rule count discrepancy CODE-DESIGN-VALIDATOR found."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Took Path A. CODE-DESIGN-VALIDATOR's finding was correct: the prior pass split cardinality into 4 sub-rules (fields, indexes, foreign_keys, constraints) then claimed a fold of 'field uniqueness' and 'index/constraint-name uniqueness' into one rule to bring 12 back to 11 -- but AC2's 9 named categories only ever had one uniqueness category, so that fold reduced nothing and the true count was 12. Fixed by reducing the cardinality split from 4 sub-rules to 3 instead, using a grouping principle this design already establishes and uses elsewhere (not invented to force the arithmetic): Rule 2 (scope c) and Rule 5 already treat 'foreign_keys' and 'constraints' as one combined namespace (one duplicate-name check, one field-coverage check, since REQ-226's projection gives them one shared DB-constraint-name namespace). Applying that same principle to cardinality yields Rule 8c: one combined ceiling on length(foreign_keys) + length(constraints) <= 32, rather than two separate per-collection ceilings. Final breakdown: Rule 1 (name format), Rule 2 (name uniqueness -- fields; indexes; foreign_keys+constraints combined), Rule 3 (queried+json exclusion), Rule 4 (index field coverage), Rule 5 (FK field coverage, foreign_keys+constraints combined), Rule 6 (enum validity), Rule 7 (decimal validation), Rule 8a (field-count cardinality, max 200), Rule 8b (index-count cardinality, max 32), Rule 8c (combined FK+constraint-count cardinality, max 32), Rule 9 (self-referential-FK rejection). That is 7 singly-numbered rules + 3 lettered cardinality sub-rules + 1 = 11 total, verified by counting the revised Sec 3 table's rows directly (1,2,3,4,5,6,7,8a,8b,8c,9). Sec 3's preamble now includes an explicit 'Rework note' explaining what was wrong with the prior pass's claimed fold and why this pass's grouping is principled rather than arbitrary. Sec 9 open question 1 updated to flag that R-Co source cannot confirm whether FKs and constraints were bounded combined or separately in the original. Sec 10 traceability row for AC2 updated to reference the 3-way cardinality split. Committed as e13866da on feature/WF02-REQ225-20260906. No code implemented, not pushed, not merged."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

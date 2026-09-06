@@ -13617,7 +13617,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity definition JSON schema shape and structural validation rules (definition.zig + validator.zig's definition-validation half)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

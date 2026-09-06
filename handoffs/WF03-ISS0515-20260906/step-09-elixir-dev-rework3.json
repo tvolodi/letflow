@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-09",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "09",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-09-elixir-dev-rework3.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T18:01:16Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03",
+      "WF03-ISS0515-20260906-step-04",
+      "WF03-ISS0515-20260906-step-05",
+      "WF03-ISS0515-20260906-step-06",
+      "WF03-ISS0515-20260906-step-07",
+      "WF03-ISS0515-20260906-step-08"
+    ],
+    "artifacts_changed": [
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "PR #1033 failed CI a THIRD time with the IDENTICAL failure signature (DBConnection.ConnectionError, 15000ms timeout, :prim_inet.recv0/3 stack) as rework 2, despite rework 2 changing the internal pool-size/reserve split (TEST_POOL_SIZE 1->4, TEST_NONPOOL_CONNECTION_RESERVE 3->5). Verify ORCH's read that this is genuine server-side max_connections=100 scarcity rather than a mis-sized internal reserve, and if so implement a decisive fix -- raise Postgres's own max_connections in CI -- rather than reslicing the existing 100-connection budget a third time."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "REASONING VERIFIED: two internal reslices of the SAME 100-connection budget (TEST_POOL_SIZE=1 then =4, reserve=3 then =5) produced the EXACT SAME failure signature -- same 15000ms timeout, same :erlang client identifier, same :prim_inet.recv0/3 stack frame (a raw TCP-level socket-receive, i.e. a stalled connection ESTABLISHMENT, not a queue wait on an already-open slot). Two different splits yielding an identical symptom is evidence against 'the split is wrong' and for 'the budget itself is too small' -- concurred with ORCH's read.\n\nRESEARCH (via WebSearch/WebFetch, not guessed): confirmed GitHub Actions' `services.<id>.command` key IS genuinely supported -- added to the runner in April 2026 (well before this project's 2026-09-06 run date), Linux-runners-only (ubuntu-latest, already used by this job, qualifies). It overrides the service container's default CMD; the official postgres:16 image's own docker-entrypoint.sh treats a `command:` beginning with `postgres` as the server process's own argv, so `-c max_connections=200` is a real postgresql.conf override, not a docker-create/run flag (that's the pre-existing, unrelated `options:` key's job -- confirmed these are two distinct, both-real keys, not a case of guessing one for the other). Cross-checked against two independent sources (itacademy.com.ua's 2026-04-04 writeup and a WebFetch summary of GitHub's own 'About service containers' doc) before writing any YAML, per the task's own caution about a wrong key silently doing nothing or breaking container startup.\n\nFIX IMPLEMENTED:\n1. .github/workflows/ci.yml: added `command: postgres -c max_connections=200` to `services.postgres` (doubles the real server-side ceiling from 100 to 200). Added `TEST_MAX_CONNECTIONS: \"200\"` to the 'Run backend gate' step's env (scripts/test_parallel.sh already reads this var, default 100, previously never overridden in CI) so the existing budget arithmetic recomputes against the real, raised ceiling instead of silently leaving the extra 100 connections of headroom unused. Added inline comments at both edit sites explaining the reasoning and citing the command/options distinction.\n2. docs/migration/decisions/0009-test-parallel-pool-sizing.md: added a new addendum (2026-09-06, ISS-0515 third rework) recording the identical-signature-across-two-reslices evidence, the command-key research and citation, the fix, and a re-derived verification: usable_ceiling=200-3=197, budget=197-10-5=182, computed=182/4=45 (up from 20), N*TEST_POOL_SIZE=180, worst case=180+1+4+10=195<=197 (holds, same 2-connection margin as before but against a ceiling with 100 more absolute connections of real slack for the outer partitions).\n3. NOT reverted: scripts/test_parallel.sh's TEST_POOL_SIZE=4 (nested subprocess) and TEST_NONPOOL_CONNECTION_RESERVE default=5 from rework 2 are left unchanged -- they were never wrong, only insufficient alone against a near-exhausted 100-connection ceiling; kept as an additive, still-reasonable margin now sitting inside a doubled budget. Explicitly justified in the new addendum rather than left ambiguous.\n4. FALLBACK NOT TAKEN, with reasoning recorded: the queue-timeout-increase / retry-the-nested-subprocess fallback was available but not used, since `services.command` was confirmed genuinely supported (not a guess) -- a queue-timeout increase would mask the same scarcity by waiting longer for a connection that might still not arrive, and a retry would hide a real recurring constraint behind non-determinism, rather than fixing the actual constraint. Documented as still-reasonable belt-and-suspenders options if max_connections=200 also proves marginal.\n\nVERIFICATION (own output, this turn):\n- `python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))\"`: parses clean, `command: postgres -c max_connections=200` confirmed present under services.postgres in the parsed structure.\n- `mix compile --warnings-as-errors`: exit 0, no output (clean).\n- `mix format --check-formatted`: exit 0 (clean).\n- `mix test test/letflow/engine/lua/executor_test.exs`: 'Result: 45 passed, 11 excluded', 0 failures -- the ISS-0426 self-check (spawning the nested subprocess) passed locally, consistent with both prior reworks' own note that this local sandbox has more connection headroom than CI and does not reproduce the scarcity being fixed.\n\nNON-REPRODUCTION NOTE (same caveat as reworks 1 and 2): the original failure is CI-specific server-side scarcity and does not reproduce in this local sandbox. This fix's correctness rests on (a) verified-not-guessed GitHub Actions syntax support for `services.command`, and (b) the doubled-ceiling arithmetic re-derived above, not on a local repro of the exhaustion itself.\n\nWHAT I'D TRY NEXT IF THIS ALSO FAILS: if CI fails a fourth time with the SAME signature even after doubling max_connections, that would be strong evidence the scarcity is even larger than 2x, or that a different resource (not connection count) is the real constraint (e.g. genuine host-level TCP/network saturation on the runner, unrelated to Postgres's own connection ceiling) -- next step would be to raise max_connections further (e.g. 400) as a cheap re-test, AND in parallel add the queue-timeout/retry fallback from this task's option 2 as a second, independent line of defense, since two SEPARATE fixes addressing different failure theories would no longer suffer from the 'identical signature across different reslices' ambiguity that ruled out a third pool-size-only reslice this round."
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

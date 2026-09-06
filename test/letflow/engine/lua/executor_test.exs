@@ -1428,13 +1428,77 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # "excluded everywhere, so it silently never runs or fails again" failure mode
     # the task description specifically calls out, at the point where it would
     # actually matter (the real isolated run, not just the tag count above).
+    # ISS-0515/ISS-0426 follow-up: this subprocess is a brand-new OS process/BEAM VM.
+    # It inherits TEST_POOL_SIZE (and every other env var, incl. MIX_TEST_PARTITION --
+    # System.cmd/3's :env option ADDS to the inherited environment, it doesn't replace
+    # it) from whichever scripts/test_parallel.sh partition spawned it, so left
+    # unset here it would start its OWN, separate Ecto pool sized identically to a
+    # full sibling partition's -- an entire extra partition's worth of live Postgres
+    # connections that scripts/test_parallel.sh's N*TEST_POOL_SIZE budget arithmetic
+    # never accounts for, on top of the parent partition's own pool (still open/idle,
+    # not closed, while this call blocks). That is what pushed CI over
+    # max_connections after ISS-0515 added a synchronous
+    # `Letflow.Test.TenantTemplate.ensure_template!()` pre-build call to every
+    # `mix test` invocation's test_helper.exs (this nested run included) -- see
+    # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515 addendum.
+    # This module's own moduledoc note (line ~7) already establishes these 11 tests
+    # short-circuit before any Repo insert, so a small, fixed pool is genuinely
+    # enough -- but NOT a pool of exactly 1. This file's `async: true` (line 11)
+    # means this nested subprocess's own test_helper.exs pre-build calls
+    # (`sweep_orphans/0`, `sweep_service_catalog_orphans/1`,
+    # `ensure_template!/0` -- all real `Letflow.Repo` checkouts) run in that same
+    # BEAM VM, and Ecto's Sandbox/DBConnection checkout+checkin machinery can
+    # transiently need a second connection concurrently with the first even when
+    # the 11 tests themselves never touch the DB (e.g. a prior checkout's
+    # asynchronous `on_exit` checkin racing the next caller's checkout, or
+    # Postgrex's own internal health/reconnect connection). A pool of exactly 1
+    # gave DBConnection's checkout queue nowhere to put that second, genuinely
+    # concurrent request, so it queued past the 15s default and the whole
+    # subprocess died with a `DBConnection.ConnectionError` (first hit
+    # 2026-09-06, this same ISS-0515/ISS-0426 branch, immediately after the
+    # TEST_POOL_SIZE=1 cap landed). 4 connections is still tiny next to an
+    # uncapped sibling-partition-sized pool (schedulers_online()*2, typically
+    # 8-32) but gives enough slack for that kind of transient overlap without
+    # reopening the original unbounded-pool problem. See
+    # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515
+    # addendum for the re-derived connection-budget arithmetic this value feeds
+    # into (`TEST_NONPOOL_CONNECTION_RESERVE` in scripts/test_parallel.sh).
     @tag timeout: 60_000
     test "the isolated --only lua_wallclock_race partition runs and passes exactly 11 tests" do
       {output, exit_code} =
         System.cmd(
           "mix",
           ["test", "--only", "lua_wallclock_race", "test/letflow/engine/lua/executor_test.exs"],
-          stderr_to_stdout: true
+          stderr_to_stdout: true,
+          env: [
+            {"TEST_POOL_SIZE", "4"},
+            # ISS-0515, fourth rework (2026-09-06): PR #1033 failed CI four times in a
+            # row with the identical DBConnection.ConnectionError signature even after
+            # doubling Postgres's own max_connections (see this file's env var and
+            # docs/migration/decisions/0009-test-parallel-pool-sizing.md's fourth
+            # addendum for the live CI evidence that the `services.postgres.command`
+            # override did NOT actually raise the server-side ceiling). Rather than
+            # attempt a fifth reslice/raise of a connection budget this subprocess
+            # never needed to touch in the first place, this env var tells
+            # test/test_helper.exs to skip its `Letflow.Test.TenantTemplate
+            # .ensure_template!/0` pre-build call entirely inside THIS one nested
+            # subprocess. That is safe by construction: this module's own moduledoc
+            # already states the 11 `:lua_wallclock_race`-tagged tests need "No
+            # database access required ... short-circuit before any Repo insert" --
+            # they have no tenant fixture dependency for `ensure_template!/0` to have
+            # ever protected them from in the first place. The tenant_template schema
+            # was, in any case, already built by THIS partition's own enclosing
+            # test_helper.exs run before this test process could even exist -- the
+            # nested subprocess re-doing that work from its own empty
+            # `:persistent_term` was always pure overhead, never a genuine
+            # correctness requirement. `TEST_POOL_SIZE=4` above is left in place
+            # (not reduced further) because test_helper.exs's `sweep_orphans/0` and
+            # `sweep_service_catalog_orphans/1` calls remain unconditional and still
+            # open real `Letflow.Repo` checkouts in this subprocess regardless of
+            # this flag -- it removes the heaviest, advisory-lock-contending DB path
+            # (`ensure_template!/0`), not all DB access from this process.
+            {"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD", "1"}
+          ]
         )
 
       assert exit_code == 0,

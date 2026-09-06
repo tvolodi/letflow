@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-00",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T16:08:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515"],
+    "related_handoff_ids": ["WF02-REQ226-20260906"],
+    "artifacts_in": [
+      "docs/issues/ISS-0515.yaml",
+      "test/support/tenant_template.ex",
+      "priv/repo/migrations/20260906000001_create_entity_definitions.exs",
+      "scripts/test_parallel.sh",
+      ".github/workflows/ci.yml"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "base_commit": "468079c4"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0515: PR #1029 (REQ-226)'s backend CI gate failed twice reproducibly (~53min each) with widespread cascading test failures (200+ tests/partition) consistent with parallel test_parallel.sh partitions racing on tenant_template.ex's advisory-lock-guarded template build. A same-day docs-only PR (#1032, branched from main WITHOUT REQ-226's migration) ran the identical CI gate cleanly in 6-7 minutes, confirming the race is specific to REQ-226's branch state, not general harness fragility. Read docs/issues/ISS-0515.yaml in full for the complete symptom description and ORCH's working hypothesis (Ecto's default 15s query timeout applied to the pg_advisory_lock wait in tenant_template.ex, tipped over threshold by REQ-226's one additional migration under CI's specific hardware). CONFIRM OR REFUTE this hypothesis with direct evidence (read the actual timeout config, the actual lock-wait code, and ideally reproduce/instrument), then hand off to CODE-DESIGNER/ELIXIR-DEV for the actual fix -- do not implement the fix yourself."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0515-20260906 created off main @ 468079c4 (post ISS-0515 filing merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

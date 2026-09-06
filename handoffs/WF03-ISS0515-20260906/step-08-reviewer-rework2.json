@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-08",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "08",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0515-20260906/step-08-reviewer-rework2.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T17:44:05Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03",
+      "WF03-ISS0515-20260906-step-04",
+      "WF03-ISS0515-20260906-step-05",
+      "WF03-ISS0515-20260906-step-06",
+      "WF03-ISS0515-20260906-step-07"
+    ],
+    "artifacts_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "Independently re-verify ELIXIR-DEV's rework2 (step-07): TEST_POOL_SIZE raised 1->4 in executor_test.exs's nested subprocess env, TEST_NONPOOL_CONNECTION_RESERVE bumped 3->5 in scripts/test_parallel.sh, decision-record addendum re-derived. Re-derive the connection-budget arithmetic independently, sanity-check the choice of 4, confirm no application-logic scope creep, run own compile/format/test commands, and assess risk of a third failure plus a more robust alternative."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "1) DIFF MATCHES CLAIM: `git diff 593fb932..eef643d1` touches exactly test/letflow/engine/lua/executor_test.exs, scripts/test_parallel.sh, docs/migration/decisions/0009-test-parallel-pool-sizing.md (plus the step-07 handoff json). TEST_POOL_SIZE literal changed 1->4 at the System.cmd/3 :env call; TEST_NONPOOL_CONNECTION_RESERVE default changed 3->5; decision doc's Fix/reserve/verification paragraphs rewritten to match, explicitly recording that the TEST_POOL_SIZE=1 attempt was wrong and why. No other files touched -- confirmed scoped to test-harness/CI-budget only, same discipline as the prior two rounds.\n\n2) ARITHMETIC INDEPENDENTLY RE-DERIVED from scripts/test_parallel.sh's own current code (lines ~140-168), not from the doc's numbers: with defaults max_conn=100, headroom=10, superuser_reserved=3, nonpool_reserve=5, N=4: usable_ceiling = 100-3 = 97. budget = 97-10-5 = 82. computed_pool = 82/4 = 20 (bash integer division, floor -- verified: 82/4 in bash is 20, remainder 2 discarded). N*TEST_POOL_SIZE = 4*20 = 80. Worst case = 80 (N-partition saturation) + 1 (ISS-0287 reaper connection) + 4 (this nested subprocess's own capped pool) + 10 (ad-hoc headroom, already excluded from budget but added back for the ceiling check) = 95. 95 <= usable_ceiling 97: holds, with a 2-connection margin (exactly matching the 2 discarded by the floor division, which is the expected relationship). This independently reproduces every number in the doc's re-derivation -- no arithmetic defect found. Cross-checked the prior (reserve=3) numbers the same way: budget=84, computed=21, N*pool=84, worst case=84+1+1+10=96<=97 -- also matches what the doc says the prior addendum computed, confirming internal consistency across both versions of the addendum.\n\n3) CHOICE OF 4 -- SANITY CHECK: this is a reasoned-but-round safety margin, not a value derived from a concrete count of concurrent DB users in the nested subprocess. The 11 tagged tests are DB-free per the module's own moduledoc; the only real Repo activity is test_helper.exs's sequential pre-build calls (sweep_orphans/0, sweep_service_catalog_orphans/1, ensure_template!/0) plus possible transient overlap from async on_exit checkins or Postgrex's internal reconnect connection. That failure mode plausibly needs 2 connections (one steady + one transient), not 4. ELIXIR-DEV's own note concedes this is a margin choice ('still tiny ... wide enough to absorb'), not a formula tied to schedulers_online() or the 11-test count. Not a blocker -- a conservative round number one notch above the minimum plausible need is a reasonable engineering choice for a value that's expensive to get wrong (each round costs a CI cycle) -- but flagging this explicitly as 'reasoned round number, not concretely derived' per the review brief's own framing.\n\n4) NO APPLICATION-LOGIC CHANGES: confirmed via `git diff --stat` -- only the three test-harness/CI-budget/decision-doc files (plus the handoff json) changed. lib/letflow/ untouched.\n\n5) OWN COMMAND RUNS (this turn, not trusting ELIXIR-DEV's report): `mix compile --warnings-as-errors` -- clean, exit 0, no output. `mix format --check-formatted` -- clean, exit 0, no output. `mix test test/letflow/engine/lua/executor_test.exs` run twice independently -- both report 'Result: 45 passed, 11 excluded', 0 failures (the ISS-0426 self-check test, which spawns the TEST_POOL_SIZE=4 nested subprocess, passed both times).\n\n6) RISK OF A THIRD FAILURE / ALTERNATIVE: real risk exists -- as with the 1->4 jump, 4 is untested against CI's actual hardware/timing (both this rework and the prior one note the failure does not reproduce locally, so neither number has been empirically validated against the environment that actually failed). Recommend, as a non-blocking follow-up: reusing the outer partition's own computed TEST_POOL_SIZE for the nested subprocess is NOT the better alternative -- that value is deliberately sized to multiply by N in the outer arithmetic (config/test.exs's schedulers_online()*2 heritage) and is exactly the kind of unbounded, sibling-partition-sized pool this whole addendum chain has been trying to get OUT of the nested subprocess; reusing it would reopen the original too_many_connections problem. A hardcoded small value is the right shape. The more robust alternative worth filing as a follow-up is orthogonal to pool size: the actual symptom was a DBConnection *checkout-queue timeout* (15000ms default), not a connection-count exhaustion in that subprocess (only 1-2 connections were plausibly needed concurrently) -- so raising the Repo's own `:queue_target`/`:queue_interval` (or a one-off `:timeout` override) for this nested subprocess's Repo config would directly address 'queued too long' without consuming any extra connection-budget headroom at all, keeping TEST_POOL_SIZE at a minimal value (1 or 2) and avoiding a second round of budget-arithmetic churn if 4 also proves marginal on CI. Filing this as a suggestion, not a blocking finding, since the current fix's arithmetic is sound and passes its own local verification.\n\nVERDICT: PASS. Diff matches the claimed scope exactly, connection-budget arithmetic independently re-derived and correct with a genuine 2-connection margin, no application-logic scope creep, own compile/format/test runs all green across two independent executions. One non-blocking observation (choice of 4 is a reasoned round number, not formula-derived) and one non-blocking follow-up recommendation (consider a queue-timeout increase instead of/alongside further pool-size growth if this value also proves insufficient on CI, to avoid a fourth budget-arithmetic churn cycle)."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-06",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "06",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0515-20260906/step-06-reviewer-rework.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T17:25:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-04",
+      "WF03-ISS0515-20260906-step-05"
+    ],
+    "artifacts_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "Independently re-verify ELIXIR-DEV's ISS-0515/ISS-0426 rework capping the nested lua_wallclock_race mix test subprocess's Ecto pool and bumping TEST_NONPOOL_CONNECTION_RESERVE, per handoffs/WF03-ISS0515-20260906/step-05-elixir-dev-rework.json."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Re-verified by reading the actual diff (git diff b41f657d..2ad982d1), not by trusting the handoff's own claims.\n\n1. DIFF MATCHES CLAIMS. Confirmed all three claimed edits, exactly as described: (a) executor_test.exs's System.cmd/3 call at the ISS-0426 self-check now passes `env: [{\"TEST_POOL_SIZE\", \"1\"}]`, with a new comment block explaining the inherited-env structural cost; (b) scripts/test_parallel.sh's TEST_NONPOOL_CONNECTION_RESERVE default changed 2->3 with a matching new comment block above the clamp logic; (c) docs/migration/decisions/0009-test-parallel-pool-sizing.md gained a new 'Addendum (2026-09-06, ISS-0515/ISS-0426)' section with root cause, fix, and re-derived arithmetic. git diff --stat over the same range shows only the intended files touched (plus docs/issues/ISS-0515.yaml and status-tracking files, which are expected bookkeeping, not code).\n\n2. NESTED SUBPROCESS DOES NOT NEED >1 CONNECTION. Confirmed via the module's own moduledoc (executor_test.exs lines 2-8): 'No database access required -- the isolation tests exercise only the Lua VM, and the INV-LSA-1 / INV-LSA-2 paths short-circuit before any Repo insert. async: true is safe.' Counted the actual `@tag :lua_wallclock_race` occurrences directly (not the raw grep -c of 15, which also matches two prose/string references) -- exactly 11 real tag sites, matching the file's own meta-test at line 1376 ('exactly 11 tests in this file carry @tag :lua_wallclock_race') and matching the nested subprocess's asserted exit condition ('exactly 11 passed'). None of the 11 tests perform concurrent DB writes/reads; capping the nested pool to 1 connection does not introduce a deadlock risk for the tests as they exist today.\n\n3. ARITHMETIC RE-DERIVED INDEPENDENTLY, MATCHES ADDENDUM. Read scripts/test_parallel.sh's actual formula (lines ~163-172): usable_ceiling = max_conn - superuser_reserved = 100-3 = 97. budget = usable_ceiling - headroom - nonpool_reserve = 97-10-3 = 84. computed_pool = budget/N = 84/4 = 21 (integer division). N*TEST_POOL_SIZE = 84. Worst-case accounted demand = 84 (partitions) + 1 (ISS-0287 reaper connection) + 1 (this addendum's capped nested pool) + 10 (headroom, already subtracted from budget but double-counted deliberately in the worst-case check per the addendum's own framing) = 96 <= 97. All figures in the addendum match this re-derivation exactly; no arithmetic error found.\n\n4. SCOPE CONFIRMED UNTOUCHED. `git diff b41f657d..2ad982d1 -- test/test_helper.exs test/support/tenant_template.ex` returns empty -- the ISS-0515 mechanism (ensure_template!/0, test_helper.exs's unconditional pre-build call) is genuinely untouched by this rework, as claimed.\n\n5. OWN COMMAND RUNS (this turn, not trusted from the handoff): `mix compile --warnings-as-errors` -- exit 0, no output. `mix format --check-formatted` -- exit 0, no output. `mix test test/letflow/engine/lua/executor_test.exs` -- Result: 45 passed, 11 excluded, 0 failures (includes the nested-subprocess self-check test itself, which passed). `mix test test/support/tenant_template_test.exs` -- Result: 7 passed, 0 failures.\n\n6. IDIOM/SCOPE ASSESSMENT. Capping the nested subprocess's pool_size to 1 via an explicit `env:` override at the one call site that creates the process is the minimal, correctly-scoped fix -- it does not touch the already-reviewed ISS-0515 mechanism, does not inflate the whole suite's non-pool reserve to cover an unbounded cost, and is documented at both the call site and in the decision record. This is not scope creep; no new abstraction was introduced.\n\nFRAGILITY RISK (noted per instructions, does not block PASS): if a future test is added under the `:lua_wallclock_race` tag that needs genuine concurrent DB access (e.g. two async operations racing against the same connection), pool_size=1 would serialize rather than deadlock outright (Ecto/DBConnection queues checkouts on a single-connection pool rather than failing), but any such test would likely see wall-clock-timing symptoms that are exactly the failure mode this test suite already exists to catch precision on -- a mis-timed serialization could produce a flaky pass/fail rather than a loud, immediate error. This is a real but narrow risk given the pool_size cap is local to one test file's own subprocess and the moduledoc explicitly commits this file to no-DB-access; recommend the moduledoc's 'No database access required' sentence (or a comment near the new `env:` override) be read as an implicit invariant that any future :lua_wallclock_race test must preserve, but this does not need a code change today since no such test exists yet.\n\nNo type-safety gap or scope-creep issue found that rises to a docs/issues/ filing -- this is a test-infrastructure/CI-budget fix, not new transition or domain logic.\n\nVerdict: PASS."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

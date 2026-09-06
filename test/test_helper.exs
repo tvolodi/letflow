@@ -51,6 +51,49 @@ Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
 # lua_wallclock_race test/letflow/engine/lua/executor_test.exs`.
 ExUnit.start(exclude: [:keycloak, :wasm_hang, :lua_wallclock_race])
 
+# ISS-0515: structural pre-build of the "tenant_template" schema, synchronous,
+# BEFORE any test in this partition process can run. See
+# lib/letflow/design/iss0515-tenant-template-build-race-fix.md for the full
+# rationale -- summary: ExUnit.start/1 above only REGISTERS the eventual test
+# run via System.at_exit/1; it does not dispatch a single test inline. That
+# means this call, placed anywhere in this file, is guaranteed to complete
+# before any test process exists, so no test process can ever race another to
+# be the first caller of `ensure_template!/0` within this partition again --
+# the ONLY concurrent caller of its advisory-lock acquisition is now this one,
+# uncontested, one-time call. This removes the race's own precondition (2+
+# concurrent first-callers within one scripts/test_parallel.sh partition)
+# rather than widening its timing margin (design §3's rejection of a bigger
+# lock-acquisition timeout as the fix). Unconditional -- not gated behind any
+# "does this run touch a tenant fixture" heuristic (design §7) -- EXCEPT for
+# the one narrow, explicitly-flagged escape hatch immediately below.
+#
+# ISS-0515, fourth rework (2026-09-06): `LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD`
+# skips this call when set. This is NOT a general opt-out (design §7's
+# "unconditional" reasoning above still holds for every real invocation shape
+# this project uses) -- it exists solely for one self-verifying nested
+# subprocess: test/letflow/engine/lua/executor_test.exs's ISS-0426 self-check,
+# which spawns `mix test --only lua_wallclock_race ...` via `System.cmd/3` and
+# sets this env var on that one call only (see that test's own comment).
+# That subprocess's 11 dispatched tests are, by this test module's own
+# moduledoc, guaranteed DB-access-free and have no tenant-fixture dependency
+# for `ensure_template!/0` to protect -- and the tenant_template schema this
+# call would build was, in any case, already built moments earlier by the
+# ENCLOSING partition's own test_helper.exs run (the nested subprocess only
+# re-attempts it because its own fresh BEAM VM's `:persistent_term` cache is
+# empty, not because the template is actually missing). Four consecutive CI
+# failures (PR #1033, all identical DBConnection.ConnectionError signatures)
+# were traced to this one call opening real Postgres connections inside that
+# nested subprocess and contending for an already-scarce budget -- see
+# docs/migration/decisions/0009-test-parallel-pool-sizing.md's fourth
+# addendum for the full evidence, including the live CI Postgres logs
+# confirming a prior attempt to raise the server-side connection ceiling
+# instead did not actually work. Skipping the call here removes the
+# contention at its source rather than trying to widen the budget it
+# contends over.
+if System.get_env("LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD") != "1" do
+  Letflow.Test.TenantTemplate.ensure_template!()
+end
+
 ExUnit.after_suite(fn _stats ->
   Letflow.TenantSchemaReaper.sweep_orphans()
   Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)

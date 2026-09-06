@@ -93,4 +93,36 @@ related:
   - ISS-0224
 queue_task_id: null
 github_issue: 1031
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0515-20260906
+resolved_at: "2026-09-06T17:00:00Z"
+resolution: >
+  ISSUE-FIXER confirmed the root cause by direct reproduction (5 concurrent
+  callers of ensure_template!/0 against the same database -> 1 winner in
+  ~1.8s, 4 losers reliably fail at ~15s with the exact query_canceled
+  signature seen in CI, 100% reproduction rate) and refined the causal
+  story: REQ-226 added a 472-line test module that raises the number of
+  concurrent first-callers racing for tenant_template's advisory lock at
+  partition boot -- not migration-count-driven build time (a real build
+  only takes ~1.8-1.9s). CODE-DESIGNER designed a structural fix: a single
+  synchronous Letflow.Test.TenantTemplate.ensure_template!() call added to
+  test/test_helper.exs, placed after ExUnit.start/1 (which only registers
+  the eventual run via System.at_exit/1, never dispatching a test inline --
+  verified against real ExUnit source by both CODE-DESIGN-VALIDATOR and
+  REVIEWER) and before any test can be scheduled. This eliminates the
+  race's own precondition (2+ concurrent first-callers within one
+  scripts/test_parallel.sh partition) rather than widening the lock's
+  timeout margin, which the diagnosis's own unresolved Sandbox.mode/2
+  anomaly made unsafe to trust as a fix on its own. ELIXIR-DEV implemented
+  the one-statement change (test/test_helper.exs, plus a moduledoc-only
+  note in test/support/tenant_template.ex -- zero production-path changes,
+  zero changes to REQ-226's own application code) and confirmed the race
+  structurally eliminated (post-fix concurrency repro: all 5 callers take
+  the fast path in ~0.04ms each; two consecutive clean full-suite runs).
+  REVIEWER independently re-verified from primary sources (re-read
+  ExUnit's own installed source directly, ran a fresh full
+  mix letflow.check.test to completion: 3109/3111 passed, the 2 failures
+  being the pre-existing unrelated rustc-toolchain gap, zero occurrences
+  of the ISS-0515 failure signature) -- PASS. Merged via
+  feature/WF03-ISS0515-20260906. PR #1029 (REQ-226) will be rebased onto
+  this fix and its CI retried.

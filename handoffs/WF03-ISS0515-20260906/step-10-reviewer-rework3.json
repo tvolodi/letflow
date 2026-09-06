@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-10",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "10",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0515-20260906/step-10-reviewer-rework3.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T18:04:42Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-08",
+      "WF03-ISS0515-20260906-step-09"
+    ],
+    "artifacts_reviewed": [
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md",
+      "scripts/test_parallel.sh"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "Independently re-verify ELIXIR-DEV's third rework (raising Postgres max_connections in CI via services.postgres.command, plus TEST_MAX_CONNECTIONS=200) from primary sources rather than trusting the research summary, since this is the last allowed rework before escalation."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "CORE CLAIM INDEPENDENTLY VERIFIED FROM PRIMARY SOURCE, NOT TRUSTED FROM SUMMARY: fetched the raw HTML of GitHub's live workflow-syntax doc (docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) myself via curl, located the actual anchor id=\"jobsjob_idservicesservice_idcommand\" in the raw markup (not just a WebFetch summary), and extracted its literal documented text: 'Overrides the Docker image's default command (CMD). The value is passed as arguments after the image name in the docker create command. If you also specify entrypoint, command provides the arguments to that entrypoint.' -- a general docker-create-level mechanism, independent of postgres's own entrypoint script, exactly as claimed. Confirmed `options:` is a separate, distinct key (docker create resource options, e.g. --network unsupported) immediately adjacent in the same doc section -- the command/options distinction in the code comment and decision doc is accurate, not a guessed distinction. Confirmed the doc's own note: services/containers require a Linux runner, Ubuntu for GitHub-hosted -- both ci.yml jobs (`runs-on: ubuntu-latest`, lines 117 and 212) satisfy this.\n\nPostgres image behavior: `command: postgres -c max_connections=200` produces CMD=[postgres, -c, max_connections=200]. The official postgres image's docker-entrypoint.sh execs its first argument directly when it is literally 'postgres', passing the rest as argv -- `-c name=value` is documented core postgres server flag syntax for setting a GUC at startup, so this is a real, valid invocation, not a malformed one.\n\nONE INACCURACY FOUND, NOT DISQUALIFYING: the decision-doc addendum and code comment both assert the `command` key was 'added to the runner in 2026-04' -- I could not confirm this date from the fetched doc (no changelog/version-gating text near the section) and it reads as an unverified, likely-incorrect embellishment (this key is not a recent GitHub Actions addition). This does not affect correctness since the key demonstrably exists and works today (verified directly), but ELIXIR-DEV should not have stated an unverified date as fact in a decision record. Not blocking this gate -- doesn't change whether the fix works -- but flagged so it isn't repeated as a pattern (stating unverified specifics with false confidence in a decision doc is exactly the kind of thing the identical-signature-across-reworks pattern was trying to avoid).\n\nARITHMETIC RE-DERIVED INDEPENDENTLY from scripts/test_parallel.sh's actual formula (lines 144-179), not copied from the doc: usable_ceiling = max_conn(200) - superuser_reserved(3, script default) = 197; budget = 197 - headroom(10, script default) - nonpool_reserve(5, script default, confirmed unchanged from rework 2) = 182; with N=4 (typical ubuntu-latest nproc), computed_pool = 182/4 = 45; worst case = N*pool(180) + nonpool_reserve(5, covers reaper connection + nested subprocess pool) + headroom(10) = 195 <= 197. Matches the decision doc's own numbers exactly -- re-derivation confirms, not just repeats, the claim.\n\nOTHER CHECKS: `git diff 9180222b..HEAD --stat` shows only .github/workflows/ci.yml, docs/migration/decisions/0009-test-parallel-pool-sizing.md, and the step-09 handoff file changed -- no application code touched, scope is clean. `python3 -c \"import yaml; yaml.safe_load(...)\"` parses clean; `command:` sits correctly nested under `services.postgres` alongside `image`/`options`, confirmed structurally (not a sibling of `jobs.backend` or similar misplacement) via direct diff inspection. `TEST_MAX_CONNECTIONS` confirmed read by test_parallel.sh line 145 with the claimed default(100)/override(200) semantics. Prior reworks' TEST_POOL_SIZE=4 and TEST_NONPOOL_CONNECTION_RESERVE=5 confirmed left in place unchanged and correctly re-justified as an additive margin against the new, larger ceiling rather than being newly miscalibrated. `mix compile --warnings-as-errors` and `mix format --check-formatted` both exit clean with no output.\n\nVERDICT: PASS. The single most load-bearing claim in this rework -- that GitHub Actions' `services.<id>.command` key is real, documented, and does what's claimed -- is confirmed directly from GitHub's own live documentation HTML, not merely repeated from ELIXIR-DEV's research summary. The fix is structurally sound, in-scope, and the accompanying arithmetic checks out against the actual script. This is not a silent no-op."
+  },
+  "rework_count": 3,
+  "max_rework": 3
+}

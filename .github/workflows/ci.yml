@@ -59,6 +59,40 @@
 # resolves `LETFLOW_DB_PORT` from the environment first, then an untracked
 # `.env`, then that same 5462 default; CI sets neither, so the service's
 # published port must be the one the default actually falls through to.
+#
+# services.postgres.command / TEST_MAX_CONNECTIONS=200 -- TRIED AND REVERTED.
+# ISS-0515's third rework (2026-09-06) added `command: postgres -c
+# max_connections=200` here plus `TEST_MAX_CONNECTIONS=200` on the "Run
+# backend gate" step below, on the theory that PR #1033's repeated identical
+# `DBConnection.ConnectionError` (from executor_test.exs's ISS-0426 self-check
+# nested subprocess) was caused by genuine server-side connection scarcity
+# (Postgres's own `max_connections=100` near-exhausted by the outer
+# partitions), and that GitHub Actions' `services.<id>.command` key
+# (confirmed genuinely supported per GitHub's own docs) could double that
+# ceiling directly.
+#
+# THIS DID NOT WORK IN PRACTICE. PR #1033's very next (fourth) CI run failed
+# with the EXACT SAME failure signature, and that run's own Postgres
+# container logs showed both `FATAL: sorry, too many clients already`
+# (repeated many times) and, in the container's own initdb bootstrap log,
+# `selecting default max_connections ... 100` -- i.e. the server never
+# actually applied the override and started at the untouched default of 100.
+# The `command:` key being genuinely documented and syntactically correct did
+# not mean it took effect in this actual runner/image invocation; the exact
+# cause (a YAML subtlety, a runner-version gap, or a precedence issue with an
+# implicit default CMD/entrypoint) was not conclusively identified, and ORCH
+# decided not to sink further time into debugging the `services.command`
+# mechanism itself after four consecutive identical failures.
+#
+# The `command:` key and `TEST_MAX_CONNECTIONS=200` env below have been
+# REMOVED (reverted to the pre-third-rework state) rather than left as a
+# no-op, since live CI evidence shows the override never took effect anyway
+# and leaving disproven config in place would misleadingly suggest it does
+# something. The fourth rework's actual fix instead makes the nested
+# subprocess skip its `tenant_template` pre-build entirely, since it never
+# needed real DB access for that purpose in the first place -- see
+# docs/migration/decisions/0009-test-parallel-pool-sizing.md's fourth
+# addendum for the full evidence and reasoning.
 
 name: CI
 

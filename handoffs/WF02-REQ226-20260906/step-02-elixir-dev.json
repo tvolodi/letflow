@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ226-20260906-step-02",
+  "run_id": "WF02-REQ226-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ226-20260906/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T09:38:47Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ226-20260906-step-01d"],
+    "artifacts_in": ["lib/letflow/design/req226-entity-definitions-persistence-crud.md"],
+    "branch_name": "feature/WF02-REQ226-20260906",
+    "base_commit": "0cf0503d"
+  },
+  "task": {
+    "description": "Implemented REQ-226 per the validated design: (1) priv/repo/migrations/20260906000001_create_entity_definitions.exs -- tenant-scoped entity_definitions table (id, tenant_id, name, display_name, definition_json jsonb, content_hash, logical_shape_version, artifact_version_id FK->artifact_versions on_delete: :restrict, status, inserted_at utc_datetime_usec), UNIQUE (tenant_id, name, logical_shape_version) as entity_definitions_tenant_name_shape_idx, plus the tenant_inserted_id and content_hash support indexes; registered in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest. (2) lib/letflow/repository/artifact_kind.ex -- appended :entity as the 8th @artifact_kinds value and @type t union member, updated the moduledoc's stale seven-atom text to eight-atom, values/0 unchanged. (3) lib/letflow/entities/entity_definition.ex -- new Ecto.Schema for entity_definitions with unique_constraint/foreign_key_constraint changeset. (4) lib/letflow/entities/definitions.ex -- new Letflow.Entities.Definitions CRUD context module: create_definition/2 (validates via REQ-225's Validator first with zero DB writes on rejection, then calls Letflow.Repository.create/2 with artifact_kind: :entity unmodified, then inserts the entity_definitions row), get_definition/2, get_definition_by_name/2, list_definitions/2 (REQ-067 cursor contract, 'ED:' prefix, tenant-scoped by construction via per-tenant schema), and activate_definition/4 (thin wrapper over Letflow.Repository.Activation.activate_group/5, no new activation mechanism, syncs entity_definitions.status). (5) test/letflow/entities/definitions_test.exs -- 16 passing tests covering all 8 acceptance criteria. No route or controller file was added (confirmed via git diff --stat). One design-narrative discrepancy was found and flagged inline in the test file plus here: design section 4 Scenario A describes two entity definitions with different `name` values sharing one repository_artifacts row via an identical content_hash -- this is structurally unreachable, because Letflow.Entities.Definition.Shape.content_hash/1 (REQ-225, unmodified, out of this requirement's scope) hashes the entire definition document including its own `name` field, and create_definition/2 uses that same `name` verbatim as Repository.create/2's artifact_name (design's own §3.3 step 3). Two byte-identical documents therefore always share the same `name`, so the 'different name, shared hash' half of AC4 can never occur through this pipeline -- only the 'same name -> UNIQUE constraint rejection' half (Scenario B) is reachable, and is what the shipped tests verify. Implementation was not changed to route around this since REQ-225's Shape module is out of scope; flagging for REVIEWER sign-off per CLAUDE.md's 'don't silently re-decide a decision record' guidance -- this isn't a decision record but is a real gap in an already-validated design that a future requirement or design rework may need to address (e.g., excluding `name` from content_hash, or reconsidering whether AC4's dedup clause is achievable/necessary as literally written)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "mix compile --warnings-as-errors: clean (no warnings/errors). mix format --check-formatted: clean (no output, nothing unformatted). Migration verified by applying the full tenant_scoped_migrations/0 manifest (including the new entity_definitions migration) against a real Postgres test database via TenantProvisioning.provision_tenant_schema/1 + replay_migrations/1 inside the test suite (used a scratch MIX_ENV=test/MIX_TEST_PARTITION=226 database per the dev-DB confirmation guard in lib/letflow/repo.ex, not the shared letflow_dev database) -- applied cleanly, no errors. mix test test/letflow/entities/definitions_test.exs: 16 tests, 0 failures. mix test test/letflow/repository_test.exs test/letflow/repository/activation_test.exs test/letflow/entities/definitions_test.exs (regression check on the modules this slice touches/depends on): 71 tests, 0 failures. mix test test/letflow/tenant_provisioning_test.exs (exercises the full tenant-scoped migration manifest including the new migration): 18 tests, 0 failures. git diff --stat for this commit: lib/letflow/entities/definitions.ex (new), lib/letflow/entities/entity_definition.ex (new), lib/letflow/repository/artifact_kind.ex (modified, 26 lines), lib/letflow/tenant_provisioning.ex (modified, 2 lines), priv/repo/migrations/20260906000001_create_entity_definitions.exs (new), test/letflow/entities/definitions_test.exs (new) -- no route or controller file. Commit: ebbbc963."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

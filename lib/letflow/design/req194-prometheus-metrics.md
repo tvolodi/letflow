@@ -3,6 +3,7 @@
 Status: DESIGN (WF-02 Step 1). No implementation code below — `@spec`/`@type`/
 interface tables and prose only, per CODE-DESIGNER's mandate.
 
+PROVENANCE (historical, not current decision authority):
 Queue task 367, GH#713. Resolves REQ-078's three recorded divergences (auth, scope,
 format) between R-Co's `src/obs/metrics.zig` / `src/api/routes/metrics.zig` and
 Letflow's placeholder `lib/letflow/routers/metrics.ex`.

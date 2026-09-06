@@ -18,6 +18,7 @@ and `web/src/types/api.ts` are read-only inputs.
 
 Both new router moduledocs MUST state, verbatim in substance:
 
+> PROVENANCE (historical, not current decision authority):
 > R-Co's `src/api/routes/services.zig` (417 lines) has five handlers —
 > `handleListServices` (L27), `handleAdminListServices` (L62),
 > `handleAdminRegisterService` (L93), `handleAdminUpdateService` (L175),

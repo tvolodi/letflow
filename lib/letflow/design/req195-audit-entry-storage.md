@@ -7,6 +7,7 @@ serves `GET /api/v1/audit` from this store later). This closes the gap
 `"instance"`, `before_state`/`after_state` always `null`, because Letflow has "no such
 table" as R-Co's `audit_entries`.
 
+PROVENANCE (historical, not current decision authority):
 Ported from R-Co `migrations/020_obs03_audit_entries.sql` plus `050` (trace_id) and
 `051` (chain columns), and `src/obs/audit.zig`. Two R-Co defects are deliberately NOT
 ported (Decision 1 below; the hash-recompute weakness under "Chain verification").
@@ -571,6 +572,7 @@ module's `@moduledoc`, not merely cross-referenced to this file.
 
 ## 6. Chain verification — recompute, not linkage-only (AC6, the critical fix)
 
+PROVENANCE (historical, not current decision authority):
 **The defect this must not repeat:** R-Co's `validateAuditChain` (`src/obs/audit.zig`
 L312-373) selects every content column per entry but only ever compares
 `entry.prev_chain_hash == predecessor.chain_hash` — it never recomputes a digest from

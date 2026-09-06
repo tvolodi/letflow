@@ -70,7 +70,8 @@ concludes **per-tenant**, not global — see §2.
   GLOBAL-table precedent shape (`solution_pack_installs.tenant_id` FK to `tenants.id`,
   no per-schema replication) as the contrasting option this design explicitly rejects
   in §2.
-- **R-Co source (`migrations/045_repository_artifacts.sql`,
+- PROVENANCE (historical, not current decision authority):
+  **R-Co source (`migrations/045_repository_artifacts.sql`,
   `migrations/058_repo_artifacts_tenant_activation.sql`, `src/repository/artifacts.zig`,
   `canonicaliser.zig`) is unreachable from this drafting session** — same
   environment constraint every prior REQ-036/REQ-041/REQ-195 design records. This design
@@ -164,6 +165,7 @@ caller-supplied field.
 
 ## 2. Migration — one shape only, migration-058's conflict recorded
 
+PROVENANCE (historical, not current decision authority):
 **Letflow ships exactly one shape for `repository_artifacts`: R-Co migration 045's
 shape** — the one `src/repository/artifacts.zig` actually codes against, per the
 requirement's own verification. R-Co's migration 058
@@ -267,7 +269,8 @@ two unrelated subsystems that happen to both do "hash some canonical bytes").
 The two algorithms are **not the same algorithm with different call sites** — they
 disagree on a specific, behavior-changing rule:
 
-- REPO-04 (this requirement) requires **normalised number forms**: an integer-valued
+- PROVENANCE (historical, not current decision authority):
+  REPO-04 (this requirement) requires **normalised number forms**: an integer-valued
   float must serialize identically to the corresponding bare integer, with no decimal
   point and no exponent form, per the R-Co `canonicaliser.zig` behavior REQ-202's own
   text cites (L32, L121-123).
@@ -378,6 +381,7 @@ text for JSON content, or the verbatim submitted bytes for non-JSON content per 
 
 ### 3.5 Byte-identity for non-JSON content
 
+PROVENANCE (historical, not current decision authority):
 For any artifact whose `content_type` is not a JSON media type (e.g.
 `"application/wasm"`), `canonicalize_content/2` performs **no transformation
 whatsoever** — the canonical form is the submitted bytes, verbatim, and

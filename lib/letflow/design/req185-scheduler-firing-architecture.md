@@ -24,7 +24,8 @@ R-Co directly at least once — but this session had no way to re-check that
 work. A later session with R-Co reachable should re-verify these two citations
 directly before this artefact is treated as fully closed:
 
-- ISS-301's four stated grounds for removing the per-timer
+- PROVENANCE (historical, not current decision authority):
+  ISS-301's four stated grounds for removing the per-timer
   `pg_try_advisory_xact_lock` (scheduler.zig L207-242).
 - ISS-0618's account of the due-but-locked/nothing-due collapse and the
   swallowed non-retryable error, and ISS-303's fix.
@@ -312,6 +313,7 @@ record independent of the mechanism comparison):
 
 ## 4. Decision 3 — claim mechanism, and the ISS-301 correction
 
+PROVENANCE (historical, not current decision authority):
 **Decision: `SELECT ... FOR UPDATE SKIP LOCKED` is the claim mechanism.**
 This departs from SCH-02's literal text ("the scheduler MUST acquire a
 PostgreSQL advisory lock on the timer's ID") — that per-timer advisory lock

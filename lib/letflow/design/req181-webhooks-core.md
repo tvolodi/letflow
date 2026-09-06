@@ -1,5 +1,6 @@
 # REQ-181 — Webhook subscription schema and core CRUD context module
 
+PROVENANCE (historical, not current decision authority):
 Design for the `webhook_subscriptions` table and its backing context module,
 `Letflow.Webhooks`. Greenfield within S6: no prior webhook-subscription code
 exists to extend. Binding contract per the requirement text and this run's

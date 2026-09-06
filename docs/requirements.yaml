@@ -13770,7 +13770,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity record payload validation against a definition's derived schema (validator.zig's record-payload half, ISS-0160/GH#481 parity)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

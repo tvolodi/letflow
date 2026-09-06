@@ -294,3 +294,21 @@ history:
       files -- PASS (handoffs/WF02-REQ269-20260906/step-02d-reviewer.json).
       Docs-only, no mix compile/format/test applicable. ORCH will merge
       and release queue task 507 status:done.
+  - req: REQ-271
+    event: started
+    agent: ORCH
+    at: "2026-09-06T02:03:01Z"
+    note: >
+      Starting chunk 239-design-h (LAST/8th sibling of the
+      lib/letflow/design/ .zig provenance-marking split, REQ-264..271) --
+      req205-simulation-harness-foundation.md, req206-swiftroute-scenario-
+      execution.md, req207-vortex-scenario-execution.md, req209-expr-
+      differential-corpus-regression.md, req215-service-task-engine-
+      wiring.md, req237-zig-provenance-marking-convention.md (the design
+      doc itself, in scope per CODE-DESIGN-VALIDATOR's OQ-4 resolution),
+      search.md, service_task_dispatcher.md, service_task.md (9 files).
+      Branch feature/WF02-REQ271-20260906 off main@43f0a56e, queue task
+      509 (already claimed to letflow-ee-orch, not re-claimed). Pre-flight
+      .zig grep -c sum across the 9 files: 84 (req205=4, req206=4,
+      req207=12, req209=4, req215=1, req237=47, search.md=4,
+      service_task_dispatcher.md=1, service_task.md=7).

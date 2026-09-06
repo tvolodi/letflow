@@ -5139,9 +5139,43 @@
       "queue_task_id": 506,
       "queue_agent_id": "letflow-ee-orch",
       "lock_acquired_at": "2026-09-06T00:20:34Z",
-      "released_lock": false,
-      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 58c32a52, pre-flight .zig counts confirmed non-zero in all 13 named files (sum 345). Dispatching DOC-UPDATER next.",
+      "released_lock": true,
+      "last_known_step": "Step Final COMPLETED PASS -- confirmed via git log (commit cb770b78 'chore(ORCH): WF02-REQ268-20260906 closeout -- REQ-268 done, queue task 506 released', merged via PR #1014/#1015) and docs/requirements.yaml (REQ-268 status: done). This entry was never updated by that prior session to reflect the closeout; amended here by WF02-REQ271-20260906 (ORCH, 2026-09-06) purely to correct the stale IN_PROGRESS/released_lock:false bookkeeping -- no content of the run's own history is altered, only the terminal status fields, per HANDOFF_PROTOCOL.md §7.2 (amend, do not rewrite).",
+      "status_amended_by": "WF02-REQ271-20260906",
+      "status_amended_at": "2026-09-06T02:03:01Z",
       "note": "Chunk 239-design-e of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- req068-validation.md through req081-definition-routes-read.md (req068-req081, 13 files; req071-mount-auth-tenant-status-plugs.md falls in-range numerically but is excluded from this chunk's file list per REQ-237's own chunking table). Sibling chunks 239-design-a/b/c/d (REQ-264/265/266/267) precede this range and are done; 239-design-f/g/h (REQ-269/270/271) follow. No overlap confirmed at registry-scan time (no existing REQ-268 entry found before this one)."
+    },
+    {
+      "run_id": "WF02-REQ271-20260906",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-271"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/design/req205-simulation-harness-foundation.md",
+        "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+        "lib/letflow/design/req207-vortex-scenario-execution.md",
+        "lib/letflow/design/req208-meridian-scenario-execution.md",
+        "lib/letflow/design/req209-expr-differential-corpus-regression.md",
+        "lib/letflow/design/req210-s7-parity-report.md",
+        "lib/letflow/design/req211-instance-attachments-core.md",
+        "lib/letflow/design/req212-instance-attachments-routes.md",
+        "lib/letflow/design/req213-check-test-mandatory-step.md",
+        "lib/letflow/design/req215-service-task-engine-wiring.md",
+        "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+        "lib/letflow/design/search.md",
+        "lib/letflow/design/service_task_dispatcher.md",
+        "lib/letflow/design/service_task.md"
+      ],
+      "branch_name": "feature/WF02-REQ271-20260906",
+      "queue_task_id": 509,
+      "queue_agent_id": "letflow-ee-orch",
+      "lock_acquired_at": "2026-09-06T02:03:01Z",
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 43f0a56e (already up to date, no pull needed), pre-flight .zig counts confirmed non-zero in the 9 files this chunk's requirement text actually names (sum 84: req205=4, req206=4, req207=12, req209=4, req215=1, req237=47, search.md=4, service_task_dispatcher.md=1, service_task.md=7). Dispatching DOC-UPDATER next.",
+      "note": "Chunk 239-design-h of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- LAST/8th sibling. File list: req205-simulation-harness-foundation.md, req206-swiftroute-scenario-execution.md, req207-vortex-scenario-execution.md, req209-expr-differential-corpus-regression.md, req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md (the design doc defining the convention itself, in scope per CODE-DESIGN-VALIDATOR's OQ-4 resolution), search.md, service_task_dispatcher.md, service_task.md -- 9 files (req208/210/211/212/213 are numerically in-range but excluded from this chunk's actual file list, consistent with REQ-268's req071 precedent). owned_modules lists the wider req205-req215 numeric span defensively for lock purposes; actual edit scope is the 9 named files only. Sibling chunks 239-design-a through -g (REQ-264/265/266/267/268/269/270) precede this; REQ-270 (239-design-g) still pending as of this run's start, no overlap (disjoint file lists). Completing this run closes out all 8 siblings of the lib/letflow/design/ split once merged."
     }
   ]
 }

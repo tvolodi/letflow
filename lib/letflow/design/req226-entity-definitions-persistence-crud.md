@@ -215,21 +215,27 @@ shape / persisted schema / context module) is deliberate and mirrors the
 
 ### 3.2 `Letflow.Entities.EntityDefinition` — Ecto schema field list
 
-```
-@primary_key {:id, :binary_id, autogenerate: true}
-schema "entity_definitions" do
-  field :tenant_id,             :binary_id
-  field :name,                  :string
-  field :display_name,          :string
-  field :definition_json,       :map
-  field :content_hash,          :binary
-  field :logical_shape_version, :binary
-  field :artifact_version_id,   :binary_id
-  field :status, Ecto.Enum, values: [:active, :inactive]
+Primary key: `id`, type `:binary_id`, server-generated (`autogenerate: true`) — not
+Ecto's default auto-incrementing integer, same convention as `artifact_versions.version_id`.
 
-  timestamps(updated_at: false)
-end
-```
+Schema fields (source table `entity_definitions`, §1.2 — this table restates those same
+columns as schema-field specs rather than DB-column specs; the two must stay in exact
+correspondence):
+
+| Field | Ecto field type | Source column (§1.2) |
+|---|---|---|
+| `tenant_id` | `:binary_id` | `tenant_id` |
+| `name` | `:string` | `name` |
+| `display_name` | `:string` | `display_name` |
+| `definition_json` | `:map` | `definition_json` |
+| `content_hash` | `:binary` | `content_hash` |
+| `logical_shape_version` | `:binary` | `logical_shape_version` |
+| `artifact_version_id` | `:binary_id` | `artifact_version_id` |
+| `status` | `Ecto.Enum`, allowed values `[:active, :inactive]` | `status` |
+
+Timestamps: `inserted_at` only (no `updated_at`), matching the `timestamps(updated_at: false)`
+migration option in §1.2/§1.4 and the same convention `repository_artifacts`/`artifact_versions`
+use.
 
 `changeset/2`: casts and requires every field above except `id`/`inserted_at`
 (server/DB-assigned); `unique_constraint(:name, name: :entity_definitions_tenant_name_shape_idx)`

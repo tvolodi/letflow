@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ228-20260906-step-04",
+  "run_id": "WF02-REQ228-20260906",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ228-20260906/step-04-test-runner-rerun.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T21:23:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-228"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ228-20260906-step-03"],
+    "artifacts_in": ["test/support/tenant_template.ex"],
+    "branch_name": "feature/WF02-REQ228-20260906",
+    "base_commit": "ec8766d2"
+  },
+  "task": {
+    "description": "Re-run the full regression gate after TEST-RUNNER's original dispatch (step-03) correctly diagnosed 744 failures across all 8 partitions as caused by stale per-partition tenant_template schemas (built before REQ-228's migrations existed on the shared local Postgres instance's per-partition databases letflow_test1..8) -- a distinct staleness class from ISS-0515's build-race (confirmed: no orphan/staging-schema debris, atomic build-then-rename held). This is the same safe, self-rebuilding test-cache category ORCH handled directly earlier this session for REQ-226."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "ORCH dropped tenant_template in all 8 per-partition databases (letflow_test1..8) plus the default letflow_test, directly, as a pre-authorized, idempotent, self-rebuilding test-cache operation (not user data) -- confirmed each drop cascaded to the correct table set (42 objects for the stale ones, 45 for the one already-fresh default db including REQ-228's own 3 new tables). Reran mix letflow.check.test in full: 8/8 partitions completed (partition results: 585 passed; 330 passed, 1 excluded; 409/411 passed with 2 failed; 425 passed (1 property, 424 tests), 14 excluded; 409 passed; 384 passed; 410 passed (4 properties, 406 tests), 4 excluded; 396 passed (1 property, 395 tests), 3 excluded -- roughly 3350 tests total), only 2 failures total, both in partition-3: Mix.Tasks.Letflow.CheckToolchainTest's rust-pin tests (test/mix/tasks/letflow_check_toolchain_test.exs:274 and :289), both failing with the same pre-existing, unrelated :enoent from this local sandbox having no rustc binary installed at all (confirmed via `which rustc` exit 1 earlier this session, unchanged) -- not a REQ-228 regression, same class of gap already accepted for REQ-225/226/227's own merges. All other 7 partitions passed 100% clean with zero failures, including full replay of REQ-228's own entity-event/record-command test suite and every downstream consumer of the refactored Letflow.EventStore.append_multi/3 primitive. This confirms REQ-228's own implementation and the append_multi/3 refactor introduce zero regression once the test-cache staleness (a local-sandbox-only artifact, structurally impossible on CI which provisions a fresh database) is cleared."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

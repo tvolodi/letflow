@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ229-20260906-step-01b",
+  "run_id": "WF02-REQ229-20260906",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ229-20260906/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T23:40:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-229"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ229-20260906-step-01"],
+    "artifacts_in": ["lib/letflow/design/req229-entity-record-projection-replay.md"],
+    "branch_name": "feature/WF02-REQ229-20260906",
+    "base_commit": "9613d348"
+  },
+  "task": {
+    "description": "Independently validate REQ-229's design artefact (entity record projection and replay) against docs/requirements.yaml's REQ-229 entry, REQ-228's actually-shipped code, and the cited Letflow.Engine.Reconstruction/Letflow.EventStore.read/2 precedents."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "One genuine, verifiable defect, fail-worthy per the no-partial-credit rule: §3.3 step 6's fold table (and §3.4's justification) states that on an ENTITY_RECORD_DELETED event, both `field_values` AND `entity_def_version` are 'left unchanged at their pre-delete values.' Read against the actual REQ-228 code (lib/letflow/entities/records.ex): field_values IS correctly left unchanged (delete_record/2's ctx.field_values = existing_record.field_values, matching upsert_record_latest/3's :delete clause). But entity_def_version is NOT left unchanged on the live write path -- upsert_record_latest/3's :delete clause (records.ex ~line 289) sets entity_def_version: ctx.definition.logical_shape_version, exactly the same recompute-from-the-currently-active-definition rule used for :create and :update, where ctx.definition comes from fetch_active_definition/2 called fresh inside delete_record/2 (not the record's own prior/stored entity_def_version). The ENTITY_RECORD_DELETED event's own appended payload also carries this same freshly-computed 'entity_def_version' key (base_payload/1 is called unconditionally for all three event kinds, records.ex ~line 259-266), so the information needed to recompute it on replay is present in the event, exactly as it is for UPDATE. The design's DELETE fold clause therefore commits to a rule (carry forward the pre-delete entity_def_version, ignore the DELETE event's own payload value for that field) that will silently diverge from what entity_record_latest actually, observably contains whenever the entity type's active definition version advances between a record's last update and its deletion -- a scenario REQ-229's own AC1/AC3 language ('matching the record's actual current field_values' / 'restores exactly the state ... would independently compute') explicitly requires NOT to diverge on. This is not a hypothetical edge case dismissed by hand-waving -- it is a directly-inspectable mismatch between a stated fold rule and the shipped upsert_record_latest/3 code the design itself cites as its own consistency justification in the same paragraph. Required fix: DELETE's fold clause must re-decode entity_def_version from the DELETE event's own payload (identical rule to UPDATE's clause), not treat it as carried-forward/unchanged; only field_values is genuinely 'unchanged' on delete. §3.4's prose and its moduledoc-mirroring text need the same correction. All other checks passed: (1) table-ownership correction is accurate -- the migration and Latest schema module both already exist exactly as described, and the design adds zero new migration/schema/changeset code for entity_record_latest; (2) all 6 ACs map to a traceable design section (§8's table checks out on independent re-derivation); (3) no literal executable code anywhere -- grepped for defmodule/def /schema \"...\" do across the whole file, zero matches, all fenced blocks are @type/@typep/@spec only; (4) the cited precedents are real and match the described shape: Letflow.Engine.Reconstruction.reconstruct_instance/2, read_full_log/3 (@doc false, confirmed exported-for-reuse), replay/4, and write_back/3 all exist in lib/letflow/engine/reconstruction.ex with the arities and read-then-fold-then-optionally-write-back shape described, including the unrecognized-event-type-is-a-hard-error discipline; Letflow.EventStore.read/2 exists in lib/letflow/event_store.ex with the exact {:ok, [Event.t()]}/{:error, :instance_not_found} vs {:ok, []} contract and $ref-resolution behavior the design describes, and accepts prefix: prefix via its opts keyword list exactly as called; (5) payload shape assumption (payload[\"record_id\"]) is real -- records.ex's base_payload/1 puts \"record_id\" => record_id into every event's payload unconditionally; (6) FAILED as detailed above -- field_values half of the deleted-record claim is correct, entity_def_version half is not; (7) the per-entity-type Repo.transaction/1 batching strategy and its stop-on-first-failure/re-run-safe reasoning is sound and does not hand-wave the partial-success concern -- no defect found there; (8) no migration/schema/route/controller/query-DSL scope creep found anywhere in the design."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

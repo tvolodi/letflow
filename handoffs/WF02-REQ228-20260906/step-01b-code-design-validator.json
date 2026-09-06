@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF02-REQ228-20260906-step-01b",
+  "run_id": "WF02-REQ228-20260906",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ228-20260906/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T21:10:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-228"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ228-20260906-step-01"],
+    "artifacts_in": [
+      "lib/letflow/design/req228-entity-event-registration-commands.md",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/event_store/idempotency_record.ex",
+      "lib/letflow/event_store/instance_projection.ex",
+      "test/support/tenant_fixture.ex"
+    ],
+    "branch_name": "feature/WF02-REQ228-20260906",
+    "base_commit": "ec8766d2"
+  },
+  "task": {
+    "description": "Independent design-gate review of REQ-228's design artefact (entity event registration and record commands) against REQ-228's 8 acceptance criteria, with mandatory verification of the append/2-commits-its-own-transaction claim and the proposed append_multi/3 refactor against the real lib/letflow/event_store.ex code."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "One genuine, verifiable, load-bearing defect found in the append_multi/3 proposal (the design's central, most load-bearing claim per this review's own charge). CONFIRMED CORRECT: append/2 does open and commit its own Repo.transaction/2 internally (event_store.ex ~line 245: `ctx |> build_multi() |> Repo.transaction() |> interpret_transaction_result()`, wrapped in :telemetry.span), so append/2 genuinely cannot be composed into a caller's larger Multi unmodified -- the design's core premise (§3.1) holds. TaskActivation.append_multi/6's 'extend a caller-supplied open Multi' idiom is real (lib/letflow/engine/task_activation.ex, @spec at line 160, def at line 168) and a legitimate structural precedent. event_idempotency is a real, already-provisioned table (confirmed in test/support/tenant_fixture.ex line 137) and claim_idempotency/resolve_duplicate (event_store.ex lines 571-604) genuinely implement the described insert-then-reread dedup behavior. entity_record_latest and entity_type_instances table specs (design doc SS6.1/6.2) are precise (columns, types, unique indexes, changeset cast lists) -- not vague. Design explicitly states no route/controller and no projection/replay logic beyond the one entity_record_latest write (SS1, SS5.3, SS9). DEFECT: the design repeatedly (moduledoc-restatement in SS0, SS3.1's step list, and critically SS5.1 step 6's exact error-tuple pattern) names the append/2 Multi's third step as `:claim_idempotency` and asserts append_multi/3 must reuse this step-name atom verbatim so callers can pattern-match `{:error, :claim_idempotency, {:duplicate_idempotency_key, original_event}, _changes}`. The REAL Multi step key in build_multi/1 (event_store.ex line 463) is `:idempotency` -- `Multi.run(:idempotency, fn repo, changes -> claim_idempotency(repo, changes, ctx) end)` -- and interpret_transaction_result/1's real duplicate-key clause (event_store.ex line 733-743) pattern-matches on `{:error, :idempotency, {:duplicate_idempotency_key, %Event{} = original_event}, _changes}`, not `:claim_idempotency`. `claim_idempotency` is only the private function's name, not the Multi step atom -- the design conflates the two. This is not cosmetic: SS5.1 step 6 hands ELIXIR-DEV a literal error-tuple shape to pattern-match against for the ISS-0159/GH#480 duplicate-record-return path (AC3, one of REQ-228's 8 acceptance criteria), and that literal tuple is wrong -- an implementer following the design verbatim would write a pattern that never matches, silently falling through to SS5.1 step 7's generic command_error() passthrough instead of returning the original record, breaking AC3. Per WF-02 Step 1b's no-partial-credit rule, this fails the review outright even though the surrounding M1/M2/M4 step-name claims (active_instance_guard, assign_sequence, insert_event) are all independently confirmed correct. ACTION FOR CODE-DESIGNER: correct every occurrence of the Multi step-name atom from `:claim_idempotency` to `:idempotency` (SS0's moduledoc restatement, SS3.1's step list and its 'Multi step-name atoms... unchanged' claim, and SS5.1 step 6's error-tuple pattern), then resubmit. No other defect found in this pass."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

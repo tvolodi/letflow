@@ -1,0 +1,96 @@
+id: ISS-0515
+title: "CI backend gate fails reproducibly on feature/WF02-REQ226-20260906 with widespread cascading tenant_template-build-race failures (200+ tests per partition)"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ226-20260906
+discovered_at: "2026-09-06T14:35:00Z"
+severity: MAJOR
+tags: [ci, test-harness, tenant_template, advisory-lock, flake, s6]
+description: >
+  PR #1029 (REQ-226: entity_definitions persistence/CRUD)'s backend CI gate
+  (mix letflow.check) failed twice in a row, each run taking ~53 minutes
+  (vs. ~6-7 minutes for a clean run, e.g. PR #1030/REQ-227's own CI) and
+  ending with a massive, near-simultaneous cascade of failures across every
+  test_parallel.sh partition (run 1: one partition showed 186/790 failed;
+  run 2, a plain rerun of the identical commit: all four partitions failed
+  -- 213/933, 136/735, 208/861, 186/790 -- i.e. this is reproducible, not a
+  one-off flake).
+
+  Representative failure signature (both runs): Postgres logs show a burst
+  of `ERROR: canceling statement due to user request` (real
+  pg_cancel_backend-driven query cancellations, not connection kills)
+  clustered tightly in time, alongside genuine data-integrity errors that
+  only make sense if multiple template-build attempts collided:
+  `duplicate key value violates unique constraint "service_catalog_pkey"`,
+  `new row for relation "service_catalog" violates check constraint
+  "chk_service_catalog_timeout_ms"` (and two other chk_service_catalog_*
+  constraints), `relation
+  "tenant_template_build_<hex>.process_definitions" does not exist`,
+  `repository_artifacts is immutable`, `artifact_versions is immutable`,
+  `duplicate key value violates unique constraint
+  "artifact_versions_kind_name_number_idx"`.
+
+  HYPOTHESIS (not yet confirmed by ISSUE-FIXER): test/support/tenant_template.ex's
+  atomic build-then-rename design serializes concurrent template builds via
+  `Repo.query!("SELECT pg_advisory_lock(hashtext($1))", [@advisory_lock_key])`
+  (session-level lock, no explicit statement timeout override) -- this
+  query uses Ecto's default 15000ms query timeout. Under
+  `mix letflow.check.test`'s N-way parallel partitions (this repo's
+  test_parallel.sh computed N=4 in the observed run), every partition's
+  first tenant-fixture-needing test races to acquire this lock
+  simultaneously; whichever partition wins spends real wall-clock time
+  running dozens of migrations to build the template schema before
+  renaming it into place, while the other N-1 partitions block on the same
+  advisory lock wait. If the winning partition's build takes longer than
+  15s under CI's runner (slower/shared/throttled vs. this project's own
+  local dev hardware), Ecto's default query timeout fires on the WAITING
+  partitions' lock-acquisition query itself, canceling it mid-wait
+  (`canceling statement due to user request`) rather than the lock
+  genuinely failing to be granted -- and the resulting retry/fallback path
+  is what produces the observed data-integrity collisions (multiple
+  partitions independently attempting to build/rename the template
+  concurrently after a canceled wait leaves ambiguous state).
+
+  REQ-226 is circumstantially implicated as the trigger only in the sense
+  that it adds one more migration (20260906000001_create_entity_definitions.exs)
+  to the tenant-scoped manifest the template build replays -- one plausible
+  reading is that this pushed the winning partition's real build time
+  across the 15s threshold under CI's specific hardware, where it
+  previously fit under it. REQ-227's own separate PR (#1030, no new
+  migration) ran cleanly in 6-7 minutes on the same CI infrastructure,
+  consistent with (but not proof of) this reading. This has NOT been
+  independently confirmed -- ISSUE-FIXER should verify by reading the
+  actual Ecto/Repo timeout configuration, `test/support/tenant_template.ex`
+  in full, and ideally reproducing with instrumentation (e.g. timing how
+  long a full from-scratch template build actually takes under
+  `mix letflow.check.test`'s N=4 partitioning) rather than trusting this
+  hypothesis at face value.
+
+  A weaker, non-exclusive alternative hypothesis: this could be a
+  resource-contention issue specific to the CI runner's class (shared
+  vCPU/IO ubuntu-latest runner) rather than something REQ-226's migration
+  count specifically tips over -- i.e. general fragility in the
+  parallel-build-race design under slow/loaded hardware, which any future
+  migration-count growth (not just this one) would eventually trigger
+  again regardless of which specific migration crosses the line.
+
+  IMPACT: this blocks REQ-226 from merging via the normal CI-gated path
+  (branch protection requires both status checks green) despite REQ-226's
+  own code being independently, repeatedly verified correct via scoped
+  local test runs (ELIXIR-DEV's 71/71 + 18/18, REVIEWER's own 16/16, and
+  ORCH's own 16/16 against a freshly-built local template) -- see
+  handoffs/WF02-REQ226-20260906/step-02d-reviewer.json and
+  step-03-test-runner.json. This also blocks REQ-228/REQ-230 (both
+  depend_on REQ-226) from becoming claimable via the task queue until
+  resolved.
+affected_files:
+  - test/support/tenant_template.ex
+  - priv/repo/migrations/20260906000001_create_entity_definitions.exs
+  - scripts/test_parallel.sh
+  - .github/workflows/ci.yml
+related:
+  - REQ-226
+  - REQ-227
+  - ISS-0224
+queue_task_id: null
+github_issue: 1031
+status: open

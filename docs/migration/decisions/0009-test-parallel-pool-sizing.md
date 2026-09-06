@@ -289,3 +289,99 @@ own logic (correct, unmodified) — this addendum only (a) caps one test's own
 nested-subprocess pool size at its own call site (now at 4, not 1), and (b)
 updates this script's connection-budget accounting to reserve room for that
 corrected cost.
+
+## Addendum (2026-09-06, ISS-0515 third rework) — raise the server-side
+   ceiling instead of reslicing it again
+
+PR #1033 failed CI a **third** time, with the identical failure signature as
+the second failure this file's own ISS-0515 addendum above describes fixing:
+a `DBConnection.ConnectionError` client timing out at exactly 15000ms, stack
+rooted in `:prim_inet.recv0/3` (a raw TCP-level socket-receive — i.e. a
+stalled connection *establishment* attempt, not a wait for an already-open
+pool slot to free up), from the same ISS-0426 nested-subprocess self-check.
+
+The two prior attempts each reslice the **same** 100-connection server-side
+budget differently: `TEST_POOL_SIZE=1` (rework 1) then `TEST_POOL_SIZE=4` with
+`TEST_NONPOOL_CONNECTION_RESERVE` bumped 3→5 (rework 2, this file's addendum
+directly above). Both hit the *exact same* failure signature — same timeout
+duration, same client identifier, same stack location. Two different internal
+splits producing an identical symptom is evidence against "the split is
+wrong" and for "the thing being split is itself too small": Postgres's own
+`max_connections=100` ceiling is plausibly near-exhausted at that moment in a
+real CI run by the outer N partitions' own legitimate concurrent connection
+usage, independent of anything this script's arithmetic controls. A third
+reslice of an already-thin 100-connection budget was judged unlikely to
+change that outcome.
+
+**Fix: raise the actual server-side ceiling, not the internal split.**
+`.github/workflows/ci.yml`'s `services.postgres` block now sets
+`command: postgres -c max_connections=200`, using GitHub Actions' native
+`services.<id>.command` key (added to the runner in 2026-04, Linux-runner-only
+— `ubuntu-latest` qualifies) to override the official `postgres:16` image's
+default `CMD` and pass a real `postgresql.conf` override as the server's own
+argv (confirmed via GitHub's "About service containers" docs and the
+`docker-entrypoint.sh` behavior of the official image: a `command:` beginning
+with `postgres` is treated as the server process's own flags, not a
+`docker create`/`docker run` flag — that's what the pre-existing, unrelated
+`options:` key is for). This doubles the real ceiling from 100 to 200.
+
+The "Run backend gate" step also now sets `TEST_MAX_CONNECTIONS=200` (an
+env var `scripts/test_parallel.sh` already reads, previously only ever
+exercised at its own default of 100 in CI) so this script's own budget
+arithmetic recomputes against the real, raised ceiling rather than silently
+leaving the extra 100 connections of headroom unused while still computing
+`TEST_POOL_SIZE` as if the ceiling were still 100.
+
+**The prior reworks' internal tuning is left in place, unchanged, as an
+additive safety margin — not reverted.** `TEST_POOL_SIZE=4` for the ISS-0426
+nested subprocess and `TEST_NONPOOL_CONNECTION_RESERVE`'s default of 5 were
+never *wrong*; they were insufficient *alone* against a genuinely
+near-exhausted 100-connection ceiling. Both values are still individually
+reasoned and correct, and now sit inside a budget twice the size, so their
+existing margin is only more comfortable, not made moot or contradictory.
+Nothing about reverting them would improve safety, and reverting would
+reintroduce dependence on a single un-doubled fix path if the 200-connection
+raise alone still proves marginal.
+
+**Verification at `max_connections=200`, `TEST_MAX_CONNECTIONS=200`, N=4
+(other defaults unchanged):** `usable_ceiling` = 200 − 3 = 197. `budget` =
+197 − 10 − 5 = 182. `computed` = 182 / 4 = 45 (up from 20 at the
+100-connection ceiling — the outer partitions now get a much larger own pool
+too, not just more slack for the nested subprocess). `N × TEST_POOL_SIZE` =
+180. Worst case — full N-partition saturation (180) + the ISS-0287 connection
+(1) + the ISS-0426 nested subprocess's capped pool (4) + full ad-hoc headroom
+(10) = 195 ≤ 197: holds, with the same 2-connection margin as before
+(unchanged relative proportions — the fix doubles the numerator and
+denominator alike — but now against a ceiling with 100 more absolute
+connections of real slack for the outer partitions' own transient
+concurrent-connection spikes, which is the actual, previously-unaddressed
+constraint this addendum targets).
+
+**Why not the queue-timeout/retry fallback instead.** The task brief for this
+rework offered two fallback directions if raising `max_connections` proved
+infeasible in GitHub Actions' `services:` syntax: (a) lengthen the nested
+subprocess's own Ecto `:queue_target`/`:queue_interval`, or retry the
+`System.cmd/3` call once on transient failure; or (b) treat the pool-tuning
+path as exhausted and escalate differently. Neither was needed:
+`services.<id>.command` is genuinely supported (confirmed via GitHub's own
+docs, not assumed), so the decisive fix — enlarging the actual scarce
+resource — was available and was taken. A queue-timeout increase would have
+masked the same underlying scarcity by making callers wait longer for a
+connection that may still not arrive in time under real exhaustion, rather
+than removing the exhaustion; a retry would have hidden a real, recurring
+resource constraint behind non-determinism (sometimes green on retry,
+sometimes not) instead of fixing it. Both remain reasonable to revisit as a
+belt-and-suspenders addition if `max_connections=200` also proves marginal,
+but are not needed as the primary fix now that the real ceiling could be
+raised directly.
+
+**What this addendum does not change.** `TEST_POOL_SIZE=4` for the ISS-0426
+nested subprocess; `TEST_NONPOOL_CONNECTION_RESERVE`'s default of 5;
+`TEST_SUPERUSER_RESERVED`, `TEST_CONNECTION_HEADROOM`, `TEST_MIN_POOL_SIZE`'s
+meanings and defaults; `N`-derivation; the ISS-0515 `test_helper.exs`
+pre-build mechanism; `Letflow.Test.TenantTemplate.ensure_template!/0`'s own
+logic — all correct and unmodified. This addendum only (a) raises the actual
+Postgres server's `max_connections` in CI via `services.postgres.command`,
+and (b) sets `TEST_MAX_CONNECTIONS=200` in the same CI step so this script's
+arithmetic uses the real, raised ceiling instead of continuing to compute
+against the old, unchanged 100 default while the real server allows more.

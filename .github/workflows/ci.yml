@@ -59,6 +59,45 @@
 # resolves `LETFLOW_DB_PORT` from the environment first, then an untracked
 # `.env`, then that same 5462 default; CI sets neither, so the service's
 # published port must be the one the default actually falls through to.
+#
+# services.postgres.command / TEST_MAX_CONNECTIONS=200 (ISS-0515, third rework,
+# 2026-09-06): PR #1033 failed CI three times in a row with the IDENTICAL
+# signature -- a `DBConnection.ConnectionError` client timing out at exactly
+# 15000ms inside `:prim_inet.recv0/3` (a raw TCP-level socket-receive, i.e. a
+# stalled connection ESTABLISHMENT to Postgres, not a queue wait for an
+# already-open pool slot) -- from executor_test.exs's ISS-0426 self-check's
+# nested `mix test --only lua_wallclock_race` subprocess. The prior two
+# reworks (see docs/migration/decisions/0009-test-parallel-pool-sizing.md's
+# ISS-0515 addendum) each reslicing the SAME 100-connection server-side budget
+# differently -- capping that subprocess's own pool (1, then 4) and bumping
+# `TEST_NONPOOL_CONNECTION_RESERVE` (3 -> 5) to match -- and each hit the exact
+# same failure signature regardless of the slice chosen. An identical failure
+# under two different internal budget splits is evidence the real constraint
+# is server-side scarcity (Postgres's own `max_connections=100` ceiling
+# genuinely near-exhausted by the outer partitions' own legitimate concurrent
+# usage at that moment in a real CI run), not a mis-sized internal reserve --
+# a third reslice of an already-thin budget was judged unlikely to fix a
+# genuine scarcity problem, so this rework enlarges the budget itself instead.
+#
+# GitHub Actions' `services.<id>.command` key (and its sibling `entrypoint`)
+# lets a service container's default `CMD` be overridden directly in the
+# workflow YAML -- added to the runner in April 2026, Linux runners only
+# (ubuntu-latest, which this job already uses, qualifies); see GitHub's
+# "About service containers" docs. The official `postgres` image's own
+# `docker-entrypoint.sh` treats a `command:` starting with `postgres` as the
+# server process's own argv, so trailing `-c key=value` flags are real
+# `postgresql.conf` overrides, not container/docker-run flags (that's what
+# `options:` below is already for -- `options` and `command` are unrelated
+# keys). `max_connections=200` doubles the prior ceiling; the "Run backend
+# gate" step below sets `TEST_MAX_CONNECTIONS=200` to match, so
+# `scripts/test_parallel.sh`'s own budget arithmetic (see decision doc)
+# recomputes against the real, raised ceiling instead of silently leaving the
+# extra headroom unused. The prior reworks' pool-size/reserve tuning
+# (TEST_POOL_SIZE=4 for the nested subprocess, TEST_NONPOOL_CONNECTION_RESERVE
+# default=5) is left in place unchanged -- it was never wrong, just
+# insufficient alone against a genuinely near-exhausted 100-connection
+# ceiling; kept as an additional, still-reasonable margin now sitting inside a
+# much larger budget.
 
 name: CI
 
@@ -91,6 +130,8 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 10
+        command: >-
+          postgres -c max_connections=200
 
     steps:
       - name: Check out repository
@@ -132,6 +173,12 @@ jobs:
         run: mix letflow.check
         env:
           WASMEX_BUILD: true
+          # Matches services.postgres's `command: postgres -c max_connections=200`
+          # above (ISS-0515, third rework) -- keeps scripts/test_parallel.sh's own
+          # connection-budget arithmetic (TEST_MAX_CONNECTIONS, default 100) in
+          # sync with the real, raised server-side ceiling instead of computing
+          # against a ceiling that no longer reflects what's actually running.
+          TEST_MAX_CONNECTIONS: "200"
 
   frontend:
     # This job's `name:` string is a required-status-check `context` on main's branch

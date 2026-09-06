@@ -267,6 +267,76 @@ defmodule Letflow.EventStore do
   end
 
   @doc """
+  REQ-228 §3.1 — appends one `Multi.run/3` step sequence onto `multi`,
+  a caller-supplied, still-open `Ecto.Multi`, WITHOUT opening or committing
+  its own `Repo.transaction/1` call. Structurally mirrors
+  `Letflow.Engine.TaskActivation.append_multi/6`'s "append onto a
+  caller-supplied Multi" idiom.
+
+  Factors the *same* M1-M6 steps `append/2` runs internally
+  (`active_instance_guard`, `assign_sequence`, `idempotency`, `insert_event`,
+  optionally `store_oversized_payload`, `update_projection`) — reused
+  verbatim via `build_multi_composable/2`, not duplicated — onto the given
+  `multi`. `append/2` and `append_platform_event/2` are left completely
+  unmodified; every existing caller of either is unaffected.
+
+  Runs the exact same pre-transaction validation phase `append/2` runs
+  (P0-P6: reject a caller-supplied `tenant_id`, resolve the tenant schema,
+  fetch/validate `attrs`' fields, run `Registry.validate_payload/3`) before
+  ever touching `multi` — a validation failure here returns the matching
+  `append_error()` tuple with `multi` left completely untouched (no step
+  added), the same "zero DB writes attempted" discipline `append/2` itself
+  documents.
+
+  The caller is responsible for calling `Repo.transaction/1` on the returned
+  `Ecto.Multi.t()` exactly once, and for interpreting the transaction result
+  itself — the Multi step names/error tuple shapes are byte-identical to
+  `append/2`'s own (`:active_instance_guard`, `:assign_sequence`,
+  `:idempotency`, `:insert_event`, `:update_projection`, and
+  `{:error, :idempotency, {:duplicate_idempotency_key, %Event{}}, _changes}`
+  on a duplicate submission), so a caller pattern-matches on the same shapes
+  `interpret_transaction_result/1` does, rather than a parallel taxonomy
+  being invented here.
+  """
+  @spec append_multi(
+          multi :: Ecto.Multi.t(),
+          attrs :: append_attrs(),
+          opts :: [prefix: String.t()]
+        ) ::
+          {:ok, Ecto.Multi.t()} | append_error()
+  def append_multi(%Multi{} = multi, attrs, opts) when is_map(attrs) and is_list(opts) do
+    prefix = Keyword.get(opts, :prefix)
+
+    with :ok <- reject_tenant_id(attrs),
+         {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, instance_id} <- fetch_uuid(attrs, :instance_id, :missing_instance_id),
+         {:ok, actor_id} <- fetch_uuid(attrs, :actor_id, :missing_actor_id),
+         {:ok, payload} <- fetch_payload(attrs),
+         {:ok, idempotency_key} <- fetch_idempotency_key(attrs),
+         {:ok, event_type} <- fetch_event_type(attrs),
+         {:ok, metadata} <- validate_metadata(Map.get(attrs, :metadata) || %{}),
+         :ok <- Registry.validate_payload(event_type, payload, tenant_id) do
+      ctx = %{
+        schema_name: prefix,
+        tenant_id: tenant_id,
+        instance_id: instance_id,
+        event_type: event_type,
+        actor_id: actor_id,
+        idempotency_key: idempotency_key,
+        metadata: metadata,
+        payload_bytes: byte_size(payload),
+        # Safe unconditionally: Registry.validate_payload/3 (above) already
+        # proved `payload` decodes to a JSON object.
+        decoded_payload: Jason.decode!(payload),
+        event_id: Ecto.UUID.generate(),
+        created_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      }
+
+      {:ok, build_multi_composable(multi, ctx)}
+    end
+  end
+
+  @doc """
   Sibling of `append/2` (REQ-140), restricted to `platform_instance_id/0`.
   Skips M1 (`active_instance_guard/3`) and M6 (`update_projection/3`) --
   no `instance_projections` row ever exists for the platform sentinel, so
@@ -454,8 +524,15 @@ defmodule Letflow.EventStore do
   # prefix: schema_name on every operation.
   # ---------------------------------------------------------------------
 
-  defp build_multi(ctx) do
-    Multi.new()
+  defp build_multi(ctx), do: build_multi_composable(Multi.new(), ctx)
+
+  # REQ-228 §3.1 -- the composable core `append/2`'s own build_multi/1 and
+  # append_multi/3 (public, above) both call, so the M1/M2/M3/M4/M5(?)/M6
+  # step sequence exists in exactly one place. Appends onto whatever `multi`
+  # it is given -- `Multi.new()` for `append/2`'s own internal use,
+  # or a caller-supplied, still-open `Multi` for `append_multi/3`.
+  defp build_multi_composable(multi, ctx) do
+    multi
     |> Multi.run(:active_instance_guard, fn repo, changes ->
       active_instance_guard(repo, changes, ctx)
     end)

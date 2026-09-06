@@ -489,7 +489,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_902_000_001, Letflow.Repo.Migrations.MakeTokensBranchIdNullable,
      "20260902000001_make_tokens_branch_id_nullable.exs"},
     {20_260_902_010_001, Letflow.Repo.Migrations.CreateServiceTaskDispatches,
-     "20260902010001_create_service_task_dispatches.exs"}
+     "20260902010001_create_service_task_dispatches.exs"},
+    {20_260_906_000_001, Letflow.Repo.Migrations.CreateEntityDefinitions,
+     "20260906000001_create_entity_definitions.exs"}
   ]
 
   @doc """

@@ -96,7 +96,6 @@ so is not one of the 26 — it renders the identical `TenantDashboardPage` compo
 the `dashboard` row below and was exercised identically; noted, not double-counted.)
 
 PROVENANCE (historical, not current decision authority):
-
 | # | Route (`web/src/router.tsx`) | API call(s) issued | Expected shape (cite) | Actual response | Classification | Owning REQ |
 |---|---|---|---|---|---|---|
 | 1 | `/auth/callback` | none | — | — | **EXCLUDED** — `OidcCallbackPage` only completes the OIDC redirect (`oidc-client-ts` code exchange against Keycloak directly); it issues no Letflow API request. | — |

@@ -13703,7 +13703,7 @@ requirements:
   - id: REQ-226
     title: entity_definitions persistence, definition CRUD context module, and the ArtifactKind :entity extension
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):
@@ -13758,7 +13758,7 @@ requirements:
       - "lib/letflow/repository/artifact_kind.ex's @artifact_kinds includes :entity as an eighth value, and every existing artifact_kind value (:definition, :form, :schema, :service_catalog, :script, :module, :scenario) is still present and unmodified"
       - "createDefinition/2 rejects a definition failing REQ-225's structural validation and creates neither an artifact_versions row nor an entity_definitions row on rejection"
       - "createDefinition/2 for a structurally valid definition calls Letflow.Repository.create/2 with artifact_kind: :entity and creates one entity_definitions row referencing the returned artifact_version_id -- verified by inspecting both tables after the call"
-      - "submitting byte-identical definition content twice reuses the same repository_artifacts row (REQ-202's dedup) while creating two distinct entity_definitions rows if names differ, or is rejected by the UNIQUE (tenant_id, name, logical_shape_version) constraint if name and logical_shape_version match"
+      - "submitting byte-identical definition content twice under the same name is rejected by the UNIQUE (tenant_id, name, logical_shape_version) constraint; distinct names always produce distinct repository_artifacts and entity_definitions rows, since REQ-225's content_hash includes :name -- no accidental or false cross-name dedup occurs (corrected 2026-09-06: the original 'shared hash across differing names' clause was structurally unreachable given REQ-225's already-shipped hashing contract; see REQ-226 REVIEWER step-02d handoff)"
       - "listDefinitions/2 is tenant-scoped (a definition created under tenant A is absent from tenant B's list) and paginates via REQ-067's cursor contract"
       - "activating an entity_definitions row's underlying artifact_version_id uses REQ-203's existing artifact_activations machinery with no new activation table or mechanism added, confirmed by git diff --stat showing no new activation-shaped table"
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"

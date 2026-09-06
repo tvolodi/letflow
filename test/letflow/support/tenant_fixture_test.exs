@@ -307,9 +307,10 @@ defmodule Letflow.Support.TenantFixtureTest do
       # REQ-199 added correlation_cursors and effect_completions, bumping it from
       # 34 to 36; REQ-211 added instance_attachments, bumping it from 36 to 37;
       # REQ-214 added service_task_dispatches, bumping it from 37 to 38 --
+      # REQ-226 added entity_definitions, bumping it from 38 to 39 --
       # test/support/tenant_fixture.ex's own @expected_tenant_tables list already
-      # carries all 38.)
-      assert length(TenantFixture.expected_tenant_tables()) == 38
+      # carries all 39.)
+      assert length(TenantFixture.expected_tenant_tables()) == 39
       assert length(state.manifest_versions) > 0
     end
 

@@ -1,0 +1,93 @@
+{
+  "handoff_id": "c47e9d18-2b3a-4f6c-9e01-7a5d3c8b9012",
+  "run_id": "WF02-REQ271-20260906",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "ORCH",
+  "to_agent": "DOC-UPDATER",
+  "file": "handoffs/WF02-REQ271-20260906/step-01-doc-updater.json",
+  "created_at": "2026-09-06T02:04:56Z",
+  "started_at": "2026-09-06T02:04:56Z",
+  "completed_at": "2026-09-06T02:13:25Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-271"],
+    "requirement_text": {
+      "REQ-271": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-h = lib/letflow/design/, req205-simulation-harness-foundation.md through req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md (req205-req215 plus 3 lowercase-named files, plus this design document itself). This is one of eight requirements covering lib/letflow/design/ (added to REQ-237's design doc as a 2026-09-05 amendment, section 6): REQ-264 (239-design-a), REQ-265 (239-design-b), REQ-266 (239-design-c), REQ-267 (239-design-d), REQ-268 (239-design-e), REQ-269 (239-design-f), REQ-270 (239-design-g), REQ-271 (239-design-h). Each sibling covers a disjoint scope; do not touch files outside this chunk's file list under this requirement, even if they also carry a .zig citation -- they belong to a sibling chunk. lib/letflow/design/ is out of scope for REQ-243 through REQ-253. Per CODE-DESIGN-VALIDATOR's OQ-4 resolution (mark it, no special exemption): this chunk's file list includes req237-zig-provenance-marking-convention.md itself, and its own .zig citations inside its worked examples (section 4) are IN SCOPE for this requirement -- the design document describing the convention is not exempt from the convention it describes."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ271-20260906/step-00-git-setup.json",
+      "docs/status/requirement_status.v10.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "lib/letflow/design/req209-expr-differential-corpus-regression.md",
+      "lib/letflow/design/req215-service-task-engine-wiring.md",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "lib/letflow/design/search.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/design/service_task.md"
+    ]
+  },
+  "task": {
+    "description": "Claim this handoff (status -> IN_PROGRESS only). Apply REQ-237's PROVENANCE marker convention (full text in lib/letflow/design/req237-zig-provenance-marking-convention.md section 2 -- read it in full before starting, it is in artifacts_in) to exactly these 9 files, and no others: lib/letflow/design/req205-simulation-harness-foundation.md, req206-swiftroute-scenario-execution.md, req207-vortex-scenario-execution.md, req209-expr-differential-corpus-regression.md, req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md. Procedure: (1) for each file, run `grep -c '\\.zig' <file>` and record the before-count. (2) For every .zig citation, determine its enclosing citation-unit shape per section 2's four shapes (single line, paragraph, table, or -- not expected in these 9 files but check -- YAML comment-line) and insert the marker line `PROVENANCE (historical, not current decision authority):` immediately above that unit, verbatim, with no alteration to the existing text. Use section 2's de-duplication check (grep -B1) before inserting, so a unit already marked is skipped. (3) IMPORTANT AND UNUSUAL, specific to req237-zig-provenance-marking-convention.md itself (this file is IN this chunk's scope, per OQ-4's resolution quoted in context.requirement_text): section 4 of that file contains two worked 'before'/'after' examples, each showing a real citation with and without the marker, specifically to illustrate the convention mechanically. These are NOT a case of an intentionally-unmarked negative example that must stay unmarked -- they are live citations of real R-Co paths (the cursor.zig/field_grants.zig SOURCE: line, and the identity.ex moduledoc paragraph) reproduced inside this design doc's own body text, and per OQ-4's resolution they get marked like any other citation in this file. Concretely: section 4's 'Before' code fence blocks (lines ~252-257 and ~285-292 in the source as read this session -- re-locate by content, not line number, since your own edits will shift them) are themselves quoted **inside a fenced code block** that is demonstrating what an UNMARKED citation looks like elsewhere in the codebase -- that fenced block's CONTENT must NOT be edited (it is quoting docs/requirements.yaml's and identity.ex's actual current unmarked text, used as the illustrative 'before' state; editing it would corrupt the worked example's own meaning, since the 'before' fence is supposed to show what existed prior to REQ-238/239 applying the convention elsewhere). The 'After' fences immediately following each already show the correct marked-up result and also must NOT be re-edited (they are already correct, already contain the marker). What DOES need marking under this chunk's own scope is any OTHER .zig citation in req237-zig-provenance-marking-convention.md's own **prose** (not inside a fenced before/after illustration) -- reread the whole file for citations outside section 4's fences (e.g. the file's own running prose in sections 0, 1, 6 that names .zig paths/counts inline, such as section 1's phrasing-variety table and section 6's chunking tables, which quote things like 'partition_maintenance.zig', 'dlq.zig', 'cursor.zig', etc. as documentation of what OTHER files look like -- these are citations of citations, i.e. this design doc quoting examples, not this doc's own provenance claims about R-Co code it ported). Read section 2's citation-unit rule carefully: only citations that would themselves need REQ-237's marker if they lived in their original file are candidates; a table CELL inside section 1's phrasing-variety survey table that merely reproduces another file's text as a worked example is analogous to section 4's fences (illustrative, not a live citation belonging to this file) and should NOT be marked. If genuinely ambiguous whether a specific passage is a live citation of this file's own provenance vs. an illustrative quotation of another file's phrasing, flag it explicitly in result.issues as MINOR with the exact line/passage rather than guessing either way -- do not silently resolve it. (4) After all insertions, for every file: re-run `grep -c '\\.zig' <file>` and confirm the count is UNCHANGED (marker insertion adds lines, never deletes/alters .zig-bearing lines) -- report before/after per file. (5) Run `grep -rc 'PROVENANCE (historical, not current decision authority):' <the 9 files>` summed, before (should be 0 unless a prior run already marked de-duplication targets, unlikely here) and after -- quote the exact increase. (6) Sample at least 9 citations across at least 5 different files (or every citation if fewer exist) showing a byte-identical path/text diff with only the marker line added -- quote the diffs. (7) Confirm via `git diff --stat` that CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file OUTSIDE this chunk's 9-file list are untouched. (8) Confirm via `grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <the 9 files>` before and after (byte-identical expected) that no deliberate-divergence note was altered. (9) Flip REQ-271's status from in_progress to done in docs/requirements.yaml. (10) Append a 'done' event to docs/status/requirement_status.v10.yaml (current volume; append after its last entry, do not rewrite prior ones) with a real UTC timestamp from the clock, summarizing marker counts and the req237-self-scope handling from step 3 above. (11) Complete this handoff with result.status, artifacts_out listing every file you actually touched (the 9 design files, docs/requirements.yaml, docs/status/requirement_status.v10.yaml -- NOT this handoff file itself), and next_action 'Route to REVIEWER'. Do not touch any file outside this chunk's 9-file list plus the two docs-bookkeeping files named in steps 9-10.",
+    "acceptance_criteria": [
+      "before starting, grep -c '\\.zig' quoted per-file for all 9 files, summed (expect ~84, re-derive exactly)",
+      "after the change, zero citations remain in the old unmarked form across the 9 files -- grep command and before/after PROVENANCE-marker counts quoted",
+      "every citation's original file-path text preserved verbatim -- sampled diff across at least 9 citations, at least 5 files",
+      "CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk untouched -- git diff --stat quoted",
+      "deliberate-divergence notes inside this chunk's scope unmodified -- grep -rnE before/after byte-identical, quoted with both counts",
+      "req237-zig-provenance-marking-convention.md's own section-4 worked-example .zig citations confirmed marked where they are live citations (not the illustrative before/after fences themselves, which must stay exactly as they are since they demonstrate the unmarked/marked states on purpose) -- quote the specific lines before and after, per OQ-4's resolution, and flag any genuinely ambiguous passage rather than guessing",
+      "REQ-271 status flipped to done in docs/requirements.yaml",
+      "a done event appended to docs/status/requirement_status.v10.yaml with a real clock timestamp"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Applied REQ-237's PROVENANCE marker convention to all 9 chunk-239-design-h files. Before: grep -c '\\.zig' summed = 84 (req205=4, req206=4, req207=12, req209=4, req215=1, req237=47, search.md=4, service_task_dispatcher.md=1, service_task.md=7). After: identical per-file and summed .zig counts (verified unchanged), 27 new PROVENANCE markers inserted (req205=3, req206=4, req207=5, req209=2, req215=1, req237=1, search.md=4, service_task_dispatcher.md=1, service_task.md=6), 0 deletions of citation text (git diff --numstat shows only marker-line insertions; every 'deletion' git reports is an original line re-wrapped across marker+continuation, confirmed by re-diffing marker-stripped text as byte-identical). git diff --stat -- lib/letflow/design/ shows exactly these 9 files changed (9 files changed, 46 insertions(+), 9 deletions(-), all deletions accounted for by the wrap-not-loss pattern); CLAUDE.md, README.md, docs/migration/README.md untouched. grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' across the 9 files: 0 matches before and after (none exist in this chunk). req237-zig-provenance-marking-convention.md handled per OQ-4: section 4's two worked before/after/diff fenced illustrations (cursor.zig/field_grants.zig SOURCE: example; identity.ex moduledoc paragraph example) left completely untouched; section 1's phrasing-variety survey table and section 6's chunking-recommendation tables treated as illustrative quotations of other files (per the handoff's own guidance) and left unmarked; exactly one genuine live citation found in req237's own prose (the section-0 'Sources read' bullet citing REQ-231's cursor.zig / REQ-181's webhooks.zig) and marked. Two passages flagged MINOR as genuinely ambiguous rather than guessed (see issues[]). Sample diffs across 9 files (`git diff -- lib/letflow/design/req205-...md lib/letflow/design/req206-...md lib/letflow/design/req207-...md lib/letflow/design/req209-...md lib/letflow/design/req215-...md lib/letflow/design/req237-...md lib/letflow/design/search.md lib/letflow/design/service_task_dispatcher.md lib/letflow/design/service_task.md`) confirm every original citation's path text preserved verbatim, only the marker line added above each citation unit. REQ-271 flipped to status: done in docs/requirements.yaml. Appended a done event to docs/status/requirement_status.v10.yaml (376 lines / 22462 bytes after append, well under the 1200-line/120000-byte roll ceiling -- no roll needed); index's volume-10 entries count recounted to 7 (was declared 5, already one behind the true on-disk count before this append -- folded into this recount per the recount-every-time rule) in the same commit.",
+    "artifacts_out": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "lib/letflow/design/req209-expr-differential-corpus-regression.md",
+      "lib/letflow/design/req215-service-task-engine-wiring.md",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "lib/letflow/design/search.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/design/service_task.md",
+      "docs/requirements.yaml",
+      "docs/status/requirement_status.v10.yaml",
+      "docs/status/requirement_status.index.yaml"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "location": "lib/letflow/design/req237-zig-provenance-marking-convention.md, section 4 narration prose (the 'Real citation, quoted exactly as it exists in the tree today...' paragraph immediately before the first Before/After fence pair, and the 'Exactly one line is added...' paragraph immediately after the diff fence)",
+        "description": "These two prose passages quote the same cursor.zig/field_grants.zig citation the adjacent protected fenced illustration already shows, as narration introducing/explaining that worked example. Left unmarked rather than guessed: marking them would fragment one worked example into a separately-marked citation, which does not obviously match either 'a live citation of this file's own provenance' or 'an illustrative quotation of another file's phrasing' as cleanly as the handoff's other examples. Flagging for REVIEWER/CODE-DESIGN-VALIDATOR to resolve either way."
+      },
+      {
+        "severity": "MINOR",
+        "location": "lib/letflow/design/req237-zig-provenance-marking-convention.md, line 27 (H1 title) and lines 1-10 (the two AMENDMENT paragraphs at the top of the file)",
+        "description": "These use '.zig' only in generic/meta-descriptive phrasing ('100 .zig-carrying files', 'the .zig provenance-citation marking convention') with no specific R-Co file path named. Read as not being citations at all (no path to demote from decision authority) rather than as unmarked citations, so left unmarked. Flagging in case REVIEWER reads the title/amendment framing as itself citation-shaped."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ271-20260906",
+      "commit_sha_list": ["99ac73e8"],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to REVIEWER"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

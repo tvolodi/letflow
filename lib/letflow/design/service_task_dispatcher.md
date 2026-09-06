@@ -124,6 +124,7 @@ function bodies, no `.ex` files.
   `instance_projections.status = :error`, not a queue-table write, and that this module is not the
   one calling `set_instance_error/2` at all).
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source of truth:** not read directly for this design — REQ-214's own requirement text is
 explicit that this is new orchestration scope with no direct R-Co analogue module (R-Co's
 `service_task.zig` covers the pure logic REQ-056 already ported; the poller/table pairing is a

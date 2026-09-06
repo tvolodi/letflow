@@ -121,6 +121,7 @@ This matches the requirement's own claim exactly. No `Letflow.Routers.Instances`
 of any name handles a timer-advance action, and no context function in
 `lib/letflow/engine.ex`/`lib/letflow/instances.ex` (read this session) exposes one either.
 
+PROVENANCE (historical, not current decision authority):
 **Attachment/document-upload subsystem — confirmed absent, independently, this session:**
 no route under any `lib/letflow/routers/*.ex` matches `attach`/`upload`/`document` in a
 shipment or task context; `lib/letflow/router.ex`'s own reserved-slot inventory table
@@ -160,6 +161,7 @@ confirmed by reading them this session** — no new process fixture is needed:
   api-equivalent steps map onto `Letflow.Simulation.Seed`/`Letflow.Routers.Onboarding`
   directly (§1.1), not `Letflow.Engine`.
 
+PROVENANCE (historical, not current decision authority):
 **REQ-050 confirmed** (`docs/requirements.yaml` REQ-050 entry, `status: done`): ports
 `src/engine/transition.zig`'s `EXCLUSIVE_GATEWAY` branch — edges evaluated in declared
 order, first true condition wins, `is_default` edge (none present on
@@ -373,6 +375,8 @@ build without this field) is unaffected.
 
 **`swiftroute-shipment-attach-delivery-note` fixture authoring, concretely:** the
 scenario YAML's `unbuilt_feature` key is populated:
+
+PROVENANCE (historical, not current decision authority):
 
 ```
 unbuilt_feature:
@@ -622,6 +626,8 @@ count) so the fixture is structurally complete for a future re-run once the feat
 exists, but `run/1`'s short-circuit means none of that content is read this run.
 
 **Finding reported to ORCH, per ISSUE_QUEUE.md, in the same handoff's `result.issues`:**
+
+PROVENANCE (historical, not current decision authority):
 
 ```
 title: "No document/attachment API exists in Letflow or in R-Co's own src/"

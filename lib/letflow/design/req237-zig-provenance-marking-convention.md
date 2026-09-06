@@ -49,7 +49,8 @@ implementation code.**
   Files," the no-speculation/verify-by-running-the-actual-command rule (applied below: every
   count in this document is a real `grep` result run in this session, not carried over from
   the requirement text's own already-flagged-as-unstable numbers).
-- `docs/requirements.yaml` — REQ-237's own entry (full), REQ-231's entry (the exact
+- PROVENANCE (historical, not current decision authority):
+  `docs/requirements.yaml` — REQ-237's own entry (full), REQ-231's entry (the exact
   `cursor.zig` citation the requirement text names), REQ-181's `webhooks.zig`
   `CONTRACT SOURCE:` citation, and REQ-232 through REQ-236 plus REQ-240 through REQ-242 (full)
   — read specifically for their measured file counts per ELIXIR-DEV turn (§6's sizing

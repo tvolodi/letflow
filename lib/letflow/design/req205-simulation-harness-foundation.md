@@ -19,7 +19,8 @@ this still gets a `lib/letflow/design/` doc under this project's convention).
   direct or transitive — `mix.lock`/`deps()` list is `ecto_sql`, `postgrex`, `plug`,
   `bandit`, `jason`, `telemetry`, `stream_data` (test-only), `ueberauth_oidcc`, `lua`,
   `wasmex`. None parses YAML. §4 below names the dependency to add.
-- `lib/letflow/router.ex`'s own router-inventory table (read this session, lines
+- PROVENANCE (historical, not current decision authority):
+  `lib/letflow/router.ex`'s own router-inventory table (read this session, lines
   ~73-83) lists `Letflow.Routers.SimulationTest | simulation_test.zig | S7 (simulation
   harness)` as a **reserved, unbuilt** slot — confirming Decision 3's boundary is
   real, not a hypothetical: that table row is exactly what must NOT be filled by this
@@ -506,7 +507,8 @@ outcome is diagnosable from the report alone.
    against a real running Letflow instance (api-via steps) or records
    `DEFERRED_TO_S8` (gui-via steps) — it is a **test-execution harness**, built
    by REQ-205, the correctness gate over S4/S5/S6's combined output.
-2. This is explicitly **NOT** `simulation_test.zig`/`scenario_runner.zig`'s
+2. PROVENANCE (historical, not current decision authority):
+   This is explicitly **NOT** `simulation_test.zig`/`scenario_runner.zig`'s
    mechanism. Cite both R-Co paths by path:
    `src/api/routes/simulation_test.zig` and `src/simulation/scenario_runner.zig`.
    State the actual distinction confirmed by reading both files: that
@@ -527,6 +529,8 @@ outcome is diagnosable from the report alone.
 ---
 
 ## §8 — Acceptance-criteria-to-design-element map
+
+PROVENANCE (historical, not current decision authority):
 
 | AC | Design element |
 |---|---|

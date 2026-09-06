@@ -1969,9 +1969,21 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 6
+    entries: 8
     note: >
-      Recounted to 6 by WF02-REQ270-20260906's Step Final rebase, which
+      Recounted to 8 by WF02-REQ270-20260906's second Step Final rebase,
+      which found main further advanced by WF02-REQ271-20260906's own
+      REQ-271 started+done event pair (2 appends, landed while this
+      branch's own recount to 6 was already committed) -- composed in
+      requirement_status.v10.yaml itself in chronological `at:` order
+      (REQ-270 done 01:43:12Z, REQ-271 started 02:03:01Z, REQ-271 done
+      02:12:35Z), none dropped or rewritten. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v10.yaml` = 8
+      on-disk entries, rather than carrying forward either side's
+      independently-computed 6/7, per this note's own recount-every-time
+      rule. With REQ-271 done, all 8 lib/letflow/design/-scope chunks
+      (REQ-264..271) are now complete.
+      Recounted to 6 by WF02-REQ270-20260906's first Step Final rebase, which
       found main further advanced by WF02-REQ268-20260906's own closeout
       (REQ-268 done-event, landed via PR #1015 while this branch's own
       REQ-270 append, independently computing 5, was already committed)
@@ -1985,7 +1997,19 @@ volumes:
       docs/status/requirement_status.v10.yaml` = 5 on-disk entries, no
       rebase conflict on this file at the time it was written. 304
       lines, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered. (Superseded by the recount to 6 above.)
+      roll triggered. (Superseded by the recount to 8 above.)
+      Recounted to 7 by WF02-REQ271-20260906 (DOC-UPDATER)'s own REQ-271
+      done-event append (Step 01) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v10.yaml` = 7 on-disk entries (the
+      declared 5 immediately prior to this append was already one behind
+      the true on-disk count, since ORCH's own REQ-271 started-event
+      append at Step 00 had landed without its own index-note increment;
+      both are folded into this recount rather than corrected
+      retroactively, per this note's own recount-every-time rule). No
+      rebase conflict on this file at the time it was written. 376 lines /
+      22462 bytes, well under the 1200-line/120000-byte roll ceiling, so
+      no roll triggered. (Separate, concurrently-landed count of 7; also
+      superseded by the recount to 8 above.)
       Recounted to 5 by WF02-REQ268-20260906-closeout's Step Final rebase,
       which found main further advanced by WF02-REQ269-20260906's own
       done-event append (landed while this branch's own REQ-268 done-event

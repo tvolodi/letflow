@@ -1,0 +1,77 @@
+{
+  "handoff_id": "d58f0a2e-4c1b-4e7a-8f3d-9b6c1e2a4567",
+  "run_id": "WF02-REQ271-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ORCH",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ271-20260906/step-02-reviewer.json",
+  "created_at": "2026-09-06T02:15:16Z",
+  "started_at": "2026-09-06T02:15:16Z",
+  "completed_at": "2026-09-06T02:18:48Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-271"],
+    "requirement_text": {
+      "REQ-271": "Applies REQ-237's design decision (lib/letflow/design/req237-zig-provenance-marking-convention.md -- the PROVENANCE marker text and structural placement rule in section 2, the single-regex greppability justification in section 2(a), the two worked before/after examples in section 4, and the 2026-09-05 amendment's section 6 lib/letflow/design/ chunking recommendation, alphabetical-filename-sort, 13-file ceiling) to this chunk of lib/letflow/design/'s scope: chunk 239-design-h = lib/letflow/design/, req205-simulation-harness-foundation.md through req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md (req205-req215 plus 3 lowercase-named files, plus this design document itself). This is the LAST/8th sibling chunk of eight (REQ-264..271). Per CODE-DESIGN-VALIDATOR's OQ-4 resolution (mark it, no special exemption): this chunk's file list includes req237-zig-provenance-marking-convention.md itself, and its own .zig citations inside its worked examples (section 4) are IN SCOPE for this requirement -- the design document describing the convention is not exempt from the convention it describes, EXCEPT that section 4's actual illustrative before/after/diff fenced blocks themselves (which exist specifically to demonstrate the unmarked vs marked states) must not be edited, since editing them would corrupt the worked example's own illustrative meaning."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "handoffs/WF02-REQ271-20260906/step-01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "docs/status/requirement_status.v10.yaml"
+    ],
+    "owned_modules": [
+      "lib/letflow/design/req205-simulation-harness-foundation.md",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md",
+      "lib/letflow/design/req209-expr-differential-corpus-regression.md",
+      "lib/letflow/design/req215-service-task-engine-wiring.md",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "lib/letflow/design/search.md",
+      "lib/letflow/design/service_task_dispatcher.md",
+      "lib/letflow/design/service_task.md"
+    ]
+  },
+  "task": {
+    "description": "Claim this handoff (status -> IN_PROGRESS). Independently gate DOC-UPDATER's completed work on branch feature/WF02-REQ271-20260906 (already checked out; verify with git branch --show-current). Read the actual diff yourself (git diff main...HEAD -- lib/letflow/design/) rather than trusting step-01's result.summary. Check: (1) every .zig citation across the 9 named files is marked or was already marked, with zero citations left in the unmarked form -- re-derive the grep counts yourself; (2) no citation's original path text was altered or deleted -- spot check at least 9 citations across at least 5 files by reading the actual diff hunks; (3) CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file OUTSIDE this chunk's 9-file list are untouched (git diff --stat); (4) no deliberate-divergence note altered; (5) SPECIAL FOCUS, since this is the requirement's own unusual scope: req237-zig-provenance-marking-convention.md's section 4 contains two worked before/after/diff illustrative fenced examples -- confirm these fences were NOT edited (their content must stay byte-identical to what it was pre-this-run, since they exist specifically to show the unmarked vs marked states) while confirming any OTHER genuine .zig citation in that same file's own prose WAS correctly marked. Pay particular attention to whether DOC-UPDATER's line between 'live citation of this file's own provenance' and 'illustrative quotation of another file's phrasing' (e.g. section 1's phrasing-variety survey table, section 6's chunking tables) was drawn defensibly -- this is a judgement call DOC-UPDATER made and flagged two MINOR items on (see step-01 handoff's result.issues), not a mechanical check; use your own judgement on whether that line was drawn correctly, and FAIL only if a citation was mismarked (either a real citation left unmarked, or an illustrative quotation wrongly marked in a way that misrepresents it as this file's own provenance claim) -- do not fail merely because you would have drawn the line slightly differently on a genuinely ambiguous case, note disagreement as non-blocking instead. Also check the new unit-shape handling this run introduced (marker placed before a fenced code block that is itself the citation unit, in req206/req207; marker placed before a blockquote in search.md) against REQ-237's section 2 placement rule -- these are not literally enumerated as their own bullet in section 2, so judge whether they are a defensible mechanical application of the existing line/paragraph/table unit-shape rules (a fenced block or blockquote functions analogously to the 'paragraph' unit -- one contiguous textual unit, marker goes immediately above it) or a new convention needing its own amendment; REVIEWER's own prior recommendation (recorded in docs/status/requirement_status.v10.yaml's REQ-269 done-event) was to fold newer edge-case precedents into REQ-237's design doc -- decide whether that documentation update is in scope for THIS run (edits req237-zig-provenance-marking-convention.md, which this run already touches) or is better left as a separate follow-on, and state your reasoning either way; do not silently expand scope without saying so. (6) Confirm REQ-271 status is done in docs/requirements.yaml and a done event was appended to docs/status/requirement_status.v10.yaml with a real timestamp, appended (not overwriting prior entries). (7) Check against .claude/agents/reviewer.md's four questions and docs/anti-patterns.md. Complete the handoff: PASS -> next_action 'ORCH rebases and merges'; FAIL -> next_action 'Rework DOC-UPDATER', BLOCKER issues named specifically by file/line.",
+    "acceptance_criteria": [
+      "diff read directly, not from step-01's summary alone",
+      "re-derived .zig count confirms zero unmarked citations remain across the 9 files",
+      "at least 9 citations across at least 5 files spot-checked for verbatim path preservation",
+      "git diff --stat confirms no out-of-scope file touched",
+      "req237's own section-4 illustrative fences confirmed unedited; genuine other citations in that file confirmed marked; the live-citation-vs-illustrative-quotation line judged explicitly, not rubber-stamped",
+      "the new fence/blockquote unit-shape handling judged against section 2's existing shapes, with an explicit statement on whether a design-doc amendment is in-scope for this run or a follow-on",
+      "REQ-271 done status and status-history event confirmed",
+      "PASS or FAIL verdict with specific, named issues if FAIL"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived everything rather than trusting step-01's summary. (1) grep -c '\\.zig' before(main)/after(HEAD) is identical for all 9 files (req205=4,req206=4,req207=12,req209=4,req215=1,req237=47,search.md=4,service_task_dispatcher.md=1,service_task.md=7; sum 84=84) -- zero .zig lines lost. PROVENANCE marker counts: req205=3,req206=4,req207=5,req209=2,req215=1,req237=1,search.md=4,service_task_dispatcher.md=1,service_task.md=6 (27 total), matching DOC-UPDATER's own reported count. (2) Word-level diff (git diff --word-diff=plain) across all 9 files (not just the 5/9 minimum) confirms every changed line's only content delta is the inserted marker text itself -- apparent delete+add pairs on bulleted/numbered lines (req205, req207, req209, search.md, service_task.md) are a git line-diff display artifact of a bullet's text now following an unbulleted marker line, not text loss; bullet prefixes and all prose are byte-identical. (3) git diff --stat main...HEAD confirms CLAUDE.md, README.md, docs/migration/README.md show zero changes, and exactly the 9 named files (no others) changed under lib/letflow/design/. (4) grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' across the 9 files returns 0 matches on both main and HEAD -- no divergence note existed or was touched. (5) req237 special focus: only 1 marker was inserted in req237 itself, landing on section 0's 'Sources read' bullet (the file's own genuine first-person provenance claim, citing REQ-231's cursor.zig and REQ-181's webhooks.zig as sources this design read) -- confirmed correct and the only genuine live citation in this file outside section 4. Section 4's two worked before/after/diff fenced examples (lines ~253-281, ~286-304) are confirmed byte-identical to pre-run content via the diff (no hunk touches those line ranges at all). I independently re-examined every other .zig occurrence in req237 (grep -n, 40+ lines) and agree with DOC-UPDATER's line: section 1's phrasing-variety survey table (lines 85-91, quoting cursor.zig/dlq.zig/jit_provisioning.zig/registry.zig/dlq.zig as OTHER files' illustrative phrasing examples) and section 6's chunking-recommendation tables/prose (lines 351-446, discussing file counts and the string '.zig' as a grep target, plus the H1 title's own generic '.zig provenance-citation marking convention' phrasing) are meta-discussion of the convention/survey of other files, not this file's own provenance claims -- marking them would misrepresent inventory/meta text as a source citation. This line is drawn consistently: every place the file makes an actual first-person 'I read/relied on this specific R-Co file' claim (only section 0) is marked; every other .zig occurrence is either protected-fence, table-cell survey, or generic meta-prose. No mismarking found. (6) New unit-shapes (marker immediately above a fenced code block in req206/req207, marker immediately above a blockquote in search.md): confirmed by direct read that in both cases the marker sits outside the fence/blockquote delimiters on its own line with a blank line separating it from the unit, exactly mirroring the table rule's 'one marker above the whole unit, not per-line' principle -- a fence or blockquote is one contiguous structural unit exactly as a table is, so this is a defensible mechanical extension of section 2's existing shapes, not a new convention requiring a formal amendment before this can merge. Recommend (non-blocking) that a future edit fold this as a documented fifth unit-shape into req237 section 2, the same way the 2026-09-05 YAML-comment amendment was folded in -- but that is a follow-on and correctly out of scope for this run, which needed to apply the convention to 9 files, not re-litigate section 2. (7) REQ-271 status: done in docs/requirements.yaml (line 15795). Status history: requirement_status.v10.yaml has a 'started' event (ORCH, 2026-09-06T02:03:01Z) followed by a 'done' event (DOC-UPDATER, 2026-09-06T02:12:35Z), both appended after REQ-269's prior entries with no overwrite, both using the file's correct 'at:' field. (8) Checked against .claude/agents/reviewer.md's four gate questions and docs/anti-patterns.md: this is a pure documentation/design-doc edit (no gen_statem, supervision, or type-safety surface touched), and no anti-patterns.md entry bears on marker-insertion mechanics; the only applicable question is scope creep, addressed in point 6 above -- no premature abstraction or out-of-scope machinery introduced. No BLOCKER or MAJOR issues found. Two pre-existing MINOR items from step-01 (section 4's own narration prose adjacent to the fences, and the H1/AMENDMENT generic '.zig' phrasing) were independently re-evaluated and I concur they are correctly read as non-citations/already-illustrative, not omissions -- noted as non-blocking, consistent with the task's instruction not to fail on a genuinely ambiguous line-drawing disagreement.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ271-20260906/step-02-reviewer.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "type": "non-blocking-recommendation",
+        "description": "The new fence/blockquote unit-shape (marker placed immediately above a fenced code block or blockquote that is itself the citation unit, introduced this run in req206/req207/search.md) is a defensible mechanical extension of REQ-237 section 2's existing line/paragraph/table shapes, but is not yet documented as its own enumerated shape in req237-zig-provenance-marking-convention.md section 2 (unlike the 2026-09-05 YAML-comment-line amendment, which was folded in after a prior REVIEWER recommendation on REQ-269). Recommend a future doc-only follow-on fold this in as a fifth shape for the same reason the YAML amendment was made -- so REQ-264..270's siblings and any future chunk don't each have to re-derive the same judgment call. Correctly left out of this run's scope; not a blocker."
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ271-20260906",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "skipped",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH rebases and merges"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

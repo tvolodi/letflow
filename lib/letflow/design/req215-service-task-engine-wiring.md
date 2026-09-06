@@ -60,7 +60,8 @@ assumed:
   the requirement the handoff cited by name) does not render templates at all; its own
   design doc (`lib/letflow/design/req183-webhook-delivery-dispatch.md`) never mentions
   `body_template`/rendering anywhere in its text.
-- R-Co's own `src/engine/service_task.zig` (checked directly, since Letflow ports R-Co
+- PROVENANCE (historical, not current decision authority):
+  R-Co's own `src/engine/service_task.zig` (checked directly, since Letflow ports R-Co
   behavior) calls `validateRenderedUrl` on `cfg.url_template` with **no** intervening
   substitution step visible in that file either — R-Co's own design doc
   (`src/design/ext-01-service-task-node.md:137`, "At SERVICE_TASK activation, runtime

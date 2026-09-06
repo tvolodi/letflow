@@ -1,3 +1,5 @@
+PROVENANCE (historical, not current decision authority):
+
 # Design: REQ-056 — Service task configuration, retry classification and dispatch contract (`service_task.zig`, EXT-01)
 
 **Requirement:** REQ-056 (`docs/requirements.yaml`, stage S3, `depends_on: [REQ-061, REQ-049, REQ-029, REQ-031]`)
@@ -61,6 +63,7 @@ code**. No function bodies, no `.ex` files.
   — confirms `build_idempotency_key/N`'s job is to produce a value stable across redeliveries
   of the *same* attempt and distinct across *different* attempts (§3.6).
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source of truth:** the R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co` is reachable, but
 this design was not built by reading `service_task.zig` directly — it is a reasoned
 reconstruction from the requirement text's own description/acceptance criteria and the
@@ -83,6 +86,8 @@ backoff/decision functions themselves) — the actual outbound HTTP transport an
 requirement's own SCOPE BOUNDARY paragraph (quoted verbatim in §7's required moduledoc text).
 
 **Explicitly NOT built here (AC7):**
+
+PROVENANCE (historical, not current decision authority):
 
 | Not built here | Real dependency | Belongs to |
 |---|---|---|
@@ -400,6 +405,8 @@ All attribute reads are string-keyed (`Map.get(attributes, "url_template")`, not
 matches `graph.ex`'s own convention, §0). `attributes` may be `nil` (a node with no attributes
 at all) — treated identically to an empty map.
 
+PROVENANCE (historical, not current decision authority):
+
 | Config field | Source attribute key(s) | Default | Notes |
 |---|---|---|---|
 | `node_id` | `node.id` | — (required) | `{:error, :missing_node_id}` if `node.id` is `nil`/blank (defensive; `Graph.Node.t()`'s own `@enforce_keys` already makes this unreachable in practice — kept as a total-function guard, §9 OQ-2 style reasoning). |
@@ -568,6 +575,7 @@ dead-letter listing will query -- no additional table is needed for S6 to find e
 
 ## 9. Open questions — not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (MINOR, RESOLVED 2026-08-20, GH#331):** Verified against R-Co source
 (`R-Co/src/engine/service_task.zig`, `parseConfigFromNodeAttributes`, lines 84-100): R-Co
 treats `"url"`/`"endpoint"` as fully **optional** whenever `"service_id"` is present —
@@ -611,6 +619,7 @@ flagged for a future requirement/rework if this proves to matter operationally (
 requirement's own AC4 only asks for deterministic, no-sleep exponential growth with a cap,
 which this design satisfies without jitter).
 
+PROVENANCE (historical, not current decision authority):
 **OQ-5 (MINOR, RESOLVED 2026-08-20, GH#330):** `method`'s default (`:POST`, §5.1) when a
 SERVICE_TASK node's `"method"` attribute is absent has been confirmed against R-Co source
 (`R-Co/src/engine/service_task.zig`, the `method` parse block: `break :blk .POST;` when

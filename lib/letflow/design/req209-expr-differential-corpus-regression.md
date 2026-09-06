@@ -11,6 +11,7 @@ read-only dependency, no changes to that module in scope.
 
 ## 1. Why this is a regression port, not a differential port
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `tests/differential/differential_test.zig` (476+ lines, read in full at
 `c:\Users\tvolo\dev\ai-dala\R-Co\tests\differential\differential_test.zig`) evaluated
 every corpus entry's `condition_text` through **two** independent implementations —
@@ -308,7 +309,8 @@ literal string to paste):
 1. **What this module is:** a regression/golden-value port of R-Co's
    `tests/differential/corpus/conditions_v1.json` (15 entries) into an ExUnit suite for
    `Letflow.Engine.Expr`.
-2. **Explicitly state this is NOT a differential test**, and name why: R-Co's
+2. PROVENANCE (historical, not current decision authority):
+   **Explicitly state this is NOT a differential test**, and name why: R-Co's
    `tests/differential/differential_test.zig` diffed `vendor/cel` against `src/expr` as
    R-Co's own EXP-102 cutover gate (both R-Co source files cited by their repo-relative
    paths: `tests/differential/corpus/conditions_v1.json`,

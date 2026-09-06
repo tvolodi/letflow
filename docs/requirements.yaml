@@ -15792,7 +15792,7 @@ requirements:
   - id: REQ-271
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-h: req205-simulation-harness-foundation.md through req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md, search.md, service_task_dispatcher.md, service_task.md (closes ISS-0424 part 3c-18)"
     owner: DOC-UPDATER
-    status: in_progress
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

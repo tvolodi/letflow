@@ -13912,7 +13912,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-225, REQ-226, REQ-227, REQ-024]
-    impl_order: 463  # letflow-queue task id
+    impl_order: 516  # letflow-queue task id (registered 2026-09-06; original placeholder 463 was stale/never actually registered)
 
   - id: REQ-229
     # PROVENANCE (historical, not current decision authority):

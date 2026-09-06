@@ -1,0 +1,71 @@
+{
+  "handoff_id": "WF02-REQ261-20260906-step-02",
+  "run_id": "WF02-REQ261-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ261-20260906/step02-reviewer.json",
+  "created_at": "2026-09-06T00:00:00Z",
+  "started_at": "2026-09-06T00:00:00Z",
+  "completed_at": "2026-09-06T00:00:00Z",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-261"],
+    "related_handoff_ids": ["WF02-REQ261-20260906-step-01"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ261-20260906/step01-doc-updater.json",
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "handoffs/WF02-REQ260-20260905/step01-doc-updater.json",
+      "docs/issues/ISS-0085.yaml",
+      "docs/issues/ISS-0086.yaml",
+      "docs/issues/ISS-0087.yaml",
+      "docs/issues/ISS-0093.yaml",
+      "docs/issues/ISS-0094.yaml",
+      "docs/issues/ISS-0095.yaml",
+      "docs/issues/ISS-0096.yaml",
+      "docs/issues/ISS-0097.yaml",
+      "docs/issues/ISS-0098.yaml",
+      "docs/issues/ISS-0099.yaml",
+      "docs/issues/ISS-0100.yaml"
+    ]
+  },
+  "task": {
+    "description": "Gate DOC-UPDATER's REQ-261 result (commits 703a7fc2, 3ddd4dfc on feature/WF02-REQ261-20260906): mechanical PROVENANCE marker insertion into 11 docs/issues/ISS-*.yaml files per REQ-237's convention. Independently rerun every verification claim rather than trusting result.summary; check scope, additive-only diffs, the r_co_sources: shape-4(a) extension's defensibility, no other field altered, YAML validity, and marker idempotency.",
+    "acceptance_criteria": [
+      "git diff --stat main...HEAD touches exactly the 11 named files (plus this run's own handoff/registry bookkeeping) and no sibling-chunk file, no requirements.yaml, no design doc",
+      "per-file diffs are additive-only: zero '-' lines, zero .zig-bearing text in any +/- diff line",
+      "r_co_sources: sequence-item marker placement is a non-inventive mechanical extension of design doc shape 4(a), consistent with REQ-260's established r_co_evidence:/letflow_evidence: precedent",
+      "no non-marker field (status/resolution_note/severity/etc.) altered beyond line-number shifts",
+      "all 11 files remain valid YAML",
+      "no doubled/consecutive PROVENANCE marker lines anywhere in the 11 files"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently reran every verification claim in DOC-UPDATER's step-01 handoff and confirmed all of them. Scope: `git diff --stat main...HEAD` touches exactly the 11 named docs/issues/ISS-{0085,0086,0087,0093,0094,0095,0096,0097,0098,0099,0100}.yaml files plus this run's own handoff/registry bookkeeping (step00-git-setup.json, step01-doc-updater.json, handoffs/registry.json) -- no sibling-chunk file (REQ-260's ISS-0001-0079 range, REQ-262's ISS-0101-0439 range), no docs/requirements.yaml, no design doc, no CLAUDE.md/README.md/docs/migration/README.md touched (git diff --stat against those three is empty). Additive-only: `git diff -U0 main...HEAD` over all 11 files shows zero deletion lines and zero '+'/'-' lines containing '.zig' -- every citation's path text survives purely as unchanged diff context; the 43 added lines are all exactly 'PROVENANCE (historical, not current decision authority):' or its '#'-prefixed YAML-comment form, placed immediately above the first line of the paragraph/YAML sequence item carrying the citation, with indentation matched to the surrounding YAML block. Per-file .zig grep counts are identical before (git show main:<file>) and after in every one of the 11 files (85:10/10, 86:9/9, 87:7/7, 93:2/2, 94:4/4, 95:4/4, 96:5/5, 97:2/2, 98:4/4, 99:3/3, 100:3/3) -- confirms zero citation lines lost; marker counts are lower than raw .zig-line counts in several files (e.g. ISS-0086: 9 zig-lines but 7 markers) because several .zig mentions share one blank-line-bounded paragraph or wrapped sentence, exactly the many-to-one relationship the design doc's own section 5 verification method anticipates (one marker per citation *unit*, not per .zig occurrence). r_co_sources: sequence-item shape: read the design doc (lib/letflow/design/req237-zig-provenance-marking-convention.md) section 2's shape-4(a) definition directly -- it is written key-name-agnostically ('a bare #-prefixed comment line immediately above a single ... sequence-item bullet'), naming acceptance_criteria bullets and id:/title: pairs only as its two worked examples, not as an exhaustive list of eligible YAML keys. REQ-260's handoff (handoffs/WF02-REQ260-20260905/step01-doc-updater.json) already applied this identical extension to r_co_evidence:/letflow_evidence: sequences in ISS-0078/ISS-0079 and recorded it as a MINOR judgement-call note, reasoning that these are 'structurally identical to the design doc's already-documented acceptance_criteria-bullet YAML sequence-item case ... both are \"- ...\"-shaped YAML sequence items.' REQ-261's application of the same reasoning to a third same-shaped key (r_co_sources:, in ISS-0085/0086/0087) is a consistent, non-inventive continuation of an already-reviewed extension -- same YAML-sequence-of-citation-strings semantics, no new marker text, no new regex, no new placement rule. This does not require a fresh CODE-DESIGNER pass; it is squarely inside REQ-237's mechanical, per-unit placement rule as already vetted by a prior REVIEWER gate (WF02-REQ254-20260905's finding that motivated the ISS-0510 amendment in the first place). No other field altered: full diffs (git diff -U1) were read directly for all 11 files -- every hunk shows only a single added PROVENANCE line above a paragraph or sequence item; status/resolution/resolution_note/severity/reconciliation_note text bodies are unchanged verbatim aside from the marker line inserted above them. The one deliberate-divergence note in this chunk's scope (ISS-0100.yaml, 'deliberately open (unlike R-Co's closed enum) and deliberately coarser') is present and byte-identical after the change, shifted only by line-number due to the file's own 2 marker insertions above it. YAML validity: re-ran python yaml.safe_load (pyyaml, via the full Python 3.12 install since the bare 'python'/'python3' shims are Microsoft Store stubs on this machine) against all 11 files directly -- all 11 parsed successfully. Idempotency: an awk scan for two consecutive 'PROVENANCE (historical' lines found zero doubled markers in any of the 11 files.",
+    "checks": [
+      {"check": "scope: git diff --stat main...HEAD", "result": "PASS -- exactly the 11 named files plus this run's own handoff/registry bookkeeping; no sibling-chunk or unrelated file touched"},
+      {"check": "additive-only, no .zig text altered", "result": "PASS -- git diff -U0 shows zero '-' lines and zero +/- lines containing '.zig' across all 11 files"},
+      {"check": "r_co_sources: shape-4(a) extension defensible", "result": "PASS -- design doc's shape 4(a) text is key-name-agnostic; REQ-260 already established the identical extension for r_co_evidence:/letflow_evidence:; REQ-261 applies the same reasoning to a third same-shaped key, no new convention invented"},
+      {"check": "no other field altered", "result": "PASS -- full per-file diffs read directly; every hunk is a single added PROVENANCE line, all other text unchanged; ISS-0100's deliberate-divergence note confirmed byte-identical (line-shifted only)"},
+      {"check": "YAML validity, all 11 files", "result": "PASS -- pyyaml safe_load succeeded for all 11 files"},
+      {"check": "idempotency / no doubled markers", "result": "PASS -- awk scan found zero consecutive PROVENANCE lines in any file"},
+      {"check": "CLAUDE.md/README.md/docs/migration/README.md untouched", "result": "PASS -- git diff --stat against those three files is empty"}
+    ],
+    "idiom_and_scope_notes": [
+      "Not applicable in the usual OTP/gen_statem/supervision sense -- this is a docs-only YAML marker-insertion task with no application code, no state machine, no supervision tree involved. Reviewed instead against the scope-creep and decision-record-consistency angles: the r_co_sources: sequence-item extension does not introduce new abstraction or diverge from a settled decision; it is the same mechanical rule REQ-260 already established, applied to one more same-shaped YAML key. No scope creep found.",
+      "No type-safety gap applicable -- plain YAML documentation files, no Elixir types/structs involved."
+    ],
+    "deviations_and_issues": [],
+    "issues": [],
+    "artifacts_out": [
+      "handoffs/WF02-REQ261-20260906/step02-reviewer.json"
+    ],
+    "next_action": "Route to TEST-DESIGNER (Step 2e) -- not applicable for this docs-only requirement per REQ-261's own scope (no code, no tests); ORCH should route directly to DOC-UPDATER's completion path / RELEASE-VALIDATOR or close the requirement per standard WF-02 handling for docs-only chunks, consistent with how REQ-260 and its siblings were closed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

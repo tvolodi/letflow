@@ -63,6 +63,21 @@ defmodule Letflow.Test.TenantTemplate do
   convention) if the template cannot be built or fails its own post-build
   self-check (design §2.3 step 3) or parity self-check (design §3.4 use site
   1). Never falls back to anything else — see design §5.
+
+  ## ISS-0515: pre-built synchronously from `test/test_helper.exs`
+
+  As of ISS-0515, `test/test_helper.exs` calls this function once, directly,
+  as a synchronous top-level statement — before `ExUnit.start/1` ever
+  dispatches a single test in that partition process. See
+  `lib/letflow/design/iss0515-tenant-template-build-race-fix.md` for the
+  full rationale; in short, this eliminates the concurrent-first-caller race
+  that previously let 2+ async tests in the same `scripts/test_parallel.sh`
+  partition collide on this function's advisory-lock acquisition
+  (`Repo.query!/2` below, subject to Ecto's default 15000ms client timeout)
+  and raise `Postgrex.Error: query_canceled`. After that pre-build call
+  completes, every real test's own call into this function takes the
+  `template_ready?/0` fast path below — no logic in this function changed to
+  make that true.
   """
   @spec ensure_template!() :: :ok
   def ensure_template! do

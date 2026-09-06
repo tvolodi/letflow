@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-03",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T16:40:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b"
+    ],
+    "artifacts_changed": [
+      "test/test_helper.exs",
+      "test/support/tenant_template.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906"
+  },
+  "task": {
+    "description": "Implement CODE-DESIGNER's validated design (lib/letflow/design/iss0515-tenant-template-build-race-fix.md) for the ISS-0515 tenant_template build-race fix: add a single synchronous call to Letflow.Test.TenantTemplate.ensure_template!() in test/test_helper.exs, after ExUnit.start/1 and before ExUnit.after_suite/1."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Implemented exactly per the validated design, nothing more. CHANGES: (1) test/test_helper.exs -- added `Letflow.Test.TenantTemplate.ensure_template!()` as a synchronous top-level statement immediately after the existing `ExUnit.start(exclude: [...])` call (line 52) and before `ExUnit.after_suite(...)` (now pushed to follow it), with an explanatory comment citing the design doc and the ExUnit.start/1-only-registers-the-run mechanism. (2) test/support/tenant_template.ex -- added a new '## ISS-0515: pre-built synchronously from test/test_helper.exs' subsection to ensure_template!/0's own moduledoc (design's own instruction, §0/§4), describing the new caller; zero logic changed in that file. No change to Letflow.TenantProvisioning, no change to tenant_fixture.ex, no new module, no migration.\n\nTOOLCHAIN CHECKS (both run for real, both clean): `mix compile --warnings-as-errors` (MIX_ENV=dev and MIX_ENV=test) exit 0, no warnings. `mix format --check-formatted` exit 0.\n\nDESIGN SECTION 8 RE-VERIFICATION (all four steps run for real against the actual local dev DB on this branch, not simulated):\n\n1. POST-FIX CONCURRENCY REPRO (direct repro of diagnosis §4b, re-run post-fix): dropped tenant_template (DROP SCHEMA tenant_template CASCADE), ran ensure_template!/0 once to simulate the new pre-build hook (measured 1817.8ms wall-clock -- matches the diagnosis's own ~1.8-1.9s baseline, not 16x slower), then launched 5 concurrent Task.async callers of ensure_template!/0 against the same DB/pool exactly as diagnosis §4b did. RESULT: all 5 returned :ok in ~0.04ms each (CALLER_1..5_MS all < 0.05, ALL_OK=true, ALL_FAST=true) -- the fast path (template_ready?/0 already true), zero lock acquisition, zero contention. This directly demonstrates the race's own precondition (2+ concurrent first-callers) is now unreachable, not merely given more timeout headroom.\n\n2. REAL PARTITIONED SUITE, TWO CONSECUTIVE RUNS: `mix letflow.check.test` run twice consecutively end to end (4m35s and 4m24s respectively, 8-partition scripts/test_parallel.sh under the hood). BOTH runs: zero occurrences of `Postgrex.Error: ERROR 57014 (query_canceled)` or `TENANT_TEMPLATE_BUILD_FAILED` in any of the 8 partitions' logs (grepped directly against /tmp/letflow_test_parallel.*/partition-*.log both times) -- the diagnosis's own byte-for-byte pre-fix failure signature is completely absent in both runs. Run 1 had 8 unrelated failures (partition 1: 2x `Mix.Tasks.Letflow.CheckToolchainTest` rust-pin tests failing with `Erlang error: :enoent` on `System.cmd(\"rustc\", ...)` -- confirmed this sandbox has no rustc binary at all, `which rustc` exits 1, a pre-existing environment gap unrelated to this fix; partition 7: 6x `Letflow.ServiceCatalogTest` failures, all `Postgrex.Error: ERROR 42P01 (undefined_table) relation \"tenant_....process_definitions\" does not exist`, NOT a 57014/query_canceled signature). Run 2 confirmed the ServiceCatalogTest failures were a pre-existing, unrelated flake: partition 7 came back 502/502 clean (0 failures) on the identical code, and `mix test test/letflow/service_catalog_test.exs` in isolation passed 33/33. Only the 2 rustc :enoent failures (same environment gap, deterministic every run since no rustc binary exists here) repeated in run 2 -- confirmed NOT a query_canceled/tenant_template symptom. Net: two consecutive runs, zero occurrences of the exact race signature this fix targets, and independent confirmation the other observed failures are pre-existing environment/flake noise, not something this change introduced or failed to fix.\n\n3. TIMING SANITY CHECK: pre-build measured at 1817.8ms in the step-1 repro -- squarely in the diagnosis's own measured ~1.8-1.9s ballpark (diagnosis §4a: 1884.9ms / 1781.7ms / 1932.5ms), not 16x or any other multiple of it.\n\n4. REGRESSION CHECK: `mix test test/support/tenant_template_test.exs` -- Result: 7 passed, 0 failures (15.0s). No change to that file's own observable behavior.\n\nCONCLUSION: the race is structurally eliminated, not merely given more headroom -- step 1's direct repro proves concurrent first-callers never reach the lock-acquisition path at all once pre-built, and step 2's two consecutive full-suite runs show zero recurrences of the pre-fix failure signature. Routing to REVIEWER per WF-03/WF-02 gate order (SECURITY-REVIEWER not required: this change touches only test-support files, no tenant-data path, no production code, no migration)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

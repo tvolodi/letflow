@@ -51,6 +51,22 @@ Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)
 # lua_wallclock_race test/letflow/engine/lua/executor_test.exs`.
 ExUnit.start(exclude: [:keycloak, :wasm_hang, :lua_wallclock_race])
 
+# ISS-0515: structural pre-build of the "tenant_template" schema, synchronous,
+# BEFORE any test in this partition process can run. See
+# lib/letflow/design/iss0515-tenant-template-build-race-fix.md for the full
+# rationale -- summary: ExUnit.start/1 above only REGISTERS the eventual test
+# run via System.at_exit/1; it does not dispatch a single test inline. That
+# means this call, placed anywhere in this file, is guaranteed to complete
+# before any test process exists, so no test process can ever race another to
+# be the first caller of `ensure_template!/0` within this partition again --
+# the ONLY concurrent caller of its advisory-lock acquisition is now this one,
+# uncontested, one-time call. This removes the race's own precondition (2+
+# concurrent first-callers within one scripts/test_parallel.sh partition)
+# rather than widening its timing margin (design §3's rejection of a bigger
+# lock-acquisition timeout as the fix). Unconditional -- not gated behind any
+# "does this run touch a tenant fixture" heuristic (design §7).
+Letflow.Test.TenantTemplate.ensure_template!()
+
 ExUnit.after_suite(fn _stats ->
   Letflow.TenantSchemaReaper.sweep_orphans()
   Letflow.TenantSchemaReaper.sweep_service_catalog_orphans(Letflow.Repo)

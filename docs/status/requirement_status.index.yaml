@@ -1969,9 +1969,19 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 11
+    entries: 12
     note: >
-      Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
+      Recounted to 12 by WF02-REQ263-20260906's closeout append (REQ-263
+      done, 07:00:40Z), which found the declared count still at 11 from
+      the prior WF02-REQ262-20260906 recount below -- the closeout
+      commit updated the count in the same commit as the append, per
+      HOW-TO-APPEND step 6, after CI caught the drift live (A9 invariant
+      failure on PR #1026, `mix letflow.check`, run 34018087236) rather
+      than before. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v10.yaml` = 12
+      on-disk entries, no rebase pending at the time of this recount.
+
+      PRIOR NOTE (recount to 11): Recounted to 11 by WF02-REQ262-20260906's Step Final rebase, which
       found main further advanced by WF02-REQ261-20260906's own REQ-261
       done-event append (landed via PR #1023 while this branch's own
       recount to 10 was already committed). Composed in chronological

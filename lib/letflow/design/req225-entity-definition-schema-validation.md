@@ -132,7 +132,7 @@ table; this module only describes and validates the shape of the JSON blob that 
   rules — see §3's preamble).
 - `description`: optional free-text, no structural constraint.
 - `fields`: the field list. Never absent (an entity with zero fields is meaningless);
-  `required(:fields)` and Rule 8a's minimum-cardinality bound (§3) both enforce
+  `required(:fields)` and Rule 8a's field-count cardinality bound (§3) both enforce
   non-emptiness.
 - `indexes`, `foreign_keys`, `constraints`: each optional; absence is equivalent to an
   empty list for every rule below.
@@ -247,44 +247,61 @@ rules and is checked first, short-circuiting before any numbered rule runs, sinc
 like "field uniqueness" cannot be evaluated against a `fields` value that isn't even a
 list.
 
-**Resolving the 11-vs-9-named-categories mismatch, explicitly:** REQ-225's acceptance
-criteria list AC2 names 9 categories ("name format, field uniqueness, queried+json
-exclusion, index field coverage, FK field coverage, enum validity, decimal validation,
-cardinality limits, self-referential-FK rejection") but the description says "11
-numbered structural validation rules." This design resolves the gap by splitting
-**cardinality limits** into its **4** separately-numbered, separately-fixture-testable
-rules — one per collection (`fields`, `indexes`, `foreign_keys`, `constraints`) — since
-each is a distinct maximum, checked independently, and AC2 itself requires "a fixture
-that violates only that rule" for *each* of the 11 rules; a single combined "cardinality
-limits" rule could not be violated by one fixture without ambiguity about which
-collection tripped it. That yields 9 categories − 1 (cardinality, replaced) + 4
-(cardinality's 4 sub-rules) = **12**, one more than 11, so this design additionally
-folds **field uniqueness** and **index/constraint-name uniqueness** into **one** rule
-(Rule 2) rather than two, since both are the identical "no two entries in a list share a
-name" check applied to different lists, and REQ-225's own AC2 names only "field
-uniqueness" (not a separate "index/constraint name uniqueness") as a category — treating
-them as one rule with a `scope` field on the violation matches AC2's own singular
-naming while still letting a fixture "violate only that rule." That yields the final
-count of **11**:
+**Resolving the 11-vs-9-named-categories mismatch, explicitly (revised in this rework
+pass — see rework note below the table):** REQ-225's acceptance criteria list AC2 names
+9 categories ("name format, field uniqueness, queried+json exclusion, index field
+coverage, FK field coverage, enum validity, decimal validation, cardinality limits,
+self-referential-FK rejection") but the description says "11 numbered structural
+validation rules." This design resolves the gap by splitting **cardinality limits**
+into **3** separately-numbered, separately-fixture-testable sub-rules, using a grouping
+principle this design already establishes and uses **elsewhere**, not invented just to
+make the arithmetic land: `foreign_keys` and `constraints` are already treated as one
+combined namespace by two other rules below — Rule 2's scope (c) unions them into one
+duplicate-name check ("they occupy one DB-constraint-name namespace in REQ-226's
+projection") and Rule 5 unions them into one field-coverage check (`:fk_field_not_found`
+covers both `fk_def().field` and `constraints[].fields`). Applying that **same** existing
+"FKs and constraints share one namespace" principle to cardinality yields exactly 3
+cardinality sub-rules — one for `fields`, one for `indexes`, and one **combined** bound
+over `foreign_keys` ∪ `constraints` together (§3 Rule 8c below) — rather than 4 separate
+per-collection bounds. This is a real reduction, not a relabeling: the combined Rule 8c
+enforces one ceiling on `length(foreign_keys) + length(constraints)`, a materially
+different (and independently fixturable — see Rule 8c) check than two separate ceilings
+would be. That yields 8 non-cardinality categories (name format, field uniqueness,
+queried+json exclusion, index field coverage, FK field coverage, enum validity, decimal
+validation, self-referential-FK rejection) + 3 cardinality sub-rules = **11**, matching
+both AC2's "11" count and its "a fixture that violates only that rule" requirement for
+every one of the 11.
 
 | # | Rule | Category (per AC2) |
 |---|---|---|
 | 1 | Name format | name format |
-| 2 | Name uniqueness (fields, and separately indexes/FKs/constraints) | field uniqueness |
+| 2 | Name uniqueness (fields; indexes; foreign_keys ∪ constraints combined) | field uniqueness |
 | 3 | `queried` + `:json` mutual exclusion | queried+json exclusion |
 | 4 | Index field coverage | index field coverage |
-| 5 | FK field coverage | FK field coverage |
+| 5 | FK field coverage (foreign_keys ∪ constraints combined) | FK field coverage |
 | 6 | Enum validity | enum validity |
 | 7 | Decimal-field validation | decimal validation |
 | 8a | Field-count cardinality limit | cardinality limits |
 | 8b | Index-count cardinality limit | cardinality limits |
-| 8c | FK-count cardinality limit | cardinality limits |
-| 8d | Constraint-count cardinality limit | cardinality limits |
+| 8c | FK+constraint-count cardinality limit (combined) | cardinality limits |
 | 9 | Self-referential-FK rejection | self-referential-FK rejection |
 
-(Rules are numbered 1–9 with 8 split into four lettered sub-rules — 11 independently
+(Rules are numbered 1–9 with 8 split into **three** lettered sub-rules — 11 independently
 triggerable, independently fixturable checks total, matching AC2's "each of the 11 ...
 is independently exercised by a fixture that violates only that rule.")
+
+**Rework note (this pass):** the prior pass split cardinality into 4 sub-rules (one per
+collection) and then separately claimed a fold of "field uniqueness" and "index/
+constraint-name uniqueness" into one rule to bring 12 back down to 11 — CODE-DESIGN-VALIDATOR
+correctly found that fold to be fictitious, since AC2's 9 named categories only ever had
+one uniqueness category to begin with (there was nothing separate to fold away), so the
+true count under that scheme was 12, not 11, and the design's own table contradicted its
+prose. This pass fixes the actual arithmetic instead of re-asserting the wrong total: it
+reduces the cardinality split from 4 sub-rules to 3 by combining the `foreign_keys` and
+`constraints` cardinality bound into one rule (Rule 8c) — using the same combined-namespace
+principle Rule 2 and Rule 5 already apply to that same pair of collections, so the
+grouping is consistent with the rest of this design, not an arbitrary pick made solely to
+hit "11."
 
 Every rule below produces `{:error, [violation()]}` (§7) with `rule` set to the atom in
 the **Violation rule atom** column — this is what lets a caller "surface which rule
@@ -365,15 +382,18 @@ constant.)
 **Trigger:** `length(indexes) > 32`. **Violation:**
 `%Violation{rule: :too_many_indexes, path: [:indexes], message: "at most 32 indexes allowed, got <n>"}`.
 
-### Rule 8c — FK-count cardinality limit (`:too_many_foreign_keys`)
+### Rule 8c — FK+constraint-count cardinality limit, combined (`:too_many_fk_or_constraints`)
 
-**Trigger:** `length(foreign_keys) > 32`. **Violation:**
-`%Violation{rule: :too_many_foreign_keys, path: [:foreign_keys], message: "at most 32 foreign keys allowed, got <n>"}`.
-
-### Rule 8d — Constraint-count cardinality limit (`:too_many_constraints`)
-
-**Trigger:** `length(constraints) > 32`. **Violation:**
-`%Violation{rule: :too_many_constraints, path: [:constraints], message: "at most 32 constraints allowed, got <n>"}`.
+**Trigger:** `length(foreign_keys) + length(constraints) > 32` — one combined ceiling
+over both lists together, not two separate 32-item ceilings, using the same
+"`foreign_keys` and `constraints` share one namespace" principle Rule 2 (scope c) and
+Rule 5 already apply to this same pair of collections (§3 preamble note above). A
+fixture independently violates only this rule by holding both lists' combined count at
+33 while keeping every individual FK/constraint entry itself valid per Rules 5/9 (e.g.
+33 constraints and 0 foreign keys, or any other split summing past 32). **Violation:**
+`%Violation{rule: :too_many_fk_or_constraints, path: [:foreign_keys], message: "combined foreign_keys + constraints count must be at most 32, got <n>"}`
+(`path` is `[:foreign_keys]` by convention when the trigger is the combined count rather
+than either list alone; a caller inspects `message` for the actual combined total).
 
 ### Rule 9 — Self-referential-FK rejection (`:self_referential_fk`)
 
@@ -575,17 +595,23 @@ itself — no persistence, per REQ-225's explicit scope boundary.
 
 ## 9. Open questions (stated explicitly, not silently resolved)
 
-1. **Exact cardinality-limit numbers (Rules 8a-8d, §3) are this design's own concrete
+1. **Exact cardinality-limit numbers (Rules 8a-8c, §3) are this design's own concrete
    choice, not a ported R-Co constant.** R-Co's `validator.zig` source is unreachable
-   from this sandbox (§0), so the 200/32/32/32 limits above cannot be verified against
-   R-Co's actual constants. They are chosen to be generous enough not to block any
-   realistic entity type while still being a real, enforceable, testable bound (AC2
-   requires each rule to be independently fixture-triggerable, which requires *some*
-   finite number). ELIXIR-DEV or a later auditor with real R-Co access should reconcile
-   these against R-Co's actual `MAX_FIELDS`/`MAX_INDEXES`/`MAX_FOREIGN_KEYS`/
-   `MAX_CONSTRAINTS`-equivalent constants (if they differ, that is a follow-up fix, not
-   a blocker to this slice landing — REQ-225's AC2 only requires the rule exist and be
-   independently testable, not that the specific number matches R-Co byte-for-byte).
+   from this sandbox (§0), so the 200/32/32 limits above (Rule 8a's 200, Rule 8b's 32,
+   Rule 8c's combined 32) cannot be verified against R-Co's actual constants. They are
+   chosen to be generous enough not to block any realistic entity type while still being
+   a real, enforceable, testable bound (AC2 requires each rule to be independently
+   fixture-triggerable, which requires *some* finite number). This also means this
+   design cannot confirm from source whether R-Co itself bounded `foreign_keys` and
+   `constraints` combined or separately — Rule 8c's combined-bound choice is this
+   design's own reasoned grouping (per the principle already applied at Rule 2/Rule 5,
+   §3 preamble), not a verified port either. ELIXIR-DEV or a later auditor with real
+   R-Co access should reconcile these against R-Co's actual `MAX_FIELDS`/`MAX_INDEXES`/
+   `MAX_FOREIGN_KEYS`/`MAX_CONSTRAINTS`-equivalent constants and confirm whether R-Co
+   bounded FKs and constraints separately or combined (if either differs, that is a
+   follow-up fix, not a blocker to this slice landing — REQ-225's AC2 only requires the
+   rule exist and be independently testable, not that the specific number or grouping
+   matches R-Co byte-for-byte).
 2. **The `constraint_def().type` enum is deliberately narrowed to `:unique` only**,
    since this sandbox cannot verify what R-Co's actual constraint-kind set was (e.g.
    whether a `:check`-expression constraint kind existed). Expanding it later is a
@@ -627,7 +653,7 @@ itself — no persistence, per REQ-225's explicit scope boundary.
 | AC | Criterion (paraphrased) | Design section |
 |---|---|---|
 | 1 | A conforming document passes structural validation with no errors | §2 (the shape every rule in §3 is checked against), §3 preamble (malformed-shape precondition), §7 (`validate/1` returns `:ok`) |
-| 2 | Each of the 11 rules independently fixture-triggerable, with an identifiable (not generic) error | §3 (all 11 rules, each with an exact trigger condition and a distinct `rule` atom), §3's opening table resolving the 11-vs-9 count, §7 (`violation()` shape carries `rule`) |
+| 2 | Each of the 11 rules independently fixture-triggerable, with an identifiable (not generic) error | §3 (all 11 rules — 1-7, 8a-8c, 9 — each with an exact trigger condition and a distinct `rule` atom), §3's opening table resolving the 11-vs-9-named-categories count via a 3-way cardinality split (not 4), §7 (`violation()` shape carries `rule`) |
 | 3 | Canonicalising two structurally-equivalent documents (key order / whitespace) yields the same hash, via the existing `Letflow.Repository.Canonicaliser`, no second canonicaliser | §4 (delegation contract, both calls named explicitly), §7 (`Shape.content_hash/1`'s spec references the same two Canonicaliser calls, no independent logic) |
 | 4 | Logical-shape-versioning rule stated concretely, with a non-bumping and a bumping example | §5 (concrete rule, 2 non-bumping + 2 bumping worked examples) |
 | 5 | Entity-type ownership model (tenant-scoped vs. platform-scoped) stated explicitly with rationale | §1 (decision + 4-point reasoning, placed prominently as the design's own §1, not buried) |

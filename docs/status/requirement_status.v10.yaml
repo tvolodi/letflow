@@ -234,6 +234,35 @@ history:
       re-verified on main: grep -c '\.zig' across all 13 files matches
       the step-00 baseline exactly, PROVENANCE markers present in all 13.
       Queue task 505 released.
+
+  - req: REQ-268
+    event: done
+    agent: ORCH
+    at: 2026-09-06T00:48:06Z
+    note: >
+      Applied REQ-237's PROVENANCE marker convention (chunk 239-design-e,
+      req068-validation.md through req081-definition-routes-read.md, 13
+      lib/letflow/design/ files) via WF-02 (DOC-UPDATER Step 01, REVIEWER
+      PASS Step 02). No TEST-DESIGNER step -- doc-only mechanical change,
+      no test coverage applicable, consistent with REQ-264/267 precedent.
+      REVIEWER independently re-verified all 13 files' scope/counts (sum
+      345 unchanged), both new edge cases (bare code fence not preceded by
+      a heading, treated as a paragraph-like unit; heading whose only .zig
+      citation lives inside a blockquote body below it, marker placed above
+      the heading rather than inside the blockquote) confirmed defensible
+      and non-destructive, divergence notes byte-identical, zero content
+      deletion (220 insertions, 0 deletions), list-continuation indentation
+      consistent with REQ-267's own precedent. REVIEWER recommends folding
+      both new edge-case precedents into REQ-237's design doc so
+      REQ-269/270/271 don't have to re-derive them -- flagged here as a
+      lightweight follow-up note, not a new issue, since the pattern is
+      already validated correct. Merged via PR #1014 (plain merge, commit
+      5e755cc1) with no rebase needed (main had not moved since branch
+      creation) after both CI gates (frontend + backend) went green on the
+      first run. Post-merge, independently re-verified on main: grep -c
+      '\.zig' across all 13 files matches the step-00 baseline exactly (sum
+      345), PROVENANCE markers present in all 13. Queue task 506 released.
+
   - req: REQ-269
     event: done
     agent: DOC-UPDATER

@@ -1442,12 +1442,27 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
     # `mix test` invocation's test_helper.exs (this nested run included) -- see
     # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515 addendum.
     # This module's own moduledoc note (line ~7) already establishes these 11 tests
-    # short-circuit before any Repo insert, so 1 connection is genuinely enough: the
-    # pre-build call's advisory-lock check (template already built by the parent
-    # process moments earlier) and the 11 tests themselves need no concurrent DB
-    # access. Capping here, at the one call site that creates this extra process,
-    # is more precise than inflating the whole suite's non-pool reserve to cover an
-    # unbounded inherited pool size.
+    # short-circuit before any Repo insert, so a small, fixed pool is genuinely
+    # enough -- but NOT a pool of exactly 1. This file's `async: true` (line 11)
+    # means this nested subprocess's own test_helper.exs pre-build calls
+    # (`sweep_orphans/0`, `sweep_service_catalog_orphans/1`,
+    # `ensure_template!/0` -- all real `Letflow.Repo` checkouts) run in that same
+    # BEAM VM, and Ecto's Sandbox/DBConnection checkout+checkin machinery can
+    # transiently need a second connection concurrently with the first even when
+    # the 11 tests themselves never touch the DB (e.g. a prior checkout's
+    # asynchronous `on_exit` checkin racing the next caller's checkout, or
+    # Postgrex's own internal health/reconnect connection). A pool of exactly 1
+    # gave DBConnection's checkout queue nowhere to put that second, genuinely
+    # concurrent request, so it queued past the 15s default and the whole
+    # subprocess died with a `DBConnection.ConnectionError` (first hit
+    # 2026-09-06, this same ISS-0515/ISS-0426 branch, immediately after the
+    # TEST_POOL_SIZE=1 cap landed). 4 connections is still tiny next to an
+    # uncapped sibling-partition-sized pool (schedulers_online()*2, typically
+    # 8-32) but gives enough slack for that kind of transient overlap without
+    # reopening the original unbounded-pool problem. See
+    # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515
+    # addendum for the re-derived connection-budget arithmetic this value feeds
+    # into (`TEST_NONPOOL_CONNECTION_RESERVE` in scripts/test_parallel.sh).
     @tag timeout: 60_000
     test "the isolated --only lua_wallclock_race partition runs and passes exactly 11 tests" do
       {output, exit_code} =
@@ -1455,7 +1470,7 @@ defmodule Letflow.Engine.Lua.ExecutorTest do
           "mix",
           ["test", "--only", "lua_wallclock_race", "test/letflow/engine/lua/executor_test.exs"],
           stderr_to_stdout: true,
-          env: [{"TEST_POOL_SIZE", "1"}]
+          env: [{"TEST_POOL_SIZE", "4"}]
         )
 
       assert exit_code == 0,

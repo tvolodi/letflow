@@ -1,0 +1,42 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-07",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "07",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0515-20260906/step-07-elixir-dev-rework2.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T17:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03",
+      "WF03-ISS0515-20260906-step-04",
+      "WF03-ISS0515-20260906-step-05",
+      "WF03-ISS0515-20260906-step-06"
+    ],
+    "artifacts_changed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "scripts/test_parallel.sh",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033
+  },
+  "task": {
+    "description": "PR #1033 failed CI a SECOND time, from the immediately-prior REVIEWER-approved rework's own fix (step-05/step-06): capping the ISS-0426 nested `mix test --only lua_wallclock_race` subprocess to TEST_POOL_SIZE=1 stopped the too_many_connections failure but introduced a new DBConnection.ConnectionError (15000ms checkout-queue timeout) inside that same nested subprocess, since executor_test.exs's `async: true` (line 11) means the subprocess's own test_helper.exs pre-build Repo calls and Sandbox checkout/checkin machinery can transiently need a second connection concurrently even though the 11 tagged tests themselves need none. Fix by choosing a slightly larger, still-small pool_size for that nested subprocess and re-deriving the connection-budget arithmetic in scripts/test_parallel.sh and the decision doc accordingly."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "ROOT CAUSE (confirmed by reading the file, not by trusting the prompt): test/letflow/engine/lua/executor_test.exs declares `use ExUnit.Case, async: true` (line 11). The nested subprocess spawned by the ISS-0426 self-check (System.cmd/3, line ~1454) runs test_helper.exs's unconditional pre-build calls (sweep_orphans/0, sweep_service_catalog_orphans/1, ensure_template!/0 -- all real Letflow.Repo checkouts) in that same BEAM VM. With the pool capped to exactly 1 connection, any transient overlap between one checkout's asynchronous on_exit checkin and the next caller's checkout (or Postgrex's own internal health/reconnect connection) has nowhere to queue, and DBConnection's 15s default checkout-queue timeout fires. This is a strictly different failure from the original too_many_connections (which was about an UNBOUNDED, inherited, sibling-partition-sized pool) -- the fix direction (small fixed cap) was right, the chosen value (1) was too tight.\n\nFIX:\n\n1. test/letflow/engine/lua/executor_test.exs: the System.cmd/3 call's `env: [{\"TEST_POOL_SIZE\", \"1\"}]` changed to `env: [{\"TEST_POOL_SIZE\", \"4\"}]`. Chosen value reasoning: still tiny next to an uncapped sibling-partition-sized pool (schedulers_online()*2, typically 8-32 on CI/dev hosts), but wide enough to absorb a couple of genuinely-concurrent transient checkouts (pre-build calls' own checkout/checkin overlap, or Sandbox/Postgrex internals) across the 11 sequentially-dispatched tests in this one module, without reintroducing meaningful connection-budget pressure. Updated the test's own inline comment to document both the original too-tight value and why 4 was chosen, pointing at the decision doc's re-derived arithmetic.\n\n2. scripts/test_parallel.sh: TEST_NONPOOL_CONNECTION_RESERVE's default bumped from 3 to 5 -- re-derived directly from the two real non-pooled sources at their own worst case: the ISS-0287 reaper-test connection (at most 1 concurrently) + this nested subprocess's now-4-connection pool (up to 4 concurrently, by the TEST_POOL_SIZE=4 cap) = 5. Updated the surrounding comment block to match (previously said 'TEST_POOL_SIZE=1 ... exactly the same 1 extra connection shape'; now says TEST_POOL_SIZE=4 and reserve=5, explaining the pool=1 attempt's own CI failure).\n\n3. docs/migration/decisions/0009-test-parallel-pool-sizing.md: rewrote the 'Fix' and reserve paragraphs of the 2026-09-06 ISS-0515/ISS-0426 addendum to record that the first TEST_POOL_SIZE=1 attempt was itself wrong (CI caught it with the DBConnection checkout-queue-timeout failure quoted above) and that TEST_POOL_SIZE=4 / reserve=5 is the corrected fix. Re-derived the verification arithmetic at N=4 from scratch rather than assuming the prior addendum's numbers: usable_ceiling = 100-3 = 97 (unchanged). budget = 97-10-5 = 82 (nonpool_reserve now 5, was 84 with reserve=3). computed = 82/4 = 20 (down from 21, since the reserve grew by 2). N*TEST_POOL_SIZE = 80. Worst case: 80 (N-partition saturation) + 1 (ISS-0287 connection) + 4 (this addendum's now-corrected nested pool) + 10 (ad-hoc headroom) = 95 <= 97 -- still inside the true ceiling, with a 2-connection margin.\n\nVERIFICATION (own output, this turn):\n- `mix compile --warnings-as-errors`: exit 0, no output (clean).\n- `mix format --check-formatted`: exit 0 (clean).\n- `mix test test/letflow/engine/lua/executor_test.exs`, run 3x in a row: all three report 'Result: 45 passed, 11 excluded' (0 failures) -- the ISS-0426 self-check test itself (not tagged, so included in the 45) passed all 3 times, meaning its nested `mix test --only lua_wallclock_race` subprocess with TEST_POOL_SIZE=4 exited 0 and reported exactly 11 passed each time.\n- Extra confidence run: `TEST_POOL_SIZE=3 mix test test/letflow/engine/lua/executor_test.exs` (deliberately tightening the OUTER pool to approximate CI's tighter budget, per the task's own suggestion) -- also 'Result: 45 passed, 11 excluded', 0 failures. Confirms the fix's correctness rests on the NESTED subprocess's own pool (independently set via :env, unaffected by the outer pool size) rather than on this local sandbox's generally-larger headroom.\n\nDid NOT touch ensure_template!/0, test_helper.exs, or the ISS-0515 mechanism itself -- git diff --stat shows only the three files above changed, matching the prior rework's scope discipline.\n\nNOTE ON NON-REPRODUCTION: as with the prior rework, the original DBConnection checkout-queue-timeout failure does not reproduce in this local sandbox (more connection headroom than CI). Ran the file 3x plus once under an artificially-tightened outer pool for extra confidence per the task brief's own guidance, but did not attempt to reproduce CI's exact max_connections ceiling locally -- the fix's correctness rests on the re-derived connection-budget arithmetic above, not on a local repro."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

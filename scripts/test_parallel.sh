@@ -126,13 +126,16 @@ fi
 # ISS-0515/ISS-0426: a second, distinct source now also falls outside this
 # arithmetic -- executor_test.exs's isolated-partition self-check spawns a
 # NESTED `mix test` subprocess (its own OS process/BEAM VM), which that
-# test's own System.cmd/3 call now caps to a single-connection Ecto pool
-# (TEST_POOL_SIZE=1 passed via :env) specifically so it costs exactly the same
-# "1 extra connection" shape as the ISS-0287 source above rather than an
-# entire uncapped sibling-partition-sized pool. TEST_NONPOOL_CONNECTION_RESERVE's
-# default is bumped from 2 to 3 to reserve room for both named sources at once
-# (each needs at most 1 concurrently; they never overlap in practice, but the
-# reserve is sized for the worst case, not the common case). See
+# test's own System.cmd/3 call now caps to a small, fixed-size Ecto pool
+# (TEST_POOL_SIZE=4 passed via :env -- NOT 1; a pool of exactly 1 was tried
+# first and caused its own DBConnection checkout-queue timeout under this
+# file's `async: true`, see the test's own comment) rather than an entire
+# uncapped sibling-partition-sized pool. TEST_NONPOOL_CONNECTION_RESERVE's
+# default is bumped from 3 to 5 to reserve room for both named sources at once:
+# the ISS-0287 reaper-test connection (at most 1 concurrently) plus this
+# nested subprocess's full capped pool (up to 4 concurrently, by the cap
+# above). They don't overlap in practice, but the reserve is sized for the
+# worst case, not the common case. See
 # docs/migration/decisions/0009-test-parallel-pool-sizing.md's ISS-0515
 # addendum.
 #
@@ -143,7 +146,7 @@ if [ -z "${TEST_POOL_SIZE:-}" ]; then
   headroom="${TEST_CONNECTION_HEADROOM:-10}"
   min_pool="${TEST_MIN_POOL_SIZE:-2}"
   superuser_reserved="${TEST_SUPERUSER_RESERVED:-3}"
-  nonpool_reserve="${TEST_NONPOOL_CONNECTION_RESERVE:-3}"
+  nonpool_reserve="${TEST_NONPOOL_CONNECTION_RESERVE:-5}"
 
   if ! printf '%s' "$max_conn" | grep -Eq '^[1-9][0-9]*$'; then
     echo "test_parallel: ERROR TEST_MAX_CONNECTIONS='$max_conn' is not a positive integer" >&2

@@ -239,37 +239,53 @@ connection-budget-accounting follow-up to a fix that was otherwise right.
 
 **Fix, at the one call site that creates the extra process (not in this
 script or in `ensure_template!/0`):** `executor_test.exs`'s `System.cmd/3` call
-now passes `env: [{"TEST_POOL_SIZE", "1"}]`, capping the nested subprocess to a
-single-connection pool — genuinely sufficient, since (per the module's own
+first passed `env: [{"TEST_POOL_SIZE", "1"}]`, capping the nested subprocess to
+a single-connection pool, on the reasoning that (per the module's own
 moduledoc note above) neither the pre-build check nor the 11 tests need
-concurrent DB access. This turns an unbounded, inherited, sibling-partition-sized
-pool into the same small, fixed "1 extra connection" shape the ISS-0287 source
-above already has, rather than requiring `scripts/test_parallel.sh` to somehow
-account for an (N+1)th full-sized pool in its own arithmetic.
+concurrent DB access. **That first attempt was itself wrong and CI caught it**:
+PR #1033's next CI run failed with a *different*, related error —
+`DBConnection.ConnectionError: ... queued and checked out the connection for
+longer than 15000ms` — from inside that same nested subprocess. The module's
+own `async: true` (line 11) means the nested subprocess's `test_helper.exs`
+pre-build calls (`sweep_orphans/0`, `sweep_service_catalog_orphans/1`,
+`ensure_template!/0`) and Ecto's Sandbox/DBConnection checkout+checkin
+machinery can transiently need a second connection concurrently with the
+first even though the 11 tagged tests never touch the DB themselves (e.g. an
+asynchronous `on_exit` checkin from one caller overlapping the next caller's
+checkout) — a pool of exactly 1 gives DBConnection's checkout queue nowhere to
+put that second, genuinely concurrent request, so it queues past the 15s
+default and the subprocess dies. The call now passes
+`env: [{"TEST_POOL_SIZE", "4"}]` instead: still a small, fixed cap — nowhere
+near an uncapped sibling-partition-sized pool (`schedulers_online()*2`,
+typically 8–32) — but wide enough to absorb that kind of transient overlap
+across the 11 sequentially-dispatched tests in this one module.
 
-`TEST_NONPOOL_CONNECTION_RESERVE`'s default is bumped from 2 to 3 in
-`scripts/test_parallel.sh`, to reserve room for both named non-pooled sources at
-once: the ISS-0287 reaper-test connection (at most 1 concurrently) and this
-now-capped nested-subprocess pool (exactly 1, by the cap above). They don't
-overlap in practice (different tests, and this one runs a single time near the
-end of one partition's own run), but the reserve is sized for the case where
-they do, not the common case.
+`TEST_NONPOOL_CONNECTION_RESERVE`'s default is bumped from 3 to 5 in
+`scripts/test_parallel.sh`, to reserve room for both named non-pooled sources
+at their own worst case at once: the ISS-0287 reaper-test connection (at most
+1 concurrently) plus this nested-subprocess pool (up to 4 concurrently, by the
+`TEST_POOL_SIZE=4` cap above) = 5. They don't overlap in practice (different
+tests, and the nested subprocess runs a single time near the end of one
+partition's own run), but the reserve is sized for the case where they do, not
+the common case.
 
 **Verification, at N=4 (this decision's documented remedy value), with the new
-default:** `usable_ceiling` = 100 − 3 = 97 (unchanged). `budget` = 97 − 10 − 3 =
-84 (nonpool_reserve now 3, was 85 before this addendum). `computed` = 84 / 4 = 21
-(integer division — unchanged from the ISS-0287 addendum's own N=4 verification,
-since 84/4 and 85/4 both floor to 21). `N × TEST_POOL_SIZE` = 84. Worst case —
-full N-partition saturation (84) + the ISS-0287 connection (1) + this
-addendum's capped nested pool (1) + full ad-hoc headroom (10) = 96 ≤ 97: still
-inside the true ceiling, with the same 1-connection margin the ISS-0287
-addendum's own pessimistic case already documented, now correctly covering a
-second real source instead of leaving it uncounted.
+default:** `usable_ceiling` = 100 − 3 = 97 (unchanged). `budget` = 97 − 10 − 5 =
+82 (nonpool_reserve now 5, was 84 before this follow-up). `computed` = 82 / 4 =
+20 (integer division; down from 21 under the prior nonpool_reserve=3, since the
+reserve grew by 2). `N × TEST_POOL_SIZE` = 80. Worst case — full N-partition
+saturation (80) + the ISS-0287 connection (1) + this addendum's capped nested
+pool (4) + full ad-hoc headroom (10) = 95 ≤ 97: still inside the true ceiling,
+with a 2-connection margin (slightly wider than the ISS-0287 addendum's own
+1-connection pessimistic-case margin), now correctly covering the nested
+subprocess's actual 4-connection worst case instead of its previously
+undersized 1-connection cap.
 
 **What this addendum does not change.** `TEST_SUPERUSER_RESERVED`'s meaning and
 default; `TEST_CONNECTION_HEADROOM`'s meaning; `TEST_MIN_POOL_SIZE`'s meaning and
 default; `N`-derivation; the ISS-0515 `test_helper.exs` pre-build mechanism
 itself (correct, unmodified); `Letflow.Test.TenantTemplate.ensure_template!/0`'s
 own logic (correct, unmodified) — this addendum only (a) caps one test's own
-nested-subprocess pool size at its own call site, and (b) updates this script's
-connection-budget accounting to reserve room for that now-bounded cost.
+nested-subprocess pool size at its own call site (now at 4, not 1), and (b)
+updates this script's connection-budget accounting to reserve room for that
+corrected cost.

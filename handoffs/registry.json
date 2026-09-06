@@ -5176,6 +5176,35 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #1018 merged to main (squash, commit 8e6e936c), no rebase needed (main had not moved since branch creation). CI: Backend gate (mix letflow.check) PASS 6m38s, Frontend gate (npm run check) PASS. Post-merge independently re-verified on main: PROVENANCE markers present (33) and .zig counts unchanged (84 summed: req205=4, req206=4, req207=12, req209=4, req215=1, req237=47, search.md=4, service_task_dispatcher.md=1, service_task.md=7) across all 9 files. Queue task 509 released done, REQ-271 done. This closes out all 8 siblings of the lib/letflow/design/ .zig provenance-marking split (REQ-264..271).",
       "note": "Chunk 239-design-h of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- LAST/8th sibling. File list: req205-simulation-harness-foundation.md, req206-swiftroute-scenario-execution.md, req207-vortex-scenario-execution.md, req209-expr-differential-corpus-regression.md, req215-service-task-engine-wiring.md, req237-zig-provenance-marking-convention.md (the design doc defining the convention itself, in scope per CODE-DESIGN-VALIDATOR's OQ-4 resolution), search.md, service_task_dispatcher.md, service_task.md -- 9 files (req208/210/211/212/213 are numerically in-range but excluded from this chunk's actual file list, consistent with REQ-268's req071 precedent). REVIEWER PASS with one non-blocking MINOR recommendation to fold the fence/blockquote marker-placement pattern (used here for the first time, in req206/req207/search.md) into REQ-237's design doc as a documented fifth unit-shape in a future follow-on -- not done in this run, left as a recommendation. All 8 siblings (REQ-264/265/266/267/268/269/270/271) now done."
+    },
+    {
+      "run_id": "WF02-REQ261-20260906",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-261"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "docs/issues/ISS-0085.yaml",
+        "docs/issues/ISS-0086.yaml",
+        "docs/issues/ISS-0087.yaml",
+        "docs/issues/ISS-0093.yaml",
+        "docs/issues/ISS-0094.yaml",
+        "docs/issues/ISS-0095.yaml",
+        "docs/issues/ISS-0096.yaml",
+        "docs/issues/ISS-0097.yaml",
+        "docs/issues/ISS-0098.yaml",
+        "docs/issues/ISS-0099.yaml",
+        "docs/issues/ISS-0100.yaml"
+      ],
+      "branch_name": "feature/WF02-REQ261-20260906",
+      "queue_task_id": 499,
+      "queue_agent_id": "letflow-ee-orch",
+      "lock_acquired_at": "2026-09-06T04:38:16Z",
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED -- branch feature/WF02-REQ261-20260906 created from main @ 6b32f91c. Pre-flight confirmed 53 total .zig references across the 11 named files, zero pre-existing PROVENANCE markers, CLAUDE.md/README.md/docs/migration/README.md confirmed clean. Dispatching to DOC-UPDATER next.",
+      "note": "Chunk 239g of REQ-237's 2026-09-05 docs/ provenance-marking amendment (10 sibling chunks, REQ-254..263) -- docs/issues/*.yaml, ISS-0085 through ISS-0100 (the subset of that range carrying a .zig reference), 11 files. Sibling chunk 239f (REQ-260) is done; 239h (REQ-262) status unconfirmed at registry-scan time. No overlap confirmed at registry-scan time (no existing REQ-261 entry found before this one)."
     }
   ]
 }

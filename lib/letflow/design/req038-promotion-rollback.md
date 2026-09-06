@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-038 — Promotion rollback (`rollback.zig`, PRM-08)
 
 **Requirement:** REQ-038 (`docs/requirements.yaml`, stage S2, `depends_on: [REQ-030, REQ-037]`)
@@ -183,6 +184,7 @@ ELIXIR-DEV writes the real version at Step 2a.
 
 **R-Co source of truth (`C:\Users\tvolo\dev\ai-dala\R-Co\`), read directly:**
 
+PROVENANCE (historical, not current decision authority):
 - `src/definition/rollback.zig` (full file, 365 lines) — `RollbackResult`,
   `RollbackError`, `rollbackDefinitionVersion/6`'s full body: permission check, `SELECT
   ... FOR UPDATE` row lock, current-ACTIVE lookup with its "any_row" disambiguation
@@ -454,6 +456,7 @@ whole set (§0).
 ```
 2b. current_active = Enum.find(rows, &(&1.status == :active))
 
+    PROVENANCE (historical, not current decision authority):
     current_active == nil ->
       Repo.rollback(:process_key_not_found)
       # Preserves R-Co's own disambiguation exactly (§0's citation of rollback.zig
@@ -465,6 +468,7 @@ whole set (§0).
       # simplification -- R-Co's rationale (rollback.zig's own comment): "No current
       # ACTIVE row -- process_key may simply never have been promoted."
 
+PROVENANCE (historical, not current decision authority):
 2c. current_active.version == target_version ->
       Repo.rollback(:already_active)
       # Checked BEFORE the target-row lookup below, matching R-Co's literal code
@@ -810,6 +814,7 @@ discloses for `promote_definition/3`, not a new gap this design introduces. REVI
 should treat this as the same accepted tradeoff already ratified for
 `promote_definition/3`, or reopen both together if the tradeoff is reconsidered.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 (MINOR):** R-Co's own event-insert SQL (`rollback.zig` lines 240-244, §0)
 computes an idempotency key of the shape `"rollback:{tenant_id}:{process_key}:{target_version}"`.
 REQ-038's own `docs/requirements.yaml` payload list (`process_key, from_version,

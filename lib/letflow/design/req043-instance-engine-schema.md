@@ -26,6 +26,7 @@ established — ELIXIR-DEV writes the real version at Step 2a.
 - `docs/guides/backend_developer_guide.md` — §2 (project structure), §3.1 (naming),
   §3.7 (migrations: additive/reversible, `binary_id` PK, `null: false`, `timestamps/1`,
   FK-column index), §5 (multi-tenancy, schema-per-tenant, Decision B).
+PROVENANCE (historical, not current decision authority):
 - `docs/migration/stage-3-instance-engine.md` — full file. Confirms REQ-043's own scope
   boundary ("`tasks`/`tokens` tables ... created by REQ-043 because the engine cannot
   activate or complete a task without them, but `src/tasks/store.zig`'s standalone task
@@ -142,6 +143,7 @@ persisted-schema question on that basis (§5).
 
 **Explicitly NOT in scope, not silently dropped:**
 
+PROVENANCE (historical, not current decision authority):
 | Not built here | Owned by |
 |---|---|
 | Any write path that populates these columns/rows (instance start, task activation, task completion, token creation/advance) | REQ-045 (EE-01 instance store), REQ-046 (generalization/rewiring), REQ-051 (EE-06/EE-07 split/join), REQ-062 (SPC-01 sub-process) — all future S3 requirements |
@@ -478,6 +480,7 @@ The schema module's `@moduledoc` **must** state, in substance, every point below
 is the acceptance criterion's own "verbatim enough that ELIXIR-DEV cannot omit the
 boundary statement" requirement:
 
+PROVENANCE (historical, not current decision authority):
 1. **The `src/tasks/store.zig`-not-ported boundary, stated explicitly:**
    > "This module is the Ecto schema for the `tasks` table only — the table `EE-03`
    > (`src/engine/instance.zig`'s task-activation path) and `EE-04` (task completion)
@@ -802,6 +805,7 @@ already guarantees, e.g. REQ-030's `create/2` P11 note on `uq_active_definition`
 
 ## 11. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-043 acceptance criterion (this run's task text) | Concrete design element |
 |---|---|
 | "ALTER TABLE spec for instance_projections lists exactly the 7 named columns ... plus both named indexes ... and states explicitly that no enum migration is needed" | §2.1 (column table + migration shape), INV-EE43-1, INV-EE43-2 |

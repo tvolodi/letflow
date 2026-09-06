@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ266-20260905-step-02",
+  "run_id": "WF02-REQ266-20260905",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ266-20260905/step-02-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-05T23:08:13Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-266"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ266-20260905-step-00"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-266)", "lib/letflow/design/req237-zig-provenance-marking-convention.md"],
+    "branch_name": "feature/WF02-REQ266-20260905",
+    "base_commit": "7da6647f"
+  },
+  "task": {
+    "description": "Applied REQ-237's PROVENANCE marker convention (marker text, structural placement rule, single-regex greppability, YAML/table/paragraph/line unit shapes) to REQ-266's exact 13-file chunk under lib/letflow/design/ (req030-definition-store-crud.md through req048-task-completion.md). For each file, inserted the fixed literal line 'PROVENANCE (historical, not current decision authority):' immediately above the smallest enclosing citation unit (single line, whole paragraph, whole table, heading, or list/bullet/numbered-step item -- each getting its own marker) for every .zig source-path citation, without altering any citation text. No YAML-comment shape applied since none of these 13 files carry embedded YAML. Ran before/after grep -c '\\.zig' per file to prove no citation text was added/removed, and grep -c 'PROVENANCE (historical' per file to record marker counts. Sample-diffed 5 files (req030, req031, req033, req035, req048) covering well over 10 individual citation insertions to confirm only a marker line was added above each unit with zero alteration to surrounding text. Re-ran the divergence-note grep (unlike R-Co|deliberately diverges|diverges from R-Co) before and after and confirmed the two matched lines are byte-identical in text (only their line numbers shifted, as expected from inserted lines above them). Confirmed via git diff --stat that CLAUDE.md, README.md, docs/migration/README.md, and every lib/letflow/design/ file outside this chunk's 13-file list are untouched. Committed on feature/WF02-REQ266-20260905 (commit 3d7e1319); did not push, merge, flip REQ-266's status, or open a PR -- left for ORCH after REVIEWER passes."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Per-file before/after .zig counts (unchanged in every case, sum 144 both before and after): req030=23, req031=24, req032=15, req033=4, req035=1, req038=6, req039=28, req040=18, req041=7, req043=6, req044=10, req045=1, req048=1. Markers inserted per file (sum 111): req030=19, req031=17, req032=9, req033=4, req035=1, req038=5, req039=23, req040=14, req041=6, req043=4, req044=7, req045=1, req048=1. git diff --numstat shows 0 deletions across all 13 files (append-only). Sample diff across req030/req031/req033/req035/req048 (>10 citation units) confirmed marker-only insertions, no path text altered. Divergence-note grep: 2 matches before and after, text content byte-identical (confirmed via sed-stripped-and-sorted diff), only line numbers shifted due to earlier insertions in the same files. git diff --stat confirms CLAUDE.md, README.md, docs/migration/README.md, and all other lib/letflow/design/*.md files outside this chunk are untouched. All of REQ-266's acceptance criteria satisfied. Commit hash: 3d7e13194690517ff30b9ef31ad162f7689ed71f. No docs/migration/stage-N-*.md or docs/migration/decisions/*.md file was named in REQ-266's acceptance criteria, so nothing there required confirmation."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-040 — Promotion assertion re-run orchestration (`assertion_rerun.zig`, PRM-06/07)
 
 **Requirement:** REQ-040 (`docs/requirements.yaml:1875-1937`, stage S2,
@@ -94,6 +95,7 @@ citation of req039's OQ-2 as the concrete crash-safety precedent to investigate)
 
 **R-Co source of truth (`C:\Users\tvolo\dev\ai-dala\R-Co\`), read directly:**
 
+PROVENANCE (historical, not current decision authority):
 - `src/definition/assertion_rerun.zig` (full file, 641 lines) — `applyPromotionAssertionRerun`'s
   complete body (idempotency INSERT/conflict-read, sandbox claim, the single `defer`-guarded
   release, fixture load, `replayAssertions`, the final `UPDATE`), `RunStatus`, `PromotionArtifact`,
@@ -167,6 +169,7 @@ section is that investigation and its resulting decision.
 
 ### 2.1 What R-Co's own contract actually requires
 
+PROVENANCE (historical, not current decision authority):
 `assertion_rerun.zig`'s header: teardown runs through a single `defer` "so it covers every
 exit path (normal return, assertion failure, infrastructure error, panic unwind)." The
 **preserved contract** (not the mechanism) is: a teardown failure records
@@ -523,6 +526,7 @@ the derivation for a real `artifact.frozen_clock_ms` field later touches only th
 private helper that computes it, not `assertion_evaluator_fun`'s own type or any evaluator
 implementation written against it. Restated in §11 OQ-3, not silently closed.
 
+PROVENANCE (historical, not current decision authority):
 `rng_seed` is passed through **unmodified** (the raw 64-bit integer) — seeding a real RNG
 from it is the evaluator's own responsibility, not this function's. This function itself
 reseeds Erlang's own process-scoped `:rand` state via `:rand.seed(:exsss, {rng_seed
@@ -536,9 +540,11 @@ process-scoped Erlang/OTP state (`:rand`'s seed lives in the calling process's p
 dictionary), so concurrent calls to `apply_promotion_assertion_rerun/6` from different
 processes never interfere with each other's RNG state.
 
+PROVENANCE (historical, not current decision authority):
 ### 6.1 Replay algorithm (steps, not code) — ports `assertion_rerun.zig`'s `replayAssertions` faithfully
 
 1. Compute `frozen_clock_ms` once (above).
+PROVENANCE (historical, not current decision authority):
 2. For each `assertion` in `artifact.assertions`, in order:
    a. `:rand.seed(:exsss, <derived from artifact.rng_seed>)`.
    b. `{:ok, result1} = assertion_evaluator.(assertion, %{frozen_clock_ms: ..., rng_seed:
@@ -565,6 +571,7 @@ processes never interfere with each other's RNG state.
 3. `assertions_total = length(artifact.assertions)`; `assertions_passed`/`assertions_failed`
    are the running counts from step 2; `failing_assertion_ids` is the accumulated list.
 
+PROVENANCE (historical, not current decision authority):
 **Default `assertion_evaluator` (used when `opts[:assertion_evaluator]` is omitted or
 `nil`):** `default_assertion_evaluator(assertion, _injection)` returns `{:ok,
 assertion.payload}` when `byte_size(assertion.payload) > 0`, else `{:ok, "{}"}` — a direct,
@@ -576,6 +583,7 @@ placeholder computes `frozen_ms` and then immediately discards it (`_ = frozen_m
 (`assertion_rerun.zig:496`, `:511`) — this design's default evaluator is exactly as
 faithful (and exactly as much a placeholder) as R-Co's own is.
 
+PROVENANCE (historical, not current decision authority):
 **Open question, flagged rather than silently resolved (§11 OQ-4):** REQ-040's own
 `docs/requirements.yaml` description text says non-deterministic fields are stripped "from
 both expected/actual results" — language suggesting a genuine expected-vs-actual oracle
@@ -599,6 +607,7 @@ future requirement should build. Not silently resolved either way — see §11 O
 
 ### 7.1 Step 1 — idempotency (AC1)
 
+PROVENANCE (historical, not current decision authority):
 `idempotency_key = "promotion_rerun:" <> review_id <> ":" <> plan_digest` (a private,
 pure `build_idempotency_key/2` helper — direct port of `buildIdempotencyKey`,
 `assertion_rerun.zig:120-122`).
@@ -715,6 +724,7 @@ this step only runs when replay actually happened, i.e. Steps 2 and 3 both succe
 
 - `:ok` → `final_status = pre_teardown_status`; `teardown_error = nil`;
   `teardown_event_appended = true` (nothing to append).
+PROVENANCE (historical, not current decision authority):
 - `{:error, :not_found}` or `{:error, :release_failed}` → **the precedence rule, a direct
   port of `recordTeardownFailure`'s own `CASE WHEN status = 'failed' THEN 'failed' ELSE
   'teardown_failed' END`** (`assertion_rerun.zig:623-627`, quoted in §0):
@@ -752,6 +762,7 @@ own established idiom, §0), **not** wrapping Step 2's claim itself (a claim fai
 release — mirrors `rollback_definition_version/4`'s own "try/rescue wraps only the [step
 that can leak a resource / needs cleanup]" scoping note, §0):
 
+PROVENANCE (historical, not current decision authority):
 ```
 try do
   <Step 3, Step 4 (replay), Step 5>
@@ -822,6 +833,7 @@ explicitly, not silently assumed working.
 
 ## 10. Invariants
 
+PROVENANCE (historical, not current decision authority):
 | id | Invariant | Enforced where |
 |---|---|---|
 | INV-AR-1 | `apply_promotion_assertion_rerun/6` writes to `promotion_assertion_runs` **only** in the caller's own tenant schema (`opts[:prefix]`) — a sandbox schema's own (empty, unused) `promotion_assertion_runs` table is never read or written by this function | §4, §7 |
@@ -867,6 +879,7 @@ schema carries an explicit `frozen_clock_ms` field, only the private derivation 
 changes; `assertion_evaluator_fun`'s own injection-interface shape is unaffected. Not
 resolved now — no requirement asks for the schema change.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-4 (MAJOR — a genuine ambiguity between REQ-040's own descriptive text and the one
 concrete reference implementation that exists, §6):** REQ-040's `docs/requirements.yaml`
 description says non-deterministic fields are stripped "from both expected/actual results,"
@@ -950,6 +963,7 @@ for the analogous owner-crash-detection gap on an already-claimed sandbox.
 
 ### 13.2 `apply_promotion_assertion_rerun/6`'s own `@doc`
 
+PROVENANCE (historical, not current decision authority):
 ```
 Ports `src/definition/assertion_rerun.zig`'s `applyPromotionAssertionRerun` (PRM-06/07)
 -- idempotent assertion replay against an ephemeral REQ-039 sandbox, keyed by

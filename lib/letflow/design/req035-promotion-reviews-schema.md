@@ -28,6 +28,7 @@ cross-table ordering constraint, schema only.
   requirements expect this table to already have.
 - `docs/guides/backend_developer_guide.md` — naming, error-shape and migration
   conventions (same sections REQ-023/027 cite).
+PROVENANCE (historical, not current decision authority):
 - `docs/migration/stage-2-event-store-definitions.md` — confirms `promotion_review.zig`
   (PRM-04) is in this stage's scope (`src/definition/` file list).
 - `docs/migration/decisions/0003-ecto-schema-strategy.md` — read in full. Decision A

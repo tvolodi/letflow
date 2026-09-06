@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-041 — Solution-pack update three-way diff (`pack_update.zig`, PRM-09)
 
 **Requirement:** REQ-041 (`docs/requirements.yaml:1939-1998`, stage S2, `depends_on: [REQ-015]`)
@@ -37,6 +38,7 @@ schema-per-tenant mechanism. `lib/letflow/design/identity-schema.md` §2 and the
   this requirement's tables are the stated exception to**), Decision C (event-store
   composite-PK rules, not applicable here — these are ordinary mutable/append tables,
   not event-store partitions).
+PROVENANCE (historical, not current decision authority):
 - **Searched this repo for `src/definition/pack_update.zig` and `prm-batch1`'s design
   doc — confirmed absent.** `find . -iname "*pack_update*"`, `find . -iname
   "*prm-batch1*"`, and `find . -path "*src/definition*"` all returned zero matches
@@ -175,6 +177,7 @@ recent) installed state of a given solution pack, at whatever version it was las
 successfully installed/updated to (`installed_version`, this is "Vb" for the next
 update's diff).
 
+PROVENANCE (historical, not current decision authority):
 | Column | Ecto migration type | DB type | Null / default | Notes & citation |
 |---|---|---|---|---|
 | `id` | `:binary_id`, `primary_key: true` | `uuid` | `NOT NULL` (implied by PK) | Decision A surrogate PK. |
@@ -255,6 +258,7 @@ earlier decision — REQ-041's text gives no indication resolutions should carry
 across different incoming versions, and carrying them forward silently would be
 inventing a persistence/reuse policy REQ-041 never asked for (§9 OQ-5).
 
+PROVENANCE (historical, not current decision authority):
 | Column | Ecto migration type | DB type | Null / default | Notes & citation |
 |---|---|---|---|---|
 | `id` | `:binary_id`, `primary_key: true` | `uuid` | `NOT NULL` (implied by PK) | Decision A surrogate PK. |
@@ -702,6 +706,7 @@ general rule should be — that is explicitly REQ-041's own instruction to leave
 not this design's judgment call to make. See §2's cross-reference to `req035` §9 OQ-2
 for the sibling data point on the same still-open question.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-3 (RESOLVED, verified against R-Co GH#325): `installed_version`/`base_version`/
 `target_version` are `:string`, not `:integer` — confirmed.** R-Co's
 `migrations/1157_prm09_solution_pack_update.sql` declares
@@ -728,6 +733,7 @@ across update attempts.
 **OQ-6 (MINOR): `resolution`'s three-value enum was originally this design's own enumeration**, not sourced from R-Co (§0 — no access to
 prm-batch1's actual schema at design time).
 
+PROVENANCE (historical, not current decision authority):
 **RESOLVED by REQ-147 (2026-08-24).** `R-Co/src/definition/pack_update.zig:25-29` defines
 `pub const ResolutionKind = enum { keep_local, take_incoming, merged };`. Two of the three
 original atom names diverged (`keep_theirs` vs. R-Co's `keep_local`; `custom` vs. R-Co's

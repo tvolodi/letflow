@@ -31,6 +31,7 @@ naming mismatch); `lib/letflow/engine/variable_merge.ex`;
 this design writes into, and its own OQ-1/OQ-4/OQ-5); `req044-transition-kernel.md`'s
 citing module (`transition.ex` itself, read directly) for moduledoc-shape precedent.
 
+PROVENANCE (historical, not current decision authority):
 `C:\Users\tvolo\dev\ai-dala\R-Co\src\design\engine.md` Section EE-01 (`engine.md:18-406`)
 read in full and confirmed reachable this session — the requirement text's paraphrase of
 the algorithm matches the primary source closely; deviations are noted inline below.

@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-033 — Definition snapshot store (`snapshot.zig`, PD-08)
 
 **Requirement:** REQ-033 (`docs/requirements.yaml` lines 1514–1554, stage S2,
@@ -59,6 +60,7 @@ describe algorithm shape only, matching the convention already validator-approve
   :string)`, `field(:graph, :map, default: %{"nodes" => [], "edges" => []})`. **No
   `@schema_prefix`** — moduledoc states "every read and write must pass `prefix:
   schema_name` explicitly at call time."
+PROVENANCE (historical, not current decision authority):
 - `priv/repo/migrations/20260816193002_create_instance_definition_snapshots.exs` — full
   file, read directly to settle the tenant-scoping question (§3) rather than assuming
   it matches REQ-025's `events`/`instance_projections` shape. Confirmed:
@@ -88,6 +90,7 @@ describe algorithm shape only, matching the convention already validator-approve
   mechanism has nothing to apply to for this table. `process_definitions` does have the
   column, but this design never writes it.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co source (`src/design/definition.md`'s PD-08 section, `src/definition/snapshot.zig`):
 genuinely unreachable on this host**, re-checked directly per this run's own
 instructions rather than assumed stale from a prior run:
@@ -517,6 +520,7 @@ recording, not about cross-tenant attribution — but the shape (silent
 second-caller-loses-quietly semantics under `ON CONFLICT DO NOTHING`) is similar enough
 to flag rather than wave through by analogy to REQ-033's plain SQL wording alone.
 
+PROVENANCE (historical, not current decision authority):
 **OQ-3 (MINOR).** L1's lock mode is specified as `FOR SHARE` per REQ-033's own text
 ("prevents a concurrent delete or exclusive-lock write from racing the snapshot
 capture"). This design has not independently verified against PD-08's primary text

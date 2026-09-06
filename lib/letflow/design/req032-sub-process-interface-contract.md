@@ -1,3 +1,4 @@
+PROVENANCE (historical, not current decision authority):
 # Design: REQ-032 — Sub-process interface contract, definition-time half only (sub_process_interface.zig, SPC-02)
 
 **Requirement:** REQ-032 (`docs/requirements.yaml`, stage S2)
@@ -28,6 +29,7 @@ only — no implementation code, no function bodies, no `.ex`/`.exs` code blocks
   algorithm this environment cannot read from R-Co source directly (§4.3/§6 of that
   document), and its own explicit open-question style (§9) — followed here rather than
   re-invented.
+PROVENANCE (historical, not current decision authority):
 - `lib/letflow/design/req028-graph-structural-validator.md` §0 — **directly relevant and
   load-bearing for §2 below**: REQ-028's own design doc states it read `graph.zig` directly
   and found `NodeType` already has **8** variants there, *including `SUB_PROCESS`, "added
@@ -53,6 +55,7 @@ only — no implementation code, no function bodies, no `.ex`/`.exs` code blocks
   larger validation surface — a recursive schema-of-schemas checker — that finding warns
   not to under-test).
 
+PROVENANCE (historical, not current decision authority):
 **Access gap, stated explicitly per this task's own instruction, not silently worked
 around:** this environment does not have `R-Co/src/definition/sub_process_interface.zig`
 or `R-Co/src/design/spc-01-sub-process-interface-contract.md` checked out anywhere
@@ -84,6 +87,7 @@ function inside `graph.ex` — not implemented as private functions directly ins
 
 Reasoning:
 
+PROVENANCE (historical, not current decision authority):
 - **R-Co's own file split is a real signal, not just a naming coincidence.** R-Co keeps
   `sub_process_interface.zig` as its own file, separate from `graph.zig`, even though
   `graph.zig`'s own `checkSubProcess` is the PD-05 hook point that calls into it (REQ-032's
@@ -135,6 +139,7 @@ structurally required for the requirement to mean anything (a SUB_PROCESS node's
         | :SUB_PROCESS
 ```
 
+PROVENANCE (historical, not current decision authority):
 **This overrides REQ-028's own prior decision — named explicitly as an override, not a
 silent reversal, per `core-directives.md`'s "don't silently re-decide what a decision
 record already settled" concern.** `req028-graph-structural-validator.md` §0 states
@@ -630,6 +635,7 @@ choice, not a verified spc-01 rule.
 
 ### 7.6 R-Co source unreachable — §6/§5.3's algorithms are reconstructions, not verified ports
 
+PROVENANCE (historical, not current decision authority):
 Same shape as REQ-029 design doc §9.1's flag: §5's parse algorithm and §6's recursive
 well-formedness algorithm are built entirely from REQ-032's own prose in
 `docs/requirements.yaml`, since `sub_process_interface.zig` and spc-01's actual design doc
@@ -645,6 +651,7 @@ it turns out to disagree with source.
 substance (ELIXIR-DEV may adjust exact phrasing, not the content) the following, satisfying
 AC5 directly:**
 
+PROVENANCE (historical, not current decision authority):
 > This module ports only the SPC-02 (definition-time) half of R-Co's
 > `src/definition/sub_process_interface.zig`, per `src/design/spc-01-sub-process-interface-
 > contract.md` — the file's own header documents two halves: SPC-02 (definition-time
@@ -721,6 +728,7 @@ statement, keeping one canonical location for it.
   REQ-028/029's precedent. `process_definitions.graph` (REQ-027, `jsonb` column) is
   unaffected; a SUB_PROCESS node's `interface` attribute is just JSON content inside that
   same existing column, validated by this requirement's code, not a new column.
+PROVENANCE (historical, not current decision authority):
 - **Forward dependent:** REQ-030's future `Letflow.Definitions.create/1` — REQ-029 design
   doc §1/§9.3 already flagged that `create/1` must call both `validate_node_attributes/1`
   and `validate_edge_conditions/1`. This design adds no new top-level function `create/1`
@@ -734,6 +742,7 @@ statement, keeping one canonical location for it.
 
 ## 11. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-032 acceptance criterion | Concrete design element |
 |---|---|
 | "a SUB_PROCESS node with a well-formed interface (valid inputs/outputs, well-formed json_schema on each entry) passes validation and is persisted unchanged as part of the node's attributes" | §5.3's full parse algorithm (steps 1-3f) producing `{parsed, []}` when every entry is shape-valid and schema-valid; §5.4's explicit "no data-transformation side effect" statement (original `attributes` map persisted unchanged, `parsed_interface()` never touches the persistence path) |

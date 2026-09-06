@@ -1969,14 +1969,21 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 14
+    entries: 15
     note: >
-      Incremented to 14 by ELIXIR-DEV's own REQ-225 done-event append
-      (WF02-REQ225-20260906) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v10.yaml` = 14 on-disk entries, no
-      rebase conflict on this file at the time it was written. 621
-      lines, well under the 1200-line/120000-byte roll ceiling, so no
-      roll triggered.
+      Incremented to 15 by ELIXIR-DEV's own REQ-227 done-event append
+      (WF02-REQ227-20260906, branched before REQ-226's own PR #1029
+      merged -- this branch's copy of this file predates REQ-226's
+      append, so this count is local to this branch and will be
+      recomposed chronologically against REQ-226's own append at merge
+      time, per this file's own established recipe) -- `grep -c "^  -
+      req:" docs/status/requirement_status.v10.yaml` = 15 on-disk
+      entries on this branch, no rebase conflict at the time it was
+      written. 672 lines, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+      Previously incremented to 14 by ELIXIR-DEV's own REQ-225
+      done-event append (WF02-REQ225-20260906) -- 621 lines at that
+      point, well under the roll ceiling.
       Recounted to 13 by chore/ISS0424-resolved-20260906's Step Final
       rebase, which found main further advanced by
       WF02-REQ263-20260906's own closeout append (REQ-263 done,

@@ -619,3 +619,54 @@ history:
       validate that check for real. mix compile
       --warnings-as-errors and mix format --check-formatted both
       independently confirmed clean by ORCH.
+
+  - req: REQ-227
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-06T14:40:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 3: entity record-payload
+      validation against a REQ-225 definition's derived schema
+      (validator.zig's validateRecordPayload/buildRecordSchema half,
+      ISS-0160/GH#481 parity). New module
+      Letflow.Entities.Record.Validator
+      (lib/letflow/entities/record/validator.ex):
+      build_record_schema/1 translates a definition's fields into a
+      JSON-Schema-shaped map; validate_record_payload/2 delegates
+      entirely to the existing Letflow.EventStore.Registry.JsonSchema
+      (REQ-024), reusing its ValidationFailure struct verbatim -- no
+      hand-rolled second constraint engine, no new violation shape.
+      feature/WF02-REQ227-20260906, closing queue task 462.
+      CODE-DESIGNER's design explicitly resolved the requirement's
+      named open question (call JsonSchema as-is, cross-namespace, no
+      shared-module extraction -- rule of three, citing
+      Letflow.Definitions.JsonSchemaShape's own existing precedent of
+      naming JsonSchema.validate/2 as its consumer) and documented
+      that minimum/maximum/maxLength are never emitted since REQ-225's
+      field_def() carries no length/range constraint to translate --
+      not a keyword gap. CODE-DESIGN-VALIDATOR PASSed on first pass
+      (no rework needed) after independently confirming the
+      ValidationFailure struct's real shape, REQ-225's actual field
+      types, and that no literal code blocks existed in the design
+      doc. ELIXIR-DEV implemented exactly per design, wrote 10 tests
+      covering all 7 acceptance criteria including a dedicated
+      4-problem fixture proving every violation is returned, not only
+      the first, and found no design-vs-implementation discrepancy.
+      REVIEWER independently re-verified design fidelity, all 7 ACs'
+      tests by line range, ValidationFailure reuse, scope (exactly the
+      module + test file, no route/controller/REQ-228 code), and OTP
+      idiom (pure functional, zero Repo/process involvement, correctly
+      ungated by SECURITY-REVIEWER matching REQ-225's precedent) --
+      PASS (handoffs/WF02-REQ227-20260906/step-02d-reviewer.json). No
+      TEST-DESIGNER dispatch needed per established precedent
+      (ELIXIR-DEV's own tests already comprehensive, REVIEWER
+      independently confirmed). TEST-RUNNER ran the full partitioned
+      suite (mix letflow.check.test): 3310/3313 passed; the 3 failures
+      are pre-existing and unrelated to this diff -- 2 are the known
+      local-sandbox rustc-toolchain gap (CheckToolchainTest), 1 is
+      Letflow.SandboxPoolTest (ISS-0224 regression) which passed
+      cleanly (23/23) when re-run in isolation, consistent with shared
+      local-sandbox Postgres contention, not a code regression
+      (handoffs/WF02-REQ227-20260906/step-03-test-runner.json). mix
+      compile --warnings-as-errors and mix format --check-formatted
+      both independently confirmed clean by REVIEWER and TEST-RUNNER.

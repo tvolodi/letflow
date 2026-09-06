@@ -13918,7 +13918,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity record projection and replay (projector.zig -- entity_record_latest, replay-to-snapshot, full re-projection)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

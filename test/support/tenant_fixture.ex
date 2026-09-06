@@ -134,6 +134,8 @@ defmodule Letflow.TenantFixture do
     "dlq_entries",
     "effect_completions",
     "entity_definitions",
+    "entity_record_latest",
+    "entity_type_instances",
     "event_idempotency",
     "event_payload_store",
     "event_type_registry",

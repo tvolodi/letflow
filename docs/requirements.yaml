@@ -13841,7 +13841,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity event registration and record commands (events.zig + commands.zig -- create/update/delete, idempotent replay, synthetic-instance-per-type)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

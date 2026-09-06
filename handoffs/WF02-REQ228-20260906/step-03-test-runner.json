@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ228-20260906-step-03",
+  "run_id": "WF02-REQ228-20260906",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ228-20260906/step-03-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T21:17:14Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-228"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ228-20260906-step-02d"],
+    "artifacts_in": [
+      "lib/letflow/design/req228-entity-event-registration-commands.md",
+      "lib/letflow/event_store.ex",
+      "lib/letflow/entities/records.ex",
+      "lib/letflow/entities/entity_type_instance.ex",
+      "lib/letflow/entities/event_types.ex",
+      "lib/letflow/entities/record/latest.ex",
+      "priv/repo/migrations/20260906010001_create_entity_record_latest.exs",
+      "priv/repo/migrations/20260906010002_create_entity_type_instances.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/letflow/entities/records_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ228-20260906",
+    "base_commit": "ec8766d2"
+  },
+  "task": {
+    "description": "WF-02 Step 4: run the full regression gate for REQ-228 (mix compile --warnings-as-errors, mix format --check-formatted, mix letflow.check.test / scripts/test_parallel.sh) and report real pass/fail results."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "`mix compile --warnings-as-errors` -> clean, exit 0. `mix format --check-formatted` -> clean, exit 0. `mix letflow.check.test` (scripts/test_parallel.sh, N=8 partitions, TEST_POOL_SIZE=10, TEST_PARALLEL_GROUP=tp3562908) -> COMBINED: 3344 tests, 6 properties, 744 failures (2606/3350 passed), exit 1. Per-partition: p1 585 tests/149 fail, p2 330/126, p3 411/113, p4 424/49 (1 property), p5 409/43, p6 384/94, p7 406/116 (4 properties), p8 395/54 (1 property).\n\nROOT CAUSE IDENTIFIED (not the ISS-0515 tenant_template-build-RACE class -- confirmed absent, see below -- a different, related tenant_template STALENESS bug). Every single one of the 744 failures across all 8 partitions carries the identical underlying error: `clone_tenant_schema!/1 returned {:error, {:clone_failed, %Postgrex.Error{postgres: %{code: :undefined_table, message: \"relation \\\"tenant_template.entity_definitions\\\" does not exist\\\" ...}}}}` (LETFLOW_TENANT_FIXTURE phase=replay_failed). Verified directly with read-only Postgres queries (no DDL run):\n  - Base test DB (letflow_test, no MIX_TEST_PARTITION): tenant_template already has 42 tables including entity_definitions, entity_record_latest, entity_type_instances -- fine (this is the DB the REVIEWER's own step-02d run touched/rebuilt).\n  - Partitioned DBs actually used by scripts/test_parallel.sh (letflow_test1, letflow_test2, confirmed via config/test.exs:65 `database: \"letflow_test#{System.get_env(\\\"MIX_TEST_PARTITION\\\")}\"`) each have a STALE tenant_template with only 39 tables. MapSet diff against Letflow.TenantFixture.expected_tenant_tables/0 shows exactly 3 missing: entity_definitions, entity_record_latest, entity_type_instances -- i.e. this tenant_template was built before REQ-226/227/228's entity migrations existed, on a docker-compose Postgres volume that has been running for 2 days (postgres container uptime, not recreated between runs).\n  - No `tenant_template_build_*` staging-schema debris was left behind in any of these DBs after the run (checked letflow_test, all clean) -- this rules out ISS-0515's race/interrupted-build failure mode specifically (that mode leaves randomly-named orphan schemas and/or a mid-build tenant_template; INV-8's atomic build-then-rename in test/support/tenant_template.ex still held here). One transient `TenantSchemaReaper.sweep_orphans/2: skipping ... malformed schema_name=\\\"tenant_template_build_...\\\"` warning was logged during partition 1's run (an orphan from some earlier, unrelated interrupted attempt, already swept/ignored by the reaper) but is not the cause of these 744 failures -- every failure is the `entity_definitions does not exist` clone-time error against an otherwise complete, atomically-committed but STALE tenant_template.\n  - Mechanism: `Letflow.Test.TenantTemplate.ensure_template!/0`'s fast path (`template_built_in_db?/0`, test/support/tenant_template.ex ~line 246) only checks whether a schema literally named \\\"tenant_template\\\" EXISTS in the target database -- it does not check that its table set matches the CURRENT migration manifest (`TenantProvisioning.tenant_scoped_migrations/0`). That staleness check only runs inside `template_self_check!/1`, which is only reached on a fresh BUILD, never on the exists-so-skip fast path. Across multiple test runs against the same persistent docker-compose Postgres volume, once a partition DB's tenant_template was built under an earlier commit (pre-REQ-226), it is never invalidated or rebuilt even though the migration manifest has since grown -- every later run's `ensure_template!/0` call in that partition DB takes the fast path and silently serves the stale template.\n\nDid NOT run any destructive DDL (no DROP SCHEMA, no docker volume reset) per this role's own constraint -- reporting back to ORCH instead of self-repairing partitioned test DB state. A safe, standard remedy exists (drop each stale `tenant_templateN` -- i.e. `tenant_template` schema inside each `letflow_testN` database -- and re-run, forcing a fresh build against the current migration manifest) but that is a destructive-DDL action this role is instructed not to take unilaterally.\n\nThis is a genuine infra/test-fixture gap worth a docs/issues/ filing (staleness detection is missing from `template_built_in_db?/0`'s fast path -- e.g. comparing the applied migration-version set inside the existing tenant_template against the current manifest before trusting the fast path), not an application-code regression in REQ-228 itself: no failure cites application logic, REQ-228 command code, or any assertion mismatch -- 100% of the 744 failures are the identical clone-time Postgrex undefined_table error, spread across unrelated pre-existing test suites (EngineTest, PollerTest, TenantsTest, WebhooksTest, OnboardingTest, ContextTest, AttachmentsTest, etc.), none of which are REQ-228's own new tests.\n\nDid not modify any test or app code. Full partition logs preserved at /tmp/letflow_test_parallel.qyS0I2/partition-{1..8}.log for follow-up (host-local tmp, not committed)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

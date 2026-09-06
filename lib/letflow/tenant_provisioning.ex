@@ -491,7 +491,11 @@ defmodule Letflow.TenantProvisioning do
     {20_260_902_010_001, Letflow.Repo.Migrations.CreateServiceTaskDispatches,
      "20260902010001_create_service_task_dispatches.exs"},
     {20_260_906_000_001, Letflow.Repo.Migrations.CreateEntityDefinitions,
-     "20260906000001_create_entity_definitions.exs"}
+     "20260906000001_create_entity_definitions.exs"},
+    {20_260_906_010_001, Letflow.Repo.Migrations.CreateEntityRecordLatest,
+     "20260906010001_create_entity_record_latest.exs"},
+    {20_260_906_010_002, Letflow.Repo.Migrations.CreateEntityTypeInstances,
+     "20260906010002_create_entity_type_instances.exs"}
   ]
 
   @doc """

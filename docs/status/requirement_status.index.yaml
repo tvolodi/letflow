@@ -1969,9 +1969,12 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 17
+    entries: 18
     note: >
-      Recomposed to 17 during feature/WF02-REQ226-20260906's rebase onto
+      Incremented to 18 by ELIXIR-DEV's own REQ-228 done-event append
+      (WF02-REQ228-20260906) -- 862 lines at that point, well under the
+      roll ceiling.
+      Previously recomposed to 17 during feature/WF02-REQ226-20260906's rebase onto
       main post-ISS-0515 merge: this branch's own REQ-226 append (15,
       counted before REQ-227/ISS-0515 existed on main) was reordered
       chronologically ahead of REQ-227's (16) and ISS-0515's (17, the

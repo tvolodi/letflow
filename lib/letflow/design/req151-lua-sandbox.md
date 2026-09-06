@@ -157,6 +157,7 @@ category as R-Co's vacuous `jit`/`ffi`/`bit` exclusions per decision 0014).
 
 ### 4.2 Path this module ADDS beyond `Lua.new/1`'s default — the requirement's central finding
 
+PROVENANCE (historical, not current decision authority):
 | Path | Installed? | Reason |
 |---|---|---|
 | `[:debug]` | **Installed, and NOT in `Lua.new/1`'s `@default_sandbox`.** `deps/lua/lib/lua/vm/stdlib/debug.ex` installs a real `debug` global table unconditionally (`Lua.VM.Stdlib.Debug` is in `stdlib.ex`'s `@libraries` list, run for every `Lua.new/1` call regardless of sandbox options) exposing `debug.getmetatable/1` and `debug.setmetatable/2` — its own moduledoc states these bypass `__metatable` protection — and `debug.getupvalue/2` / `debug.setupvalue/3`, which read and mutate a Lua closure's captured upvalues directly. **This is a real, non-vacuous sandbox gap in the library's own default sandbox** that R-Co's LUA-03 (which never opened `debug` at all) would have closed and that `Lua.new/1`'s defaults do not. It must be added to this module's deny-set explicitly; it is not inherited. | Metatable-protection bypass and arbitrary upvalue mutation are capabilities strictly beyond `math`/`string`/`table`'s intended surface (LUA-03's MUST-load set) and are exactly the class of introspection primitive R-Co's stdlib.zig excluded by naming `debug` outright. |
@@ -263,6 +264,7 @@ The moduledoc for `Letflow.Engine.Lua.Sandbox` MUST state, in substance:
 > anyway (§4.1) for literal-text completeness, though it denies nothing that could
 > otherwise be reached.
 >
+> PROVENANCE (historical, not current decision authority):
 > (b) **`jit`, `ffi`, and `bit` do not exist in Lua 5.3 at all** — they are
 > LuaJIT-specific. R-Co's exclusion of them, including `ffi` (which R-Co's own
 > `stdlib.zig` calls "a COMPLETE sandbox escape"), is **vacuous** under this runtime,

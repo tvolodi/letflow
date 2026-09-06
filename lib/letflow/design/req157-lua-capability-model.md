@@ -49,6 +49,7 @@ either).
   the "satisfiable substantially as worded" list (§502-506), with the "starting position
   to verify, not a clearance" caution (§512-514) this design's own test-traceability table
   (§9) exists to answer
+PROVENANCE (historical, not current decision authority):
 - `R-Co/src/lua/capabilities.zig`, `R-Co/src/lua/host_api/mod.zig`: **not present in this
   checkout** (confirmed by `find` for both paths — no result). This design proceeds from
   the requirement text's own restatement of both files' substance (quoted in
@@ -123,6 +124,7 @@ non-empty grant set via `Platform.install/2` called directly in test code (AC2�
 @type grant_set :: MapSet.t(capability())
 ```
 
+PROVENANCE (historical, not current decision authority):
 A capability is an opaque string token (`"variable:read"`, `"service:call:billing"`,
 etc.) — no atom-keyed enum, no struct, matching R-Co's `capabilities.zig` string-grant
 set (per the requirement text's restatement — the actual file is not present in this
@@ -497,6 +499,7 @@ exact one that was missing.
 
 ## 7. Acceptance-criteria traceability (all 8, verbatim from `docs/requirements.yaml` REQ-157)
 
+PROVENANCE (historical, not current decision authority):
 | # | Acceptance criterion (verbatim) | Design element |
 |---|---|---|
 | 1 | "a test asserts the platform table exposes EXACTLY the eight functions of R-Co's matrix... and no others -- enumerated from inside a script" | §4.1 (8-row `@capability_matrix`, sole fold), §4.4 (`install/1` delegating to `install/2` with empty grant set, wired into every `Sandbox.new/0,1` VM unchanged); test enumerates via `pairs(platform)` from inside a real `Sandbox.new/0` script (§9) |
@@ -567,6 +570,7 @@ exact one that was missing.
 
 ## 11. Open questions — not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (non-blocking, provenance) — `R-Co/src/lua/capabilities.zig` and
 `R-Co/src/lua/host_api/mod.zig` are not present in this checkout (§0).** This design's
 capability-set shape (`has`/`add` semantics) and the 8-function matrix are both taken

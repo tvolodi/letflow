@@ -10,12 +10,14 @@ survives the port to Letflow, and which are already covered by facilities Letflo
 
 Command run against `c:\Users\tvolo\dev\ai-dala\R-Co`:
 
+PROVENANCE (historical, not current decision authority):
 ```
 find src/identity/provider/ -type f -name "*.zig" -exec wc -l {} +
 ```
 
 Output:
 
+PROVENANCE (historical, not current decision authority):
 ```
    107 src/identity/provider/adapters/keycloak/config.zig
   1626 src/identity/provider/adapters/keycloak/provider.zig
@@ -39,6 +41,7 @@ drift.** The row line counts below sum to 4,193 (see §3 tally).
 
 ## 2. Per-file table (AC1, AC3)
 
+PROVENANCE (historical, not current decision authority):
 | # | File | Lines | Verdict | Reason |
 |---|---|---|---|---|
 | 1 | `adapters/keycloak/config.zig` | 107 | **PORT** | Keycloak admin-API client config (base URL, admin realm, admin client credentials, timeouts, JWKS TTL) — none of this is provided by `oidcc`/`ueberauth_oidcc`, which only configure token-verification issuers, not Keycloak's Admin REST API. Needed by REQ-137's admin client. |
@@ -68,6 +71,7 @@ drift.** The row line counts below sum to 4,193 (see §3 tally).
 
 **Single estimate: ~1,200 lines of Elixir**, not a range.
 
+PROVENANCE (historical, not current decision authority):
 Reasoning: the five PORT files sum to 2,211 R-Co (Zig) lines, but a straight line-for-line
 port is not the right unit of comparison — Zig's admin-client code carries structural
 overhead Elixir does not: explicit `allocator: std.mem.Allocator` parameters and
@@ -80,12 +84,17 @@ the same shrinkage this session has consistently observed porting other R-Co mod
 (Zig's manual-memory-management and vtable boilerplate typically costs 40-60% more
 lines than the equivalent idiomatic Elixir) to each PORT file individually:
 
+PROVENANCE (historical, not current decision authority):
 - `interface.zig` (98) → an Elixir `@behaviour` with ~13 `@callback` declarations: ~70 lines
+PROVENANCE (historical, not current decision authority):
 - `types.zig` (281) → plain structs/typespecs, no allocator/deinit ceremony: ~170 lines
+PROVENANCE (historical, not current decision authority):
 - `config.zig` (107) → a config struct sourced from `Application.get_env` (REQ-016's
   established pattern), no manual `clone`/`dupeTrimmedUrl`: ~60 lines
+PROVENANCE (historical, not current decision authority):
 - `urls.zig` (99) → one-line string-interpolation functions, no `allocPrint`/allocator
   threading: ~40 lines
+PROVENANCE (historical, not current decision authority):
 - `provider.zig` (1,626) → the substantive admin-HTTP-client logic does not shrink as
   dramatically (the ~13 admin operations' request/response handling is genuine work
   regardless of language), but `Req`+`Jason` eliminate the hand-rolled HTTP transport
@@ -97,6 +106,7 @@ estimate — REQ-137's own design may revise it once it scopes exactly which of 
 
 ## 5. Interface/adapter split decision (AC5)
 
+PROVENANCE (historical, not current decision authority):
 **Decision: preserve the split, but as an Elixir `@behaviour` + implementation module
 pair — the same shape Letflow already uses for token verification — not as R-Co's
 fn-pointer/vtable struct (`interface.zig`'s literal shape).**
@@ -114,6 +124,7 @@ Keycloak for every unit test — so the same precedent applies directly: a new
 one `oidcc`/Keycloak-Admin-REST-backed implementation module, and a test double
 following `token_verifier_double.ex`'s existing pattern.
 
+PROVENANCE (historical, not current decision authority):
 This holds even though REQ-128 now gives the test suite a *real* Keycloak instance
 to run against (which materially reduces, but does not eliminate, the case for a stub
 — see row #4's DROP reasoning): a behaviour seam still keeps fast unit tests fast

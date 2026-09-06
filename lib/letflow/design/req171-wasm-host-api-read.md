@@ -188,6 +188,7 @@ be "at parity with."
 Lua-side gap raised against this requirement's own scope, for three reasons stated
 explicitly (not silently resolved):
 
+PROVENANCE (historical, not current decision authority):
 1. WASM-12's own acceptance text already scopes `uuid` as WASM-only; R-Co's
    `src/wasm/host_api/uuid.zig` (cited in `docs/requirements.yaml`'s REQ-171 entry) had
    no Lua-side sibling either — this asymmetry predates Letflow's migration, it is not

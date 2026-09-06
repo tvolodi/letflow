@@ -56,6 +56,7 @@ re-derived.
   the direct precedent this design's §5 partial-failure reasoning extends.
 - `lib/letflow/identity.ex` (`create_tenant/1`, `create_onboarding/1` — read directly,
   lines 596-612 and surrounding).
+PROVENANCE (historical, not current decision authority):
 - R-Co `src/api/routes/onboarding.zig` — grepped for `realm_guard`/`RealmExists`/
   `checkRealmExists`; confirmed the pattern this design's §5 idempotent-creation guard
   ports the *intent* of (query Keycloak for realm existence before creating, not a local
@@ -68,6 +69,7 @@ re-derived.
 
 ## 1. Scope
 
+PROVENANCE (historical, not current decision authority):
 This design covers **realm creation only** — the Keycloak Admin REST API operation that
 creates an empty realm for a tenant and the guard/retry semantics around it. It does
 **not** design user provisioning, client provisioning, role/federation/audit-event
@@ -113,6 +115,7 @@ machinery.
 
 ### 2.2 What Letflow already has to build on (cites REQ-135 by path, not re-derived)
 
+PROVENANCE (historical, not current decision authority):
 Per `lib/letflow/design/req135-keycloak-provider-port-boundary.md` §5: the target shape is
 an Elixir `@behaviour` + implementation-module pair, matching the already-shipped
 `Letflow.Oidc.TokenVerifier` precedent — not R-Co's `interface.zig` vtable-of-fn-pointers
@@ -193,6 +196,7 @@ resolution idiom, not a new pattern).
 
 ### 2.5 `Letflow.Identity.ProviderAdmin.Keycloak` — the real implementation
 
+PROVENANCE (historical, not current decision authority):
 Backed by the Keycloak Admin REST API (`config.zig`/`provider.zig`/`urls.zig`'s ported
 subset, §8). Internally: admin-token acquisition/caching (client-credentials or
 admin-password grant against Keycloak's own `master` realm — mirrors `config.zig`'s admin
@@ -491,6 +495,7 @@ unsized-here work.
 1. **`Letflow.Identity.ProviderAdmin` behaviour + `Letflow.Identity.ProviderAdmin.Config`
    + test double.**
    - Expected size: **150** lines.
+   PROVENANCE (historical, not current decision authority):
    - Ports/adds: R-Co `src/identity/provider/interface.zig` (PORT, REQ-135 §2 row 8 —
      realm-only subset: 3 callbacks, not the full ~13), `src/identity/provider/adapters/keycloak/config.zig`
      (PORT, row 1 — admin base URL/realm/credentials/timeouts). New Letflow modules:
@@ -505,6 +510,7 @@ unsized-here work.
 2. **`Letflow.Identity.ProviderAdmin.Keycloak` — the real Admin REST API client for the
    three realm callbacks.**
    - Expected size: **300** lines.
+   PROVENANCE (historical, not current decision authority):
    - Ports: R-Co `src/identity/provider/adapters/keycloak/provider.zig` (PORT, row 2 —
      realm-only subset: admin-token acquisition/caching plus the 3 realm HTTP calls, not
      the ~10 other admin operations that file also contains), `src/identity/provider/adapters/keycloak/urls.zig`
@@ -519,6 +525,7 @@ unsized-here work.
    `Letflow.TenantOnboarding.provision_and_migrate/1` extension (§3) + the one new AC9
    recovery-test assertion (§5.1's retry behavior).**
    - Expected size: **180** lines.
+   PROVENANCE (historical, not current decision authority):
    - Adds/changes: new Letflow module `lib/letflow/identity/realm_provisioning.ex`
      (`create_tenant_realm/1`, ~60 lines); changes to existing, shipped
      `lib/letflow/tenant_onboarding.ex` (`provision_and_migrate/1`'s `with` chain gains

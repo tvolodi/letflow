@@ -275,6 +275,7 @@ Reasons this composition point (not "callers install platform functions themselv
 
 ## 5. `platform.now` is ungated by design — required moduledoc statement (AC7)
 
+PROVENANCE (historical, not current decision authority):
 Per decision 0014 / R-Co's `src/lua/host_api/mod.zig` capability matrix (as quoted in the
 requirement text): `now` is **"a pure time read with no state reach"** and its matrix
 entry is **"a POSITIVE design statement, not an omission... A test that expects a gate on

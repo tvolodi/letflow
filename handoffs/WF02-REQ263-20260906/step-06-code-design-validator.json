@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ263-20260906-step-06",
+  "run_id": "WF02-REQ263-20260906",
+  "workflow_id": "WF-02",
+  "step": "06",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ263-20260906/step-06-code-design-validator.json",
+  "created_at": "2026-09-06T06:06:44Z",
+  "started_at": "2026-09-06T06:06:44Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "task": {
+    "description": "Independently validate CODE-DESIGNER's rework-2 amendment to lib/letflow/design/req237-zig-provenance-marking-convention.md (new §2.5, frozen-volume carve-out for REQ-263's rework) against the handoff task in step-05-code-designer.json's own acceptance_criteria.",
+    "acceptance_criteria": [
+      "Every acceptance criterion in step-05's handoff maps to a concrete design element in the amendment",
+      "No TBD/deferral language",
+      "Placement rule fully specified, mechanical, unambiguous for a weak-model DOC-UPDATER to apply without re-deriving reasoning",
+      "No implementation code present",
+      "No contradiction with either of the two prior 2026-09-05 amendments or with §1-§8 of the unchanged body"
+    ]
+  },
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-263"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md",
+      "docs/status/requirement_status.index.yaml",
+      "test/docs/requirement_status_invariants_test.exs",
+      "docs/requirements.yaml (REQ-263 entry only, via awk)"
+    ]
+  },
+  "completed_at": "2026-09-06T06:06:44Z",
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-derived every factual claim in the amendment rather than trusting CODE-DESIGNER's or ORCH's self-report; all five checks pass.\n\n1. INDEX VERIFICATION (grep, not full read, of docs/status/requirement_status.index.yaml's volume/status/frozen_prefix fields): 9 volumes are declared -- volumes 1-9 (paths requirement_status.yaml, .v2 through .v9) are ALL status: closed, each carrying both frozen_prefix_lines and frozen_prefix_sha256. Volume 10 (requirement_status.v10.yaml) is status: current, no frozen prefix (correct -- current volumes are never frozen). This confirms the design's 'current volumes are fine' carve-out is accurate and confirms all 8 volumes the amendment names as excluded (.yaml/.v2/.v3/.v4/.v5/.v6/.v7/.v9) are genuinely closed+pinned. Note: the index also shows volume 8 (.v8) as closed+pinned, which the amendment does not mention -- checked whether this is a gap: read REQ-263's actual acceptance_criteria via `awk '/^  - id: REQ-263$/,/^  - id: REQ-264$/' docs/requirements.yaml` and confirmed the requirement's own original 11-file list never included requirement_status.v8.yaml in the first place (its 11 named files are v2,v3,v4,v5,v6,v7,v9,v1/.yaml,S1-release,contract-gaps.md,anti-patterns.md). So v8's absence from the amendment is correct, not an omission -- v8 was never in scope for REQ-263 and needed no carve-out mention. Independently corroborated with a live grep for the marker string across all 13 candidate files: v8 and v10 both show 0 marker occurrences (untouched, as expected), while the other 8 closed volumes show marker counts of 57/12/3/4/3/5/3/22 respectively -- exactly matching the amendment's claim that DOC-UPDATER inserted markers into those 8 and no others.\n\n2. docs/status/S1-release-2026-08-16.yaml: confirmed absent from the index's volumes: list entirely (grep for the filename returned no matches) -- correctly still in-scope per the design's own rule (§2.5 point 3, second bullet).\n\n3. §2.5 TEXT UNAMBIGUITY: the rule is stated as a 3-step mechanical procedure (read the index's volumes: list; if status: closed, permanently out of scope, no exceptions including additive/comment-only insertions; else in scope only if status: current or absent from the list). It explicitly pre-empts the exact failure mode that caused this defect ('it's just a comment insertion is explicitly not a valid exception') and gives the corrected, actionable 3-file/8-excluded-file list by name so a DOC-UPDATER pass does not need to re-derive the index lookup itself for REQ-263 specifically (though the general rule is also stated for future reuse). This is unambiguous enough for a weak-model executor.\n\n4. DIFF ISOLATION: `git diff -- lib/letflow/design/req237-zig-provenance-marking-convention.md` shows exactly two additions -- one new dated amendment-note paragraph at the top, and one new §2.5 section inserted between the existing §2 and §3. No other line in the document (marker text/regex in §2, unit-shape rules, §4 worked examples, §6 chunking tables, §7 traceability, §8 open questions, or either prior amendment note) was touched.\n\n5. NO CONTRADICTION WITH PRIOR AMENDMENTS: both the 2026-09-05 (ISS-0510, YAML comment-line shape) and 2026-09-05 (lib/letflow/design/ chunking, §6) amendments remain present, unmodified, in the diff context. §2.5 explicitly scopes itself as overriding §2 'wherever the two conflict' -- i.e. narrowly, not a wholesale revision -- and does not touch the YAML-comment shape's regex/marker-text (explicitly disclaims relevance: 'that shape's regex/marker-text compatibility is irrelevant to this rule'). No overlap with the lib/letflow/design/ chunking table (§6, a different directory entirely, not docs/status/).\n\nADDITIONAL INDEPENDENT VERIFICATION (beyond the 5 requested checks): ran `mix test test/docs/requirement_status_invariants_test.exs` directly on this branch -- result: 16/20 passed, 4 failed, matching the amendment's and ORCH's claimed count exactly. Inspected all 4 failures (A4a, A4b, A5, A6): all four are on docs/status/requirement_status.yaml (volume 1) alone, and all are consistent with a single root cause (line-count shift from marker insertions into the frozen prefix corrupting both the A6 hash and every declared line-number cross-reference in A4a/A4b/A5's known-anomaly declarations) -- not four independent defects. This corroborates the amendment's causal account was not asserted, but is independently demonstrable.\n\nAll five requested checks PASS. No gaps found.",
+    "artifacts_out": [],
+    "issues": [],
+    "next_action": "Route to ELIXIR-DEV/DOC-UPDATER (implementation step) on feature/WF02-REQ263-20260906: (1) revert the marker insertions from the 8 closed volumes (docs/status/requirement_status.yaml, .v2, .v3, .v4, .v5, .v6, .v7, .v9) -- restore each to byte-identical with its frozen_prefix_sha256 (verify via re-running mix test test/docs/requirement_status_invariants_test.exs and confirming A6, A4a, A4b, A5 all pass, i.e. 20/20); (2) confirm the 3 correctly-in-scope files (docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, docs/anti-patterns.md) retain their markers, since those insertions were valid and should not be reverted; (3) route to REVIEWER for a re-gate of the corrected 3-file scope once 20/20 is confirmed."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

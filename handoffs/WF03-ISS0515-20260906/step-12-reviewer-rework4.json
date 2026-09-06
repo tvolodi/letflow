@@ -1,0 +1,39 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-12",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "12",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0515-20260906/step-12-reviewer-rework4.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T18:26:05Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515", "ISS-0426", "ISS-0287"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-10",
+      "WF03-ISS0515-20260906-step-11"
+    ],
+    "artifacts_reviewed": [
+      "test/letflow/engine/lua/executor_test.exs",
+      "test/test_helper.exs",
+      ".github/workflows/ci.yml",
+      "docs/migration/decisions/0009-test-parallel-pool-sizing.md"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906",
+    "pr": 1033,
+    "commit_range": "d84aaf8d..e8dafb1f"
+  },
+  "task": {
+    "description": "Independently re-verify ELIXIR-DEV's rework 4 (4th CI failure of PR #1033): abandons the disproven max_connections=200 approach and instead makes the ISS-0426 nested `mix test --only lua_wallclock_race` subprocess skip the ISS-0515 ensure_template!/0 pre-build via a new LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD env var, on the grounds the 11 tagged tests are DB-access-free by the module's own moduledoc."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Verified independently, not taken on the handoff's word:\n\n1. DIFF (d84aaf8d..e8dafb1f) confirmed exactly as described: (a) test/test_helper.exs wraps ONLY the `Letflow.Test.TenantTemplate.ensure_template!()` call in `if System.get_env(\"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD\") != \"1\" do ... end` -- the unconditional `Letflow.TenantSchemaReaper.sweep_orphans()` / `sweep_service_catalog_orphans(Letflow.Repo)` calls (both at top-of-file and inside ExUnit.after_suite) are untouched by the new conditional; (b) executor_test.exs's nested System.cmd/3 env list correctly adds `{\"LETFLOW_SKIP_TENANT_TEMPLATE_PREBUILD\", \"1\"}` alongside the existing TEST_POOL_SIZE=4, scoped to that one call site only; (c) .github/workflows/ci.yml diff is a clean revert -- grepped the file, `command:` and `TEST_MAX_CONNECTIONS` no longer appear as active YAML keys, only inside the retained comment block documenting the disproven attempt; python3 yaml.safe_load confirms the file still parses; (d) docs/migration/decisions/0009-test-parallel-pool-sizing.md's third addendum is marked '...has been reverted -- see the addendum below' rather than deleted, and a new fourth addendum records the live CI log evidence and the actual fix -- history preserved honestly.\n\n2. TIMELINE CLAIM VERIFIED, not assumed: `git show 370fd93f:test/test_helper.exs` (the ISS-0426 PR #848 commit, 2026-09-02, merged well before ISS-0515's first commit b8da8d11 on 2026-09-06) already contains the unconditional sweep_orphans()/sweep_service_catalog_orphans() calls both at top-of-file and in ExUnit.after_suite, AND already contains the ISS-0426 exclude tag and the design for the nested `mix test --only lua_wallclock_race` subprocess. This proves the sweep calls are genuinely pre-existing relative to ISS-0515 and always ran inside this exact nested-subprocess context. None of the four CI failure logs (per the handoff and step-10's own prior review) implicated these sweeps; all four pointed at ensure_template!/0's own lock-acquisition path, which is the only call being newly skipped. This is consistent and not asserted without a check.\n\n3. SAFETY OF THE SKIP RE-VERIFIED THIS ROUND: grepped all 11 `@tag :lua_wallclock_race` test bodies (lines 330-1150) -- none reference Repo, Ecto, or tenant fixtures; every one is a pure Lua-VM timing/isolation assertion, consistent with the moduledoc's 'No database access required ... short-circuit before any Repo insert' claim. File has not been touched since the last review round in a way that would invalidate this (only the env-var addition, confirmed by diff above).\n\n4. Own commands, all green: `mix compile --warnings-as-errors` (clean, no output), `mix format --check-formatted` (clean), `mix test test/letflow/engine/lua/executor_test.exs` -> 'Result: 45 passed, 11 excluded', `mix test test/support/tenant_template_test.exs` -> 'Result: 7 passed'. No failures in either run.\n\n5. CONFIDENCE ASSESSMENT: this is categorically different from reworks 1-3, which all reslicing/raising the SAME connection budget the ensure_template!/0 call inside the nested subprocess drew from -- each hit the identical failure signature because none removed a DB call, only resized around it (and rework 3's resize demonstrably never took effect server-side). Rework 4 removes a DB-touching call entirely from the one place all four failures pointed at, backed by a by-construction argument (the moduledoc invariant plus the pre-existing-and-never-implicated sweep calls) rather than a local repro of the CI-only scarcity. I agree this meaningfully lowers the probability of a fifth identical failure. Residual risk I flag, matching the handoff's own honest caveat: the two sweep calls remain unconditional DB touches in this subprocess and are the next most likely pressure point if CI fails a fifth time with the same signature -- worth pre-emptively considering (not blocking) whether they should also be skippable behind the same flag, since ExUnit.after_suite firing on a still-scarce budget could plausibly reproduce a similar symptom even with ensure_template!/0 removed. This is a forward-looking observation, not a defect in the current change.\n\n6. SCOPE: confirmed via `git diff --stat` -- only test/letflow/engine/lua/executor_test.exs, test/test_helper.exs, .github/workflows/ci.yml, docs/migration/decisions/0009-test-parallel-pool-sizing.md, and the step-11 handoff JSON changed. No lib/ or migration changes; no scope creep, no new abstractions. Idiom/OTP/supervision questions (1-2 of REVIEWER's mandate) are not implicated -- this is test-harness/CI-config only.\n\nVERDICT: PASS. The fix is well-scoped, the safety argument holds up under independent re-verification (not just re-reading the handoff's claims), local tests pass, and the decision record is honest about the prior disproven attempt. No genuine defect found."
+  },
+  "rework_count": 4,
+  "max_rework": 5
+}

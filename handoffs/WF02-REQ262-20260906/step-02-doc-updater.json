@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ262-20260906-step-02",
+  "run_id": "WF02-REQ262-20260906",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "DOC-UPDATER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ262-20260906/step-02-doc-updater.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T05:11:57Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-262"],
+    "issue_ids": ["ISS-0424"],
+    "related_handoff_ids": ["WF02-REQ262-20260906-step-00"],
+    "artifacts_in": ["docs/requirements.yaml (REQ-262)", "lib/letflow/design/req237-zig-provenance-marking-convention.md"],
+    "branch_name": "feature/WF02-REQ262-20260906",
+    "base_commit": "647cab1d"
+  },
+  "task": {
+    "description": "Applied REQ-237's .zig provenance-marking convention to chunk 239h: docs/issues/*.yaml, ISS-0101 through ISS-0439 (the subset of that range carrying a .zig reference). Re-derived the file list fresh (grep -l '\\.zig' over ISS-0101..ISS-0439 range) rather than trusting the requirement's draft-time count, and it matched the 11 draft-time-named files exactly: ISS-0101, ISS-0102, ISS-0103, ISS-0104, ISS-0105, ISS-0278, ISS-0402, ISS-0411, ISS-0424, ISS-0438, ISS-0439. For each .zig citation, inserted the marker line 'PROVENANCE (historical, not current decision authority):' immediately above its smallest enclosing citation unit (a folded-scalar paragraph bounded by blank lines/field start, per the design doc's structural rule) -- 23 markers total across 11 files. One marker (ISS-0424, preceding its title: key, whose value contains a .zig substring) used the YAML-comment-prefixed shape from the design doc's ISS-0510 amendment, since a bare prose line directly above a top-level key would corrupt YAML syntax; all other insertions sit inside description/resolution/resolution_note/scoping_note/diagnosis_note/source folded (>) scalars where a bare prose line is syntactically safe. No .zig citation text was altered, reordered, or deleted -- every insertion is a pure added line. Committed on this branch as 68ccfc04."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Before-state: fresh grep -l '\\.zig' over the 159 files in the ISS-0101..ISS-0439 range found exactly the 11 draft-time-named files, zero pre-existing PROVENANCE markers in any of them, per-file .zig counts (grep -c): ISS-0101=2, ISS-0102=2, ISS-0103=3, ISS-0104=2, ISS-0105=2, ISS-0278=5, ISS-0402=1, ISS-0411=1, ISS-0424=5, ISS-0438=8, ISS-0439=1 (sum 32). After-state: identical per-file and total .zig counts (sum 32, zero citations lost/altered), and grep -c 'PROVENANCE (historical, not current decision authority):' now returns 23 total across the 11 files (ISS-0101=2, ISS-0102=2, ISS-0103=2, ISS-0104=2, ISS-0105=2, ISS-0278=3, ISS-0402=1, ISS-0411=1, ISS-0424=5, ISS-0438=2, ISS-0439=1), i.e. every citation unit is now marked (fewer markers than raw .zig occurrences where one paragraph unit carries multiple .zig mentions, per the design's own table/paragraph rule). Sample-diffed 15 citation-unit insertions across 5 files (ISS-0101, ISS-0104, ISS-0278, ISS-0424, ISS-0438) via git diff -- every hunk is a pure one-line addition, original text byte-identical below the marker. Divergence-note check: grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' over the 11 files found exactly one match both before and after (ISS-0424, shifted from line 60 to line 63 purely by the 3 marker lines inserted above it in the same field -- text itself byte-identical, confirmed by diff). git diff --stat confirms only the 11 in-scope files changed (23 insertions, 0 deletions, 11 files) -- CLAUDE.md, README.md, docs/migration/README.md, and every other docs/issues/*.yaml file (including the other 148 files in the ISS-0101..ISS-0439 range and all files outside it) are untouched. Each of the 11 touched files individually validated as parseable YAML via python3 -c \"import yaml; yaml.safe_load(open(...))\" -- all OK, both immediately after editing each file and again after the commit. Files touched: docs/issues/ISS-0101.yaml, docs/issues/ISS-0102.yaml, docs/issues/ISS-0103.yaml, docs/issues/ISS-0104.yaml, docs/issues/ISS-0105.yaml, docs/issues/ISS-0278.yaml, docs/issues/ISS-0402.yaml, docs/issues/ISS-0411.yaml, docs/issues/ISS-0424.yaml, docs/issues/ISS-0438.yaml, docs/issues/ISS-0439.yaml. Commit: 68ccfc04. Not done in this step (by design, out of DOC-UPDATER's scope): requirement status flip, push, PR, merge -- left for ORCH after REVIEWER passes. Note: docs/requirements.yaml REQ-262's status field was intentionally NOT flipped by this step per the task instructions."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -5111,6 +5111,37 @@
       "released_lock": true,
       "last_known_step": "Step Final COMPLETED -- PR #1012 merged to main (plain merge, commit 007d9181), no rebase needed (main had not moved since branch creation). Post-merge independently re-verified on main: PROVENANCE markers present and .zig counts unchanged (9/28/12/4/2/3/17/5/9/17/3/11/21) across all 13 files. Queue task 505 released done, REQ-267 done.",
       "note": "Chunk 239-design-d of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- req049-variable-merge.md through req066-api-error-response.md (req049-req066, 13 files, non-contiguous numbering). Sibling chunks 239-design-a/b/c (REQ-264/265/266) precede this range and are done/pending; 239-design-e/f/g/h (REQ-268/269/270/271) follow. No overlap confirmed at registry-scan time (no existing REQ-267 entry found before this one)."
+    },
+    {
+      "run_id": "WF02-REQ268-20260906",
+      "workflow_id": "WF-02",
+      "requirement_ids": [
+        "REQ-268"
+      ],
+      "stage": "S6",
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/design/req068-validation.md",
+        "lib/letflow/design/req069-authorization.md",
+        "lib/letflow/design/req070-router-decomposition.md",
+        "lib/letflow/design/req072-tenant-request-context.md",
+        "lib/letflow/design/req073-identity-user-routes.md",
+        "lib/letflow/design/req074-identity-group-routes.md",
+        "lib/letflow/design/req075-tenant-administration-routes.md",
+        "lib/letflow/design/req076-identity-tokens-roles-onboarding.md",
+        "lib/letflow/design/req077-promotion-pipeline-routes.md",
+        "lib/letflow/design/req078-supporting-routes.md",
+        "lib/letflow/design/req079-instance-write-routes.md",
+        "lib/letflow/design/req080-instance-routes-read.md",
+        "lib/letflow/design/req081-definition-routes-read.md"
+      ],
+      "branch_name": "feature/WF02-REQ268-20260906",
+      "queue_task_id": 506,
+      "queue_agent_id": "letflow-ee-orch",
+      "lock_acquired_at": "2026-09-06T00:20:34Z",
+      "released_lock": false,
+      "last_known_step": "Step 00 COMPLETED -- branch created from main @ 58c32a52, pre-flight .zig counts confirmed non-zero in all 13 named files (sum 345). Dispatching DOC-UPDATER next.",
+      "note": "Chunk 239-design-e of REQ-237's 2026-09-05 lib/letflow/design/ amendment (8 sibling chunks, REQ-264..271) -- req068-validation.md through req081-definition-routes-read.md (req068-req081, 13 files; req071-mount-auth-tenant-status-plugs.md falls in-range numerically but is excluded from this chunk's file list per REQ-237's own chunking table). Sibling chunks 239-design-a/b/c/d (REQ-264/265/266/267) precede this range and are done; 239-design-f/g/h (REQ-269/270/271) follow. No overlap confirmed at registry-scan time (no existing REQ-268 entry found before this one)."
     }
   ]
 }

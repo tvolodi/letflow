@@ -8,8 +8,8 @@
   "file": "handoffs/WF02-REQ261-20260906/step01-doc-updater.json",
   "created_at": "2026-09-06T04:40:00Z",
   "started_at": "2026-09-06T04:40:00Z",
-  "completed_at": null,
-  "status": "PENDING",
+  "completed_at": "2026-09-06T04:44:24Z",
+  "status": "COMPLETED",
   "priority": "MEDIUM",
   "context": {
     "stage": "S6",
@@ -52,10 +52,90 @@
   },
   "result": {
     "status": "PASS",
-    "summary": "",
-    "artifacts_out": [],
-    "issues": [],
-    "next_action": ""
+    "summary": "Applied REQ-237's .zig provenance-marking convention (lib/letflow/design/req237-zig-provenance-marking-convention.md, both 2026-09-05 amendments including the ISS-0510 YAML comment-line/sequence-item fourth shape) to exactly the 11 files named in REQ-261 (chunk 239g): docs/issues/ISS-{0085,0086,0087,0093,0094,0095,0096,0097,0098,0099,0100}.yaml. 43 PROVENANCE marker lines inserted total (ISS-0085: 10, ISS-0086: 7, ISS-0087: 7, ISS-0093: 2, ISS-0094: 2, ISS-0095: 2, ISS-0096: 3, ISS-0097: 2, ISS-0098: 4, ISS-0099: 2, ISS-0100: 2), covering all 53 pre-existing .zig citation lines (per-file .zig count unchanged before/after in every file). Every citation unit fell into one of the four documented shapes: (2) paragraph -- the dominant shape here, applied to blank-line-bounded prose blocks inside YAML folded (`>`) scalars (description/resolution/resolution_note/reconciliation_note/summary blocks); ISS-0085/0086/0087 (the CEL-audit trio, richly paragraph-broken prose) each needed multiple markers, one per blank-line-delimited paragraph containing a .zig mention, exactly matching REQ-260's established precedent for tight vs. loose prose blocks; the 8 simpler CLASS-B-triage files (ISS-0093/94/95/96/97/98/99/100) mostly have single-paragraph description/resolution blocks (no internal blank lines), needing one marker each, except ISS-0096 (3 paragraphs across description/resolution_note/reconciliation_note) and ISS-0098 (4 paragraphs: description plus 3 blank-line-separated paragraphs inside resolution_note); (4a) YAML comment-line/sequence-item -- ISS-0085's, ISS-0086's, and ISS-0087's `r_co_sources:` YAML sequences, each .zig-carrying quoted string item individually marked with its own '#'-prefixed comment line immediately above it (13 sequence-item markers total: 4+5+4), the same r_co_sources:/r_co_evidence:-sequence extension of shape 4(a) REQ-260 already established as a defensible mechanical extension (structurally identical to the design doc's own acceptance_criteria-bullet and id:/title: examples). No table shape (3) and no commented-out '# ---' section-header block (shape 4b) occurred in this chunk. No citation-unit shape outside the four documented ones was found -- no new issue is being raised for CODE-DESIGNER.",
+    "verification": {
+      "pre_change_zig_counts": {
+        "ISS-0085.yaml": 10, "ISS-0086.yaml": 9, "ISS-0087.yaml": 7, "ISS-0093.yaml": 2,
+        "ISS-0094.yaml": 4, "ISS-0095.yaml": 4, "ISS-0096.yaml": 5, "ISS-0097.yaml": 2,
+        "ISS-0098.yaml": 4, "ISS-0099.yaml": 3, "ISS-0100.yaml": 3, "sum": 53,
+        "command": "grep -c '\\.zig' docs/issues/ISS-{0085,0086,0087,0093,0094,0095,0096,0097,0098,0099,0100}.yaml (per file, summed) -- matches step-00's own pre-flight count exactly"
+      },
+      "acceptance_criteria_evidence": [
+        {
+          "ac": "AC1 -- pre-change count of OLD (unmarked) .zig citations, quoted per file and summed",
+          "result": "ISS-0085:10, ISS-0086:9, ISS-0087:7, ISS-0093:2, ISS-0094:4, ISS-0095:4, ISS-0096:5, ISS-0097:2, ISS-0098:4, ISS-0099:3, ISS-0100:3 = 53 total"
+        },
+        {
+          "ac": "AC2 -- post-change: zero unmarked citations remain; before/after counts equal",
+          "command": "grep -c '\\.zig' <each file> before vs after",
+          "result": "Every file's .zig count is unchanged before/after (10,9,7,2,4,4,5,2,4,3,3 both times) -- confirms zero citation lines deleted, only marker lines added. Every one of the 53 .zig lines is now preceded, within its own citation unit (paragraph or YAML sequence-item), by a 'PROVENANCE (historical, not current decision authority):' marker -- manually walked per file against the marker insertion points before applying each edit."
+        },
+        {
+          "ac": "AC2 -- git diff --numstat per file",
+          "command": "git diff --numstat -- <11 files>",
+          "result": "10/0, 7/0, 7/0, 2/0, 2/0, 2/0, 3/0, 2/0, 4/0, 2/0, 2/0 -- all insertions, 0 deletions in every file. Sum of insertions (43) equals the marker count exactly."
+        },
+        {
+          "ac": "AC2 -- greppability, both regex and plain-string forms",
+          "command": "grep -rlF 'PROVENANCE (historical, not current decision authority):' <11 files> | wc -l ; grep -rlE 'PROVENANCE \\(historical, not current decision authority\\):' <11 files> | wc -l",
+          "result": "11 and 11 -- both forms find markers in all 11 files"
+        },
+        {
+          "ac": "AC3 -- sampled diff, path text preserved verbatim (>=10 citations across >=5 files)",
+          "command": "git diff -U0 -- <all 11 files> | grep -c '^[+-].*\\.zig'",
+          "result": "0 -- confirms no .zig-bearing line was added, removed, or altered anywhere across all 11 files; every citation line survives purely as diff context, since the marker text itself never contains the substring '.zig'. Sampled directly across all 11 files (43 marker insertions, well over the required 10/5) via per-edit before/after review during application -- each hunk showed only a '+PROVENANCE...' (or '+# PROVENANCE...' for sequence items) line added, every path/citation text line surviving as unchanged diff context."
+        },
+        {
+          "ac": "AC4 -- CLAUDE.md, README.md, docs/migration/README.md untouched",
+          "command": "git diff --stat -- CLAUDE.md README.md docs/migration/README.md",
+          "result": "empty output -- confirmed untouched. Pre-flight grep -l '\\.zig' on all three also returned zero matches, matching the requirement's own expectation that none carries a raw .zig citation."
+        },
+        {
+          "ac": "AC5 -- deliberate-divergence notes byte-identical before/after",
+          "command": "grep -rnE 'unlike R-Co|deliberately diverges|diverges from R-Co' <all 11 files>, run before and after this requirement's edits",
+          "result": "1 match before (docs/issues/ISS-0100.yaml:45, text 'deliberately open (unlike R-Co's closed enum) and deliberately coarser') and 1 match after (docs/issues/ISS-0100.yaml:47, identical text, shifted 2 lines by this file's own 2 marker insertions above it) -- byte-identical text, confirmed by direct comparison of the matched line content (only the line number shifted, as expected)."
+        },
+        {
+          "ac": "no doubled/duplicate consecutive markers (idempotency)",
+          "command": "awk one-liner scanning each file for two consecutive 'PROVENANCE (historical' lines",
+          "result": "no output in any of the 11 files -- zero doubled markers"
+        },
+        {
+          "ac": "YAML still parses for all 11 files",
+          "command": "python -c \"import yaml; yaml.safe_load(open(p, encoding='utf-8'))\" per file",
+          "result": "all 11 files parsed successfully"
+        },
+        {
+          "ac": "only the 11 named files changed",
+          "command": "git status --porcelain",
+          "result": "M docs/issues/ISS-0085.yaml, ISS-0086.yaml, ISS-0087.yaml, ISS-0093.yaml, ISS-0094.yaml, ISS-0095.yaml, ISS-0096.yaml, ISS-0097.yaml, ISS-0098.yaml, ISS-0099.yaml, ISS-0100.yaml -- exactly the 11 named files, nothing else, no sibling-chunk file touched"
+        }
+      ]
+    },
+    "deviations_and_issues": [
+      "No citation-unit shape outside the four documented ones (single line, paragraph, table, YAML comment-line/sequence-item) was encountered anywhere in these 11 files -- no new issue is being raised for CODE-DESIGNER. Two of the four shapes were exercised here: paragraph (the dominant shape -- description/resolution/resolution_note/reconciliation_note/summary folded-scalar prose, with ISS-0085/0086/0087 each requiring multiple markers for their multiple blank-line-separated paragraphs, matching REQ-260's established precedent for treating each blank-line-bounded block as its own citation unit) and YAML comment-line/sequence-item shape 4(a) (13 individual .zig-carrying string items inside ISS-0085's, ISS-0086's, and ISS-0087's r_co_sources: sequences, each individually marked with its own '#'-prefixed comment line immediately above it -- the same r_co_sources:/r_co_evidence:-sequence extension of shape 4(a) REQ-260 already established and flagged as a MINOR judgement-call note, not a new convention). No table shape (shape 3) and no commented-out '# ---' section-header block (shape 4b) occurred anywhere in this chunk's 11 files."
+    ],
+    "artifacts_out": [
+      "docs/issues/ISS-0085.yaml",
+      "docs/issues/ISS-0086.yaml",
+      "docs/issues/ISS-0087.yaml",
+      "docs/issues/ISS-0093.yaml",
+      "docs/issues/ISS-0094.yaml",
+      "docs/issues/ISS-0095.yaml",
+      "docs/issues/ISS-0096.yaml",
+      "docs/issues/ISS-0097.yaml",
+      "docs/issues/ISS-0098.yaml",
+      "docs/issues/ISS-0099.yaml",
+      "docs/issues/ISS-0100.yaml",
+      "handoffs/WF02-REQ261-20260906/step01-doc-updater.json"
+    ],
+    "issues": [
+      {
+        "severity": "MINOR",
+        "description": "r_co_sources: YAML sequences (ISS-0085, ISS-0086, ISS-0087) are structurally identical to the design doc's already-documented acceptance_criteria-bullet/id:-title: YAML sequence-item case (shape 4a) and to REQ-260's already-established r_co_evidence:/letflow_evidence: extension of that same shape -- applied the identical closest-matching existing shape (one '#'-prefixed comment line per sequence item) rather than inventing a new convention. Not filed as a new CODE-DESIGNER issue since it required no new marker text, regex, or placement rule -- it is REQ-260's already-flagged extension applied to a third same-shaped YAML key name. Recorded here for visibility per the task's own instruction to flag any judgement call, consistent with REQ-260's own handling of the same situation."
+      }
+    ],
+    "next_action": "Route to REVIEWER (Step 2d)"
   },
   "rework_count": 0,
   "max_rework": 3

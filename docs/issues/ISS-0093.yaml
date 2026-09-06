@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. lib/letflow/design/promotion_plan.md:437
   reads reject_if_conflicts/4 as a preflight re-check of REQ-037's already
@@ -28,6 +29,7 @@ status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"
   summary: >
+    PROVENANCE (historical, not current decision authority):
     R-Co/src/definition/promotion_plan.zig:99-102 read directly: computePromotionPlan()
     (PRM-01, the compute_promotion_plan/5 counterpart) runs "Step 1: permission check --
     caller holds promotion.submit?" via checkPermission(allocator, pool, actor_id,

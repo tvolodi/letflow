@@ -17,6 +17,7 @@ description: >
   during REQ-111's audit of req050-exclusive-gateway-cel.md:19's rewrite
   rules against the real R-Co source. Not a docs defect.
 
+  PROVENANCE (historical, not current decision authority):
   R-Co's `translateCelToExpr()` emits the word operators WITH SURROUNDING
   SPACES. `R-Co/src/engine/transition.zig:1177` reads
   `result.appendSlice(allocator, " and ")` and `:1183` reads
@@ -37,6 +38,7 @@ description: >
     Expr.evaluate_condition("variables.a&&variables.b", %{"a" => true, "b" => true})
       => false
 
+    PROVENANCE (historical, not current decision authority):
     R-Co, same input, transition.zig:1164-1205 traced by hand:
       "variables." stripped (i += 10) -> 'a' -> " and " -> "variables."
       stripped -> 'b'  ==>  "a and b"  ==> parses, evaluates TRUE.
@@ -67,6 +69,7 @@ description: >
   So a definition carrying such an edge condition is accepted and reaches
   `Expr.evaluate_condition/2` via `lib/letflow/engine/transition.ex:579`.
 
+  PROVENANCE (historical, not current decision authority):
   ROOT CAUSE. `req050-exclusive-gateway-cel.md` §4.3's rule table (rows 2
   and 3) renders the rewrites as "`&&` -> `and`" and "`||` -> `or`" and
   illustrates each only with an already-spaced example
@@ -78,11 +81,13 @@ description: >
   text rather than from `transition.zig`, per its own §0 access-gap note
   (line 19) -- exactly the second-hand sourcing REQ-111 exists to replace.
 
+  PROVENANCE (historical, not current decision authority):
   Contrast rule 4, which R-Co writes as `"not "` with a trailing space
   (`transition.zig:1194`) and which Letflow DOES reproduce faithfully
   (`expr.ex:134`, `Regex.replace(~r/!(?!=)/, expr_source, "not ")`) --
   the trailing space is present there. Only rules 2 and 3 lost it.
 
+  PROVENANCE (historical, not current decision authority):
   WHAT A FIX NEEDS TO CHANGE (for CODE-DESIGNER, not applied here).
   `expr.ex:106-107` must emit `" and "` / `" or "` rather than `"and"` /
   `"or"`, matching `transition.zig:1177`/`:1183`. Note the resulting expr
@@ -106,9 +111,13 @@ affected_files:
   - lib/letflow/engine/expr.ex
   - lib/letflow/design/req050-exclusive-gateway-cel.md
 r_co_sources:
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1177 (` and ` -- spaces included)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1183 (` or ` -- spaces included)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1164-1205 (translateCelToExpr, full single-pass loop)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1194 (`not ` -- the rule Letflow DID reproduce correctly)"
 related:
   - ISS-0086
@@ -117,6 +126,7 @@ related:
 github_issue: https://github.com/tvolodi/letflow/issues/302
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   Fixed 2026-08-20, commit 27c586a (WF03-ISS0085-20260820). expr.ex:106-107
   now emit " and "/" or " with surrounding spaces, matching
   transition.zig:1177/:1183. req050-exclusive-gateway-cel.md's §4.3 rule

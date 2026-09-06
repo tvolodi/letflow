@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. pack_id is :string/varchar(255) NOT
   NULL, chosen as this project's default string bound absent a narrower one
@@ -25,6 +26,7 @@ status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"
   summary: >
+    PROVENANCE (historical, not current decision authority):
     R-Co/src/design/sol-batch1-solution-pack.md:107 read directly:
     `pack_id: string // generated UUID at export time`. R-Co/src/solution/store.zig:249,673
     (newUuidStr -> uuid_util.newUuidV4) confirms pack_id is a canonical UUID v4 string

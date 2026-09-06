@@ -20,6 +20,7 @@ description: >
   req050-exclusive-gateway-cel.md:490's `hasCelUnsupportedFeatures()`
   reconstruction against the real R-Co source. Not a docs defect.
 
+  PROVENANCE (historical, not current decision authority):
   WHAT R-Co DOES. `R-Co/src/engine/transition.zig:1215` declares
   `const standalone_features = [_][]const u8{ "has(", "matches(", "int(",
   "string(", "double(" };` and `:1216-1222` scans for each with an
@@ -94,6 +95,7 @@ description: >
   nothing tests `evaluate_condition/2` against input that survives
   translation but is not in the expr grammar.
 
+  PROVENANCE (historical, not current decision authority):
   WHAT A FIX NEEDS TO CHANGE (for CODE-DESIGNER, not applied here). Two
   independent changes, and the second matters more than the first:
     (a) Add `matches(` to `@unsupported_call_markers` (`expr.ex:59-75`) so
@@ -128,10 +130,15 @@ affected_files:
   - lib/letflow/engine/transition.ex
   - lib/letflow/design/req050-exclusive-gateway-cel.md
 r_co_sources:
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1215 (standalone_features includes `matches(`)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1216-1222 (ident-boundary-guarded scan)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1236-1241 (isCelIdentChar)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1165 (translateCelToExpr returns null when unsupported)"
+  # PROVENANCE (historical, not current decision authority):
   - "R-Co/src/engine/transition.zig:1124 (evaluateGatewayCondition `orelse return false`)"
 related:
   - ISS-0085

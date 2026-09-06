@@ -80,7 +80,7 @@
     ],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ271-20260906",
-      "commit_sha_list": [],
+      "commit_sha_list": ["99ac73e8"],
       "remote_branch": null,
       "push_status": "skipped",
       "pr_url": null,

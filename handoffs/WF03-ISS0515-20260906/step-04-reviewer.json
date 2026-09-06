@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0515-20260906-step-04",
+  "run_id": "WF03-ISS0515-20260906",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "REVIEWER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0515-20260906/step-04-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-06T17:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226"],
+    "issue_ids": ["ISS-0515"],
+    "related_handoff_ids": [
+      "WF03-ISS0515-20260906-step-01",
+      "WF03-ISS0515-20260906-step-02",
+      "WF03-ISS0515-20260906-step-02b",
+      "WF03-ISS0515-20260906-step-03"
+    ],
+    "artifacts_reviewed": [
+      "test/test_helper.exs",
+      "test/support/tenant_template.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0515-20260906"
+  },
+  "task": {
+    "description": "Independently re-verify ELIXIR-DEV's implementation of the validated ISS-0515 tenant_template build-race fix (structural pre-build hook in test_helper.exs) against the design doc, before releasing the gate to TEST-DESIGNER."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Independently re-verified all six checks; nothing in ELIXIR-DEV's or ISSUE-FIXER's handoffs taken on trust.\n\n1. DIFF MATCHES DESIGN EXACTLY. `git diff 468079c4..HEAD -- test/test_helper.exs test/support/tenant_template.ex` shows exactly: one new top-level statement `Letflow.Test.TenantTemplate.ensure_template!()` in test_helper.exs, placed between the existing `ExUnit.start(exclude: [...])` call and `ExUnit.after_suite(fn ... end)`, as designed (design doc S4); plus a new '## ISS-0515: pre-built synchronously from test/test_helper.exs' subsection appended to `ensure_template!/0`'s existing moduledoc in tenant_template.ex -- doc-only, zero lines of executable code touched in that file. No other hunks in either file.\n\n2. TOOLCHAIN CLEAN (own output). `MIX_ENV=test mix compile --warnings-as-errors` exit 0, no warnings. `mix format --check-formatted` exit 0.\n\n3. INDEPENDENT TEST RE-RUN (own output, not ELIXIR-DEV's). `mix test test/support/tenant_template_test.exs` -> 7 passed, 0 failures (matches ELIXIR-DEV's claim exactly). Full `mix letflow.check.test` run to completion (own run, ~4m24s across 8 partitions, 3111 total tests): 3109 passed, 2 failed. Both failures are `Mix.Tasks.Letflow.CheckToolchainTest` rust-pin tests in partition-1, both `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` -- independently confirmed `which rustc` exits 1 in this sandbox (no rustc binary present at all). This is the same pre-existing, unrelated environment gap ELIXIR-DEV already identified, not a new or different failure. Grepped all 8 partition logs directly for `query_canceled`/`TENANT_TEMPLATE_BUILD_FAILED`: the only `query_canceled` hits (partition-7, two occurrences) belong to `Letflow.SandboxPoolTest`'s own deliberate ISS-0292 regression tests for `retry_query_once/1` (intentionally induced, caught-and-retried by that function's own contract, logged as a `[warning]` not a test failure) -- both of those tests passed and are unrelated to tenant_template's advisory lock. Zero occurrences of the ISS-0515 failure signature anywhere in this run.\n\n4. SCOPE CONFIRMED. `git diff 468079c4..HEAD --stat` shows only: 5 handoff JSON files, 1 design doc (lib/letflow/design/iss0515-tenant-template-build-race-fix.md), test/support/tenant_template.ex (+15, moduledoc only), test/test_helper.exs (+16, one statement + comment). No touch to lib/letflow/tenant_provisioning.ex, no other lib/letflow/ file, no migration, no REQ-226 application code.\n\n5. MECHANISM CLAIM VERIFIED AGAINST ACTUAL SOURCE, NOT TAKEN ON THE DESIGN DOC'S WORD. Read /home/tvolodi/.asdf/installs/elixir/1.18.3-otp-27/lib/ex_unit/lib/ex_unit.ex directly: `ExUnit.start/1`'s own moduledoc says 'Starts ExUnit and automatically runs tests right before the VM terminates', and its body registers the real run via `System.at_exit(fn 0 -> ... end)` (line 225) -- it does not dispatch any test inline. This independently confirms the design doc's S2/S4 citation and CODE-DESIGN-VALIDATOR's prior sign-off on the same claim. Read test/test_helper.exs directly: the new call is a bare top-level statement (no `Task.async`, no `spawn`, no callback wrapping), placed textually after `ExUnit.start(...)` (line 52) and before `ExUnit.after_suite(...)` (line 70) -- genuinely synchronous/blocking, genuinely in the stated position.\n\n6. IDIOM CHECK. This is a minimal, well-scoped test-harness fix: one new caller of an existing, unmodified public function, no new abstraction, no new module, no change to the atomic build-then-rename design or to tenant_fixture.ex's one-shot/no-retry contract. On the fixed ~1.8-2s startup cost paid by every partition regardless of whether that partition's tests touch a tenant fixture: the design doc (S7) explicitly raises and rejects a conditional/heuristic-gated alternative, reasoning that the correctness win (eliminating a 100%-reproducing, whole-CI-gate-blocking race) is not worth trading for a marginal, invocation-dependent saving, and that unconditional behavior is easier to reason about than conditional behavior tied to which test files happen to be selected. This is a considered, explicit tradeoff, not an oversight, and I agree with it -- a fixed ~2s tax on every partition's boot is negligible against a ~200s+ partition run and against the cost of a reproducible full-suite failure.\n\nNo scope creep, no abstraction introduced ahead of need, no crutch pattern, no supervision concern (test-support only, no process/OTP structure involved), no decision-record conflict. No new type-safety gap introduced (this is a boot-time side effect, not new transition/state logic). PASS -- gate open for TEST-DESIGNER."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

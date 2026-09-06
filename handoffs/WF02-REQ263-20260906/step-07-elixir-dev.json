@@ -1,0 +1,51 @@
+{
+  "handoff_id": "WF02-REQ263-20260906-step-07",
+  "run_id": "WF02-REQ263-20260906",
+  "workflow_id": "WF-02",
+  "step": "07",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF02-REQ263-20260906/step-07-elixir-dev.json",
+  "created_at": "2026-09-06T06:10:00Z",
+  "started_at": "2026-09-06T06:10:00Z",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "task": {
+    "description": "Revert PROVENANCE marker insertions from the 8 closed docs/status/requirement_status*.yaml volumes per the CODE-DESIGN-VALIDATOR-passed design amendment's §2.5 frozen-volume carve-out (lib/letflow/design/req237-zig-provenance-marking-convention.md), leaving the 3 correctly-in-scope files (docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, docs/anti-patterns.md) untouched, then verify and re-gate.",
+    "acceptance_criteria": [
+      "docs/status/requirement_status.yaml, .v2, .v3, .v4, .v5, .v6, .v7, .v9 restored byte-identical to origin/main (zero diff)",
+      "docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, docs/anti-patterns.md retain their PROVENANCE markers unmodified",
+      "mix test test/docs/requirement_status_invariants_test.exs: 20/20 passing",
+      "mix compile --warnings-as-errors and mix format --check-formatted clean",
+      "commit + push with rationale citing design §2.5"
+    ]
+  },
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-263"],
+    "artifacts_in": [
+      "lib/letflow/design/req237-zig-provenance-marking-convention.md (§2.5, CODE-DESIGN-VALIDATOR PASS at handoffs/WF02-REQ263-20260906/step-06-code-design-validator.json)",
+      "docs/status/requirement_status.index.yaml"
+    ]
+  },
+  "completed_at": "2026-09-06T06:10:00Z",
+  "result": {
+    "status": "PASS",
+    "summary": "Reconciled cleanly, no blockers.\n\n1. BASELINE VERIFICATION: `git fetch origin` then `git merge-base HEAD origin/main` returned 9c9788fac4491c9c771b4c0fd31f179a0b746948, identical to `git log origin/main -1`'s tip -- this branch is a direct fast-forward ahead of origin/main with no divergence, so origin/main is a valid, uncontaminated revert target. `git log HEAD ^origin/main -- <the 8 files>` showed exactly one commit touching them: 366b47a6 (DOC-UPDATER's original marker-insertion commit) -- confirming no other commit (this branch's design-amendment commit 534568a6, or the blank-line fix) touched these 8 files, so reverting to origin/main only undoes the one commit in question, nothing else.\n\n2. REVERT: `git checkout origin/main -- docs/status/requirement_status.yaml docs/status/requirement_status.v2.yaml docs/status/requirement_status.v3.yaml docs/status/requirement_status.v4.yaml docs/status/requirement_status.v5.yaml docs/status/requirement_status.v6.yaml docs/status/requirement_status.v7.yaml docs/status/requirement_status.v9.yaml`. Post-revert `git diff origin/main -- <same 8 files>` returned empty (exit 0, no output) -- byte-identical confirmed for all 8.\n\n3. IN-SCOPE FILES UNTOUCHED: `git diff origin/main -- docs/status/S1-release-2026-08-16.yaml docs/frontend/contract-gaps.md docs/anti-patterns.md` shows only the expected additive PROVENANCE marker lines (4 markers in S1-release, 1 each in contract-gaps.md and anti-patterns.md) -- confirmed via `grep -n PROVENANCE` on all three, markers present and untouched by the revert.\n\n4. TEST RUN: `mix test test/docs/requirement_status_invariants_test.exs` -- container `letflow-postgres-1` was already running (`docker ps` showed 'Up 10 minutes (healthy)'), reused directly, no duplicate started. Real output: `Running ExUnit with seed: 393259, max_cases: 32` / `Excluding tags: [:keycloak, :wasm_hang, :lua_wallclock_race]` / `....................` / `Finished in 1.2 seconds (1.2s async, 0.00s sync)` / `Result: 20 passed` -- 20/20, matching origin/main's clean baseline exactly (this is the same count CODE-DESIGN-VALIDATOR's step-06 handoff reported for origin/main, vs. its own observed 16/20 on the pre-revert branch state).\n\n5. COMPILE/FORMAT: `mix compile --warnings-as-errors` exited 0, no warnings. `mix format --check-formatted` exited 0, no unformatted files.\n\n6. COMMIT + PUSH: committed as c952f6b3 on feature/WF02-REQ263-20260906 (message cites design §2.5 and the frozen-prefix invariant/A6 mechanism as rationale), pushed to origin successfully (ab080d1c..c952f6b3).\n\nNo reconciliation problems encountered -- origin/main's tip was confirmed the correct clean baseline before use, exactly as the dispatch instructions asked me to verify rather than assume.",
+    "artifacts_out": [
+      "docs/status/requirement_status.yaml (reverted, byte-identical to origin/main)",
+      "docs/status/requirement_status.v2.yaml (reverted)",
+      "docs/status/requirement_status.v3.yaml (reverted)",
+      "docs/status/requirement_status.v4.yaml (reverted)",
+      "docs/status/requirement_status.v5.yaml (reverted)",
+      "docs/status/requirement_status.v6.yaml (reverted)",
+      "docs/status/requirement_status.v7.yaml (reverted)",
+      "docs/status/requirement_status.v9.yaml (reverted)",
+      "commit c952f6b3 on feature/WF02-REQ263-20260906 (pushed)"
+    ],
+    "issues": [],
+    "next_action": "Route to REVIEWER to re-gate the now-corrected, narrowed 3-file scope (docs/status/S1-release-2026-08-16.yaml, docs/frontend/contract-gaps.md, docs/anti-patterns.md) plus this revert commit itself (c952f6b3) -- confirm the 8-volume revert is complete/correct and the 3-file marker insertions remain valid, then route to TEST-DESIGNER/DOC-UPDATER per WF-02's normal next steps. This handoff does not mark REQ-263 done -- REVIEWER's gate is still pending, per core-directives.md's 'every producing step has a validating step' rule."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

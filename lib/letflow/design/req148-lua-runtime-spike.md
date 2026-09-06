@@ -20,12 +20,14 @@ Under decision 0014's chosen runtime, **all three clauses are unsatisfiable**:
 
 1. **tv-labs/lua is NOT LuaJIT.** It is a Lua 5.3 VM implemented in pure Elixir on the BEAM. There is no LuaJIT binary, no LuaJIT API surface, and no LuaJIT dialect (`jit.*`, `ffi.*`, `bit.*`, `bit32.*` do not exist).
 
+PROVENANCE (historical, not current decision authority):
 2. **There is no Zig C-interop in Letflow.** Letflow has no `.zig` files, no Zig toolchain, and no `@cImport`. The entire Lua runtime runs as BEAM bytecode.
 
 3. **There is no static linking step.** tv-labs/lua is a Hex package — a dependency declared in `mix.exs` and fetched from hex.pm. There is no C toolchain, no shared library, and no ABI surface to link.
 
 **The intent that IS satisfied:** the platform embeds a Lua runtime in-process with no external Lua runtime dependency at deploy time. A BEAM-only Hex dependency satisfies this intent more completely than static linking does — no C toolchain, no OS-level shared library, no ABI surface. Decision 0014's Reasoning §(a) records why this is a strictly better position than R-Co reached after ISS-0153 and ISS-0161.
 
+PROVENANCE (historical, not current decision authority):
 This restatement is explicit to prevent any future reader from mistaking a satisfied intent for a satisfied literal text — the exact failure mode `R-Co/src/lua/luajit_bindings.zig`'s own header records (LUA-01..16 "sat marked RELEASED" for three months while nothing executed).
 
 ---

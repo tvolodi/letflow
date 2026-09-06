@@ -15714,7 +15714,7 @@ requirements:
   - id: REQ-269
     title: "Apply the .zig provenance-marking convention to lib/letflow/design/, chunk 239-design-f: req083-task-routes-read.md through req171-wasm-host-api-read.md (closes ISS-0424 part 3c-16)"
     owner: DOC-UPDATER
-    status: pending
+    status: done
     stage: S6
     description: >
       Applies REQ-237's design decision

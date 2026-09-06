@@ -1,5 +1,6 @@
 # REQ-085 — Task routes 2/2, write path (`Letflow.Tasks`, `Letflow.Engine`, `Letflow.Routers.Tasks`)
 
+PROVENANCE (historical, not current decision authority):
 **Requirement:** REQ-085 (`docs/requirements.yaml`, stage S4; full `description` and all 7
 `acceptance_criteria` read directly from that entry —
 `grep -n "id: REQ-085" -A 45 docs/requirements.yaml`).
@@ -88,10 +89,12 @@ tables only, matching REQ-083's design doc's own convention and rigor.
   temporary pending REQ-131.
 - `docs/agents/instructions/security-invariants.md` — INV-1, INV-5, INV-7, INV-8 read in
   full (each section, plus "How to verify" and the "Applicability note").
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\routes\tasks.zig` — `handleComplete` (L341-
   ~470, including the ISS-0619 GROUP/ROLE-pool ownership-check block this design does
   **not** port, see §3.1's scope note), `handleClaim` (L551-608), `handleAssign` (L628-
   713), `handleReassign` (L716-820), `extractUserIdFromBody` (L823-841).
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\tasks\store.zig` — `claimTask` (L761-829,
   including its atomic conditional-`UPDATE`-then-diagnostic-`SELECT` shape and its
   `claimed_by`-column-only `WHERE` clause, which never inspects `assignee_type`/
@@ -146,6 +149,7 @@ separate "claimed" boolean to be independently true.
 `POST /tasks/:id/complete` already uses — not a new `:TasksClaim` key, and not
 `:TasksAssign`.** Two independent lines of evidence, both read in full at §0:
 
+PROVENANCE (historical, not current decision authority):
 1. **R-Co itself.** `handleClaim` (`tasks.zig` L568-572) calls `evaluateAccess(...,
    .TasksComplete)` — not `.TasksAssign`. R-Co treats claiming as "any caller who can
    complete tasks may claim one," an operator-adjacent action available to ordinary task
@@ -223,6 +227,7 @@ guarantee EE-12 states for `Letflow.Engine`, restated here since it is a distinc
 
 ### 3.1 Locking shape — `Ecto.Multi` + `SELECT ... FOR UPDATE`, not a bare conditional `UPDATE`
 
+PROVENANCE (historical, not current decision authority):
 **Decision: every one of the three new functions uses the same `Ecto.Multi` +
 row-lock-then-check-in-Elixir shape `complete_task/3` already established — not R-Co's
 own bare `UPDATE ... WHERE ... RETURNING` atomicity-without-an-app-level-lock idiom.**

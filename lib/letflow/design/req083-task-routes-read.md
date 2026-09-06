@@ -1,5 +1,6 @@
 # REQ-083 — Task routes 1/2, read path (`Letflow.Tasks`, `Letflow.Routers.Tasks`)
 
+PROVENANCE (historical, not current decision authority):
 **Requirement:** REQ-083 (`docs/requirements.yaml`, stage S4; full `description` and all
 7 `acceptance_criteria` read directly from that entry, per `core-directives.md`'s "Load
 Scoped Context, Not Whole Files" — `awk '/^  - id: REQ-083$/,/^  - id: REQ-084$/'
@@ -93,6 +94,7 @@ rework.
 - `lib/letflow/engine/instance_projection.ex` — confirmed `correlation_key` (`:string`,
   nullable) exists on `instance_projections`, the join `get_task/2`'s detail response
   needs to match R-Co's `serializeTaskDetail` shape (§6.2).
+PROVENANCE (historical, not current decision authority):
 - `C:\Users\tvolo\dev\ai-dala\R-Co\src\api\routes\tasks.zig` (the three handler bodies in
   full: L89-290 `handleList`, L290-322 `handleGetById`, L960-981 `handleInbox`, plus
   `errorResult`/`serializeTaskDetail`) and
@@ -103,6 +105,7 @@ rework.
 
 ---
 
+PROVENANCE (historical, not current decision authority):
 ## 1. `src/tasks/store.zig` boundary — ported vs. not ported (AC6, moduledoc-mandatory)
 
 **Ported by this requirement** (both **read-only** query operations `handleList`/
@@ -115,6 +118,7 @@ rework.
 | `taskStatusToString`/`parseTaskStatus` (L1150-1163, L1143-1149) | `Letflow.Engine.Task`'s existing `Ecto.Enum` cast/dump (already shipped, REQ-043) — no new function | R-Co's manual string↔enum port has no Elixir equivalent to write; `Ecto.Enum` already does this |
 | `parseUuid`/`uuidToHex` (L1173+, and the route file's own `uuidToHex`) | `Ecto.UUID.cast/1` / Ecto's native string-form UUIDs | Elixir has no raw 16-byte UUID type in ordinary use elsewhere in this codebase (matching `req020`'s own precedent for the identical translation) |
 
+PROVENANCE (historical, not current decision authority):
 **Not ported by this requirement** (every other `pub fn`/error set in `store.zig`,
 enumerated so the boundary is explicit rather than approximate, per AC6):
 
@@ -233,6 +237,7 @@ this function; `list_tasks/2` itself has no notion of "which endpoint called me.
      that same caller class (§3.4/§5.3). `group_ids`/`role_names` are plain string lists
      built by the router (§5) via `resolve_principal_scope/2` (§3.4) — this function never
      itself calls `Letflow.Identity`.
+PROVENANCE (historical, not current decision authority):
 5. Cursor: if `params.cursor` is non-`nil`, decode it first (`Letflow.Api.Pagination.
    decode_cursor(cursor, "T:", 2)`, §5's own pre-step per REQ-067 §0.1's "parse/validate
    at the route-handler/call-site layer" convention — `list_tasks/2` receives an
@@ -317,6 +322,7 @@ different user Y" framing generalized to any non-matching assignee).
         principal_scope()
 ```
 
+PROVENANCE (historical, not current decision authority):
 **This is the requirement's own explicit instruction — "resolve group and role
 membership through Letflow.Identity rather than reimplementing the resolution" — and it
 is also the one place this design's read path goes beyond what R-Co's own shipped
@@ -447,6 +453,7 @@ GET /tasks/inbox  -> Letflow.Tasks.list_tasks/2 (forced scope) (:TasksList polic
 GET /tasks/:id    -> Letflow.Tasks.get_task/2                  (:TasksGetById policy key)
 ```
 
+PROVENANCE (historical, not current decision authority):
 **Route-match ordering — `/tasks/inbox` before `/tasks/:id` (a real, checkable
 requirement, not a stylistic note):** `Plug.Router`'s `get "/tasks/:id"` would otherwise
 also match the literal path segment `"inbox"` as `id = "inbox"`, which would then fail
@@ -489,6 +496,7 @@ defp with_authorized_scope(conn, method, path_template, fun)
 
 ### 5.2 `handle_list/3` (`GET /tasks`)
 
+PROVENANCE (historical, not current decision authority):
 1. Parse query params: `status` (via a small `parse_status_param/1` this router or
    `Letflow.Tasks` defines — `nil` → `{:ok, nil}`; `"PENDING"|"COMPLETED"|"CANCELLED"` →
    `{:ok, :pending|:completed|:cancelled}`; anything else → `{:error, :invalid_status}` →
@@ -560,6 +568,7 @@ test-breaking surface — every existing `endpoint_policy_key/2` call site is
 pattern-matched by exact string, so adding one new clause cannot alter any existing
 route's resolution).
 
+PROVENANCE (historical, not current decision authority):
 1. Parse `status`/`instance_id` — **not accepted** by `GET /tasks/inbox` (R-Co's own
    `handleInbox` signature takes only `cursor`/`page_size`, §0) — any `status=`/
    `instance_id=` query param present is silently ignored (not an error; matching R-Co's
@@ -680,6 +689,7 @@ not-mandated performance question (supporting indexes).
 
 ## 9. Acceptance-criteria traceability
 
+PROVENANCE (historical, not current decision authority):
 | REQ-083 acceptance criterion (verbatim) | Concrete design element |
 |---|---|
 | "each of the three handlers has an end-to-end test through the real router asserting status and response shape, with list and inbox cursor-paginated via REQ-067 across at least two pages" | §5.2-§5.4 (all three routes wired through the real `Letflow.Routers.Tasks`); §3.1 points 5-9 (cursor mechanism reused from REQ-067 verbatim) — TEST-DESIGNER's job to write the ≥2-page test, this design's job is that the mechanism supports it (no dup/gap, same guarantee REQ-067 §10 already establishes) |

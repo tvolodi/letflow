@@ -234,3 +234,34 @@ history:
       re-verified on main: grep -c '\.zig' across all 13 files matches
       the step-00 baseline exactly, PROVENANCE markers present in all 13.
       Queue task 505 released.
+  - req: REQ-269
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-06T01:22:17Z"
+    note: >
+      Applied REQ-237's .zig provenance-marking convention to
+      lib/letflow/design/req083-task-routes-read.md through
+      req171-wasm-host-api-read.md (13 files, sparse numbering) (closes
+      ISS-0424 part 3c-16, queue task 507, feature/WF02-REQ269-20260906).
+      This is chunk 239-design-f of eight lib/letflow/design/-scope
+      chunks (REQ-264..271). 71 markers inserted across 13 files
+      (10+5+20+11+7+2+2+1+1+4+5+2+1), 0 deletions; 120 .zig citation
+      lines identical before/after. Notable edge case: req151-lua-
+      sandbox.md's citation sits inside a Markdown blockquote --
+      DOC-UPDATER inserted a `> `-prefixed marker to preserve blockquote
+      syntax rather than splitting it, a shape not literally enumerated
+      in REQ-237's design doc. REVIEWER independently verified this by
+      analogy to the design's own ISS-0510 YAML-comment-line amendment
+      (same marker text, prefix added only to avoid corrupting
+      surrounding syntax) and judged it defensible, not an unauthorized
+      new convention -- recommending (non-blocking) a follow-up
+      amendment formally naming this shape for consistency ahead of
+      REQ-270/271, the two remaining lib/letflow/design/ chunks.
+      REVIEWER also independently re-verified every marker count via
+      `git diff | grep -v PROVENANCE` returning empty (every changed
+      line is exclusively a marker addition), confirmed
+      CLAUDE.md/README.md/docs/migration/README.md/sibling design files
+      untouched, and confirmed no YAML frontmatter in any of the 13
+      files -- PASS (handoffs/WF02-REQ269-20260906/step-02d-reviewer.json).
+      Docs-only, no mix compile/format/test applicable. ORCH will merge
+      and release queue task 507 status:done.

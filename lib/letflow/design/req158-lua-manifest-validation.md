@@ -56,6 +56,7 @@ audit-persistence half.
   caution that the list is "a starting position to verify, not a clearance" (§512–514) —
   this design's own traceability table (§7) is what verifies it for REQ-158's slice.
   Nothing else in that record bears directly on manifest shape or hashing.
+PROVENANCE (historical, not current decision authority):
 - `R-Co/src/lua/manifest.zig` — **attempted via `find` and confirmed absent in this
   checkout** (no result for `find / -iname "manifest.zig"` or any `R-Co` directory at
   all). This matches the established pattern this session already hit for
@@ -191,12 +192,14 @@ is built" precedent (REQ-157 design §2.5).
 
 ### 2.4 R-Co field carried over vs. dropped — required moduledoc content (AC6)
 
+PROVENANCE (historical, not current decision authority):
 Per §0, `R-Co/src/lua/manifest.zig` is **not present in this checkout** — confirmed by
 `find` returning no result for the file or for any `R-Co` directory at all. This design
 cannot state "field X was in the original and is deliberately dropped for reason Y"
 against a source it has not read. What it states instead, and what must appear in the
 shipped module's moduledoc verbatim in substance, is:
 
+PROVENANCE (historical, not current decision authority):
 > This module's `script_id`/`capabilities` shape is derived from
 > `docs/requirements.yaml` REQ-158's own restatement of LUA-07 and REQ-157's already-built
 > `capability()` type — not from reading `R-Co/src/lua/manifest.zig` directly, because
@@ -497,6 +500,7 @@ substitute its own outcome for it — `Letflow.Engine.Lua.Manifest` has no depen
 
 ## 7. Acceptance-criteria traceability (all 7, verbatim from `docs/requirements.yaml` REQ-158)
 
+PROVENANCE (historical, not current decision authority):
 | # | Acceptance criterion (verbatim) | Design element |
 |---|---|---|
 | 1 | "a test loads a script whose manifest has been modified after registration and asserts it is REJECTED, which is LUA-07's own acceptance criterion" | §3.1 `validate_at_load/3`, §4.2/§4.3 (hash sensitivity to a `capabilities` edit), §5.3 (why the hash must cover the manifest for this to be detectable at all) |
@@ -538,6 +542,7 @@ substitute its own outcome for it — `Letflow.Engine.Lua.Manifest` has no depen
 
 ## 9. Open questions — not silently resolved
 
+PROVENANCE (historical, not current decision authority):
 **OQ-1 (non-blocking, provenance) — `R-Co/src/lua/manifest.zig` is not present in this
 checkout (§0, §2.4).** Confirmed absent by `find` for both the specific file and any
 `R-Co` directory at all. This design's manifest shape (`script_id` + `capabilities`) is

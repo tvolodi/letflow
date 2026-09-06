@@ -11,6 +11,7 @@ signature, a type, a table shape or a schema-field list. No function body, no `.
 Every citation below was re-read this session and the line numbers re-confirmed against the current
 working tree / R-Co tree; nothing here is carried from memory.
 
+PROVENANCE (historical, not current decision authority):
 | Source | Line(s) confirmed this session | What it settles |
 |---|---|---|
 | `docs/requirements.yaml` REQ-109 | 4684–4936 (13 acceptance criteria) | The full scope, the three deliverables, what is deferred |
@@ -49,6 +50,7 @@ conflated these and mis-scoped the issue onto REQ-047's OQ-3. This design names 
 mistake is not repeatable. **This block is the substance of what must appear in
 `Letflow.Engine.VariableSchema`'s moduledoc** (AC10, item 1).
 
+PROVENANCE (historical, not current decision authority):
 | Concept | R-Co location | What it actually is | Scope |
 |---|---|---|---|
 | `tasks.form_schema` | populated at activation from `node.attributes["form_schema"]` (`src/engine/instance.zig:5490`, `extractFormSchemaJson`); served in the task-detail response (`src/api/routes/tasks.zig:896`) | A UI form-**rendering** payload. **R-Co never validates submitted output against it.** | **OUT.** REQ-047's OQ-3 stays open; answering it would not close ISS-0063. |
@@ -125,6 +127,7 @@ requirement's job, and it should find this paragraph.
 Missing either half is the failure mode AC1 tests both ends of: the manifest entry by inspection, the
 apply by provisioning a tenant and reading the table back.
 
+PROVENANCE (historical, not current decision authority):
 Corroboration that per-tenant is right and R-Co agrees: R-Co's own DDL comment at `012:27-30`
 ("ISS-0641 / GH-637: PER_TENANT … FKs to tenant-schema `process_definitions(id)`"), and
 `R-Co src/definition/sandbox_pool.zig:126`, which clones `variable_schemas` per tenant schema.
@@ -245,10 +248,12 @@ database — the same pure/orchestration split `req049-variable-merge.md` §7 es
   on the transaction's connection.
 - **Order of operations is load-bearing (AC7):** validate `opts[:prefix]` **first**, before anything
   else and before any query is constructed or issued. Then validate `definition_id`. Only then query.
+PROVENANCE (historical, not current decision authority):
 - One query, not one per key, matching R-Co's own doc comment "Issues one SELECT on `variable_schemas`;
   no writes" (`instance.zig:2318`):
   `from(vs in VariableSchema, where: vs.definition_id == ^definition_id, select: {vs.variable_key, vs.json_schema})`,
   executed as `repo.all(query, prefix: prefix)`. Result reduced into a `schema_map()`.
+PROVENANCE (historical, not current decision authority):
 - **The query is not filtered by candidate key.** R-Co selects every row for the definition and filters
   in memory (`instance.zig:2345-2358` then `schema_map.get(key)`); this is a port, the row count per
   definition is small and bounded by the definition's declared variables, and one stable query plan is
@@ -315,6 +320,7 @@ concrete benefit: the `ValidationFailure.field_path` values that come back read 
 
 This is the REQ-109 replacement for `req049-variable-merge.md` §7.2's table.
 
+PROVENANCE (historical, not current decision authority):
 | `JsonSchema.validate/2` result | `validation_outcome()` | Rationale |
 |---|---|---|
 | `[]` | `:ok` | Schema-compatible (REQ-049 AC2) |
@@ -347,6 +353,7 @@ Behaviour, in order:
    `incoming_variables`. Formally `Map.keys(incoming_variables)` filtered by
    `Map.has_key?(current_variables, K)` — the same `overwrite_keys` partition
    `req049-variable-merge.md` §3.1 step 2 defines, recomputed here because `merge/3` does not expose it.
+PROVENANCE (historical, not current decision authority):
 3. **Fast path**: if the candidate list is empty → `{:ok, %{}}`, **no query issued**. This is R-Co's own
    `if (output_variables.count() == 0)` fast path (`instance.zig:2331`) generalised to "nothing to
    validate." It runs *after* step 1, so AC7's fail-closed test still gets `{:error, :missing_prefix}`
@@ -431,6 +438,7 @@ answer available.
 
 ### 5.4 What does **not** change
 
+PROVENANCE (historical, not current decision authority):
 - `VariableMerge.merge/3` — untouched. Its two-phase validate-all-then-apply semantic
   (`variable_merge.ex:14-20`, `req049` §3.2) is already implemented and is **not** re-implemented in the
   caller. R-Co's `instance.zig:2300-2304` is the source it ports.
@@ -485,6 +493,7 @@ failure of every completion for that definition.
 **Rule: a stored `json_schema` that is not a map is treated as no constraint — the key is omitted from
 `variable_validations` (§4.2 step 2), exactly as if no row existed.**
 
+PROVENANCE (historical, not current decision authority):
 **This is a Letflow-specific defensive rule with a related — but strictly narrower — R-Co precedent, not
 a literal port. Stated precisely so nobody over-claims the citation:** `instance.zig:2426-2428`'s
 "Unparseable schema string → treat as no constraint" is the `else` arm of `std.json.parseFromSlice`, so
@@ -578,9 +587,11 @@ now-reachable path works (§5.2 step 5), and REQ-109 is the proof.
 
 ### 8.3 Lines 18–20 — ISS-0075 claim 2 (AC9c)
 
+PROVENANCE (historical, not current decision authority):
 Today: §3.2's abort-the-entire-batch semantic is "a reasoned reconstruction, not verified against
 `instance.zig`'s literal source, since no R-Co source tree is reachable in this environment."
 
+PROVENANCE (historical, not current decision authority):
 The tree **is** reachable and **the reconstruction was correct**. **Replace** the caveat with a
 **positive citation** — not merely delete it. `instance.zig:2300-2304` documents the ISS-202 two-phase
 merge verbatim: "Phase 1: Validate ALL output variables … with NO state change. On any failure, return
@@ -641,6 +652,7 @@ file fails the gate even though the words exist somewhere.
 
 ### 9.1 The registration (INSERT) path — REQ-078 and REQ-082
 
+PROVENANCE (historical, not current decision authority):
 REQ-109 builds the table, the Ecto schema, the lookup and the wiring. It builds **no path that writes a
 `variable_schemas` row.** R-Co scoped it identically: variable schemas are "created during process
 definition loading (existing mechanism, not part of ISS-202)"
@@ -652,7 +664,9 @@ Those map onto two already-pending S4 requirements, whose descriptions REQ-109 h
 carry the obligation (confirmed in `docs/requirements.yaml` at 4341–4360 and 4522–4540, and both now
 carry `REQ-109` in `depends_on`):
 
+PROVENANCE (historical, not current decision authority):
 - **REQ-078** — `solution_packs.zig` `handleInstall` (L110).
+PROVENANCE (historical, not current decision authority):
 - **REQ-082** — `definitions.zig` `handleImport` (L1126), plus `handleCreate`/`handlePut` where the
   submitted document carries them.
 
@@ -726,6 +740,7 @@ criterion; the divergence is flagged for REVIEWER.**
 REQ-109's AC5 pins that with an explicit test ("a brand-new key … whose value would violate a seeded
 schema for that same key is **still inserted unvalidated**"). §4.5 step 2 implements exactly that.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co does not do this.** Confirmed by direct read this session: `mergeVariables`'s Phase 1
 (`instance.zig:2390-2430`) iterates **every** key of `output_variables`, checks `schema_map.get(key)`
 first, and only *afterwards* — at `:2432`, under a separate `if (current_vars.get(key))` — does
@@ -738,6 +753,7 @@ first write of that variable — the one most likely to be wrong — escapes it.
 checked. That is a strange contract to explain to a process author, and it means "registered a schema
 for `amount`" does not mean "`amount` is always valid."
 
+PROVENANCE (historical, not current decision authority):
 **Why this design does not resolve it:** AC5 is explicit and REQ-049 §3.1 is gate-approved shipped
 behaviour in `variable_merge.ex`. Changing it would alter `merge/3`, which REQ-109's own description
 forbids ("do not re-implement it in the caller"), and would fail AC5. **REVIEWER should decide whether
@@ -754,6 +770,7 @@ forbids substituting a current version for a pinned one, so that "a newer catalo
 mid-flight does not affect an in-flight instance." A merge-time **live** read of `variable_schemas`
 (§4.1) can expose an in-flight instance to a schema edited after it started.
 
+PROVENANCE (historical, not current decision authority):
 **R-Co does both**: the live read at merge (`instance.zig:2318`) and a digest pinned at start
 (`pin_resolver.zig:428`/`:490`). **REQ-109 ports the live read** and routes the tension to REVIEWER.
 
@@ -789,12 +806,14 @@ must not assume §3.2's changeset already guarantees this.
 
 **Status: recorded for REVIEWER. Not this requirement's to change.**
 
+PROVENANCE (historical, not current decision authority):
 R-Co's error-code table — a 10-variant `error_type_str` switch beginning at
 `R-Co/src/engine/instance.zig:4060`, with `.SCHEMA_VIOLATION => "SCHEMA_VIOLATION"` at `:4062`
 (confirmed by direct read this session) — names this variant **`SCHEMA_VIOLATION`**. Letflow uses
 **`error_type: :variable_schema_rejected`** (`lib/letflow/engine.ex:1548`, and
 `variable_merge.ex:98`'s `reason :: :variable_schema_rejected`).
 
+PROVENANCE (historical, not current decision authority):
 **Provenance of the divergence:** `lib/letflow/engine/execution_error.ex:5` cites R-Co's
 `setInstanceError()` at `~L3078` and its error-code table at `~L4067`, marking both approximate because
 R-Co was believed unreachable when REQ-061 was written. R-Co **is** reachable and **both citations are
@@ -832,6 +851,7 @@ left dangling. **`req049-variable-merge.md` is not edited by this requirement** 
 gate-approved design record); the supersessions are recorded in `engine.ex`'s and `variable_merge.ex`'s
 moduledocs, which is what AC8 and AC9 verify.
 
+PROVENANCE (historical, not current decision authority):
 | REQ-049 artefact | Disposition | Where recorded |
 |---|---|---|
 | §7.1 `{"value" => <raw>}` wrapper convention | **Superseded** by §4.3's `%{K => value}` / `%{"type" => "object", "properties" => %{K => schema}, "required" => [K]}`, the shape already proven at `sub_process.ex:179-185` | `engine.ex` moduledoc (AC8) |

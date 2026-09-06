@@ -46,6 +46,7 @@ has also landed.
 
 ## 2. What R-Co Had, and Why It Does Not Port
 
+PROVENANCE (historical, not current decision authority):
 R-Co's `src/lua/instruction_limiter.zig` (126 lines) built two invariants this codebase
 does not have and must not look for:
 

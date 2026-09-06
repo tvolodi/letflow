@@ -153,6 +153,7 @@ parity with Lua, not to a rich structured-type interface).
 
 ## §2 — R-Co's stub settles nothing; this choice is Letflow's own
 
+PROVENANCE (historical, not current decision authority):
 `R-Co/src/wasm/wasmtime_bindings.zig`'s header, quoted verbatim from
 `docs/requirements.yaml`'s REQ-163 entry and from decision 0014 (both already quote it
 directly from the live R-Co tree at `c:\Users\tvolo\dev\ai-dala\R-Co\`, which is a
@@ -319,6 +320,7 @@ See the Deliverables Summary below for the actual command run at commit time.
 
 ## Deliverables Summary
 
+PROVENANCE (historical, not current decision authority):
 | Item | Result |
 |---|---|
 | Decision | **Core modules** (not the component model) |

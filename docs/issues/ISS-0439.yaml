@@ -95,6 +95,7 @@ related:
 depends_on_queue_tasks:
   - 438
 source: >
+  PROVENANCE (historical, not current decision authority):
   User question 2026-09-02: "what can we introduce at this stage / is it
   required at all", citing 1C's typed-object model. Deferral option chosen
   by the user when the tradeoff was presented. R-Co's untyped entity design

@@ -62,6 +62,7 @@ resolution_note: >
   lines, or GitHub timeline data) rather than assumed from the closure
   state:
 
+  PROVENANCE (historical, not current decision authority):
   GH#329/ISS-0101 -- GENUINELY RESOLVED. PR #337 (merged 2026-08-20T04:28:01Z,
   "Fixes #329") found and fixed a real pre-existing gap:
   lib/letflow/engine/sub_process.ex's build_completion_multi_from_merge/12
@@ -89,6 +90,7 @@ resolution_note: >
   not a mistaken closure. ISS-0107.yaml backfilled to resolved, cross-linked
   to ISS-0171.yaml; ISS-0171.yaml's own related: list updated to point back.
 
+  PROVENANCE (historical, not current decision authority):
   GH#326/ISS-0098 -- GENUINELY RESOLVED, verified live by THIS run (the
   closure itself had zero evidence trail, but the underlying question is
   now actually answerable and the design's assumptions turn out correct).
@@ -104,6 +106,7 @@ resolution_note: >
   already implements both confirmed behaviours. ISS-0098.yaml backfilled to
   resolved.
 
+  PROVENANCE (historical, not current decision authority):
   GH#324/ISS-0096 -- MISTAKEN CLOSURE, REOPENED. Zero comment, no linked PR,
   no commit_id on the close event -- the only one of the four with no
   evidence trail of any kind (unlike #329/#357, which had real merged PRs

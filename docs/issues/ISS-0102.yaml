@@ -5,6 +5,7 @@ discovered_in_run: WF02-REQ112-20260820
 discovered_at: "2026-08-20T03:08:10Z"
 severity: MINOR
 description: >
+  PROVENANCE (historical, not current decision authority):
   Triaged as CLASS B during REQ-112's sweep of ISS-0076 item 2's remaining
   "R-Co source unavailable" claims. OQ-5 (MINOR): method defaults to :POST
   -- "EXT-01's typical default for a body-carrying dispatch" -- not verified
@@ -21,6 +22,7 @@ queue_task_id: null   # filed directly via gh (no ORCH intermediary in this sess
 github_issue: https://github.com/tvolodi/letflow/issues/330
 status: resolved
 resolution: >
+  PROVENANCE (historical, not current decision authority):
   R-Co/src/engine/service_task.zig confirms the `method` field's parse block
   defaults unconditionally to `.POST` when `"method"` is absent from the
   node's JSON config (`break :blk .POST;`), matching Letflow's design

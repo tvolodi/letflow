@@ -1,4 +1,5 @@
 id: ISS-0424
+# PROVENANCE (historical, not current decision authority):
 title: "Establish Letflow as an independent product: reframe R-Co as historical provenance, retire the 131 parity-justifications, keep the .zig audit trail"
 discovered_by: ORCH
 discovered_in_run: ORCH-adhoc-20260902-arch-review
@@ -12,6 +13,7 @@ description: >
   the user in preference to a total-removal alternative that was
   offered and declined.
 
+  PROVENANCE (historical, not current decision authority):
   MEASURED SCOPE (repo-wide, excluding .git/deps/_build/node_modules):
   6070 R-Co mentions across 870 files. Of these, ~1235 are .zig
   source-path citations (provenance), 131 are parity-justifications in
@@ -49,6 +51,7 @@ description: >
   if the code is self-evident. Do NOT mechanically find-and-replace --
   each needs a judgement call.
 
+  PROVENANCE (historical, not current decision authority):
   (3) PROVENANCE -- the ~1235 .zig source-path citations. KEEP THESE, but
   demote them from inline decision-authority to clearly-marked historical
   provenance. They are the audit trail explaining why 179 completed
@@ -96,6 +99,7 @@ orch_routing_note: >
   edits and was done directly by ORCH, merged via PR #916 alongside
   this note.
 
+  PROVENANCE (historical, not current decision authority):
   Parts 2 and 3 were routed to REQ-ANALYST, which drafted 10
   requirements into docs/requirements.yaml (stage S6, status: pending):
   REQ-232 (routers), REQ-233 (engine/wasm/lua), REQ-234 (definitions),
@@ -116,6 +120,7 @@ orch_routing_note: >
   requirements' completion -- closing it directly would misrepresent
   Parts 2 and 3 as done when only Part 1 has landed.
 
+  PROVENANCE (historical, not current decision authority):
   DOC-UPDATER (2026-09-05, WF02-REQ242-20260905): Part 2 is now FULLY
   COMPLETE -- all seven of its requirements are done:
   REQ-232 (routers, PR #928), REQ-233 (engine/wasm/lua, PR #939),

@@ -1864,3 +1864,5 @@
 2026-09-05T21:39:20Z | DISPATCH | WF-02 | WF02-REQ260-20260905-step-00 | ORCH -> DOC-UPDATER | Step 00 PASS -- branch feature/WF02-REQ260-20260905 off main@4f7c7596, queue task 498, REQ-260 (chunk 239f, ISS-0424 part 3c-7, docs/issues/*.yaml ISS-0001..ISS-0079 subset carrying .zig, 11 files)
 2026-09-05T21:42:02Z | DISPATCH | WF-02 | handoffs/WF02-REQ260-20260905/step01-doc-updater.json | ORCH -> DOC-UPDATER | PENDING
 2026-09-06T02:03:01Z | DISPATCH | WF-02 | WF02-REQ271-20260906/step-00-git-setup.json | ORCH -> ORCH | COMPLETED PASS
+2026-09-06T02:28:37Z | MERGE | WF-02 | WF02-REQ271-20260906 | ELIXIR-DEV(role) -> ORCH | PASS -- PR #1018 squash-merged to main @ 8e6e936c, CI green (backend 6m38s, frontend). Queue task 509 released done. REQ-271 done. All 8 siblings of lib/letflow/design/ .zig provenance-marking split (REQ-264..271) now complete.
+2026-09-06T02:28:37Z | DONE | WF-02 | WF02-REQ271-20260906 | ORCH | REQ-271 done, queue task 509 released, all 8 lib/letflow/design/ split siblings (REQ-264..271) complete

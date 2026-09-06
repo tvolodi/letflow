@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF02-REQ229-20260906-step-01d",
+  "run_id": "WF02-REQ229-20260906",
+  "workflow_id": "WF-02",
+  "step": "01d",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ229-20260906/step-01d-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-06T23:15:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-229"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ229-20260906-step-01b",
+      "WF02-REQ229-20260906-step-01c"
+    ],
+    "artifacts_in": ["lib/letflow/design/req229-entity-record-projection-replay.md"],
+    "branch_name": "feature/WF02-REQ229-20260906",
+    "base_commit": "9613d348"
+  },
+  "task": {
+    "description": "Re-verify CODE-DESIGNER's rework of the entity_def_version DELETE-case fold defect in the REQ-229 design doc, and confirm nothing else regressed."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Re-read lib/letflow/entities/records.ex directly: upsert_record_latest/3's :delete clause (lines 289-298) sets entity_def_version from ctx.definition.logical_shape_version, where ctx.definition comes from delete_record/2's own fresh fetch_active_definition/2 call (line 201) -- identical rule to the :update clause, not carried forward from the pre-delete row. base_payload/1 (lines 259-265) is called unconditionally for all three event kinds and always includes entity_def_version, confirming the DELETE event's own payload genuinely carries this freshly-computed value. Grepped all entity_def_version occurrences in the corrected design doc (lines 144, 216, 219, 220, 229-230, 238, 250, 255, 261, 273, 468-470): the DELETE-case rule is now stated correctly and consistently everywhere -- fold table row (line 220), §3.4's choice statement (lines 229-230), and its full justification (lines 234-277) all state entity_def_version is re-decoded from the DELETE event's own payload, identical to the UPDATE rule, never carried forward. field_values's DELETE-case rule (retained unchanged at pre-delete value) is still correctly and separately stated in the same fold row and justification, and was not disturbed by the rework. Grepped for defmodule/def/schema-do patterns across the whole doc: zero matches -- all fenced blocks contain only @type/@spec/@typep declarations, no executable function bodies. Re-confirmed the rest of the design is unchanged from the prior near-pass assessment: §1's table-ownership correction, §0/§3.1's EventStore.read/2 and Letflow.Engine.Reconstruction precedents (fold-per-event-type structure, @doc false-exported-for-reuse convention, unrecognized-event-type-is-an-error discipline), §3.3 step 4's payload record_id string-comparison filtering, §4.3's per-entity-type transaction/batching rationale (lock duration, partial-success recoverability, AC3's own single-type scope), and §8's traceability table covering all 6 acceptance criteria plus the two explicit scope-boundary rows. No regressions found. Design is unambiguous and complete; cleared to proceed to ELIXIR-DEV."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

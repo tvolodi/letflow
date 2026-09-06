@@ -186,3 +186,27 @@ history:
       InstancesTest, REQ-200 actor-display-name test) -- structurally
       confirmed non-overlapping with this PR's docs-only diff before
       rerunning. Queue task 502 released.
+
+  - req: REQ-267
+    event: done
+    agent: ORCH
+    at: 2026-09-06T00:10:27Z
+    note: >
+      Applied REQ-237's PROVENANCE marker convention (chunk 239-design-d,
+      req049-variable-merge.md through req066-api-error-response.md, 13
+      lib/letflow/design/ files) via WF-02 (DOC-UPDATER Step 01, REVIEWER
+      PASS Step 02). No TEST-DESIGNER step -- doc-only mechanical change,
+      no test coverage applicable, consistent with REQ-264's precedent.
+      REVIEWER independently re-derived the verdict from the diff itself:
+      per-file .zig counts unchanged (9/28/12/4/2/3/17/5/9/17/3/11/21
+      before=after), marker placement correct including the
+      H1-title-as-first-line edge case, req062's list-continuation
+      re-indentation confirmed content-preserving, req066's divergence
+      note byte-identical across a line-wrap, no scope leakage into
+      sibling chunks or lib/ code. Merged via PR #1012 (plain merge,
+      commit 007d9181) with no rebase needed (main had not moved since
+      branch creation) after both duplicate CI trigger runs went green
+      (frontend + backend gates, 4/4). Post-merge, independently
+      re-verified on main: grep -c '\.zig' across all 13 files matches
+      the step-00 baseline exactly, PROVENANCE markers present in all 13.
+      Queue task 505 released.

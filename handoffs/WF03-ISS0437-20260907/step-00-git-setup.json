@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-00",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0437-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T12:06:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0437.yaml",
+      "lib/letflow/design/req216-admission-control-core.md",
+      "lib/letflow/admission.ex (or wherever Letflow.Admission actually lives)",
+      "docs/migration/decisions/0006-*.md"
+    ],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0437: REQ-216's own requirement text describes per-tenant fair-share tracking against tenants that have made an admission attempt in a ROLLING WINDOW, but the shipped Letflow.Admission GenServer retains every tenant's entry in state.tenants indefinitely once created -- no time-decay/eviction mechanism at all. This was found and self-acknowledged by CODE-DESIGN-VALIDATOR during REQ-216's own design gate (OQ-2), not silently missed. Two legitimate resolution paths are named in the issue, neither prescribed: (a) design and implement an actual rolling-window eviction mechanism for Letflow.Admission's per-tenant state, or (b) make an explicit decision that unbounded retention is PERMANENTLY acceptable given decision 0006's own tenant-cardinality bound, and correct REQ-216's design doc language to remove the stale rolling-window reference rather than leaving a requirement-vs-implementation mismatch on file. Read REQ-216's full requirement text in docs/requirements.yaml, the actual lib/letflow/design/req216-admission-control-core.md design doc (especially its own OQ-2 self-acknowledgment), the actual Letflow.Admission module's current state shape and tenant-entry lifecycle, and docs/migration/decisions/0006-*.md's tenant-cardinality bound, then recommend which of (a) or (b) is correct given the real operational stakes (how large can state.tenants actually grow in practice? is memory/lookup-time growth from unbounded tenant entries a genuine concern at decision 0006's stated tenant-count ceiling, or is it negligible?)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0437-20260907 created off main @ 50b5b0f3."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

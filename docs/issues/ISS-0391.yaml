@@ -49,7 +49,27 @@ source: >
   here for ORCH to act on at Step Final).
 queue_task_id: 391
 github_issue: 770
-status: open
+status: resolved_via_duplicate
+resolution: >
+  Resolved 2026-09-07. ISS-0393 (the superset duplicate this issue's own
+  duplicate_note anticipated) was picked up first, and by the time R-Co
+  became reachable (user-provided GitHub remote,
+  https://github.com/tvolodi/R-Co, commit
+  d19bfec4a9ec492345346bfccd8e389bd9cd92db), ISS-0393's own premise --
+  verbatim port into test/fixtures/simulation/*/scenarios/ -- was found
+  false (R-Co's real scenario files are narrative UAT scripts incompatible
+  with Letflow.Simulation.Runner's machine-executable format, see
+  ISS-0393's own resolution). ISS-0393 was closed as not-applicable-as-scoped,
+  and the real R-Co content was instead ported into a new UAT-RUNNER-facing
+  destination via ISS-0526 (11 tenant-business files) and ISS-0527 (18
+  platform-operator files) -- test/fixtures/uat/scenarios/{swiftroute,
+  vortex,meridian,platform}/*.yaml. This issue's own literal request
+  (replace test/fixtures/simulation/*/scenarios/*.yaml verbatim) does not
+  apply for the same reason ISS-0393's didn't; closing as resolved via the
+  ISS-0393/0526/0527 thread rather than left open for a request that
+  cannot be fulfilled as originally written. test/fixtures/simulation/'s
+  existing synthetic Runner-executed fixtures remain intentionally
+  unchanged throughout.
 duplicate_note: >
   REQ-207's own RELEASE-VALIDATOR independently filed ISS-0393 (GH#773,
   queue task 393) covering this exact same gap (plus explicitly extending

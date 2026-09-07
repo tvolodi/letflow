@@ -65,5 +65,36 @@ related:
   - REQ-229
   - ISS-0438
 queue_task_id: 519
-github_issue: 1040
-status: open
+github_issue: 1041
+status: resolved
+resolved_in_run: WF03-ISS0519-20260907
+resolved_at: "2026-09-07T03:06:00Z"
+resolution: >
+  ISSUE-FIXER's diagnosis uncovered a deeper latent bug beyond this
+  issue's original filing: activate_definition/4 never demoted a sibling
+  row's status back to :inactive when promoting a new version, meaning a
+  naive status: :active filter alone would not have fixed anything --
+  multiple rows could already be simultaneously status: :active under one
+  name. CODE-DESIGNER bundled three fixes together rather than deferring
+  scope: (A) get_definition_by_name/2 now orders by inserted_at/id desc
+  with limit 1 instead of crashing on 2+ matches; (B) a new
+  get_active_definition_by_name/2 routed through the already-authoritative
+  Letflow.Repository.Activation.resolve/3 rather than trusting
+  entity_definitions' own denormalized status column, with
+  Letflow.Entities.Records.fetch_active_definition/2 switched to use it;
+  (C) activate_definition/4 rewritten to demote-then-promote inside one
+  Ecto.Multi/transaction, backed by a new additive migration
+  (priv/repo/migrations/20260907000001_add_entity_definitions_active_partial_index.exs)
+  adding a partial unique index (tenant_id, name) WHERE status = 'active',
+  with built-in pre-migration remediation for any already-existing
+  violating data. CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, and REVIEWER
+  all independently verified every claim against real source code (not
+  the design doc's own claims) and PASSed with no rework needed.
+  TEST-RUNNER confirmed 498/500 passed, the only 2 failures being the
+  pre-existing unrelated local rustc-toolchain gap. Merged via
+  feature/WF03-ISS0519-20260907.
+
+  Note: GH issue #1040 was a duplicate of this issue's own canonical
+  mirror (#1041), created by ORCH manually before registering properly
+  through the queue -- closed as duplicate; see ISS-0520 for that
+  bookkeeping record.

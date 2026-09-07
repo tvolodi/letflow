@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0519-20260907-step-02",
+  "run_id": "WF03-ISS0519-20260907",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0519-20260907/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T02:16:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226"],
+    "issue_ids": ["ISS-0519"],
+    "related_handoff_ids": ["WF03-ISS0519-20260907-step-01"],
+    "artifacts_in": [
+      "lib/letflow/entities/definitions.ex",
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/entities/records.ex",
+      "test/letflow/entities/definitions_test.exs"
+    ],
+    "artifacts_out": ["lib/letflow/design/iss0519-entity-definition-versioning-fix.md"],
+    "branch_name": "feature/WF03-ISS0519-20260907",
+    "base_commit": "42d218a9"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0519 (Ecto.MultipleResultsError crash) and the deeper latent bug ISSUE-FIXER found (activate_definition/4 never demotes sibling active rows)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Design doc written to lib/letflow/design/iss0519-entity-definition-versioning-fix.md. Scoping decision: ship (A)+(B)+(C) together, not split -- (A) alone stops the crash but leaves fetch_active_definition/2 able to silently resolve the wrong version; (B) is only genuinely authoritative if (C) closes the self-contradictory-status gap; (C)'s two halves (demote-siblings logic + one additive partial-index migration) are small, low-risk, share the same root-cause narrative and files as (A)/(B). Fix designs: (A) get_definition_by_name/2 keeps its existing find-by-name-regardless-of-status contract, adds order_by: [desc: inserted_at, desc: id], limit: 1 (same ordering idiom list_definitions/2 already uses), no @spec change, compatible with the existing test at definitions_test.exs:196-211. (B) new get_active_definition_by_name/2 on Definitions, implemented via the authoritative Letflow.Repository.Activation.resolve/3 -> look up the entity_definitions row by (tenant_id, artifact_version_id); Records.fetch_active_definition/2 switches to calling it instead of its current unsafe status-pattern-match-after-unfiltered-query. (C) activate_definition/4 rewritten to run demote-siblings (Repo.update_all/3) then promote-self inside one Ecto.Multi/Repo.transaction/1, demote-before-promote ordering to never transiently violate the new constraint, backed by a new additive migration adding a partial unique index (tenant_id, name) WHERE status = 'active' named entity_definitions_tenant_name_active_idx, wired into EntityDefinition.changeset/2 via a new unique_constraint/3 clause. Ten tests specified (T1-T10) including direct regression tests for the exact Ecto.MultipleResultsError scenario, a test proving (B) tracks the activation pointer rather than row recency, and tests proving (C)'s demote-on-promote and DB-constraint enforcement. Three open questions listed (pre-migration data-integrity check requirement, defensive limit:1 in B's query, module placement) -- none silently resolved. Self-checked: grepped for defmodule/def/defp/schema-do/use-Ecto patterns, zero matches; the doc's one code-fenced block is a bare @type/@spec pair with no function body."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0519-20260907-step-00",
+  "run_id": "WF03-ISS0519-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0519-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T01:57:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226"],
+    "issue_ids": ["ISS-0519"],
+    "related_handoff_ids": ["WF02-REQ229-20260906"],
+    "artifacts_in": [
+      "docs/issues/ISS-0519.yaml",
+      "lib/letflow/entities/definitions.ex",
+      "lib/letflow/entities/entity_definition.ex",
+      "priv/repo/migrations/20260906000001_create_entity_definitions.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0519-20260907",
+    "base_commit": "42d218a9"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0519: Letflow.Entities.Definitions.get_definition_by_name/2 raises Ecto.MultipleResultsError once a tenant legitimately advances a definition to a second version under the same name. Read docs/issues/ISS-0519.yaml in full for the complete symptom description and suggested fix directions. CONFIRM the defect is real and characterize REQ-225/226's ACTUAL intended semantics for 'the definition by this name' when multiple logical_shape_version rows exist under one name -- read REQ-225's and REQ-226's own design docs (lib/letflow/design/req225-entity-definition-schema-validation.md, lib/letflow/design/req226-entity-definitions-persistence-crud.md) and the entity_definitions status/activation model (Letflow.Repository's artifact_activations machinery, REQ-203) to determine whether 'the' definition for a name should resolve to the single ACTIVE version (with multiple simultaneously-active versions under one name being itself an invariant violation to enforce elsewhere), or the latest/newest version by some ordering, or something else. Recommend a concrete, well-justified fix direction and hand off to CODE-DESIGNER."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0519-20260907 created off main @ 42d218a9 (post PR #1044 merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

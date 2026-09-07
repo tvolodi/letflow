@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0519-20260907-step-02b",
+  "run_id": "WF03-ISS0519-20260907",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0519-20260907/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T02:05:05Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-225", "REQ-226"],
+    "issue_ids": ["ISS-0519"],
+    "related_handoff_ids": [
+      "WF03-ISS0519-20260907-step-01",
+      "WF03-ISS0519-20260907-step-02"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0519-entity-definition-versioning-fix.md",
+      "lib/letflow/entities/definitions.ex",
+      "lib/letflow/repository/activation.ex",
+      "lib/letflow/entities/records.ex",
+      "lib/letflow/entities/entity_definition.ex",
+      "lib/letflow/repository/artifact_version.ex",
+      "test/letflow/entities/definitions_test.exs",
+      "priv/repo/migrations/20260906000001_create_entity_definitions.exs",
+      "priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0519-20260907",
+    "base_commit": "42d218a9"
+  },
+  "task": {
+    "description": "Independently validate CODE-DESIGNER's design at lib/letflow/design/iss0519-entity-definition-versioning-fix.md for ISS-0519, verifying against the actual current source (not the design doc's or issue-fixer's own characterizations) on all nine points: no literal code, get_definition_by_name/2 fix compatibility with existing test, activate_definition/4's actual never-demotes behavior, Activation.resolve/3's real signature vs the design's proposed usage, Records.fetch_active_definition/2's actual current unsafe pattern, partial-unique-index migration feasibility and demote/promote transaction-ordering soundness, scoping-decision reasoning, T1-T10 traceability, and the pre-migration data-integrity risk."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "All nine checks independently verified against real source, not against the design doc's or handoffs' own claims. (1) grep for defmodule/def /defp /schema \"...\" do/use Ecto against the design doc: zero matches -- no literal executable code, only prose + one bare @type/@spec fence. (2) Read definitions.ex:190-212 directly: get_definition_by_name/2 is exactly as characterized (unfiltered, unordered `where: e.name == ^name` + Repo.one/2, no limit). The proposed `order_by: [desc: e.inserted_at, desc: e.id], limit: 1` is syntactically identical to the working idiom already used by list_definitions/2 (definitions.ex:237-242). Read test/letflow/entities/definitions_test.exs:196-211 directly: creates exactly one row via create_definition/2, calls get_definition_by_name/2 with no activation, asserts {:ok, by_name} with by_name.id == created.id -- adding order_by+limit:1 to a single-row match set is a no-op on result content, so the test's behavior is provably unaffected. (3) Read definitions.ex:299-339 (activate_definition/4) directly: confirmed it finds one row via get_definition_by_name/2, calls Activation.activate_group/5, then Repo.update's only that row's status to :active -- no second write site anywhere in the function or file touches a sibling row's status; matches the design's characterization exactly. (4) Read activation.ex:160-177 (resolve/3) directly: `case Repo.one(query) do nil -> {:error, :not_activated}; %__MODULE__{active_version_id: version_id} -> version = Repo.get!(ArtifactVersion, version_id, ...); {:ok, version} end` -- returns {:ok, %ArtifactVersion{}}, and ArtifactVersion's actual @primary_key (artifact_version.ex:38) is `{:version_id, :binary_id, autogenerate: true}`, so the design's `{:ok, %Repository.ArtifactVersion{version_id: version_id}}` pattern match is a genuinely valid destructure against the real struct shape, not an imagined field. Also confirmed create_definition/2 (definitions.ex:106-141) mints a fresh artifact_version_id via Repository.create/2 on every call and inserts it once per entity_definitions row, substantiating the design's 'effectively unique per row' claim in step 4 of B. (5) Read records.ex:358-372 (fetch_active_definition/2) directly: confirmed unfiltered get_definition_by_name/2 call followed by a post-hoc %EntityDefinition{status: :active} pattern match with three other arms -- matches the design's 'unsafe status-pattern-match-after-unfiltered-query' characterization exactly, and independently confirms ISSUE-FIXER's diagnosis item 3 that Repo.one/2 would raise before this pattern match is ever reached. (6) Confirmed partial unique indexes with WHERE clauses are real and already used in this exact codebase: priv/repo/migrations/20260819000003_create_users_tenant_scoped.exs:79 has a working `unique_index(:users, [...], where: ...)` precedent, so the design's proposed `entity_definitions_tenant_name_active_idx` partial index is not inventing unsupported syntax. Traced the demote-then-promote transaction ordering statement-by-statement: newly inserted rows default to status: :inactive (definitions.ex:159, confirmed via insert_entity_definition), so before activation begins at most the pre-existing sibling (if any) is :active. Statement 1 (demote, update_all, filtered to status == :active and id != new id) reduces the active-row count for (tenant_id, name) to 0. Statement 2 (promote, Repo.update on the target row to :active) then raises it to exactly 1. Postgres checks a non-deferred unique/partial-unique index immediately at each statement's end, not at transaction commit, so at every statement boundary within this single transaction at most one row is ever :active for a given (tenant_id, name) -- the design's claim that this ordering never even transiently violates the constraint holds up under trace; reversing the order (promote before demote) would genuinely create a real transient two-active-rows window and fail the constraint, exactly as the design warns. (7) Scoping decision (bundle A+B+C): reasoning is specific and falsifiable (B routed through Activation.resolve/3 is only 'authoritative in name' if entity_definitions.status can still self-contradict per its own moduledoc's read-convenience-denormalisation framing; C's two halves are independently small/low-risk/same-file) rather than hand-waved -- a reasonable engineering judgment call, soundly argued even if not the only defensible one. (8) T1-T10 reviewed against the actual bug mechanics traced above: each test names a concrete precondition (row count, activation order, status history) and a concrete assertion that would fail under the pre-fix code paths just traced (e.g. T6 specifically distinguishes B's pointer-tracking from A's recency-ordering, which is a real behavioral fork given A and B are separate functions with different data sources) -- genuinely traceable to regressions, not restated design prose. (9) Section 5.4 explicitly names the exact failure mode this check asked about: a partial unique index CREATE would fail outright at migration-apply time against any tenant schema already holding 2+ simultaneously-active rows for one name, and requires ELIXIR-DEV to run a pre-check query and add remediation to the same migration if any duplicate is found, rather than assuming a clean dataset -- flagged as OQ-1, not silently resolved or ignored. No defect found on any of the nine checks; design is unambiguous enough to implement without further author judgment calls beyond the three explicitly-flagged, non-blocking open questions (OQ-1/2/3)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

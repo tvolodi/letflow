@@ -932,3 +932,63 @@ history:
       REQ-229 regressions. mix compile --warnings-as-errors and mix
       format --check-formatted independently confirmed clean by
       ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T03:06:00Z"
+    note: >
+      ISS-0519 resolved: Letflow.Entities.Definitions.get_definition_by_name/2
+      raised Ecto.MultipleResultsError once a tenant legitimately advanced
+      a definition to a second version under the same name (discovered by
+      ELIXIR-DEV while testing REQ-229, filed as ISS-0519, GH#1041).
+      ISSUE-FIXER's diagnosis uncovered a DEEPER latent bug beyond the
+      original filing: activate_definition/4 never demoted a sibling row's
+      status back to :inactive when promoting a new version, meaning
+      filtering to status: :active alone would not have actually fixed
+      anything -- multiple rows could already be simultaneously
+      status: :active under one name. CODE-DESIGNER's design bundled three
+      fixes together (reasoned explicitly why splitting them would leave
+      the fix incomplete rather than deferring scope): (A) ordered
+      get_definition_by_name/2 by inserted_at/id desc with limit 1 instead
+      of crashing; (B) new get_active_definition_by_name/2 routed through
+      the already-authoritative Letflow.Repository.Activation.resolve/3
+      rather than trusting entity_definitions' own denormalized status
+      column, with Letflow.Entities.Records.fetch_active_definition/2
+      switched to use it; (C) activate_definition/4 rewritten to
+      demote-then-promote inside one Ecto.Multi/transaction (demote-first
+      ordering proven load-bearing -- reversing it would transiently
+      violate the new constraint), backed by a new additive migration
+      adding a partial unique index (tenant_id, name) WHERE status =
+      'active', with built-in pre-migration remediation for any
+      already-existing tenant data that might violate it before the index
+      is created. CODE-DESIGN-VALIDATOR independently traced the
+      demote-then-promote transaction ordering statement-by-statement and
+      confirmed it never transiently violates the new constraint, verified
+      every cited function (Activation.resolve/3, ArtifactVersion's real
+      primary key shape) against actual source rather than the design's
+      claims, and confirmed a working partial-index precedent already
+      exists in this codebase -- PASS, no rework needed. ELIXIR-DEV
+      implemented exactly per design, wrote regression tests directly
+      reproducing the original Ecto.MultipleResultsError crash plus a
+      dedicated test proving the new lookup tracks the activation pointer
+      rather than row recency and another directly violating the new DB
+      constraint to confirm enforcement. SECURITY-REVIEWER independently
+      verified tenant isolation on the new migration and its remediation
+      UPDATE, confirmed the remediation logic is a genuine no-op on clean
+      data, traced the two stacked concurrency-safety mechanisms
+      (activate_group/5's FOR UPDATE lock plus the new partial unique
+      index as DB backstop), and flagged one non-blocking observation
+      (a denormalized-status race window that can't actually produce a
+      wrong answer since the new lookup never reads that column) -- PASS.
+      REVIEWER independently re-verified design fidelity across all three
+      parts, confirmed the flagged tests are genuine and non-tautological,
+      and assessed SECURITY-REVIEWER's flagged observation as acceptable
+      to leave as-is rather than needing a follow-up issue -- PASS
+      (handoffs/WF03-ISS0519-20260907/step-03d-reviewer.json).
+      TEST-RUNNER hit the by-now-familiar stale-per-partition-
+      tenant_template artifact (this branch's own new migration not yet
+      reflected in cached templates), self-diagnosed and cleared it
+      directly per this session's established safe procedure, then
+      confirmed 498/500 passed with the only 2 failures being the
+      pre-existing, unrelated local rustc-toolchain gap. feature/WF03-ISS0519-20260907.

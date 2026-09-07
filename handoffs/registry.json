@@ -5256,6 +5256,26 @@
       "backfilled": false,
       "last_known_step": "Step Final pending -- issue resolved for real (both sites), GH#1049 close pending merge.",
       "note": "ISS-0522: unhandled raise when a pagination cursor's id component was malformed (non-UUID). SITE 1 (Letflow.Entities.Definitions.list_definitions/2) fixed and gated first: added Letflow.Api.Pagination.cast_binary_id_component/1, routed through decode_list_definitions_seek/1. MID-RUN COLLISION, recorded not smoothed over: ISSUE-FIXER's diagnosis correctly found site 2 (lib/letflow/entities/query/cursor.ex, REQ-231) did not exist yet and scoped the fix to site 1 only -- but REQ-231 merged to main (PR #1050) while this run's Step 4/5 was in flight, creating site 2 for real with the identical Ecto.UUID.dump!/1 unhandled-raise defect. ORCH caught this on rebase (an add/add conflict on docs/issues/ISS-0522.yaml itself, since the REQ-231 session independently filed an equivalent record under the same queue task) rather than merging a false 'resolved, 1 site' claim -- corrected the record to an honest in-progress state and re-ran the full pipeline for site 2: CODE-DESIGNER extended the design (narrowed to a single-line fix after confirming Allowlist.typed_columns/0 has no 'id' entry, so the hardcoded id tiebreaker was the ONLY reachable :binary_id path); CODE-DESIGN-VALIDATOR PASS (independently re-verified that load-bearing claim); ELIXIR-DEV implemented (commit af1cf03e, reusing cast_binary_id_component/1 as-is); SECURITY-REVIEWER + REVIEWER PASS on both sites; TEST-DESIGNER added coverage for both sites (one rework cycle on site 1 for a missing required test/specs/ISS-0522.md); TEST-DESIGN-VALIDATOR PASS on both (independently reproduced both fail-then-pass proofs: site 1 pre-fix 25/26 real Ecto.Query.CastError -> post-fix 26/26; site 2 pre-fix 9/11 real ArgumentError from Ecto.UUID.dump!/1 -> post-fix 11/11; also independently diagnosed and fixed a stale tenant_template local-DB-cache issue unrelated to this branch). TEST-RUNNER's final full-suite run: 3408/3413 passed, 5 failures all structurally cleared (4 = already-tracked ISS-0513 Windows Path.expand() bug, not yet merged; 1 = Letflow.Scheduler.PollerTest, same already-open CI-load-timing flake class as ISS-0453, new data point recorded there). Both real call sites fixed; issue resolved for real, not the earlier premature/scope-incomplete claim."
+    },
+    {
+      "run_id": "WF03-ISS0523-20260907",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0523",
+      "queue_task_id": 523,
+      "queue_agent_id": "letflow-2-orch",
+      "github_issue_number": 1053,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/mix/tasks/letflow.lint_handoffs_test.exs"
+      ],
+      "branch_name": "feature/WF03-ISS0523-20260907",
+      "started_at": "2026-09-07T11:30:38Z",
+      "lock_released_at": "2026-09-07T12:30:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final pending -- issue resolved, GH#1053 close pending merge.",
+      "note": "ISS-0523 (originally filed as ISS-0445, GH#860, never registered in the queue -- ORCH found the registration gap while investigating why get_next_task kept returning no_eligible_task despite several open GitHub issues, per user escalation). Fix: rewrote T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS from an end-to-end real-corpus scan (capture_io + LintHandoffs.run([]) == :ok) to a pure resolve_dir([]) == \"handoffs\" unit assertion, eliminating the coupling where a sibling session's bad handoff could redden an unrelated branch's suite. Zero net coverage lost (F-DIR-DEFAULT and T-DIR-SCOPED-SCAN already cover the same claims); real-corpus scannability remains independently CI-gated via mix.exs's letflow.check alias. SIBLING COLLISION, reconciled not ignored: a sibling session independently found the same registration gap and merged its own bookkeeping-only fix (renumbering the file, closing duplicate GH#860) to main as 50b5b0f3 while this run was already gated and ready -- caught on rebase (add/add conflict), resolved by keeping the sibling's richer canonical record and layering this run's actual code fix on top (the sibling's commit carried no code change, only the rename/dedup). CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR all independently PASSed; the coupling-removal was proven live twice (TEST-DESIGNER and REVIEWER each independently corrupted a scratch handoff file, confirmed the OLD test body failed against it and the NEW test passes despite it, then cleaned up). TEST-RUNNER's first attempt was invalidated by ORCH's own process error (switched branches in this shared checkout mid-run) -- redispatched cleanly on an untouched checkout, got 3408/3413 with 5 failures, 4 already-tracked (ISS-0513, this branch had briefly fallen behind main before a rebase) and 1 new incidental finding filed as ISS-0524 (queue task 524, GH#1055: mix letflow.check.test's wasm_hang dry-run fixture treats zero discovered tests as a hard failure post-ISS-0418's root-fix)."
     }
   ]
 }

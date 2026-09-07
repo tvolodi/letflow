@@ -1,0 +1,132 @@
+run_id: WF03-ISS0523-20260907
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0523-20260907
+head_commit: 47230182
+timestamp_utc: "2026-09-07T17:23:12Z"
+note: >
+  Retry run. A prior attempt on this same shared checkout was invalidated
+  because ORCH switched branches mid-run, contaminating the result (the
+  finding from that run -- tenant_template caches clean across all 16
+  partition DBs -- carries forward but its numbers are discarded). This
+  run confirmed the checkout was stable throughout: `git branch
+  --show-current` and `git log --oneline -1` both matched
+  (feature/WF03-ISS0523-20260907 @ 47230182) before mix letflow.check
+  started and again immediately after it finished. Diff under test is a
+  single test-file rewrite (commit 47230182,
+  test/mix/tasks/letflow.lint_handoffs_test.exs) plus
+  docs/issues/ISS-0523.yaml and
+  lib/letflow/design/iss0523-lint-handoffs-corpus-coupling-fix.md -- zero
+  lib/ changes. bd558bdd (ISS-0418 wasm_hang root-fix, landed on main) is
+  an ancestor of this branch.
+
+commands_run:
+  - cmd: "docker compose up -d"
+    result: OK
+    note: letflow-2-keycloak-1 and letflow-2-postgres-1 already running.
+  - cmd: "mix letflow.check"
+    result: FAIL
+    exit_code: 1
+    note: >
+      letflow.check_toolchain: WARN only (Rust 1.93.1 running vs 1.97.1
+      pinned -- advisory, never gates). check_requirements_registration
+      and check_deferral_staleness: reported clean (241 entries, 2
+      legitimate deferrals, 0 stale). lint_handoffs: ran to completion,
+      grandfathered/pre-existing debt only (does not gate).
+      check_async_sandbox_reachability, format --check-formatted, and
+      compile --warnings-as-errors: all passed silently. letflow.check.test
+      (scripts/test_parallel.sh, N=16 partitions, nproc-derived): FAILED.
+      Combined result across all 16 partitions: 3407 tests + 6 properties,
+      3408/3413 passed, 5 failures. Partition 2 (179 tests) had 4
+      failures; partition 5 (209 tests) had 1 failure; all other 14
+      partitions reported 0 failures, exit 0. Because run_main_suite
+      raised on the nonzero scripts/test_parallel.sh exit, the alias never
+      reached the isolated :wasm_hang / :lua_wallclock_race subprocess
+      re-runs -- those did not run this pass.
+
+failures:
+  - test_module: Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest
+    file: test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs
+    count: 4
+    tests:
+      - "run/1 against a scratch --dir fixture an async:false file with a real provisioned_tenant!( call is never flagged"
+      - "run/1 against a scratch --dir fixture a violating fixture (async:true + real provisioned_tenant!( call) fails the build"
+      - "run/1 -- support-module-shaped files are excluded by file selection a tenant_schema_reaper.ex-shaped mode/2 caller (not *_test.exs) is never scanned"
+      - "run/1 against a scratch --dir fixture a clean async:true fixture (no call site) reports zero violations"
+    error: >
+      ** (Mix.Error) letflow.check_async_sandbox_reachability: --dir
+      "C:\\Users\\tvolo\\...\\Temp/letflow-check-async-sandbox-<N>"
+      discovered 0 files -- refusing to report success for an empty or
+      non-existent scan target
+    structural_attribution: >
+      NOT attributable to this branch. This is the already-tracked
+      ISS-0513 Windows-only Path.expand() mixed-separator
+      scratch-directory bug (previously observed and attributed in
+      report-20260907-WF03-ISS0522-20260907-gate2.yaml). The failing
+      module (lib/mix/tasks/letflow.check_async_sandbox_reachability.ex)
+      has no call/import/data-path relationship to this branch's diff,
+      which touches only test/mix/tasks/letflow.lint_handoffs_test.exs,
+      docs/issues/ISS-0523.yaml, and a design doc under
+      lib/letflow/design/. No lib/ code changed on this branch at all, so
+      this failure cannot be a regression introduced here.
+
+  - test_module: Mix.Tasks.Letflow.Check.TestTest
+    file: test/mix/tasks/letflow_check_test_test.exs
+    count: 1
+    tests:
+      - "mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1) passes (no raise) when the wrapper exits 0 and the target substring is absent from every partition log, even with unrelated warnings present"
+    error: >
+      ** (Mix.Error) mix letflow.check.test: FAILED -- `mix test --only
+      wasm_hang --dry-run` exited 0 but its "Tests that would be
+      executed:" block was empty or absent. This task cannot tell whether
+      that means zero :wasm_hang tests currently exist or the discovery
+      parse itself is broken, so it is treating this as a hard failure
+      rather than silently passing.
+    structural_attribution: >
+      NOT attributable to this branch's diff -- ISS-0523's changed files
+      have no relationship to lib/mix/tasks/letflow.check.test.ex or any
+      :wasm_hang-tagged test. However, per this run's briefing this is
+      flagged explicitly rather than dismissed: ISS-0418's wasm_hang class
+      was just root-fixed on main (commit bd558bdd, an ancestor of this
+      branch). The failure here is the opposite of a hang recurring: the
+      check's own dry-run discovery now finds ZERO :wasm_hang-tagged
+      tests in the suite, which is itself treated as a hard failure by
+      the check's defensive design (it cannot distinguish "legitimately
+      zero" from "discovery broken"). This is consistent with bd558bdd's
+      fix having removed/retagged the tests that used to carry
+      :wasm_hang, leaving Check.TestTest's own fixture/assumption (that at
+      least one :wasm_hang test exists to exercise discovery against)
+      stale. This is a pre-existing gap on main surfaced by a just-landed
+      commit, not something ISS-0523 caused -- but it is a real breakage
+      on main's own test-tooling self-test and should be routed to
+      ISSUE-FIXER/ELIXIR-DEV for a follow-up fix to
+      Check.TestTest's fixture (or to re-tag at least one still-relevant
+      test :wasm_hang) independent of this gate.
+
+conclusion:
+  status: FAIL
+  recommendation: FAIL
+  summary: >
+    mix letflow.check's overall exit code was 1. All non-test sub-checks
+    (toolchain advisory warning aside) passed: check_requirements_registration,
+    check_deferral_staleness, lint_handoffs, check_async_sandbox_reachability,
+    format --check-formatted, compile --warnings-as-errors. The test-suite
+    combined result was 3408/3413 passed, 5 failures (3407 tests + 6
+    properties across 16 partitions). Both failure groups are structurally
+    unrelated to this branch's diff (a single test-file rewrite touching
+    only lint_handoffs coverage, plus docs/design-doc bookkeeping, zero
+    lib/ changes): 4 are the already-tracked ISS-0513 Windows
+    Path.expand() scratch-dir bug, and 1 is a stale assumption in
+    Check.TestTest's own wasm_hang-discovery fixture, surfaced now that
+    ISS-0418's bd558bdd fix (an ancestor of this branch) appears to have
+    removed the :wasm_hang-tagged test(s) that fixture depended on --
+    flagged explicitly per this run's briefing rather than waved off,
+    since it touches the just-landed wasm_hang fix, but it is not a
+    regression of the hang itself and not caused by ISS-0523. The branch's
+    own changed test file (test/mix/tasks/letflow.lint_handoffs_test.exs)
+    is covered by the full-suite run and shows no failures. Recommending
+    FAIL on this run's raw exit code per the no-speculation rule --
+    RELEASE-VALIDATOR should independently re-run rather than take this
+    report's structural attribution as sufficient to call it PASS -- while
+    noting neither failure traces back to ISS-0523's diff.

@@ -683,18 +683,19 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
       assert io =~ "step-02-refused.json"
     end
 
-    test "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS -- default no-flag invocation still scans @handoffs_dir" do
-      # Cheap check per the handoff's own instruction: does not re-verify the
-      # whole H1-H6/grandfathering/exit-behaviour corpus (already covered by
-      # the "existing .json handoff behavior (H1-H5) is unaffected" and H6
-      # describe blocks above, and by T-H6-ZERO-NEW / F-GRANDFATHERED-* in
-      # this same file) -- only proves resolve_dir([]) still feeds run/1
-      # @handoffs_dir, i.e. that this fix's new flag-parsing branch did not
-      # change the zero-flag call path.
-      io = capture_io(fn -> assert LintHandoffs.run([]) == :ok end)
-
-      assert io =~ ~s(under "handoffs")
-      refute io =~ "AUTOFIX"
+    test "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS -- default no-flag invocation still resolves to @handoffs_dir" do
+      # ISS-0523: this used to invoke `LintHandoffs.run([])` against the REAL
+      # handoffs/ directory and assert :ok, transitively claiming the whole
+      # repository's handoff corpus is clean -- see ISS-0445 for the incident
+      # this caused (a sibling session's handoff turned this test red on an
+      # unrelated branch). The property this test actually owns is narrower:
+      # that run/1's zero-flag path still resolves to @handoffs_dir after the
+      # --dir branch was added (ISS-0440). That is exactly what resolve_dir/1's
+      # own unit test, F-DIR-DEFAULT (line ~419), already asserts -- so this
+      # test now asserts the same thing directly, without a corpus scan. The
+      # banner-threads-resolve_dir's-output claim is covered end-to-end,
+      # corpus-scan-free, by T-DIR-SCOPED-SCAN (line ~521) via a tmp fixture.
+      assert LintHandoffs.resolve_dir([]) == "handoffs"
     end
   end
 

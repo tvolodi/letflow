@@ -1,0 +1,65 @@
+{
+  "handoff_id": "step02-WF03-ISS0523-20260907",
+  "run_id": "WF03-ISS0523-20260907",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0523-20260907/step-02-code-designer.json",
+  "created_at": "2026-09-07T00:00:00Z",
+  "started_at": "2026-09-07T00:00:00Z",
+  "completed_at": "2026-09-07T00:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0523", "ISS-0445"],
+    "requirement_text": {
+      "ISS-0523": "lint_handoffs full-corpus scan couples unrelated PRs to global repo cleanliness. ISSUE-FIXER's diagnosis confirmed against real source: test/mix/tasks/letflow.lint_handoffs_test.exs:686, test T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS, does capture_io(fn -> assert LintHandoffs.run([]) == :ok end) plus assert io =~ ~s(under \"handoffs\") -- scanning the REAL handoffs/ directory and transitively asserting the whole repo is clean, coupling unrelated branches' suite results to global repo state (observed live in ISS-0445's incident). lib/mix/tasks/letflow.lint_handoffs.ex's resolve_dir/1 (public, line 354) is the actual thing under test -- it resolves [] args to @handoffs_dir (\"handoffs\"). This coverage is already duplicated safely elsewhere: resolve_dir([]) == \"handoffs\" is already a pure unit test at line 419 (F-DIR-DEFAULT), and the banner-threading integration (run/1 actually prints \"under <dir>\" for whatever resolve_dir returns) is already proven end-to-end at line 521 (T-DIR-SCOPED-SCAN) using a tmp fixture via --dir -- same code path, no real-corpus dependency. Fixing this test drops zero net coverage."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0523.yaml",
+      "docs/issues/ISS-0445.yaml",
+      "test/mix/tasks/letflow.lint_handoffs_test.exs",
+      "lib/mix/tasks/letflow.lint_handoffs.ex"
+    ],
+    "owned_modules": [
+      "test/mix/tasks/letflow.lint_handoffs_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0523-20260907"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0523: replace T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS's body (test/mix/tasks/letflow.lint_handoffs_test.exs:686-698) so it no longer scans the real handoffs/ directory or asserts run([]) == :ok. Independently re-verify (don't just trust ISSUE-FIXER's report) that F-DIR-DEFAULT (line 419) and T-DIR-SCOPED-SCAN (line 521) genuinely exist and cover what's claimed. Pick ONE of the two options ISSUE-FIXER named -- (i) rewrite to assert resolve_dir([]) == \"handoffs\" directly, keeping the test's name/slot, or (ii) delete the test and add a superseded-by comment at F-DIR-DEFAULT/T-DIR-SCOPED-SCAN -- and justify the choice against this file's own precedent for how it documents redundant/narrowed coverage. Explicitly confirm whether removing this test leaves real-corpus scannability meaningfully uncovered, reasoning about whether mix letflow.check's own CI invocation of the actual mix letflow.lint_handoffs task is sufficient coverage at the CI-gate level. State test-ability: why no fail-then-pass proof is needed for the rewritten assertion itself, and how TEST-DESIGNER should positively verify the OLD test's real-corpus coupling is gone in the NEW one. Design only -- no implementation code, and no lib/ changes (resolve_dir/1 is already correct and public).",
+    "acceptance_criteria": [
+      "Design independently re-verifies line numbers and content of T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS, F-DIR-DEFAULT, and T-DIR-SCOPED-SCAN against the actual current test file, not just ISSUE-FIXER's report",
+      "Exact replacement test body given verbatim, with one of options (i)/(ii) chosen and justified against this file's own documented-coverage-decision precedent",
+      "Scope confirmed as test-only: no lib/ changes, resolve_dir/1 unchanged",
+      "Explicit reasoning on whether removing this test's real-corpus scan leaves scannability meaningfully uncovered, citing mix.exs's letflow.check alias and CI wiring as the independent gate-level coverage",
+      "Test-ability section states why fail-then-pass is not needed here and how TEST-DESIGNER should positively verify the coupling is gone (not just reworded)",
+      "No implementation code in the design doc",
+      "Handoff status flips to COMPLETED with next_action naming CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read test/mix/tasks/letflow.lint_handoffs_test.exs (lines 380-699) before designing -- confirmed all three tests ISSUE-FIXER named exist exactly as claimed: F-DIR-DEFAULT (lines 416-420) is a pure unit assertion `LintHandoffs.resolve_dir([]) == \"handoffs\"`, no directory scan, no capture_io; T-DIR-SCOPED-SCAN (lines 521-533) exercises run/1's full banner-printing path end-to-end against an isolated System.tmp_dir!/0 fixture via --dir, asserting `io =~ inspect(dir)` (same banner format T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS checks for, just against a safe fixture instead of the real corpus); T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS (lines 686-698) is confirmed to do exactly what ISSUE-FIXER described -- capture_io around LintHandoffs.run([]) == :ok, plus io =~ under \\\"handoffs\\\". Also independently confirmed resolve_dir/1 (lib/mix/tasks/letflow.lint_handoffs.ex:354-360) is public, takes no filesystem action itself (pure case over find_dir_flag/1's return), and is unchanged by this fix.\n\nDesign written to lib/letflow/design/iss0523-lint-handoffs-corpus-coupling-fix.md. Chose option (i): rewrite the test body in place to `assert LintHandoffs.resolve_dir([]) == \"handoffs\"` with an explanatory comment, keeping the test's name/slot. Justified against this file's own precedent: the test's existing docstring (lines 687-693) already narrates its own narrowed scope in place rather than being deleted once narrowed, and the file's convention throughout (ISS-0440/ISS-0442 section banners, the mutant-table note, the empty-dir carve-out note) is to keep a name-addressable test slot with an inline comment stating current scope, not to delete slots and point elsewhere -- keeping the searchable test name matters for future grep/`--only` use and for incident-report traceability the way ISS-0445 itself needed. Option (ii) was weighed and rejected as needing two edits (both F-DIR-DEFAULT and T-DIR-SCOPED-SCAN) to replace what one docstring currently conveys as a single coherent claim.\n\nCrux question (design section 3) answered explicitly: removing the real-corpus assertion leaves NO net coverage gap. Confirmed by direct reading (not assumed) that mix.exs line 105 lists \\\"letflow.lint_handoffs\\\" inside the letflow.check alias chain, and .github/workflows/ci.yml lines 50-55 carry a comment stating mix letflow.lint_handoffs is one of letflow.check's own CI steps (and is why the workflow uses fetch-depth: 0). So the real mix task, scanning the real corpus, already runs as its own CI gate step independent of mix test -- and a real violation surfaces there with correct attribution (a corpus-hygiene gate failing), not smuggled into an unrelated branch's test-suite result the way the ISS-0445 incident's misattribution happened.\n\nTest-ability (design section 4): no fail-then-pass proof needed for the rewritten assertion -- it's byte-identical to F-DIR-DEFAULT's already-passing claim, no application-code change occurred. TEST-DESIGNER should instead positively verify the OLD coupling is gone: a one-time manual/review-time check (not a new permanent test, to avoid reintroducing corpus-touching risk) of temporarily writing a violation-tripping scratch file into handoffs/, confirming the rewritten test still passes, then removing it; plus a full-suite regression run of the test file confirming green regardless of the corpus's current state.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0523-lint-handoffs-corpus-coupling-fix.md"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0523-20260907",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

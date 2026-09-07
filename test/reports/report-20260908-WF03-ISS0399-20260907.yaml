@@ -1,0 +1,134 @@
+run_id: WF03-ISS0399-20260907
+agent: TEST-RUNNER
+workflow: WF-03 (Issue Resolving), Step 4 final gate
+timestamp_utc: "2026-09-08T02:05:00Z"
+branch: feature/WF03-ISS0399-20260907
+head_commit: 9d042aef
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - 9d042aef "docs(ISS-0399): test spec + mutation-testing addendum, plus two anti-patterns"
+    - 0f92da2a "test(ISS-0399): regression coverage for the content-scanning pipeline"
+    - 60f3614e "feat(ISS-0399): content-scanning/AV pipeline for instance attachments"
+
+format_check:
+  command: "mix format --check-formatted"
+  result: PASS
+  output: "(no output -- fully formatted)"
+
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: PASS
+  output: |
+    Compiling 210 files (.ex)
+    Generated letflow app
+
+full_suite:
+  command: "scripts/test_parallel.sh"
+  attempts:
+    - n: 16
+      source: "nproc (default)"
+      result: FAIL
+      combined: "1736 tests, 4 properties, 453 failures (1287/1740 passed)"
+      diagnosis: >
+        ISS-0219-class failure: N=16 exceeded this host's Postgres capacity for
+        16 concurrent ecto.create/ecto.migrate + tenant-template-build
+        connections. 8 of 16 partitions produced NO Result: line at all
+        (DBConnection.ConnectionError: "connection not available ... dropped
+        from queue"). README.md explicitly documents this exact failure mode
+        and prescribes TEST_PARALLEL_N=4 as known-good -- not treated as a
+        suite verdict, re-ran per that guidance.
+    - n: 4
+      source: "TEST_PARALLEL_N=4 (README known-good override)"
+      result: FAIL
+      combined: "3443 tests, 6 properties, 749 failures (2700/3449 passed)"
+      diagnosis: >
+        All 4 partitions now produced Result: lines (no crashes), but ~21.7%
+        of tests failed uniformly across every partition. Root-caused via
+        partition-1 log: every failure traced to
+        Letflow.TenantFixture.provisioned_tenant!/1 raising
+        TENANT_TEMPLATE_SELF_CHECK-style errors reporting
+        "versions_missing=[20260907020001]" -- the migration this branch adds
+        (priv/repo/migrations/20260907020001_add_scan_status_to_instance_attachments.exs).
+        Cause: test/support/tenant_template.ex builds the shared
+        "tenant_template" Postgres schema ONCE and caches it by bare
+        schema-existence (by design, see that module's own comment on why a
+        completeness re-check was judged unnecessary) -- but that assumption
+        breaks across separate mix test invocations against a
+        docker-compose-persisted Postgres volume: this workspace's Postgres
+        container had accumulated tenant_template schemas (across ~20 stale
+        letflow_test* databases) built by an EARLIER run, before this
+        branch's new migration existed. Every tenant provisioned via
+        TenantFixture in this run inherited that stale, pre-ISS-0399 template,
+        which explains the near-uniform failure rate across all four
+        partitions (any test needing a provisioned tenant failed).
+      remediation_applied: >
+        Dropped all 23 stale letflow_test* databases via
+        `docker exec ... psql -c "DROP DATABASE IF EXISTS <db>"` (test
+        databases only, not letflow_dev), then re-ran the full suite with
+        TEST_PARALLEL_N=4 so ecto.create/ecto.migrate and
+        tenant_template.ex's ensure_template!/0 rebuilt everything fresh
+        against this branch's actual migration set.
+    - n: 4
+      source: "TEST_PARALLEL_N=4, after stale test-DB reset"
+      result: FAIL (2 failures, both attributed as pre-existing/unrelated -- see below)
+      combined: "3443 tests, 6 properties, 2 failures (3447/3449 passed)"
+      per_partition:
+        - "partition 1: 1065 tests, 0 properties, 0 failures, exit 0"
+        - "partition 2: 696 tests, 2 properties, 2 failures, exit 2"
+        - "partition 3: 837 tests, 2 properties, 0 failures, exit 0"
+        - "partition 4: 845 tests, 2 properties, 0 failures, exit 0"
+
+remaining_failures:
+  - test: "Mix.Tasks.Letflow.Check.TestTest: mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1) passes (no raise) when the wrapper exits 0 and the target substring is absent from every partition log, even with unrelated warnings present"
+    location: "test/mix/tasks/letflow_check_test_test.exs:739"
+    error: >
+      ** (Mix.Error) mix letflow.check.test: FAILED -- `mix test --only
+      wasm_hang --dry-run` exited 0 but its "Tests that would be executed:"
+      block was empty or absent on BOTH the first attempt and a retry
+      attempt.
+  - test: "Mix.Tasks.Letflow.Check.TestTest: mix letflow.check.test's ISS-0524 wasm_hang discovery bounded retry + diagnosability (c) no-retry-needed path is unaffected -- existing passing-path fixture/test still passes"
+    location: "test/mix/tasks/letflow_check_test_test.exs:926"
+    error: "Same Mix.Error signature as above (wasm_hang dry-run discovery)."
+  attribution:
+    caused_by_this_branch_diff: false
+    reasoning: >
+      Both failures are self-tests of the wasm_hang-discovery machinery in
+      lib/mix/tasks/letflow.check.test.ex, exercised via a subprocess
+      `mix test --only wasm_hang --dry-run` call. This is a long-tracked,
+      recurring flake class with its own issue history: ISS-0352 (original
+      exclusion), ISS-0453 (timing flakes), ISS-0418 ("Root-fix wasm_hang CI
+      flake via per-test process isolation", commit bd558bdd), and ISS-0524
+      ("dry-run wasm_hang fixture finds zero tagged tests after ISS-0418
+      root-fix, treats it as hard failure", commit 8c9c8682) -- with repo
+      history showing repeated recurrence entries (`chore(ORCH): third
+      wasm_hang data point, tally now 4/10`, etc.) even after each root-fix
+      attempt. `git diff main...HEAD --stat` confirms this branch touches
+      neither lib/mix/tasks/letflow.check.test.ex nor
+      test/mix/tasks/letflow_check_test_test.exs -- zero overlap with
+      ISS-0399's diff (content-scanning/AV pipeline for instance
+      attachments, entirely under lib/letflow/ and
+      test/letflow/{attachments,scanning}* paths). Per this project's
+      "Failure Attribution Is Structural, Never By Count-Matching" rule,
+      this is not a blocker for this gate -- it is the known wasm_hang class
+      recurring again, worth another tally entry, not a regression this
+      branch introduced.
+
+verdict: PASS
+verdict_reasoning: >
+  mix format and mix compile --warnings-as-errors are both clean. The full
+  suite's only two failures are structurally unrelated to ISS-0399's diff
+  (a different subsystem, a known/tracked recurring flake class with its own
+  issue trail) and do not touch instance-attachment scanning, the new
+  migration, or any file this branch changed. The severe failures seen
+  before the stale-test-DB reset were an environmental artifact of this
+  workspace's persisted Postgres volume (tenant_template built before this
+  branch's new migration existed), not a code defect in ISS-0399 -- resolved
+  by dropping stale letflow_test* databases and confirmed by a clean re-run.
+
+next_action: "Route to ISSUE-FIXER for Step 5 close-out."
+
+notes_for_downstream:
+  - "Record another wasm_hang-class data point (ISS-0524/ISS-0418 lineage) for the ORCH tally -- 2 failures, both in test/mix/tasks/letflow_check_test_test.exs, both the '\"Tests that would be executed:\" block was empty or absent' signature."
+  - "Environmental: this workspace's docker-compose Postgres volume can accumulate stale tenant_template schemas across mix test invocations spanning a migration-adding commit. test/support/tenant_template.ex's ensure_template!/0 only checks bare schema existence (by design), so it will silently serve a stale template until the underlying test databases are dropped. Not fixed as part of this run (out of TEST-RUNNER's ownership scope for this gate) -- worth an anti-patterns.md entry if this recurs."

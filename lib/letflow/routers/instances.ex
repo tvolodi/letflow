@@ -1044,6 +1044,19 @@ defmodule Letflow.Routers.Instances do
     Response.payload_too_large(conn, "uploaded file exceeds the maximum allowed size")
   end
 
+  # ISS-0399 design §7 OQ-4 -- infected content is a caller-actionable
+  # rejection (4xx), never a 500.
+  defp render_upload_attachment(conn, {:error, :infected, verdict}) do
+    Response.unprocessable(conn, "uploaded file failed a content scan (#{verdict})")
+  end
+
+  # ISS-0399 design §7 OQ-4 -- the scanner adapter itself was unavailable
+  # (e.g. a future external-AV call timed out); this is an infrastructure
+  # failure, not a rejection of the file itself, and is retry-able.
+  defp render_upload_attachment(conn, {:error, :scan_unavailable}) do
+    Response.service_unavailable(conn, "content scan is temporarily unavailable, please retry")
+  end
+
   # An Ecto.Changeset failure here means file_name exceeded 255 characters
   # (REQ-211 schema's only realistic changeset-rejection path via this
   # route's own construction) or another required_fields gap this route's
@@ -1119,6 +1132,9 @@ defmodule Letflow.Routers.Instances do
       {:error, :content_missing} ->
         Response.internal_error(conn)
 
+      {:error, :not_available} ->
+        Response.conflict(conn, "attachment content is not currently available")
+
       {:error, :invalid_instance_id} ->
         Response.unprocessable(conn, "instance_id is not a valid UUID")
     end
@@ -1138,7 +1154,8 @@ defmodule Letflow.Routers.Instances do
   # Letflow.Routers.Dlq's own :invalid_id -> not_found precedent for a
   # cross-tenant-probeable UUID.
   @spec fetch_scoped_attachment_content(String.t(), Ecto.UUID.t(), keyword()) ::
-          {:ok, Attachment.t(), Artifact.t()} | {:error, :not_found | :content_missing}
+          {:ok, Attachment.t(), Artifact.t()}
+          | {:error, :not_found | :content_missing | :not_available}
   defp fetch_scoped_attachment_content(raw_attachment_id, instance_id, opts) do
     case Attachments.get_content(raw_attachment_id, opts) do
       {:ok, %Attachment{instance_id: ^instance_id} = attachment, artifact} ->
@@ -1155,6 +1172,9 @@ defmodule Letflow.Routers.Instances do
 
       {:error, :content_missing} ->
         {:error, :content_missing}
+
+      {:error, :not_available} ->
+        {:error, :not_available}
     end
   end
 

@@ -501,7 +501,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_907_010_001, Letflow.Repo.Migrations.CreateEntityFieldRestrictions,
      "20260907010001_create_entity_field_restrictions.exs"},
     {20_260_907_010_002, Letflow.Repo.Migrations.CreateUserEntityGrants,
-     "20260907010002_create_user_entity_grants.exs"}
+     "20260907010002_create_user_entity_grants.exs"},
+    {20_260_907_020_001, Letflow.Repo.Migrations.AddScanStatusToInstanceAttachments,
+     "20260907020001_add_scan_status_to_instance_attachments.exs"}
   ]
 
   @doc """

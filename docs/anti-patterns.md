@@ -2603,3 +2603,119 @@ should run both `mix letflow.check_requirements_registration` and `mix
 letflow.check_deferral_staleness` locally (both fast, no queue call needed for either)
 before handing off or committing — each check gates a different failure mode, and passing
 one says nothing about the other.
+
+## `git worktree remove` on a worktree with a `deps`/`_build` junction deletes the TARGET, not just the link
+
+On 2026-09-07 (WF03-ISS0399-20260907, TEST-DESIGNER), a throwaway `git worktree` was
+created to run the WF-03 mutation-testing addendum in isolation (`git worktree add
+--detach ../letflow-2-mutwt HEAD`). To avoid a slow `mix deps.get`/full recompile inside
+the new worktree, a Windows directory junction was created so the worktree's `deps/`
+pointed at the main checkout's real `deps/` (`mklink /J deps ..\letflow-2\deps`), and
+`_build` was left to compile fresh locally. Three mutants were applied, tested, and
+reverted cleanly inside the worktree — that part worked exactly as intended, and
+`git status --porcelain` in both the worktree and the main checkout was empty
+throughout, confirming no `lib/`/`test/` file was ever mutated outside the throwaway
+copy.
+
+**Then `git worktree remove ../letflow-2-mutwt --force` wiped the MAIN checkout's
+`deps/` directory too.** Windows' recursive-delete behavior for a directory junction is
+not "unlink the junction point" the way a symlink-aware `rm` on Linux treats it — `git
+worktree remove`'s own directory teardown (like several common Windows tools) walked
+into the junction and deleted its *contents*, i.e. the real files sitting in the main
+repo's `deps/`, not just the link. `ls deps` in the main checkout came back empty
+immediately after. `_build` was unaffected only because it was never junctioned — it was
+a real, separate directory inside the worktree, so removing the worktree removed that
+copy and nothing else.
+
+**Recovery:** `mix deps.get` re-fetched everything cleanly (network was available), and
+a subsequent `MIX_ENV=test mix compile --force --warnings-as-errors` came back clean.
+No data was permanently lost — but every `mix compile`/`mix test` invocation for the
+rest of that session then had to eat one full dependency recompile (all ~25 deps),
+which is what actually made several foreground commands exceed the tool's 120-second
+timeout and get moved to background, in turn causing the reporting confusion described
+below.
+
+**Lesson:** never junction/symlink a throwaway worktree's `deps/` (or anything else) at
+a real directory inside the main checkout, even read-only in intent — a worktree is
+meant to be disposable, and `git worktree remove` does not guarantee it won't walk into
+a link. If deps need to be shared to avoid a slow refetch, copy them (`robocopy
+deps-src deps-dst /E`, accepting the one-time copy cost) instead of linking, or just pay
+for a fresh `mix deps.get` in the worktree — both leave the main checkout's own `deps/`
+untouched no matter how the worktree is later torn down.
+
+## Windows Defender treats a literal EICAR test string in a real temp file as a real threat
+
+Also 2026-09-07, same run: a router-level test drove a real EICAR-content upload
+through `Plug.Parsers`'s actual multipart temp-file path (matching the file's other
+multipart tests' own established idiom — write a real body, let the real parser buffer
+it to a real temp file, dispatch the route, let the route `File.read!/1` it back). This
+reproducibly failed with `** (File.Error) could not read file
+".../plug-.../multipart-...": I/O error` — not a bug in the route or the parser: a live
+antivirus product on the dev machine (Windows Defender) detected the industry-standard
+EICAR test signature in the temp file and quarantined/deleted it in the window between
+Plug writing it and the route reading it back. This is the AV product doing exactly what
+it's designed to do; it is not something application code can or should work around by
+degrading its own file-handling.
+
+**Fix:** for a test whose only job is to prove *this codebase's own* logic reacts
+correctly to an infected verdict (e.g. a route's `{:error, :infected, _} -> 422`
+status-code mapping), don't require the byte pattern that trips real AV products to
+survive a real filesystem round-trip on a real dev machine. Swap in a fixture scanner
+adapter (`@behaviour Letflow.Repository.AttachmentScanner`, `scan/2` unconditionally
+returns `{:ok, :infected, "fixture-verdict"}`) via `Application.put_env/3` instead — this
+decouples "does the ROUTE map an infected verdict to the right status" (what that test
+actually needs to prove) from "does the EICAR string get detected as infected" (already
+covered elsewhere, at the context-module and unit-test levels, entirely in-memory with
+no temp file involved at all).
+
+**Lesson:** a test that needs a *specific scanner* to report a *specific verdict* to
+exercise logic downstream of the scan call should inject a fixture for that verdict,
+not rely on triggering the real default adapter's real detection logic through a real
+byte pattern that a real, unrelated system component (host AV) is independently and
+correctly primed to intercept. Reserve real EICAR bytes for the tests whose actual job
+is proving detection itself works (unit-level adapter tests, and any in-memory,
+no-filesystem context-module call) — those two are unaffected by this hazard because
+nothing ever touches disk.
+
+## Stale `tenant_template` schema surviving a migration-adding commit (docker-compose-persisted Postgres)
+
+TEST-RUNNER (WF03-ISS0399-20260907) ran `scripts/test_parallel.sh` (both N=16 default and
+the README's N=4 known-good override) and got 453 and then 749 failures respectively out
+of ~3449 tests — a suite-wide, near-uniform failure rate, not confined to any one file.
+Root cause (via `partition-1.log`): every failure traced back to
+`Letflow.TenantFixture.provisioned_tenant!/1` raising with
+`versions_missing=[20260907020001]` — exactly the migration
+(`priv/repo/migrations/20260907020001_add_scan_status_to_instance_attachments.exs`) added
+by the very commit under test. `test/support/tenant_template.ex` builds the shared
+`"tenant_template"` Postgres schema once and caches it by **bare schema-existence**
+(`template_built_in_db?/0` — a deliberate design choice per that module's own comment,
+not a bug in the module itself). That check is blind to one thing: this repo's
+`docker compose` Postgres container persists its data volume across unrelated `mix test`
+invocations on the same host. If an *earlier* run (before this branch's migration
+existed) already built `tenant_template` into that persisted volume, a *later* run
+against the same container inherits the stale template — no rebuild is triggered, because
+the schema does exist, it's just missing the newest tenant-scoped migration. This
+produced ~20 accumulated stale `letflow_test*` databases on the workspace host, all
+serving the same stale template.
+
+**Symptom to recognize:** a full-suite run failing at a near-constant percentage across
+every partition (not concentrated in the files a branch actually touched), with the
+actual assertion failures bottoming out in `TenantFixture`/`TenantTemplate`
+`TENANT_TEMPLATE_SELF_CHECK`-style errors naming `versions_missing` — especially a
+version matching a migration the current branch just added.
+
+**Fix:** drop every stale `letflow_test*` database (not `letflow_dev`) via
+`docker exec <postgres-container> psql -U letflow -d letflow_dev -c "DROP DATABASE IF
+EXISTS <db>;"` for each one `SELECT datname FROM pg_database WHERE datname LIKE
+'letflow_test%'` lists, then re-run `scripts/test_parallel.sh` — the `test` alias's own
+`ecto.create --quiet`/`ecto.migrate --quiet` and `tenant_template.ex`'s
+`ensure_template!/0` rebuild everything fresh against the branch's actual migration set.
+This resolved 749 failures down to 2 (both an unrelated, independently-tracked
+`wasm_hang` flake) in this run.
+
+**Lesson:** when a full-suite run fails broadly and uniformly right after a branch added
+a new migration, suspect a stale cached `tenant_template` in a persisted test-Postgres
+volume before suspecting the migration or the branch's application code — check one
+failing test's full log for `versions_missing` before doing anything else. This is
+specific to hosts running `docker compose`'s Postgres with a persistent volume across
+sessions; it will not reproduce against a freshly-created container.

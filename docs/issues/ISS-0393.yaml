@@ -50,4 +50,33 @@ source: >
   (follow-up finding #2).
 queue_task_id: 393
 github_issue: 773
-status: open
+status: closed_not_applicable
+resolution: >
+  Closed 2026-09-07 (not applicable as scoped) via WF03-ISS0393-20260907.
+  R-Co became reachable via a GitHub remote (https://github.com/tvolodi/R-Co,
+  commit d19bfec4a9ec492345346bfccd8e389bd9cd92db, confirmed working by the
+  user after this session's Windows-filesystem-path check remained
+  unreachable) -- but this issue's own premise, that R-Co's real
+  tests/simulation/scenarios/*.yaml corpus is a drop-in verbatim replacement
+  for REQ-206/207/208's synthetic scenario fixtures, does not hold. ELIXIR-DEV
+  diffed all 11 real/synthetic file pairs (4 SwiftRoute, 4 Vortex, 3 Meridian)
+  and found the real files are a materially different artifact: narrative UAT
+  scripts (prose action/input/produces fields, prose preconditions[].detail/
+  expected_outcomes[].detail/evidence, several carrying a pipeline_test: key
+  pointing at a web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts Playwright spec)
+  authored for a human reader or UAT-RUNNER's Playwright harness -- not for
+  Letflow.Simulation.Runner.run/1's params/args-driven dispatch.
+  test/support/simulation/scenario_fixture.ex's ScenarioFixture.load!/1 would
+  raise FunctionClauseError on every real outcome in every real file (no
+  verification.args key exists in the real content), unlike ISS-0388's
+  company/org/process fixtures which mapped 1:1 onto letflow's schema.
+  ELIXIR-DEV correctly made zero file changes and escalated rather than
+  inventing machine-executable params/args to force a fit -- this is a genuine
+  architecture decision, not a synthetic-detail-assertion correction (this
+  issue's own AC3 framing). ORCH presented the finding to the user, who chose
+  to keep the existing synthetic Runner-executed fixtures as-is and split the
+  real R-Co narrative content into a correctly-scoped follow-up targeting
+  UAT-RUNNER's domain instead of Letflow.Simulation.Runner's -- filed as
+  ISS-0526 (queue task 526, GH#1062). REQ-206/207/208's design docs corrected
+  (append-only) to remove the implied expectation that a future byte-for-byte
+  port into these specific fixtures was straightforward or pending.

@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0393-20260907-step-00",
+  "run_id": "WF03-ISS0393-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0393-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T16:50:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-207", "REQ-208"],
+    "issue_ids": ["ISS-0393"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0393.yaml",
+      "test/fixtures/simulation/swiftroute/scenarios/*.yaml",
+      "test/fixtures/simulation/vortex/scenarios/*.yaml",
+      "test/fixtures/simulation/meridian/scenarios/*.yaml",
+      "lib/letflow/design/req206-swiftroute-scenario-execution.md",
+      "lib/letflow/design/req207-vortex-scenario-execution.md"
+    ],
+    "branch_name": "feature/WF03-ISS0393-20260907",
+    "base_commit": "18249565"
+  },
+  "task": {
+    "description": "ISS-0393: port R-Co's real tests/simulation/scenarios/*.yaml corpus (SwiftRoute/Vortex/Meridian) verbatim, replacing REQ-206/207/208's self-authored synthetic scenario fixtures, per docs/issues/ISS-0393.yaml's acceptance criteria. R-Co's Windows filesystem path was previously confirmed unreachable from this sandbox; ORCH obtained a GitHub remote from the user (https://github.com/tvolodi/R-Co) and cloned it read-only to /tmp/claude-1001/-home-tvolodi-workspace-letflow-1/272542c3-4900-4f18-9bc0-54eaccf87cff/scratchpad/r-co-src (do NOT commit this clone or its path into letflow -- it is a local scratch reference only, cite it in the handoff/design-doc-correction commit messages by URL+commit-sha instead of by local path). Confirmed present in that clone: tests/simulation/scenarios/{swiftroute-shipment-attach-delivery-note,swiftroute-shipment-high-value-happy,swiftroute-shipment-ops-timeout-escalation,swiftroute-tenant-onboarding-happy}.yaml (4), tests/simulation/scenarios/{vortex-entity-list-filter-and-page,vortex-production-order-above-threshold,vortex-supplier-quality-deviation-critical,vortex-supplier-quality-deviation-false-positive}.yaml (4), tests/simulation/scenarios/{meridian-loan-origination-above-threshold,meridian-loan-origination-below-threshold,meridian-regulatory-compliance-review-bafin}.yaml (3). All 11 filenames match letflow's existing synthetic fixtures 1:1 (minus the company-name prefix R-Co's filenames carry)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0393-20260907 created off main @ 18249565. R-Co source confirmed reachable via git clone from https://github.com/tvolodi/R-Co (user-provided remote, replacing the previously-confirmed-unreachable Windows filesystem path). Real scenario corpus located and enumerated (11 files across SwiftRoute/Vortex/Meridian)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

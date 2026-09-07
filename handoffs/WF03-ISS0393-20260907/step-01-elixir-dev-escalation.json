@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0393-20260907-step-01",
+  "run_id": "WF03-ISS0393-20260907",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0393-20260907/step-01-elixir-dev-escalation.json",
+  "status": "ESCALATED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T17:20:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": ["REQ-206", "REQ-207", "REQ-208"],
+    "issue_ids": ["ISS-0393"],
+    "related_handoff_ids": ["WF03-ISS0393-20260907-step-00"],
+    "artifacts_in": [
+      "test/support/simulation/scenario_fixture.ex",
+      "test/support/simulation/runner.ex",
+      "test/fixtures/simulation/swiftroute/scenarios/*.yaml",
+      "test/fixtures/simulation/vortex/scenarios/*.yaml",
+      "test/fixtures/simulation/meridian/scenarios/*.yaml"
+    ],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0393-20260907",
+    "base_commit": "18249565"
+  },
+  "task": {
+    "description": "Port R-Co's real tests/simulation/scenarios/*.yaml corpus verbatim, replacing REQ-206/207/208's synthetic scenario fixtures."
+  },
+  "result": {
+    "status": "ESCALATED",
+    "note": "ZERO FILE CHANGES MADE (git status/diff confirmed empty). Diffed all 11 real-vs-synthetic file pairs and found the SAME systemic architecture conflict in every single one, not 11 independent judgment calls: R-Co's real scenario files are narrative UAT scripts (prose action/input/produces fields, preconditions with check: custom + prose detail:, expected_outcomes with prose detail:/evidence:, several carrying a pipeline_test: key pointing at a web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts Playwright spec explicitly meant for UAT-RUNNER) -- NOT a reformatting of the same machine-executable shape letflow's synthetic fixtures use. Letflow's actual executor, test/support/simulation/scenario_fixture.ex's ScenarioFixture.load!/1 and test/support/simulation/runner.ex's Runner.run/1, requires a params map per step and an args map per verification outcome to dispatch real HTTP calls and DB assertions -- both modules' own moduledocs state they were built specifically against REQ-206's synthetic corpus shape (Runner's own doc: built by hand because 'no scenario corpus exists yet' at REQ-205 design time). R-Co's real files carry no params/args anywhere; ScenarioFixture.load!/1's single-clause pattern match on verification.args would raise FunctionClauseError on every real outcome in every real file at load time. Step counts, via values, actor sets, and business conditions also differ materially in every file (not superficially) -- confirmed via full diff table in ELIXIR-DEV's own report. A literal verbatim port as ISS-0393 describes it is NOT achievable via superficial rewrapping (unlike ISS-0388's company/org_structure/process_* fixtures, which mapped 1:1 onto letflow's schema). Real options: (1) rewrite ScenarioFixture/Scenario/Runner to parse the narrative schema and INVENT machine-executable params/args to attach to real prose -- which is re-authoring the synthetic layer again, anchored to different (real) narrative text, not an actual verbatim port; or (2) keep the existing synthetic machine-executable fixtures for Runner's unit-level exercise as-is, and treat R-Co's real narrative corpus as a SEPARATE artifact class serving UAT-RUNNER's Playwright pipeline_test: references -- a materially different requirement shape than 'replace these 11 fixture files.' Both are genuine architecture decisions, not synthetic-detail-assertion corrections (ISS-0393 AC3's framing), so ELIXIR-DEV correctly stopped per its own dispatch instruction rather than deciding unilaterally or inventing content to force a fit. ISS-0393's own premise (verbatim port = drop-in replacement) does not hold; its acceptance criteria need correction regardless of which option is chosen."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

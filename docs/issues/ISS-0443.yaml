@@ -55,4 +55,36 @@ source: >
   independently reproduced the silent-ignore with --bogus-flag-xyz.
 queue_task_id: 443
 github_issue: 853
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0443-20260907
+resolved_at: "2026-09-07T13:20:00Z"
+resolution_note: >
+  Applied option (a): replaced the hand-rolled --dir/--autofix parsing
+  (find_dir_flag/1, membership test) with
+  OptionParser.parse(args, strict: [dir: :string, autofix: :boolean]).
+  {"--dir", nil} still raises the pre-existing byte-identical message
+  (no change to F-DIR-MISSING-VALUE's expectation); any other
+  unrecognized flag now raises Mix.Error naming itself; a type-mismatch
+  value (e.g. --autofix=notabool) raises a distinct "invalid value"
+  message; a bare positional argument also raises, closing an
+  additional silent-swallow the old code had. resolve_dir/1's
+  signature/return type is unchanged. run_autofix/1 and everything
+  downstream (ISS-0442/0457's domain, both already resolved before this
+  run started, no live sequencing conflict) is untouched.
+
+  Live evidence: `mix letflow.lint_handoffs --bogus-flag-xyz` now exits
+  non-zero with `unrecognized flag "--bogus-flag-xyz" -- known flags
+  are --dir <path> and --autofix`; a bare `mix letflow.lint_handoffs`
+  still reports the normal healthy corpus result unchanged.
+
+  SECURITY-REVIEWER PASS (out of scope, pure CLI-parsing change to a
+  build-time mix task). REVIEWER PASS (independently re-verified live,
+  including an extra --autofix=notabool case not in the original
+  report). TEST-DESIGN-VALIDATOR PASS (independently reproduced the
+  fail-then-pass proof: pre-fix 48/57 with the 9 new tests failing
+  "expected exception but nothing was raised", post-fix 57/57).
+  TEST-RUNNER: full mix letflow.check gate clean on every check
+  exercising this branch's diff (lint_handoffs itself, the 9 new
+  regression tests, compile, format, sandbox reachability); the one
+  suite failure (3421/3422) is the already-separately-queued ISS-0524,
+  structurally unrelated (zero file overlap).

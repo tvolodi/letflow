@@ -147,6 +147,7 @@ defmodule Letflow.Routers.Tenants do
 
   use Letflow.Api.AuthorizedRouter
 
+  alias Letflow.Admission
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
@@ -351,8 +352,25 @@ defmodule Letflow.Routers.Tenants do
 
   defp handle_deactivate(conn, slug) do
     case Identity.deactivate_tenant(slug) do
-      {:ok, tenant} -> Response.ok(conn, tenant_map(tenant))
-      {:error, :not_found} -> Response.not_found(conn)
+      {:ok, tenant} ->
+        # ISS-0437: evict this tenant's Admission-tracked entry so it stops
+        # permanently diluting every remaining active tenant's fair-share
+        # cap. Called here, at the router layer, deliberately -- NOT inside
+        # Identity.deactivate_tenant/1 itself -- mirroring this router's own
+        # create-path precedent of sequencing cross-context orchestration
+        # here rather than inside a single-purpose context module (see
+        # lib/letflow/design/iss0437-admission-tenant-eviction.md §3).
+        # `schema_name_for_tenant/1`'s `{:error, :invalid_tenant_id}` branch
+        # is not reachable here in practice -- `tenant.id` is a real UUID
+        # just read back from Repo inside Identity.deactivate_tenant/1, not
+        # user input -- so it is not defensively re-checked, matching this
+        # router's own established pattern elsewhere.
+        {:ok, schema} = TenantProvisioning.schema_name_for_tenant(tenant.id)
+        :ok = Admission.forget_tenant(schema)
+        Response.ok(conn, tenant_map(tenant))
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
     end
   end
 

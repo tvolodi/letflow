@@ -293,6 +293,22 @@ mechanism. Recorded as Open Question OQ-2 (§9): a real cardinality bound
 for a follow-up requirement if unbounded growth is later observed to matter
 in practice.
 
+**Correction (ISS-0437, resolved-for-the-deactivation-case; does not amend
+the paragraphs above, which remain accurate for the still-open residual
+case):** the above described the state of the world before ISS-0437.
+`Letflow.Admission.forget_tenant/2` (see
+`lib/letflow/design/iss0437-admission-tenant-eviction.md`) now evicts a
+`state.tenants` entry exactly once, at the moment `Letflow.Routers.Tenants`'s
+deactivate handler calls it after `Letflow.Identity.deactivate_tenant/1`
+succeeds. This is **deactivation-triggered eviction only** — NOT the
+time-windowed or LRU mechanism this section and OQ-2 describe as absent, and
+NOT eviction of a merely-idle-but-still-active tenant (reasons 1–2 above
+remain fully valid and unchanged for that case). An idle-but-never-deactivated
+tenant's entry still accumulates forever, bounded only by the platform's own
+administratively-controlled tenant cardinality (reason 2, unchanged) — this
+narrower residual case remains a distinct, still-open question, not resolved
+by ISS-0437.
+
 **This is a self-acknowledged narrowing of REQ-216's own requirement text,
 not a pre-existing exclusion the requirement text itself already carved
 out** (unlike OQ-5/tier-weighting, which ISS-0431's own decision text names
@@ -476,6 +492,15 @@ does not survive a restart), for the same class of reason:
   `register_task` issue registration (see §3's full escalation paragraph for
   the proposed title/description/severity); it is not left as a design-doc-
   only note.
+  **Resolved-for-the-deactivation-case (ISS-0437):** `Letflow.Admission.forget_tenant/2`,
+  wired from `Letflow.Routers.Tenants`'s deactivate handler (see
+  `lib/letflow/design/iss0437-admission-tenant-eviction.md`), now evicts a
+  `state.tenants` entry on tenant deactivation — not a time-windowed or LRU
+  mechanism, and not eviction of a merely-idle active tenant (§3's reasons
+  1–2 remain valid for that case). Residual, still-open note: an
+  idle-but-never-deactivated tenant's entry still accumulates forever,
+  bounded only by administratively-controlled tenant cardinality (§3 reason
+  2) — this narrower case remains open, not resolved by ISS-0437.
 - **OQ-3:** a crash of `Letflow.Admission` forgets all in-flight admissions
   (§5) rather than persisting/reconciling them. Left open pending evidence
   that repeated crashes under load cause meaningful sustained

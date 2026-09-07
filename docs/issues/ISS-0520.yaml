@@ -1,0 +1,35 @@
+id: ISS-0520
+title: "get_definition_by_name/2 crashes once a definition has 2+ versions under the same name (duplicate)"
+discovered_by: ORCH
+discovered_in_run: WF02-REQ229-20260906
+discovered_at: "2026-09-07T00:50:31Z"
+severity: MINOR
+tags: [duplicate, bookkeeping]
+description: >
+  Duplicate of ISS-0519 (docs/issues/ISS-0519.yaml, letflow-queue task 519,
+  GH#1041). This queue task (520) was created by letflow-queue's own
+  GitHub-import step auto-importing GH issue #1040, which ORCH had created
+  manually (via `gh issue create`) BEFORE registering the same defect
+  properly through the queue's `register_task` endpoint -- that
+  registration independently auto-created its own GitHub mirror, #1041,
+  titled "ISS-0519: ...". The underlying defect
+  (Letflow.Entities.Definitions.get_definition_by_name/2 raising
+  Ecto.MultipleResultsError once a definition has 2+ versions under the
+  same name) is real and NOT yet fixed -- see ISS-0519 for the actual
+  description, severity assessment, and suggested fix direction. This
+  record exists only to keep the docs/issues/<issue_ref>.yaml ↔ queue
+  task id convention consistent; no independent action should be taken
+  against ISS-0520 itself.
+
+  RESOLUTION: GH issue #1040 closed as duplicate of #1041. Queue task 520
+  released with status done (no real work required -- see note on the
+  task itself). The actual fix work remains open and tracked under
+  ISS-0519/task 519.
+affected_files: []
+related:
+  - ISS-0519
+queue_task_id: 520
+github_issue: 1040
+status: resolved
+resolved_in_run: WF02-REQ229-20260906
+resolved_at: "2026-09-07T00:51:21Z"

@@ -47,11 +47,9 @@ to validate against. In practice this does not become live until S7
 ```
 1. Confirm the target instance responds (health check, or a simple GET against a
    known route).
-2. Confirm the scenario corpus for this stage exists under test/uat-reports/scenarios/
-   (or wherever S7's own requirements land it — this workflow doc doesn't prescribe
-   the exact corpus format ahead of S7 defining it, since
-   docs/migration/stage-7-simulation-uat-parity.md notes R-Co's own scenario format
-   as the thing being ported, not invented fresh).
+2. Confirm the scenario corpus for this stage exists under
+   `test/fixtures/uat/scenarios/<company>/*.yaml` (see `.claude/agents/uat-runner.md`
+   and ISS-0526's design doc for the full shape).
 3. If either check fails: do not dispatch UAT-RUNNER. Log BLOCKED, name what's missing.
 ```
 

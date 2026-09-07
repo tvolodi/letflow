@@ -860,3 +860,75 @@ history:
       cleared. mix compile --warnings-as-errors and mix format
       --check-formatted independently confirmed clean by ELIXIR-DEV,
       SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.
+
+  - req: REQ-229
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-06T23:38:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 5: entity record projection
+      and replay (projector.zig). New module
+      Letflow.Entities.Record.Projector (third sibling under
+      Letflow.Entities.Record.* alongside Validator/REQ-227 and
+      Latest/REQ-228): replay_record/3 folds an entity record's full
+      event stream into a snapshot; rebuild_projection/2 does a
+      tenant-or-entity-type-scoped full re-projection of
+      entity_record_latest, one Repo.transaction/1 per entity type.
+      feature/WF02-REQ229-20260906, closing queue task 517 (registered
+      fresh this run via PR #1039 -- REQ-229's original impl_order: 464
+      placeholder was never actually registered, same gap as
+      REQ-226/227/228's own placeholders). NO new migration/schema --
+      entity_record_latest already exists from REQ-228; the design's
+      own section 1 explicitly corrects REQ-229's original description,
+      which mistakenly claimed to 'own' that table's schema.
+      CODE-DESIGNER's design went through one genuine rework cycle:
+      CODE-DESIGN-VALIDATOR's first pass FAILed on a real correctness
+      defect -- the design claimed entity_def_version is left unchanged
+      on ENTITY_RECORD_DELETED, when REQ-228's own shipped
+      upsert_record_latest/3 :delete clause actually re-derives it from
+      a freshly-fetched active definition (same rule as :update), and
+      base_payload/1 embeds that current value in every event's payload
+      including DELETE -- meaning replay would have silently diverged
+      from entity_record_latest's actual contents whenever the active
+      definition version advances between a record's last update and
+      its deletion, directly contradicting AC1/AC3. Rework corrected
+      the fold rule (field_values carried forward unchanged;
+      entity_def_version re-decoded from the DELETE event's own
+      payload); CODE-DESIGN-VALIDATOR's re-check independently
+      confirmed the fix against the real records.ex code and PASSed.
+      ELIXIR-DEV implemented exactly per the corrected design, wrote 10
+      tests covering all 6 acceptance criteria including a dedicated
+      test crafting a raw event stream with a different
+      entity_def_version on DELETE vs. CREATE/UPDATE to directly target
+      the exact defect class the design rework fixed. ELIXIR-DEV also
+      discovered and flagged a genuine, separate pre-existing bug in
+      already-shipped REQ-226 code (not this requirement's to fix):
+      Letflow.Entities.Definitions.get_definition_by_name/2 raises
+      Ecto.MultipleResultsError once a tenant legitimately advances a
+      definition to a second version under the same name -- filed as
+      ISS-0519 (GH#1041/#1040) via PR #1042. SECURITY-REVIEWER
+      independently confirmed tenant isolation (schema-prefix-only,
+      entity_record_latest has no tenant_id column), destructive-
+      operation safety (delete_all/insert_all correctly scoped per
+      entity type and prefix, one transaction per type so a failure
+      partway through a multi-type rebuild leaves already-committed
+      types intact), and independently assessed ISS-0519 as an
+      availability/DoS-class defect with no cross-tenant leak -- PASS.
+      REVIEWER independently re-verified design fidelity, the corrected
+      DELETE-case fix in the actual shipped code (not just the design
+      doc), all 6 ACs by test name, scope (exactly one new module + one
+      new test file, no migration/route/query-DSL creep), and OTP idiom
+      -- PASS (handoffs/WF02-REQ229-20260906/step-02d-reviewer.json).
+      No TEST-DESIGNER dispatch needed per established precedent.
+      TEST-RUNNER hit a documented Postgres connection-budget artifact
+      (ISS-0219-class) at the default partition count, correctly
+      distinguished it from ISS-0515's stale-tenant_template-cache
+      signature (grepped for and found none), and resolved it by
+      re-running with a lower TEST_PARALLEL_N per the README's own
+      documented mitigation: 3357/3382 passed, the 3 residual failures
+      being the pre-existing rustc-toolchain gap (2) and a
+      connection-ceiling-induced ISS-0426 nested-subprocess flake that
+      passed cleanly (11/11) when re-run in isolation -- none are
+      REQ-229 regressions. mix compile --warnings-as-errors and mix
+      format --check-formatted independently confirmed clean by
+      ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.

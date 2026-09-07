@@ -1969,9 +1969,12 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 18
+    entries: 19
     note: >
-      Incremented to 18 by ELIXIR-DEV's own REQ-228 done-event append
+      Incremented to 19 by ELIXIR-DEV's own REQ-229 done-event append
+      (WF02-REQ229-20260906) -- 934 lines at that point, well under the
+      roll ceiling.
+      Previously incremented to 18 by ELIXIR-DEV's own REQ-228 done-event append
       (WF02-REQ228-20260906) -- 862 lines at that point, well under the
       roll ceiling.
       Previously recomposed to 17 during feature/WF02-REQ226-20260906's rebase onto

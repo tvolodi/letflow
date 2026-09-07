@@ -195,3 +195,34 @@ history:
       correct via direct replication since the gated local task couldn't
       reach it past the unrelated toolchain gap). Implementation commit
       b775b2d4. ORCH will merge and release queue task 524 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T16:07:19Z"
+    note: >
+      ISS-0525 resolved via WF03-ISS0525-20260907 (queue task 525, GH#1060).
+      ORCH's own finding while merging ISS-0524 (PR #1059): 2 test failures
+      in Letflow.SandboxPoolTest (RT-9, RT-2) on real GitHub Actions CI,
+      unrelated to that PR's diff. ISSUE-FIXER ruled out the originally-
+      hypothesized cross-CI-job/cross-partition collision and found the real
+      cause: RT-9 deliberately starts a real schema-provisioning
+      Task.Supervisor.async_nolink/3 worker and only waited for it to START,
+      never to FINISH; ExUnit's LIFO on_exit ordering meant its own cleanup
+      raced the still-live orphaned worker's schema drop, sometimes losing
+      and leaving a schema behind that corrupted RT-2's unrelated baseline
+      assertion. A new manifestation of a gap ISS-0224 had explicitly named
+      and declined to fix at the time, not a regression of ISS-0227 or
+      ISS-0292. Fixed test-only: RT-9 now monitors the worker's real pid and
+      assert_receive's its :DOWN before the test returns, closing the race
+      at its source rather than stacking more retry/timeout arithmetic onto
+      the cleanup helpers (explicitly avoided per ISS-0292's own history of
+      3 prior FAILs for that shape of fix). No production code changed, no
+      claim-release added (each test's pool is a private unregistered
+      GenServer, no cross-test leak possible). Verification: 24 repeated-seed
+      local runs (24/24), full test/letflow/ directory (3153/3153), REVIEWER's
+      independent 5 more seeded runs (5/5), TEST-RUNNER's final gate showing
+      zero SandboxPoolTest failures across all 8 partitions. Pipeline:
+      ISSUE-FIXER -> CODE-DESIGNER (0 reworks) -> CODE-DESIGN-VALIDATOR
+      (PASS first pass) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER
+      out of scope) -> TEST-RUNNER. Implementation commit ae3906dd. ORCH
+      will merge and release queue task 525 status:done.

@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF02-REQ230-20260907-step-01b",
+  "run_id": "WF02-REQ230-20260907",
+  "workflow_id": "WF-02",
+  "step": "01b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ230-20260907/step-01b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T00:00:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-230"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ230-20260907-step-01"],
+    "artifacts_in": ["lib/letflow/design/req230-entity-query-dsl-compiler.md"],
+    "branch_name": "feature/WF02-REQ230-20260907",
+    "base_commit": "0f5710f8"
+  },
+  "task": {
+    "description": "Independently validate REQ-230's design artefact (entity query DSL: closed operator enum, allowlist, parameterised SQL compiler) against REQ-230's 7 acceptance criteria and the 'no implementation code' gate, with real-file verification of every load-bearing precedent claim."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "Design substance (allowlist precedence, fragment/1 parameterisation discipline, error taxonomy, scope boundaries, AC traceability) is sound and independently verified against real files -- but the document contains genuine executable Elixir code disguised as 'illustrative inline snippets', which the design-doc gate forbids outright ('no implementation code -- signatures and type shapes only'). Two concrete violations, both in section 5.1/3.3 prose:\n\n1. Line 489: `Enum.reduce(clauses, true, fn c, acc -> dynamic([r], ^acc and ^c) end)` is a complete, syntactically valid, compilable anonymous function with a real accumulator -- this is the exact 'and-combination' algorithm for step 3 of compile/2, not a data-shape illustration. It is copy-pasteable directly into an implementation body. This is the single worst offender and matches precisely the failure mode the designer's own handoff flagged for scrutiny ('a real Enum.reduce shape').\n2. Line 312: `definition.fields |> Enum.filter(& &1.queried)` is likewise a real, runnable filter expression with actual predicate logic (not a type or signature), stating the literal implementation of the JSON-field-entry-selection step.\n\nBy contrast, the other backtick spans checked are genuinely inert: the case-arm illustration at line 403 (`\"eq\" -> {:ok, :eq}`, ..., `_ -> {:error, ...}`) is fragmentary -- missing the `case ... do/end` wrapper and 10 of 12 arms, not compilable as shown; the `fragment(\"(?->>?)::numeric\", r.field_values, ^field_name) > ^value` example at line 566 and the `:in` extension at line 718 are single-expression conceptual shapes explicitly labelled 'conceptually'/'e.g.', consistent with req229's own precedent style, and match precedent already in `lib/letflow/definitions.ex`. The `@type`/`@spec` fenced blocks throughout are signatures/type shapes only, as required.\n\nOther checks all PASSED on independent verification:\n- AC1-AC7 traceability (§10) is complete and specific.\n- AC3 (typed-column-vs-JSONB precedence): stated explicitly with justification (§3.4), matches entity_record_latest's real schema read directly from lib/letflow/entities/record/latest.ex (entity_type:string, record_id:Ecto.UUID, field_values:map, deleted:boolean, entity_def_version:binary, last_event_global_seq:integer, timestamps) -- design's fixed typed-column table (§3.4) matches these columns exactly.\n- AC4 (SQL-metacharacter payload treated as inert data): the fragment/1 discipline in §5.2 genuinely avoids runtime string concatenation into SQL text -- confirmed both the JSONB key name (^field_name) and the comparison value (^value) are bound as separate Ecto placeholders to a compile-time-fixed fragment literal selected by pattern match, not interpolated into the fragment string itself. This is a real parameterised-key mechanism, not disguised interpolation.\n- Letflow.Engine.Expr.cmp_op() precedent verified real: lib/letflow/engine/expr.ex defines `@type cmp_op :: :eq | :neq | :lt | :lte | :gt | :gte`, a closed atom union, matching the design's citation.\n- REQ-225 validator claim verified real: lib/letflow/entities/definition/validator.ex lines 296-309 (`queried_json_violations/1`, Rule 3) rejects `:json` fields with `queried: true` -- confirms :json fields are structurally excluded from the JSONB-side allowlist, as the design claims.\n- No route/controller: confirmed by design text (§1, §8) -- correctly defers to the deferred Letflow.Routers.EntityQuery per REQ-225/226 precedent; no cursor pagination or field-grant scope creep (correctly deferred to REQ-231, §8).\n- Design is detailed enough (module/file placement, full error taxonomy, INV-1/6/7/8 compliance statement in §7) for SECURITY-REVIEWER's later gate to check against.\n\nACTION REQUIRED: rewrite lines 489 and 312 as prose descriptions of the algorithm (e.g. 'each clause's dynamic/2 fragment is folded into a single combined dynamic/2 expression via AND, starting from an initial true accumulator' / 'JSON-field entries are built from the subset of definition.fields whose queried flag is true') with no anonymous function, no `fn ... -> ... end`, no `Enum.reduce`/`Enum.filter` call syntax, and no `|>` pipe into one, anywhere in the document. Also re-scan the full document once more end-to-end for any other complete, compilable expression (anything with `fn`, `->` inside a lambda, `Enum.*` piped with a real predicate/accumulator, `case`/`cond` with more than a fragmentary illustration) before resubmitting -- this is the third rework cycle on this exact class of defect for this requirement's design lineage."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

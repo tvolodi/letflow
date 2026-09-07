@@ -5337,6 +5337,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0524: mix letflow.check.test's wasm_hang discovery stage (added by ISS-0418's fix) allegedly finding zero tagged tests after ISS-0418's root-fix. ISSUE-FIXER found this NOT REPRODUCIBLE -- all 5 real @tag :wasm_hang sites intact, live discovery works correctly, the check's own unit test passes consistently across repeated runs; judged most likely a one-off transient/environmental flake, not a code defect. Treated as a scoped diagnosability-only improvement rather than a behavior fix: discover_wasm_hang_tests/0 now retries the dry-run discovery subprocess exactly once on an empty first result before hard-failing, and the hard-fail message uses a new header-anchored diagnostic window (find_discovery_window/2, mirroring extract_test_list_block/1's own header/terminator matching) instead of a flat line tail. CODE-DESIGN-VALIDATOR FAILed an early flat-40-line-tail design iteration for silently dropping the real 'Tests that would be executed:' header (live-measured 232-line header-to-terminator span, dominated by ExUnit's documented non-deterministic compile-warning interleaving) -- reworked to an explicit 300-line bound with an explicit not-complete flag on overflow and a distinct more-severe signal when no header is found at all. Zero-tolerance-after-retry policy preserved throughout (a persistently-empty result after retry still Mix.raises). Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework) -> CODE-DESIGN-VALIDATOR (1 re-check, PASS) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope, no tenant-data path touched) -> TEST-RUNNER (main suite 3422/3424 passed, 2 pre-existing unrelated rustc-absent failures in Mix.Tasks.Letflow.CheckToolchainTest blocked the gated local task from ever reaching the wasm_hang stage itself; TEST-RUNNER independently replicated the stage's internal commands directly and confirmed the fix behaves correctly -- CI has rustc and will provide end-to-end confirmation on merge). Implementation commit b775b2d4."
+    },
+    {
+      "run_id": "WF03-ISS0525-20260907",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0525",
+      "queue_task_id": 525,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1060,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/sandbox_pool_test.exs"
+      ],
+      "branch_name": "feature/WF03-ISS0525-20260907",
+      "started_at": "2026-09-07T14:37:07Z",
+      "lock_released_at": "2026-09-07T16:15:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0525: 2 test failures in Letflow.SandboxPoolTest (RT-9, RT-2) observed on real GitHub Actions CI (PR #1059/ISS-0524), structurally unrelated to that PR's diff. ISSUE-FIXER ruled out the originally-hypothesized cross-CI-job/cross-partition collision (backend job has no matrix strategy, one isolated postgres service container per trigger; mix test --partitions assigns whole files to partitions so RT-2/RT-9, same file, can never land in different partition processes) and found the real cause: RT-9 deliberately starts a real schema-provisioning Task.Supervisor.async_nolink/3 worker and only waited for it to START, never to FINISH. ExUnit's LIFO on_exit ordering meant RT-9's own cleanup (drop_sandbox_schemas_created_since!/1) ran before start_pool!'s GenServer.stop while the migration Task was still live; SandboxPool has no terminate/2 and the worker is async_nolink, so stopping the pool did nothing to the orphan. RT-9's own cleanup then raced that still-live orphan's DROP SCHEMA, sometimes losing (Postgrex.Error query_canceled) and leaving a schema behind mid-write, corrupting RT-2's unrelated baseline assertion (RT-2 itself needed no changes). A new manifestation of a gap ISS-0224 had explicitly named and declined to fix at the time, not a regression of ISS-0227 or ISS-0292. Fixed test-only (no production code changes): RT-9 now reads the worker's real pid (state.in_flight.task_pid, already test-visible), takes a fresh Process.monitor/1 on it, and assert_receive's its :DOWN before the test returns, bounded by the existing pool_op_rendezvous_timeout/0 helper -- closing the race at its source rather than stacking more retry/timeout arithmetic onto the cleanup helpers (explicitly avoided per ISS-0292's own history of 3 prior CODE-DESIGN-VALIDATOR FAILs for that shape of fix). No explicit claim-release added (each test's pool is a private unregistered GenServer, no cross-test leak possible). Verification: ELIXIR-DEV ran 24 repeated-seed local runs of just this test file (24/24 passed) plus a full test/letflow/ directory run (3153/3153 passed); REVIEWER independently corroborated with 5 more seeded runs (5/5 passed); TEST-RUNNER's final gate showed zero SandboxPoolTest failures across all 8 partitions (the 2 failures present were the separately-tracked pre-existing rustc-absent gap). Pipeline: ISSUE-FIXER -> CODE-DESIGNER (0 reworks) -> CODE-DESIGN-VALIDATOR (PASS first pass) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope) -> TEST-RUNNER. Implementation commit ae3906dd."
     }
   ]
 }

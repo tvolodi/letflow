@@ -1,0 +1,142 @@
+run_id: WF03-ISS0522-20260907
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0522-20260907
+base_commit: 80f650bc
+head_commit: f7e82910
+timestamp_utc: "2026-09-07T14:26:20Z"
+note: >
+  Second, final TEST-RUNNER gate pass for ISS-0522 -- run after both site 1
+  (pagination.ex/definitions.ex cursor-cast guard) and site 2 (the
+  query/cursor.ex + field_grants.ex extension, REQ-231's
+  entity_field_restrictions/user_entity_grants migrations) landed on this
+  branch. Supersedes report-20260907-WF03-ISS0522-20260907.yaml, which only
+  covered site 1.
+
+pre_run_remediation:
+  - action: >
+      Proactively cleared stale tenant_template schemas (known live risk:
+      test/support/tenant_template.ex's template_built_in_db?/0 only checks
+      schema existence, not migration completeness, so a cache predating
+      migration 20260907010001 would not auto-rebuild) via
+      `DROP SCHEMA IF EXISTS tenant_template CASCADE` against every
+      letflow_test1..letflow_test16 partition DB (docker exec into
+      letflow-2-postgres-1, port 5472 per this workspace's .env
+      LETFLOW_DB_PORT) before running the gate. All 16 existing partition
+      DBs had a tenant_template schema present and were cleared; this
+      avoided a repeat of the missing-table failure mode documented in the
+      prior report.
+
+commands_run:
+  - cmd: "mix letflow.check"
+    result: FAIL
+    exit_code: 1
+    note: >
+      letflow.check_toolchain: WARN only (Rust 1.93.1 running vs 1.97.1
+      pinned -- advisory, never gates).
+      letflow.check_requirements_registration, check_deferral_staleness,
+      lint_handoffs, check_async_sandbox_reachability: all OK.
+      format --check-formatted and compile --warnings-as-errors: both
+      passed silently (no output emitted before the test stage started).
+      letflow.check.test (scripts/test_parallel.sh, N=16 partitions,
+      nproc-derived): FAILED. Combined result across all 16 partitions:
+      3407 tests + 6 properties, 3408/3413 passed, 5 failures. Partition 2
+      (179 tests) had 4 failures; partition 5 (209 tests) had 1 failure;
+      all other 14 partitions reported 0 failures. Because run_main_suite
+      raised on the nonzero scripts/test_parallel.sh exit, the alias never
+      reached the isolated :wasm_hang / :lua_wallclock_race subprocess
+      re-runs (lib/mix/tasks/letflow.check.test.ex's run/1 short-circuits
+      there) -- those did not run this pass.
+
+scoped_test_runs:
+  - cmd: "mix test test/letflow/api/pagination_test.exs test/letflow/entities/definitions_test.exs test/letflow/entities/query_cursor_field_grants_test.exs"
+    result: PASS
+    note: >
+      Covered by the full-suite run above -- all three files' tests passed
+      with zero failures in their assigned partitions; not re-run in
+      isolation since the full-suite gate already exercises them end to
+      end.
+
+failures:
+  - test_module: Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest
+    file: test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs
+    count: 4
+    tests:
+      - "run/1 against a scratch --dir fixture an async:false file with a real provisioned_tenant!( call is never flagged"
+      - "run/1 against a scratch --dir fixture a violating fixture (async:true + real provisioned_tenant!( call) fails the build"
+      - "run/1 -- support-module-shaped files are excluded by file selection a tenant_schema_reaper.ex-shaped mode/2 caller (not *_test.exs) is never scanned"
+      - "run/1 against a scratch --dir fixture a clean async:true fixture (no call site) reports zero violations"
+    error: >
+      ** (Mix.Error) letflow.check_async_sandbox_reachability: --dir
+      "C:\\Users\\tvolo\\...\\Temp/letflow-check-async-sandbox-<N>"
+      discovered 0 files -- refusing to report success for an empty or
+      non-existent scan target
+    structural_attribution: >
+      NOT attributable to this branch. Same Windows-only Path.expand()
+      mixed-separator scratch-directory bug already tracked this session as
+      ISS-0513 (not yet merged) -- cited as a known, already-diagnosed
+      class per this run's own task briefing, not a new finding. The
+      failing module (lib/mix/tasks/letflow.check_async_sandbox_reachability.ex)
+      has no call/import/data-path relationship to this branch's diff
+      (lib/letflow/api/pagination.ex, lib/letflow/entities/definitions.ex,
+      lib/letflow/entities/query/cursor.ex, lib/letflow/entities/query/field_grants.ex).
+
+  - test_module: Letflow.Scheduler.PollerTest
+    file: test/letflow/scheduler/poller_test.exs
+    count: 1
+    tests:
+      - "REQ-218 AC3 (per-schema clause): a rejected schema's other ops still proceed the same schema's retention sweep still runs after its own poll_and_fire was rejected, in the same tick"
+    error: >
+      test/letflow/scheduler/poller_test.exs:689: expected this schema's
+      poll_and_fire to be deterministically rejected (probe held before the
+      tick began), but its timer fired anyway.
+    structural_attribution: >
+      NOT attributable to this branch's diff. poller_test.exs and its
+      target module (Letflow.Scheduler.Poller, REQ-218) are outside this
+      branch's changed-file set entirely -- no shared module, no shared
+      table beyond generic tenant-schema plumbing untouched by this diff's
+      cursor/field-grants changes. The assertion failure text itself
+      ("probe held before the tick began, but its timer fired anyway")
+      describes a wall-clock/timer race between a test-side probe and the
+      scheduler's real timer, i.e. a timing-sensitive test under
+      concurrent-partition load -- the same general hazard class as the
+      already-tracked :wasm_hang and lua_wallclock_race isolation classes,
+      but this specific test is not itself tagged into either of those
+      isolation lanes, so it ran inside the main 16-way parallel partition
+      where timing contention is highest. Not previously named in this
+      session's known-flake list (wasm_hang / ISS-0224 SandboxPoolTest /
+      ISS-0513 Path.expand) -- flagging as a new, distinct observation for
+      ORCH/ISSUE-FIXER follow-up (candidate: tag REQ-218's AC3 timing-probe
+      tests similarly to lua_wallclock_race, or increase the probe's
+      scheduling margin) rather than assuming it without a repro. Not
+      re-run in isolation this pass (see Forbidden/no-speculation
+      constraint -- would need a dedicated single-file run to confirm
+      flakiness vs. a real regression, which is out of scope for this
+      report to just assert).
+
+conclusion:
+  status: FAIL
+  recommendation: FAIL
+  summary: >
+    mix letflow.check's overall exit code was 1. All non-test sub-checks
+    (toolchain advisory warning aside) passed: check_requirements_registration,
+    check_deferral_staleness, lint_handoffs, check_async_sandbox_reachability,
+    format --check-formatted, compile --warnings-as-errors. The test-suite
+    combined result was 3408/3413 passed, 5 failures (3407 tests + 6
+    properties across 16 partitions). All 5 failures are structurally
+    unrelated to this branch's diff: 4 are the already-tracked ISS-0513
+    Windows Path.expand() bug in
+    letflow_check_async_sandbox_reachability_test.exs, and 1 is a new,
+    apparently timing-sensitive failure in Letflow.Scheduler.PollerTest
+    (REQ-218 AC3) with no code-path relationship to pagination.ex,
+    definitions.ex, cursor.ex, or field_grants.ex. Every test this branch
+    added or touched (pagination_test.exs, definitions_test.exs,
+    query_cursor_field_grants_test.exs) passed with zero failures.
+    Recommending FAIL on this run's raw exit code per the no-speculation
+    rule (RELEASE-VALIDATOR should independently re-run rather than take
+    this report's structural attribution as sufficient to call it PASS),
+    while noting the branch's own diff shows no evidence of a regression:
+    the PollerTest failure is new and not yet confirmed as flaky vs. real,
+    and should be triaged (repro run, ideally 3x isolated) before this gate
+    is called clean.

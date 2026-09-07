@@ -38,4 +38,94 @@ related:
   - ISS-0438
 queue_task_id: 522
 github_issue: 1049
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0522-20260907
+resolved_at: "2026-09-07T09:00:00Z"
+resolution_note: >
+  BOTH real call sites fixed. Site 1
+  (Letflow.Entities.Definitions.list_definitions/2): added
+  Letflow.Api.Pagination.cast_binary_id_component/1 ({:ok, Ecto.UUID.t()}
+  | {:error, :invalid_cursor}, wrapping Ecto.UUID.cast/1) and routed
+  decode_list_definitions_seek/1's id component through it before the
+  value ever reaches a query. Site 2 (Letflow.Entities.Query.Cursor,
+  REQ-231 -- landed on main mid-run, see history below): in
+  build_resume_terms/2, replaced the unchecked
+  decode_component(:string, id_value) with the same
+  cast_binary_id_component/1 call, matching site 1's pattern exactly and
+  fulfilling the issue's own original ask for a shared, reusable helper.
+  CODE-DESIGN-VALIDATOR independently confirmed (for site 2) that
+  Allowlist.typed_columns/0 has no `id` entry and Definition.field_type/0
+  has no UUID variant, so the hardcoded id tiebreaker at cursor.ex:254
+  was the ONLY reachable :binary_id/Ecto.UUID path -- the narrow,
+  single-line fix is complete, not partial. SECURITY-REVIEWER PASSed both
+  sites (tenant_id/prefix scoping untouched in both, {:error,
+  :invalid_cursor} carries zero tenant-data content, matches this
+  codebase's established error-shape convention). REVIEWER PASSed both
+  (independently traced with/else-chain propagation, confirmed no
+  @spec-widening needed either site). TEST-DESIGN-VALIDATOR PASSed both
+  (one rework cycle on site 1 for a missing required test/specs/
+  ISS-0522.md deliverable) -- independently reproduced both fail-then-pass
+  proofs: site 1 pre-fix 25/26 (real Ecto.Query.CastError), post-fix
+  26/26; site 2 pre-fix 9/11 (real ArgumentError from Ecto.UUID.dump!/1),
+  post-fix 11/11. TEST-RUNNER ran the full mix letflow.check gate twice
+  (once per site's completion); the final run showed 3408/3413 passed,
+  5 failures, all structurally cleared: 4 already-tracked (ISS-0513's
+  Windows-only Path.expand() bug in
+  letflow_check_async_sandbox_reachability_test.exs, not yet merged --
+  this branch simply inherits main's current pre-fix state) and 1 in
+  Letflow.Scheduler.PollerTest (REQ-218 AC3 family), the same
+  already-open, already-documented CI-load-timing flake class as
+  ISS-0453 (status: open) -- that issue's own precedent establishes a
+  PR touching zero scheduler files can still hit this race, and this
+  branch's diff likewise touches zero files under lib/letflow/scheduler
+  or test/letflow/scheduler.
+history_note: >
+  RECOVERED FROM A MID-RUN COLLISION, recorded rather than silently
+  smoothed over. This run's ISSUE-FIXER originally, correctly, found
+  lib/letflow/entities/query/cursor.ex did not exist (REQ-231 was
+  status: pending) and scoped the fix to site 1 only. REQ-231 then
+  merged to main (PR #1050, commit 1e3a1d6f) while this run's Step 4/5
+  was in flight, creating site 2 for real -- with the identical defect.
+  ORCH caught this on rebase (an add/add conflict on this very file,
+  since the REQ-231 session had independently filed an equivalent
+  ISS-0522 record under the same queue task) rather than merging a
+  false "resolved, only 1 site" claim, corrected the record to an
+  honest in-progress state, and re-ran the full pipeline
+  (CODE-DESIGNER/CODE-DESIGN-VALIDATOR/ELIXIR-DEV/SECURITY-REVIEWER/
+  REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR/TEST-RUNNER) for site 2
+  before resolving this issue for real.
+progress_note_superseded: >
+  IN PROGRESS, not yet resolved -- recorded here rather than left silent
+  mid-run. Site 1 (Letflow.Entities.Definitions.list_definitions/2) is
+  fixed: added Letflow.Api.Pagination.cast_binary_id_component/1
+  ({:ok, Ecto.UUID.t()} | {:error, :invalid_cursor}, wrapping
+  Ecto.UUID.cast/1) and routed decode_list_definitions_seek/1's id
+  component through it before the value ever reaches a query
+  (list_definitions/2's own @spec already declared {:error,
+  :invalid_cursor}, so no with-chain/@spec change was needed further up).
+  SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (one rework cycle),
+  and TEST-RUNNER all independently PASSed this site-1 fix and its 7
+  regression tests + test/specs/ISS-0522.md.
+
+  EARLIER DIAGNOSIS CORRECTED, NOT SILENTLY: this run's ISSUE-FIXER
+  originally found lib/letflow/entities/query/cursor.ex did not exist
+  anywhere and REQ-231 was still pending, concluding only 1 of the 2
+  named call sites was real. REQ-231 merged to main (PR #1050, commit
+  1e3a1d6f) while this run's Step 4/5 was in flight -- ORCH caught this
+  on rebase (an add/add conflict on this very file, since the REQ-231
+  session filed an equivalent ISS-0522 record independently under the
+  same queue task) and re-verified against the newly-landed module
+  rather than trusting the now-stale diagnosis. Confirmed by direct
+  reading: Letflow.Entities.Query.Cursor's maybe_dump/2
+  (lib/letflow/entities/query/cursor.ex:354-355) calls
+  Ecto.UUID.dump!/1 unconditionally for :binary_id/Ecto.UUID-typed sort
+  terms, and decode_component/2's catch-all
+  (lib/letflow/entities/query/cursor.ex:306) accepts ANY binary string
+  for the id tiebreaker with no UUID validation -- the identical
+  unhandled-raise defect class, genuinely present at a real, newly-live
+  site. Site 2 is NOT yet fixed. Extending the same
+  cast_binary_id_component/1 helper to cursor.ex's maybe_dump/2 next,
+  through the full pipeline again (SECURITY-REVIEWER/REVIEWER/
+  TEST-DESIGN-VALIDATOR/TEST-RUNNER all re-gate, since this is new
+  substantive scope against a tenant-data query path, not a
+  documentation-only change).

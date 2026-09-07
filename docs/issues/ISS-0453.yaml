@@ -99,3 +99,15 @@ source: >
   92b5ce92, observed live during this run's merge-gate check.
 queue_task_id: 453
 status: open
+data_point_20260907: >
+  Another occurrence, different specific assertion in the same file/
+  family: WF03-ISS0522-20260907's TEST-RUNNER hit
+  Letflow.Scheduler.PollerTest's REQ-218 AC3 "retention sweep still runs
+  after its own poll_and_fire was rejected" test ("probe held before the
+  tick began, but its timer fired anyway") on a branch touching zero
+  files under lib/letflow/scheduler or test/letflow/scheduler
+  (lib/letflow/api/pagination.ex, lib/letflow/entities/definitions.ex,
+  lib/letflow/entities/query/cursor.ex only) -- same CI-load-timing
+  mechanism class as this issue's own filing, structurally cleared on
+  that basis rather than blocking the merge. Recorded as a fresh data
+  point rather than a new issue.

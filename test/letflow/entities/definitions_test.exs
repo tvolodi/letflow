@@ -413,6 +413,56 @@ defmodule Letflow.Entities.DefinitionsTest do
       assert Definitions.list_definitions(%{}, "not-a-real-schema") ==
                {:error, :invalid_schema_name}
     end
+
+    # ISS-0522: decode_list_definitions_seek/1 used to return a bare
+    # `{inserted_at, id_str}` tuple with `id_str` unvalidated -- a cursor
+    # carrying a malformed (non-UUID) id component then reached Repo.all/2's
+    # {e.inserted_at, e.id} < {^inserted_at, ^id_str} WHERE clause against
+    # EntityDefinition.id (typed :binary_id) and raised
+    # Ecto.Query.CastError, unhandled by list_definitions/2's `with` chain.
+    # The fix routes id_str through Pagination.cast_binary_id_component/1
+    # before it ever reaches a query. Mirrors ISSUE-FIXER's own
+    # reproduction; asserts a clean return, NOT assert_raise, since the
+    # whole point of the fix is that nothing raises. See test/specs/ISS-0522.md.
+    test "ISS-0522: a cursor with a malformed (non-UUID) id component returns {:error, :invalid_cursor}, not a raise" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      malformed_cursor =
+        "ED:"
+        |> Letflow.Api.Pagination.build_raw_cursor_timestamp_key(
+          System.system_time(:microsecond),
+          "not-a-uuid",
+          System.system_time(:microsecond)
+        )
+        |> Letflow.Api.Pagination.encode_cursor()
+
+      assert Definitions.list_definitions(%{cursor: malformed_cursor}, schema) ==
+               {:error, :invalid_cursor}
+    end
+
+    # Non-regression: proves the fix's new cast doesn't reject a well-formed
+    # id component -- a valid cursor with a real UUID id still paginates.
+    test "ISS-0522: a cursor with a valid UUID id component still paginates cleanly (non-regression)" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      for n <- 1..3 do
+        assert {:ok, _} =
+                 Definitions.create_definition(
+                   create_attrs(%{definition: valid_definition(%{name: "entity_uuid_#{n}"})}),
+                   schema
+                 )
+      end
+
+      assert {:ok, page_1} = Definitions.list_definitions(%{page_size: 2}, schema)
+      assert length(page_1.items) == 2
+      assert is_binary(page_1.next_cursor)
+
+      assert {:ok, page_2} =
+               Definitions.list_definitions(%{page_size: 2, cursor: page_1.next_cursor}, schema)
+
+      assert length(page_2.items) == 1
+      assert page_2.next_cursor == nil
+    end
   end
 
   # ---------------------------------------------------------------------------------

@@ -358,6 +358,26 @@ defmodule Letflow.Api.Pagination do
   end
 
   @doc """
+  Casts a cursor-payload substring expected to be an Ecto `:binary_id` (UUID)
+  component into its binary form, or rejects it. Companion to
+  `parse_int_from_cursor/3` above for the binary_id case: an endpoint's own
+  store/list function uses this to validate a domain field parsed out of
+  `cursor.inner` before pinning it into a query against a `:binary_id`
+  column -- this module never interprets `cursor.inner`'s domain fields on
+  its own (design §0.3 is unchanged by this addition).
+  """
+  @spec cast_binary_id_component(String.t()) ::
+          {:ok, Ecto.UUID.t()} | {:error, :invalid_cursor}
+  def cast_binary_id_component(component) when is_binary(component) do
+    case Ecto.UUID.cast(component) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :invalid_cursor}
+    end
+  end
+
+  def cast_binary_id_component(_component), do: {:error, :invalid_cursor}
+
+  @doc """
   PROVENANCE (historical, not current decision authority):
   Returns the zero-indexed byte position of the `n`-th `:` (1-indexed `n`,
   matching `pagination.zig`'s own 1-indexing) in `slice`, or `nil` if fewer

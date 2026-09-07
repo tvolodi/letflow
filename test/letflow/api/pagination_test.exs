@@ -368,6 +368,50 @@ defmodule Letflow.Api.PaginationTest do
     end
   end
 
+  # ── cast_binary_id_component/1 (ISS-0522) ──────────────────────────────────
+  #
+  # ISS-0522: an endpoint's own list function (e.g.
+  # Letflow.Entities.Definitions.list_definitions/2) used to pin a cursor's
+  # raw id_str substring straight into a :binary_id-typed WHERE clause, so a
+  # non-UUID id component reached Repo.all/2 unvalidated and raised
+  # Ecto.Query.CastError -- outside every `with`-chain error arm, unhandled.
+  # cast_binary_id_component/1 is the shared guard (design:
+  # lib/letflow/design/iss0522-cursor-uuid-cast-guard.md) a call site now
+  # uses to validate that substring itself, before it ever reaches a query,
+  # translating Ecto.UUID.cast/1's bare :error into this module's
+  # established {:error, :invalid_cursor} shape (matching
+  # decode_list_definitions_cursor/1's own catch-all atom). See
+  # test/specs/ISS-0522.md.
+  describe "cast_binary_id_component/1 (ISS-0522)" do
+    test "a valid UUID string casts to {:ok, binary}, matching Ecto.UUID.cast/1's own shape" do
+      uuid = Ecto.UUID.generate()
+
+      assert Pagination.cast_binary_id_component(uuid) == Ecto.UUID.cast(uuid)
+      assert {:ok, ^uuid} = Pagination.cast_binary_id_component(uuid)
+    end
+
+    test "a non-UUID string is rejected with {:error, :invalid_cursor}, not a raise" do
+      assert Pagination.cast_binary_id_component("not-a-uuid") == {:error, :invalid_cursor}
+    end
+
+    test "an empty string is rejected with {:error, :invalid_cursor}" do
+      assert Pagination.cast_binary_id_component("") == {:error, :invalid_cursor}
+    end
+
+    test "a UUID-length string with non-hex characters is rejected" do
+      # Same byte length as a real UUID (36 chars incl. hyphens), but the
+      # hex groups are replaced with non-hex letters -- proves the guard
+      # checks content, not merely length/shape.
+      assert Pagination.cast_binary_id_component("zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz") ==
+               {:error, :invalid_cursor}
+    end
+
+    test "non-binary input is rejected with {:error, :invalid_cursor} instead of a pattern-match failure" do
+      assert Pagination.cast_binary_id_component(12345) == {:error, :invalid_cursor}
+      assert Pagination.cast_binary_id_component(nil) == {:error, :invalid_cursor}
+    end
+  end
+
   describe "find_nth_colon/2" do
     test "finds the n-th colon, 1-indexed" do
       slice = "a:bb:ccc:d"

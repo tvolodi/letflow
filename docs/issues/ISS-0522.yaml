@@ -1,0 +1,41 @@
+id: ISS-0522
+title: "Hardening: unhandled raise on malformed cursor component (recurring pattern, 2 call sites)"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ231-20260907
+discovered_at: "2026-09-07T06:00:00Z"
+severity: MINOR
+tags: [hardening, robustness, cursor, pagination, req-067]
+description: >
+  A caller-supplied pagination cursor with a malformed component (e.g. a
+  non-UUID string where a binary_id keyset value is expected) causes an
+  unhandled raise (an `ArgumentError` from `Ecto.UUID.dump!/1` or similar)
+  rather than a clean, typed `{:error, :invalid_cursor}`-shaped result.
+
+  This is now a RECURRING pattern across two independently-shipped call
+  sites: `Letflow.Entities.Definitions.list_definitions/2` (REQ-226,
+  REQ-067's cursor contract) and `Letflow.Entities.Query.Cursor` (REQ-231).
+  SECURITY-REVIEWER assessed each instance individually as non-blocking at
+  the time (the request runs in its own isolated BEAM process, so a raise
+  there is a doomed single request, not a shared-state or cross-tenant
+  security issue -- fits INV-8's own "isolated crash, not a shared one"
+  carve-out) but did not evaluate the pattern across both sites together,
+  since each review only ever saw its own requirement's diff.
+
+  REVIEWER (WF02-REQ231-20260907) flagged, upon noticing this was the
+  SECOND occurrence of the same class, that this is worth evaluating as a
+  cross-cutting hardening item now that a pattern (not just an isolated
+  instance) exists: every future cursor-consuming call site is likely to
+  reintroduce the identical gap unless a shared, reusable safe-decode
+  helper exists.
+affected_files:
+  - lib/letflow/entities/definitions.ex
+  - lib/letflow/entities/query/cursor.ex
+  - lib/letflow/api/pagination.ex
+related:
+  - REQ-067
+  - REQ-226
+  - REQ-231
+  - ISS-0438
+queue_task_id: 522
+github_issue: 1049
+status: open

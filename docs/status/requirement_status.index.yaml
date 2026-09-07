@@ -1969,12 +1969,16 @@ volumes:
     path: docs/status/requirement_status.v10.yaml
     status: current
     opened: 2026-09-05
-    entries: 21
+    entries: 22
     note: >
-      Incremented to 21 by ELIXIR-DEV's own REQ-230 done-event append
-      (WF02-REQ230-20260907) -- 1063 lines at that point, approaching
-      but still under the 1200-line/120000-byte roll ceiling -- next
-      append should check headroom carefully and be ready to roll.
+      Incremented to 22 by ELIXIR-DEV's own REQ-231 done-event append
+      (WF02-REQ231-20260907) -- 1134 lines at that point (68684 bytes),
+      still under the 1200-line/120000-byte roll ceiling but with very
+      little headroom left -- the NEXT append to this volume will very
+      likely need to roll to volume 11. Check both bounds before
+      appending again.
+      Previously incremented to 21 by ELIXIR-DEV's own REQ-230 done-event
+      append (WF02-REQ230-20260907) -- 1063 lines at that point.
       Previously incremented to 20 by ORCH's own ISS-0519 SCOPE-CHANGE done-event
       append (WF03-ISS0519-20260907) -- 994 lines at that point, well
       under the roll ceiling.

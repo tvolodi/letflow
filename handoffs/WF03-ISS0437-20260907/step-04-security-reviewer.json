@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-04",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "SECURITY-REVIEWER",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0437-20260907/step-04-security-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T15:05:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-03"],
+    "artifacts_in": ["lib/letflow/admission.ex", "lib/letflow/routers/tenants.ex"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3",
+    "implementation_commit": "12611d23"
+  },
+  "task": {
+    "description": "Security gate on ISS-0437's tenant-data-adjacent change (Admission GenServer eviction + router-layer wiring in the deactivate handler)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Checked INV-1..INV-9. INV-1/2/3/5/9 not applicable (no migration/Ecto schema/business table touched, no response-shape change, no scripting path, no new lookup-by-id endpoint, no outbound HTTP). INV-4 (secrets by reference) PASS, grep clean. INV-7 (no SQL interpolation) PASS, grep clean. INV-8 (no unhandled crashes on realistic failure) PASS -- two apparent bare-match hits (routers/tenants.ex:368-369) confirmed unreachable-on-realistic-input since tenant.id is a UUID just read back from Postgres, and forget_tenant/2's handle_call has no failure branch; admission.ex:415's case clause falls through safely on non-match. Cross-tenant isolation of forget_tenant/2's wiring confirmed safe: schema derived purely from the tenant being deactivated, single-GenServer serialized handle_call rules out cross-request races, disjoint map keys for different tenants. Generation-tag mechanism confirmed server-side-only: never on the public Ref struct, never client-derivable, keyed by unforgeable make_ref(). DoS potential assessed low: forget_tenant/2 only reachable via POST /tenants/:slug/deactivate gated by :TenantsManage (PLATFORM_ADMIN-only, unchanged by this diff), tenant_generations growth bounded by administratively-controlled tenant cardinality. Authorization unchanged -- purely internal orchestration added inside an already-authorized handler, no new externally-reachable behavior. Silent-failure/drift check: global_in_use decrements unconditionally on every release regardless of generation match, only the per-tenant adjustment is generation-gated, so no real release is ever silently dropped without freeing the global budget unit -- confirmed via admission_test.exs's Test 4. Real test run: mix test test/letflow/admission_test.exs test/letflow/routers/tenants_test.exs -- 43 passed, 0 failures."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

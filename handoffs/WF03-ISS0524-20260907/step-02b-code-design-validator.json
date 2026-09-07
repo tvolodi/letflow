@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0524-20260907-step-02b",
+  "run_id": "WF03-ISS0524-20260907",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0524-20260907/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T14:25:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0524"],
+    "related_handoff_ids": ["WF03-ISS0524-20260907-step-02"],
+    "artifacts_in": ["lib/letflow/design/iss0524-wasm-hang-discovery-diagnosability.md", "lib/mix/tasks/letflow.check.test.ex"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0524-20260907",
+    "base_commit": "c5f2ac6b"
+  },
+  "task": {
+    "description": "Validate ISS-0524's diagnosability-improvement design (error-message enrichment + bounded retry)."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "FAIL on check 4: the design's SS3.3 rationale for choosing N=40 as the tail length ('comfortably larger than a real discovery block's typical size... plus a handful of header/terminator lines') is empirically false. Live mix test --only wasm_hang --dry-run captured: Tests that would be executed: header at line 30, All tests have been excluded. terminator at line 262, 283 total lines -- a 232-line header-to-terminator span, not a handful of lines, matching the module's own already-documented DEVIATION comment about ExUnit's non-deterministic compile-warning interleaving (which the design itself cites in SS1 to justify the retry, then contradicts in SS3.3). Taking the real last 40 lines, the 5 test entries and terminator land inside the window but the header itself (line 30) does not -- directly falsifying SS3.2's claim that 'the header, any entries, and the terminator would appear' in the tail. This matters substantively: in the actual failure scenario the design targets, a reader cannot tell from the truncated excerpt whether the header ever appeared (a more severe 'dry-run itself broken' signal) versus appeared-but-empty -- exactly the diagnostic distinction this design exists to restore. Route back to CODE-DESIGNER: either (a) re-derive N against real evidence (measure header-to-terminator span across repeated real runs, pick a bound that reliably includes the header, or explicitly cap/skip the warning-noise region instead of a flat line-count tail), or (b) drop the header-will-be-visible claim and adjust the message content requirements to explicitly state whether the header was found in the raw output at all, independent of what the truncated tail displays. All other checks PASS: current-code description matches reality (discover_wasm_hang_tests/0 lines 429-448, extract_test_list_block/1 475-492, run_wasm_hang_tests/0 365-404, DEVIATION comment 458-474); retry logic genuinely preserves never-proceed-with-zero (both-empty path still Mix.raises); scope exclusions correct (parsing logic, existing fixture, real @tag sites, admission logic all untouched); docs/issues/ISS-0524.yaml append confirmed pure additive via git diff; no disguised executable code (grep clean)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

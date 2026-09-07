@@ -277,8 +277,7 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
   @impl Mix.Task
   @spec run([String.t()]) :: :ok
   def run(args) do
-    dir = resolve_dir(args)
-    autofix? = "--autofix" in args
+    {dir, autofix?} = parse_flags(args)
 
     files = handoff_files(dir)
 
@@ -340,29 +339,69 @@ defmodule Mix.Tasks.Letflow.LintHandoffs do
     end
   end
 
-  # -- CLI flag parsing (ISS-0440 §2.1) ------------------------------------
+  # -- CLI flag parsing (ISS-0440 §2.1, tightened by ISS-0443) -------------
 
-  # No "--dir" present in args -> returns @handoffs_dir, byte-identical to
-  # today's hardcoded default -- this is the property CI's own no-flag
-  # invocation (via the `letflow.check` alias, which calls plain
-  # "letflow.lint_handoffs" with no arguments) depends on. "--dir" present
-  # -> returns the next arg verbatim; a "--dir" with no following value is a
-  # usage error (raises), never a silent fallback to @handoffs_dir -- a
-  # silent fallback would let a typo'd --dir invocation quietly re-lint the
-  # real corpus while claiming to have checked something else.
-  @spec resolve_dir([String.t()]) :: String.t()
-  def resolve_dir(args) do
-    case find_dir_flag(args) do
-      :not_present -> @handoffs_dir
-      {:ok, value} -> value
-      :missing_value -> Mix.raise("letflow.lint_handoffs: --dir given with no path argument")
+  # Single parse point for both flags, via OptionParser's `strict:` mode --
+  # replaces the old hand-walked find_dir_flag/1, which silently discarded
+  # any token it didn't recognize (ISS-0443's root cause: a mistyped
+  # --autofx or --dr, or any other unrecognized flag, produced a confident
+  # "OK" instead of an error). No "--dir"/"--autofix" present in args ->
+  # dir defaults to @handoffs_dir, autofix? defaults to false --
+  # byte-identical to today's behavior on the no-flag path CI's own
+  # `letflow.check` alias depends on. Any unrecognized flag, a malformed
+  # value for a recognized flag, or a bare positional argument now raises
+  # instead of being silently ignored.
+  @spec parse_flags([String.t()]) :: {dir :: String.t(), autofix? :: boolean()}
+  defp parse_flags(args) do
+    {parsed, remaining, invalid} =
+      OptionParser.parse(args, strict: [dir: :string, autofix: :boolean])
+
+    case invalid do
+      [entry | _rest] -> raise_invalid_flag(entry)
+      [] -> :ok
     end
+
+    if remaining != [] do
+      Mix.raise(
+        "letflow.lint_handoffs: unexpected argument(s) #{inspect(remaining)} -- this task " <>
+          "takes no positional arguments"
+      )
+    end
+
+    dir = Keyword.get(parsed, :dir, @handoffs_dir)
+    autofix? = Keyword.get(parsed, :autofix, false)
+    {dir, autofix?}
   end
 
-  defp find_dir_flag(["--dir", value | _rest]), do: {:ok, value}
-  defp find_dir_flag(["--dir"]), do: :missing_value
-  defp find_dir_flag([_other | rest]), do: find_dir_flag(rest)
-  defp find_dir_flag([]), do: :not_present
+  # "--dir" with no following value is special-cased ahead of the generic
+  # unrecognized-flag clause below, preserving today's exact message --
+  # OptionParser's `invalid` list carries both cases as {flag, nil}, so they
+  # are only distinguishable by which flag string appears, not by the nil.
+  @spec raise_invalid_flag({String.t(), String.t() | nil}) :: no_return()
+  defp raise_invalid_flag({"--dir", nil}) do
+    Mix.raise("letflow.lint_handoffs: --dir given with no path argument")
+  end
+
+  defp raise_invalid_flag({flag, nil}) do
+    Mix.raise(
+      "letflow.lint_handoffs: unrecognized flag #{inspect(flag)} -- known flags are " <>
+        "--dir <path> and --autofix"
+    )
+  end
+
+  defp raise_invalid_flag({flag, value}) do
+    Mix.raise("letflow.lint_handoffs: invalid value #{inspect(value)} for flag #{inspect(flag)}")
+  end
+
+  # Preserved for callers: same input type ([String.t()]) and same success
+  # return type (String.t()) as before ISS-0443. Delegates to parse_flags/1
+  # so --dir's validation stays in the single parse point above -- no
+  # duplicated logic between run/1's flag handling and this public helper.
+  @spec resolve_dir([String.t()]) :: String.t()
+  def resolve_dir(args) do
+    {dir, _autofix?} = parse_flags(args)
+    dir
+  end
 
   # ISS-0440 §2.1a(a) -- a hard guard: an EXPLICITLY-supplied --dir that
   # discovers zero files is a usage error (Mix.raise/1, non-zero exit), not

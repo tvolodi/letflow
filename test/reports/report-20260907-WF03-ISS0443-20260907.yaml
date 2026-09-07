@@ -1,0 +1,48 @@
+run_id: WF03-ISS0443-20260907
+agent: TEST-RUNNER
+issue: ISS-0443
+branch: feature/WF03-ISS0443-20260907
+timestamp: 2026-09-07T13:17:19Z
+branch_stable: true
+branch_confirmed_before: feature/WF03-ISS0443-20260907
+branch_confirmed_after: feature/WF03-ISS0443-20260907
+
+command: mix letflow.check
+
+sub_checks:
+  letflow.check_toolchain:
+    result: WARN (non-gating)
+    detail: "Rust 1.93.1 running vs 1.97.1 pinned -- warning only, never changes exit code"
+  letflow.check_requirements_registration: PASS
+  letflow.check_deferral_staleness: PASS
+  letflow.lint_handoffs:
+    result: PASS
+    detail: "OK -- 0 new violations across 2398 handoff files (25 pre-existing grandfathered, traced to ISS-0190)"
+  letflow.check_async_sandbox_reachability:
+    result: PASS
+    detail: "OK -- 67 async:true test files scanned, 0 reach Sandbox.mode/2, 0 new violations"
+  format --check-formatted: PASS (no output, no errors)
+  compile --warnings-as-errors: PASS (no output, no errors)
+  letflow.check.test:
+    result: FAIL
+    test_suite_summary: "combined: 3416 tests, 6 properties, 1 failures (3421/3422 passed)"
+    failing_partition: 5
+    failing_test: "Mix.Tasks.Letflow.Check.TestTest: mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1) passes (no raise) when the wrapper exits 0 and the target substring is absent from every partition log, even with unrelated warnings present"
+    failure_location: "test/mix/tasks/letflow_check_test_test.exs:386"
+    attribution: "ISS-0524 (pre-existing, open, queue task 524) -- Mix.Tasks.Letflow.Check.TestTest's own wasm_hang dry-run fixture finds zero :wasm_hang-tagged tests after ISS-0418's root-fix (bd558bdd) retagged/removed them, and treats that as a hard failure. Not caused by this branch: this branch's diff is confined to lib/mix/tasks/letflow.lint_handoffs.ex, test/mix/tasks/letflow.lint_handoffs_test.exs, test/specs/ISS-0443.md, docs/issues/ISS-0443.yaml, and a design doc -- none of which touch letflow.check.test.ex, the wasm_hang discovery machinery, or ISS-0418's retagging."
+    other_known_flake_classes_seen: "none -- ISS-0453-class Letflow.Scheduler.PollerTest CI-load-timing flake did not occur in this run"
+
+overall_exit_code: 1
+overall_result: FAIL (attributable entirely to pre-existing ISS-0524, not to this branch's change)
+
+recommendation: PASS
+recommendation_rationale: >
+  All 8 checks that exercise this branch's actual diff (lint_handoffs itself, the new
+  9 regression tests in letflow.lint_handoffs_test.exs, compile --warnings-as-errors,
+  format --check-formatted, async-sandbox reachability, requirements/deferral-staleness
+  checks) are green. The single overall-suite failure is the previously-filed,
+  independently-reproducible ISS-0524 defect in the check.test task's own wasm_hang
+  fixture, unrelated to and untouched by this branch's diff. Gate recommendation is
+  PASS for this issue conditional on ISS-0524 being tracked/fixed separately (already
+  queued as task 524), consistent with the two named pre-existing gaps this run was
+  briefed to expect.

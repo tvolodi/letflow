@@ -61,14 +61,26 @@ source: >
   synthetic counterparts.
 queue_task_id: 526
 github_issue: 1062
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0526-20260907. All 11 named tenant-business
+  scenario files (4 SwiftRoute, 4 Vortex, 3 Meridian) ported verbatim into
+  test/fixtures/uat/scenarios/<company>/*.yaml; UAT-RUNNER and WF-05
+  instructions updated to point at the new location and correctly
+  distinguish this narrative format from Letflow.Simulation.Runner's
+  unrelated machine-executable synthetic fixtures (confirmed untouched).
+  Pipeline: CODE-DESIGNER (PASS first pass) -> CODE-DESIGN-VALIDATOR ->
+  ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope, fixture/docs
+  only, no tenant-data path) -> TEST-RUNNER (3431/3433 passed, 2 pre-existing
+  unrelated rustc-absent failures, zero SandboxPoolTest failures confirming
+  ISS-0525's fix holds). Implementation commit 65c4618b. The 18-file
+  platform/ corpus was explicitly kept out of scope (per REQ-210's own
+  already-recorded decision, not re-litigated here) and filed as a
+  follow-up, ISS-0527 (queue task 527, GH#1064).
 implementation_note: >
   ELIXIR-DEV (WF03-ISS0526-20260907) implemented CODE-DESIGNER's
   lib/letflow/design/iss0526-uat-scenario-corpus-destination.md design
-  (PASSed by CODE-DESIGN-VALIDATOR on first pass). Status left "open"
-  here -- SECURITY-REVIEWER and REVIEWER gates, plus ORCH's Step Final
-  disposition, have not run yet; DOC-UPDATER flips status once those
-  land.
+  (PASSed by CODE-DESIGN-VALIDATOR on first pass).
 
   PORTED (11 of 11 named tenant-business scenario files, scope §4 of the
   design; the 18-file platform/ corpus explicitly deferred, see below):

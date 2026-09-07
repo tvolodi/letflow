@@ -1967,17 +1967,32 @@ volumes:
 
   - volume: 10
     path: docs/status/requirement_status.v10.yaml
-    status: current
+    status: closed
     opened: 2026-09-05
-    entries: 23
+    closed: 2026-09-07
+    entries: 24
+    lines: 1210
+    bytes_working_tree: 73372
+    frozen_prefix_lines: 1210
+    frozen_prefix_sha256: "c23f0b80ea3fb06953c0d8f20ae77131ba21e47db1699ba17197e519162c5c37"
     note: >
-      Incremented to 23 by ORCH's own ISS-0418 SCOPE-CHANGE done-event
+      Closed 2026-09-07 by ORCH's own ISS-0437 SCOPE-CHANGE done-event append
+      (WF03-ISS0437-20260907), which brought this file to 1210 lines / 73372
+      bytes -- over the 1200-line roll ceiling flagged as imminent by the
+      prior note below. Rolled to volume 11
+      (docs/status/requirement_status.v11.yaml) per the standard procedure:
+      the triggering entry itself stays in this volume (matching the v9->v10
+      precedent), a closure footer was appended, and v11 was created with
+      this volume's header text carried forward verbatim (volume number,
+      opening date, predecessor path updated).
+      Incremented to 24 by ORCH's own ISS-0437 SCOPE-CHANGE done-event
+      append (WF03-ISS0437-20260907) -- 1210 lines at that point (73372
+      bytes), over the 1200-line/120000-byte roll ceiling, triggering the
+      roll documented above.
+      Previously incremented to 23 by ORCH's own ISS-0418 SCOPE-CHANGE done-event
       append (WF03-ISS0418-20260907) -- 1181 lines at that point
       (71589 bytes), STILL under the 1200-line/120000-byte roll ceiling
-      but with only ~19 lines of headroom left. The NEXT append to this
-      volume MUST roll to volume 11 -- do not attempt a normal append,
-      go straight to the roll procedure (close v10 with a frozen-prefix
-      footer, create v11 with v10's header carried forward).
+      but with only ~19 lines of headroom left.
       Previously incremented to 22 by ELIXIR-DEV's own REQ-231 done-event
       Previously incremented to 21 by ELIXIR-DEV's own REQ-230 done-event
       append (WF02-REQ230-20260907) -- 1063 lines at that point.
@@ -2169,6 +2184,19 @@ volumes:
       above.)
       Opened by ORCH at feature/WF02-REQ265-20260905's Step Final, successor
       to volume 9. Created with volume 9's header text verbatim (volume
+      number, opening date and predecessor path updated) and an empty
+      `history:` list, per this index's `roll_rule.on_exceed` procedure.
+      `entries:` will be incremented per HOW-TO-APPEND step 6 as real
+      appends land.
+
+  - volume: 11
+    path: docs/status/requirement_status.v11.yaml
+    status: current
+    opened: 2026-09-07
+    entries: 0
+    note: >
+      Opened by ORCH at feature/WF03-ISS0437-20260907's Step Final, successor
+      to volume 10. Created with volume 10's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty
       `history:` list, per this index's `roll_rule.on_exceed` procedure.
       `entries:` will be incremented per HOW-TO-APPEND step 6 as real

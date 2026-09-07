@@ -1,0 +1,77 @@
+run_id: WF03-ISS0437-20260907
+workflow_id: WF-03
+step: "final-gate"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0437-20260907
+head_commit: e738e727
+fix_commit: 12611d23
+timestamp_utc: "2026-09-07T12:55:46Z"
+
+commands_run:
+  - cmd: "mix compile --warnings-as-errors"
+    result: PASS
+    note: "No output, clean compile, exit 0."
+  - cmd: "mix format --check-formatted"
+    result: PASS
+    note: "No output, all files formatted, exit 0."
+  - cmd: "mix letflow.check.test"
+    result: FAIL (pre-existing, unrelated)
+    note: >
+      test_parallel: N=8 (source: nproc), TEST_POOL_SIZE=10.
+      Per-partition results:
+        partition 1: 494 tests, 0 properties, 0 failures, exit 0
+        partition 2: 348 tests, 4 properties, 0 failures, exit 0
+        partition 3: 411 tests, 1 property, 0 failures, exit 0
+        partition 4: 549 tests, 1 property, 0 failures, exit 0
+        partition 5: 408 tests, 0 properties, 0 failures, exit 0
+        partition 6: 436 tests, 0 properties, 2 failures, exit 2
+        partition 7: 404 tests, 0 properties, 0 failures, exit 0
+        partition 8: 362 tests, 0 properties, 0 failures, exit 0
+      combined: 3412 tests, 6 properties, 2 failures (3416/3418 passed).
+      Both failures are in Mix.Tasks.Letflow.CheckToolchainTest
+      (test/mix/tasks/letflow_check_toolchain_test.exs):
+        1) "rust pin (REQ-165) a matching rust pin reports OK with no
+           mismatch" (line 274) -- ** (ErlangError) Erlang error: :enoent
+           from System.cmd("rustc", ["--version"], stderr_to_stdout: true)
+           at lib/system.ex:1141, via
+           Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0 (line 69)
+           and running_rust_version/0 (line 76), called from test at
+           line 275.
+        2) "rust pin (REQ-165) a mismatched rust pin reports a MISMATCH
+           row naming expected and running" (line 289) -- identical
+           :enoent signature, called from test at line 290.
+      Root cause: rustc is not installed in this sandbox (`which rustc`
+      style lookup fails with :enoent) -- a known, pre-existing environment
+      gap, not something this branch introduced. This is the exact same
+      failure signature ELIXIR-DEV reported earlier (434/436 in that
+      partial run; here the full 8-way parallel run gives 3416/3418
+      combined, same 2 named tests, same :enoent root cause).
+      No regression: `git diff main...HEAD --stat` shows this branch only
+      touches lib/letflow/admission.ex, lib/letflow/routers/tenants.ex,
+      lib/letflow/design/iss0437-admission-tenant-eviction.md,
+      lib/letflow/design/req216-admission-control-core.md,
+      test/letflow/admission_test.exs, test/letflow/routers/tenants_test.exs,
+      and orchestration handoff docs under docs/agents/handoffs/ -- nothing
+      in or near test/mix/tasks/letflow_check_toolchain_test.exs or any
+      Rust/wasmex toolchain path.
+      No Admission-related failures anywhere in any partition log (grepped
+      all 8 partition logs for "Admission" + fail/error markers -- the only
+      hit is a normal tenant-fixture teardown log line for
+      Letflow.Plugs.AdmissionPipelineTest, not an error). test/letflow/admission_test.exs
+      and test/letflow/routers/tenants_test.exs (the new/changed tests for
+      this fix) all passed as part of the combined run.
+
+conclusion:
+  status: PASS (for this branch's change)
+  summary: >
+    mix compile --warnings-as-errors and mix format --check-formatted are
+    both clean. mix letflow.check.test's full 8-way parallel run gives
+    3416/3418 tests passed; the only 2 failures are the pre-existing,
+    environment-caused Mix.Tasks.Letflow.CheckToolchainTest rust-pin
+    failures (rustc binary absent from this sandbox), with an identical
+    :enoent signature to the prior ELIXIR-DEV report and confirmed outside
+    this branch's diff. No regression and no new failure attributable to
+    ISS-0437's Letflow.Admission tenant-eviction fairness fix (commit
+    12611d23). Recommend RELEASE-VALIDATOR treat these 2 as known
+    environmental noise, independently re-run to confirm, and proceed with
+    the merge decision on that basis.

@@ -38,4 +38,36 @@ source: >
   handoffs/WF02-REQ216-20260902/step-01c-code-designer-rework.json).
 queue_task_id: 437
 github_issue: 843
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0437-20260907. ISSUE-FIXER's diagnosis
+  reframed this from a purely cosmetic requirement-vs-doc mismatch into a
+  genuine correctness bug: deactivated tenants' entries in
+  Letflow.Admission's state.tenants map were never evicted, permanently
+  diluting every remaining active tenant's fair-share admission cap
+  (per_tenant_cap/1 = max(div(global_cap, map_size(tenants)), 1) grows
+  its divisor forever). Fixed by adding Letflow.Admission.forget_tenant/2,
+  called from Letflow.Routers.Tenants's deactivate handler (router-layer
+  wiring, following the existing Identity.create_tenant/1 precedent of
+  not orchestrating cross-context calls inside Identity itself) --
+  unconditionally evicts the deactivated tenant's state.tenants entry.
+  A real race this composition could introduce (deactivate->reactivate->
+  stale-release driving in_use negative and silently uncapping that
+  tenant) was caught by CODE-DESIGN-VALIDATOR across two rework cycles
+  and closed via a per-schema generation/epoch tag: state.tenants entries
+  and state.refs both carry a generation stamp captured server-side at
+  admission time, and release_tenant/3 only decrements when the stored
+  generation still matches, otherwise no-oping as a stale release. A
+  second rework cycle fixed a shape inconsistency the first rework
+  introduced (:global admissions had been left storing a bare atom while
+  {:tenant, schema} admissions moved to a {pool, generation} tuple --
+  now both are uniformly the tuple shape). REQ-216's design doc corrected
+  (append-only, OQ-2 annotated resolved for the deactivation case,
+  idle-but-never-deactivated case explicitly left open as a residual,
+  smaller gap). Implementation commit 12611d23, merged via PR (see
+  requirement_status for the exact merge event). Full pipeline:
+  ISSUE-FIXER diagnosis -> CODE-DESIGNER (2 reworks) ->
+  CODE-DESIGN-VALIDATOR (2 re-checks, final PASS) -> ELIXIR-DEV ->
+  SECURITY-REVIEWER (PASS, INV-1..9 checked) -> REVIEWER (PASS) ->
+  TEST-RUNNER (3416/3418 passed, 2 pre-existing unrelated rustc-absent
+  failures) -> merge.

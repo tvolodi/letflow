@@ -606,4 +606,173 @@ defmodule Letflow.Routers.Req212AttachmentsRoutesTest do
       assert items == []
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # ISS-0399 -- content-scanning pipeline, route-level error mapping (design
+  # §7 OQ-4): {:error, :infected, _} -> 422, {:error, :scan_unavailable} ->
+  # 503, {:error, :not_available} (get_content) -> 409.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # NOTE: this test deliberately does NOT put literal EICAR bytes through a
+  # real `Plug.Parsers` multipart temp-file round-trip. On a dev/CI machine
+  # with a live antivirus product (observed here: Windows Defender), an
+  # actual EICAR-content temp file gets quarantined/deleted by the AV
+  # engine itself between Plug writing it and this route reading it back --
+  # a real-world false positive unrelated to this code's correctness, which
+  # made this test flake with a `File.Error: I/O error` reading the
+  # already-vanished temp file. The real EICAR-detection behavior itself
+  # (SignatureHeuristic actually flagging the byte pattern) is already
+  # covered at the context-module level
+  # (test/letflow/repository/attachments_test.exs's "ISS-0399:
+  # EICAR-signature upload is rejected" describe block) and at the unit
+  # level (signature_heuristic_test.exs). This test's own job is narrower
+  # and doesn't need real EICAR bytes to prove it: verify the ROUTE's
+  # {:error, :infected, _} -> 422 status mapping (design §7 OQ-4) --
+  # orthogonal to which scanner produced the infected verdict. A fixture
+  # scanner that always reports :infected isolates that mapping cleanly,
+  # the same way the 503 test below isolates the scan_unavailable mapping.
+  describe "ISS-0399: POST upload rejected by the scanner -> 422, nothing persisted" do
+    defmodule AlwaysInfectedScanner do
+      @moduledoc false
+      @behaviour Letflow.Repository.AttachmentScanner
+
+      @impl true
+      def scan(_raw_bytes, _content_type), do: {:ok, :infected, "fixture-verdict"}
+    end
+
+    test "an infected verdict returns 422 naming the verdict, and persists nothing" do
+      previous = Application.get_env(:letflow, :attachment_scanner)
+      Application.put_env(:letflow, :attachment_scanner, AlwaysInfectedScanner)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:letflow, :attachment_scanner, previous)
+        else
+          Application.delete_env(:letflow, :attachment_scanner)
+        end
+      end)
+
+      tenant = provisioned_tenant("iss0399-upload-infected")
+      instance_id = Ecto.UUID.generate()
+      boundary = "iss0399boundary1"
+
+      body = multipart_body(boundary, "note.txt", "text/plain", "harmless-looking bytes")
+
+      conn =
+        dispatch_multipart(
+          :post,
+          "/#{instance_id}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          body,
+          boundary
+        )
+
+      assert conn.status == 422
+      resp = Jason.decode!(conn.resp_body)
+      assert resp["detail"] =~ "content scan"
+      assert resp["detail"] =~ "fixture-verdict"
+
+      {:ok, %{items: items}} =
+        Attachments.list(%{instance_id: instance_id, cursor: nil, page_size: 10},
+          prefix: tenant.schema_name
+        )
+
+      assert items == []
+    end
+  end
+
+  describe "ISS-0399: POST upload when the scanner adapter is unavailable -> 503, nothing persisted" do
+    defmodule UnavailableScanner do
+      @moduledoc false
+      @behaviour Letflow.Repository.AttachmentScanner
+
+      @impl true
+      def scan(_raw_bytes, _content_type), do: {:error, :simulated_unavailable}
+    end
+
+    test "a scanner returning {:error, _} maps to 503" do
+      previous = Application.get_env(:letflow, :attachment_scanner)
+      Application.put_env(:letflow, :attachment_scanner, UnavailableScanner)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:letflow, :attachment_scanner, previous)
+        else
+          Application.delete_env(:letflow, :attachment_scanner)
+        end
+      end)
+
+      tenant = provisioned_tenant("iss0399-upload-unavail")
+      instance_id = Ecto.UUID.generate()
+      boundary = "iss0399boundary2"
+      body = multipart_body(boundary, "note.txt", "text/plain", "harmless bytes")
+
+      conn =
+        dispatch_multipart(
+          :post,
+          "/#{instance_id}/attachments",
+          tenant,
+          ["PROCESS_OPERATOR"],
+          body,
+          boundary
+        )
+
+      assert conn.status == 503
+
+      {:ok, %{items: items}} =
+        Attachments.list(%{instance_id: instance_id, cursor: nil, page_size: 10},
+          prefix: tenant.schema_name
+        )
+
+      assert items == []
+    end
+  end
+
+  describe "ISS-0399: GET content for a non-:clean attachment -> 409" do
+    test "a :pending row's byte content cannot be fetched -- 409, distinct from the 404/500 cases" do
+      tenant = provisioned_tenant("iss0399-get-pending")
+      instance_id = Ecto.UUID.generate()
+
+      tenant_id = tenant.tenant_id
+      content_hash = :crypto.hash(:sha256, "pending route-level content")
+
+      {:ok, _artifact} =
+        Letflow.Repository.upsert_content(
+          tenant.schema_name,
+          tenant_id,
+          content_hash,
+          "text/plain",
+          byte_size("pending route-level content"),
+          "pending route-level content"
+        )
+
+      pending_attrs = %{
+        tenant_id: tenant_id,
+        instance_id: instance_id,
+        content_hash: content_hash,
+        file_name: "pending.txt",
+        content_type: "text/plain",
+        byte_size: byte_size("pending route-level content"),
+        uploaded_by: Ecto.UUID.generate(),
+        scan_status: :pending
+      }
+
+      {:ok, pending_attachment} =
+        %Letflow.Repository.Attachment{}
+        |> Letflow.Repository.Attachment.changeset(pending_attrs)
+        |> Letflow.Repo.insert(prefix: tenant.schema_name)
+
+      conn =
+        build_conn(
+          :get,
+          "/#{instance_id}/attachments/#{pending_attachment.id}",
+          tenant,
+          roles: ["PLATFORM_ADMIN"]
+        )
+        |> dispatch()
+
+      assert conn.status == 409
+    end
+  end
 end

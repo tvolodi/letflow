@@ -215,6 +215,207 @@ defmodule Letflow.Repository.AttachmentsTest do
     end
   end
 
+  # ---------------------------------------------------------------------------------
+  # ISS-0399 -- content-scanning pipeline (lib/letflow/design/iss0399-attachment-
+  # content-scanning.md). Four traps this fix exists to close, each with its own
+  # test: (1) infected content must not be persisted; (2) a scanner exception must
+  # not become a false-clean; (3) a pre-existing/pending row must not be servable;
+  # (4) an infected-upload attempt must be audit-logged without leaking raw bytes.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0399: clean upload is scanned, marked :clean, and servable" do
+    test "a non-EICAR upload gets scan_status: :clean and its content is fetchable via get_content/2" do
+      %{schema_name: schema} = provisioned_tenant("iss0399-clean")
+
+      assert {:ok, attachment} = Attachments.upload(upload_attrs(), prefix: schema)
+      assert attachment.scan_status == :clean
+
+      assert {:ok, ^attachment, artifact} = Attachments.get_content(attachment.id, prefix: schema)
+      assert artifact.content == "hello attachment bytes"
+    end
+  end
+
+  describe "ISS-0399: EICAR-signature upload is rejected and nothing is persisted" do
+    test "upload/2 returns {:error, :infected, verdict} and creates neither an instance_attachments nor a repository_artifacts row" do
+      %{schema_name: schema} = provisioned_tenant("iss0399-eicar")
+
+      eicar =
+        "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+      assert {:error, :infected, verdict} =
+               Attachments.upload(upload_attrs(raw_bytes: eicar), prefix: schema)
+
+      assert verdict == "eicar-test-signature"
+
+      # Nothing persisted -- asserted directly via DB counts, not inference
+      # (Mutant A target: infected branch must short-circuit before any
+      # upsert/insert).
+      assert Repo.aggregate(Attachment, :count, prefix: schema) == 0
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 0
+    end
+
+    test "an EICAR upload rejection is audit-logged with tenant/actor/hash metadata but never the raw bytes" do
+      %{schema_name: schema, tenant_id: tenant_id} = provisioned_tenant("iss0399-audit")
+
+      eicar =
+        "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+      uploaded_by = Ecto.UUID.generate()
+      instance_id = Ecto.UUID.generate()
+
+      log =
+        ExUnit.CaptureLog.capture_log([metadata: :all], fn ->
+          assert {:error, :infected, _verdict} =
+                   Attachments.upload(
+                     upload_attrs(
+                       raw_bytes: eicar,
+                       instance_id: instance_id,
+                       uploaded_by: uploaded_by
+                     ),
+                     prefix: schema
+                   )
+        end)
+
+      assert log =~ "attachment upload rejected: infected content"
+      assert log =~ tenant_id
+      assert log =~ instance_id
+      assert log =~ uploaded_by
+      assert log =~ Base.encode16(:crypto.hash(:sha256, eicar), case: :lower)
+
+      # The raw bytes/EICAR signature itself must never appear in the log line.
+      refute log =~ "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
+    end
+  end
+
+  describe "ISS-0399: a scanner adapter exception fails closed, never a false-clean" do
+    defmodule RaisingScanner do
+      @moduledoc false
+      @behaviour Letflow.Repository.AttachmentScanner
+
+      @impl true
+      def scan(_raw_bytes, _content_type) do
+        raise "simulated scanner crash"
+      end
+    end
+
+    defp put_attachment_scanner!(module) do
+      previous = Application.get_env(:letflow, :attachment_scanner)
+      Application.put_env(:letflow, :attachment_scanner, module)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:letflow, :attachment_scanner, previous)
+        else
+          Application.delete_env(:letflow, :attachment_scanner)
+        end
+      end)
+
+      :ok
+    end
+
+    test "an adapter that raises returns {:error, :scan_unavailable}, not a false {:ok, :clean}, and nothing is persisted" do
+      %{schema_name: schema} = provisioned_tenant("iss0399-raise")
+      put_attachment_scanner!(RaisingScanner)
+
+      assert Attachments.upload(upload_attrs(), prefix: schema) == {:error, :scan_unavailable}
+
+      # Mutant B target: the rescue clause must return an error tuple, not
+      # {:ok, :clean} -- asserted here by proving nothing was persisted, which
+      # is only possible if the scan step genuinely fails closed.
+      assert Repo.aggregate(Attachment, :count, prefix: schema) == 0
+      assert Repo.aggregate(Artifact, :count, prefix: schema) == 0
+    end
+  end
+
+  describe "ISS-0399: a non-:clean attachment's content is never servable via get_content/2" do
+    test "a :pending row (pre-existing/backfilled shape) is rejected with {:error, :not_available}" do
+      %{schema_name: schema} = provisioned_tenant("iss0399-pending")
+
+      # upload/2 itself can never produce a :pending row (only :clean is ever
+      # written on the write path) -- simulate the ONE way a :pending row can
+      # exist: a pre-existing row from before this migration shipped
+      # (design §1.1's DB-level default). Constructed directly via the
+      # schema's own changeset/Repo.insert, bypassing upload/2 entirely, the
+      # same way this codebase's other "simulate a pre-existing row" fixtures
+      # work.
+      tenant_id = Ecto.UUID.generate()
+      content_hash = :crypto.hash(:sha256, "pending row content")
+
+      {:ok, _artifact} =
+        Repository.upsert_content(
+          schema,
+          tenant_id,
+          content_hash,
+          "text/plain",
+          20,
+          "pending row content"
+        )
+
+      pending_attrs = %{
+        tenant_id: tenant_id,
+        instance_id: Ecto.UUID.generate(),
+        content_hash: content_hash,
+        file_name: "pending.txt",
+        content_type: "text/plain",
+        byte_size: 20,
+        uploaded_by: Ecto.UUID.generate(),
+        scan_status: :pending
+      }
+
+      {:ok, pending_attachment} =
+        %Attachment{}
+        |> Attachment.changeset(pending_attrs)
+        |> Repo.insert(prefix: schema)
+
+      assert pending_attachment.scan_status == :pending
+
+      # Mutant C target: the scan_status != :clean gate in get_content/2 must
+      # reject this, not just :infected/:error.
+      assert Attachments.get_content(pending_attachment.id, prefix: schema) ==
+               {:error, :not_available}
+
+      # Metadata is still readable -- only byte-serving is gated (design §4.2).
+      assert {:ok, %Attachment{scan_status: :pending}} =
+               Attachments.get(pending_attachment.id, prefix: schema)
+    end
+
+    test "an :infected row (not reachable via upload/2, simulated directly) is rejected with {:error, :not_available}" do
+      %{schema_name: schema} = provisioned_tenant("iss0399-infected-row")
+
+      tenant_id = Ecto.UUID.generate()
+      content_hash = :crypto.hash(:sha256, "infected row content")
+
+      {:ok, _artifact} =
+        Repository.upsert_content(
+          schema,
+          tenant_id,
+          content_hash,
+          "text/plain",
+          22,
+          "infected row content"
+        )
+
+      infected_attrs = %{
+        tenant_id: tenant_id,
+        instance_id: Ecto.UUID.generate(),
+        content_hash: content_hash,
+        file_name: "infected.txt",
+        content_type: "text/plain",
+        byte_size: 22,
+        uploaded_by: Ecto.UUID.generate(),
+        scan_status: :infected
+      }
+
+      {:ok, infected_attachment} =
+        %Attachment{}
+        |> Attachment.changeset(infected_attrs)
+        |> Repo.insert(prefix: schema)
+
+      assert Attachments.get_content(infected_attachment.id, prefix: schema) ==
+               {:error, :not_available}
+    end
+  end
+
   describe "list/2" do
     test "tenant-scoped and filtered by instance_id (AC5)" do
       %{schema_name: schema_a} = provisioned_tenant("req211-list-a")
@@ -363,7 +564,7 @@ defmodule Letflow.Repository.AttachmentsTest do
   end
 
   describe "moduledoc content statements" do
-    test "states per-tenant dedup boundary, no-canonicalisation, and content-scanning deferral" do
+    test "states per-tenant dedup boundary, no-canonicalisation, and the real content-scanning mechanism (ISS-0399)" do
       {:docs_v1, _anno, _lang, _format, %{"en" => moduledoc}, _meta, _docs} =
         Code.fetch_docs(Attachments)
 
@@ -372,7 +573,19 @@ defmodule Letflow.Repository.AttachmentsTest do
       assert normalized =~ "Decision B"
       assert normalized =~ "never one shared row"
       assert normalized =~ "No canonicalisation is applied to attachment bytes"
-      assert normalized =~ "deliberately deferred follow-up"
+
+      # ISS-0399 design §4.3: the old "Content-scanning deferral" section
+      # (which said this was a "deliberately deferred follow-up") is REPLACED,
+      # not appended to, by a statement of the mechanism actually shipped --
+      # the deferral is now resolved, so asserting deferral language would
+      # assert something no longer true. This is the corrected assertion:
+      # the moduledoc must document the real synchronous scan step, its
+      # reject-before-persist guarantee, and the default adapter, and must
+      # NOT still claim the scan is deferred.
+      refute normalized =~ "deliberately deferred follow-up"
+      assert normalized =~ "synchronous"
+      assert normalized =~ "reject-before-persist"
+      assert normalized =~ "Letflow.Repository.AttachmentScanner.SignatureHeuristic"
     end
   end
 

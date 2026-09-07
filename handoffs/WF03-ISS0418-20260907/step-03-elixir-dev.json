@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF03-ISS0418-20260907-step-03",
+  "run_id": "WF03-ISS0418-20260907",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0418-20260907/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T10:35:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": ["ISS-0418"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0418-20260907/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0418-20260907/step-02-code-designer.json",
+      "handoffs/WF03-ISS0418-20260907/step-02b-code-design-validator.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "artifacts_out": [
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/mix/tasks/letflow_check_test_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0418-20260907",
+    "base_commit": "1e3a1d6f"
+  },
+  "task": {
+    "description": "Implement the validated ISS-0418 design: restructure run_wasm_hang_tests/0 into a discovery-based (mix test --only wasm_hang --dry-run) + per-test-subprocess (mix test <file>:<line>, no --only) shape, add the irreducible-pair comment at plugin_handler_test.exs, and verify the fix with repeated isolated runs of the wasm_hang stage."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Implemented exactly per design §4, with two genuine, documented deviations discovered during live verification (both required to make the mechanism actually work -- neither changes the design's overall approach): (1) §4.2 step 2's 'take the block up to the next blank line or a line that doesn't match the file:line shape' assumes the test-list lines are contiguous immediately after the 'Tests that would be executed:' header; live-verified across several real `mix test --only wasm_hang --dry-run` runs that ExUnit's own non-deterministic compiler-warning re-emission for unrelated test files interleaves inside that window, so extract_test_list_block/1 instead FILTERS (not take_while-stops-at-first-mismatch) every line between the header and a terminator ('All tests have been excluded.'/'Finished in') for the file:line shape -- robust to the interleaving, same scope-bounding intent. (2) §4.2 step 5 says hard-fail if the discovery subprocess 'exits nonzero'; live-verified that `mix test --only wasm_hang --dry-run` exits 1 UNCONDITIONALLY, every time, because --dry-run never executes anything and Mix's own CLI treats '--only given but 0 tests executed' as an error regardless of dry-run's own success ('The --only option was given to \"mix test\" but no test was executed'). Gating on this exit code as specified would make discovery hard-fail on every single invocation. discover_wasm_hang_tests/0 ignores the discovery subprocess's exit code entirely and relies solely on the parsed test-list block (empty vs non-empty) as the broken/working signal. Both deviations are documented inline in the code with 'DEVIATION FROM DESIGN DOC' comments, not silently patched. Per-test isolation itself (mix test <file>:<line>, no --only suffix, per §4.1) verified working as designed. Also found and fixed a pre-existing-test regression NOT anticipated by the design's artifacts_in list: test/mix/tasks/letflow_check_test_test.exs's install_passing_fake_mix/1 fakes `mix` with one static args-blind response, which broke the file's only test that reaches run_wasm_hang_tests/0 (the fake's fixed 'Result: 0 passed' output lacks a 'Tests that would be executed:' block, so discovery correctly treated it as broken and hard-failed). Added a new args-aware install_wasm_hang_aware_fake_mix/1 helper (dispatches on argv shape: --dry-run -> canned 1-test discovery block, exit 1 matching real Mix behavior; the discovered fake file:line -> a passing per-test result; else -> generic pass) and pointed that one test at it; all 6 tests in that file now pass (mix test test/mix/tasks/letflow_check_test_test.exs: 'Result: 6 passed'). test/letflow/engine/wasm/plugin_handler_test.exs:483 got the one-line (expanded to a short block) irreducible-pair comment per §5, citing this design doc and the prior design doc, warning against splitting the test body. invocation_lease.ex and all production wasmex call sites (PluginHandler.run_guest/3, PluginInterface.invoke/2,3) untouched, confirmed by `git diff --stat` showing only the 3 files above changed. `mix compile --warnings-as-errors` clean. `mix format --check-formatted` clean on all 3 changed files. VERIFICATION (per ORCH's mid-task correction: isolated wasm_hang-stage repeated runs, not full-suite loops): temporarily added `@compile :export_all` to letflow.check.test.ex (reverted before finishing, confirmed via git diff/mix compile/mix format after removal) to call the private run_wasm_hang_tests/0 directly via `MIX_ENV=test mix run <script>` in a loop, exercising the REAL discovery + 5 real per-test subprocesses each time, no mocking. Ran 3 warm-up runs (3/3 passed) then 15 consecutive runs: 15/15 PASS, zero wasm_hang-class failures, elapsed times 26.7s-28.3s per run (avg ~27.2s for 1 discovery + 5 per-test subprocesses = 6 total, i.e. ~4.5s/subprocess average including Postgres tenant-provisioning-check round trips -- higher than the design's §7 ~1.5-2s/subprocess estimate measured via a bare --dry-run with no DB work, but the total added overhead (~17-19s beyond a hypothetical single-subprocess run) is still a one-time, non-shocking cost against the ~50%-flake-rate problem being fixed, not a regression requiring further optimization). Result summary from the loop: 'run 1: PASS (27413 ms)' through 'run 15: PASS (27226 ms)', 'Total: 15 runs, 15 passed, 0 failed'. ENVIRONMENT LIMITATION (documented, not worked around): this sandbox has no `rustc` on PATH, so `test/mix/tasks/letflow_check_toolchain_test.exs`'s two REQ-165 rust-pin tests fail with `System.cmd(\"rustc\", ...)` :enoent inside run_main_suite/0's own parallel suite -- entirely pre-existing and unrelated to ISS-0418 (confirmed: these are the ONLY two failures in two consecutive full `mix letflow.check.test` attempts, both stopping at run_main_suite/0's own Mix.raise before ever reaching run_wasm_hang_tests/0). This means a true green end-to-end `mix letflow.check.test` run could not be produced in this specific sandbox regardless of the ISS-0418 fix's correctness; the 15/15 isolated-stage runs above are the load-bearing evidence for this issue's own acceptance criterion (design doc §8's AC-NEW), and both full-suite attempts independently confirm my change introduces zero NEW failures (431/433 passed both times, same 2 pre-existing rustc failures, nothing wasm_hang-related). Recommend RELEASE-VALIDATOR/CI (which does have rustc) run the real end-to-end mix letflow.check.test to confirm the main-suite-to-wasm_hang-stage handoff is clean there. Per design doc §1.1, also flagging that ORCH/DOC-UPDATER still owes ISS-0418.yaml the append-only AC correction (existing cap criterion annotated SATISFIED-but-NOT-SUFFICIENT, new AC-NEW added) -- not done by this handoff since that's explicitly DOC-UPDATER's step, listed here so it isn't dropped."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

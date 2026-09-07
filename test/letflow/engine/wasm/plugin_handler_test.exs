@@ -480,6 +480,16 @@ defmodule Letflow.Engine.Wasm.PluginHandlerTest do
     # out timeout_ms being silently dropped to wasmex's hardcoded 5_000ms
     # default, and 45_000ms remains well short of any point where this
     # assertion would stop meaning anything.
+    # ISS-0418 (design iss0418-wasm-hang-test-isolation-fix.md §5): this test body's
+    # two dispatches are a documented IRREDUCIBLE PAIR -- do not split this into two
+    # `test` blocks to "parallelize" or "further isolate" it under the per-test
+    # subprocess harness (lib/mix/tasks/letflow.check.test.ex). Splitting would not
+    # reduce the isolated-subprocess leak count (each dispatch already leaks one
+    # Store regardless of which test body it's in) and would only add a second,
+    # unnecessary `mix test` boot for no benefit, since both dispatches already land
+    # in one already-isolated subprocess. See also the prior design doc
+    # (iss0418-wasm-concurrency-cap.md §6.3.1 item 1/3) for why the ordering
+    # assertion below needs both results in scope together.
     @tag :wasm_hang
     @tag timeout: 180_000
     test "a 300ms timeout_ms binds sooner than a 7_000ms timeout_ms, and 7_000ms is not silently dropped to wasmex's hardcoded 5_000ms default" do

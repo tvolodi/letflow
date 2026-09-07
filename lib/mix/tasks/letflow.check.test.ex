@@ -43,16 +43,36 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   terminal/CI job log sees the actual failing test's detail without needing the
   runner's own `mktemp -d` directory to still exist.
 
-  ISS-0352: after the main suite passes, this task runs a SECOND subprocess, `mix
-  test --only wasm_hang`, in its own fresh BEAM node -- unchanged by ISS-0428, still
-  serial. `:wasm_hang` tags a handful of tests in `test/letflow/engine/wasm/` that
-  deliberately, genuinely hang a real `wasmex` NIF call to prove REQ-170's own
-  live-verified finding that no BEAM-side mechanism can reclaim that thread -- it
-  permanently occupies one slot of `wasmex`'s shared, node-global native worker pool
-  for the rest of the OS process. Run in the same process as every other WASM NIF
-  test, this starved unrelated tests once the pool was exhausted (PR #691, then worse
-  on PR #692 -- 18 cascading `ExUnit.TimeoutError`s). Running under N-way parallelism
-  would multiply this hazard by N, so it stays a single serial subprocess.
+  ISS-0352: after the main suite passes, this task runs the `:wasm_hang`-tagged tests
+  in `test/letflow/engine/wasm/` -- tests that deliberately, genuinely hang a real
+  `wasmex` NIF call to prove REQ-170's own live-verified finding that no BEAM-side
+  mechanism can reclaim that thread -- it permanently occupies one slot of `wasmex`'s
+  shared, node-global native worker pool for the rest of the OS process. Run in the
+  same process as every other WASM NIF test, this starved unrelated tests once the
+  pool was exhausted (PR #691, then worse on PR #692 -- 18 cascading
+  `ExUnit.TimeoutError`s).
+
+  ISS-0418: a single shared subprocess for every `:wasm_hang` test (this task's
+  original ISS-0352 shape) does not actually solve the hazard above -- it only moves
+  it: every `:wasm_hang` test permanently wedges one native worker thread in whatever
+  subprocess it runs in, so a single shared subprocess still accumulates one leaked
+  thread per test and exhausts a small-CPU-count runner's pool by the last test or
+  two (post-fix CI still showed the same ~50% flake rate as before,
+  `docs/issues/ISS-0418.yaml`). The fix (see
+  `lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md`, ELIXIR-DEV-owned) is
+  per-test process isolation: `discover_wasm_hang_tests/0` runs `mix test --only
+  wasm_hang --dry-run` to ask ExUnit itself which `{file, line}` pairs are currently
+  tagged (never hardcoded -- adding/removing a `:wasm_hang` test anywhere is picked
+  up automatically), then `run_wasm_hang_tests/0` spawns one real, fresh subprocess
+  per discovered location via `mix test <file>:<line>` -- deliberately **without**
+  `--only wasm_hang` (design doc §4.1: verified live that `--only` is silently
+  discarded when combined with `<file>:<line>`, and `<file>:<line>` alone already
+  bypasses `test/test_helper.exs`'s default `:wasm_hang` exclusion, so the suffix
+  would be a no-op). A fresh OS subprocess means a fresh BEAM node and therefore a
+  fresh, unleaked native thread pool, by construction -- no test ever shares a
+  process (and therefore an accumulating pool) with another `:wasm_hang` test.
+  Running under N-way parallelism would still multiply the per-process hazard, so
+  every per-test subprocess stays serial, same as before.
 
   ISS-0426: this task then runs a THIRD subprocess, `mix test --only
   lua_wallclock_race`, also unchanged and serial -- these tests need to run without
@@ -84,14 +104,19 @@ defmodule Mix.Tasks.Letflow.Check.Test do
 
     * Exits `0` only if the parallel runner's own aggregated result is a real pass
       (every partition has a `Result:` line, zero parsed failures) **and** the
-      target substring is absent from every partition log **and** both isolated
-      subprocess runs (`:wasm_hang`, `:lua_wallclock_race`) also exit `0` clean.
-    * Exits `1` if the runner (or either isolated subprocess) reports real failures,
-      regardless of the substring check.
-    * Exits `1` if the runner (or either isolated subprocess) exits `0` but the
-      target substring is present anywhere in the relevant captured/log output,
-      printing the offending line(s) -- with partition attribution for the main
-      suite -- so the failure is immediately actionable.
+      target substring is absent from every partition log **and** the
+      `:lua_wallclock_race` isolated subprocess exits `0` clean **and** the
+      `:wasm_hang` discovery subprocess succeeds and every one of the N per-test
+      `:wasm_hang` subprocesses it discovers exits `0` clean.
+    * Exits `1` if the runner, the `:lua_wallclock_race` subprocess, the `:wasm_hang`
+      discovery subprocess, or any of the N per-test `:wasm_hang` subprocesses
+      reports a real failure, regardless of the substring check.
+    * Exits `1` if the runner or the `:lua_wallclock_race` subprocess exits `0` but
+      the target substring is present anywhere in the relevant captured/log output
+      (with partition attribution for the main suite), or if the target substring is
+      present in the concatenation of the N `:wasm_hang` per-test subprocess
+      outputs -- printing the offending line(s) so the failure is immediately
+      actionable.
 
   Every other warning class (including the two ISS-0044 classes above, and
   the separately out-of-scope unused `tenant` variable) remains visible in
@@ -317,33 +342,207 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     |> String.split("\n")
   end
 
-  # ISS-0352: run the deliberately-hanging :wasm_hang tests in their own
-  # subprocess, isolated from the main run above -- see moduledoc. Unchanged by
-  # ISS-0428 (design doc section 2): stays serial, no test_parallel.sh involvement.
+  # ISS-0418 (design iss0418-wasm-hang-test-isolation-fix.md §4.2): a wasm_hang_hint
+  # is one {file, line} pair as ExUnit's own --dry-run resolves it -- never
+  # hand-derived or hardcoded (see discover_wasm_hang_tests/0 below).
+  @type wasm_hang_location :: {file :: Path.t(), line :: pos_integer()}
+
+  @type wasm_hang_test_result :: %{
+          location: wasm_hang_location(),
+          output: String.t(),
+          exit_code: non_neg_integer()
+        }
+
+  @wasm_hang_test_list_regex ~r/^(test\/\S+\.exs):(\d+)$/
+
+  # ISS-0418: run every currently-tagged :wasm_hang test in its own dedicated,
+  # freshly-booted `mix test <file>:<line>` subprocess -- see moduledoc's ISS-0418
+  # section and design doc §4.3. Replaces the prior single-shared-subprocess shape
+  # (ISS-0352), which left every :wasm_hang test's permanently-leaked native worker
+  # thread in one process, accumulating across tests until the pool was exhausted.
+  # Unchanged by ISS-0428: stays serial (both the discovery subprocess and every
+  # per-test subprocess), no test_parallel.sh involvement.
+  @spec run_wasm_hang_tests() :: :ok | no_return()
   defp run_wasm_hang_tests do
-    {hang_output, hang_exit_code} = stream_and_capture("mix", ["test", "--only", "wasm_hang"])
+    locations = discover_wasm_hang_tests()
 
-    if hang_exit_code != 0 do
-      Mix.raise(
-        "mix letflow.check.test: FAILED -- isolated `mix test --only wasm_hang` run " <>
-          "exited #{hang_exit_code} (real test failure/error)."
-      )
+    results = Enum.map(locations, &run_single_wasm_hang_test/1)
+
+    {failing, passing} = Enum.split_with(results, fn %{exit_code: code} -> code != 0 end)
+    offending = check_substring_across_wasm_hang_results(results)
+
+    cond do
+      failing != [] ->
+        report_wasm_hang_failures(failing)
+
+        failing_names =
+          failing
+          |> Enum.map(fn %{location: {file, line}} -> "#{file}:#{line}" end)
+          |> Enum.join(", ")
+
+        Mix.raise(
+          "mix letflow.check.test: FAILED -- #{length(failing)}/#{length(results)} isolated " <>
+            "wasm_hang tests failed: #{failing_names}"
+        )
+
+      offending != [] ->
+        offending_lines = Enum.join(offending, "\n")
+
+        Mix.raise(
+          "mix letflow.check.test: FAILED -- \"#{@target_substring}\" warning found across the " <>
+            "isolated :wasm_hang runs (ISS-0069's own class recurring):\n#{offending_lines}"
+        )
+
+      true ->
+        Mix.shell().info(
+          "mix letflow.check.test: OK -- #{length(passing)}/#{length(results)} isolated " <>
+            "wasm_hang tests passed, each in its own subprocess."
+        )
     end
 
-    if String.contains?(hang_output, @target_substring) do
-      offending_lines =
-        hang_output
-        |> String.split("\n")
-        |> Enum.filter(&String.contains?(&1, @target_substring))
-        |> Enum.join("\n")
+    :ok
+  end
 
-      Mix.raise(
-        "mix letflow.check.test: FAILED -- \"#{@target_substring}\" warning found in the " <>
-          "isolated :wasm_hang run (ISS-0069's own class recurring):\n#{offending_lines}"
-      )
+  # ISS-0418 (design doc §4.2): asks ExUnit itself, via a --dry-run discovery
+  # subprocess, which tests :wasm_hang currently resolves to -- deliberately not a
+  # static grep of `@tag :wasm_hang` sites, which would re-implement (fragilely)
+  # tag-resolution logic ExUnit already gets right (describe-level tags, multiple
+  # @tag lines, etc). This makes the harness self-updating: adding, removing, or
+  # renaming a :wasm_hang test anywhere is picked up automatically, no edit to this
+  # file required. Hard-fails (rather than silently proceeding with zero tests and
+  # reporting a false "OK") if the discovery subprocess itself is broken in any way.
+  #
+  # DEVIATION FROM DESIGN DOC (documented, not silent -- see handoff): §4.2 step 5
+  # says to hard-fail if "the discovery subprocess exits nonzero." Live-verified
+  # this session that `mix test --only wasm_hang --dry-run` exits **1 always**,
+  # on every run, regardless of whether real :wasm_hang tests exist or the parse
+  # would succeed -- `--dry-run` never executes anything, and Mix's own `mix test`
+  # CLI treats "--only was given but 0 tests were executed" as an error condition
+  # unconditionally ("The --only option was given to \"mix test\" but no test was
+  # executed", exit 1), independent of dry-run's own success. Gating on this exit
+  # code as the design specifies would make discovery hard-fail on every single
+  # invocation, defeating the whole mechanism. This implementation does not check
+  # the discovery subprocess's exit code at all; the parse result below (empty vs.
+  # non-empty test-list block) is the only signal used to distinguish "discovery
+  # broken" from "discovery succeeded," which is the actual reliable signal
+  # available from this specific Mix/dry-run combination.
+  @spec discover_wasm_hang_tests() :: [wasm_hang_location()]
+  defp discover_wasm_hang_tests do
+    {output, _exit_code} = stream_and_capture("mix", ["test", "--only", "wasm_hang", "--dry-run"])
+
+    case extract_test_list_block(output) do
+      [] ->
+        Mix.raise(
+          "mix letflow.check.test: FAILED -- `mix test --only wasm_hang --dry-run` exited 0 " <>
+            "but its \"Tests that would be executed:\" block was empty or absent. This task " <>
+            "cannot tell whether that means zero :wasm_hang tests currently exist or the " <>
+            "discovery parse itself is broken, so it is treating this as a hard failure " <>
+            "rather than silently passing."
+        )
+
+      lines ->
+        lines
+        |> Enum.map(&parse_wasm_hang_location!/1)
+        |> Enum.sort()
     end
+  end
 
-    Mix.shell().info("mix letflow.check.test: OK -- isolated :wasm_hang run also passed clean.")
+  # Locates the "Tests that would be executed:" line in --dry-run's captured
+  # output and returns the file:line entries in the block of lines between it and
+  # the next terminator line ("All tests have been excluded." or "Finished in ...",
+  # both always printed by --dry-run once the list ends) -- scoping the parse to
+  # exactly the test-list block rather than trusting the whole stream (design doc
+  # §4.2 step 2, same discipline as find_partition_log_dir/1's own narrowly-scoped
+  # regex above).
+  #
+  # DEVIATION FROM DESIGN DOC (documented, not silent -- see handoff): §4.2 step 2
+  # specifies taking the block "up to the next blank line or a line that does not
+  # match the file:line shape," implying the test-list lines are contiguous
+  # immediately after the header. Live-verified this session (5 consecutive real
+  # `mix test --only wasm_hang --dry-run` runs against the full, uncached test
+  # suite) that this assumption does not hold in practice: ExUnit's own
+  # non-deterministic compiler-warning emission for OTHER, unrelated test files
+  # (re-diagnosed every run, seemingly regardless of compile-manifest cache state)
+  # interleaves directly between the header and the actual file:line entries, and
+  # sometimes between individual entries. A strict `take_while` that stops at the
+  # first non-matching line would therefore intermittently discover 0 tests and
+  # hard-fail (per this task's own "never silently proceed with zero" discipline)
+  # even though 5 real :wasm_hang tests exist -- a false negative, not a true
+  # "discovery broken" case. This implementation instead FILTERS every line in the
+  # bounded window between the header and the terminator for the file:line shape,
+  # which is robust to warning interleaving inside that window while still bounding
+  # the scan to the correct section of output (never scanning the whole stream).
+  @spec extract_test_list_block(String.t()) :: [String.t()]
+  defp extract_test_list_block(output) do
+    output
+    |> String.split("\n")
+    |> Enum.drop_while(&(&1 != "Tests that would be executed:"))
+    |> case do
+      [] ->
+        []
+
+      [_header | rest] ->
+        rest
+        |> Enum.take_while(fn line ->
+          not String.starts_with?(line, "All tests have been excluded.") and
+            not String.starts_with?(line, "Finished in")
+        end)
+        |> Enum.filter(&Regex.match?(@wasm_hang_test_list_regex, String.trim(&1)))
+    end
+  end
+
+  @spec parse_wasm_hang_location!(String.t()) :: wasm_hang_location()
+  defp parse_wasm_hang_location!(line) do
+    case Regex.run(@wasm_hang_test_list_regex, String.trim(line)) do
+      [_, file, line_str] ->
+        {file, String.to_integer(line_str)}
+
+      nil ->
+        Mix.raise(
+          "mix letflow.check.test: FAILED -- could not parse a `file:line` pair from " <>
+            "`mix test --only wasm_hang --dry-run`'s test-list line: #{inspect(line)}"
+        )
+    end
+  end
+
+  # ISS-0418 (design doc §4.1): the command is `mix test <file>:<line>` ALONE --
+  # deliberately WITHOUT `--only wasm_hang`. Verified live (design doc §4.1) that
+  # `--only <tag>` and `<file>:<line>` do NOT compose: `<file>:<line>` is sugar for
+  # `--exclude test --include line:N`, which entirely replaces any --only/--include
+  # also given on the same command line, so a trailing `--only wasm_hang` would be
+  # silently discarded -- harmless (changes nothing) but misleading to a future
+  # reader into thinking it does something. Do not add it back. `<file>:<line>`
+  # alone already bypasses test/test_helper.exs's default :wasm_hang exclusion, so
+  # no --only/--include is needed at all for the addressed test to actually run.
+  @spec run_single_wasm_hang_test(wasm_hang_location()) :: wasm_hang_test_result()
+  defp run_single_wasm_hang_test({file, line} = location) do
+    {output, exit_code} = stream_and_capture("mix", ["test", "#{file}:#{line}"])
+    %{location: location, output: output, exit_code: exit_code}
+  end
+
+  # Prints the full captured output of every failing per-test subprocess result --
+  # same "show the real failure text, don't make the reader dig for it" principle
+  # as report_partition_failures/1 above, applied to this new per-test data shape.
+  @spec report_wasm_hang_failures([wasm_hang_test_result()]) :: :ok
+  defp report_wasm_hang_failures(failing) do
+    Enum.each(failing, fn %{location: {file, line}, output: output} ->
+      Mix.shell().info(
+        "\n=== isolated wasm_hang subprocess #{file}:#{line} -- FAILED ===\n#{output}"
+      )
+    end)
+
+    :ok
+  end
+
+  # Same ISS-0069 substring check as the main suite, applied across the
+  # concatenation of all N per-test wasm_hang subprocess outputs instead of one.
+  @spec check_substring_across_wasm_hang_results([wasm_hang_test_result()]) :: [String.t()]
+  defp check_substring_across_wasm_hang_results(results) do
+    for %{output: output} <- results,
+        line <- String.split(output, "\n"),
+        String.contains?(line, @target_substring) do
+      line
+    end
   end
 
   # ISS-0426: run the tag-isolated :lua_wallclock_race tests (REQ-155/156/162,

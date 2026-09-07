@@ -218,14 +218,22 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     :ok
   end
 
-  # Installs a passing fake `mix` (used by run_wasm_hang_tests/0 and
-  # run_lua_wallclock_race_tests/0, both unchanged by ISS-0428 and still shelling
-  # directly to `mix test --only ...`) so a test that only cares about
-  # run_main_suite/0's behavior doesn't pay the cost -- or the nondeterminism -- of two
-  # real `mix test --only wasm_hang`/`--only lua_wallclock_race` subprocess runs on
-  # every case below. A test that specifically wants to exercise those two helpers can
-  # override this by calling install_fake_executable/4 again with a different exit code
-  # after this returns.
+  # Installs a passing fake `mix` (used by run_lua_wallclock_race_tests/0, unchanged
+  # by ISS-0428/ISS-0418 and still shelling directly to a single `mix test --only
+  # lua_wallclock_race`) so a test that only cares about run_main_suite/0's behavior
+  # doesn't pay the cost -- or the nondeterminism -- of a real subprocess run on
+  # every case below. Every test in this file except the one at "passes (no raise)
+  # ..." below raises inside run_main_suite/0 itself, so `mix` (used only by the
+  # two isolated-test-tag stages that run AFTER run_main_suite/0) is never actually
+  # invoked in those cases -- this fake is installed there purely defensively.
+  #
+  # ISS-0418 NOTE: this static, args-blind fake is NOT sufficient for
+  # run_wasm_hang_tests/0's own new shape (a `--dry-run` discovery call followed by
+  # N per-test `mix test <file>:<line>` calls, see letflow.check.test.ex) -- a fixed
+  # "Result: 0 passed" response never contains "Tests that would be executed:", so
+  # discover_wasm_hang_tests/0 correctly treats it as a broken discovery run and
+  # hard-fails. Use install_wasm_hang_aware_fake_mix/1 instead for any test whose
+  # path reaches run_wasm_hang_tests/0.
   defp install_passing_fake_mix(fake_bin_dir) do
     install_fake_executable(
       fake_bin_dir,
@@ -233,6 +241,77 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       "Finished in 0.0 seconds\nResult: 0 passed\n",
       0
     )
+  end
+
+  # ISS-0418: an args-aware fake `mix`, for the one test below whose path actually
+  # reaches run_wasm_hang_tests/0 (every other test raises inside run_main_suite/0
+  # first, per install_passing_fake_mix/1's own note above). Dispatches on argv
+  # shape rather than returning one static response, since run_wasm_hang_tests/0
+  # now issues genuinely different commands in sequence: one `--dry-run` discovery
+  # call, then one `mix test <file>:<line>` call per discovered fake location, then
+  # (unchanged) one `--only lua_wallclock_race` call from the next stage.
+  defp install_wasm_hang_aware_fake_mix(fake_bin_dir) do
+    case :os.type() do
+      {:win32, _} ->
+        fake_path = Path.join(fake_bin_dir, "mix.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        setlocal
+        set ARGS=%*
+        echo %ARGS% | findstr /C:"--dry-run" >nul
+        if %ERRORLEVEL%==0 (
+          echo Tests that would be executed:
+          echo test/fake_wasm_hang_test.exs:1
+          echo All tests have been excluded.
+          echo Finished in 0.0 seconds
+          echo Result: 0 tests, 1 excluded
+          exit /b 1
+        )
+        echo %ARGS% | findstr /C:"fake_wasm_hang_test" >nul
+        if %ERRORLEVEL%==0 (
+          echo Finished in 0.0 seconds
+          echo Result: 1 passed
+          exit /b 0
+        )
+        echo Finished in 0.0 seconds
+        echo Result: 0 passed
+        exit /b 0
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "mix")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        case "$*" in
+          *"--dry-run"*)
+            cat <<'FAKE_DISCOVERY_OUTPUT'
+        Tests that would be executed:
+        test/fake_wasm_hang_test.exs:1
+        All tests have been excluded.
+        Finished in 0.0 seconds
+        Result: 0 tests, 1 excluded
+        FAKE_DISCOVERY_OUTPUT
+            exit 1
+            ;;
+          *"fake_wasm_hang_test"*)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 1 passed"
+            exit 0
+            ;;
+          *)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 0 passed"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
   end
 
   # Writes `name` under fixture_root/log_subdir with `content`, creating the directory
@@ -317,7 +396,7 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
       write_partition_log(fixture_root, "logs", "partition-2.log", "Result: 3/3 passed\n")
 
       install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(log_dir), 0)
-      install_passing_fake_mix(fake_bin_dir)
+      install_wasm_hang_aware_fake_mix(fake_bin_dir)
 
       io = run_and_capture_ok(fake_bin_dir)
 

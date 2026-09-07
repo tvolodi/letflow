@@ -1,0 +1,35 @@
+id: ISS-0524
+title: "mix letflow.check.test dry-run wasm_hang fixture finds zero tagged tests after ISS-0418 root-fix, treats it as hard failure"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0523-20260907
+discovered_at: "2026-09-07T12:15:00Z"
+severity: MINOR
+tags: [testing, ci, wasm, s6]
+description: >
+  Incidental finding from WF03-ISS0523-20260907's TEST-RUNNER.
+  Mix.Tasks.Letflow.Check.TestTest
+  (test/mix/tasks/letflow_check_test_test.exs) has its own fixture that
+  runs `mix test --only wasm_hang --dry-run` to discover wasm_hang-tagged
+  tests before doing an isolated re-run of them as part of
+  `mix letflow.check.test`. ISS-0418 (commit bd558bdd, root-fix via
+  per-test process isolation) apparently removed or retagged the tests
+  this fixture depended on, so the dry-run now discovers zero
+  `:wasm_hang`-tagged tests. The check treats zero discovered tests as a
+  hard failure, unable to distinguish "legitimately zero tests now that
+  the flake class is fixed" from "test discovery is broken."
+
+  OBSERVED LIVE, not hypothetical: WF03-ISS0523-20260907's TEST-RUNNER
+  got `Mix.Tasks.Letflow.Check.TestTest:386` failing on a branch touching
+  only test/mix/tasks/letflow.lint_handoffs_test.exs -- confirmed
+  pre-existing on main post-ISS-0418, not caused by that branch's diff.
+affected_files:
+  - test/mix/tasks/letflow_check_test_test.exs
+related:
+  - ISS-0418
+  - ISS-0523
+source: >
+  WF03-ISS0523-20260907's TEST-RUNNER full mix letflow.check gate run,
+  after the wasm_hang class was root-fixed by ISS-0418 (commit bd558bdd).
+queue_task_id: 524
+github_issue: 1055
+status: open

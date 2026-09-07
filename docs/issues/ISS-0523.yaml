@@ -71,7 +71,41 @@ source: >
   session's handoff rather than by touching any test or lib code.
 queue_task_id: 523
 github_issue: 1053
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0523-20260907
+resolved_at: "2026-09-07T12:30:00Z"
+resolution_note: >
+  Applied option (b) from this issue's own filed options: rewrote
+  T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS's body from
+  `capture_io(fn -> assert LintHandoffs.run([]) == :ok end)` to a pure
+  `assert LintHandoffs.resolve_dir([]) == "handoffs"` unit assertion --
+  no capture_io, no run/1 invocation, no real-corpus scan at all. Zero
+  net coverage lost: F-DIR-DEFAULT already asserted the identical
+  resolve_dir([]) claim, and T-DIR-SCOPED-SCAN already covers run/1's
+  banner-threading behavior end-to-end via an isolated tmp --dir
+  fixture. Real-corpus scannability remains gated independently and
+  correctly: mix.exs's letflow.check alias runs the actual
+  letflow.lint_handoffs mix task (not this test) against the real
+  corpus as its own CI step.
+
+  COUPLING-REMOVAL PROVEN, NOT JUST ASSERTED, twice by two independent
+  parties: TEST-DESIGNER and REVIEWER each independently wrote a
+  deliberately-invalid scratch handoff file, confirmed the OLD test
+  body genuinely failed against it (real Mix.Error, coupling was real),
+  then confirmed the CURRENT rewritten test still passes with the same
+  corrupted file present (coupling is genuinely gone) -- both cleaned
+  up their scratch files afterward.
+
+  CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and
+  TEST-DESIGN-VALIDATOR all independently PASSed. TEST-RUNNER's full
+  mix letflow.check gate: 3408/3413 passed, 5 failures all structurally
+  cleared -- 4 already-tracked ISS-0513-class Windows Path.expand()
+  failures (this branch had briefly fallen behind main's ISS-0513 merge
+  before a rebase picked it up) and 1 new incidental finding filed
+  separately as ISS-0524 (Mix.Tasks.Letflow.Check.TestTest's wasm_hang
+  dry-run fixture finding zero tagged tests after ISS-0418's root-fix
+  retagged/removed them -- unrelated to this issue's diff, which
+  touches only test/mix/tasks/letflow.lint_handoffs_test.exs).
 renumbering_note: >
   Originally filed as ISS-0445 (GH#860) on 2026-09-03, but never actually
   registered as its own letflow-queue task at the time -- get_next_task

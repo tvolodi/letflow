@@ -2603,3 +2603,76 @@ should run both `mix letflow.check_requirements_registration` and `mix
 letflow.check_deferral_staleness` locally (both fast, no queue call needed for either)
 before handing off or committing — each check gates a different failure mode, and passing
 one says nothing about the other.
+
+## `git worktree remove` on a worktree with a `deps`/`_build` junction deletes the TARGET, not just the link
+
+On 2026-09-07 (WF03-ISS0399-20260907, TEST-DESIGNER), a throwaway `git worktree` was
+created to run the WF-03 mutation-testing addendum in isolation (`git worktree add
+--detach ../letflow-2-mutwt HEAD`). To avoid a slow `mix deps.get`/full recompile inside
+the new worktree, a Windows directory junction was created so the worktree's `deps/`
+pointed at the main checkout's real `deps/` (`mklink /J deps ..\letflow-2\deps`), and
+`_build` was left to compile fresh locally. Three mutants were applied, tested, and
+reverted cleanly inside the worktree — that part worked exactly as intended, and
+`git status --porcelain` in both the worktree and the main checkout was empty
+throughout, confirming no `lib/`/`test/` file was ever mutated outside the throwaway
+copy.
+
+**Then `git worktree remove ../letflow-2-mutwt --force` wiped the MAIN checkout's
+`deps/` directory too.** Windows' recursive-delete behavior for a directory junction is
+not "unlink the junction point" the way a symlink-aware `rm` on Linux treats it — `git
+worktree remove`'s own directory teardown (like several common Windows tools) walked
+into the junction and deleted its *contents*, i.e. the real files sitting in the main
+repo's `deps/`, not just the link. `ls deps` in the main checkout came back empty
+immediately after. `_build` was unaffected only because it was never junctioned — it was
+a real, separate directory inside the worktree, so removing the worktree removed that
+copy and nothing else.
+
+**Recovery:** `mix deps.get` re-fetched everything cleanly (network was available), and
+a subsequent `MIX_ENV=test mix compile --force --warnings-as-errors` came back clean.
+No data was permanently lost — but every `mix compile`/`mix test` invocation for the
+rest of that session then had to eat one full dependency recompile (all ~25 deps),
+which is what actually made several foreground commands exceed the tool's 120-second
+timeout and get moved to background, in turn causing the reporting confusion described
+below.
+
+**Lesson:** never junction/symlink a throwaway worktree's `deps/` (or anything else) at
+a real directory inside the main checkout, even read-only in intent — a worktree is
+meant to be disposable, and `git worktree remove` does not guarantee it won't walk into
+a link. If deps need to be shared to avoid a slow refetch, copy them (`robocopy
+deps-src deps-dst /E`, accepting the one-time copy cost) instead of linking, or just pay
+for a fresh `mix deps.get` in the worktree — both leave the main checkout's own `deps/`
+untouched no matter how the worktree is later torn down.
+
+## Windows Defender treats a literal EICAR test string in a real temp file as a real threat
+
+Also 2026-09-07, same run: a router-level test drove a real EICAR-content upload
+through `Plug.Parsers`'s actual multipart temp-file path (matching the file's other
+multipart tests' own established idiom — write a real body, let the real parser buffer
+it to a real temp file, dispatch the route, let the route `File.read!/1` it back). This
+reproducibly failed with `** (File.Error) could not read file
+".../plug-.../multipart-...": I/O error` — not a bug in the route or the parser: a live
+antivirus product on the dev machine (Windows Defender) detected the industry-standard
+EICAR test signature in the temp file and quarantined/deleted it in the window between
+Plug writing it and the route reading it back. This is the AV product doing exactly what
+it's designed to do; it is not something application code can or should work around by
+degrading its own file-handling.
+
+**Fix:** for a test whose only job is to prove *this codebase's own* logic reacts
+correctly to an infected verdict (e.g. a route's `{:error, :infected, _} -> 422`
+status-code mapping), don't require the byte pattern that trips real AV products to
+survive a real filesystem round-trip on a real dev machine. Swap in a fixture scanner
+adapter (`@behaviour Letflow.Repository.AttachmentScanner`, `scan/2` unconditionally
+returns `{:ok, :infected, "fixture-verdict"}`) via `Application.put_env/3` instead — this
+decouples "does the ROUTE map an infected verdict to the right status" (what that test
+actually needs to prove) from "does the EICAR string get detected as infected" (already
+covered elsewhere, at the context-module and unit-test levels, entirely in-memory with
+no temp file involved at all).
+
+**Lesson:** a test that needs a *specific scanner* to report a *specific verdict* to
+exercise logic downstream of the scan call should inject a fixture for that verdict,
+not rely on triggering the real default adapter's real detection logic through a real
+byte pattern that a real, unrelated system component (host AV) is independently and
+correctly primed to intercept. Reserve real EICAR bytes for the tests whose actual job
+is proving detection itself works (unit-level adapter tests, and any in-memory,
+no-filesystem context-module call) — those two are unaffected by this hazard because
+nothing ever touches disk.

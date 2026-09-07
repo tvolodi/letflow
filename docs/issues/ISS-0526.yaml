@@ -61,4 +61,83 @@ source: >
   synthetic counterparts.
 queue_task_id: 526
 github_issue: 1062
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0526-20260907. All 11 named tenant-business
+  scenario files (4 SwiftRoute, 4 Vortex, 3 Meridian) ported verbatim into
+  test/fixtures/uat/scenarios/<company>/*.yaml; UAT-RUNNER and WF-05
+  instructions updated to point at the new location and correctly
+  distinguish this narrative format from Letflow.Simulation.Runner's
+  unrelated machine-executable synthetic fixtures (confirmed untouched).
+  Pipeline: CODE-DESIGNER (PASS first pass) -> CODE-DESIGN-VALIDATOR ->
+  ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope, fixture/docs
+  only, no tenant-data path) -> TEST-RUNNER (3431/3433 passed, 2 pre-existing
+  unrelated rustc-absent failures, zero SandboxPoolTest failures confirming
+  ISS-0525's fix holds). Implementation commit 65c4618b. The 18-file
+  platform/ corpus was explicitly kept out of scope (per REQ-210's own
+  already-recorded decision, not re-litigated here) and filed as a
+  follow-up, ISS-0527 (queue task 527, GH#1064).
+implementation_note: >
+  ELIXIR-DEV (WF03-ISS0526-20260907) implemented CODE-DESIGNER's
+  lib/letflow/design/iss0526-uat-scenario-corpus-destination.md design
+  (PASSed by CODE-DESIGN-VALIDATOR on first pass).
+
+  PORTED (11 of 11 named tenant-business scenario files, scope §4 of the
+  design; the 18-file platform/ corpus explicitly deferred, see below):
+  destination test/fixtures/uat/scenarios/<company>/*.yaml, one company
+  subdirectory each for swiftroute/ (4 files), vortex/ (4 files),
+  meridian/ (3 files). Every file carries a leading YAML-comment
+  provenance header (R-Co source path, https://github.com/tvolodi/R-Co
+  commit d19bfec4a9ec492345346bfccd8e389bd9cd92db -- no local clone path
+  anywhere) matching ISS-0388's established header convention, and is
+  byte-identical below that header to the real R-Co source (confirmed by
+  diff for all 11).
+
+  pipeline_test: field kept verbatim in all 3 files that carry it
+  (swiftroute-tenant-onboarding-happy.yaml,
+  swiftroute-shipment-attach-delivery-note.yaml,
+  vortex-entity-list-filter-and-page.yaml). The latter two's referenced
+  Playwright specs do not exist in either R-Co's or letflow's web/tests/e2e/pipelines/
+  tree, so both got an added "NOTE (ISS-0526)" comment directly under the
+  pipeline_test: key marking the reference as unresolved/aspirational,
+  per the design's §2 -- the field itself was not stripped in any file.
+
+  .claude/agents/uat-runner.md updated: the "location TBD" mandatory-reading
+  line now names the real path, and a new "Reading the scenario corpus"
+  subsection (placed after "What you do") contrasts this narrative format
+  against Letflow.Simulation.Runner's unrelated machine-executable fixtures.
+  docs/agents/workflows/WF-05_uat_run.md Step 1's line 2 tightened to point
+  at the same resolved path instead of "or wherever S7's own requirements
+  land it."
+
+  test/fixtures/simulation/ (existing synthetic Runner-executed fixtures)
+  confirmed completely untouched -- git diff --stat against that tree is
+  empty.
+
+  VERIFICATION (structural only, per the design's own §5 scope decision --
+  no live UAT-RUNNER dry-run, which is out of scope for this pass): all 11
+  files parse cleanly via YamlElixir.read_from_file/1 (MIX_ENV=test);
+  byte-diff of each ported file's content below its header (and below the
+  NOTE block for the 2 annotated files) against the real R-Co source shows
+  zero differences for all 11; git diff --stat -- test/fixtures/simulation/
+  is empty. One pre-existing oddity in the R-Co source itself, not
+  introduced by this port: tests/simulation/scenarios/swiftroute-tenant-onboarding-happy.yaml
+  contains its entire scenario body twice under one YAML document (single
+  leading "---", but company_id/steps/expected_outcomes/etc. each appear
+  twice) -- ported byte-identical as required; YamlElixir/yamerl parses it
+  without error, silently keeping the second (last) value for each
+  duplicated key. Flagged here for awareness, not treated as this issue's
+  defect to fix (byte-identical porting is what the design requires).
+
+  OUT OF SCOPE / FOLLOW-UP FOR ORCH TO FILE: the 18-file
+  tests/simulation/scenarios/platform/*.yaml platform-operator corpus, per
+  the design's §4 (this scoping decision was already made once for REQ-210
+  and is not re-decided here). Recommend a follow-up issue scoped to repeat
+  this design's §0-§3 process against those 18 files, destination
+  test/fixtures/uat/scenarios/platform/, flagging
+  platform-sandbox-cross-tenant-probe and
+  platform-attachment-cross-tenant-probe specifically for
+  SECURITY-REVIEWER attention (plausible tenant-isolation/security-invariant
+  territory). Not filed by this session -- ELIXIR-DEV's remit is
+  lib/letflow/ and priv/repo/migrations/, and per this design's own §4 the
+  follow-up is to be filed by ORCH at Step Final.

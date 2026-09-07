@@ -258,3 +258,31 @@ history:
       mix compile --warnings-as-errors clean, mix test
       test/letflow/simulation/ 27 passed (confirms true no-op on code).
       ORCH will merge and release queue task 393 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T18:17:02Z"
+    note: >
+      ISS-0526 resolved via WF03-ISS0526-20260907 (queue task 526, GH#1062),
+      the correctly-scoped successor to ISS-0393. Ported R-Co's 11 named
+      tenant-business narrative UAT scenario files (4 SwiftRoute, 4 Vortex,
+      3 Meridian) verbatim into test/fixtures/uat/scenarios/<company>/*.yaml,
+      a new destination distinct from test/fixtures/simulation/'s existing
+      synthetic Runner-executed fixtures (confirmed completely untouched).
+      Each ported file carries a provenance header (URL+commit sha, no local
+      path) matching ISS-0388's established convention. pipeline_test: kept
+      verbatim in all 3 files carrying it; the 2 whose referenced Playwright
+      spec doesn't exist yet got an added NOTE (ISS-0526) comment rather than
+      silent stripping. .claude/agents/uat-runner.md and
+      docs/agents/workflows/WF-05_uat_run.md updated to resolve their own
+      previously-explicit "location TBD" language and correctly contrast
+      this narrative format against Letflow.Simulation.Runner's unrelated
+      machine-executable fixtures. Pipeline: CODE-DESIGNER (PASS first pass)
+      -> CODE-DESIGN-VALIDATOR (PASS first pass) -> ELIXIR-DEV -> REVIEWER
+      (PASS; SECURITY-REVIEWER out of scope) -> TEST-RUNNER (3431/3433
+      passed, 2 pre-existing unrelated rustc-absent failures, zero
+      SandboxPoolTest failures confirming ISS-0525's already-merged fix
+      holds). Implementation commit 65c4618b. The 18-file platform/ corpus
+      explicitly kept out of scope (per REQ-210's own already-recorded
+      decision) and filed as follow-up ISS-0527 (queue task 527, GH#1064).
+      ORCH will merge and release queue task 526 status:done.

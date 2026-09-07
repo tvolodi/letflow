@@ -5380,6 +5380,28 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0393 (blocked for weeks on R-Co's Windows filesystem path being unreachable from this sandbox) was unblocked when the user provided a GitHub remote, https://github.com/tvolodi/R-Co (confirmed reachable, commit d19bfec4a9ec492345346bfccd8e389bd9cd92db). STALE-LOCK RECOVERY: the queue task was found locked by a different agent with zero branch/handoff trail -- force-released and re-claimed on the user's explicit direction after confirming no visible sibling progress. ELIXIR-DEV attempted the verbatim port of R-Co's real tests/simulation/scenarios/*.yaml corpus (4 SwiftRoute, 4 Vortex, 3 Meridian) and diffed all 11 real/synthetic pairs, finding the SAME systemic architecture conflict in every one, not independent judgment calls: R-Co's real files are narrative UAT scripts (prose action/input/produces fields, prose preconditions[].detail/expected_outcomes[].detail/evidence, several carrying a pipeline_test: key pointing at a web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts Playwright spec for UAT-RUNNER) -- fundamentally incompatible with Letflow.Simulation.Runner.run/1's params/args-driven machine-executable dispatch (ScenarioFixture.load!/1's single build_outcome/1 clause requires verification.args, absent from every real file, would raise FunctionClauseError on load). ELIXIR-DEV correctly made ZERO file changes and escalated rather than inventing machine-executable params/args to force a fit -- a genuine architecture decision, not a synthetic-detail-assertion correction (ISS-0393's own AC3 framing). ORCH presented the finding to the user with three options; user chose to keep the existing synthetic Runner-executed fixtures as-is and split the real R-Co narrative content into a correctly-scoped follow-up. ISS-0393 closed as not-applicable-as-scoped; filed ISS-0526 (queue task 526, GH#1062) targeting UAT-RUNNER's domain instead, explicitly stating REQ-206/207/208's existing fixtures must stay untouched. REQ-206/207/208's design docs corrected (append-only, 19 lines each, 0 deletions) to remove the implied expectation that a future byte-for-byte port was straightforward. REVIEWER independently re-verified the core technical claim against real code (scenario_fixture.ex:97-100) AND real R-Co content (spot-checked swiftroute-shipment-attach-delivery-note.yaml directly against the cited commit sha, confirmed no verification.args anywhere, pipeline_test: key present) -- PASS. Docs-only change, mix compile --warnings-as-errors clean, mix test test/letflow/simulation/ 27 passed (confirms true no-op on code behavior)."
+    },
+    {
+      "run_id": "WF03-ISS0526-20260907",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0526",
+      "queue_task_id": 526,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1062,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/fixtures/uat/scenarios",
+        ".claude/agents/uat-runner.md",
+        "docs/agents/workflows/WF-05_uat_run.md"
+      ],
+      "branch_name": "feature/WF03-ISS0526-20260907",
+      "started_at": "2026-09-07T17:52:55Z",
+      "lock_released_at": "2026-09-07T18:20:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0526, ISS-0393's correctly-scoped successor. Ported R-Co's 11 named tenant-business narrative UAT scenario files (4 SwiftRoute, 4 Vortex, 3 Meridian) verbatim into a new destination, test/fixtures/uat/scenarios/<company>/*.yaml, distinct from test/fixtures/simulation/'s existing synthetic Runner-executed fixtures (confirmed completely untouched throughout). CODE-DESIGNER's design (PASSed by CODE-DESIGN-VALIDATOR on first pass) chose the destination over docs/uat/ (this is test-input data, not prose docs) and test/uat-reports/scenarios/ (that directory is UAT-RUNNER's own dated OUTPUT location, mixing input/output invites accidental cleanup collisions); content byte-identical below a leading provenance header (URL+commit sha, no local path) matching ISS-0388's established convention -- independently re-verified via direct diff for 5 of 11 files by REVIEWER, zero differences found. pipeline_test: field kept verbatim in all 3 files carrying it; the 2 whose referenced Playwright spec doesn't exist in either R-Co's or letflow's web tree got an added NOTE (ISS-0526) comment rather than silent stripping -- independently confirmed via grep by both CODE-DESIGN-VALIDATOR and REVIEWER. .claude/agents/uat-runner.md and docs/agents/workflows/WF-05_uat_run.md updated to resolve their own previously-explicit 'location TBD' language and correctly contrast this narrative prose format against Letflow.Simulation.Runner's unrelated machine-executable synthetic-fixture format -- contrast independently spot-checked against real scenario_fixture.ex/runner.ex code by both gates. The 18-file platform/ corpus was explicitly kept out of scope, correctly not re-litigating REQ-210's own already-recorded scoping decision (independently confirmed present in stage-7-simulation-uat-parity.md by CODE-DESIGN-VALIDATOR) -- filed as follow-up ISS-0527 (queue task 527, GH#1064), flagging 2 cross-tenant-probe files for SECURITY-REVIEWER attention on that future pass. Pipeline: CODE-DESIGNER (PASS first pass) -> CODE-DESIGN-VALIDATOR (PASS first pass) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope, fixture/docs only) -> TEST-RUNNER (3431/3433 passed, 2 pre-existing unrelated rustc-absent failures, zero SandboxPoolTest failures confirming ISS-0525's already-merged fix holds). Implementation commit 65c4618b."
     }
   ]
 }

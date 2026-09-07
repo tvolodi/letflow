@@ -1,0 +1,115 @@
+run_id: WF03-ISS0526-20260907
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0526-20260907
+head_commit: 2fdf41f8
+timestamp_utc: "2026-09-07T18:15:13Z"
+note: >
+  Final verification gate before ORCH merges ISS-0526's fix (port of R-Co's
+  11-file narrative UAT scenario corpus into test/fixtures/uat/scenarios/,
+  plus UAT-RUNNER/WF-05 instruction updates, implementation commit 65c4618b)
+  to main. This is a fixture/docs-only change -- no .ex/.exs files touched.
+  Ran the project's standard full-suite command `mix letflow.check.test` as
+  instructed. `docker compose up -d` reported permission-denied on this
+  sandbox's plain user docker socket; `sudo -n docker ps` showed
+  letflow-1-postgres-1 already Up (healthy) on port 5463, matching this
+  workspace's untracked .env (LETFLOW_DB_PORT=5463), so no compose action
+  was needed or taken.
+
+commands_run:
+  - cmd: "docker compose up -d"
+    result: "permission denied on docker.sock as plain user"
+    note: >
+      Checked `sudo -n docker ps` instead of retrying with sudo compose:
+      letflow-1-postgres-1 was already Up (healthy) on 0.0.0.0:5463, which
+      matches .env's LETFLOW_DB_PORT=5463 used by both compose and Ecto.
+      No compose command run against a possibly-shared container.
+  - cmd: "mix letflow.check.test"
+    result: FAIL
+    exit_code: 1
+    note: >
+      run_main_suite (scripts/test_parallel.sh, N=8 partitions, nproc-derived)
+      failed and Mix.raise short-circuited the task before any later stage
+      ran. Combined main-suite result across all 8 partitions: 3431/3433
+      tests+properties passed, 2 failures. Per-partition: partition 1: 494
+      tests/0 failures/exit 0; partition 2: 348 tests+4 properties/0
+      failures/exit 0 (4 excluded); partition 3: 411 tests+1 property/0
+      failures/exit 0; partition 4: 549 tests+1 property/0 failures/exit 0
+      (14 excluded); partition 5: 414 tests/0 failures/exit 0; partition 6:
+      436 tests/2 failures/exit 2; partition 7: 404 tests/0 failures/exit 0
+      (1 excluded); partition 8: 371 tests/0 failures/exit 0 (3 excluded).
+      Partition 6's own summary line: "Result: 434/436 passed" / "Failed:
+      2 tests".
+
+failures:
+  - test_module: Mix.Tasks.Letflow.CheckToolchainTest
+    file: test/mix/tasks/letflow_check_toolchain_test.exs
+    count: 2
+    tests:
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running"
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch"
+    error: |
+      ** (ErlangError) Erlang error: :enoent
+      stacktrace:
+        (elixir 1.20.3) lib/system.ex:1141: System.cmd("rustc", ["--version"], [stderr_to_stdout: true])
+        test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0
+        test/mix/tasks/letflow_check_toolchain_test.exs:76: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_version/0
+    structural_attribution: >
+      NOT attributable to this branch or to ISS-0526's change. `rustc` is
+      not installed in this sandbox, so the toolchain-pin check raises
+      before any assertion runs -- identical signature to the pre-existing
+      failures reported on multiple prior branches' TEST-RUNNER runs in this
+      same sandbox (e.g. report-20260907-WF03-ISS0524-20260907.yaml,
+      report-20260907-WF03-ISS0525-20260907.yaml). ISS-0526's diff (UAT
+      fixture files and instruction docs only, no .ex/.exs changes) has no
+      relationship whatsoever to the rust-toolchain-pin check.
+
+sandbox_pool_test_verification:
+  status: "no failures or errors of any kind in Letflow.SandboxPoolTest across all 8 partitions"
+  detail: >
+    Grepped the full combined output (all 8 partition logs) for
+    "SandboxPoolTest" combined with failure/error markers. Only hits were
+    two test *names* embedded in partition 4's PASSING-test stack-trace
+    lines (the tests' own descriptive names reference ISS-0292's regression
+    scenario); partition 4 recorded 0 failure blocks. No SandboxPoolTest
+    failure anywhere in this run, confirming ISS-0525's race fix has not
+    regressed.
+
+check_test_later_stages:
+  status: "not exercised by mix letflow.check.test itself this run"
+  reason: >
+    lib/mix/tasks/letflow.check.test.ex's run/1 calls run_main_suite() first;
+    it raised (Mix.raise, halting the task) on the pre-existing rustc
+    :enoent failures above, so whatever stages follow run_main_suite in this
+    task never executed as part of this invocation. The task's own terminal
+    output ends at "mix letflow.check.test: FAILED -- scripts/test_parallel.sh
+    exited 1 (real test failure/error)" with no subsequent stage output,
+    confirming the short-circuit. This is the same masking behavior flagged
+    on prior branches' runs and is unrelated to ISS-0526's change.
+
+conclusion:
+  status: FAIL
+  recommendation: PASS (with structural note)
+  summary: >
+    `mix letflow.check.test`'s real exit code on this run was 1 (task
+    raised via Mix.raise inside run_main_suite). Combined main-suite result:
+    3431/3433 tests+properties passed, 2 failures -- identical signature to
+    the pre-existing, sandbox-only rustc :enoent failures in
+    Mix.Tasks.Letflow.CheckToolchainTest already reported and attributed on
+    at least two prior branches' TEST-RUNNER runs in this sandbox; no
+    regression, no new failure signature, and specifically no
+    SandboxPoolTest failures anywhere across all 8 partitions. Because
+    run_main_suite raises on any nonzero scripts/test_parallel.sh exit,
+    whatever later stages mix letflow.check.test defines after
+    run_main_suite never executed in this invocation, so this run cannot
+    independently confirm those stages beyond confirming they were not
+    reached. Per the no-speculation rule this is reported as FAIL on the
+    task's actual exit code, not as PASS-by-inference. Given ISS-0526 is a
+    fixture/docs-only change (no .ex/.exs files touched) and the only 2
+    failures are the pre-existing, environment-caused (rustc absent)
+    CheckToolchainTest failures with no relationship to UAT scenario
+    fixtures, RELEASE-VALIDATOR should treat this as a clean run for the
+    purpose of merging ISS-0526, subject to its own independent re-run and
+    its own judgment on the pre-existing rustc-toolchain gap (already
+    flagged, not new to this branch).

@@ -42,8 +42,14 @@ left as "TBD."
   §4.2) — the existing precedent in this codebase for a `@behaviour` + safe-default
   `Application.get_env/3` swappable adapter: `platform.ex:774` resolves
   `Application.get_env(:letflow, :lua_platform_service_caller, @default_service_caller)`
-  fresh on every call, defaulting to a real, always-succeeding module
-  (`NoServiceCaller`) when no config entry exists anywhere. Verified against the actual
+  fresh on every call, defaulting to a real, honest, crash-free "not configured" error
+  responder (`NoServiceCaller`) when no config entry exists anywhere — it never crashes
+  and never silently pretends success; it always returns a typed
+  `{:error, :service_caller_not_configured}` cleanly. That honest-failure-with-no-crash
+  behavior is still a legitimate safe-default pattern (contrast with a hypothetical
+  default that silently pretends success), and it is that pattern — not literal
+  always-succeeding behavior — that this design's precedent argument relies on.
+  Verified against the actual
   call site, not just that design doc's prose. This — not `Letflow.Oidc.TokenVerifier`
   — is the precedent reused as the shape for §3's `AttachmentScanner` resolution.
   (`TokenVerifier`'s own real resolution, `lib/letflow/plugs/auth_pipeline.ex:243-245`,

@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF02-REQ230-20260907-step-02",
+  "run_id": "WF02-REQ230-20260907",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ230-20260907/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T04:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-230"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ230-20260907-step-01",
+      "WF02-REQ230-20260907-step-01b",
+      "WF02-REQ230-20260907-step-01c",
+      "WF02-REQ230-20260907-step-01d"
+    ],
+    "artifacts_in": ["lib/letflow/design/req230-entity-query-dsl-compiler.md"],
+    "artifacts_out": [
+      "lib/letflow/entities/query/types.ex",
+      "lib/letflow/entities/query/allowlist.ex",
+      "lib/letflow/entities/query/compiler.ex",
+      "test/letflow/entities/query_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ230-20260907",
+    "base_commit": "0f5710f8"
+  },
+  "task": {
+    "description": "Implemented REQ-230's three-layer SQL-injection defence exactly per the validated design (lib/letflow/design/req230-entity-query-dsl-compiler.md): Letflow.Entities.Query.Types (closed filter_op()/sort_dir() enums, parse_filter_op/1, parse_sort_dir/1, query_request()/filter_clause()/sort_clause() shapes), Letflow.Entities.Query.Allowlist (load/2 building a per-tenant field allowlist from REQ-225's entity definition with typed-column-wins shadowing precedence stated verbatim in the moduledoc, resolve_field/2), and Letflow.Entities.Query.Compiler (compile/2 assembling a parameterised Ecto.Query.t() via the with-chain step order in design section 5.1, check_value_arity/2, check_operator_field_type/2, build_filter_dynamic/2 dispatching source x op x type with one compile-time-literal fragment per JSONB field_type() per design section 5.2's discipline -- both the JSONB key name and the comparison value are separate ^-bound parameters, never interpolated -- build_order_by/2, and the AND-fold combining all filter clauses). Wrote 26 ExUnit tests in test/letflow/entities/query_test.exs covering all 7 acceptance criteria, with AC4's SQL-injection test actually executing the compiled query against a real Postgres tenant schema (not just asserting the query struct shape)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "mix compile --warnings-as-errors: clean, no warnings, no errors. mix format --check-formatted: clean, no diffs. mix test test/letflow/entities/query_test.exs: 26 tests, 0 failures ('Finished in 26.2 seconds ... Result: 26 passed'). Broader regression mix test test/letflow/entities/: 129 tests, 0 failures ('Finished in 85.6 seconds ... Result: 129 passed') -- no existing entities-subsystem test broke.\n\nAC1 (closed operator enum): Types.parse_filter_op/1 rejects e.g. 'DROP TABLE' and 'regex_match' with {:error, {:unknown_operator, raw}} naming the exact caller string, verified directly and via compile/2 never being reached with an unparsed string.\nAC2 (field allowlist): both Allowlist.resolve_field/2 and Compiler.compile/2 reject a plausible-looking non-existent field ('customer_email_address', 'not_a_real_field') with {:error, {:field_not_allowed, field}} before any query is built.\nAC3 (shadowing precedence): a tenant entity definition declaring a queried:true JSONB field literally named 'deleted' still resolves via Allowlist.resolve_field/2 to source: :typed_column, type: :boolean (the real entity_record_latest.deleted column) -- the typed column wins, and Letflow.Entities.Query.Allowlist's own moduledoc states this rule verbatim ('a field name backed by a real typed column ... takes precedence over the same name found only as a JSONB key'), asserted directly against Code.fetch_docs/1 in the test suite.\nAC4 (SQL-injection defence, executed against real Postgres): 4 tests actually run Repo.all(compiled_query, prefix: schema) against a real, sandboxed tenant Postgres schema. (1) A string filter value of \"'; DROP TABLE entity_record_latest; --\" against a JSONB string field matched zero rows AND Repo.aggregate(Latest, :count, prefix: schema) still returned 2 afterward (both fixture rows intact) -- if the payload had executed as SQL, the DROP TABLE would have succeeded and this aggregate call would have raised Postgrex.Error (undefined_table) instead. (2) A :contains payload \"%' OR '1'='1\" matched zero rows (not every row, which a real injection would have produced) and the table survived with its 1 row. (3) An injection-shaped string against a :decimal JSONB field triggered a clean client-side Postgrex encoding rejection (FunctionClauseError from Postgrex.Extensions.Numeric, never reaching Postgres as SQL text at all) and the table survived with its 1 row -- covered by AC4's own 'errors cleanly' clause. (4) An ordinary value ('Acme') round-trips correctly, confirming the parameterised path works for legitimate queries too. All 4 tests pass against the real database, not mocked.\nAC5: this handoff routes to SECURITY-REVIEWER next, per this requirement's hard-gate status -- not self-certified. The design's section 7 (INV-1/6/7/8 compliance statement) and this implementation's test suite (esp. the AC5 describe block's full error-taxonomy and cross-tenant-isolation tests) are the concrete material for that gate.\nAC6: git status --short shows only new untracked files under lib/letflow/entities/query/ and test/letflow/entities/query_test.exs -- no lib/letflow_web/** or router/controller path touched.\nAC7: real mix test/mix compile output quoted above.\n\nNo discrepancy found between the validated design and the implementation. One implementation-level clarification not spelled out verbatim in the design (flagged for REVIEWER, not silently resolved): definition_json's field values decode from the entity_definitions JSONB column as string-keyed maps with string-valued :type entries (e.g. \"type\" => \"string\"), never atom-keyed -- Allowlist.load/2's private field_document/1 follows the exact same String.to_existing_atom/1-on-\"type\" conversion Letflow.Entities.Records's own private definition_document/1/field_document/1 already uses (that module's moduledoc names this as 'a real design-doc gap' it worked around the same way), so this is precedent-following, not a new pattern."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

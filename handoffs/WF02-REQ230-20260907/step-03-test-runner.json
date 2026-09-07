@@ -1,0 +1,43 @@
+{
+  "handoff_id": "WF02-REQ230-20260907-step-03",
+  "run_id": "WF02-REQ230-20260907",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ230-20260907/step-03-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T04:09:24Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-230"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ230-20260907-step-01",
+      "WF02-REQ230-20260907-step-01b",
+      "WF02-REQ230-20260907-step-01c",
+      "WF02-REQ230-20260907-step-01d",
+      "WF02-REQ230-20260907-step-02",
+      "WF02-REQ230-20260907-step-02b",
+      "WF02-REQ230-20260907-step-02d"
+    ],
+    "artifacts_in": [
+      "lib/letflow/entities/query/types.ex",
+      "lib/letflow/entities/query/allowlist.ex",
+      "lib/letflow/entities/query/compiler.ex",
+      "test/letflow/entities/query_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ230-20260907",
+    "base_commit": "0f5710f8"
+  },
+  "task": {
+    "description": "Full regression test gate for REQ-230 (three-layer SQL-injection defence: Types/Allowlist/Compiler). Ran `mix compile --warnings-as-errors`, `mix format --check-formatted`, `mix letflow.check.test` (8-way partitioned full suite via scripts/test_parallel.sh), and independently the two isolated subprocess suites (`mix test --only wasm_hang`, `mix test --only lua_wallclock_race`) that letflow.check.test runs after the main partitioned pass -- run manually here because the main run's failures aborted the task before it reached them. Also independently re-ran the REQ-230-specific test file directly."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "1) `mix compile --warnings-as-errors`: clean, no output, no warnings, exit 0.\n\n2) `mix format --check-formatted`: clean, exit 0.\n\n3) `mix letflow.check.test` (8-way partitioned, TEST_PARALLEL_N default = 8 on this host, Postgres already up on port 5463 per this workspace's .env LETFLOW_DB_PORT): combined per-partition Result:/Failed: lines were: p1 494 passed (3 excl), p2 385 passed (1 excl), p3 461 passed, p4 437 passed (14 excl), p5 467/469 passed / 2 failed, p6 376 passed, p7 410 passed (1 excl), p8 363 passed (3 excl). Combined total: 3395 tests run across all partitions, 3393 passed, 2 failed. The task itself exited non-zero (`mix letflow.check.test: FAILED -- scripts/test_parallel.sh exited 1 (real test failure/error)`) because of those 2 failures in partition 5, and per its own design (lib/mix/tasks/letflow.check.test.ex) it does not proceed to its two isolated subprocess stages when the main partitioned run fails, so I ran those two stages manually afterward (see item 4).\n\nThe 2 failures were both in Mix.Tasks.Letflow.CheckToolchainTest (test/mix/tasks/letflow_check_toolchain_test.exs:274 and :289, 'rust pin (REQ-165) a matching/mismatched rust pin reports OK/MISMATCH'), both `** (ErlangError) Erlang error: :enoent` raised from `System.cmd(\"rustc\", [\"--version\"], ...)` at lib/system.ex:1141 via running_rust_version/0. Verified `which rustc` on this host returns nothing -- no rustc binary installed in this sandbox at all, so this is a deterministic environmental gap (not timing-flaky, not intermittent), matching the pre-briefed known class exactly ('rust-pin tests, :enoent, no rustc installed in this sandbox'). No other test in any of the 8 partitions failed -- confirmed by grepping every partition log's Result:/Failed: line and finding failures only in partition 5, and grepping partition 5's failure numbering finding exactly these 2 and no others. Not a REQ-230 regression: neither test touches lib/letflow/entities/query/*, Repo, or any tenant-data path: they check a hardcoded rust-version-pin string against `rustc --version`'s output. This is a toolchain-availability check unrelated in every way to this diff's 3 new modules and 1 test file.\n\n4) Isolated subprocess stages run manually (since check.test aborted before reaching them): `mix test --only wasm_hang` -> 'Result: 5 passed, 3412 excluded', 0 failures, ~18.6s. `mix test --only lua_wallclock_race` -> 'Result: 11 passed, 3406 excluded', 0 failures, ~8.9s. Both clean -- no wasm-hang or lua-wallclock-race regressions.\n\n5) `mix test test/letflow/entities/query_test.exs` (REQ-230's own test file, re-run independently in this session) -> 'Result: 26 passed', 0 failures, 26.1s -- matches SECURITY-REVIEWER's and REVIEWER's independently-reported counts exactly.\n\n6) Other pre-briefed known-flaky classes (sandbox_pool_test.exs ISS-0224, api/context_test.exs scoped_repo_opts/1 ISS-0340) were NOT observed this run -- checked for and absent from every partition's failure list; only the 2 rustc :enoent failures occurred.\n\nOverall assessment: every test that exercises REQ-230's actual change surface, every isolated subprocess suite, compile, and format are all clean. The only 2 failures anywhere are a pre-existing, deterministic, environment-only gap (no rustc binary in this sandbox) in an unrelated toolchain-check test, matching a hazard explicitly pre-authorized as non-blocking and not to be escalated. Reporting PASS on that basis, with the full real counts and the exact two failing test names/locations quoted above (not omitted) so RELEASE-VALIDATOR's independent re-run can verify the same explanation applies if it hits the same 2 failures on this same host."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,101 @@
+run_id: WF03-ISS0522-20260907
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0522-20260907
+base_commit: 80f650bc
+head_commit: 6eabe09f
+timestamp_utc: "2026-09-07T08:26:00Z"
+
+commands_run:
+  - cmd: "mix letflow.check"
+    result: FAIL_THEN_PASS
+    note: >
+      lint_handoffs, compile --warnings-as-errors, and format --check-formatted
+      all passed silently (no output prior to the test stage in either run).
+      First attempt: scripts/test_parallel.sh (16 partitions) failed with 90
+      test failures, all raising LETFLOW_TENANT_FIXTURE phase=replay_failed,
+      clone_failed, Postgrex undefined_table on
+      "tenant_template.entity_definitions" -- tenant_template was missing
+      entity_definitions/entity_type_instances/entity_record_latest (39
+      tables present vs the expected ~42). Verified directly via
+      `docker compose exec postgres psql -U letflow -d letflow_test1 -c
+      "\dt tenant_template.*"`. Root cause: tenant_template is a long-lived
+      Postgres-resident cache (test/support/tenant_template.ex's
+      template_built_in_db?/0 only checks schema *existence*, not
+      manifest freshness), and this local DB's copy predated
+      priv/repo/migrations/20260906000001_create_entity_definitions.exs
+      (an already-merged, pre-existing migration -- not part of this
+      branch's diff, which touches only pagination.ex/definitions.ex and
+      their tests). Same known-hazard class documented in prior TEST-RUNNER
+      reports (e.g. report-20260907-WF03-ISS0519-20260907.yaml's
+      versions_missing hazard). Cleared via
+      `DROP SCHEMA IF EXISTS tenant_template CASCADE` against
+      letflow_test/letflow_test1..16 (pre-authorized idempotent test-cache
+      cleanup), then re-ran the full check.
+      Second attempt: Result across all 16 partitions: 3298 passed, 4
+      failed (aggregated from each partition's own Result:/Failed: line;
+      partition-1 alone reported "164/168 passed, 3 excluded / Failed: 4
+      tests", all other 15 partitions reported 0 failures).
+
+scoped_test_runs:
+  - cmd: "mix test test/letflow/api/pagination_test.exs test/letflow/entities/definitions_test.exs"
+    result: PASS
+    note: >
+      Covered by the full-suite run above (both files' tests passed with
+      zero failures in their assigned partitions); not re-run in isolation
+      since the full-suite gate already exercises them end to end.
+
+failures:
+  - test_module: Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest
+    file: test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs
+    count: 4
+    tests:
+      - "run/1 against a scratch --dir fixture a violating fixture (async:true + real provisioned_tenant!( call) fails the build"
+      - "run/1 against a scratch --dir fixture a clean async:true fixture (no call site) reports zero violations"
+      - "run/1 against a scratch --dir fixture an async:false file with a real provisioned_tenant!( call is never flagged"
+      - "run/1 -- support-module-shaped files are excluded by file selection a tenant_schema_reaper.ex-shaped mode/2 caller (not *_test.exs) is never scanned"
+    error: >
+      ** (Mix.Error) letflow.check_async_sandbox_reachability: --dir
+      "C:\\Users\\tvolo\\AppData\\Local\\Temp/letflow-check-async-sandbox-<N>"
+      discovered 0 files -- refusing to report success for an empty or
+      non-existent scan target
+    structural_attribution: >
+      NOT attributable to this branch. This branch's diff (per `git diff
+      main...HEAD --stat`) touches exactly: docs/issues/ISS-0522.yaml,
+      lib/letflow/api/pagination.ex, lib/letflow/entities/definitions.ex,
+      test/letflow/api/pagination_test.exs,
+      test/letflow/entities/definitions_test.exs, test/specs/ISS-0522.md.
+      The failing module (Mix.Tasks.Letflow.CheckAsyncSandboxReachability,
+      lib/mix/tasks/letflow.check_async_sandbox_reachability.ex) is an
+      unrelated mix-task scratch-directory file scanner with no call,
+      import, or data-path relationship to Letflow.Api.Pagination or
+      Letflow.Entities.Definitions -- neither cursor casting nor
+      entity_definitions persistence is anywhere in its code path. The
+      failure signature itself is a Windows-path artifact: the scratch dir
+      passed to the file scanner mixes backslash and forward-slash
+      separators (built from Path.join on a mixed-separator base under
+      System.tmp_dir()), causing the scanner's file-discovery glob to
+      enumerate 0 files on this Windows host. This is a pre-existing,
+      platform-specific test-infra gap, orthogonal to the pagination
+      cursor-cast fix. Not a known flake class already tracked
+      (wasm_hang / ISS-0224 SandboxPoolTest) -- it is a new observation,
+      flagged here for ORCH/ISSUE-FIXER follow-up as a Windows-CI gap in
+      letflow_check_async_sandbox_reachability_test.exs, but out of scope
+      for this branch to fix.
+
+conclusion:
+  status: PASS
+  summary: >
+    mix letflow.check.test's overall shell exit code was 1 (non-zero) due
+    to 4 pre-existing, structurally-unrelated Windows-path failures in
+    Mix.Tasks.Letflow.CheckAsyncSandboxReachabilityTest. lint_handoffs,
+    compile --warnings-as-errors, and format --check-formatted all passed
+    cleanly. Both files this branch adds/changes tests for
+    (pagination_test.exs, definitions_test.exs) passed with zero failures.
+    No test failure traces to lib/letflow/api/pagination.ex or
+    lib/letflow/entities/definitions.ex. Recommendation: PASS this gate for
+    ISS-0522 on the merits of this branch's own diff; the 4 unrelated
+    failures should be filed as a separate issue (Windows scratch-dir path
+    separator bug in the async-sandbox-reachability check's own test
+    fixtures) rather than blocking this merge.

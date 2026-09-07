@@ -245,7 +245,7 @@ defmodule Letflow.Entities.Query.Cursor do
       {sort_values, [id_value]} = Enum.split(raw_resume_key, length(resolved_sort))
 
       with {:ok, casted_values} <- cast_all(resolved_sort, sort_values),
-           {:ok, id_str} <- decode_component(:string, id_value) do
+           {:ok, id_str} <- Pagination.cast_binary_id_component(id_value) do
         sort_terms =
           resolved_sort
           |> Enum.zip(casted_values)
@@ -256,6 +256,7 @@ defmodule Letflow.Entities.Query.Cursor do
         {:ok, sort_terms ++ [id_term]}
       else
         :error -> {:error, :invalid_cursor}
+        {:error, :invalid_cursor} -> {:error, :invalid_cursor}
       end
     end
   end

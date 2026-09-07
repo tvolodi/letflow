@@ -1,0 +1,61 @@
+id: ISS-0525
+title: "SandboxPoolTest RT-9/RT-2 CI flake recurrence (same class as ISS-0224/0227/0292) under real GitHub Actions load"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0524-20260907
+discovered_at: "2026-09-07T14:25:59Z"
+severity: MINOR
+tags: [testing, ci, flake, sandbox-pool, s6]
+description: >
+  Observed live on PR #1059 (WF03-ISS0524-20260907,
+  feature/WF03-ISS0524-20260907), real GitHub Actions Backend gate run
+  34131920822, partition 4 of 4: 2 test failures in
+  Letflow.SandboxPoolTest, structurally unrelated to that PR's diff
+  (which only touches lib/mix/tasks/letflow.check.test.ex and its test
+  file).
+
+  Failure 1: test/letflow/sandbox_pool_test.exs:1286 (RT-9, ISS-0227
+  regression test) -- drop_sandbox_schemas_created_since!/1 failed with
+  Postgrex.Error query_canceled (57014) while dropping schema
+  sandbox_dbf4377210ee43b7bcc3ad32f93e4d95, cascading from an earlier
+  connection checkin/checkout race logged as DBConnection.ConnectionError
+  against the concurrently-running RT-2 test migrating a different
+  sandbox schema.
+
+  Failure 2: test/letflow/sandbox_pool_test.exs:849 (RT-2, a waiter's
+  max_wait_ms honoured while a different waiter is being provisioned) --
+  assert sandbox_schema_names() == baseline failed, left MapSet.new([])
+  vs right MapSet.new(["sandbox_dbf4377210ee43b7bcc3ad32f93e4d95"]),
+  i.e. a schema that should have been dropped by RT-9 was still present
+  when RT-2 asserted its baseline, consistent with RT-9's own drop
+  having been cancelled by a query timeout under concurrent test load.
+
+  Both RT-9 and RT-2 are provisioning/pool-mailbox timing tests
+  explicitly designed around ISS-0224/ISS-0227 (deliberately concurrent
+  sandbox provisioning scenarios) -- this looks like the same
+  CI-load-timing-sensitivity class those issues (and ISS-0292's
+  RT-9/RT-8 title) already document, recurring under GitHub Actions
+  concurrent-partition load specifically (the parallel sibling
+  partition running the SAME test module concurrently is a plausible
+  new contributing factor not present when these tests were last
+  hardened). A companion partition/run on the SAME PR (job
+  34131891071) passed cleanly with zero failures, confirming this is
+  intermittent, not a deterministic regression.
+
+  Scope for whoever picks this up: determine whether the two tests need
+  additional serialization/isolation from concurrent partition
+  scheduling (e.g. exclusive tagging, a shorter/more generous timeout,
+  or resilient retry around the cross-test schema-drop assertion), or
+  whether this is an acceptable known-flake rate to document explicitly
+  rather than eliminate.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+related:
+  - ISS-0224
+  - ISS-0227
+  - ISS-0292
+source: >
+  PR #1059 (WF03-ISS0524-20260907), GitHub Actions Backend gate run
+  34131920822, partition 4 of 4.
+queue_task_id: 525
+github_issue: 1060
+status: open

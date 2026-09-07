@@ -2193,8 +2193,11 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by ORCH's own ISS-0524 SCOPE-CHANGE done-event append
+      (WF03-ISS0524-20260907) -- 197 lines at that point (11705 bytes), well
+      under the roll ceiling.
       Opened by ORCH at feature/WF03-ISS0437-20260907's Step Final, successor
       to volume 10. Created with volume 10's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty

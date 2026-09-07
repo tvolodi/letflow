@@ -236,7 +236,7 @@ TEST-DESIGNER should cover, at minimum:
    `{:ok, %Pagination.Page{}}` unchanged — the existing REQ-226/067 cursor
    round-trip tests must still pass.
 
-## 5. Open questions (not silently resolved)
+## 5. Open questions, site 1 (not silently resolved)
 
 1. **Should this fix also guard `decode_list_definitions_seek/1`'s
    `String.split/3` pattern match and `DateTime.from_unix!/2` call** (§3.3)?
@@ -255,3 +255,230 @@ TEST-DESIGNER should cover, at minimum:
    which always yields binaries, making the non-binary case likely
    unreachable in practice). This design includes the guard defensively;
    CODE-DESIGN-VALIDATOR may drop it as dead code if judged unreachable.
+
+## 6. Site 2 — `Letflow.Entities.Query.Cursor` (REQ-231, landed on `main` after §0-§5 were written)
+
+Written this session (`WF03-ISS0522-20260907`), after ORCH's rebase surfaced that
+REQ-231 merged to `main` (PR #1050, commit `1e3a1d6f`) while §0-§5 above were in
+flight, making the "only 1 real call site" conclusion in §3.1/§4.1 above stale.
+Independently re-read the real, current
+`lib/letflow/entities/query/cursor.ex` (431 lines, confirmed present on this
+branch after rebase — `git log --all -- lib/letflow/entities/query/cursor.ex`
+now returns REQ-231's merge commit), `lib/letflow/entities/query/allowlist.ex`
+(176 lines), and `lib/letflow/api/pagination.ex`'s `cast_binary_id_component/1`
+(lines 360-378) directly, per the same "confirm against source, not a prior
+diagnosis" standard §0 above already applied. This section does not amend
+§0-§5; it is additive, covering the second, now-real site.
+
+### 6.1 Independently re-confirmed defect
+
+`maybe_dump/2` (cursor.ex:353-356):
+
+```
+defp maybe_dump(nil, value), do: value
+defp maybe_dump(:binary_id, value), do: Ecto.UUID.dump!(value)
+defp maybe_dump(Ecto.UUID, value), do: Ecto.UUID.dump!(value)
+defp maybe_dump(_ecto_type, value), do: value
+```
+
+is called unconditionally from `field_eq/3`/`field_cmp/4` (cursor.ex:349-351),
+themselves called from `build_row_dynamic/1` inside `apply_resume_filter/2`
+(cursor.ex:311-337). The `id` tiebreaker term is built in
+`build_resume_terms/2` (cursor.ex:254):
+
+```
+id_term = %{dir: :asc, value: id_str, ecto_type: :binary_id, dyn: dynamic([r], r.id)}
+```
+
+where `id_str` comes from `decode_component(:string, id_value)`
+(cursor.ex:248), which dispatches to the catch-all clause
+(cursor.ex:306): `defp decode_component(_type, v) when is_binary(v) or
+is_boolean(v), do: {:ok, v}` — **any** binary string passes, no UUID-format
+check. `id_value` itself is caller-controlled: it is the last element of the
+JSON array decoded from the cursor payload's `resume_key_json`
+(`parse_resume_key_json/1`, cursor.ex:176-190) — network-facing input, same
+trust category as §0's `id_str` in `definitions.ex`. Confirmed: this is the
+identical defect class, genuinely present.
+
+### 6.2 Whether a caller can choose a `:binary_id`-typed field as a SORT key — investigated, not guessed
+
+Read `allowlist.ex` in full. `Allowlist.typed_columns/0` (allowlist.ex:63-73)
+is the **fixed, hardcoded** table of every typed-column field ever exposed to
+a caller's `sort`/`filter` clause:
+
+```
+%{
+  "entity_type" => {:entity_type, :string},
+  "record_id" => {:record_id, :string},
+  "deleted" => {:deleted, :boolean},
+  "entity_def_version" => {:entity_def_version, :string},
+  "last_event_global_seq" => {:last_event_global_seq, :integer},
+  "inserted_at" => {:inserted_at, :datetime},
+  "updated_at" => {:updated_at, :datetime}
+}
+```
+
+`entity_record_latest.id` (the `:binary_id` primary key — confirmed
+`@primary_key {:id, :binary_id, autogenerate: true}` in
+`lib/letflow/entities/record/latest.ex:26`) is **not a member of this map** —
+`resolve_field/2` (allowlist.ex:143-148) is a `Map.fetch/2` against exactly
+this table (merged with JSON-field entries), so a caller can never name `"id"`
+in a `sort`/`filter` clause and have it resolve. `resolved_sort_term/2`'s
+`:typed_column` clause (cursor.ex:209-220) derives `ecto_type` from
+`Latest.__schema__(:type, column_atom)` for whichever `column_atom` the
+allowlist entry names — since none of the seven `typed_columns/0` entries
+point at `:id`, none of their `ecto_type`s can ever be `:binary_id`/`Ecto.UUID`
+(`:string`, `:boolean`, `:integer`, `:datetime` only, matching the table
+above). The `:json_field` clause (cursor.ex:222-231) hardcodes
+`ecto_type: nil` unconditionally — `maybe_dump(nil, value)` is the
+pass-through no-op clause, never the raising ones. Also confirmed via
+`Letflow.Entities.Definition.field_type/0`
+(`lib/letflow/entities/definition.ex:50`): `:string | :integer | :decimal |
+:boolean | :date | :datetime | :enum | :json` — **no `:binary_id`/UUID
+variant exists anywhere in the field-type system** a JSON-field entry's
+`type` could carry, so even indirectly a JSON-field sort term could never
+reach a `:binary_id` `ecto_type`.
+
+**Conclusion: `maybe_dump(:binary_id, _)`/`maybe_dump(Ecto.UUID, _)` are reachable from exactly one call site — the hardcoded `id_term` at cursor.ex:254 — and from nowhere else.** No caller-chosen sort field can reach either raising clause. This rules out the concern that guarding only the id tiebreaker would leave the same raise reachable via a caller-chosen `:binary_id` sort field: it would not, because no such field is ever allowlisted.
+
+### 6.3 Shape chosen: (b) — guard at the id tiebreaker's own construction point
+
+Given §6.2's finding, shape (a) (widen `maybe_dump/2` to return a tagged tuple
+and propagate that through `field_eq/3`/`field_cmp/4`/`apply_resume_filter/2`
+up to `build_resume_terms/2`) would be strictly more propagation-surface than
+the defect requires: it would touch four functions to guard two `maybe_dump/2`
+clauses that only one call site (`id_term`) can ever reach with unvalidated
+input. Shape (b) — validate `id_value` once, at the point `id_str` is
+constructed in `build_resume_terms/2` — closes the actual reachable defect
+with a one-clause change, matching §0-§5's own site-1 fix shape (validate at
+the parse point, before the value is ever pinned into a query term) and
+keeping `maybe_dump/2` itself untouched (it remains correct: by the time a
+`:binary_id`-typed value reaches it, it is now always pre-validated).
+
+**Chosen: shape (b).**
+
+### 6.4 Exact propagation path
+
+`build_resume_terms/2` (cursor.ex:241-261), current relevant fragment:
+
+```
+with {:ok, casted_values} <- cast_all(resolved_sort, sort_values),
+     {:ok, id_str} <- decode_component(:string, id_value) do
+  ...
+  id_term = %{dir: :asc, value: id_str, ecto_type: :binary_id, dyn: dynamic([r], r.id)}
+  {:ok, sort_terms ++ [id_term]}
+else
+  :error -> {:error, :invalid_cursor}
+end
+```
+
+Change: replace the second `with`-clause's right-hand side from
+`decode_component(:string, id_value)` to
+`Letflow.Api.Pagination.cast_binary_id_component(id_value)` (module already
+`alias`ed as `Pagination` at cursor.ex:54). `decode_component/2`'s catch-all
+clause (cursor.ex:306) is otherwise unchanged — it still legitimately serves
+`cast_all/2`'s per-sort-value dispatch for non-`:binary_id`-typed values
+(§6.2 confirms it's never asked to validate a `:binary_id`/UUID value there
+either, so no other caller of `decode_component/2` is affected). Because
+`cast_binary_id_component/1` returns `{:error, :invalid_cursor}` (a tagged
+tuple) rather than bare `:error` — unlike `decode_component/2`/`cast_all/2`,
+which return bare `:error` — the `with`'s `else` block needs one additional
+clause: `{:error, :invalid_cursor} -> {:error, :invalid_cursor}` (pass
+through unchanged), alongside the existing `:error -> {:error,
+:invalid_cursor}` clause that still serves `cast_all/2`'s failure path. No
+new atom introduced — same `{:error, :invalid_cursor}` shape either branch
+produces.
+
+`build_resume_terms/2`'s own `@spec` (cursor.ex:235-238) already declares
+`{:error, :invalid_cursor}` as a return — no `@spec` change needed there.
+Propagation upward is unchanged from what §0/§2.3's site-1 analysis already
+established for `with`-chain short-circuiting: `paginate/5`'s own `with`
+chain (cursor.ex:128-131) has
+`{:ok, resume_terms} <- build_resume_terms(raw_resume_key, resolved_sort)`
+as one clause; when that returns `{:error, :invalid_cursor}` instead of
+letting a raise reach `Repo.all/2` inside the same `with`'s body, the `with`
+construct's implicit `else` (absent, so Elixir returns the non-matching
+value as-is) makes `paginate/5` itself return `{:error, :invalid_cursor}`
+directly. **Confirmed by direct reading: `paginate/5`'s `@spec`
+(cursor.ex:110-123) already lists `| {:error, :invalid_cursor}`** among its
+declared return shapes — no `@spec` widening needed at the top level, matching
+this handoff's framing.
+
+### 6.5 Reuse `cast_binary_id_component/1` as-is — confirmed, no variant needed
+
+Read the function's actual current body (pagination.ex:369-378):
+
+```
+def cast_binary_id_component(component) when is_binary(component) do
+  case Ecto.UUID.cast(component) do
+    {:ok, uuid} -> {:ok, uuid}
+    :error -> {:error, :invalid_cursor}
+  end
+end
+
+def cast_binary_id_component(_component), do: {:error, :invalid_cursor}
+```
+
+Its success shape is `{:ok, Ecto.UUID.t()}` — `Ecto.UUID.cast/1`'s own output,
+the **canonical hyphenated UUID string** (e.g.
+`"550e8400-e29b-41d4-a716-446655440000"`), *not* the raw 16-byte dumped
+binary. This is exactly the right input shape for cursor.ex's existing
+`maybe_dump/2`, which is unchanged by this fix and still expects to receive
+the canonical string form and call `Ecto.UUID.dump!/1` on it itself
+(`field_eq/3`/`field_cmp/4` still route `id_term.value` through
+`maybe_dump(:binary_id, value)` exactly as before) — so the guard is
+"cast-validate first, `id_term.value` still carries the canonical string, the
+existing unconditional `Ecto.UUID.dump!/1` inside `maybe_dump/2` still runs
+but can now never raise because its input was already proven a valid UUID
+string by `cast_binary_id_component/1`." No variant of the helper is needed;
+`maybe_dump/2` itself does not change at all — reused as-is, both the helper
+and its call site require zero shape adaptation.
+
+### 6.6 Test-ability, end-to-end through `Cursor.paginate/5`
+
+TEST-DESIGNER should cover, at minimum (mirrors §4's site-1 shape):
+
+1. **Non-regression on the helper itself**: `cast_binary_id_component/1` is
+   already covered by site-1's tests (§4.1) — no new helper-level tests
+   needed, only new call-site coverage.
+2. **End-to-end via `Cursor.paginate/5` with a malformed `:binary_id`
+   component**: construct a `sort` list (any valid, allowlisted field or
+   empty `sort`), mint a resume-key JSON array whose **last** element (the
+   `id` position) is a non-UUID string (e.g. `"not-a-uuid"`), encode it via
+   `Pagination.build_raw_cursor/3` + `Pagination.encode_cursor/1` under
+   `Cursor.cursor_prefix/0` (`"EQ:"`), call
+   `Cursor.paginate(request, compiled_query, allowlist, %{cursor: encoded},
+   prefix)`, and assert `{:error, :invalid_cursor}` — explicitly not
+   `assert_raise`. Must not reach `Repo.all/2`/`Ecto.UUID.dump!/1`'s raise at
+   all.
+3. **Boundary**: a resume-key array with a syntactically-binary but
+   non-UUID-format `id` component of exactly 36 characters (UUID length) but
+   invalid hex/hyphen placement, to confirm `Ecto.UUID.cast/1`'s real
+   validation (not just a length check) is what gates this.
+4. **Non-regression**: a valid cursor (canonical UUID `id` component, valid
+   sort-value components matching `sort`) through `Cursor.paginate/5` still
+   returns `{:ok, %Pagination.Page{}}` unchanged — REQ-231's own existing
+   round-trip tests for this module must still pass.
+5. Per §6.2's finding, **no test is needed for a caller-chosen `:binary_id`
+   sort field**, since no such field can ever be allowlisted — asserting this
+   structurally (e.g. a test that `Allowlist.typed_columns/0`'s values never
+   include `:id` / `:binary_id`, guarding against a future `typed_columns/0`
+   edit silently reopening the shape-(a)-only scenario) is optional hardening
+   TEST-DESIGNER may add but is not required by this fix's own scope.
+
+## 7. Open questions, site 2 (not silently resolved)
+
+1. **Should `decode_component/2`'s catch-all clause (cursor.ex:306) be
+   tightened generally**, beyond just routing the `id` position through
+   `cast_binary_id_component/1`? It still accepts any binary/boolean
+   unchecked for every other sort-value position — but per §6.2, no
+   allowlistable field type ever maps to `:binary_id`/UUID, so the catch-all's
+   remaining unchecked cases are for `:string`/`:enum`-typed sort values
+   compared as plain strings, which is not a cast-raise risk (no
+   `Ecto.UUID.dump!/1` or equivalent in that path) — flagged for
+   CODE-DESIGN-VALIDATOR/REVIEWER to confirm this reasoning rather than fold
+   in silently.
+2. **Whether ISS-0522's own "2 call sites" framing and `status: open` should
+   be corrected/updated once this site-2 design is implemented** — this is
+   DOC-UPDATER/ISSUE-FIXER's job at WF-03 Step 5, not this design step; noted
+   here only so the design doesn't appear to silently resolve it.

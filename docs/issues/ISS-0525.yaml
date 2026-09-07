@@ -58,4 +58,56 @@ source: >
   34131920822, partition 4 of 4.
 queue_task_id: 525
 github_issue: 1060
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0525-20260907. ISSUE-FIXER ruled out
+  the originally-hypothesized cross-CI-job/cross-partition collision
+  (.github/workflows/ci.yml's backend job has no matrix strategy, one
+  isolated postgres service container per trigger; mix test --partitions
+  assigns whole files to partitions so RT-2/RT-9, same file, can never
+  land in different partition processes). REAL ROOT CAUSE: RT-9
+  deliberately starts a real schema-provisioning Task.Supervisor.async_nolink/3
+  worker (lib/letflow/sandbox_pool.ex) and only waited for it to START,
+  never for it to FINISH. Because ExUnit runs on_exit callbacks LIFO,
+  RT-9's own cleanup (drop_sandbox_schemas_created_since!/1) was
+  registered before start_pool!'s GenServer.stop, so the pool got
+  stopped first while the migration Task was still live -- SandboxPool
+  has no terminate/2 and the worker is async_nolink, so stopping the
+  pool did nothing to the orphan. RT-9's own cleanup then raced that
+  still-live orphan's DROP SCHEMA, sometimes losing (Postgrex.Error
+  query_canceled) and leaving a schema behind mid-write, corrupting
+  RT-2's unrelated baseline assertion (an innocent bystander, needed no
+  changes). This was a NEW manifestation of a gap ISS-0224 had
+  explicitly named and declined to fix at the time ("an async_nolink
+  worker outlives a pool that dies mid-provisioning... nothing aborts a
+  hung provisioning"), not a regression of ISS-0227 (unrelated dead-field
+  removal) or ISS-0292 (hardened the cleanup helpers against an
+  already-occurring Postgres error, worked exactly as designed here, but
+  never addressed why the query got canceled in the first place). FIX
+  (test-only, no production code changes): RT-9 now reads the worker's
+  real pid (state.in_flight.task_pid, already test-visible), takes a
+  fresh Process.monitor/1 on it, and assert_receive's its :DOWN (either
+  exit reason) bounded by the existing pool_op_rendezvous_timeout/0
+  helper, before the test function returns -- closing the race at its
+  source rather than stacking more retry/timeout arithmetic onto the
+  cleanup helpers (explicitly avoided, per ISS-0292's own history of 3
+  prior CODE-DESIGN-VALIDATOR FAILs for that shape of fix). No explicit
+  claim-release added (Option A): the race is against a live process not
+  a live Postgres row, and once :DOWN is observed the fallback CASCADE
+  drop is safe regardless of the pool's internal claim-map state (each
+  test's pool is a private unregistered GenServer, no cross-test leak
+  possible). Verification: ELIXIR-DEV ran 24 repeated-seed local runs of
+  just this test file (24/24 passed) plus a full test/letflow/ directory
+  run (3153/3153 passed, zero failures); REVIEWER independently
+  corroborated with 5 more seeded runs (5/5 passed); TEST-RUNNER's final
+  full-suite gate showed zero SandboxPoolTest failures across all 8
+  partitions (the 2 failures present were the separately-tracked
+  pre-existing rustc-absent sandbox gap, structurally unrelated). Sample-size
+  caveat from ISSUE-FIXER's original diagnosis (n=2 CI observations)
+  explicitly carried forward -- the fix closes a real, deterministic-in-
+  principle race by construction, but frequency claims beyond that
+  remain unconfirmed pending further CI observation. Pipeline:
+  ISSUE-FIXER -> CODE-DESIGNER (0 reworks) -> CODE-DESIGN-VALIDATOR
+  (PASS first pass) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER
+  out of scope, no tenant-data path) -> TEST-RUNNER. Implementation
+  commit ae3906dd.

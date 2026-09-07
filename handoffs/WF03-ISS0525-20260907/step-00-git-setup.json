@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0525-20260907-step-00",
+  "run_id": "WF03-ISS0525-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0525-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T14:37:30Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0525"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0525.yaml",
+      "test/letflow/sandbox_pool_test.exs",
+      "docs/issues/ISS-0224.yaml",
+      "docs/issues/ISS-0227.yaml",
+      "docs/issues/ISS-0292.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0525-20260907",
+    "base_commit": "8c9c8682"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0525: two SandboxPoolTest tests (RT-9 at test/letflow/sandbox_pool_test.exs:1286, an ISS-0227 regression test about drop_sandbox_schemas_created_since!/1; RT-2 at test/letflow/sandbox_pool_test.exs:849, a waiter's max_wait_ms honoured while a different waiter is being provisioned) failed intermittently on real GitHub Actions CI (run 34131920822, partition 4 of 4) on a branch (WF03-ISS0524-20260907) whose diff had zero file overlap with sandbox_pool.ex/sandbox_pool_test.exs -- a companion matrix job on the exact same PR passed cleanly with zero failures, confirming intermittency not a deterministic regression. Read docs/issues/ISS-0224.yaml, ISS-0227.yaml, and ISS-0292.yaml in full (all already 'resolved', all about the same RT-9/RT-2/RT-8 CI-timing-sensitivity class) to understand what hardening was already applied and why it apparently isn't sufficient under GitHub Actions' concurrent-partition scheduling specifically. Read test/letflow/sandbox_pool_test.exs around lines 528-960 and 1280-1300 (RT-2 and RT-9's bodies, the query_without_holding/1, resilient_drop_schema/1, and drop_sandbox_schemas_created_since!/1 helpers) to understand the actual mechanism: RT-9 attempted to DROP SCHEMA and got Postgrex.Error query_canceled (57014) -- itself cascading from a DBConnection.ConnectionError logged against a concurrently-running instance of RT-2 (from the OTHER partition's concurrent run of the same test module) checking in a connection still in use by a Task.Supervised process running an Ecto migration. RT-2 then failed its own baseline assertion because the schema RT-9 was supposed to have dropped was still present (MapSet.new([]) expected, got MapSet.new([\"sandbox_...\"])). Determine: is this genuinely a NEW contributing factor (two GitHub Actions matrix jobs both running the FULL suite concurrently, each partitioning across 4 sub-partitions, meaning the SAME test module/schema-naming-space could be exercised by two independent OS-level runs against the SAME database at once -- check whether CI's postgres service is shared or per-job, and whether schema names are randomized enough to avoid two concurrent CI job runs colliding) versus a genuine remaining gap in RT-9/RT-2's own concurrency-safety design (e.g. a missing timeout/retry around the schema-drop that ISS-0227/ISS-0292's prior hardening didn't anticipate). Recommend the correct fix path: additional test-level isolation/serialization, a retry/timeout adjustment, a CI-infrastructure fix (e.g. per-job-unique schema name prefixes to eliminate cross-job collision entirely if that's the real cause), or a documented decision that this is an acceptable residual flake rate. Do not implement anything -- diagnosis only."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0525-20260907 created off main @ 8c9c8682 (post ISS-0524 merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

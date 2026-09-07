@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0525-20260907-step-02",
+  "run_id": "WF03-ISS0525-20260907",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0525-20260907/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T15:25:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0525"],
+    "related_handoff_ids": ["WF03-ISS0525-20260907-step-01"],
+    "artifacts_in": ["test/letflow/sandbox_pool_test.exs", "lib/letflow/sandbox_pool.ex"],
+    "artifacts_out": ["lib/letflow/design/iss0525-sandboxpool-rt9-orphan-wait.md"],
+    "branch_name": "feature/WF03-ISS0525-20260907",
+    "base_commit": "8c9c8682"
+  },
+  "task": {
+    "description": "Design RT-9's fix for ISS-0525: wait for the deliberately-abandoned provisioning task to actually finish before the test ends, closing the LIFO on_exit race with its own teardown."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Root fix: after RT-9's existing ISS-0227 key-set assertions (current lines 1300-1319), add exactly one new step: read the worker pid already present at state.in_flight.task_pid (confirmed present, no production-code change needed -- sandbox_pool.ex:602-619's pump/1 already stores it there), take a fresh Process.monitor/1 on it from the test process, assert_receive its :DOWN (either exit reason) bounded by the file's existing pool_op_rendezvous_timeout/0 helper (already equals provision_timeout_ms() + slack, no new constant). Closes the LIFO on_exit race by construction -- once the worker is confirmed dead, neither GenServer.stop nor the fallback DROP SCHEMA CASCADE has anything left to race against. Claim-release decision: does NOT add an explicit release/2 call (Option A only) -- the race is against a live process not a live Postgres row, once :DOWN is observed the fallback CASCADE drop is safe regardless of the pool's internal active map state; an explicit release is recorded as an optional non-mandated follow-up, not silently decided. Purpose check: new step strictly appended after all existing ISS-0227 assertions, RT-9's actual documented purpose (the ISS-0227 dead-field regression, per its own comment block) undisturbed; flagged a discrepancy that the dispatch's framing (mailbox-not-blocked, ISS-0224's target) actually describes RT-2 not RT-9. RT-2 needs no changes and gets none. New test coverage: none beyond RT-9's own body change -- the defect is a race against a live orphaned process not a deterministic bug, a classic fail-then-pass regression test isn't a good fit (would need production-code timing instrumentation, out of scope); substituted structural proof plus a recommendation that TEST-RUNNER loop the test file ~20-50 times post-fix given ISSUE-FIXER's own n=2 sample-size caveat. Self-check: grep for defmodule|def |defp |schema \"|Enum.|fn ->|case do|cond do|with do|pipe operator returned one hit -- a quoted citation of an already-existing real assertion at test file line 1312, used as factual evidence about current state, not new implementation code; no disguised executable code."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

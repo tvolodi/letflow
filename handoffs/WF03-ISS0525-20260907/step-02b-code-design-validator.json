@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0525-20260907-step-02b",
+  "run_id": "WF03-ISS0525-20260907",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0525-20260907/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T15:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0525"],
+    "related_handoff_ids": ["WF03-ISS0525-20260907-step-02"],
+    "artifacts_in": ["lib/letflow/design/iss0525-sandboxpool-rt9-orphan-wait.md", "lib/letflow/sandbox_pool.ex", "test/letflow/sandbox_pool_test.exs"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0525-20260907",
+    "base_commit": "8c9c8682"
+  },
+  "task": {
+    "description": "Validate ISS-0525's RT-9 orphan-wait design."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Verified sandbox_pool.ex:606-612's pump/1: task = Task.Supervisor.async_nolink(...), in_flight = %{op:, task_ref: task.ref, task_pid: task.pid} -- task.pid genuinely is the real worker Task's pid, stored in GenServer state, test-visible via wait_until_pool_state/3 (already used by RT-9). Confirmed RT-9's existing body (sandbox_pool_test.exs:1286-1320) blocks on provision_in_flight?/1 which is true only while the task is still running (complete_op/3 sets in_flight: nil on completion, sandbox_pool.ex:687/697) -- so the captured task_pid is read while the task is provably alive, matching what the existing key-set assertions already depend on. Process.monitor/1-on-already-dead-pid semantics confirmed as a non-issue (immediate :DOWN delivery either way), no race window in the design. pool_op_rendezvous_timeout/0 confirmed to exist exactly as claimed (test file ~line 92-93, equals SandboxPool.release_call_timeout() = provision_timeout_ms()). Scope confirmed: complete_op/3's successful-provision clause never issues a release/drop (sandbox_pool.ex:672-699), only converts reservation to an active entry, matching SS2/SS3.3's claims; no production file diffs proposed anywhere; RT-2/resilient_drop_schema/1/retry_query_once/1/drop_sandbox_schemas_created_since!/1 named only as read-only citations. Claim-release Option A safety confirmed: start_pool! registers no global name, each test's pool is a private unregistered GenServer, an unresolved active entry dies with the process at GenServer.stop and cannot leak into another test's pool state, combined with DROP SCHEMA CASCADE not caring about the pool's internal bookkeeping. No-new-test-coverage reasoning holds: RT-9 itself is the reproduction vector so a parallel fail/pass test would just reintroduce the flake on some runs; deterministic forcing would need production timing hooks, correctly scoped out; the design's repeated-isolated-runs empirical-confidence step is a reasonable substitute. Self-check agreed: the design doc's one grep hit is a citation of an existing real assertion (line 1312), not new implementation code -- correct judgment call. Design is unambiguous and complete enough to hand to ELIXIR-DEV as-is."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -571,6 +571,60 @@ defmodule Letflow.Entities.RecordsTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # ISS-0519 fix (B) regression -- T7: reproduce ISS-0519's originally filed
+  # repro path (Records.delete_record/2 against a name with 2+
+  # entity_definitions rows). See
+  # lib/letflow/design/iss0519-entity-definition-versioning-fix.md §8.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0519 fix (B) regression -- delete_record/2 no longer crashes under 2+ definition versions" do
+    test "T7: delete_record/2 resolves the correct active definition instead of raising Ecto.MultipleResultsError" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      # v1: created and activated.
+      activated_v1 = create_active_definition!(schema)
+
+      assert {:ok, %{record: created}} = Records.create_record(create_attrs(), schema)
+
+      # v2: a second entity_definitions row under the SAME name, created
+      # after v1 was activated, and never itself activated -- this is the
+      # exact "2+ rows share `name`" condition ISS-0519 names. Pre-fix, any
+      # get_definition_by_name/2 call against "customer" from this point on
+      # raises Ecto.MultipleResultsError.
+      assert {:ok, _v2} =
+               Definitions.create_definition(
+                 %{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "customer_name", type: :string, required: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     }),
+                   created_by: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      assert {:ok, %{record: deleted, is_duplicate: false}} =
+               Records.delete_record(
+                 %{
+                   entity_type: "customer",
+                   record_id: created.record_id,
+                   actor_id: Ecto.UUID.generate(),
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 schema
+               )
+
+      assert deleted.deleted
+      assert deleted.record_id == created.record_id
+      assert deleted.entity_def_version == activated_v1.logical_shape_version
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # Scope: no route or controller file added for this requirement.
   # ---------------------------------------------------------------------------------
 

@@ -469,4 +469,265 @@ defmodule Letflow.Entities.DefinitionsTest do
              )
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0519 fix -- entity_definitions versioning-under-one-name safety. See
+  # lib/letflow/design/iss0519-entity-definition-versioning-fix.md §8 (T1-T10)
+  # for the scenario table this describe block implements.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0519 fix (A) -- get_definition_by_name/2 deterministic latest-row resolution" do
+    test "T1: 2 rows sharing one name no longer raise Ecto.MultipleResultsError -- resolves to the newest" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, v1} =
+               Definitions.create_definition(
+                 create_attrs(%{definition: valid_definition()}),
+                 schema
+               )
+
+      assert {:ok, v2} =
+               Definitions.create_definition(
+                 create_attrs(%{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "email", type: :string, required: true, queried: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     })
+                 }),
+                 schema
+               )
+
+      refute v1.logical_shape_version == v2.logical_shape_version
+      assert v1.name == v2.name
+
+      assert {:ok, resolved} = Definitions.get_definition_by_name("customer", schema)
+      assert resolved.id == v2.id
+    end
+
+    test "T3: activate_definition/4 still resolves the row to promote under 2+ rows" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, _v1} =
+               Definitions.create_definition(
+                 create_attrs(%{definition: valid_definition()}),
+                 schema
+               )
+
+      assert {:ok, v2} =
+               Definitions.create_definition(
+                 create_attrs(%{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "email", type: :string, required: true, queried: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     })
+                 }),
+                 schema
+               )
+
+      assert {:ok, %EntityDefinition{status: :active} = activated} =
+               Definitions.activate_definition(
+                 "customer",
+                 Ecto.UUID.generate(),
+                 "go-live",
+                 schema
+               )
+
+      assert activated.id == v2.id
+    end
+  end
+
+  describe "ISS-0519 fix (B) -- get_active_definition_by_name/2 tracks the activation pointer" do
+    test "T4: happy path -- create + activate returns the activated row" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, created} = Definitions.create_definition(create_attrs(), schema)
+
+      assert {:ok, activated} =
+               Definitions.activate_definition(
+                 "customer",
+                 Ecto.UUID.generate(),
+                 "go-live",
+                 schema
+               )
+
+      assert {:ok, resolved} = Definitions.get_active_definition_by_name("customer", schema)
+      assert resolved.id == created.id
+      assert resolved.id == activated.id
+    end
+
+    test "T5: never activated -- returns {:error, :not_found}" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, _created} = Definitions.create_definition(create_attrs(), schema)
+
+      assert Definitions.get_active_definition_by_name("customer", schema) ==
+               {:error, :not_found}
+    end
+
+    test "T6: multi-version, out-of-order activation -- tracks the pointer, not inserted_at recency" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, v1} =
+               Definitions.create_definition(
+                 create_attrs(%{definition: valid_definition()}),
+                 schema
+               )
+
+      assert {:ok, activated_v1} =
+               Definitions.activate_definition(
+                 "customer",
+                 Ecto.UUID.generate(),
+                 "go-live v1",
+                 schema
+               )
+
+      assert activated_v1.id == v1.id
+
+      # A newer version is created AFTER v1 was activated, but is never
+      # itself activated.
+      assert {:ok, v2} =
+               Definitions.create_definition(
+                 create_attrs(%{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "email", type: :string, required: true, queried: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     })
+                 }),
+                 schema
+               )
+
+      refute v2.id == v1.id
+
+      # get_definition_by_name/2 (fix A) resolves to the newest row by
+      # inserted_at -- v2.
+      assert {:ok, newest} = Definitions.get_definition_by_name("customer", schema)
+      assert newest.id == v2.id
+
+      # get_active_definition_by_name/2 (fix B) resolves to the ACTIVATED
+      # row -- v1 -- not the newest-inserted one. This is the key behavioral
+      # fork between the two functions.
+      assert {:ok, active} = Definitions.get_active_definition_by_name("customer", schema)
+      assert active.id == v1.id
+    end
+
+    test "an invalid schema-name prefix is rejected with :invalid_schema_name" do
+      assert Definitions.get_active_definition_by_name("customer", "not-a-real-schema") ==
+               {:error, :invalid_schema_name}
+    end
+  end
+
+  describe "ISS-0519 fix (C) -- activate_definition/4 demotes siblings, DB enforces the invariant" do
+    test "T8: activating a second version demotes the first -- never 2 simultaneously-active rows" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, v1} =
+               Definitions.create_definition(
+                 create_attrs(%{definition: valid_definition()}),
+                 schema
+               )
+
+      assert {:ok, %EntityDefinition{status: :active}} =
+               Definitions.activate_definition(
+                 "customer",
+                 Ecto.UUID.generate(),
+                 "go-live v1",
+                 schema
+               )
+
+      assert active_count(schema, "customer") == 1
+
+      assert {:ok, v2} =
+               Definitions.create_definition(
+                 create_attrs(%{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "email", type: :string, required: true, queried: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     })
+                 }),
+                 schema
+               )
+
+      assert {:ok, %EntityDefinition{status: :active} = activated_v2} =
+               Definitions.activate_definition(
+                 "customer",
+                 Ecto.UUID.generate(),
+                 "go-live v2",
+                 schema
+               )
+
+      assert activated_v2.id == v2.id
+      assert active_count(schema, "customer") == 1
+
+      reloaded_v1 = Repo.get!(EntityDefinition, v1.id, prefix: schema)
+      assert reloaded_v1.status == :inactive
+
+      reloaded_v2 = Repo.get!(EntityDefinition, v2.id, prefix: schema)
+      assert reloaded_v2.status == :active
+    end
+
+    test "T9: DB constraint directly enforced -- a second concurrent :active row is rejected, not silently accepted" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert {:ok, v1} =
+               Definitions.create_definition(
+                 create_attrs(%{definition: valid_definition()}),
+                 schema
+               )
+
+      assert {:ok, v2} =
+               Definitions.create_definition(
+                 create_attrs(%{
+                   definition:
+                     valid_definition(%{
+                       fields: [
+                         %{name: "email", type: :string, required: true, queried: true},
+                         %{name: "age", type: :integer},
+                         %{name: "loyalty_tier", type: :string}
+                       ]
+                     })
+                 }),
+                 schema
+               )
+
+      # Bypass activate_definition/4 entirely -- set v1 active directly.
+      assert {:ok, _} =
+               v1
+               |> EntityDefinition.changeset(%{status: :active})
+               |> Repo.update(prefix: schema)
+
+      # Attempting to also set v2 active directly (simulating a hypothetical
+      # future bug reintroducing the pre-fix gap) must be rejected by the
+      # partial unique index, translated to a changeset error on :status --
+      # not a raw Ecto.ConstraintError, and not a silent success.
+      assert {:error, changeset} =
+               v2
+               |> EntityDefinition.changeset(%{status: :active})
+               |> Repo.update(prefix: schema)
+
+      assert %{status: ["has already been taken"]} = errors_on(changeset)
+      assert active_count(schema, "customer") == 1
+    end
+  end
+
+  defp active_count(schema, name) do
+    EntityDefinition
+    |> where([e], e.name == ^name and e.status == :active)
+    |> Repo.aggregate(:count, prefix: schema)
+  end
 end

@@ -355,13 +355,19 @@ defmodule Letflow.Entities.Records do
   # Definition/record resolution (design §5.1 step 1-2, §5.2)
   # ---------------------------------------------------------------------
 
+  # ISS-0519 fix (B), lib/letflow/design/iss0519-entity-definition-versioning-fix.md
+  # §4.2: routed through Definitions.get_active_definition_by_name/2 (which
+  # itself resolves via REQ-203's authoritative Activation.resolve/3 pointer)
+  # instead of the previous unfiltered get_definition_by_name/2 + post-hoc
+  # %EntityDefinition{status: :active} pattern match -- that unfiltered query
+  # could raise Ecto.MultipleResultsError before the pattern match was ever
+  # reached once 2+ rows shared entity_type (the ISS-0519 crash). The "found
+  # but not active" arm is unreachable in the new contract and is removed,
+  # not kept dead.
   defp fetch_active_definition(entity_type, prefix) do
-    case Definitions.get_definition_by_name(entity_type, prefix) do
-      {:ok, %EntityDefinition{status: :active} = definition} ->
+    case Definitions.get_active_definition_by_name(entity_type, prefix) do
+      {:ok, %EntityDefinition{} = definition} ->
         {:ok, definition}
-
-      {:ok, %EntityDefinition{}} ->
-        {:error, {:definition_not_found, entity_type}}
 
       {:error, :not_found} ->
         {:error, {:definition_not_found, entity_type}}

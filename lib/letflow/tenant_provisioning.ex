@@ -495,7 +495,9 @@ defmodule Letflow.TenantProvisioning do
     {20_260_906_010_001, Letflow.Repo.Migrations.CreateEntityRecordLatest,
      "20260906010001_create_entity_record_latest.exs"},
     {20_260_906_010_002, Letflow.Repo.Migrations.CreateEntityTypeInstances,
-     "20260906010002_create_entity_type_instances.exs"}
+     "20260906010002_create_entity_type_instances.exs"},
+    {20_260_907_000_001, Letflow.Repo.Migrations.AddEntityDefinitionsActivePartialIndex,
+     "20260907000001_add_entity_definitions_active_partial_index.exs"}
   ]
 
   @doc """

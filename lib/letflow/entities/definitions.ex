@@ -193,6 +193,17 @@ defmodule Letflow.Entities.Definitions do
   Fetches one `entity_definitions` row by `name`, scoped to the tenant
   schema named by `prefix` (design §3.3). Same not-found semantics as
   `get_definition/2`.
+
+  This finds the **newest row by this name, regardless of status** --
+  NOT "the active" row (see `get_active_definition_by_name/2` for that).
+  `name` alone is not unique in `entity_definitions` -- REQ-225/226's own
+  versioning model allows 2+ rows to share one `name` under distinct
+  `logical_shape_version`s -- so the query is ordered `inserted_at desc, id
+  desc` (the same "latest by name" ordering idiom `list_definitions/2`
+  already uses) and limited to 1, resolving deterministically to the newest
+  row instead of raising `Ecto.MultipleResultsError` once 2+ rows exist
+  (ISS-0519 fix, `lib/letflow/design/iss0519-entity-definition-versioning-fix.md`
+  §3).
   """
   @spec get_definition_by_name(name :: String.t(), prefix :: String.t()) ::
           {:ok, EntityDefinition.t()}
@@ -200,11 +211,65 @@ defmodule Letflow.Entities.Definitions do
           | {:error, :invalid_schema_name}
   def get_definition_by_name(name, prefix) when is_binary(name) and is_binary(prefix) do
     with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
-      query = from(e in EntityDefinition, where: e.name == ^name)
+      query =
+        from(e in EntityDefinition,
+          where: e.name == ^name,
+          order_by: [desc: e.inserted_at, desc: e.id],
+          limit: 1
+        )
 
       case Repo.one(query, prefix: prefix) do
         nil -> {:error, :not_found}
         %EntityDefinition{} = entity_definition -> {:ok, entity_definition}
+      end
+    end
+  end
+
+  @typedoc "ISS-0519 fix design §4.1 -- `get_active_definition_by_name/2`'s error shape."
+  @type get_active_definition_error ::
+          {:error, :not_found}
+          | {:error, :invalid_schema_name}
+
+  @doc """
+  Fetches the `entity_definitions` row that corresponds to `name`'s
+  **currently activated** `artifact_version_id`, scoped to the tenant schema
+  named by `prefix` -- ISS-0519 fix (B),
+  `lib/letflow/design/iss0519-entity-definition-versioning-fix.md` §4.
+
+  Unlike `get_definition_by_name/2` (newest row by `inserted_at`),  this
+  resolves via REQ-203's authoritative activation pointer
+  (`Letflow.Repository.Activation.resolve/3`), not via this table's own
+  `status` column or row recency -- the two can disagree (an older version
+  explicitly re-activated after a newer one was created), and this function
+  is the one that must not get that wrong.
+
+  Never raises on a data-integrity edge case a caller cannot prevent (e.g. an
+  `artifact_activations` pointer referencing a version this module never
+  wrote) -- returns `{:error, :not_found}` instead of a `Repo.get!`-style
+  raise.
+  """
+  @spec get_active_definition_by_name(name :: String.t(), prefix :: String.t()) ::
+          {:ok, EntityDefinition.t()} | get_active_definition_error()
+  def get_active_definition_by_name(name, prefix)
+      when is_binary(name) and is_binary(prefix) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      case Activation.resolve(:entity, name, prefix) do
+        {:error, :not_activated} ->
+          {:error, :not_found}
+
+        {:error, :invalid_schema_name} = error ->
+          error
+
+        {:ok, %Repository.ArtifactVersion{version_id: version_id}} ->
+          query =
+            from(e in EntityDefinition,
+              where: e.tenant_id == ^tenant_id and e.artifact_version_id == ^version_id
+            )
+
+          case Repo.one(query, prefix: prefix) do
+            nil -> {:error, :not_found}
+            %EntityDefinition{} = entity_definition -> {:ok, entity_definition}
+          end
       end
     end
   end
@@ -299,9 +364,25 @@ defmodule Letflow.Entities.Definitions do
   @doc """
   Activates `name`'s current `artifact_version_id` (design §3.4) -- a thin
   wrapper around `Letflow.Repository.Activation.activate_group/5`, unchanged,
-  with `artifact_kind: :entity`. On that call's own success, updates the
+  with `artifact_kind: :entity`. On that call's own success, promotes the
   matching `entity_definitions` row's `status` to `:active`. Adds no new
   activation table, pointer, or history mechanism.
+
+  ISS-0519 fix (C),
+  `lib/letflow/design/iss0519-entity-definition-versioning-fix.md` §5.1: the
+  `entity_definitions`-side effect is now internally transactional (a
+  separate transaction from `activate_group/5`'s own, unchanged from before)
+  and demotes every OTHER row under the same `(tenant_id, name)` back to
+  `:inactive` BEFORE promoting the target row to `:active`. This ordering is
+  load-bearing, not stylistic: newly inserted rows default to `status:
+  :inactive` (`insert_entity_definition/6`), so at most one sibling can be
+  `:active` before this function runs; demoting that sibling first drops the
+  active count for `(tenant_id, name)` to 0 before promote-self raises it
+  back to exactly 1, so the partial unique index
+  `entity_definitions_tenant_name_active_idx` (added by this fix) is never
+  even transiently violated at any statement boundary. Reversing the order
+  (promote before demote) would create a real transient two-`:active`-rows
+  window and fail that constraint.
   """
   @spec activate_definition(
           name :: String.t(),
@@ -315,6 +396,7 @@ defmodule Letflow.Entities.Definitions do
           | {:error, :duplicate_artifact_in_group}
           | {:error, :invalid_schema_name}
           | {:error, {:group, Ecto.Changeset.t()}}
+          | {:error, {:persistence, Ecto.Changeset.t()}}
           | {:error, {atom(), Ecto.Changeset.t()}}
   def activate_definition(name, activator_user_id, rationale, prefix)
       when is_binary(name) and is_binary(prefix) do
@@ -332,9 +414,37 @@ defmodule Letflow.Entities.Definitions do
              rationale,
              prefix
            ) do
-      entity_definition
-      |> EntityDefinition.changeset(%{status: :active})
-      |> Repo.update(prefix: prefix)
+      promote_and_demote_siblings(entity_definition, prefix)
+    end
+  end
+
+  # ISS-0519 fix (C), design §5.1 steps 3-4: demote every OTHER
+  # entity_definitions row under this (tenant_id, name) to :inactive via a
+  # set-based Repo.update_all/3 (no per-row changeset needed for a
+  # single-field status flip), THEN promote the target row to :active --
+  # both inside one Ecto.Multi/Repo.transaction/1, demote-before-promote, per
+  # the ordering rationale in this function's own moduledoc above.
+  defp promote_and_demote_siblings(%EntityDefinition{} = entity_definition, prefix) do
+    demote_siblings_query =
+      from(e in EntityDefinition,
+        where:
+          e.tenant_id == ^entity_definition.tenant_id and
+            e.name == ^entity_definition.name and
+            e.id != ^entity_definition.id and
+            e.status == :active
+      )
+
+    promote_changeset = EntityDefinition.changeset(entity_definition, %{status: :active})
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update_all(:demote_siblings, demote_siblings_query, [set: [status: :inactive]],
+      prefix: prefix
+    )
+    |> Ecto.Multi.update(:promote, promote_changeset, prefix: prefix)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{promote: promoted}} -> {:ok, promoted}
+      {:error, :promote, changeset, _changes} -> {:error, {:persistence, changeset}}
     end
   end
 end

@@ -1,0 +1,64 @@
+id: ISS-0526
+title: "Port R-Co's real narrative UAT scenario corpus (tests/simulation/scenarios/*.yaml) into UAT-RUNNER's domain -- correctly-scoped successor to ISS-0393"
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0393-20260907
+discovered_at: "2026-09-07T17:37:52Z"
+severity: MINOR
+tags: [fixture-porting, uat-runner, s7]
+description: >
+  ISS-0393 assumed R-Co's real tests/simulation/scenarios/*.yaml corpus was
+  a drop-in replacement for REQ-206/207/208's self-authored synthetic
+  scenario fixtures (test/fixtures/simulation/{swiftroute,vortex,meridian}/
+  scenarios/*.yaml). That premise was tested and found false: R-Co's real
+  scenario files are narrative UAT scripts -- prose action/input/produces
+  fields, preconditions with check: custom plus a prose detail: block,
+  expected_outcomes with prose detail:/evidence: fields, and several files
+  carry a pipeline_test: key pointing at a
+  web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts Playwright spec, explicitly
+  meant to be driven by UAT-RUNNER or a human reader -- not by
+  Letflow.Simulation.Runner.run/1, which requires a machine-executable
+  params map per step and an args map per verification.method to dispatch
+  real HTTP calls and DB assertions. test/support/simulation/
+  scenario_fixture.ex's ScenarioFixture.load!/1 would raise
+  FunctionClauseError on every real outcome in every real file (no
+  verification.args key exists in R-Co's real content).
+
+  Confirmed for all 11 real/synthetic file pairs (4 SwiftRoute, 4 Vortex, 3
+  Meridian) during ISS-0393's WF03-ISS0393-20260907 attempt -- ELIXIR-DEV
+  made zero file changes and escalated rather than inventing
+  machine-executable params/args to force a fit, correctly recognizing this
+  as an architecture decision outside its own remit.
+
+  R-Co is reachable via https://github.com/tvolodi/R-Co (confirmed commit
+  d19bfec4a9ec492345346bfccd8e389bd9cd92db).
+
+  Scope for whoever picks this up: (1) confirm which of R-Co's real
+  scenario files actually carry a pipeline_test: key and locate/verify the
+  corresponding web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts files exist
+  or need porting too; (2) determine the correct home for the ported
+  narrative YAML content -- likely a new test/fixtures/uat/ or docs/uat/
+  location distinct from test/fixtures/simulation/, read by UAT-RUNNER
+  rather than Letflow.Simulation.Runner; (3) port the real narrative
+  content verbatim into that location; (4) confirm UAT-RUNNER's own
+  instructions (.claude/agents/uat-runner.md) already know how to consume
+  this format, or extend them if not; (5) leave REQ-206/207/208's existing
+  synthetic Runner-executed fixtures completely untouched -- they are a
+  different, intentionally-synthetic artifact serving a different test
+  layer, not superseded by this work.
+affected_files:
+  - test/fixtures/simulation/swiftroute/scenarios/*.yaml
+  - test/fixtures/simulation/vortex/scenarios/*.yaml
+  - test/fixtures/simulation/meridian/scenarios/*.yaml
+  - .claude/agents/uat-runner.md
+related:
+  - ISS-0393
+  - REQ-206
+  - REQ-207
+  - REQ-208
+source: >
+  WF03-ISS0393-20260907's ELIXIR-DEV escalation, confirmed by ORCH via
+  direct diff of all 11 real R-Co scenario files against letflow's
+  synthetic counterparts.
+queue_task_id: 526
+github_issue: 1062
+status: open

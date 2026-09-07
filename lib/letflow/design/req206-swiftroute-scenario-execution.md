@@ -97,6 +97,25 @@ access can port the real
 shipment-ops-timeout-escalation,shipment-attach-delivery-note}.yaml`-equivalent
 content later, exactly as ISS-0388 did for the 12 company/org/process files.
 
+**Resolution (2026-09-07, ISS-0393, correcting this recommendation's own implied
+expectation):** R-Co became reachable via a GitHub remote
+(`https://github.com/tvolodi/R-Co`, commit `d19bfec4a9ec492345346bfccd8e389bd9cd92db`),
+and ISS-0393's attempted port found the real `tests/simulation/scenarios/*.yaml`
+corpus is **not** a drop-in replacement for these synthetic fixtures, unlike
+ISS-0388's company/org/process content — it is a materially different artifact
+(narrative UAT scripts: prose `action`/`input`/`produces` fields, prose
+`preconditions[].detail`/`expected_outcomes[].detail`/`evidence`, several files
+carrying a `pipeline_test:` key pointing at a `web/tests/e2e/pipelines/
+*.pipeline.e2e.spec.ts` Playwright spec — authored for a human reader or
+UAT-RUNNER's Playwright harness, not for `Letflow.Simulation.Runner.run/1`'s
+`params`/`args`-driven dispatch). `ScenarioFixture.load!/1` would raise on every real
+outcome (no `verification.args` key exists in the real files). The synthetic
+fixtures described above remain the correct, intentional artifact for this
+requirement's Runner-executed scenarios and are NOT superseded by R-Co's real
+corpus. ISS-0393 was closed as not-applicable-as-scoped; a correctly-scoped
+follow-up (real R-Co narrative content → UAT-RUNNER's `pipeline_test:` domain, a
+separate concern from this requirement) was filed instead — see ISS-0526.
+
 **Real routes confirmed by reading `lib/letflow/plugs/api_pipeline.ex` and the routers
 under `lib/letflow/routers/*.ex` this session** (mounted under `/api/v1` by
 `Letflow.Plugs.ApiPipeline`):

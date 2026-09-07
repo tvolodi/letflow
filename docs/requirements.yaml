@@ -13963,7 +13963,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity query DSL -- closed-enum operators, per-tenant field allowlist, and the parameterised SQL compiler (query/types.zig + allowlist.zig + compiler.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

@@ -992,3 +992,72 @@ history:
       directly per this session's established safe procedure, then
       confirmed 498/500 passed with the only 2 failures being the
       pre-existing, unrelated local rustc-toolchain gap. feature/WF03-ISS0519-20260907.
+
+  - req: REQ-230
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-07T04:28:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 6a: entity query DSL's
+      security-relevant half -- a three-layer SQL-injection defence
+      (closed operator enum -> allowlist-only column resolution ->
+      positional-parameter binding). New modules
+      Letflow.Entities.Query.Types (closed filter_op()/sort_dir()
+      enums), .Allowlist (per-tenant field resolution against a REQ-225
+      entity definition, typed-column-wins-over-JSONB-key precedence
+      stated explicitly), .Compiler (parameterised Ecto.Query compiler,
+      never string-interpolating a fragment/1 shape or a caller value
+      into SQL text -- both the JSONB key name AND the comparison value
+      bound as separate ^-parameters, stronger than the acceptance
+      criterion requires). feature/WF02-REQ230-20260907, closing queue
+      task 518. CODE-DESIGNER's own operator enum was explicitly stated
+      as its own construction (R-Co's QRY-01..05 source unreachable
+      from this Linux sandbox, no definition found anywhere accessible
+      in this repo) rather than presented as transcribed. Design went
+      through one genuine rework cycle: CODE-DESIGN-VALIDATOR's first
+      pass FAILed on two real, disguised executable-code snippets in
+      the design doc (a complete Enum.reduce anonymous-function fold
+      implementing the AND-composition algorithm, and an
+      Enum.filter(& &1.queried) field-selection expression) -- both
+      copy-pasteable directly into implementation code despite being
+      framed as "illustrative." Rework converted both to pure prose and
+      proactively found and fixed two more borderline passages in its
+      own fresh full re-scan; CODE-DESIGN-VALIDATOR's re-check
+      independently re-scanned the entire document from scratch (not
+      just the flagged spots) and PASSed. ELIXIR-DEV implemented
+      exactly per design, wrote 26 tests covering all 7 acceptance
+      criteria, with AC4 (the security-critical test) actually
+      EXECUTING compiled queries containing real SQL-metacharacter
+      payloads (a DROP TABLE payload, a boolean-bypass ILIKE payload)
+      against a live Postgres tenant schema and confirming zero
+      SQL-execution effect via before/after row-count checks -- not
+      merely inspecting the query struct. SECURITY-REVIEWER's hard gate
+      (this requirement's central purpose) independently re-derived
+      every claim against the actual compiler code line by line, then
+      went further than the existing test suite: personally constructed
+      and ran 5 additional injection attempts (a UNION SELECT payload,
+      an :in-list-embedded DROP TABLE, a comment-sequence payload
+      against a typed column, a second-order injection via stored
+      SQL-shaped data, and sort-field-name smuggling) against real
+      Postgres tenant schemas -- all 5 defeated, none executed as SQL,
+      none crossed a tenant boundary -- PASS, with one flagged
+      non-blocking observation (ILIKE wildcard characters in
+      :contains/:starts_with values aren't escaped, a query-precision
+      nit within an already-authorized tenant-scoped query, not a
+      security defect). REVIEWER independently re-verified design
+      fidelity, all 7 ACs by test name, confirmed the ILIKE observation
+      matches an existing pre-REQ-230 precedent elsewhere in the
+      codebase (not a regression), and confirmed scope (exactly 3 new
+      modules + 1 test file, no route/controller, no REQ-231 cursor
+      pagination/field-grant-redaction creep) -- PASS
+      (handoffs/WF02-REQ230-20260907/step-02d-reviewer.json). No
+      TEST-DESIGNER dispatch needed per established precedent.
+      TEST-RUNNER ran the full partitioned suite plus both isolated
+      wasm_hang/lua_wallclock_race subprocesses manually after the main
+      run's only 2 failures (the pre-existing, unrelated local
+      rustc-toolchain gap) aborted the check.test task's own automatic
+      isolated-subprocess stage -- 3393/3395 core tests passed, 16/16
+      isolated-subprocess tests passed, zero REQ-230 regressions. mix
+      compile --warnings-as-errors and mix format --check-formatted
+      independently confirmed clean by ELIXIR-DEV, SECURITY-REVIEWER,
+      REVIEWER, and TEST-RUNNER.

@@ -17,6 +17,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
 
   use Letflow.DataCase, async: false
 
+  alias Letflow.Api.Pagination
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.Query.Allowlist
   alias Letflow.Entities.Query.Compiler
@@ -288,6 +289,105 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
                %{page_size: 1, cursor: page.next_cursor},
                schema
              ) == {:error, :resume_key_arity_mismatch}
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0522 (site 2) -- Cursor.paginate/5's id-tiebreaker component must be
+  # validated as a real UUID before it reaches maybe_dump/2's unconditional
+  # Ecto.UUID.dump!/1, returning {:error, :invalid_cursor} for a malformed
+  # component instead of letting an ArgumentError raise. See
+  # lib/letflow/design/iss0522-cursor-uuid-cast-guard.md §6 (esp. §6.6) and
+  # test/specs/ISS-0522.md's "Site 2" section for the acceptance criteria
+  # this describe block covers. Mirrors this issue's own site-1 coverage in
+  # test/letflow/entities/definitions_test.exs.
+  # ---------------------------------------------------------------------------------
+
+  describe "ISS-0522 (site 2) -- malformed id-component cast guard (Cursor.paginate/5)" do
+    setup do
+      %{schema_name: schema} = provisioned_tenant()
+      create_active_definition!(schema)
+
+      for age <- [10, 20] do
+        create_record!(schema, %{"customer_name" => "Guard", "age" => age})
+      end
+
+      request = %{entity_type: "customer", sort: [%{field: "age", dir: :asc}]}
+      assert {:ok, compiled_query} = Compiler.compile(request, schema)
+      assert {:ok, allowlist} = Allowlist.load("customer", schema)
+
+      %{schema: schema, request: request, compiled_query: compiled_query, allowlist: allowlist}
+    end
+
+    # Mints a cursor by hand -- the same "EQ:<mint_time_us>:<resume_key_json>"
+    # shape Cursor.build_next_cursor/2 itself produces -- with an
+    # attacker/caller-controlled id component, exactly as a real
+    # network-facing request body would carry it.
+    defp raw_cursor_with_id(sort_values, id_value) do
+      resume_key_json = Jason.encode!(sort_values ++ [id_value])
+      mint_time_us = System.system_time(:microsecond)
+
+      Cursor.cursor_prefix()
+      |> Pagination.build_raw_cursor(mint_time_us, resume_key_json)
+      |> Pagination.encode_cursor()
+    end
+
+    test "a non-UUID id component returns {:error, :invalid_cursor}, not a raise",
+         %{schema: schema, request: request, compiled_query: compiled_query, allowlist: allowlist} do
+      encoded = raw_cursor_with_id([15], "not-a-uuid")
+
+      assert Cursor.paginate(
+               request,
+               compiled_query,
+               allowlist,
+               %{page_size: 10, cursor: encoded},
+               schema
+             ) == {:error, :invalid_cursor}
+    end
+
+    test "a UUID-length id component with invalid hex/hyphen content is still rejected",
+         %{schema: schema, request: request, compiled_query: compiled_query, allowlist: allowlist} do
+      # 36 characters, hyphens in the right positions -- proves
+      # Ecto.UUID.cast/1's real validation gates this, not a bare length check.
+      bogus_uuid_shaped = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+      assert String.length(bogus_uuid_shaped) == 36
+
+      encoded = raw_cursor_with_id([15], bogus_uuid_shaped)
+
+      assert Cursor.paginate(
+               request,
+               compiled_query,
+               allowlist,
+               %{page_size: 10, cursor: encoded},
+               schema
+             ) == {:error, :invalid_cursor}
+    end
+
+    test "non-regression: a valid, system-minted cursor (real UUID id component) still paginates cleanly",
+         %{schema: schema, request: request, compiled_query: compiled_query, allowlist: allowlist} do
+      assert {:ok, first_page} =
+               Cursor.paginate(
+                 request,
+                 compiled_query,
+                 allowlist,
+                 %{page_size: 1},
+                 schema
+               )
+
+      assert [%{field_values: %{"age" => 10}}] = first_page.items
+      refute is_nil(first_page.next_cursor)
+
+      assert {:ok, second_page} =
+               Cursor.paginate(
+                 request,
+                 compiled_query,
+                 allowlist,
+                 %{page_size: 1, cursor: first_page.next_cursor},
+                 schema
+               )
+
+      assert [%{field_values: %{"age" => 20}}] = second_page.items
+      assert second_page.next_cursor == nil
     end
   end
 

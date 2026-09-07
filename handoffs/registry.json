@@ -5234,6 +5234,27 @@
       "released_lock": false,
       "last_known_step": "Step 00 COMPLETED -- branch feature/WF02-REQ263-20260906 created from main @ b12898cb. Pre-flight confirmed 175 total .zig references across the 11 named files, zero pre-existing PROVENANCE markers, CLAUDE.md/README.md/docs/migration/README.md confirmed clean. v9.yaml confirmed CLOSED (append-immune) per requirement_status.index.yaml. Dispatching to DOC-UPDATER next.",
       "note": "Chunk 239i of REQ-237s 2026-09-05 docs/ provenance-marking amendment (10 sibling chunks, REQ-254..263) -- LAST/10th sibling. docs/status/*, docs/frontend/*, docs/anti-patterns.md (11 files carrying a .zig reference). All 9 other siblings (REQ-254..262) already done. No overlap confirmed at registry-scan time (owned_modules disjoint from REQ-261s docs/issues/*.yaml scope and every other active run)."
+    },
+    {
+      "run_id": "WF03-ISS0522-20260907",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0522",
+      "queue_task_id": 522,
+      "queue_agent_id": "letflow-2-orch",
+      "github_issue_number": 1049,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/api/pagination.ex",
+        "lib/letflow/entities/definitions.ex"
+      ],
+      "branch_name": "feature/WF03-ISS0522-20260907",
+      "started_at": "2026-09-07T06:15:02Z",
+      "lock_released_at": "2026-09-07T08:15:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step 5 COMPLETED, Step Final pending -- issue flipped to resolved, GH#1049 close pending merge.",
+      "note": "ISS-0522: unhandled Ecto.Query.CastError raise when Letflow.Entities.Definitions.list_definitions/2 received a pagination cursor with a malformed (non-UUID) id component. ISSUE-FIXER reproduced live and found the issue's own 'two call sites' framing overstated -- lib/letflow/entities/query/cursor.ex (REQ-231's site) does not exist anywhere, REQ-231 still pending; only 1 real site. CODE-DESIGNER designed Letflow.Api.Pagination.cast_binary_id_component/1 ({:ok, Ecto.UUID.t()} | {:error, :invalid_cursor}), routed through decode_list_definitions_seek/1 before the id reaches a query; CODE-DESIGN-VALIDATOR PASS. ELIXIR-DEV implemented (commit 6ea959df). SECURITY-REVIEWER PASS (in scope, tenant_id where-clause untouched, error shape carries zero tenant data, pure availability fix). REVIEWER PASS (independently traced propagation, confirmed no @spec-widening needed). TEST-DESIGNER added 7 regression tests + test/specs/ISS-0522.md (one rework cycle: initial submission c738ec5e missed the required spec doc, TEST-DESIGN-VALIDATOR FAILed with a BLOCKER, rework 6eabe09f closed it, re-gate PASS). Fail-then-pass proof: pre-fix 25/26 with the real Ecto.Query.CastError, post-fix 26/26. TEST-RUNNER: full mix letflow.check gate 3298/3302 passed, 4 failures structurally attributed to an already-tracked, unrelated Windows tmp-path bug in letflow_check_async_sandbox_reachability_test.exs (ISS-0513, not yet merged -- this branch just inherits main's current pre-fix state). Issue flipped to resolved with a scope_correction note (2 call sites -> 1 real site, recorded not silently fixed)."
     }
   ]
 }

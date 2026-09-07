@@ -1,0 +1,69 @@
+{
+  "handoff_id": "step02-WF03-ISS0522-20260907",
+  "run_id": "WF03-ISS0522-20260907",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0522-20260907/step-02-code-designer.json",
+  "created_at": "2026-09-07T00:00:00Z",
+  "started_at": "2026-09-07T00:00:00Z",
+  "completed_at": "2026-09-07T00:30:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-226", "REQ-067", "REQ-231"],
+    "issue_ids": ["ISS-0522"],
+    "requirement_text": {
+      "ISS-0522": "Hardening: unhandled raise on malformed cursor component. ISSUE-FIXER's Step 1 diagnosis (this run) found the issue's premise of 2 call sites is only half true -- lib/letflow/entities/query/cursor.ex (the supposed REQ-231 site) does not exist anywhere in this checkout, any worktree, or any branch; REQ-231 is still status: pending. The one real site is lib/letflow/entities/definitions.ex, decode_list_definitions_seek/1 (~line 340): it splits the decoded cursor payload and returns the raw id substring UNCHECKED as {inserted_at, id_str}; list_definitions/2's with chain treats this as already-validated and passes it to filter_by_list_definitions_cursor/2, which pins it into a query where: {e.inserted_at, e.id} < {^inserted_at, ^id_str} against EntityDefinition.id (:binary_id). A non-UUID id_str causes Repo.all/2 to raise Ecto.Query.CastError, outside the with chain's error arms -- genuinely unhandled, reproduced directly by ISSUE-FIXER. lib/letflow/api/pagination.ex already documents an INV-8/INV-9 no-unhandled-crash discipline (from ISS-0216) but that coverage stops at decode_cursor/4's own outer decode and does not extend to a caller parsing its own domain fields (like this UUID id component) out of the decoded payload."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0522.yaml",
+      "lib/letflow/entities/definitions.ex",
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/design/iss0216-pagination-prefix-guard.md"
+    ],
+    "owned_modules": [
+      "lib/letflow/api/pagination.ex",
+      "lib/letflow/entities/definitions.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0522-20260907"
+  },
+  "task": {
+    "description": "Design the fix for ISS-0522's one real call site: lib/letflow/entities/definitions.ex's decode_list_definitions_seek/1 returns an unvalidated id_str that later crashes Repo.all/2 with Ecto.Query.CastError when it isn't a valid UUID. Write lib/letflow/design/iss0522-cursor-uuid-cast-guard.md specifying: (1) a reusable helper's exact name/module/signature/contract (confirm or reject Letflow.Api.Pagination as its home, given INV-8/INV-9 and the parse_int_from_cursor/3 precedent already live there); (2) exactly how decode_list_definitions_seek/1 and decode_list_definitions_cursor/1 change, and the full propagation trace to list_definitions/2's already-declared {:error, :invalid_cursor} return; (3) explicit scope note that lib/letflow/entities/query/cursor.ex does not exist (REQ-231 pending) so this design does not touch it, that the helper is designed for REQ-231 to reuse later, and that ISS-0522's own '2 call sites' framing is currently inaccurate (flag for ISSUE-FIXER's Step 5 resolution note, not silently absorbed); (4) what TEST-DESIGNER must cover, both the raw helper and end-to-end through list_definitions/2 with a malformed cursor. Design only -- no implementation code.",
+    "acceptance_criteria": [
+      "Design independently re-verifies the diagnosis against the actual source (definitions.ex, pagination.ex), not just restates ISSUE-FIXER's report",
+      "Helper's exact module/name/@spec/error-shape is stated, with reasoning for its placement",
+      "Full propagation path from the new helper through decode_list_definitions_seek/1, decode_list_definitions_cursor/1, to list_definitions/2's existing @spec is traced explicitly",
+      "Design explicitly states it does not touch lib/letflow/entities/query/cursor.ex (nonexistent) and flags ISS-0522's '2 call sites' framing as currently inaccurate for Step 5 to correct",
+      "TEST-DESIGNER scope named: helper-level tests and an end-to-end list_definitions/2 malformed-cursor test",
+      "No implementation code in the design doc",
+      "Handoff status flips to COMPLETED with next_action naming CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Independently re-read lib/letflow/entities/definitions.ex (lines 280-370) and the full lib/letflow/api/pagination.ex (382 lines) before designing -- confirmed ISSUE-FIXER's diagnosis matches source exactly: decode_list_definitions_seek/1 (definitions.ex:340-346) splits the decoded cursor payload and returns id_str unchecked; decode_list_definitions_cursor/1 (definitions.ex:323-334) unconditionally wraps it as {:ok, ...} with no failure arm; list_definitions/2's with chain (definitions.ex:297-313) passes the unvalidated tuple into filter_by_list_definitions_cursor/2, which pins the raw string against EntityDefinition.id (:binary_id) -- Repo.all/2 raises Ecto.Query.CastError on a non-UUID id_str, unhandled. Also independently confirmed lib/letflow/entities/query/cursor.ex does not exist in this checkout, any worktree, or any branch (git log --all and worktree filesystem search both empty; only an unrelated lib/letflow/ordering/cursor.ex exists) and REQ-231 is still status: pending in docs/requirements.yaml.\n\nDesign written to lib/letflow/design/iss0522-cursor-uuid-cast-guard.md. Summary: new helper Letflow.Api.Pagination.cast_binary_id_component/1, @spec (String.t()) :: {:ok, Ecto.UUID.t()} | {:error, :invalid_cursor} -- placed in the module's existing 'cursor-payload parsing utilities' section alongside parse_int_from_cursor/3 (the direct precedent for a per-field decode a caller's own list function uses on its own domain slice of cursor.inner, returning a tagged tuple rather than raising). Delegates to Ecto.UUID.cast/1, translating its bare :error into this module's established {:error, :invalid_cursor} atom -- no new atom introduced. Does not raise: id_str is network-facing input in INV-8's own sense (unlike ISS-0216's prefix, which is caller-internal config), so the tagged-tuple pattern applies, not ISS-0216's raise pattern.\n\ndecode_list_definitions_seek/1's @spec changes to {:ok, {DateTime.t(), Ecto.UUID.t()}} | {:error, :invalid_cursor} -- calls the new helper on id_str before returning, pass-through on {:error, :invalid_cursor}. decode_list_definitions_cursor/1's success branch changes from always wrapping in {:ok, ...} to returning decode_list_definitions_seek/1's result directly (now already correctly shaped). list_definitions/2 itself needs NO change -- its with chain already has {:ok, cursor_seek} <- decode_list_definitions_cursor(...) as a clause, and its @spec (definitions.ex:296) ALREADY lists {:error, :invalid_cursor} as a documented return, so the new failure path surfaces through the existing contract with no widening.\n\nScope note (design §3): explicitly states this design does not touch lib/letflow/entities/query/cursor.ex since it does not exist, that the new helper's contract is deliberately reusable by REQ-231 whenever implemented, and that ISS-0522's own '2 call sites' framing is currently inaccurate (only 1 real site exists today) -- flagged for ISSUE-FIXER to correct in the issue's own resolution note at Step 5, not silently absorbed here. Also flags (§3.3/§5) that decode_list_definitions_seek/1's String.split/3 pattern match and DateTime.from_unix!/2 call remain unguarded and still raise on a malformed timestamp component -- same defect category, different component than what ISS-0522 reproduced/titled, left as an explicit open question rather than silently folded in or silently ignored.\n\nTest-ability (§4): helper-level tests (valid UUID -> {:ok, binary}; non-UUID string -> {:error, :invalid_cursor}; non-binary -> {:error, :invalid_cursor}) plus an end-to-end list_definitions/2 test building a raw cursor with a non-UUID id component via build_raw_cursor_timestamp_key/4, asserting {:error, :invalid_cursor} (not assert_raise) and that Repo.all/2/Ecto.Query.CastError is never reached, plus non-regression on the existing valid-cursor round trip.\n\nNo implementation code anywhere in the design file -- signatures, @spec deltas, and prose only.",
+    "artifacts_out": [
+      "lib/letflow/design/iss0522-cursor-uuid-cast-guard.md"
+    ],
+    "issues": [
+      "ISS-0522.yaml's own description/title claim 2 call sites; only 1 real call site exists today (query/cursor.ex does not exist, REQ-231 pending) -- flagged for ISSUE-FIXER to correct at Step 5, not fixed by this handoff.",
+      "decode_list_definitions_seek/1's timestamp-parsing path (String.split/3 match, DateTime.from_unix!/2) remains a separate unguarded raise, same category as this issue but a different component than ISS-0522 reproduced -- flagged as design open question 5.1, not folded into this fix's scope."
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0522-20260907",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGN-VALIDATOR"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

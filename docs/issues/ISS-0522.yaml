@@ -38,4 +38,63 @@ related:
   - ISS-0438
 queue_task_id: 522
 github_issue: 1049
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0522-20260907
+resolved_at: "2026-09-07T08:15:00Z"
+scope_correction: >
+  This issue's own filing overstated scope: it named "2 call sites"
+  (Letflow.Entities.Definitions.list_definitions/2 and
+  Letflow.Entities.Query.Cursor). ISSUE-FIXER's diagnosis found that the
+  second site does not exist -- lib/letflow/entities/query/cursor.ex is
+  absent from every branch and worktree, and REQ-231 (which would create
+  it) is still status: pending in docs/requirements.yaml. Only ONE real
+  call site had this defect. Recorded here rather than silently corrected,
+  per CODE-DESIGNER's own explicit flag in
+  lib/letflow/design/iss0522-cursor-uuid-cast-guard.md.
+resolution_note: >
+  Root cause (ISSUE-FIXER, reproduced live): Letflow.Entities.Definitions.
+  decode_list_definitions_seek/1 returned a pagination cursor's id
+  component unchecked; list_definitions/2's with-chain treated it as
+  already-validated and passed it into a query filtered against
+  EntityDefinition.id (:binary_id), so a non-UUID id component caused
+  Repo.all/2 to raise Ecto.Query.CastError -- unhandled, outside every
+  error arm.
+
+  Fix: added Letflow.Api.Pagination.cast_binary_id_component/1
+  ({:ok, Ecto.UUID.t()} | {:error, :invalid_cursor}, wrapping
+  Ecto.UUID.cast/1, matching the module's existing
+  parse_int_from_cursor/3 precedent), and routed
+  decode_list_definitions_seek/1's id component through it before the
+  value ever reaches a query. list_definitions/2's own @spec already
+  declared {:error, :invalid_cursor} as a possible return, so no
+  with-chain or @spec change was needed further up the call chain.
+  The helper is designed for reuse by REQ-231's future
+  Letflow.Entities.Query.Cursor implementation, whenever it lands.
+
+  CODE-DESIGN-VALIDATOR independently re-verified the design's claims
+  against the real source (PASS,
+  handoffs/WF03-ISS0522-20260907/step-02b-code-design-validator.json).
+  SECURITY-REVIEWER PASSed: in scope (a real tenant-scoped query path),
+  confirmed the tenant_id where-clause is untouched, confirmed the
+  {:error, :invalid_cursor} response shape carries zero tenant-data
+  content (matches ISS-0216's own established error-shape precedent) --
+  a pure availability fix (400 instead of an unhandled 500), not an
+  isolation-relevant change. REVIEWER independently traced the full
+  propagation and re-ran compile/format/a live reproduction, PASS.
+  TEST-DESIGNER added 7 regression tests (5 unit tests for the new
+  helper in test/letflow/api/pagination_test.exs, 2 end-to-end tests in
+  test/letflow/entities/definitions_test.exs -- a malformed-cursor case
+  and a valid-cursor non-regression case) plus test/specs/ISS-0522.md
+  (added after one rework cycle closing a missing-deliverable BLOCKER).
+  Fail-then-pass proof: pre-fix code genuinely raised
+  Ecto.Query.CastError (25/26 passed, the new test failing as expected);
+  post-fix, 26/26 clean. TEST-DESIGN-VALIDATOR independently reproduced
+  both numbers and the full 71/71 pass count across both test files
+  before PASSing. TEST-RUNNER ran the full mix letflow.check gate:
+  3298/3302 passed; the 4 failures were an already-known, unrelated
+  Windows tmp-path bug in
+  test/mix/tasks/letflow_check_async_sandbox_reachability_test.exs
+  (tracked separately as ISS-0513, not yet merged to main -- this
+  branch simply inherits main's pre-fix state, not a new regression),
+  structurally unrelated to this branch's diff (pagination.ex/
+  definitions.ex and their tests only).

@@ -62,12 +62,23 @@ defmodule Letflow.Repository.Attachments do
   user-uploaded document, not a versioned configuration artifact subject to
   REQ-202's dedup-by-canonical-form semantics.
 
-  ## Content-scanning deferral (AC9, design §4.0 item 8)
+  ## Content scanning (ISS-0399, `lib/letflow/design/iss0399-attachment-content-scanning.md`)
 
-  No antivirus/content-scanning pipeline exists for uploaded attachment
-  bytes. This is a deliberately deferred follow-up, not an oversight --
-  flag it for a future issue if malicious-upload risk becomes a concrete
-  concern before S8.
+  `upload/2` runs a synchronous, reject-before-persist content scan (§2)
+  before either `repository_artifacts` or `instance_attachments` is written --
+  an infected or scan-failed upload is never persisted at all, so there is
+  structurally no code path that can serve an unscanned/infected attachment's
+  bytes (see `get_content/2`'s own moduledoc for the defense-in-depth gate
+  covering pre-existing rows). The scanner adapter is resolved via
+  `Application.get_env(:letflow, :attachment_scanner,
+  Letflow.Repository.AttachmentScanner.SignatureHeuristic)` -- the same
+  safe-default pattern `lib/letflow/engine/lua/platform.ex`'s
+  `lua_platform_service_caller` uses -- defaulting in every environment, with
+  no config required, to `Letflow.Repository.AttachmentScanner.SignatureHeuristic`,
+  a real (if limited) EICAR-signature-based scanner, not a stub. Swapping in a
+  real external AV engine later means implementing
+  `Letflow.Repository.AttachmentScanner`'s `scan/2` callback in a new module
+  and changing that one config value -- no change to this module.
 
   ## `delete/2`'s metadata-only-delete rationale (design §4.0 item 9)
 
@@ -80,6 +91,8 @@ defmodule Letflow.Repository.Attachments do
   """
 
   import Ecto.Query
+
+  require Logger
 
   alias Letflow.Api.Pagination
   alias Letflow.Repo
@@ -106,6 +119,11 @@ defmodule Letflow.Repository.Attachments do
   # number with no requirement-stated value (design §4.4).
   @max_upload_bytes 26_214_400
 
+  # ISS-0399 design §3.1 -- resolved fresh on every call (not a compile-time
+  # attribute value), same safe-default shape as
+  # lib/letflow/engine/lua/platform.ex:774's lua_platform_service_caller.
+  @default_attachment_scanner Letflow.Repository.AttachmentScanner.SignatureHeuristic
+
   # ===========================================================================
   # upload/2 (design §4.1)
   # ===========================================================================
@@ -121,29 +139,40 @@ defmodule Letflow.Repository.Attachments do
 
   @doc """
   Uploads an attachment: hashes `raw_bytes` independently (byte-identity
-  only, no canonicalisation), upserts a `repository_artifacts` row keyed by
-  that hash (creating or reusing it, including the real bytes into its
-  `content` column), and inserts one `instance_attachments` row referencing
-  it.
+  only, no canonicalisation), runs a synchronous content scan (ISS-0399
+  design §2), then upserts a `repository_artifacts` row keyed by that hash
+  (creating or reusing it, including the real bytes into its `content`
+  column), and inserts one `instance_attachments` row referencing it.
 
-  Steps (design §4.1):
+  Steps (design §4.1, revised by ISS-0399 design §2):
 
     1. Computes `byte_size = byte_size(raw_bytes)` -- never a caller-supplied
        field. If it exceeds `#{@max_upload_bytes}` bytes (25 MiB,
        `@max_upload_bytes`), returns `{:error, :file_too_large}`
-       immediately, before any hashing, upsert, or insert is attempted --
-       neither a `repository_artifacts` row nor an `instance_attachments`
-       row is created.
+       immediately, before any hashing, scanning, upsert, or insert is
+       attempted -- neither a `repository_artifacts` row nor an
+       `instance_attachments` row is created.
     2. Computes `content_hash = :crypto.hash(:sha256, raw_bytes)` --
        byte-identity hashing only, unconditionally, regardless of
        `content_type` (see moduledoc's no-canonicalisation statement).
-    3. Upserts the `repository_artifacts` row via
+    3. Calls the configured `Letflow.Repository.AttachmentScanner` adapter
+       (moduledoc) synchronously, before any persistence. `{:ok, :infected,
+       verdict}` and `{:error, reason}` both **fail closed**: no
+       `repository_artifacts` row, no `instance_attachments` row is created,
+       and this function returns `{:error, :infected, verdict}` /
+       `{:error, :scan_unavailable}` respectively. An infected verdict also
+       emits one structured `Logger.warning/2` audit entry (never the raw
+       bytes) so a rejected upload attempt is not silently invisible to
+       operators.
+    4. Upserts the `repository_artifacts` row via
        `Letflow.Repository.upsert_content/6`, in the same tenant's schema.
-    4. Derives `tenant_id` from `opts[:prefix]`.
-    5. Inserts the `instance_attachments` row.
+    5. Derives `tenant_id` from `opts[:prefix]`.
+    6. Inserts the `instance_attachments` row with `scan_status: :clean` --
+       the only value this function ever writes; this insert is unreachable
+       unless step 3 returned `{:ok, :clean}`.
 
   Uploading byte-identical content twice (same or different `instance_id`)
-  reuses the same `repository_artifacts` row (step 3's upsert) while step 5
+  reuses the same `repository_artifacts` row (step 4's upsert) while step 6
   always inserts a fresh `instance_attachments` row -- so two calls
   necessarily produce one `repository_artifacts` row and two
   `instance_attachments` rows, by construction, not by a special-cased
@@ -152,6 +181,8 @@ defmodule Letflow.Repository.Attachments do
   @spec upload(upload_attrs(), opts()) ::
           {:ok, Attachment.t()}
           | {:error, :file_too_large}
+          | {:error, :infected, verdict :: String.t()}
+          | {:error, :scan_unavailable}
           | {:error, Ecto.Changeset.t()}
   def upload(attrs, opts) when is_map(attrs) and is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
@@ -164,42 +195,103 @@ defmodule Letflow.Repository.Attachments do
       content_hash = :crypto.hash(:sha256, raw_bytes)
       content_type = Map.fetch!(attrs, :content_type)
 
-      with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
-        Repo.transaction(fn ->
-          Repository.upsert_content(
+      case run_attachment_scan(raw_bytes, content_type) do
+        {:ok, :clean} ->
+          do_upload_after_scan(
+            attrs,
             prefix,
-            tenant_id,
+            raw_bytes,
             content_hash,
             content_type,
-            measured_byte_size,
-            raw_bytes
+            measured_byte_size
           )
 
-          insert_attrs = %{
-            tenant_id: tenant_id,
-            instance_id: Map.fetch!(attrs, :instance_id),
-            content_hash: content_hash,
-            file_name: Map.fetch!(attrs, :file_name),
-            content_type: content_type,
-            byte_size: measured_byte_size,
-            uploaded_by: Map.fetch!(attrs, :uploaded_by),
-            description: Map.get(attrs, :description)
-          }
+        {:ok, :infected, verdict} ->
+          log_infected_upload_attempt(attrs, prefix, content_hash)
+          {:error, :infected, verdict}
 
-          %Attachment{}
-          |> Attachment.changeset(insert_attrs)
-          |> Repo.insert(prefix: prefix)
-          |> case do
-            {:ok, attachment} -> attachment
-            {:error, changeset} -> Repo.rollback(changeset)
-          end
-        end)
-        |> case do
-          {:ok, attachment} -> {:ok, attachment}
-          {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-        end
+        {:error, _reason} ->
+          {:error, :scan_unavailable}
       end
     end
+  end
+
+  # ISS-0399 design §2 step 3 / §6 INV-8 -- the adapter call is wrapped so a
+  # raised exception from a future non-default adapter can never crash
+  # upload/2's caller; the default adapter (SignatureHeuristic) is pure and
+  # cannot raise, but the seam is written for adapters that can.
+  @spec run_attachment_scan(binary(), String.t()) ::
+          {:ok, :clean} | {:ok, :infected, String.t()} | {:error, term()}
+  defp run_attachment_scan(raw_bytes, content_type) do
+    scanner = Application.get_env(:letflow, :attachment_scanner, @default_attachment_scanner)
+    scanner.scan(raw_bytes, content_type)
+  rescue
+    exception -> {:error, Exception.message(exception)}
+  end
+
+  defp do_upload_after_scan(
+         attrs,
+         prefix,
+         raw_bytes,
+         content_hash,
+         content_type,
+         measured_byte_size
+       ) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      Repo.transaction(fn ->
+        Repository.upsert_content(
+          prefix,
+          tenant_id,
+          content_hash,
+          content_type,
+          measured_byte_size,
+          raw_bytes
+        )
+
+        insert_attrs = %{
+          tenant_id: tenant_id,
+          instance_id: Map.fetch!(attrs, :instance_id),
+          content_hash: content_hash,
+          file_name: Map.fetch!(attrs, :file_name),
+          content_type: content_type,
+          byte_size: measured_byte_size,
+          uploaded_by: Map.fetch!(attrs, :uploaded_by),
+          description: Map.get(attrs, :description),
+          scan_status: :clean
+        }
+
+        %Attachment{}
+        |> Attachment.changeset(insert_attrs)
+        |> Repo.insert(prefix: prefix)
+        |> case do
+          {:ok, attachment} -> attachment
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+      |> case do
+        {:ok, attachment} -> {:ok, attachment}
+        {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
+      end
+    end
+  end
+
+  # ISS-0399 design §2 step 3's audit-log entry -- tenant_id/instance_id/
+  # uploaded_by/content_hash/verdict only, never the raw bytes (INV-4-
+  # adjacent hygiene, even though verdict itself is not a secret).
+  defp log_infected_upload_attempt(attrs, prefix, content_hash) do
+    tenant_id =
+      case TenantProvisioning.tenant_id_for_schema_name(prefix) do
+        {:ok, tenant_id} -> tenant_id
+        {:error, _reason} -> nil
+      end
+
+    Logger.warning(
+      "attachment upload rejected: infected content",
+      tenant_id: tenant_id,
+      instance_id: Map.get(attrs, :instance_id),
+      uploaded_by: Map.get(attrs, :uploaded_by),
+      content_hash: Base.encode16(content_hash, case: :lower)
+    )
   end
 
   # ===========================================================================
@@ -320,20 +412,40 @@ defmodule Letflow.Repository.Attachments do
   schema. Surfaced as `{:error, :content_missing}` so the caller can map it
   to a 500 (INV-4, no detail) rather than a 404, which would incorrectly
   suggest the attachment itself doesn't exist.
+
+  ## `scan_status` gate (ISS-0399 design §4.2)
+
+  Before bytes are returned, `attachment.scan_status` must be `:clean` -- any
+  other value (`:pending`, `:infected`, `:error`) returns
+  `{:error, :not_available}` instead, and the `Artifact.content` value is not
+  surfaced. `upload/2`'s own reject-before-persist guarantee (moduledoc)
+  already makes an `:infected`/`:error` row structurally unreachable via this
+  module's own write path, so this gate exists as defense-in-depth for the
+  one row shape it *can* still observe: a **pre-existing** row from before
+  this scan mechanism shipped, which defaults to `:pending`
+  (design §1.1) and has never actually been scanned. `list/2` and `get/2`
+  are unaffected by this gate -- a `:pending`/`:infected` row's metadata
+  (including `scan_status` itself) still lists/fetches normally; only
+  byte-serving is gated, because that is the only path that can leak actual
+  file content.
   """
   @spec get_content(id :: String.t(), opts()) ::
           {:ok, Attachment.t(), Artifact.t()}
-          | {:error, :invalid_id | :not_found | :content_missing}
+          | {:error, :invalid_id | :not_found | :content_missing | :not_available}
   def get_content(id, opts) when is_list(opts) do
     prefix = Keyword.fetch!(opts, :prefix)
 
-    with {:ok, attachment} <- get(id, opts) do
+    with {:ok, attachment} <- get(id, opts),
+         :ok <- check_scan_status_clean(attachment) do
       case Repo.get(Artifact, attachment.content_hash, prefix: prefix) do
         %Artifact{} = artifact -> {:ok, attachment, artifact}
         nil -> {:error, :content_missing}
       end
     end
   end
+
+  defp check_scan_status_clean(%Attachment{scan_status: :clean}), do: :ok
+  defp check_scan_status_clean(%Attachment{}), do: {:error, :not_available}
 
   # ===========================================================================
   # delete/2 (design §4.5)

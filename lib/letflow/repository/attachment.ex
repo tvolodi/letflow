@@ -24,6 +24,15 @@ defmodule Letflow.Repository.Attachment do
   -- a "changed" attachment is a new `upload/2` call (a new row), matching the
   immutable-content spirit of the store it references, though not itself
   DB-trigger-enforced.
+
+  `scan_status` (ISS-0399,
+  `lib/letflow/design/iss0399-attachment-content-scanning.md` §1) is a closed
+  4-value `Ecto.Enum` (`:pending`/`:clean`/`:infected`/`:error`), DB-default
+  `"pending"` (fail-closed for any pre-existing row), always explicit-set by
+  `Letflow.Repository.Attachments.upload/2` on every new insert -- `:clean`
+  is the only value `upload/2` itself ever writes; `:infected`/`:error` rows
+  are never persisted (reject-before-persist, see that module's `upload/2`
+  moduledoc).
   """
 
   use Ecto.Schema
@@ -39,6 +48,7 @@ defmodule Letflow.Repository.Attachment do
     field(:byte_size, :integer)
     field(:uploaded_by, :binary_id)
     field(:description, :string)
+    field(:scan_status, Ecto.Enum, values: [:pending, :clean, :infected, :error])
 
     timestamps(updated_at: false, inserted_at: :created_at, type: :utc_datetime_usec)
   end
@@ -52,7 +62,8 @@ defmodule Letflow.Repository.Attachment do
     :file_name,
     :content_type,
     :byte_size,
-    :uploaded_by
+    :uploaded_by,
+    :scan_status
   ]
 
   @optional_fields [:description]

@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-02d",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "02d",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0437-20260907/step-02d-code-design-validator-recheck1.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T13:35:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-02c"],
+    "artifacts_in": ["lib/letflow/design/iss0437-admission-tenant-eviction.md", "lib/letflow/admission.ex"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3"
+  },
+  "task": {
+    "description": "Re-check rework 1 of ISS-0437's design (generation/epoch mechanism) against the original composed-race FAIL."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "Original composed race (deactivate->reactivate->stale-release driving in_use negative) is CONFIRMED FIXED -- independently re-traced the same 6-step interleaving against the new generation mechanism, lands correctly at in_use=1, not negative, not over/under-counted. No overflow/reset collision risk (unbounded BEAM integers, monotonic). Trust model preserved (generation captured server-side in the same handle_call as admission, keyed by unforgeable ref id, never on the public Ref struct). tenant_generations' unbounded growth does not reopen the original fairness bug since per_tenant_cap/1 never reads it. Source-vs-doc match confirmed on state.tenants shape, Map.update!/3, ensure_tenant_tracked/2, per_tenant_cap/1, handle_deactivate/2 line range. No disguised executable code (grep clean). Test 4 genuinely proves the fix; Test 2's narrowing is a strict superset with Test 4, no coverage loss. forget_tenant/2 API shape, router-wiring decision/precedent, REQ-216 doc-correction targets all genuinely untouched except the justified extension. BUT: a NEW defect was introduced by this rework itself. Section 2.1's revised state.refs type declares EVERY entry becomes {pool_selector(), generation | nil}, including :global admissions (nil for those). But the real handle_call({:try_acquire, :global}, ...) clause (admission.ex:271-286) currently stores the bare atom :global, and section 8's scope-confirmation list of changed function bodies never lists this clause as needing a change -- it lists only release_tenant/2, ensure_tenant_tracked/2, the {:tenant,_} try_acquire clause, the release clause, init/1, and handle_deactivate/2. Left as scoped, state.refs ends up holding MIXED shapes (bare :global atoms vs {pool, generation} tuples), and the release clause's destructure of {pool, generation} = stored_pool raises MatchError on the very first release of any :global-only ref -- not a rare corner case, this is the ordinary Poller-sweep path per the moduledoc's own AC3/AC4 language. Design must explicitly resolve this: either (a) have the :global try_acquire clause also store {:global, nil} and add that clause to section 8's list, or (b) specify a shape-tolerant destructure in the release clause handling both a bare :global atom and a tuple, with section 2.1's type corrected to match. Secondary minor inaccuracy also flagged for the same rework pass: section 3's alias note incorrectly claims routers/tenants.ex does not already alias Letflow.TenantProvisioning -- it does, at line 160; only alias Letflow.Admission actually needs adding. Relevant files: lib/letflow/design/iss0437-admission-tenant-eviction.md, lib/letflow/admission.ex (lines 271-286, 323-345), lib/letflow/routers/tenants.ex (lines 150-160, 352-357)."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

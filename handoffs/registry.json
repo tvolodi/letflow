@@ -5276,6 +5276,27 @@
       "backfilled": false,
       "last_known_step": "Step Final pending -- issue resolved, GH#1053 close pending merge.",
       "note": "ISS-0523 (originally filed as ISS-0445, GH#860, never registered in the queue -- ORCH found the registration gap while investigating why get_next_task kept returning no_eligible_task despite several open GitHub issues, per user escalation). Fix: rewrote T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS from an end-to-end real-corpus scan (capture_io + LintHandoffs.run([]) == :ok) to a pure resolve_dir([]) == \"handoffs\" unit assertion, eliminating the coupling where a sibling session's bad handoff could redden an unrelated branch's suite. Zero net coverage lost (F-DIR-DEFAULT and T-DIR-SCOPED-SCAN already cover the same claims); real-corpus scannability remains independently CI-gated via mix.exs's letflow.check alias. SIBLING COLLISION, reconciled not ignored: a sibling session independently found the same registration gap and merged its own bookkeeping-only fix (renumbering the file, closing duplicate GH#860) to main as 50b5b0f3 while this run was already gated and ready -- caught on rebase (add/add conflict), resolved by keeping the sibling's richer canonical record and layering this run's actual code fix on top (the sibling's commit carried no code change, only the rename/dedup). CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, REVIEWER, and TEST-DESIGN-VALIDATOR all independently PASSed; the coupling-removal was proven live twice (TEST-DESIGNER and REVIEWER each independently corrupted a scratch handoff file, confirmed the OLD test body failed against it and the NEW test passes despite it, then cleaned up). TEST-RUNNER's first attempt was invalidated by ORCH's own process error (switched branches in this shared checkout mid-run) -- redispatched cleanly on an untouched checkout, got 3408/3413 with 5 failures, 4 already-tracked (ISS-0513, this branch had briefly fallen behind main before a rebase) and 1 new incidental finding filed as ISS-0524 (queue task 524, GH#1055: mix letflow.check.test's wasm_hang dry-run fixture treats zero discovered tests as a hard failure post-ISS-0418's root-fix)."
+    },
+    {
+      "run_id": "WF03-ISS0437-20260907",
+      "workflow_id": "WF-03",
+      "requirement_id": "REQ-216",
+      "issue_id": "ISS-0437",
+      "queue_task_id": 437,
+      "queue_agent_id": "ORCH",
+      "github_issue_number": 843,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/admission.ex",
+        "lib/letflow/routers/tenants.ex"
+      ],
+      "branch_name": "feature/WF03-ISS0437-20260907",
+      "started_at": "2026-09-07T12:06:00Z",
+      "lock_released_at": "2026-09-07T13:20:00Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merged to main.",
+      "note": "ISS-0437: Letflow.Admission's deactivated-tenant entries were never evicted from state.tenants, permanently diluting every remaining active tenant's fair-share admission cap (per_tenant_cap/1's divisor only ever grew). Fixed via new Admission.forget_tenant/2, wired from Routers.Tenants's deactivate handler (router-layer, following the Identity.create_tenant/1 precedent of not orchestrating cross-context calls inside Identity itself). CODE-DESIGN-VALIDATOR caught a composed race across 2 rework cycles: unconditional eviction composed with lazy reactivation allowed a deactivate->reactivate->stale-release interleaving to drive in_use negative, silently uncapping the reactivated tenant -- closed via a per-schema generation/epoch tag on state.tenants/state.refs, captured server-side only, never exposed on the public Ref struct; a stale release now no-ops on generation mismatch instead of decrementing. A second rework cycle fixed a :global-vs-{:tenant,_} state.refs shape inconsistency the first rework introduced (both now uniformly {pool_selector, generation|nil}). REQ-216's design doc corrected (append-only, OQ-2 annotated resolved for the deactivation case, idle-but-never-deactivated case left open as a smaller residual gap). Pipeline: ISSUE-FIXER -> CODE-DESIGNER (2 reworks) -> CODE-DESIGN-VALIDATOR (2 re-checks, PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, INV-1..9 checked) -> REVIEWER (PASS) -> TEST-RUNNER (3416/3418 passed, 2 pre-existing unrelated rustc-absent failures in Mix.Tasks.Letflow.CheckToolchainTest). docs/status/requirement_status volume rolled v10->v11 as part of this run's Step Final append (v10 hit its 1200-line ceiling). Implementation commit 12611d23, merged as PR #1057."
     }
   ]
 }

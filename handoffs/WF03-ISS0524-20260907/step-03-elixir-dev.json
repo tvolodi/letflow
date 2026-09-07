@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0524-20260907-step-03",
+  "run_id": "WF03-ISS0524-20260907",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0524-20260907/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T15:35:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0524"],
+    "related_handoff_ids": ["WF03-ISS0524-20260907-step-02d"],
+    "artifacts_in": ["lib/letflow/design/iss0524-wasm-hang-discovery-diagnosability.md"],
+    "artifacts_out": ["lib/mix/tasks/letflow.check.test.ex", "test/mix/tasks/letflow_check_test_test.exs"],
+    "branch_name": "feature/WF03-ISS0524-20260907",
+    "base_commit": "c5f2ac6b",
+    "implementation_commit": "b775b2d4"
+  },
+  "task": {
+    "description": "Implement the validated ISS-0524 design: bounded single retry on empty wasm_hang discovery, header-anchored diagnostic window for the hard-fail message."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Added @wasm_hang_discovery_window_lines 300 and @wasm_hang_discovery_fallback_tail_lines 40. Rewrote discover_wasm_hang_tests/0: runs dry-run via new run_discovery_dry_run/0, retries exactly once on an empty first result (info log both attempts), a non-empty retry proceeds (info line noting recovery), a persistently-empty retry calls new raise_discovery_hard_failure/1 -- zero-tolerance policy preserved, function only ever returns non-empty or raises. New find_discovery_window/2 returns {:header_found, window, terminator_reached?} or :header_not_found, mirroring extract_test_list_block/1's exact header/terminator recognition via new shared wasm_hang_discovery_terminator_line?/1; retained last_output_lines/2 as the header-not-found fallback tail. extract_test_list_block/1, parse_wasm_hang_location!/1, run_single_wasm_hang_test/1, and main-suite/lua_wallclock_race paths untouched (confirmed via git diff). Tests: new describe block with 4 new fixtures (retry_succeeds, retry_still_fails, retry_noisy_window, no_header) via marker-file call counting, covering all design-specified cases. Verification: mix compile --warnings-as-errors clean; mix format --check-formatted clean (after one fix); mix test test/mix/tasks/letflow_check_test_test.exs -- 12 passed (6 original + 6 new); real (non-fixture) mix test --only wasm_hang --dry-run run 3x directly, header/terminator/span consistent with design's live measurement, all 5 real wasm_hang locations found on first attempt every time (consistent with ISSUE-FIXER's non-reproduction finding -- retry path covered by fixtures since not naturally reproducible live); mix test test/mix/tasks/ -- 216/218 passed, 2 pre-existing unrelated rustc-absent failures in letflow_check_toolchain_test.exs. Scope confirmed: no change to extract_test_list_block/1's parsing, no change to any real @tag :wasm_hang test site, no change to zero-tolerance-after-retry policy, no admission/try_acquire changes. SECURITY-REVIEWER out of scope: this touches only mix-task tooling and its own test file, no tenant-data path (no migration, no Ecto schema, no API route, no response shaping)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

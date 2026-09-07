@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF03-ISS0418-20260907-step-00",
+  "run_id": "WF03-ISS0418-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0418-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T09:38:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0406"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0352.yaml",
+      "docs/issues/ISS-0406.yaml",
+      "lib/letflow/design/req170-wasm-wallclock-timeout.md",
+      "docs/migration/decisions/0014-*.md",
+      "test/letflow/engine/wasm/*_test.exs",
+      "lib/mix/tasks/letflow.check.test.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0418-20260907",
+    "base_commit": "1e3a1d6f"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0418: implement the OQ-5 operator-configurable cap on concurrently in-flight WASM invocations -- the structural root fix for ISS-0352's recurring wasmex native-thread-pool exhaustion class (6+ independent recurrences: PR #691, #780/ISS-0392, #786/ISS-0400, #790/ISS-0401, #795/ISS-0406, #810/ISS-0404, always contained to the isolated `mix test --only wasm_hang` CI subprocess, main suite always green, but chronically blocking merges via 60-180s ExUnit timeouts under runner contention -- this exact flake was hit repeatedly by ORCH this session too, rerun-and-pass each time). Read docs/issues/ISS-0352.yaml and docs/issues/ISS-0406.yaml in FULL for the complete recurrence history, and lib/letflow/design/req170-wasm-wallclock-timeout.md section 8 (OQ-5) plus the referenced decision 0014-*.md for the already-scoped-but-unimplemented fix direction, before diagnosing. Determine: (1) exactly where wasmex invocations are dispatched in the current codebase (the actual call site(s) that would need to acquire a permit before invoking a WASM guest), (2) what mechanism should own the cap (a global semaphore? a bounded worker pool? an existing rate-limiter primitive already in this codebase, e.g. Letflow.Admission from REQ-216/218/ISS-0431?), (3) how the cap should be operator-configurable (a config value, following this project's existing config conventions), and (4) whether this genuinely needs to apply only to the isolated wasm_hang test subprocess or to the wasmex invocation path generally (the acceptance criteria's own wording says 'and/or', meaning this is not yet settled and diagnosis should recommend one). Hand off a clear, well-evidenced recommendation to CODE-DESIGNER."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Git branch feature/WF03-ISS0418-20260907 created off main @ 1e3a1d6f. Queue task 418 claimed via /tasks/418/lock (queue's own status field still shows 'blocked' from a prior session's characterization, but the lock itself succeeded -- 'blocked' does not appear to prevent claiming, just signals it needed follow-up attention, which this run now provides)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

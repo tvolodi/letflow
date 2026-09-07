@@ -1132,3 +1132,50 @@ history:
       passed, zero REQ-231 regressions. mix compile --warnings-as-errors
       and mix format --check-formatted independently confirmed clean by
       ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T10:56:00Z"
+    note: >
+      ISS-0418 resolved: the chronic wasm_hang CI flake (11+ documented
+      recurrences since 2026-09-02, hit repeatedly by ORCH this session
+      too, always rerun-and-pass) is finally correctly root-caused and
+      fixed. The 2026-09-05 partial fix (InvocationLease, a concurrency
+      semaphore) targeted concurrent-contention, but its own post-fix
+      CI data already showed the flake rate unchanged -- ISSUE-FIXER's
+      fresh diagnosis this run found the real mechanism is CUMULATIVE
+      native-thread leakage: all wasm_hang tests are async:false and
+      ran sequentially in ONE shared long-lived subprocess, so nothing
+      was ever concurrent; 6 permanently-leaked wasmex Stores accumulate
+      one at a time until the shared Tokio pool exhausts partway
+      through, explaining the ever-shifting which-test-fails pattern.
+      CODE-DESIGNER's design (one rework-free PASS) restructures
+      lib/mix/tasks/letflow.check.test.ex to dynamically discover each
+      wasm_hang test (via --dry-run parsing, never hardcoded) and run
+      each in its own fresh subprocess -- CODE-DESIGN-VALIDATOR
+      independently live-verified the load-bearing claim that `--only`
+      silently gets discarded when combined with file:line (file:line
+      alone is what actually works). ELIXIR-DEV implemented exactly per
+      design plus two necessary, documented deviations (a bounded-window
+      discovery-output parser instead of take_while, since ExUnit
+      warnings non-deterministically interleave; ignoring discovery's
+      exit code since --dry-run always exits 1 regardless of match
+      count) and fixed a pre-existing harness-test regression the
+      restructuring exposed. REVIEWER independently re-verified both
+      deviations against live re-derivation, confirmed a genuine
+      safeguard exists against discovery ever silently finding zero
+      tests and passing vacuously (explicit Mix.raise on an empty
+      list), and re-ran the isolated stage 8 more times cleanly on top
+      of ELIXIR-DEV's own 15 -- 23 total consecutive clean runs across
+      two independent agents, zero wasm_hang-class failures -- PASS
+      (handoffs/WF03-ISS0418-20260907/step-03d-reviewer.json).
+      feature/WF03-ISS0418-20260907. Test-harness-only change --
+      Letflow.Engine.Wasm.InvocationLease and all production wasmex
+      call sites untouched (still correct and load-bearing for a
+      separate, not-yet-closed production-dispatch-integration
+      follow-up, design OQ-C). ISS-0418's own AC1 (concurrency cap)
+      annotated as satisfied-but-insufficient rather than deleted, with
+      a new AC added for the actual fix mechanism, per the REQ-226 AC4
+      precedent for correcting acceptance criteria against real
+      evidence rather than silently ignoring the mismatch.

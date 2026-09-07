@@ -173,7 +173,104 @@ recurrence_2026_09_04_b: >
   register_task call.
 queue_task_id: 418
 github_issue: 816
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0418-20260907
+resolved_at: "2026-09-07T10:55:00Z"
+acceptance_criteria_correction: >
+  Per the design's own section 1.1 (append-only, does not delete the
+  original criterion or this issue's own history, matching the REQ-226
+  AC4 precedent): the original AC1 ("A concurrency cap on in-flight
+  wasmex/WASM guest invocations exists and is operator-configurable")
+  is ANNOTATED, not deleted -- it is genuinely SATISFIED by the
+  2026-09-05 partial fix (Letflow.Engine.Wasm.InvocationLease,
+  commit e5d07019), but that satisfaction was NOT SUFFICIENT to close
+  this issue, exactly as partial_fix_20260905's own entry above already
+  concluded. A NEW criterion is added: each `:wasm_hang`-tagged test now
+  runs in its own dedicated, freshly-booted `mix test <file>:<line>`
+  subprocess (dynamically discovered via `mix test --only wasm_hang
+  --dry-run`, never a hardcoded list), verified by repeated consecutive
+  clean runs of the isolated stage (23 total across two independent
+  agents: ELIXIR-DEV 15/15, REVIEWER 8/8, zero wasm_hang-class
+  failures) -- this satisfies the originally-intended OUTCOME ("the
+  isolated wasm_hang subprocess... cannot exhaust the shared Tokio
+  native worker pool regardless of CI runner size or concurrent-session
+  contention") via a different, evidence-driven mechanism than the
+  literal AC1 wording assumed.
+resolution: >
+  ROOT CAUSE, finally correctly identified after the 2026-09-05 partial
+  fix's own falsifiable prediction (see partial_fix_20260905 above) was
+  tested against reality and found wanting: the concurrent-contention
+  hypothesis that motivated InvocationLease (a semaphore capping
+  SIMULTANEOUS wasmex invocations) was never the dominant mechanism.
+  All three `:wasm_hang`-tagged test modules are `async: false` and ran
+  sequentially, one at a time, inside ONE shared long-lived `mix test
+  --only wasm_hang` subprocess -- nothing was ever actually concurrent,
+  so a concurrency cap could never be contended, and indeed
+  orch_note_20260905's own post-fix data point (50%, unchanged from the
+  50% pre-fix baseline) already proved this empirically before
+  re-diagnosis even began. The REAL mechanism, confirmed by
+  ISSUE-FIXER's fresh diagnosis (WF03-ISS0418-20260907): CUMULATIVE
+  native-thread leakage. wasmex's shared Tokio native worker pool never
+  regrows once threads are lost, and 6 permanently-leaked Stores
+  accumulate ONE AT A TIME across the sequential tests sharing that one
+  long-lived subprocess (1 leak in call_timeout_test.exs, 1 in
+  host_api_write_test.exs, 4 in plugin_handler_test.exs). On CI's
+  small/contended runner, that pool exhausts partway through the
+  6-test run, so whichever tests happen to run LAST (explaining the
+  ever-shifting which-test-fails-this-time pattern across this issue's
+  entire 11+-recurrence history) can no longer get a native worker
+  thread and hang until the 180s ExUnit timeout kills them --
+  Wasmex.start_link/1 blocking in :proc_lib.sync_start/2, exactly the
+  stack shape recorded over and over above.
+
+  FIX: lib/mix/tasks/letflow.check.test.ex's wasm_hang stage now
+  discovers each `:wasm_hang`-tagged test dynamically (via `mix test
+  --only wasm_hang --dry-run`, parsing its own "Tests that would be
+  executed:" output -- never a hardcoded list that could silently go
+  stale) and runs each one in its OWN fresh `mix test <file>:<line>`
+  subprocess (deliberately without `--only`, since CODE-DESIGN-VALIDATOR
+  and REVIEWER both independently, live-verified that combining `--only`
+  with file:line silently discards the tag filter entirely -- file:line
+  alone already bypasses the default `:wasm_hang` exclude and is
+  sufficient). Each leaked native thread now dies with its own
+  short-lived BEAM node before the next test starts, so leaks can never
+  accumulate across tests. The one documented irreducible case
+  (plugin_handler_test.exs's AC4 test genuinely dispatches twice in one
+  test body) stays atomic by construction, since file:line addressing
+  targets a whole test body -- a warning comment was added at that
+  test's @tag site so a future editor doesn't split it apart.
+  Letflow.Engine.Wasm.InvocationLease and every production wasmex call
+  site are UNTOUCHED -- this is a test-harness-only fix; InvocationLease
+  remains correct and load-bearing for its own actual purpose (bounding
+  a genuine concurrent burst once production dispatch integration
+  ships, design OQ-C, still a separate, not-yet-closed follow-up).
+
+  VERIFICATION: 23 total consecutive clean runs of the isolated stage
+  across two independent agents (ELIXIR-DEV 15/15, REVIEWER 8/8, the
+  latter re-derived independently rather than trusting the former's
+  count), zero wasm_hang-class failures, ~27-28s per run (6 real
+  subprocess boots). REVIEWER also independently confirmed a real
+  safeguard exists against the discovery mechanism ever silently
+  finding zero tests and passing vacuously (an empty parsed list raises
+  explicitly rather than silently succeeding). CODE-DESIGN-VALIDATOR
+  and REVIEWER each independently live-verified the load-bearing
+  `--only`/`file:line` CLI-composition claim rather than trusting the
+  design doc's own transcript. Full mix letflow.check.test runs in this
+  sandbox stop in the main-suite stage before reaching wasm_hang (an
+  unrelated local rustc-toolchain gap), so a true sandbox-local
+  end-to-end green run wasn't obtainable regardless of this fix's
+  correctness -- CI observation on the merging PR is the next, final
+  confirmation layer, per this issue's own established evidence-
+  gathering convention (see partial_fix_20260905's own "what would
+  settle it" section, now actually settled).
+status_history_note: >
+  This issue was previously released status:blocked (not done) via
+  orch_note_20260905, specifically to prevent it resurfacing via
+  get_next_task's ordering ahead of genuinely actionable work while
+  more CI history accumulated. That blocking condition is now resolved
+  -- the accumulated history it was waiting for was exactly what
+  ISSUE-FIXER's fresh diagnosis in this run used to identify the real
+  mechanism.
 orch_note_20260905: >
   ORCH observation (2026-09-05, direct-append per this issue's own
   convention, no code change): PR #937 (ISS-0389, docs/scheduler/router/

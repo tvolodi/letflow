@@ -323,3 +323,20 @@ history:
       platform-corpus scoping rationale. ORCH will merge and release queue
       task 527 status:done. This closes the R-Co UAT-scenario-porting
       thread opened by ISS-0393 (S7 backlog).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T19:35:36Z"
+    note: >
+      ISS-0391 (queue task 391, GH#770) closed as resolved-via-duplicate,
+      per its own pre-recorded duplicate_note instructing whichever of
+      ISS-0391/ISS-0393 got picked up first to close the other. ISS-0393
+      was picked up first this session; by the time R-Co became reachable,
+      ISS-0393's own verbatim-port premise (and therefore ISS-0391's
+      identical request) was found false and closed as not-applicable-as-
+      scoped, with the real content instead ported via ISS-0526/ISS-0527
+      into test/fixtures/uat/scenarios/. Direct-action doc-only change per
+      ORCHESTRATOR.md SS10's sizing rule (single file, no code/test-behavior
+      change) -- branch/PR/merge still followed GIT_MERGE.md's procedure.
+      Merged as PR #1067. This closes the last open item in the R-Co
+      UAT-scenario-porting thread.

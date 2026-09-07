@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0526-20260907-step-01",
+  "run_id": "WF03-ISS0526-20260907",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0526-20260907/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T18:20:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0526", "ISS-0393"],
+    "related_handoff_ids": ["WF03-ISS0526-20260907-step-00"],
+    "artifacts_in": [".claude/agents/uat-runner.md", "docs/agents/workflows/WF-05_uat_run.md", "docs/migration/stage-7-simulation-uat-parity.md", "web/tests/e2e/pipelines/*.pipeline.e2e.spec.ts"],
+    "artifacts_out": ["lib/letflow/design/iss0526-uat-scenario-corpus-destination.md"],
+    "branch_name": "feature/WF03-ISS0526-20260907",
+    "base_commit": "c52f0432"
+  },
+  "task": {
+    "description": "Design the destination/format for R-Co's real narrative UAT scenario corpus and the corresponding UAT-RUNNER/WF-05 instruction updates."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Destination: test/fixtures/uat/scenarios/<company>/*.yaml (sibling to test/fixtures/simulation/<company>/scenarios/, distinguished by uat/ vs simulation/ segment). Rejected docs/uat/ (this is test-input data, not prose docs) and test/uat-reports/scenarios/ (WF-05's own tentative guess, rejected -- that dir is UAT-RUNNER's dated OUTPUT location, mixing input/output invites accidental cleanup collisions). Content byte-identical below a leading YAML-comment provenance header (URL+sha, no local path), following the exact convention already established by ISS-0388's fixture port. pipeline_test: handling: verified only 3 of 11 named files carry it; onboarding-wizard.pipeline.e2e.spec.ts already exists in letflow's web/ tree, kept verbatim; the other two don't exist in R-Co's own web/ tree either (aspirational references to specs never authored anywhere, gated on unbuilt backend features) -- field kept, never silently stripped, with an appended NOTE (ISS-0526) comment explaining it doesn't resolve yet and why. UAT-RUNNER instruction update: exact replacement text for uat-runner.md's location-TBD line plus a new Reading the scenario corpus subsection explicitly contrasting narrative prose format against Letflow.Simulation.Runner's unrelated machine-executable format, plus a matching WF-05_uat_run.md Step 1 tightening. Scope for this pass: only the 11 named tenant-business files. platform/ subdirectory actually has 18 files not ~15 as originally estimated (corrected in doc) -- excluded per docs/migration/stage-7-simulation-uat-parity.md's own already-recorded REQ-210 scoping decision (platform corpus explicitly deferred as its own future batch); re-including here would silently re-decide a settled scope boundary. Recommended a follow-up issue, flagging 2 cross-tenant-probe files for SECURITY-REVIEWER attention. Verification: structural only for this pass (files present, YAML-parseable, byte-diff clean against R-Co source, instructions updated, existing synthetic fixtures confirmed untouched via git diff) -- a real live UAT-RUNNER dry-run explicitly out of scope, would hit S7's own already-recorded DEFERRED_TO_S8 wall for every GUI step regardless, folding a live run into a fixture-relocation issue would expand scope beyond how it was sized. Self-check: grep for defmodule|def |defp |schema \"|Enum.|fn ->|case do|cond do|with do|pipe operator returned zero matches -- no disguised executable code."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

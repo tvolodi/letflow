@@ -2676,3 +2676,46 @@ correctly primed to intercept. Reserve real EICAR bytes for the tests whose actu
 is proving detection itself works (unit-level adapter tests, and any in-memory,
 no-filesystem context-module call) — those two are unaffected by this hazard because
 nothing ever touches disk.
+
+## Stale `tenant_template` schema surviving a migration-adding commit (docker-compose-persisted Postgres)
+
+TEST-RUNNER (WF03-ISS0399-20260907) ran `scripts/test_parallel.sh` (both N=16 default and
+the README's N=4 known-good override) and got 453 and then 749 failures respectively out
+of ~3449 tests — a suite-wide, near-uniform failure rate, not confined to any one file.
+Root cause (via `partition-1.log`): every failure traced back to
+`Letflow.TenantFixture.provisioned_tenant!/1` raising with
+`versions_missing=[20260907020001]` — exactly the migration
+(`priv/repo/migrations/20260907020001_add_scan_status_to_instance_attachments.exs`) added
+by the very commit under test. `test/support/tenant_template.ex` builds the shared
+`"tenant_template"` Postgres schema once and caches it by **bare schema-existence**
+(`template_built_in_db?/0` — a deliberate design choice per that module's own comment,
+not a bug in the module itself). That check is blind to one thing: this repo's
+`docker compose` Postgres container persists its data volume across unrelated `mix test`
+invocations on the same host. If an *earlier* run (before this branch's migration
+existed) already built `tenant_template` into that persisted volume, a *later* run
+against the same container inherits the stale template — no rebuild is triggered, because
+the schema does exist, it's just missing the newest tenant-scoped migration. This
+produced ~20 accumulated stale `letflow_test*` databases on the workspace host, all
+serving the same stale template.
+
+**Symptom to recognize:** a full-suite run failing at a near-constant percentage across
+every partition (not concentrated in the files a branch actually touched), with the
+actual assertion failures bottoming out in `TenantFixture`/`TenantTemplate`
+`TENANT_TEMPLATE_SELF_CHECK`-style errors naming `versions_missing` — especially a
+version matching a migration the current branch just added.
+
+**Fix:** drop every stale `letflow_test*` database (not `letflow_dev`) via
+`docker exec <postgres-container> psql -U letflow -d letflow_dev -c "DROP DATABASE IF
+EXISTS <db>;"` for each one `SELECT datname FROM pg_database WHERE datname LIKE
+'letflow_test%'` lists, then re-run `scripts/test_parallel.sh` — the `test` alias's own
+`ecto.create --quiet`/`ecto.migrate --quiet` and `tenant_template.ex`'s
+`ensure_template!/0` rebuild everything fresh against the branch's actual migration set.
+This resolved 749 failures down to 2 (both an unrelated, independently-tracked
+`wasm_hang` flake) in this run.
+
+**Lesson:** when a full-suite run fails broadly and uniformly right after a branch added
+a new migration, suspect a stale cached `tenant_template` in a persisted test-Postgres
+volume before suspecting the migration or the branch's application code — check one
+failing test's full log for `versions_missing` before doing anything else. This is
+specific to hosts running `docker compose`'s Postgres with a persistent volume across
+sessions; it will not reproduce against a freshly-created container.

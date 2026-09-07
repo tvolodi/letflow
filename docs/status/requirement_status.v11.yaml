@@ -226,3 +226,35 @@ history:
       (PASS first pass) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER
       out of scope) -> TEST-RUNNER. Implementation commit ae3906dd. ORCH
       will merge and release queue task 525 status:done.
+  - req: SCOPE-CHANGE
+    event: revised
+    agent: ORCH
+    at: "2026-09-07T17:41:24Z"
+    note: >
+      ISS-0393 (queue task 393, GH#773) closed as not-applicable-as-scoped
+      via WF03-ISS0393-20260907. The user provided R-Co's real GitHub
+      remote (https://github.com/tvolodi/R-Co, commit d19bfec4a9ec49234534
+      6bfccd8e389bd9cd92db), resolving the prior Windows-filesystem-path
+      unreachability, but ISS-0393's own premise -- that R-Co's real
+      tests/simulation/scenarios/*.yaml corpus is a verbatim drop-in
+      replacement for REQ-206/207/208's synthetic scenario fixtures --
+      does not hold. ELIXIR-DEV diffed all 11 real/synthetic file pairs
+      and found the real files are narrative UAT scripts (prose fields,
+      pipeline_test: keys pointing at Playwright specs for UAT-RUNNER),
+      incompatible with Letflow.Simulation.Runner.run/1's params/args-driven
+      machine-executable format (ScenarioFixture.load!/1's single
+      build_outcome/1 clause requires verification.args, absent from every
+      real file) -- made zero file changes and correctly escalated rather
+      than inventing content to force a fit. ORCH presented the finding to
+      the user, who chose to keep the existing synthetic fixtures as-is
+      and split the real R-Co narrative content into a correctly-scoped
+      follow-up. Filed ISS-0526 (queue task 526, GH#1062) targeting
+      UAT-RUNNER's domain instead. REQ-206/207/208's design docs corrected
+      (append-only) to remove the implied expectation of a straightforward
+      future port. REVIEWER independently re-verified the core technical
+      claim against real code (scenario_fixture.ex:97-100) and real R-Co
+      content (spot-checked swiftroute-shipment-attach-delivery-note.yaml
+      directly against the cited commit sha) -- PASS. Docs-only change,
+      mix compile --warnings-as-errors clean, mix test
+      test/letflow/simulation/ 27 passed (confirms true no-op on code).
+      ORCH will merge and release queue task 393 status:done.

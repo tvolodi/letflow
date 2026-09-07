@@ -1,0 +1,46 @@
+{
+  "handoff_id": "WF02-REQ231-20260907-step-02",
+  "run_id": "WF02-REQ231-20260907",
+  "workflow_id": "WF-02",
+  "step": "02",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF02-REQ231-20260907/step-02-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T05:30:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-231"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ231-20260907-step-00",
+      "WF02-REQ231-20260907-step-01",
+      "WF02-REQ231-20260907-step-01b"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req231-entity-query-cursor-field-grants.md",
+      "handoffs/WF02-REQ231-20260907/step-01b-code-design-validator.json"
+    ],
+    "artifacts_out": [
+      "lib/letflow/entities/query/cursor.ex",
+      "lib/letflow/entities/query/field_grants.ex",
+      "priv/repo/migrations/20260907010001_create_entity_field_restrictions.exs",
+      "priv/repo/migrations/20260907010002_create_user_entity_grants.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/entities/query_cursor_field_grants_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ231-20260907",
+    "base_commit": "80f650bc"
+  },
+  "task": {
+    "description": "Implement REQ-231 exactly per the CODE-DESIGN-VALIDATOR-approved design (lib/letflow/design/req231-entity-query-cursor-field-grants.md): Letflow.Entities.Query.Cursor (generalized keyset-pagination cursor codec reusing Letflow.Api.Pagination's outer envelope with a new 'EQ:' prefix and a JSON-encoded, positionally-ordered resume-key array of length(sort)+1, generalizing Letflow.Entities.Definitions.list_definitions/2's fixed two-column cursor to REQ-230's arbitrary sort-clause list) and Letflow.Entities.Query.FieldGrants (per-user, per-field default-deny redaction backed by two new tenant-scoped tables, entity_field_restrictions and user_entity_grants, per the design's §3.1 researched conclusion that no existing Letflow.Api.Authorization/Letflow.Secrets.Redaction primitive fits). No REQ-230 (Types/Allowlist/Compiler) logic changed; no route/controller added."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Implemented both new modules and the two migrations exactly per the validated design, registered both migrations in Letflow.TenantProvisioning's @tenant_scoped_migration_manifest and both new tables in test/support/tenant_fixture.ex's @expected_tenant_tables (alphabetically placed). Wrote test/letflow/entities/query_cursor_field_grants_test.exs covering all 5 acceptance criteria: AC1 -- a 5-record dataset paginated with page_size:2 over a GENERIC two-field sort (customer_name asc, age desc, not the trivial default) produces 3 pages (2/2/1) with next_cursor round-tripping correctly, zero repeated/skipped records, plus a dedicated test asserting {:error, :resume_key_arity_mismatch} when a cursor is resent against a differently-shaped sort. AC2 -- two explicit tests: a user with no matching user_entity_grants row sees field_values['ssn'] == :__field_redacted__ (key retained) while unrestricted fields pass through unchanged; a second user holding an explicit grant sees 'ssn' populated with its real value; plus a redact_page/2 test and a zero-restrictions-is-not-an-error test. AC3 is a design-doc property (verified already by step-01b, not re-tested in code, per this file's own instructions). AC4 verified structurally (grep-equivalent test asserting no lib/letflow/routers/**/*.ex file references Query.Cursor or Query.FieldGrants) and confirmed via `git diff --stat 80f650bc..HEAD`, which touches only lib/letflow/entities/query/{cursor,field_grants}.ex, two migrations, tenant_provisioning.ex, tenant_fixture.ex, and the new test file -- no route/controller. AC5: `mix compile --warnings-as-errors` -> clean, no output/warnings. `mix format --check-formatted` -> clean. `mix test test/letflow/entities/query_cursor_field_grants_test.exs --max-cases 1` -> 'Result: 8 passed', 0 failures. Regression: `mix test test/letflow/entities/ --max-cases 1` -> 'Result: 137 passed'. `mix test test/letflow/api/ --max-cases 1` -> 'Result: 176 passed' (Pagination's own suite lives under this path; confirmed no regression from Cursor's reuse of Letflow.Api.Pagination's envelope). One environment-only wrinkle found and fixed, not a code defect: test/support/tenant_template.ex caches a physical 'tenant_template' Postgres schema across mix test invocations for speed; since it predated this session's new migrations, the first api/ suite run failed 6 tests with 'relation tenant_template.entity_field_restrictions does not exist' until the stale template schema was dropped (`DROP SCHEMA IF EXISTS tenant_template CASCADE`), after which all 176 passed -- this is expected, documented behavior of that caching mechanism (any new tenant-scoped migration invalidates the cached template) and requires no code change; flagging for SECURITY-REVIEWER/REVIEWER awareness in case CI hits the same stale-cache state on a shared runner. One implementation deviation from the design's literal prose, made empirically necessary and documented in cursor.ex's own comments: the design says id-comparison type-casting mirrors Compiler.build_filter_dynamic/2's dispatch, but composing a `binary_id`/`Ecto.UUID` field comparison via runtime-composed `Ecto.Query.dynamic/2` (necessary for the arbitrary-arity row comparison, per design §2.3) does not run Ecto's automatic string-to-16-byte-binary dump step the way a compile-time-inline `field(r, ^col) == ^value` would -- confirmed empirically (Postgrex raised 'expected a binary of 16 bytes, got \"<uuid-string>\"' before the fix). Fixed by an explicit `Ecto.UUID.dump!/1` call in a small `maybe_dump/2` helper, applied only for :binary_id/Ecto.UUID typed_column and id comparisons (json_field comparisons are unaffected, already passing before this fix). No design-scope or security-contract change -- purely a correctness fix to make the design's own specified behavior work against real Postgrex."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

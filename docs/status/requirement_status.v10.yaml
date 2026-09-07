@@ -1061,3 +1061,74 @@ history:
       compile --warnings-as-errors and mix format --check-formatted
       independently confirmed clean by ELIXIR-DEV, SECURITY-REVIEWER,
       REVIEWER, and TEST-RUNNER.
+
+  - req: REQ-231
+    event: done
+    agent: ELIXIR-DEV
+    at: "2026-09-07T06:09:00Z"
+    note: >
+      ISS-0438 entity-subsystem port slice 6b -- the FINAL slice,
+      closing the entire entity-subsystem port (REQ-225 through
+      REQ-231 all now done): keyset-pagination cursor codec for
+      arbitrary REQ-230 sort clauses, and per-user field-level
+      redaction. New modules Letflow.Entities.Query.Cursor (reuses
+      Letflow.Api.Pagination's existing envelope with a new EQ: prefix
+      and a JSON-encoded resume-key array, generalizing
+      list_definitions/2's fixed two-column shape to an arbitrary
+      sort-clause list) and Letflow.Entities.Query.FieldGrants
+      (default-deny-with-per-user-override redaction, :__field_redacted__
+      atom sentinel, key retained). Two new tenant-scoped tables,
+      entity_field_restrictions and user_entity_grants.
+      feature/WF02-REQ231-20260907, closing queue task 521 (registered
+      fresh this run -- same stale-placeholder gap as every other
+      ISS-0438 slice). CODE-DESIGNER researched the requirement's named
+      open design question properly rather than punting: read
+      Letflow.Api.Authorization in full and confirmed its own moduledoc
+      states INV-2 structurally forbids a field-level third parameter
+      from ever reaching evaluate_access/2, read Letflow.Secrets.Redaction
+      and confirmed it's a global identity-blind denylist with no
+      user_id, and confirmed no existing RBAC-adjacent table has a
+      field-name/entity-type grant concept -- concluding new dedicated
+      tables were genuinely needed, not just assumed. Design doc PASSed
+      CODE-DESIGN-VALIDATOR's gate on the FIRST attempt (no rework),
+      applying the disguised-executable-code lesson REQ-230's own design
+      had just failed twice for. ELIXIR-DEV implemented exactly per
+      design, wrote 8 tests covering all 5 acceptance criteria including
+      a genuinely generic two-field sort exercised against REQ-230's
+      real Compiler/Allowlist (not just the trivial default sort), and
+      found a real implementation gap the design's prose didn't specify
+      (composing a binary_id/UUID tiebreak comparison via runtime dynamic/2
+      skips Ecto's automatic UUID encode/dump, needing an explicit
+      Ecto.UUID.dump!/1 call) -- fixed and documented rather than
+      silently worked around. ELIXIR-DEV also proactively found and fixed
+      the tenant_fixture_test.exs table-count assertion gap (41->43) for
+      the two new tables, pre-empting the exact class of follow-up fix
+      REQ-226 needed twice. SECURITY-REVIEWER's hard gate traced all
+      three logical cases of the default-deny redaction property
+      (no-restriction-row, restriction-with-no-grant,
+      restriction-with-matching-grant) against the actual code and
+      confirmed each produces the intended fail-safe result -- the
+      central security property this requirement exists for -- plus
+      independently re-verified the new cursor's dynamic query
+      composition has no injection surface distinct from REQ-230's
+      already-reviewed compiler -- PASS, with one flagged non-blocking
+      robustness observation (a malformed cursor component can raise
+      rather than return a typed error, a now-recurring pattern across
+      two call sites -- filed as ISS-0522/GH#1049 for ISSUE-FIXER to
+      evaluate a shared fix). REVIEWER independently re-verified design
+      fidelity, all 5 ACs by test name, the table-count bump's
+      correctness, and did a whole-ISS-0438 sanity check: grepped every
+      req22*/req23* design doc for open-question markers and confirmed
+      none were silently dropped, and confirmed Compiler->Cursor->
+      FieldGrants are genuinely composed together in real tests, not
+      just unit-tested in isolation -- PASS
+      (handoffs/WF02-REQ231-20260907/step-02d-reviewer.json), assessing
+      ISS-0438 as a whole as genuinely complete. TEST-RUNNER ran the
+      full partitioned suite plus both isolated wasm_hang/
+      lua_wallclock_race subprocesses manually after the stale-template
+      cache (again predating this branch's own new migrations) was
+      cleared -- 3401/3403 core tests passed (2 failures being the
+      pre-existing unrelated rustc-toolchain gap), 16/16 isolated tests
+      passed, zero REQ-231 regressions. mix compile --warnings-as-errors
+      and mix format --check-formatted independently confirmed clean by
+      ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER, and TEST-RUNNER.

@@ -1,0 +1,47 @@
+{
+  "handoff_id": "WF02-REQ231-20260907-step-03",
+  "run_id": "WF02-REQ231-20260907",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "TEST-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ231-20260907/step-03-test-runner.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T05:56:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-231"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": [
+      "WF02-REQ231-20260907-step-00",
+      "WF02-REQ231-20260907-step-01",
+      "WF02-REQ231-20260907-step-01b",
+      "WF02-REQ231-20260907-step-02",
+      "WF02-REQ231-20260907-step-02b",
+      "WF02-REQ231-20260907-step-02d"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/req231-entity-query-cursor-field-grants.md",
+      "lib/letflow/entities/query/cursor.ex",
+      "lib/letflow/entities/query/field_grants.ex",
+      "priv/repo/migrations/20260907010001_create_entity_field_restrictions.exs",
+      "priv/repo/migrations/20260907010002_create_user_entity_grants.exs",
+      "lib/letflow/tenant_provisioning.ex",
+      "test/support/tenant_fixture.ex",
+      "test/letflow/support/tenant_fixture_test.exs",
+      "test/letflow/entities/query_cursor_field_grants_test.exs"
+    ],
+    "branch_name": "feature/WF02-REQ231-20260907",
+    "base_commit": "80f650bc"
+  },
+  "task": {
+    "description": "Run the project's full regression test gate (mix letflow.check.test), plus mix compile --warnings-as-errors and mix format --check-formatted, for REQ-231 (Entities.Query.Cursor + Entities.Query.FieldGrants) before ORCH proceeds to RELEASE-VALIDATOR / merge."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "All checks run fresh, real output quoted below.\n\n1. `mix compile --warnings-as-errors` -> clean, no output, exit 0.\n\n2. `mix format --check-formatted` -> clean, no output, exit 0.\n\n3. `mix letflow.check.test` (8-way partitioned full suite via scripts/test_parallel.sh):\n   - FIRST RUN: hit the known local-sandbox hazard (stale per-partition tenant_template schemas built before this branch's two new migrations existed) -- every partition failed with `relation \"tenant_template.entity_field_restrictions\" does not exist` / clone_failed on unrelated tenant-fixture-provisioning tests (44-117 failures per partition, e.g. partition-8: 'Result: 318/362 passed, 3 excluded / Failed: 44 tests'). This is pre-authorized hazard #1 from the dispatch instructions, not a REQ-231 regression -- root cause is a build artifact of running tests before this branch's new migrations existed, not a code defect. Cleared it: `DROP SCHEMA IF EXISTS tenant_template CASCADE` via `sudo docker exec letflow-1-postgres-1 psql -U letflow -d <db>` against all of letflow_test, letflow_test1..letflow_test8.\n   - SECOND RUN (after cache clear): combined result across all 8 partitions -- 3401 passed, 2 failed, 22 excluded (partition sizes: p1=494 passed; p2=352 passed incl 4 properties, 4 excluded; p3=403 passed incl 1 property; p4=550 passed incl 1 property, 14 excluded; p5=406 passed; p6=431/433 passed, 2 failed; p7=403 passed, 1 excluded; p8=362 passed, 3 excluded). The only 2 failures, both in partition-6, are Mix.Tasks.Letflow.CheckToolchainTest's rust-pin tests ('a matching rust pin reports OK with no mismatch' and 'a mismatched rust pin reports a MISMATCH row naming expected and running'), both `** (ErlangError) Erlang error: :enoent` from `System.cmd(\"rustc\", [\"--version\"], ...)` at test/mix/tasks/letflow_check_toolchain_test.exs:69/76 -- exactly the pre-authorized known-flaky class (no rustc installed on this host), not a REQ-231 regression. `mix letflow.check.test` exited 1 overall solely because of these 2 known-environmental failures (Mix.raise halts before reaching the isolated wasm_hang/lua_wallclock_race subprocess stages it normally chains).\n   - Ran the two isolated subprocess stages manually since the main task halted before reaching them: `mix test --only wasm_hang` -> 'Result: 5 passed, 3420 excluded', 0 failures (expected GenServer timeout/error log noise from the plugin-handler hang test itself, not a failure). `mix test --only lua_wallclock_race` -> 'Result: 11 passed, 3414 excluded', 0 failures (one unrelated compile-time type-warning at test/letflow/repository_test.exs:250 comparing module atoms with ==, pre-existing, not from this branch).\n   - REQ-231-specific targeted run: `mix test test/letflow/entities/query_cursor_field_grants_test.exs test/letflow/support/tenant_fixture_test.exs --max-cases 1` -> 'Result: 22 passed', 0 failures.\n\nNo genuine REQ-231 regression found anywhere in the suite. All failures encountered map exactly to the two pre-authorized known-flaky/hazard classes named in the dispatch (stale tenant_template cache, cleared; no-rustc-on-host toolchain check). No new failure signature was seen."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

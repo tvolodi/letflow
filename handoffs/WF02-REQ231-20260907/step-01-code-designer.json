@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF02-REQ231-20260907-step-01",
+  "run_id": "WF02-REQ231-20260907",
+  "workflow_id": "WF-02",
+  "step": "01",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ231-20260907/step-01-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T05:15:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-231"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ231-20260907-step-00"],
+    "artifacts_in": [
+      "lib/letflow/api/authorization.ex",
+      "lib/letflow/secrets/redaction.ex",
+      "lib/letflow/identity/group.ex, tenant_role.ex",
+      "lib/letflow/api/pagination.ex",
+      "test/support/tenant_fixture.ex"
+    ],
+    "artifacts_out": ["lib/letflow/design/req231-entity-query-cursor-field-grants.md"],
+    "branch_name": "feature/WF02-REQ231-20260907",
+    "base_commit": "80f650bc"
+  },
+  "task": {
+    "description": "Produce the design artefact for REQ-231 (entity query cursor codec + field-grant redaction), researching and answering the named open design question against real Letflow authorization modules."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Design doc written to lib/letflow/design/req231-entity-query-cursor-field-grants.md. Researched answer to the open design question: NEW dedicated tables are needed, no existing Letflow primitive covers per-user per-field redaction. Read Letflow.Api.Authorization in full: evaluate_access/2 is a pure two-argument function returning only :Allow/:Deny403/:AllowWithRowFilter, all coarse route/action-level; its own moduledoc states INV-2 structurally forbids a third parameter (e.g. which field) from ever reaching evaluate_access/2; no field/column/entity-type concept exists anywhere in its closed enums. Read Letflow.Secrets.Redaction in full: a global identity-blind key-name denylist for log metadata, no user_id, no data-driven grant table -- wrong shape, but its keep-the-key-replace-the-value sentinel convention is reused. Confirmed groups/group_members/tenant_role/users are pure name/role registries with no field-name or entity-type column. Decision: two new tenant-schema tables, entity_field_restrictions (entity_type, field_name, default-deny) and user_entity_grants (user_id, entity_type, field_name, per-user override), per R-Co's own naming. Cursor codec: Letflow.Entities.Query.Cursor reuses Letflow.Api.Pagination's outer envelope exactly, with a new EQ: prefix and a JSON-encoded positionally-ordered resume-key array generalizing list_definitions/2's fixed two-column shape to REQ-230's arbitrary sort-clause list. Redaction mechanism: key retained, value replaced with atom sentinel :__field_redacted__ (not a string, to avoid colliding with real JSON-decoded string data; not omission/nil, both ambiguous with legitimate absent/null data). IMPORTANT FOR VALIDATOR: given REQ-230's own design failed twice on disguised executable code, scrutinize this doc's backtick-quoted function references (e.g. Repo.all(query, prefix: prefix), Map.fetch!(row, column_atom)) with the same rigor -- self-check claims these are prose vocabulary naming real functions by signature, not executable logic blocks, but verify independently."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

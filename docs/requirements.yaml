@@ -14027,7 +14027,7 @@ requirements:
     # PROVENANCE (historical, not current decision authority):
     title: Entity query DSL -- keyset pagination cursor codec and field-grant row-level redaction (query/cursor.zig + field_grants.zig)
     owner: ELIXIR-DEV
-    status: pending
+    status: done
     stage: S6
     description: >
       PROVENANCE (historical, not current decision authority):

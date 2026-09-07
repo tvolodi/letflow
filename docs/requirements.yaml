@@ -14071,7 +14071,7 @@ requirements:
       - "no route or controller file is added or modified, confirmed by git diff --stat scoped to this requirement's commits"
       - "mix test and mix compile --warnings-as-errors both pass with real output quoted"
     depends_on: [REQ-230]
-    impl_order: 466  # letflow-queue task id
+    impl_order: 521  # letflow-queue task id (registered 2026-09-07; original placeholder 466 was stale/never actually registered)
 
   - id: REQ-232
     title: Retire parity-justification phrasing in lib/letflow/routers/* -- restate each decision on Letflow's own merit or delete it (closes ISS-0424 part 2a)

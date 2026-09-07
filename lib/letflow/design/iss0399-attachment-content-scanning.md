@@ -38,9 +38,18 @@ left as "TBD."
   migration this design's new migration follows the same tenant-scoped-migration
   convention from (`if prefix() do` guard, `Letflow.TenantProvisioning.tenant_scoped_migrations/0`
   registration).
-- `lib/letflow/oidc/token_verifier.ex` — the existing precedent in this codebase for a
-  `@behaviour` + `Application.get_env/3`-resolved swappable adapter (real implementation
-  vs. a test double), reused as the shape for §3's `AttachmentScanner` behaviour.
+- `lib/letflow/engine/lua/platform.ex` (REQ-160, `lib/letflow/design/req160-lua-host-api-write.md`
+  §4.2) — the existing precedent in this codebase for a `@behaviour` + safe-default
+  `Application.get_env/3` swappable adapter: `platform.ex:774` resolves
+  `Application.get_env(:letflow, :lua_platform_service_caller, @default_service_caller)`
+  fresh on every call, defaulting to a real, always-succeeding module
+  (`NoServiceCaller`) when no config entry exists anywhere. Verified against the actual
+  call site, not just that design doc's prose. This — not `Letflow.Oidc.TokenVerifier`
+  — is the precedent reused as the shape for §3's `AttachmentScanner` resolution.
+  (`TokenVerifier`'s own real resolution, `lib/letflow/plugs/auth_pipeline.ex:243-245`,
+  is `Application.fetch_env!(:letflow, :oidc) |> Keyword.fetch!(:token_verifier)` —
+  fail-fast, no built-in default, mandatory in every environment's config file. That is
+  a materially different mechanism and is not what §3 below follows.)
 - `docs/agents/instructions/security-invariants.md` — INV-1 (tenant scoping), INV-4
   (no secrets), INV-8 (typed error handling, no unhandled crash on a realistic failure
   path — the scanner-unavailable branch, §2 step 3b) all apply; see §6.
@@ -214,14 +223,53 @@ New file: `lib/letflow/repository/attachment_scanner.ex`
             | {:error, reason :: term()}
 ```
 
-Resolved the same way `Letflow.Oidc.TokenVerifier`'s implementation is resolved (§0):
+Resolved the same way `platform.ex`'s `lua_platform_service_caller` is resolved (§0,
+REQ-160 §4.2), **not** the way `Letflow.Oidc.TokenVerifier` is resolved — those are two
+genuinely different mechanisms in this codebase and this design deliberately follows
+the former:
 `Application.get_env(:letflow, :attachment_scanner, Letflow.Repository.AttachmentScanner.SignatureHeuristic)`
 inside `Letflow.Repository.Attachments`, called once per `upload/2` invocation (§2 step
 3) as `scanner_mod().scan(raw_bytes, content_type)`. The third argument to
 `Application.get_env/3` is the default adapter itself (§3.2) — no separate
-`Mix.env()` branch is needed anywhere in `Letflow.Repository.Attachments`, unlike a
-config key with no safe built-in default; this one is safe out of the box in every
-environment, including a fresh `dev`/`test` checkout with no config override at all.
+`Mix.env()` branch is needed anywhere in `Letflow.Repository.Attachments`, and no
+config entry needs to be added to `config/dev.exs`/`config/test.exs`/`config/prod.exs`
+for this to work; this one is safe out of the box in every environment, including a
+fresh `dev`/`test` checkout with no config override at all — because, like
+`lua_platform_service_caller`'s default `NoServiceCaller`, `SignatureHeuristic` (§3.2)
+is a real, complete, always-succeeding-or-cleanly-answering implementation, not a
+placeholder that merely avoids a crash.
+
+**Why safe-default rather than fail-fast/mandatory-config here, stated on its own
+merits (not by analogy to either precedent alone):** `TokenVerifier`'s fail-fast
+resolution is the right call for OIDC because there genuinely is no safe default
+identity-verification behavior — a JWT verifier that "defaults" to something is either
+insecure (accept-everything) or meaningless (there is no sensible passive choice), so
+forcing every environment to state its verifier explicitly is the correct guard against
+an unconfigured deployment silently trusting forged tokens. `attachment_scanner` is the
+opposite shape: `SignatureHeuristic` (§3.2) *is* a legitimate, complete, permanently
+correct behavior on its own — a real signature check, not a "does nothing" or
+"insecure" stand-in — so a deployment that never touches the config key is not running
+in a degraded or unsafe mode, it is running the codebase's own default scanning
+policy, exactly as `lua_platform_service_caller` deployments that never configure it
+correctly get `NoServiceCaller`'s honest "not configured" behavior rather than a crash.
+
+The real tradeoff a safe default does introduce: a typo'd config key (e.g.
+`:attachement_scanner`) or a key set under the wrong config app would silently fall
+through to `SignatureHeuristic` instead of crashing at boot. This is judged acceptable
+here for two reasons, both absent from the `TokenVerifier` case: (1) the fallback
+behavior is never *worse* than the intended behavior in a way that creates a false
+sense of security — `SignatureHeuristic` still runs a real (if limited) scan and still
+fails closed on its own `{:error, _}` branch's absence (§3.2), it is not a no-op; a
+misrouted `TokenVerifier` config key, by contrast, could silently fall back to
+accepting unverified tokens, which is categorically worse. (2) this design's own
+migration path (§3.3) already requires deliberately changing the config value to swap
+in a real external-AV adapter — that is a one-line, code-reviewed change, not a
+runtime environment-variable typo risk equivalent to OIDC's per-environment secret
+config. If a future adapter swap makes a silent config-key typo a real operational
+risk (e.g. an org believes it configured ClamAV but is silently still running the
+default), that is a candidate for tightening to `fetch_env!`/`Keyword.fetch!` at that
+time — not a decision this design forecloses, but not warranted at today's scope
+either.
 
 ### 3.2 Default adapter — `Letflow.Repository.AttachmentScanner.SignatureHeuristic`
 

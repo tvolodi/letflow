@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0527-20260907-step-01",
+  "run_id": "WF03-ISS0527-20260907",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0527-20260907/step-01-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T19:00:00Z",
+  "context": {
+    "stage": "S7",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0527", "ISS-0526"],
+    "related_handoff_ids": ["WF03-ISS0527-20260907-step-00"],
+    "artifacts_in": ["lib/letflow/design/iss0526-uat-scenario-corpus-destination.md"],
+    "artifacts_out": ["test/fixtures/uat/scenarios/platform/*.yaml", ".claude/agents/uat-runner.md", "docs/agents/workflows/WF-05_uat_run.md"],
+    "branch_name": "feature/WF03-ISS0527-20260907",
+    "base_commit": "5aae6d0d",
+    "implementation_commit": "ec21d779"
+  },
+  "task": {
+    "description": "Port R-Co's 18-file platform-operator UAT corpus, reusing ISS-0526's already-validated design pattern. Flag platform-sandbox-cross-tenant-probe.yaml and platform-attachment-cross-tenant-probe.yaml for SECURITY-REVIEWER per ISS-0527's own acceptance criteria."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Created 18 files under test/fixtures/uat/scenarios/platform/ with the platform- filename prefix stripped, same provenance header format as ISS-0526's ported files (URL https://github.com/tvolodi/R-Co + commit d19bfec4a9ec492345346bfccd8e389bd9cd92db, no local path). pipeline_test: findings correct ISS-0527's own '7 of 18' estimate to the real count of 12 -- none resolve (referenced specs exist in neither R-Co's nor letflow's web/tests/e2e/pipelines/ tree, both hold only the same 4 unrelated files), all 12 got a NOTE (ISS-0527) unresolved-pointer comment reusing ISS-0526's wording pattern. Byte-for-byte fidelity confirmed for all 18 (programmatic strip-header-and-compare check). YAML validity confirmed for all 18 via YamlElixir.read_from_file/1. test/fixtures/simulation/ and the previously-ported test/fixtures/uat/scenarios/{swiftroute,vortex,meridian}/ confirmed completely untouched via git status. .claude/agents/uat-runner.md updated to reflect the platform/ corpus now being present (replacing prior deferred-scope wording) plus a note flagging the two cross-tenant-probe scenarios as security-severity; docs/agents/workflows/WF-05_uat_run.md's Step 1 corpus-existence check now names the platform/ path explicitly. docs/issues/ISS-0527.yaml appended (not rewritten). mix compile --warnings-as-errors clean; mix format --check-formatted clean; mix test test/letflow/simulation/ 27 passed. CROSS-TENANT-PROBE NARRATIVES FOR SECURITY-REVIEWER: sandbox-cross-tenant-probe.yaml (PW-12, sys-agent-sandbox-ownership) -- a coordinator worker hands out an assignment while lying about who authored it, the record must attribute the true submitter not the claim; the coordinator then tries to seize a workspace and do the work itself (must be refused, enforces split between who-assigns and who-executes); a second worker tries to take an already-held workspace (must be refused without revealing the current holder); a worker from a DIFFERENT company requests the first company's workspace, then requests a never-issued reference, and compares answers -- the two responses must be indistinguishable (no side-channel disclosure of another tenant's automated-work existence); all attempts must be audit-logged and repeated probing throttled. attachment-cross-tenant-probe.yaml (PW-09, sys-file-attachment-lifecycle) -- a SwiftRoute dispatcher attaches a real document to a task and gets a reference; a Vortex user (different tenant) takes that reference and navigates directly to it via GUI, the response must be byte-identical (message/layout/timing) to requesting a reference that never existed, no name/size/owner/task leakage, no partial preview; separately verifies signed URLs expire (old link -> explicit expiry message, no content) but legitimate re-requests by the owning tenant still work; all cross-tenant access attempts must appear in the platform operator's audit trail. Both ported byte-for-byte verbatim, content only described here not altered."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

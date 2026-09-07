@@ -50,4 +50,59 @@ source: >
   recommendation.
 queue_task_id: 527
 github_issue: 1064
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0527-20260907. All 18 platform-operator
+  scenario files ported verbatim into test/fixtures/uat/scenarios/platform/,
+  reusing ISS-0526's already-validated design pattern without a fresh
+  CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass. SECURITY-REVIEWER PASSed both
+  flagged cross-tenant-probe files (content genuine and consistent with
+  Letflow's actual INV-1 mechanism for attachment-cross-tenant-probe.yaml;
+  one non-blocking finding applied directly -- sandbox-cross-tenant-probe.yaml
+  targets R-Co's own unbuilt runtime-agent subsystem and could be
+  mis-mapped onto the semantically-unrelated Letflow.SandboxPool module, now
+  disclaimed via an added NOTE). Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER
+  (PASS, applied fix) -> REVIEWER (PASS) -> TEST-RUNNER (3431/3433 passed,
+  2 pre-existing unrelated rustc-absent failures, zero SandboxPoolTest
+  failures). Implementation commits ec21d779, 1f48b630. Does not re-decide
+  REQ-210's original platform-corpus scoping rationale.
+implementation_note: >
+  ELIXIR-DEV (WF03-ISS0527-20260907) ported all 18 R-Co
+  tests/simulation/scenarios/platform/*.yaml files verbatim into
+  test/fixtures/uat/scenarios/platform/*.yaml, following ISS-0526's exact
+  destination/header/pipeline_test-handling conventions (no fresh
+  CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass, per this issue's own handoff).
+  Filename prefix `platform-` stripped, same as ISS-0526 stripped its
+  per-company prefixes. All 12 files carrying `pipeline_test:` (not 7 as
+  this issue's own description estimated -- corrected count, verified by
+  grep against the pinned commit) reference spec files that exist in
+  neither R-Co's own web/tests/e2e/pipelines/ nor letflow's (both trees
+  hold only the same 4 filenames: admin-user-lifecycle, onboarding-wizard,
+  sim-admin-processes, sim-company-onboarding); each of those 12 got the
+  same `NOTE (ISS-0527)`-style unresolved-pointer comment ISS-0526 used for
+  its own 2 unresolved cases, wording reused verbatim with the issue
+  reference updated. The other 6 files carry no pipeline_test field at all
+  (agent-artifact-resubmit-idempotent, frontend-guard-selfcheck,
+  out-of-order-effect-completion, outbox-cap-backpressure,
+  sandbox-cross-tenant-probe, unsafe-migration-rejected). Byte-for-byte
+  fidelity confirmed programmatically for all 18 files (source content
+  reconstructed by stripping the header and NOTE block reproduces R-Co's
+  file exactly). All 18 files verified YAML-parseable via
+  YamlElixir.read_from_file/1. test/fixtures/simulation/ and the
+  previously-ported swiftroute/vortex/meridian directories confirmed
+  untouched (`git status --short` empty for those paths). `mix compile
+  --warnings-as-errors`, `mix format --check-formatted`, and
+  `mix test test/letflow/simulation/` (27 tests) all clean/passing --
+  zero regressions. Updated `.claude/agents/uat-runner.md` (corpus listing,
+  no longer "deferred") and `docs/agents/workflows/WF-05_uat_run.md` (Step
+  1's corpus-existence check now names the platform/ path too) since
+  ISS-0526's wording was company-specific and explicitly called the
+  platform corpus deferred. Two files --
+  sandbox-cross-tenant-probe.yaml and attachment-cross-tenant-probe.yaml --
+  ported verbatim, unaltered, and flagged for SECURITY-REVIEWER per this
+  issue's own acceptance criteria; narrative summaries of both were
+  reported to ORCH for SECURITY-REVIEWER's head start rather than
+  duplicated here. This pass does not re-decide REQ-210's original
+  platform-corpus scoping rationale -- it is exactly the follow-up ISS-0526
+  §4 recommended, at the same structural-verification-only bar ISS-0526's
+  §5 set (no live UAT-RUNNER dry-run attempted or required).

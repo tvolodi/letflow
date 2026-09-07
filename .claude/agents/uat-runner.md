@@ -17,11 +17,15 @@ AGENT_ID: UAT-RUNNER
   principle applies here directly
 - The scenario corpus for the stage under test —
   `test/fixtures/uat/scenarios/<company>/*.yaml` (11 files: 4 SwiftRoute, 4 Vortex, 3
-  Meridian; a `platform/` subdirectory covering an additional 18 platform-level
-  scenarios is deferred, see `docs/migration/stage-7-simulation-uat-parity.md`'s own
-  scope note and ISS-0526's design doc §4). Ported verbatim from R-Co
+  Meridian) plus `test/fixtures/uat/scenarios/platform/*.yaml` (18 platform-operator
+  scenarios, ported by ISS-0527 following the same convention ISS-0526 established;
+  see `docs/migration/stage-7-simulation-uat-parity.md`'s REQ-210 note and ISS-0526's
+  design doc §4 for the original scoping history). Ported verbatim from R-Co
   (`https://github.com/tvolodi/R-Co`) at the commit named in each file's own header
-  comment.
+  comment. Two platform scenarios (`sandbox-cross-tenant-probe`,
+  `attachment-cross-tenant-probe`) exercise tenant-isolation invariants directly —
+  treat any observed failure there as security-severity, not a routine scenario
+  failure.
 
 ## What you do
 

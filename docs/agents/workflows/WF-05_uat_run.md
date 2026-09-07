@@ -48,8 +48,9 @@ to validate against. In practice this does not become live until S7
 1. Confirm the target instance responds (health check, or a simple GET against a
    known route).
 2. Confirm the scenario corpus for this stage exists under
-   `test/fixtures/uat/scenarios/<company>/*.yaml` (see `.claude/agents/uat-runner.md`
-   and ISS-0526's design doc for the full shape).
+   `test/fixtures/uat/scenarios/<company>/*.yaml` and
+   `test/fixtures/uat/scenarios/platform/*.yaml` (see `.claude/agents/uat-runner.md`
+   and ISS-0526/ISS-0527's design docs for the full shape).
 3. If either check fails: do not dispatch UAT-RUNNER. Log BLOCKED, name what's missing.
 ```
 

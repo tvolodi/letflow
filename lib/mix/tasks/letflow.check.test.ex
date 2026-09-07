@@ -355,6 +355,19 @@ defmodule Mix.Tasks.Letflow.Check.Test do
 
   @wasm_hang_test_list_regex ~r/^(test\/\S+\.exs):(\d+)$/
 
+  # ISS-0524 (design doc §3.3): the header-anchored window's line bound, chosen with
+  # margin above the 232-line header-to-terminator span empirically measured live
+  # against this repository while designing the fix (see the design doc §3.2/§3.3 for
+  # the full measurement and the caveat that this bound could in principle be
+  # invalidated by future growth in compile-warning noise -- if the "bound reached,
+  # terminator not confirmed" caveat below starts showing up routinely, that is the
+  # signal to raise this number, not a silent truncation to quietly work around).
+  @wasm_hang_discovery_window_lines 300
+
+  # ISS-0524: the fallback tail length used only when the discovery output contains no
+  # "Tests that would be executed:" header at all (see find_discovery_window/2).
+  @wasm_hang_discovery_fallback_tail_lines 40
+
   # ISS-0418: run every currently-tagged :wasm_hang test in its own dedicated,
   # freshly-booted `mix test <file>:<line>` subprocess -- see moduledoc's ISS-0418
   # section and design doc §4.3. Replaces the prior single-shared-subprocess shape
@@ -426,25 +439,100 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   # non-empty test-list block) is the only signal used to distinguish "discovery
   # broken" from "discovery succeeded," which is the actual reliable signal
   # available from this specific Mix/dry-run combination.
+  # ISS-0524 (design doc §3.1): a single bounded retry when the first attempt's parsed
+  # block comes back empty, to rule out a one-shot compile/manifest race (the same
+  # class of run-to-run variance the DEVIATION comment above extract_test_list_block/1
+  # already documents) without weakening the "never silently proceed with zero"
+  # policy -- a persistently-empty block after the retry still hard-fails via
+  # run_discovery_dry_run_or_raise/1 below. Exactly one retry, never a loop.
   @spec discover_wasm_hang_tests() :: [wasm_hang_location()]
   defp discover_wasm_hang_tests do
-    {output, _exit_code} = stream_and_capture("mix", ["test", "--only", "wasm_hang", "--dry-run"])
+    first_output = run_discovery_dry_run()
 
-    case extract_test_list_block(output) do
+    case extract_test_list_block(first_output) do
       [] ->
-        Mix.raise(
-          "mix letflow.check.test: FAILED -- `mix test --only wasm_hang --dry-run` exited 0 " <>
-            "but its \"Tests that would be executed:\" block was empty or absent. This task " <>
-            "cannot tell whether that means zero :wasm_hang tests currently exist or the " <>
-            "discovery parse itself is broken, so it is treating this as a hard failure " <>
-            "rather than silently passing."
+        Mix.shell().info(
+          "mix letflow.check.test: NOTE -- first `mix test --only wasm_hang --dry-run` " <>
+            "attempt found an empty \"Tests that would be executed:\" block; retrying once " <>
+            "before treating this as a hard failure."
         )
+
+        retry_output = run_discovery_dry_run()
+
+        case extract_test_list_block(retry_output) do
+          [] ->
+            raise_discovery_hard_failure(retry_output)
+
+          lines ->
+            Mix.shell().info(
+              "mix letflow.check.test: NOTE -- first `mix test --only wasm_hang --dry-run` " <>
+                "attempt was empty, but the retry attempt succeeded."
+            )
+
+            lines |> Enum.map(&parse_wasm_hang_location!/1) |> Enum.sort()
+        end
 
       lines ->
         lines
         |> Enum.map(&parse_wasm_hang_location!/1)
         |> Enum.sort()
     end
+  end
+
+  @spec run_discovery_dry_run() :: String.t()
+  defp run_discovery_dry_run do
+    {output, _exit_code} = stream_and_capture("mix", ["test", "--only", "wasm_hang", "--dry-run"])
+    output
+  end
+
+  # ISS-0524 (design doc §3.2): both the first attempt and the retry came back empty --
+  # this is the only hard-failure path for discovery. Builds the Mix.raise message
+  # using the RETRY attempt's raw output only (the first attempt's raw output is
+  # deliberately not embedded here -- it was already surfaced live via the
+  # Mix.shell().info/1 line above, see the design doc's rationale for not duplicating
+  # it), searching for the discovery header via find_discovery_window/2 so the
+  # message's claims about what it captured are always true rather than assumed.
+  @spec raise_discovery_hard_failure(String.t()) :: no_return()
+  defp raise_discovery_hard_failure(retry_output) do
+    framing =
+      "mix letflow.check.test: FAILED -- `mix test --only wasm_hang --dry-run` exited 0 " <>
+        "but its \"Tests that would be executed:\" block was empty or absent on BOTH the " <>
+        "first attempt and a retry attempt. This task cannot tell whether that means zero " <>
+        ":wasm_hang tests currently exist or the discovery parse itself is broken, so it is " <>
+        "treating this as a hard failure rather than silently passing."
+
+    detail =
+      cond do
+        String.trim(retry_output) == "" ->
+          "The retry attempt's raw output was completely empty (zero bytes/lines captured) " <>
+            "-- the dry-run subprocess produced no output whatsoever."
+
+        true ->
+          case find_discovery_window(retry_output, @wasm_hang_discovery_window_lines) do
+            :header_not_found ->
+              "The retry attempt's raw output contains no \"Tests that would be executed:\" " <>
+                "header at all; this is a more severe signal than an empty block, since the " <>
+                "dry-run subprocess's own discovery output format itself may be broken " <>
+                "(crashed early, produced no output, or its output shape has changed), not " <>
+                "merely resolving to zero tests.\n\n" <>
+                "Generic tail (no header to anchor a targeted excerpt to), last " <>
+                "#{@wasm_hang_discovery_fallback_tail_lines} lines of the retry attempt's " <>
+                "raw output:\n" <>
+                last_output_lines(retry_output, @wasm_hang_discovery_fallback_tail_lines)
+
+            {:header_found, window, true} ->
+              "Header found; showing the retry attempt's captured window from the header " <>
+                "through the terminator line:\n" <> window
+
+            {:header_found, window, false} ->
+              "Header found; showing the retry attempt's captured window from the header, " <>
+                "but the #{@wasm_hang_discovery_window_lines}-line capture bound was reached " <>
+                "before a terminator line was found -- this excerpt may not include the full " <>
+                "block, so it should not be read as complete:\n" <> window
+          end
+      end
+
+    Mix.raise(framing <> "\n\n" <> detail)
   end
 
   # Locates the "Tests that would be executed:" line in --dry-run's captured
@@ -488,6 +576,71 @@ defmodule Mix.Tasks.Letflow.Check.Test do
             not String.starts_with?(line, "Finished in")
         end)
         |> Enum.filter(&Regex.match?(@wasm_hang_test_list_regex, String.trim(&1)))
+    end
+  end
+
+  # Shared with extract_test_list_block/1's own bounding logic above -- a line is a
+  # "terminator" once discovery's test-list block has ended, either form always
+  # printed by --dry-run once the list ends.
+  @spec wasm_hang_discovery_terminator_line?(String.t()) :: boolean()
+  defp wasm_hang_discovery_terminator_line?(line) do
+    String.starts_with?(line, "All tests have been excluded.") or
+      String.starts_with?(line, "Finished in")
+  end
+
+  # ISS-0524 (design doc §3.3): line-oriented boundary-finding only -- find the
+  # discovery header, then find either a terminator line or the bound, whichever
+  # comes first, and slice between. Does NOT interpret/filter individual entry lines
+  # the way extract_test_list_block/1 does; this helper's job is to show the raw
+  # window for a human to read in a Mix.raise message, not to extract structured
+  # entries for the program to consume. Mirrors extract_test_list_block/1's own
+  # header/terminator recognition exactly, so this helper's notion of "the header"
+  # and "the terminator" never diverges from the parsing logic's.
+  @spec find_discovery_window(String.t(), pos_integer()) ::
+          {:header_found, window :: String.t(), terminator_reached? :: boolean()}
+          | :header_not_found
+  defp find_discovery_window(output, bound) do
+    lines = String.split(output, "\n")
+
+    case Enum.drop_while(lines, &(&1 != "Tests that would be executed:")) do
+      [] ->
+        :header_not_found
+
+      [header | rest] ->
+        {collected, terminator_reached?} = collect_discovery_window(rest, bound)
+        {:header_found, Enum.join([header | collected], "\n"), terminator_reached?}
+    end
+  end
+
+  @spec collect_discovery_window([String.t()], non_neg_integer()) :: {[String.t()], boolean()}
+  defp collect_discovery_window(_lines, 0), do: {[], false}
+
+  defp collect_discovery_window([], _remaining), do: {[], false}
+
+  defp collect_discovery_window([line | rest], remaining) do
+    if wasm_hang_discovery_terminator_line?(line) do
+      {[line], true}
+    else
+      {tail, terminator_reached?} = collect_discovery_window(rest, remaining - 1)
+      {[line | tail], terminator_reached?}
+    end
+  end
+
+  # ISS-0524 (design doc §3.3): retained fallback for the :header_not_found branch --
+  # a generic tail is the only available context when there is no header to anchor a
+  # targeted window to. Prefixes an explicit truncation marker only when truncation
+  # actually occurred.
+  @spec last_output_lines(String.t(), pos_integer()) :: String.t()
+  defp last_output_lines(output, n) do
+    lines = String.split(output, "\n")
+    total = length(lines)
+
+    tail = Enum.take(lines, -n)
+
+    if total > n do
+      Enum.join(["...(truncated, showing last #{n} of #{total} lines)..." | tail], "\n")
+    else
+      Enum.join(tail, "\n")
     end
   end
 

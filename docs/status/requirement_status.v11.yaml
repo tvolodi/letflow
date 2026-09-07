@@ -167,3 +167,31 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T14:11:58Z"
+    note: >
+      ISS-0524 resolved via WF03-ISS0524-20260907 (queue task 524, GH#1055).
+      Originally-claimed regression (wasm_hang discovery finding zero tagged
+      tests after ISS-0418) was NOT reproducible -- ISSUE-FIXER confirmed all
+      5 real @tag :wasm_hang sites intact and discovery working correctly;
+      judged a one-off transient/environmental flake. Treated as a scoped
+      diagnosability improvement instead of a behavior fix: discover_wasm_hang_tests/0
+      now retries the dry-run discovery subprocess exactly once on an empty
+      first result before hard-failing; the hard-fail message uses a new
+      header-anchored diagnostic window (find_discovery_window/2, mirroring
+      extract_test_list_block/1's own header/terminator matching) instead of
+      a flat line tail -- CODE-DESIGN-VALIDATOR FAILed an early flat-40-line-tail
+      design for silently dropping the real header (live-measured 232-line
+      header-to-terminator span), reworked to an explicit 300-line bound with
+      an explicit not-complete flag on overflow and a distinct more-severe
+      signal when no header is found at all. Zero-tolerance-after-retry
+      policy preserved. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework) ->
+      CODE-DESIGN-VALIDATOR (1 re-check, PASS) -> ELIXIR-DEV -> REVIEWER
+      (PASS; SECURITY-REVIEWER out of scope, no tenant-data path) ->
+      TEST-RUNNER (main suite 3422/3424 passed, 2 pre-existing unrelated
+      rustc-absent failures; wasm_hang stage logic independently confirmed
+      correct via direct replication since the gated local task couldn't
+      reach it past the unrelated toolchain gap). Implementation commit
+      b775b2d4. ORCH will merge and release queue task 524 status:done.

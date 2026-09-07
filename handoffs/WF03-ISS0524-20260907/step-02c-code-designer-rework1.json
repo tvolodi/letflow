@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0524-20260907-step-02c",
+  "run_id": "WF03-ISS0524-20260907",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0524-20260907/step-02c-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T14:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0524"],
+    "related_handoff_ids": ["WF03-ISS0524-20260907-step-02b"],
+    "artifacts_in": ["lib/mix/tasks/letflow.check.test.ex"],
+    "artifacts_out": ["lib/letflow/design/iss0524-wasm-hang-discovery-diagnosability.md"],
+    "branch_name": "feature/WF03-ISS0524-20260907",
+    "base_commit": "c5f2ac6b"
+  },
+  "task": {
+    "description": "Rework 1: fix the N=40 flat-tail rationale defect that could silently drop the discovery header."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Ran mix test --only wasm_hang --dry-run live twice, confirmed CODE-DESIGN-VALIDATOR's numbers (header at line 32, terminator at line 264, ~232-line span, ~285-287 total lines, consistently reproducible, dominated by interleaved ExUnit compiler-deprecation warnings for unrelated files, matching the module's own DEVIATION comment). Replaced the flat 40-line tail with an explicit header search (find_discovery_window/2) mirroring extract_test_list_block/1's own literal-line header match so the message's notion of the header never diverges from the real parsing logic. Header found: capture a window from the header line up to a new bound @wasm_hang_discovery_window_lines = 300 (margin above the observed 232-line span), stopping early at the terminator if reached; if the bound is exhausted first, the message says so explicitly rather than implying completeness. Header not found at all: stated explicitly as a more severe distinct signal ('dry-run itself may be broken'), falls back to the retained last_output_lines/2 40-line tail helper since there's no header to anchor to. Retry-output-empty case unchanged. Updated SS3.2/SS3.3, SS4's failure-shape table, SS5's test list (added a2/a3/a4 for noisy-but-bounded, bound-exceeded, and header-absent cases, two new fixtures), SS6's open questions grounded honestly (300-line bound can still be insufficient under future growth, but now flags insufficiency via terminator_reached? = false instead of silently failing). Did not touch retry decision/logic, scope exclusions, or the ISS-0524.yaml append. Self-check: grep for defmodule|def |defp |schema \"|Enum.|fn ->|case do|cond do|with do|pipe operator returned zero matches."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

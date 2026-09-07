@@ -314,6 +314,345 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     :ok
   end
 
+  # ISS-0524: fixtures for discover_wasm_hang_tests/0's bounded single retry and its
+  # header-anchored hard-failure message (lib/letflow/design/iss0524-wasm-hang-hang-discovery-diagnosability.md
+  # §5). Each `--dry-run` invocation is a fresh subprocess, so "was this the first or a
+  # later call" state must live outside the fake script's own process -- a marker file
+  # under `fake_bin_dir` (which persists for the whole test, cleaned up in on_exit/1).
+  #
+  # Windows fakes below use a companion `type`-file (same technique
+  # install_fake_executable/3 uses generically) instead of inline `echo`, since some of
+  # this fixture's content (noise lines) is large/arbitrary and batch's `echo` inside an
+  # `if (...)` block breaks on stray parentheses -- a `goto`-based dispatch plus `type`
+  # sidesteps that entirely rather than fighting batch's escaping rules per line.
+  defp normalize_for_shell(path) do
+    path |> Path.expand() |> String.replace("\\", "/")
+  end
+
+  # Fixture 1: first --dry-run call returns an empty/absent-header block, second (and
+  # any later) call returns the same successful block install_wasm_hang_aware_fake_mix/1
+  # already returns. Used for test (b): retry actually retries once and succeeds.
+  defp install_wasm_hang_retry_succeeds_fake_mix(fake_bin_dir) do
+    marker_path = Path.join(fake_bin_dir, "retry_succeeds_marker") |> normalize_for_shell()
+
+    empty_block = """
+    All tests have been excluded.
+    Finished in 0.0 seconds
+    Result: 0 tests, 1 excluded
+    """
+
+    success_block = """
+    Tests that would be executed:
+    test/fake_wasm_hang_test.exs:1
+    All tests have been excluded.
+    Finished in 0.0 seconds
+    Result: 0 tests, 1 excluded
+    """
+
+    case :os.type() do
+      {:win32, _} ->
+        marker_win = String.replace(marker_path, "/", "\\")
+        empty_file = Path.join(fake_bin_dir, "retry_succeeds_empty.txt")
+        success_file = Path.join(fake_bin_dir, "retry_succeeds_success.txt")
+        File.write!(empty_file, empty_block)
+        File.write!(success_file, success_block)
+        empty_file_win = String.replace(empty_file, "/", "\\")
+        success_file_win = String.replace(success_file, "/", "\\")
+
+        fake_path = Path.join(fake_bin_dir, "mix.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        setlocal
+        set ARGS=%*
+        echo %ARGS% | findstr /C:"--dry-run" >nul
+        if %ERRORLEVEL%==0 goto dryrun
+        echo %ARGS% | findstr /C:"fake_wasm_hang_test" >nul
+        if %ERRORLEVEL%==0 (
+          echo Finished in 0.0 seconds
+          echo Result: 1 passed
+          exit /b 0
+        )
+        echo Finished in 0.0 seconds
+        echo Result: 0 passed
+        exit /b 0
+
+        :dryrun
+        if exist "#{marker_win}" (
+          type "#{success_file_win}"
+          exit /b 1
+        )
+        echo. > "#{marker_win}"
+        type "#{empty_file_win}"
+        exit /b 1
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "mix")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        case "$*" in
+          *"--dry-run"*)
+            if [ -f "#{marker_path}" ]; then
+        cat <<'FAKE_RETRY_SUCCESS_OUTPUT'
+        #{success_block}
+        FAKE_RETRY_SUCCESS_OUTPUT
+              exit 1
+            else
+              touch "#{marker_path}"
+        cat <<'FAKE_RETRY_EMPTY_OUTPUT'
+        #{empty_block}
+        FAKE_RETRY_EMPTY_OUTPUT
+              exit 1
+            fi
+            ;;
+          *"fake_wasm_hang_test"*)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 1 passed"
+            exit 0
+            ;;
+          *)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 0 passed"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
+  end
+
+  # Fixture 2: every --dry-run call returns the header immediately followed by a
+  # terminator (an empty block, not an absent header), but each call's output embeds a
+  # distinguishing "attempt=N" marker so a test can prove the raised message embeds the
+  # RETRY attempt's output specifically. Also appends one line per --dry-run call to a
+  # counter file so a test can assert --dry-run was invoked exactly twice.
+  defp install_wasm_hang_retry_still_fails_fake_mix(fake_bin_dir) do
+    marker_path = Path.join(fake_bin_dir, "still_fails_marker") |> normalize_for_shell()
+    count_path = Path.join(fake_bin_dir, "still_fails_count") |> normalize_for_shell()
+
+    block = fn attempt ->
+      """
+      Tests that would be executed:
+      attempt=#{attempt}
+      All tests have been excluded.
+      Finished in 0.0 seconds
+      Result: 0 tests, 1 excluded
+      """
+    end
+
+    case :os.type() do
+      {:win32, _} ->
+        marker_win = String.replace(marker_path, "/", "\\")
+        count_win = String.replace(count_path, "/", "\\")
+        attempt1_file = Path.join(fake_bin_dir, "still_fails_attempt1.txt")
+        attempt2_file = Path.join(fake_bin_dir, "still_fails_attempt2.txt")
+        File.write!(attempt1_file, block.(1))
+        File.write!(attempt2_file, block.(2))
+        attempt1_win = String.replace(attempt1_file, "/", "\\")
+        attempt2_win = String.replace(attempt2_file, "/", "\\")
+
+        fake_path = Path.join(fake_bin_dir, "mix.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        setlocal
+        set ARGS=%*
+        echo %ARGS% | findstr /C:"--dry-run" >nul
+        if %ERRORLEVEL%==0 goto dryrun
+        echo Finished in 0.0 seconds
+        echo Result: 0 passed
+        exit /b 0
+
+        :dryrun
+        echo x >> "#{count_win}"
+        if exist "#{marker_win}" (
+          type "#{attempt2_win}"
+          exit /b 1
+        )
+        echo. > "#{marker_win}"
+        type "#{attempt1_win}"
+        exit /b 1
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "mix")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        case "$*" in
+          *"--dry-run"*)
+            echo x >> "#{count_path}"
+            if [ -f "#{marker_path}" ]; then
+        cat <<'FAKE_STILL_FAILS_ATTEMPT2'
+        #{block.(2)}
+        FAKE_STILL_FAILS_ATTEMPT2
+              exit 1
+            else
+              touch "#{marker_path}"
+        cat <<'FAKE_STILL_FAILS_ATTEMPT1'
+        #{block.(1)}
+        FAKE_STILL_FAILS_ATTEMPT1
+              exit 1
+            fi
+            ;;
+          *)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 0 passed"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
+  end
+
+  # Fixture 3: every --dry-run call returns the header, then `filler_line_count` lines
+  # of numbered filler simulating unrelated compiler-warning noise (the real shape
+  # measured live against this repository, design doc §3.2), then a terminator only
+  # when `include_terminator?` is true. No retry-count state needed -- both calls
+  # return the same (possibly oversized) response, since this fixture exercises the
+  # window-vs-bound behavior, not the retry-count logic already covered by fixtures 1/2.
+  defp install_wasm_hang_retry_noisy_window_fake_mix(
+         fake_bin_dir,
+         filler_line_count,
+         include_terminator?
+       ) do
+    filler =
+      Enum.map_join(1..filler_line_count, "\n", fn n ->
+        "noise line #{n} simulating unrelated compiler warning output"
+      end)
+
+    body =
+      if include_terminator? do
+        """
+        Tests that would be executed:
+        #{filler}
+        All tests have been excluded.
+        Finished in 0.0 seconds
+        Result: 0 tests, 1 excluded
+        """
+      else
+        """
+        Tests that would be executed:
+        #{filler}
+        """
+      end
+
+    case :os.type() do
+      {:win32, _} ->
+        content_file = Path.join(fake_bin_dir, "noisy_window_#{filler_line_count}.txt")
+        File.write!(content_file, body)
+        content_win = String.replace(content_file, "/", "\\")
+
+        fake_path = Path.join(fake_bin_dir, "mix.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        setlocal
+        set ARGS=%*
+        echo %ARGS% | findstr /C:"--dry-run" >nul
+        if %ERRORLEVEL%==0 goto dryrun
+        echo Finished in 0.0 seconds
+        echo Result: 0 passed
+        exit /b 0
+
+        :dryrun
+        type "#{content_win}"
+        exit /b 1
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "mix")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        case "$*" in
+          *"--dry-run"*)
+        cat <<'FAKE_NOISY_WINDOW_OUTPUT'
+        #{body}
+        FAKE_NOISY_WINDOW_OUTPUT
+            exit 1
+            ;;
+          *)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 0 passed"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
+  end
+
+  # Fixture 4: every --dry-run call returns non-empty output containing no "Tests that
+  # would be executed:" line at all, modeling a dry-run subprocess that crashed/reshaped
+  # rather than one that legitimately resolved to zero tests.
+  defp install_wasm_hang_no_header_fake_mix(fake_bin_dir) do
+    body = """
+    ** (Mix) could not compile dependency :fake_dep (mix.exs)
+    unexpected crash before any test discovery output was produced
+    """
+
+    case :os.type() do
+      {:win32, _} ->
+        content_file = Path.join(fake_bin_dir, "no_header.txt")
+        File.write!(content_file, body)
+        content_win = String.replace(content_file, "/", "\\")
+
+        fake_path = Path.join(fake_bin_dir, "mix.bat")
+
+        File.write!(fake_path, """
+        @echo off
+        setlocal
+        set ARGS=%*
+        echo %ARGS% | findstr /C:"--dry-run" >nul
+        if %ERRORLEVEL%==0 goto dryrun
+        echo Finished in 0.0 seconds
+        echo Result: 0 passed
+        exit /b 0
+
+        :dryrun
+        type "#{content_win}"
+        exit /b 1
+        """)
+
+      _ ->
+        fake_path = Path.join(fake_bin_dir, "mix")
+
+        File.write!(fake_path, """
+        #!/bin/sh
+        case "$*" in
+          *"--dry-run"*)
+        cat <<'FAKE_NO_HEADER_OUTPUT'
+        #{body}
+        FAKE_NO_HEADER_OUTPUT
+            exit 1
+            ;;
+          *)
+            echo "Finished in 0.0 seconds"
+            echo "Result: 0 passed"
+            exit 0
+            ;;
+        esac
+        """)
+
+        File.chmod!(fake_path, 0o755)
+    end
+
+    :ok
+  end
+
   # Writes `name` under fixture_root/log_subdir with `content`, creating the directory
   # if needed. Returns the absolute, "/"-normalized path to log_subdir (the shape
   # find_partition_log_dir/1's regex expects, and what a real bash/MSYS subprocess on
@@ -345,6 +684,20 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
     ExUnit.CaptureIO.capture_io(fn ->
       assert Mix.Tasks.Letflow.Check.Test.run([]) == :ok
     end)
+  end
+
+  # ISS-0524: installs a clean-passing main suite (fake `bash`) so a test can reach
+  # run_wasm_hang_tests/0 -- and therefore discover_wasm_hang_tests/0 -- without also
+  # needing to exercise the main-suite gate itself. Mirrors the setup already used by
+  # the "passes (no raise) when the wrapper exits 0..." test above.
+  defp install_passing_main_suite(fixture_root, fake_bin_dir) do
+    log_dir =
+      write_partition_log(fixture_root, "logs", "partition-1.log", "Result: 5/5 passed\n")
+
+    write_partition_log(fixture_root, "logs", "partition-2.log", "Result: 3/3 passed\n")
+
+    install_fake_executable(fake_bin_dir, "bash", fake_runner_stdout(log_dir), 0)
+    :ok
   end
 
   describe "mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1)" do
@@ -473,6 +826,112 @@ defmodule Mix.Tasks.Letflow.Check.TestTest do
         end
 
       assert exception.message =~ "zero partition-*.log files"
+    end
+  end
+
+  describe "mix letflow.check.test's ISS-0524 wasm_hang discovery bounded retry + diagnosability" do
+    test "(b) retry actually retries once and succeeds -- returns :ok and logs that the first attempt was empty and the retry succeeded",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_retry_succeeds_fake_mix(fake_bin_dir)
+
+      io = run_and_capture_ok(fake_bin_dir)
+
+      assert io =~ "first" and io =~ "retry"
+      assert io =~ "isolated wasm_hang tests passed"
+    end
+
+    test "(a)/(b2) retry retries exactly once, then hard-fails with the retry attempt's real captured output (header present, empty block)",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_retry_still_fails_fake_mix(fake_bin_dir)
+
+      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, fn ->
+          ExUnit.CaptureIO.capture_io(fn -> Mix.Tasks.Letflow.Check.Test.run([]) end)
+        end
+
+      # Real captured output of the RETRY attempt is embedded, not the first attempt's.
+      assert exception.message =~ "attempt=2"
+      refute exception.message =~ "attempt=1"
+
+      # Existing framing prose preserved.
+      assert exception.message =~ "cannot tell"
+
+      # The literal header string itself must be present (the defect this revision
+      # fixes: a flat tail could embed post-header content while cutting the header).
+      assert exception.message =~ "Tests that would be executed:"
+
+      # --dry-run was invoked exactly twice: once for the first attempt, once for the
+      # retry -- not zero, not looping.
+      count_path = Path.join(fake_bin_dir, "still_fails_count")
+      assert File.exists?(count_path)
+      invocation_count = count_path |> File.read!() |> String.split("\n", trim: true) |> length()
+      assert invocation_count == 2
+    end
+
+    test "(a2) header-anchored window covers real noisy output within the bound, including the header and terminator, with no bound-exceeded caveat",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_retry_noisy_window_fake_mix(fake_bin_dir, 250, true)
+
+      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, fn ->
+          ExUnit.CaptureIO.capture_io(fn -> Mix.Tasks.Letflow.Check.Test.run([]) end)
+        end
+
+      assert exception.message =~ "Tests that would be executed:"
+      assert exception.message =~ "All tests have been excluded."
+      refute exception.message =~ "bound was reached"
+    end
+
+    test "(a3) bound reached before a terminator is stated explicitly, not silently truncated",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_retry_noisy_window_fake_mix(fake_bin_dir, 400, false)
+
+      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, fn ->
+          ExUnit.CaptureIO.capture_io(fn -> Mix.Tasks.Letflow.Check.Test.run([]) end)
+        end
+
+      assert exception.message =~ "Tests that would be executed:"
+      assert exception.message =~ "bound was reached"
+      refute exception.message =~ "All tests have been excluded."
+    end
+
+    test "(a4) header entirely absent is reported as a distinct, more severe signal, with a last-40-lines fallback tail",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_no_header_fake_mix(fake_bin_dir)
+
+      activate_fake_bin_dir(fake_bin_dir, ["bash", "mix"])
+
+      exception =
+        assert_raise Mix.Error, fn ->
+          ExUnit.CaptureIO.capture_io(fn -> Mix.Tasks.Letflow.Check.Test.run([]) end)
+        end
+
+      assert exception.message =~ "no \"Tests that would be executed:\" header"
+      assert exception.message =~ "more severe"
+      assert exception.message =~ "unexpected crash before any test discovery output"
+    end
+
+    test "(c) no-retry-needed path is unaffected -- existing passing-path fixture/test still passes",
+         %{fixture_root: fixture_root, fake_bin_dir: fake_bin_dir} do
+      install_passing_main_suite(fixture_root, fake_bin_dir)
+      install_wasm_hang_aware_fake_mix(fake_bin_dir)
+
+      io = run_and_capture_ok(fake_bin_dir)
+
+      assert io =~ "isolated wasm_hang tests passed"
+      refute io =~ "NOTE"
     end
   end
 

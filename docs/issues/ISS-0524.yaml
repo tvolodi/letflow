@@ -32,4 +32,65 @@ source: >
   after the wasm_hang class was root-fixed by ISS-0418 (commit bd558bdd).
 queue_task_id: 524
 github_issue: 1055
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0524-20260907. The originally-claimed
+  regression was NOT reproducible (see notes below) -- treated as a
+  scoped diagnosability improvement rather than a behavior-changing fix.
+  Implementation (commit b775b2d4): discover_wasm_hang_tests/0 now
+  retries the dry-run discovery subprocess exactly once when the first
+  attempt's test-list block is empty, before hard-failing; the
+  Mix.raise message on a persistent empty result uses a new
+  find_discovery_window/2 helper that anchors to the real
+  "Tests that would be executed:" header (mirroring
+  extract_test_list_block/1's own matching) rather than a flat line
+  tail -- an early design iteration using a flat 40-line tail was
+  FAILed by CODE-DESIGN-VALIDATOR for silently dropping the header
+  (real header-to-terminator span measured live at 232 lines), reworked
+  to the header-anchored window with an explicit 300-line bound and an
+  explicit "bound reached, not complete" flag when exceeded, and an
+  explicit "header not found at all" distinct signal (more severe) with
+  a 40-line tail fallback only in that case. Zero-tolerance-after-retry
+  policy preserved throughout. Pipeline: ISSUE-FIXER (non-reproduction
+  finding) -> CODE-DESIGNER (1 rework) -> CODE-DESIGN-VALIDATOR (1
+  re-check, PASS) -> ELIXIR-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out
+  of scope, no tenant-data path) -> TEST-RUNNER (main suite 3422/3424
+  passed, 2 pre-existing unrelated rustc-absent failures blocking the
+  gated task's own local run of the wasm_hang stage before it could
+  reach it -- TEST-RUNNER independently replicated the stage's internal
+  commands directly and confirmed the fix behaves correctly; CI has
+  rustc and will provide end-to-end confirmation on merge).
+notes:
+  - date: "2026-09-07"
+    author: ISSUE-FIXER
+    run_id: WF03-ISS0524-20260907
+    note: >
+      Root-cause diagnosis (handoffs/WF03-ISS0524-20260907/step-01-issue-fixer-diagnosis.json):
+      the claimed regression is NOT REPRODUCIBLE. All 5 real @tag :wasm_hang sites
+      confirmed intact (plugin_handler_test.exs:153,390,493; call_timeout_test.exs:77;
+      host_api_write_test.exs:459) -- ISS-0418 did not remove or retag anything,
+      contrary to this issue's own stated premise. Live `mix test --only wasm_hang
+      --dry-run` correctly discovers all 5. Mix.Tasks.Letflow.Check.TestTest passes
+      consistently across 5 repeated runs with distinct seeds; its
+      install_wasm_hang_aware_fake_mix/1 fixture uses a fake mix binary independent
+      of real repo tag counts, so it was never actually coupled to the real
+      wasm_hang tag count. discover_wasm_hang_tests/0's parsing logic shows no bug
+      against current real output shape. Judged most likely a one-off
+      transient/environmental flake at TEST-RUNNER's original observation time, not
+      a code defect; no surviving raw output from the original observation exists to
+      confirm this definitively.
+  - date: "2026-09-07"
+    author: CODE-DESIGNER
+    run_id: WF03-ISS0524-20260907
+    note: >
+      Per ISSUE-FIXER's recommendation, scoped a diagnosability-only fix (design doc
+      lib/letflow/design/iss0524-wasm-hang-discovery-diagnosability.md): (1) the
+      discover_wasm_hang_tests/0 hard-fail Mix.raise message will include the raw
+      captured discovery output (last 40 lines) so a future recurrence is
+      diagnosable without a live repro; (2) one bounded single retry of the
+      discovery dry-run subprocess is added when the first attempt's test-list
+      block is empty, to rule out one-shot compile-race flakiness, WITHOUT changing
+      the zero-tolerance "never silently proceed with zero" policy -- a persistently
+      empty block after the retry still hard-fails. No change to
+      extract_test_list_block/1's parsing logic, no change to any real @tag
+      :wasm_hang test, no change to try_acquire-style admission logic (unrelated).

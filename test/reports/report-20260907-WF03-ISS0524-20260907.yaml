@@ -1,0 +1,133 @@
+run_id: WF03-ISS0524-20260907
+workflow_id: WF-03
+step: "04"
+agent: TEST-RUNNER
+branch: feature/WF03-ISS0524-20260907
+head_commit: 57c99f7b
+timestamp_utc: "2026-09-07T14:09:44Z"
+note: >
+  Final verification gate before ORCH merges ISS-0524's fix (bounded retry +
+  header-anchored diagnostic window for mix letflow.check.test's wasm_hang
+  discovery stage, implementation commit b775b2d4) to main. Ran the
+  project's standard full-suite command `mix letflow.check.test` as
+  instructed. `docker compose up -d` reported permission-denied on this
+  sandbox's docker socket, but letflow-1-postgres-1 and letflow-1-keycloak-1
+  were already running, so the suite proceeded against the existing stack.
+
+commands_run:
+  - cmd: "docker compose up -d"
+    result: "N/A (permission denied on docker.sock in this sandbox)"
+    note: >
+      letflow-1-postgres-1 and letflow-1-keycloak-1 containers were already
+      running from a prior session, confirmed via `docker ps`. Proceeded
+      without a fresh `up -d`.
+  - cmd: "mix deps.get"
+    result: OK
+    note: all dependencies fetched successfully, no network issue in this run.
+  - cmd: "mix letflow.check.test"
+    result: FAIL
+    exit_code: 1
+    note: >
+      run_main_suite (scripts/test_parallel.sh, N=8 partitions, nproc-derived)
+      failed and Mix.raise short-circuited the task before run_wasm_hang_tests/0
+      or run_lua_wallclock_race_tests/0 ever ran. Combined main-suite result:
+      3418 tests, 6 properties, 2 failures (3422/3424 passed). Partition 6
+      (436 tests) had the 2 failures, exit 2; all other 7 partitions (494,
+      348, 411, 549, 414, 404, 362 tests respectively) reported 0 failures,
+      exit 0.
+
+failures:
+  - test_module: Mix.Tasks.Letflow.CheckToolchainTest
+    file: test/mix/tasks/letflow_check_toolchain_test.exs
+    count: 2
+    tests:
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running"
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch"
+    error: |
+      ** (ErlangError) Erlang error: :enoent
+      stacktrace:
+        (elixir 1.20.3) lib/system.ex:1141: System.cmd("rustc", ["--version"], [stderr_to_stdout: true])
+        test/mix/tasks/letflow_check_toolchain_test.exs:69: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_raw/0
+        test/mix/tasks/letflow_check_toolchain_test.exs:76: Mix.Tasks.Letflow.CheckToolchainTest.running_rust_version/0
+    structural_attribution: >
+      NOT attributable to this branch. Identical failure signature to the
+      2 pre-existing failures reported in prior runs on this branch
+      (216/218 on the narrower test/mix/tasks/ slice): `rustc` is not
+      installed in this sandbox, so System.cmd("rustc", ...) raises :enoent
+      before any assertion runs. ISS-0524's diff (lib/mix/tasks/letflow.check.test.ex,
+      bounded retry + header-anchored window for wasm_hang discovery) has no
+      relationship to the rust-toolchain-pin check. Confirmed unchanged on
+      the FULL suite, not just the test/mix/tasks/ slice.
+
+wasm_hang_stage_verification:
+  status: "not exercised by mix letflow.check.test itself this run -- independently verified below"
+  reason: >
+    lib/mix/tasks/letflow.check.test.ex's run/1 calls run_main_suite() then
+    run_wasm_hang_tests() then run_lua_wallclock_race_tests() sequentially.
+    run_main_suite() raised (Mix.raise, which halts the task) on the
+    pre-existing rustc :enoent failures above, so run_wasm_hang_tests/0 --
+    the actual discovery+isolation stage ISS-0524 fixed -- never executed
+    as part of this `mix letflow.check.test` invocation. The task's own
+    terminal output ends at "mix letflow.check.test: FAILED -- scripts/test_parallel.sh
+    exited 1 (real test failure/error)" with no subsequent wasm_hang or
+    lua_wallclock_race output, confirming the short-circuit.
+  independent_verification: >
+    To still confirm ISS-0524's actual fix works end-to-end, manually ran
+    the two commands run_wasm_hang_tests/0 drives internally, outside the
+    gated task:
+      1. `mix test --only wasm_hang --dry-run` -- discovery succeeded on
+         the first attempt (no retry needed), found 5 locations under the
+         "Tests that would be executed:" header:
+           test/letflow/engine/wasm/plugin_handler_test.exs:155
+           test/letflow/engine/wasm/plugin_handler_test.exs:495
+           test/letflow/engine/wasm/plugin_handler_test.exs:392
+           test/letflow/engine/wasm/call_timeout_test.exs:79
+           test/letflow/engine/wasm/host_api_write_test.exs:461
+         Result: 0 tests, 3441 excluded (exit 1, expected/documented
+         deviation per the module's own DEVIATION comment -- Mix always
+         exits 1 on `--only` + `--dry-run` with 0 executed, independent of
+         whether discovery itself succeeded).
+      2. Ran each of the 5 discovered locations as its own fresh
+         `mix test <file>:<line>` subprocess (matching run_single_wasm_hang_test/1
+         exactly): all 5 exited 0, each reporting "1 passed" (plus that
+         file's other excluded tests), no "default values for the optional
+         arguments" substring in any output.
+      3. `mix test --only lua_wallclock_race` (the third stage,
+         run_lua_wallclock_race_tests/0): exited 0, "Result: 11 passed,
+         3435 excluded", no target-substring warning.
+    This confirms the wasm_hang discovery-and-isolation mechanism itself
+    (ISS-0524's subject) is healthy and would have passed had
+    run_main_suite not raised first -- but this is TEST-RUNNER manually
+    replicating the stage's logic outside the gated task, not the gated
+    task itself exercising it. RELEASE-VALIDATOR should be aware the real
+    `mix letflow.check.test` invocation, as shipped, cannot reach this
+    stage at all while the rustc-toolchain failures remain, and should
+    decide whether that masking is acceptable for this merge.
+
+conclusion:
+  status: FAIL
+  recommendation: FAIL (with structural note)
+  summary: >
+    `mix letflow.check.test`'s real exit code on this run was 1 (task
+    raised). Combined main-suite result: 3422/3424 tests+properties passed,
+    2 failures -- identical signature to the pre-existing, sandbox-only
+    rustc :enoent failures in Mix.Tasks.Letflow.CheckToolchainTest reported
+    on prior narrower runs of this branch; no regression, no change in
+    failure signature on the full suite. Because run_main_suite raises on
+    any nonzero scripts/test_parallel.sh exit, the task's own
+    run_wasm_hang_tests/0 (ISS-0524's actual subject) and
+    run_lua_wallclock_race_tests/0 never executed in this invocation --
+    the wasm_hang discovery+isolation fix was NOT exercised end-to-end by
+    the real gated task this run. TEST-RUNNER independently ran the same
+    three commands run_wasm_hang_tests/0 issues internally (dry-run
+    discovery, all 5 discovered per-test subprocesses, and the
+    lua_wallclock_race subprocess) and all passed cleanly with no
+    regressions and no target-substring warnings, confirming the fix logic
+    itself is sound. Per the no-speculation rule this is reported as FAIL
+    on the task's actual exit code, not as PASS-by-inference from the
+    independent verification -- RELEASE-VALIDATOR should re-run
+    independently and decide whether the environment's missing `rustc`
+    toolchain (which pre-dates and is unrelated to ISS-0524) is an
+    acceptable reason the gated task can't reach its own target stage in
+    this sandbox, or whether CheckToolchainTest needs conditional skipping
+    when `rustc` is absent.

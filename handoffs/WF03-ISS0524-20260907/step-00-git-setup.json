@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0524-20260907-step-00",
+  "run_id": "WF03-ISS0524-20260907",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0524-20260907/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T13:28:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0524"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0524.yaml",
+      "test/mix/tasks/letflow_check_test_test.exs",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0524-20260907",
+    "base_commit": "c5f2ac6b"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0524: mix letflow.check.test's wasm_hang discovery stage (discover_wasm_hang_tests/0 in lib/mix/tasks/letflow.check.test.ex, added by ISS-0418's fix, commit bd558bdd) runs `mix test --only wasm_hang --dry-run` to find wasm_hang-tagged tests before doing an isolated per-test subprocess run of each. Mix.Tasks.Letflow.Check.TestTest (test/mix/tasks/letflow_check_test_test.exs:386) is now failing because that discovery step finds zero :wasm_hang-tagged tests, and the check treats zero discovered tests as a hard failure -- unable to distinguish 'legitimately zero tests because ISS-0418's fix genuinely retagged/restructured them' from 'discovery is broken and silently finding nothing when it should find something'. IMPORTANT: verify the issue's own premise before assuming it -- the issue text claims ISS-0418 'apparently removed or retagged the tests this fixture depended on', but ISS-0418's actual design/implementation (see lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md and the ISS-0418 implementation) was understood at the time to KEEP the existing @tag :wasm_hang on test/letflow/engine/wasm/plugin_handler_test.exs's test body untouched, only restructuring how mix letflow.check.test's OWN wasm_hang stage discovers and isolates those tests (discovery via dry-run + per-test subprocess spawn, replacing a prior concurrency-cap-only approach) -- it was never intended to change or remove the tag itself. Grep the real current test/letflow/engine/wasm/plugin_handler_test.exs for `@tag :wasm_hang` and confirm whether it's still present, and separately run `mix test --only wasm_hang --dry-run` yourself live to see what it actually discovers today. Also check the fixture in test/mix/tasks/letflow_check_test_test.exs:386 itself -- does IT use a hardcoded/mocked fake mix binary (per ISS-0418's own implementation notes, a new install_wasm_hang_aware_fake_mix/1 helper was added to handle the two-phase discover-then-run invocation shape) whose fixture data itself might be stale or mismatched against the real discovery/run flow, independent of whether real wasm_hang tags still exist in the codebase? Determine: is this a real regression in discover_wasm_hang_tests/0's parsing logic, a stale test fixture in letflow_check_test_test.exs itself that doesn't reflect the current real output shape, a genuine reduction to zero real wasm_hang tests (and if so, why, and whether that's actually correct/expected), or something else. Recommend the correct fix: should the check tolerate a legitimately-empty discovery as a valid non-failing outcome, does discovery need a bug fix, or does letflow_check_test_test.exs's OWN fixture need updating to match reality? Do not implement the fix -- diagnosis only, per ISSUE-FIXER's role."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0524-20260907 created off main @ c5f2ac6b (post ISS-0437 merge)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

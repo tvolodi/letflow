@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF02-REQ230-20260907-step-01c",
+  "run_id": "WF02-REQ230-20260907",
+  "workflow_id": "WF-02",
+  "step": "01c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ230-20260907/step-01c-code-designer-rework.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T03:41:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-230"],
+    "issue_ids": ["ISS-0438"],
+    "related_handoff_ids": ["WF02-REQ230-20260907-step-01b"],
+    "artifacts_in": [],
+    "artifacts_out": ["lib/letflow/design/req230-entity-query-dsl-compiler.md"],
+    "branch_name": "feature/WF02-REQ230-20260907",
+    "base_commit": "0f5710f8"
+  },
+  "task": {
+    "description": "Rework: convert two disguised executable code snippets (an Enum.reduce anonymous-function fold, an Enum.filter field-selection expression) to pure prose, and do a fresh full re-scan for anything similar."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Fixed both required defects: line 312 (Enum.filter(& &1.queried) -> prose describing keeping only queried:true fields), line 489 (Enum.reduce fn c, acc -> dynamic(...) end -> prose describing a left fold ANDing each clause onto the accumulator from a true identity). Fresh re-scan additionally found and fixed two passages in sections 5.3/5.5 using bare arrow operator-to-expression mappings without the explicit conceptually/e.g. framing used elsewhere -- reworded both to lead with prose description, Elixir shown only as a parenthetical e.g. example, matching the validator's own already-accepted precedent style. Rigorous self-check: grepped for Enum./fn /def /defp /defmodule/case /cond /with /pipe/do-blocks/arrow-to-brace across the whole document -- no Enum.*, fn, defmodule, def, defp, cond, or pipe occurrences remain; all case/with hits are inert English prose, not Elixir syntax; the only remaining arrow hit is the pre-existing validator-accepted fragmentary case-arm illustration; all remaining single-expression Elixir fragments are now explicitly framed as conceptually/e.g. parenthetical illustrations of a prose-described shape, not standalone executable logic. @spec/@type fenced blocks unchanged."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

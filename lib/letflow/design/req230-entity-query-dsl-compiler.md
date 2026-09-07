@@ -309,8 +309,9 @@ Step order:
    definition is ever persisted, so this step performs no re-validation,
    only a plain `Map.get/2`-style read of `:fields`).
 4. Build the **typed-column** entries first (§3.4 fixed table), then the
-   **JSON-field** entries from `definition.fields |> Enum.filter(& &1.queried)`
-   — only `queried: true` fields are ever allowlisted (a field the
+   **JSON-field** entries: from `definition.fields`, keep only the subset
+   whose `queried` flag is `true`, and build one allowlist entry per kept
+   field — only `queried: true` fields are ever allowlisted (a field the
    entity-definition author did not mark `queried: true` is invisible to
    this query DSL entirely, matching `Definition.Validator`'s own
    `index_field_coverage_violations/1` precedent that a field must be
@@ -485,11 +486,13 @@ each step's failure short-circuiting the rest via `with`:
       `type`.
    d. `build_filter_dynamic/2` (§5.4) — produces one `Ecto.Query.dynamic/2`
       fragment for this clause.
-3. Combine every clause's `dynamic/2` fragment with `Ecto.Query.dynamic/2`'s
-   own `and` composition (`Enum.reduce(clauses, true, fn c, acc -> dynamic([r], ^acc and ^c) end)`
-   — implicit AND across all filter clauses, no OR/grouping in this design's
-   scope; a future requirement adding boolean grouping is out of scope here
-   and not silently assumed).
+3. Combine every clause's `dynamic/2` fragment into one combined boolean
+   expression: starting from a `true` identity value, fold the list of
+   per-clause fragments left-to-right, ANDing each successive clause's
+   fragment onto the accumulator built so far — implicit AND across all
+   filter clauses, no OR/grouping in this design's scope; a future
+   requirement adding boolean grouping is out of scope here and not
+   silently assumed.
 4. For each `sort_clause()` in `request.sort` (already `[]` if absent):
    a. `parse_sort_dir/1` already ran at request-construction time (§4.1) —
       `sort_clause().dir` is already a `sort_dir()` by §2.2's type, not a
@@ -593,18 +596,21 @@ maps to a fixed schema-field atom via this closed table (never a dynamic
 | `"inserted_at"` | `:inserted_at` |
 | `"updated_at"` | `:updated_at` |
 
-`build_filter_dynamic/2`'s typed-column clauses compose `field(r,
-^column_atom)` with the operator via ordinary `Ecto.Query.dynamic/2`
-constructs — `:eq` → `field(r, ^col) == ^value`, `:in` → `field(r, ^col) in
-^value`, `:contains`/`:starts_with` (only ever reached for `"entity_type"`
-or `"entity_def_version"`, the only `:string`-typed entries in this table,
-per §4.3's type check) → `ilike(field(r, ^col), ^pattern)` with `pattern`
-built as `"%" <> value <> "%"` / `value <> "%"` — the same
+`build_filter_dynamic/2`'s typed-column clauses compose a reference to the
+resolved column (conceptually, `field(r, ^column_atom)`) with the operator
+via ordinary `Ecto.Query.dynamic/2` constructs. Conceptually, per operator:
+`:eq` yields a plain equality comparison against the column (e.g.
+`field(r, ^col) == ^value`); `:in` yields a membership test (e.g.
+`field(r, ^col) in ^value`); `:contains`/`:starts_with` (only ever reached
+for `"entity_type"` or `"entity_def_version"`, the only `:string`-typed
+entries in this table, per §4.3's type check) yield a case-insensitive
+pattern match (e.g. `ilike(field(r, ^col), ^pattern)`) with `pattern` built
+by wrapping/appending `%` around the caller's value — the same
 `ilike`/pattern-concatenation idiom `lib/letflow/definitions.ex`'s
 `where_name/2` already uses (§0), where the pattern string itself is still
-passed as one bound `^pattern` value, not interpolated into query text.
-`:is_null`/`:is_not_null` → `is_nil(field(r, ^col))` / `not is_nil(field(r,
-^col))`.
+passed as one bound `^pattern` value, not interpolated into query text;
+`:is_null`/`:is_not_null` yield a null check and its negation (e.g.
+`is_nil(field(r, ^col))` and its negation).
 
 ### 5.4 `build_filter_dynamic/2` — signature
 
@@ -630,8 +636,10 @@ through).
 @spec build_order_by(sort_clause(), allowlisted_field()) :: {sort_dir(), Ecto.Query.dynamic_expr()}
 ```
 
-For `:typed_column`, `{dir, dynamic([r], field(r, ^column_atom))}`. For
-`:json_field`, the same per-`field_type()` cast table as §5.2 (a sort needs
+For `:typed_column`, the result pairs the requested direction with a
+dynamic expression that simply references the resolved column (e.g.
+`dynamic([r], field(r, ^column_atom))`). For `:json_field`, the same
+per-`field_type()` cast table as §5.2 (a sort needs
 the same type cast a comparison does, so a numeric field sorts numerically
 rather than lexicographically as text) — no separate table, §5.2's fragment
 literals are reused verbatim for the sort case, just without a trailing

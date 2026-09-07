@@ -1,0 +1,175 @@
+defmodule Letflow.Entities.Query.Allowlist do
+  @moduledoc """
+  `allowlist.zig`-equivalent (REQ-230 §3) -- builds a per-tenant,
+  per-entity-type field allowlist from REQ-225's entity definition, and
+  resolves a caller-supplied field name against it. See
+  `lib/letflow/design/req230-entity-query-dsl-compiler.md` §3 for the full
+  design this module implements.
+
+  This is layer 2 of the three-layer SQL-injection defence: a field name
+  absent from the loaded allowlist is rejected by `resolve_field/2` before
+  it ever reaches `Letflow.Entities.Query.Compiler` (AC2).
+
+  ## Shadowing precedence rule (AC3, design §3.4)
+
+  **A field name backed by a real typed column on `entity_record_latest`
+  always takes precedence over the same name found only as a JSONB key
+  inside `field_values`.** A caller writing `field: "deleted"` always
+  resolves to the typed `entity_record_latest.deleted` boolean column,
+  never to a same-named key an entity definition happens to declare inside
+  its `field_values` JSON, even if that entity type's definition includes a
+  `queried: true` field literally named `"deleted"`. This is because the
+  typed columns are structural to every entity record regardless of entity
+  type, are indexed/typed at the Postgres level, and a comparison against
+  them is cheaper and more precise than a JSONB text-cast comparison
+  against a same-named key would be -- there is no scenario where
+  resolving to the JSONB key instead would be more correct, only ambiguous
+  (design §3.4).
+  """
+
+  alias Letflow.Entities.Definition
+  alias Letflow.Entities.Definitions
+  alias Letflow.TenantProvisioning
+
+  @typedoc "Where an allowlisted field's data actually lives (design §3.2)."
+  @type field_source :: :typed_column | :json_field
+
+  @typedoc "One resolved, allowlisted field (design §3.2)."
+  @type allowlisted_field :: %{
+          required(:name) => String.t(),
+          required(:source) => field_source(),
+          required(:type) => Definition.field_type(),
+          required(:enum_values) => [String.t()] | nil
+        }
+
+  @typedoc """
+  The full per-entity-type allowlist (design §3.2) -- keyed by the field
+  name a caller writes in a `filter_clause()`/`sort_clause()`, already
+  shadow-resolved: a name can never map to two entries.
+  """
+  @type allowlist :: %{String.t() => allowlisted_field()}
+
+  @typedoc "`resolve_field/2`'s field-not-allowed error (design §3.5, AC2)."
+  @type field_not_allowed_error :: {:error, {:field_not_allowed, String.t()}}
+
+  @doc """
+  The fixed typed-column table (design §3.3 step 4's first pass, §3.4) --
+  every entry present on **every** entity type's allowlist, since these
+  columns exist on `entity_record_latest` regardless of entity type.
+  Exposed for `Letflow.Entities.Query.Compiler.build_filter_dynamic/2`'s
+  typed-column dispatch (design §5.3).
+  """
+  @spec typed_columns() :: %{String.t() => {atom(), Definition.field_type()}}
+  def typed_columns do
+    %{
+      "entity_type" => {:entity_type, :string},
+      "record_id" => {:record_id, :string},
+      "deleted" => {:deleted, :boolean},
+      "entity_def_version" => {:entity_def_version, :string},
+      "last_event_global_seq" => {:last_event_global_seq, :integer},
+      "inserted_at" => {:inserted_at, :datetime},
+      "updated_at" => {:updated_at, :datetime}
+    }
+  end
+
+  @doc """
+  Builds the field allowlist for one entity type, scoped to the tenant
+  schema named by `prefix` (design §3.3). Step order:
+
+    1. Validate `prefix` resolves to a provisioned tenant schema --
+       `{:error, :invalid_schema_name}` before any query.
+    2. `Letflow.Entities.Definitions.get_active_definition_by_name/2` --
+       `{:error, :not_found}` from that call is remapped to
+       `{:error, :entity_type_not_found}` here, this module's own error
+       atom.
+    3. Decode `definition_json` into a `Letflow.Entities.Definition.t()`
+       (already-validated JSON by construction -- no re-validation here).
+    4. Build the typed-column entries first (§3.4's fixed table), then the
+       JSON-field entries: only fields with `queried: true` are ever
+       allowlisted from the JSONB side. `:json`-typed fields are
+       structurally excluded without a special case, since
+       `Definition.Validator`'s Rule 3 already forbids `queried: true` on a
+       `:json` field at definition-creation time.
+    5. Merge: a JSON-field entry whose name collides with a typed-column
+       entry is discarded -- the typed-column entry wins (AC3, the
+       shadowing-precedence rule stated in this module's own moduledoc
+       above).
+  """
+  @spec load(entity_type :: String.t(), prefix :: String.t()) ::
+          {:ok, allowlist()}
+          | {:error, :invalid_schema_name}
+          | {:error, :entity_type_not_found}
+  def load(entity_type, prefix) when is_binary(entity_type) and is_binary(prefix) do
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, entity_definition} <- fetch_active_definition(entity_type, prefix) do
+      typed_column_entries =
+        Map.new(typed_columns(), fn {name, {_atom, type}} ->
+          {name, %{name: name, source: :typed_column, type: type, enum_values: nil}}
+        end)
+
+      json_field_entries =
+        entity_definition.definition_json
+        |> Map.get("fields", [])
+        |> Enum.map(&field_document/1)
+        |> Enum.filter(&(&1.queried == true))
+        |> Map.new(fn field ->
+          {field.name,
+           %{
+             name: field.name,
+             source: :json_field,
+             type: field.type,
+             enum_values: field.enum_values
+           }}
+        end)
+
+      # AC3: typed-column entries win on name collision -- merge with the
+      # typed-column map as the *second* argument so its values overwrite
+      # any same-named json_field entry.
+      allowlist = Map.merge(json_field_entries, typed_column_entries)
+
+      {:ok, allowlist}
+    end
+  end
+
+  @doc """
+  Resolves one caller-supplied field name against an already-loaded
+  `allowlist()` (design §3.5). A single `Map.fetch/2`, remapped to
+  `{:error, {:field_not_allowed, field_name}}` on miss -- AC2's rejection
+  point, called once per `filter_clause()`/`sort_clause()` field by
+  `Letflow.Entities.Query.Compiler`.
+  """
+  @spec resolve_field(allowlist(), field_name :: String.t()) ::
+          {:ok, allowlisted_field()} | field_not_allowed_error()
+  def resolve_field(allowlist, field_name) when is_map(allowlist) and is_binary(field_name) do
+    case Map.fetch(allowlist, field_name) do
+      {:ok, field} -> {:ok, field}
+      :error -> {:error, {:field_not_allowed, field_name}}
+    end
+  end
+
+  defp fetch_active_definition(entity_type, prefix) do
+    case Definitions.get_active_definition_by_name(entity_type, prefix) do
+      {:ok, entity_definition} -> {:ok, entity_definition}
+      {:error, :not_found} -> {:error, :entity_type_not_found}
+      {:error, :invalid_schema_name} = error -> error
+    end
+  end
+
+  # `definition_json` is always string-keyed once round-tripped through the
+  # `entity_definitions.definition_json` JSONB column -- same conversion
+  # `Letflow.Entities.Records`'s own private `definition_document/1`/
+  # `field_document/1` already performs (see that module's moduledoc for why
+  # `String.to_existing_atom/1` on `"type"`'s value is safe: the full closed
+  # set of `Letflow.Entities.Definition.field_type()` atoms is already
+  # compiled into this codebase). `"queried"` defaults to `false` when
+  # absent, matching `Letflow.Entities.Definition.field_def()`'s own
+  # `optional(:queried)`.
+  defp field_document(field) do
+    %{
+      name: Map.fetch!(field, "name"),
+      type: String.to_existing_atom(Map.fetch!(field, "type")),
+      queried: Map.get(field, "queried", false),
+      enum_values: Map.get(field, "enum_values")
+    }
+  end
+end

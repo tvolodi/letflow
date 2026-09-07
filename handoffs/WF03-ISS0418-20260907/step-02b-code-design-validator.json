@@ -1,0 +1,40 @@
+{
+  "handoff_id": "WF03-ISS0418-20260907-step-02b",
+  "run_id": "WF03-ISS0418-20260907",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0418-20260907/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T10:05:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": ["ISS-0418"],
+    "related_handoff_ids": [
+      "handoffs/WF03-ISS0418-20260907/step-01-issue-fixer-diagnosis.json",
+      "handoffs/WF03-ISS0418-20260907/step-02-code-designer.json"
+    ],
+    "artifacts_in": [
+      "lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md",
+      "lib/letflow/engine/wasm/invocation_lease.ex",
+      "lib/mix/tasks/letflow.check.test.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs",
+      "test/letflow/engine/wasm/call_timeout_test.exs",
+      "test/letflow/engine/wasm/host_api_write_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0418-20260907",
+    "base_commit": "1e3a1d6f"
+  },
+  "task": {
+    "description": "Independent re-verification of the ISS-0418 per-test wasm_hang subprocess isolation design, including live re-derivation of the load-bearing file:line/--only composition claim, a full scan for disguised executable code, and confirmation of the irreducible-pair, InvocationLease-untouched, and scope-reframing claims."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "All seven checks pass. (1) LIVE-VERIFIED the load-bearing composition claim myself, independently of the design doc's own transcripts: `mix test test/letflow/engine/wasm/plugin_handler_test.exs:155 --only wasm_hang` (real run, not dry-run) produces 'Including tags: [location: {...}]' -- wasm_hang is absent from Including tags, confirming --only is discarded when combined with file:line -- yet the test still runs and passes (Result: 1 passed, 11 excluded, exit 0), since the location filter alone suffices and already bypasses test_helper.exs's default wasm_hang exclusion. A parallel real run of `mix test test/.../plugin_handler_test.exs:155` alone (no --only, matching what the design actually ships) also produced 'Result: 1 passed, 11 excluded'. Full discovery dry-run (`mix test --only wasm_hang --dry-run`, no file arg) returned exactly the 5 locations the design's own §3 table lists (call_timeout_test.exs:79, host_api_write_test.exs:461, plugin_handler_test.exs:155/392/485) -- exact match. Design's mechanism claim holds under independent live re-derivation, not just trust in the doc's own transcript. (2) Grepped the entire design doc for defmodule/def /defp /schema \"/Enum\\./fn ->/case do/cond do/with do/|> -- zero hits. All 5 fenced blocks are either genuine terminal transcripts or bare @type/@spec lines; no disguised executable logic found. (3) Scope-reframing (§1.1) is append-only per its own text -- explicitly instructs annotating the existing cap criterion as SATISFIED-but-NOT-SUFFICIENT in a new dated block rather than deleting it, and adds a new AC rather than replacing the old one; matches the cited REQ-226 AC4 precedent, independently confirmed present in docs/requirements.yaml (an inline 'corrected 2026-09-06 ... original clause was structurally unreachable' annotation on REQ-226, append-style, not a deletion). (4) Read plugin_handler_test.exs:483-509 directly: confirmed one `test \"...\" do ... end` block contains two independent `PluginInterface.invoke/2` dispatches (300ms then 7000ms). Confirmed no describe-level setup_all/setup in any of the three wasm_hang test files (grep, zero hits) that could split or otherwise affect this pair when targeted by one file:line -- the design's atomicity claim holds. (5) Read lib/letflow/engine/wasm/invocation_lease.ex in full: exists exactly as described, moduledoc explicitly states production dispatch does not call it, only test bodies do; nothing in the design's scope touches this file, consistent with §6's claim. (6) Overhead tradeoff (§7): the ~1.7s per-subprocess boot figure is independently plausible (matches typical BEAM+ecto-provisioning-check boot cost observed in this session's own dry-run output), and the ~10s-per-green-run vs 60-180s-recurring-timeout comparison is reasoned explicitly with real per-run costs cited from ISS-0418.yaml, not hand-waved. (7) Confirmed by reading the design and its stated scope (§2, §6) that the only artefact touched is lib/mix/tasks/letflow.check.test.ex (a test harness, not a production module) -- no production call site (PluginHandler.run_guest/3, PluginInterface.invoke/2,3) is modified. No gaps found; no ambiguity that would block ELIXIR-DEV. PASS."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

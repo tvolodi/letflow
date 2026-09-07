@@ -1317,6 +1317,21 @@ defmodule Letflow.SandboxPoolTest do
 
       {:provision, %{schema_name: n}} = state.in_flight.op
       assert is_binary(n)
+
+      # ISS-0525: wait for the real provisioning worker to actually finish before this
+      # test returns, so neither `on_exit/1` callback below (this test's own
+      # `drop_sandbox_schemas_created_since!/1`, nor `start_pool!/1`'s `GenServer.stop/1`)
+      # races a still-running orphaned Task. See
+      # lib/letflow/design/iss0525-sandboxpool-rt9-orphan-wait.md §3.2 -- a fresh,
+      # test-owned monitor on the worker pid already captured above, independent of the
+      # pool's own internal `task_ref` monitor. Either exit reason is acceptable: this
+      # assertion only needs to prove the worker is no longer alive, not that
+      # provisioning succeeded (a migration failure is covered elsewhere).
+      worker_pid = state.in_flight.task_pid
+      worker_monitor_ref = Process.monitor(worker_pid)
+
+      assert_receive {:DOWN, ^worker_monitor_ref, :process, ^worker_pid, _reason},
+                     pool_op_rendezvous_timeout()
     end
   end
 

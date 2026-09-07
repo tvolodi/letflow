@@ -286,3 +286,40 @@ history:
       explicitly kept out of scope (per REQ-210's own already-recorded
       decision) and filed as follow-up ISS-0527 (queue task 527, GH#1064).
       ORCH will merge and release queue task 526 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T18:51:59Z"
+    note: >
+      ISS-0527 resolved via WF03-ISS0527-20260907 (queue task 527, GH#1064),
+      the follow-up ISS-0526 recommended for R-Co's platform-operator UAT
+      corpus. Ported all 18 R-Co tests/simulation/scenarios/platform/*.yaml
+      files verbatim into test/fixtures/uat/scenarios/platform/*.yaml,
+      reusing ISS-0526's already-validated design pattern (destination
+      convention, provenance header, pipeline_test: verbatim-plus-NOTE
+      handling) without a fresh CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass.
+      Corrected the issue's own "~7" pipeline_test: estimate to the real
+      count of 12, none resolving to an existing spec in either R-Co's or
+      letflow's web tree, each annotated. Two files flagged for
+      SECURITY-REVIEWER per the issue's own acceptance criteria:
+      attachment-cross-tenant-probe.yaml confirmed a sound UAT target
+      already matching Letflow's implemented INV-1 cross-tenant-404
+      mechanism; sandbox-cross-tenant-probe.yaml found to target R-Co's own
+      unbuilt runtime-agent subsystem with narrative terminology that could
+      be mis-mapped onto the semantically-unrelated Letflow.SandboxPool
+      module by a future UAT-RUNNER invocation -- a clarifying NOTE was
+      applied directly (non-blocking finding, mechanical fix) disclaiming
+      the relationship and marking the scenario BLOCKED/UNBUILT_FEATURE.
+      .claude/agents/uat-runner.md and docs/agents/workflows/WF-05_uat_run.md
+      updated to reflect the platform/ corpus now being present (no longer
+      "deferred") plus a security-severity note on the two probe scenarios.
+      test/fixtures/simulation/ and ISS-0526's previously-ported
+      swiftroute/vortex/meridian directories confirmed completely untouched
+      throughout. Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER (PASS, applied
+      fix) -> REVIEWER (PASS) -> TEST-RUNNER (3431/3433 passed, 2
+      pre-existing unrelated rustc-absent failures, zero SandboxPoolTest
+      failures confirming ISS-0525's fix continues to hold). Implementation
+      commits ec21d779, 1f48b630. Does not re-decide REQ-210's original
+      platform-corpus scoping rationale. ORCH will merge and release queue
+      task 527 status:done. This closes the R-Co UAT-scenario-porting
+      thread opened by ISS-0393 (S7 backlog).

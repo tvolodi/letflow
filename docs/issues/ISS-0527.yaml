@@ -50,7 +50,22 @@ source: >
   recommendation.
 queue_task_id: 527
 github_issue: 1064
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-07 via WF03-ISS0527-20260907. All 18 platform-operator
+  scenario files ported verbatim into test/fixtures/uat/scenarios/platform/,
+  reusing ISS-0526's already-validated design pattern without a fresh
+  CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass. SECURITY-REVIEWER PASSed both
+  flagged cross-tenant-probe files (content genuine and consistent with
+  Letflow's actual INV-1 mechanism for attachment-cross-tenant-probe.yaml;
+  one non-blocking finding applied directly -- sandbox-cross-tenant-probe.yaml
+  targets R-Co's own unbuilt runtime-agent subsystem and could be
+  mis-mapped onto the semantically-unrelated Letflow.SandboxPool module, now
+  disclaimed via an added NOTE). Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER
+  (PASS, applied fix) -> REVIEWER (PASS) -> TEST-RUNNER (3431/3433 passed,
+  2 pre-existing unrelated rustc-absent failures, zero SandboxPoolTest
+  failures). Implementation commits ec21d779, 1f48b630. Does not re-decide
+  REQ-210's original platform-corpus scoping rationale.
 implementation_note: >
   ELIXIR-DEV (WF03-ISS0527-20260907) ported all 18 R-Co
   tests/simulation/scenarios/platform/*.yaml files verbatim into

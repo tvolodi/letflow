@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0525-20260907-step-05",
+  "run_id": "WF03-ISS0525-20260907",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0525-20260907/step-05-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T17:15:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0525"],
+    "related_handoff_ids": ["WF03-ISS0525-20260907-step-03"],
+    "artifacts_in": ["test/letflow/sandbox_pool_test.exs"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0525-20260907",
+    "base_commit": "8c9c8682",
+    "implementation_commit": "ae3906dd"
+  },
+  "task": {
+    "description": "OTP-idiom/scope-creep/decision-record hard gate on ISS-0525's RT-9 orphan-wait fix. SECURITY-REVIEWER skipped -- test-only change, no tenant-data path."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Scope confirmed via git show --stat: only test/letflow/sandbox_pool_test.exs touched (+15/-0), purely additive after RT-9's existing final assertion, RT-2 and lib/letflow/sandbox_pool.ex untouched. Idiom correct: :DOWN tuple shape and pin-operator usage match this file's own established rendezvous idiom (RT-1..RT-8's assert_receive {:released,...}, pool_op_rendezvous_timeout() pattern); pool_op_rendezvous_timeout/0 confirmed to exist and evaluate to release_call_timeout() + slack = provision_timeout_ms() + slack, an appropriate bound. Race closure independently re-derived (not trusted from design/ELIXIR-DEV): state.in_flight.task_pid is literally the async_nolink Task's own pid; a monitor cannot deliver :DOWN before the monitored process actually terminates; ExUnit's LIFO on_exit ordering means blocking the test function's return until :DOWN fires guarantees all three on_exit callbacks (claimer kill guard, GenServer.stop, RT-9's own CASCADE drop) run strictly after the worker is confirmed dead. No quality regression from accepting any exit reason: the pool itself treats a crashed provisioning worker as an already-tested first-class outcome (classify_worker_result/2), RT-9's own documented purpose is the ISS-0227 key-set-shape regression already fully asserted before this step, binding _reason rather than :normal is correct and doesn't silently swallow anything. Independent verification: REVIEWER ran mix test test/letflow/sandbox_pool_test.exs 5 times with distinct seeds, 5/5 passed (23 passed each), corroborating ELIXIR-DEV's 24/24 and full test/letflow/ 3153/3153. mix compile --warnings-as-errors and mix format --check-formatted both clean. Decision-record consistency: test-tooling around SandboxPool's existing state shape, no conflict with process-vs-row (REQ-045) or any other docs/migration/decisions/ record. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established session precedent -- ELIXIR-DEV's own verification (single run, 24-seed loop, full-directory regression) is already comprehensive and REVIEWER independently corroborated it above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

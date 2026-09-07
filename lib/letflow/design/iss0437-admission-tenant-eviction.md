@@ -208,6 +208,25 @@ concept — `:global`'s release path never reads it).
   happens within the same serialized `handle_call`, so there is no
   window for the generation to change between being read and being
   stamped.
+- **`handle_call({:try_acquire, :global}, ...)` is also changed** (this is
+  a correction to the prior revision of this document, which declared
+  §2.1's revised `state.refs` type as uniformly `{pool_selector(),
+  non_neg_integer() | nil}` but never updated this clause to match — left
+  as originally written, this clause stores the bare atom `:global` under
+  the ref's `id`, producing a MIXED-shape `state.refs` map where some
+  entries are bare atoms and others are `{pool, generation}` tuples; the
+  first ordinary `:global`-only release would then fail to destructure as
+  a 2-tuple and raise `MatchError` in the release clause below — not a
+  rare corner case, this is the ordinary Poller-sweep path). The fix:
+  this clause now stores `{:global, nil}` — instead of the bare atom
+  `:global` — under the new ref's `id` in `state.refs`, keeping every
+  entry in `state.refs` uniformly a 2-tuple regardless of pool kind. This
+  is a same-`handle_call`-clause edit only: the admission decision itself
+  (`state.global_in_use < state.global_cap`), `Ref{pool: :global}`'s own
+  shape, and `global_in_use`'s increment are all unchanged — only the
+  value written into `state.refs` changes shape, from a bare atom to a
+  2-tuple with a `nil` second element (mirroring the `nil` this design
+  already documents above for "`:global`'s release path never reads it").
 - `forget_tenant/2`'s handler advances `tenant_generations[schema]` by one
   (§1's revised "Effect on state"), independently of whatever it does to
   `tenants[schema]`.
@@ -367,10 +386,11 @@ absent from `lib/letflow/identity/`).
 
 `handle_reactivate/2` (lines 359–364) is **not modified** — see §4.
 
-**Alias note:** `lib/letflow/routers/tenants.ex` does not currently alias
-`Letflow.TenantProvisioning` or `Letflow.Admission` — ELIXIR-DEV adds both
-`alias Letflow.TenantProvisioning` and `alias Letflow.Admission` to this
-router's existing alias block.
+**Alias note:** `lib/letflow/routers/tenants.ex` already aliases
+`Letflow.TenantProvisioning` (existing alias block, line 160) — only
+`Letflow.Admission` is missing. ELIXIR-DEV adds `alias Letflow.Admission`
+to this router's existing alias block; no change is needed for the
+`TenantProvisioning` alias.
 
 ## 4. Reactivation — no Admission-side action needed, now composed with §2.1
 
@@ -594,11 +614,13 @@ already-existing `handle_deactivate/2` handler, no new config surface. The
 only new public API is `Letflow.Admission.forget_tenant/2` (§1); the
 changed existing function bodies are `release_tenant/2` (now arity 3,
 generation-aware, §2.1), `ensure_tenant_tracked/2` (stamps a generation on
-fresh entries, §2.1), the `handle_call({:try_acquire, {:tenant, ...}})` and
-`handle_call({:release, ...})` clauses (both now read/write the paired
-generation in `state.refs`, §2.1), `init/1` (adds `tenant_generations: %{}`
-to the initial state, §2.1/§5(a)), and `handle_deactivate/2`'s
-orchestration (§3). `release_tenant/2`'s `@spec` gaining a third parameter
+fresh entries, §2.1), the `handle_call({:try_acquire, {:tenant, ...}})`,
+`handle_call({:try_acquire, :global})` (now stores `{:global, nil}` instead
+of the bare atom `:global` into `state.refs`, keeping every `state.refs`
+entry a uniform 2-tuple — §2.1), and `handle_call({:release, ...})` clauses
+(all three now read/write the paired generation in `state.refs`, §2.1),
+`init/1` (adds `tenant_generations: %{}` to the initial state, §2.1/§5(a)),
+and `handle_deactivate/2`'s orchestration (§3). `release_tenant/2`'s `@spec` gaining a third parameter
 is a private-function signature change only — no caller outside this
 module invokes it directly, and `release/2`'s own public `@spec` is
 unchanged (still `admission_ref(), GenServer.server() -> :ok`). No change

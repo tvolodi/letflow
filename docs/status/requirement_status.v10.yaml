@@ -1179,3 +1179,62 @@ history:
       a new AC added for the actual fix mechanism, per the REQ-226 AC4
       precedent for correcting acceptance criteria against real
       evidence rather than silently ignoring the mismatch.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-07T12:57:39Z"
+    note: >
+      ISS-0437 resolved via WF03-ISS0437-20260907 (queue task 437, GH#843).
+      Letflow.Admission's deactivated-tenant entries were never evicted from
+      state.tenants, permanently diluting every remaining active tenant's
+      fair-share admission cap (per_tenant_cap/1's divisor only ever grew).
+      Fixed via new Letflow.Admission.forget_tenant/2, wired from
+      Letflow.Routers.Tenants's deactivate handler (router-layer, following
+      the Identity.create_tenant/1 precedent of not cross-context-calling
+      inside Identity itself). A composed race this introduced
+      (deactivate->reactivate->stale-release driving in_use negative,
+      silently uncapping the reactivated tenant) was caught by
+      CODE-DESIGN-VALIDATOR across 2 rework cycles and closed via a
+      per-schema generation/epoch tag on state.tenants entries and
+      state.refs, server-side-only, never exposed on the public Ref
+      struct; release_tenant/3 no-ops on a stale-generation match instead
+      of decrementing. A second rework cycle fixed a :global-vs-{:tenant,_}
+      state.refs shape inconsistency the first rework introduced. REQ-216's
+      design doc corrected (append-only, OQ-2 annotated resolved for the
+      deactivation case, idle-but-never-deactivated case left open as a
+      smaller residual gap). Pipeline: ISSUE-FIXER -> CODE-DESIGNER (2
+      reworks) -> CODE-DESIGN-VALIDATOR (2 re-checks, PASS) -> ELIXIR-DEV
+      -> SECURITY-REVIEWER (PASS, INV-1..9) -> REVIEWER (PASS) ->
+      TEST-RUNNER (3416/3418 passed, 2 pre-existing unrelated rustc-absent
+      failures). Implementation commit 12611d23. ORCH will merge and
+      release queue task 437 status:done.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 10 — CLOSED 2026-09-07. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-05 through
+# 2026-09-07 (24 entries, lines 1-1210). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at feature/WF03-ISS0437-20260907's
+# ISS-0437 SCOPE-CHANGE done-event append, whose own append brought this file to
+# 1210 lines, over its declared roll_rule ceiling (max_lines: 1200) -- confirmed
+# via `wc -l` on the working-tree file per this volume's own "WHEN THIS VOLUME
+# IS FULL" procedure. Reads of this volume are TARGETED reads only -- a line
+# range or a pattern match, never a whole-file read. Use whichever your shell
+# has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v11.yaml
+#
+# Why this file was closed: WF03-ISS0437-20260907's own ISS-0437 SCOPE-CHANGE
+# done-event append brought the on-disk count to 24 entries across 1210 lines --
+# over the roll ceiling. No entry above this footer was moved, edited or
+# deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

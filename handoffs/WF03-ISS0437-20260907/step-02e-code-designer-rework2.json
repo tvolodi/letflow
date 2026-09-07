@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-02e",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "02e",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0437-20260907/step-02e-code-designer-rework2.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T13:55:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-02d"],
+    "artifacts_in": ["lib/letflow/admission.ex", "lib/letflow/routers/tenants.ex"],
+    "artifacts_out": ["lib/letflow/design/iss0437-admission-tenant-eviction.md"],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3"
+  },
+  "task": {
+    "description": "Rework 2: fix the mixed state.refs shape defect (:global bare atom vs {pool, generation} tuple) and the alias-note inaccuracy flagged by CODE-DESIGN-VALIDATOR's recheck-1 FAIL."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Chose option (a): handle_call({:try_acquire, :global}, ...) now stores {:global, nil} instead of the bare atom :global, keeping state.refs uniformly a {pool_selector(), generation | nil} 2-tuple for both :global and {:tenant, _} entries. Chosen over (b) because section 2.1's type was already written as a uniform tuple and the release clause's documented behavior already assumed a uniform 2-tuple destructure -- (a) is the smaller, consistent change. Section 8's scope-confirmation list updated to explicitly include the :global try_acquire clause among changed function bodies. Alias note in section 3 corrected: routers/tenants.ex already aliases Letflow.TenantProvisioning (line 160, verified), only alias Letflow.Admission needs adding. Re-verified section 2.1 end to end: state type declarations -> both try_acquire clauses -> release_tenant/2's generation-comparison contract -> the interleaving traces, all reference one uniform state.refs shape with no remaining bare-atom producer. Self-check grep for defmodule|def |defp |schema \"|Enum.|fn ->|case do|cond do|with do|pipe operator over the whole doc: zero matches."
+  },
+  "rework_count": 2,
+  "max_rework": 3
+}

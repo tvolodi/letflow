@@ -60,7 +60,7 @@ defmodule Letflow.Admission do
   already holds remains valid and freely releasable for its full natural
   lifetime.
 
-  ## Lazy tenant-entry creation; no eviction (ISS-0437)
+  ## Lazy tenant-entry creation; deactivation-triggered eviction (ISS-0437)
 
   A `{:tenant, schema}` entry is created in `state.tenants` (with
   `in_use: 0`) the first time `try_acquire/2` is called for a schema not
@@ -69,19 +69,28 @@ defmodule Letflow.Admission do
   attempt. This happens regardless of whether the ensuing admission
   succeeds or is rejected.
 
-  Entries are never evicted within this requirement's scope, even once a
-  tenant's `in_use` returns to zero and it stops attempting further
-  admissions — state growth is bounded by the count of distinct tenant
-  schemas that have EVER attempted admission since the last process
-  restart, not by concurrently-active tenants. This is a deliberate,
-  flagged narrowing of REQ-216's own "rolling window" text (see the design
-  doc §3, §9 OQ-2); a real cardinality bound (time-windowed eviction or an
-  LRU cap) is out of scope here and tracked as ISS-0437 for a follow-up
-  requirement. Do not implement eviction against this module without a
-  design doc revision — see the design doc §3 for why an unconditional
-  zero-`in_use` eviction would be actively wrong (it would make fair-share
-  division oscillate across every idle/burst boundary for periodic tenant
-  workloads).
+  Entries are evicted exactly once, on tenant deactivation, via
+  `Letflow.Routers.Tenants`'s call to `forget_tenant/2` after
+  `Identity.deactivate_tenant/1` succeeds (see
+  `lib/letflow/design/iss0437-admission-tenant-eviction.md` §3) — this
+  closes the correctness/fairness gap ISS-0437 reported (a deactivated
+  tenant's entry permanently diluting every remaining active tenant's
+  fair-share cap), WITHOUT reintroducing the oscillation risk this same
+  section otherwise warns against for a merely-*idle*-but-still-active
+  tenant: deactivation is a distinct, deliberate, rare administrative act,
+  not an idle/burst cycle, so an entry for a tenant that is
+  idle-but-active (no deactivation) is still never evicted, exactly as
+  before. A stale `Ref` acquired before eviction is tolerated at release
+  time via a per-schema generation counter (`state.tenant_generations`,
+  see `release_tenant/3` below) that survives eviction and distinguishes a
+  reactivated tenant's fresh epoch from a prior, discarded one. Beyond the
+  deactivation trigger, state growth is still bounded only by the count of
+  distinct tenant schemas that have EVER attempted admission since the
+  last process restart, not by concurrently-active tenants — a real
+  cardinality bound for the still-open idle-but-never-deactivated case
+  (time-windowed eviction or an LRU cap) remains out of scope here (design
+  doc §3, §9 OQ-2, residual note). Do not implement further eviction
+  against this module without a design doc revision.
 
   ## Crash / restart semantics
 
@@ -208,6 +217,28 @@ defmodule Letflow.Admission do
   end
 
   @doc """
+  Evicts `schema`'s tracked entry from `state.tenants`, unconditionally and
+  idempotently (a no-op, still returning `:ok`, if `schema` is not
+  currently a key). Also advances `schema`'s entry in `state.tenant_generations`
+  by one, independently of whether `schema` was present in `state.tenants` —
+  this is what lets a stale `Ref` acquired before this call be recognized as
+  stale (rather than corrupting a freshly reactivated tenant's bookkeeping)
+  at release time, even across a deactivate -> reactivate interleaving. See
+  `lib/letflow/design/iss0437-admission-tenant-eviction.md` §1/§2.1 and this
+  module's own moduledoc "Lazy tenant-entry creation; deactivation-triggered
+  eviction (ISS-0437)" section.
+
+  Does not touch `global_cap`, `global_in_use`, or `reserved_headroom`.
+
+  `server` defaults to `__MODULE__`, mirroring every other client function
+  in this module.
+  """
+  @spec forget_tenant(schema :: String.t(), server :: GenServer.server()) :: :ok
+  def forget_tenant(schema, server \\ __MODULE__) when is_binary(schema) do
+    GenServer.call(server, {:forget_tenant, schema})
+  end
+
+  @doc """
   Returns this instance's own `reserved_headroom`, live from GenServer state —
   the identical value that instance's own `global_cap` was derived from at
   `init/1` (see moduledoc/state-shape comment below), whether this instance was
@@ -244,14 +275,17 @@ defmodule Letflow.Admission do
   # GenServer callbacks
 
   # State shape (design doc §2.2; reserved_headroom added per
-  # lib/letflow/design/iss0421-poller-bounded-concurrency.md §3b/§7):
+  # lib/letflow/design/iss0421-poller-bounded-concurrency.md §3b/§7;
+  # generation/eviction fields added per
+  # lib/letflow/design/iss0437-admission-tenant-eviction.md §2.1/§5(a)):
   #
   #   %{
-  #     global_cap:        pos_integer(),               # fixed at init/1, from config
-  #     global_in_use:     non_neg_integer(),
-  #     tenants:           %{optional(String.t()) => %{in_use: non_neg_integer()}},
-  #     refs:              %{optional(reference()) => pool_selector()},
-  #     reserved_headroom: pos_integer()                 # fixed at init/1, same source as global_cap
+  #     global_cap:         pos_integer(),               # fixed at init/1, from config
+  #     global_in_use:      non_neg_integer(),
+  #     tenants:            %{optional(String.t()) => %{in_use: non_neg_integer(), generation: non_neg_integer()}},
+  #     refs:               %{optional(reference()) => {pool_selector(), non_neg_integer() | nil}},
+  #     reserved_headroom:  pos_integer(),                 # fixed at init/1, same source as global_cap
+  #     tenant_generations: %{optional(String.t()) => non_neg_integer()}  # never deleted, only incremented (forget_tenant/2)
   #   }
   @impl true
   def init(%{pool_size: pool_size, reserved_headroom: reserved_headroom}) do
@@ -263,7 +297,8 @@ defmodule Letflow.Admission do
        global_in_use: 0,
        tenants: %{},
        refs: %{},
-       reserved_headroom: reserved_headroom
+       reserved_headroom: reserved_headroom,
+       tenant_generations: %{}
      }}
   end
 
@@ -276,7 +311,7 @@ defmodule Letflow.Admission do
       new_state = %{
         state
         | global_in_use: state.global_in_use + 1,
-          refs: Map.put(state.refs, id, :global)
+          refs: Map.put(state.refs, id, {:global, nil})
       }
 
       {:reply, {:ok, ref}, new_state}
@@ -292,7 +327,8 @@ defmodule Letflow.Admission do
     # fair-share divisor (moduledoc's "Lazy tenant-entry creation").
     state = ensure_tenant_tracked(state, schema)
 
-    tenant_in_use = state.tenants[schema].in_use
+    tenant_entry = state.tenants[schema]
+    tenant_in_use = tenant_entry.in_use
     per_tenant_cap = per_tenant_cap(state)
 
     if state.global_in_use < state.global_cap and tenant_in_use < per_tenant_cap do
@@ -303,7 +339,7 @@ defmodule Letflow.Admission do
         state
         | global_in_use: state.global_in_use + 1,
           tenants: Map.update!(state.tenants, schema, &%{&1 | in_use: &1.in_use + 1}),
-          refs: Map.put(state.refs, id, pool)
+          refs: Map.put(state.refs, id, {pool, tenant_entry.generation})
       }
 
       {:reply, {:ok, ref}, new_state}
@@ -322,21 +358,22 @@ defmodule Letflow.Admission do
 
   def handle_call({:release, %Ref{id: id}}, _from, state) do
     # The server's own `refs` entry (keyed by the unforgeable `id`) is the
-    # sole source of truth for which pool to free -- the caller-supplied
-    # struct's `pool` field is never trusted here, so a mismatched or
-    # hand-altered `pool` field on an otherwise-valid ref cannot under- or
-    # over-release, and cannot crash this clause.
+    # sole source of truth for which pool (and, for a tenant pool, which
+    # generation) to free -- the caller-supplied struct's `pool` field is
+    # never trusted here, so a mismatched or hand-altered `pool` field on an
+    # otherwise-valid ref cannot under- or over-release, and cannot crash
+    # this clause.
     case Map.pop(state.refs, id) do
       {nil, _refs} ->
         # Already released, never acquired, or a hand-constructed struct --
         # documented idempotent no-op (moduledoc's "release/2").
         {:reply, :ok, state}
 
-      {stored_pool, refs} ->
+      {{stored_pool, captured_generation}, refs} ->
         new_state = %{
           state
           | global_in_use: state.global_in_use - 1,
-            tenants: release_tenant(state.tenants, stored_pool),
+            tenants: release_tenant(state.tenants, stored_pool, captured_generation),
             refs: refs
         }
 
@@ -344,11 +381,26 @@ defmodule Letflow.Admission do
     end
   end
 
+  def handle_call({:forget_tenant, schema}, _from, state) do
+    new_state = %{
+      state
+      | tenants: Map.delete(state.tenants, schema),
+        tenant_generations: Map.update(state.tenant_generations, schema, 1, &(&1 + 1))
+    }
+
+    {:reply, :ok, new_state}
+  end
+
   defp ensure_tenant_tracked(state, schema) do
     if Map.has_key?(state.tenants, schema) do
       state
     else
-      %{state | tenants: Map.put(state.tenants, schema, %{in_use: 0})}
+      generation = Map.get(state.tenant_generations, schema, 0)
+
+      %{
+        state
+        | tenants: Map.put(state.tenants, schema, %{in_use: 0, generation: generation})
+      }
     end
   end
 
@@ -356,9 +408,15 @@ defmodule Letflow.Admission do
     max(div(global_cap, map_size(tenants)), 1)
   end
 
-  defp release_tenant(tenants, :global), do: tenants
+  defp release_tenant(tenants, :global, _captured_generation), do: tenants
 
-  defp release_tenant(tenants, {:tenant, schema}) do
-    Map.update!(tenants, schema, &%{&1 | in_use: &1.in_use - 1})
+  defp release_tenant(tenants, {:tenant, schema}, captured_generation) do
+    case Map.fetch(tenants, schema) do
+      {:ok, %{generation: ^captured_generation} = entry} ->
+        Map.put(tenants, schema, %{entry | in_use: entry.in_use - 1})
+
+      _absent_or_stale_generation ->
+        tenants
+    end
   end
 end

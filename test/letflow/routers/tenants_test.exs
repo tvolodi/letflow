@@ -26,6 +26,7 @@ defmodule Letflow.Routers.TenantsTest do
   import Plug.Conn
   import Ecto.Query, only: [from: 2]
 
+  alias Letflow.Admission
   alias Letflow.Identity.Tenant
   alias Letflow.TenantFixture
   alias Letflow.TenantProvisioning
@@ -314,6 +315,38 @@ defmodule Letflow.Routers.TenantsTest do
         |> dispatch()
 
       assert resp.status == 404
+    end
+
+    # ISS-0437: confirms Letflow.Admission.forget_tenant/1 is actually invoked
+    # on a successful deactivation. Per
+    # lib/letflow/design/iss0437-admission-tenant-eviction.md §6/§7, this
+    # router handler has no `server` seam to substitute an isolated test
+    # instance, so this exercises the REAL, application-supervised
+    # `Letflow.Admission` singleton -- safe here because this module is
+    # already `async: false` (line 23) and every `async: false` module runs
+    # sequentially, one at a time (matching `test/letflow/plugs/admission_test.exs`'s
+    # own documented convention for the same singleton). This test only
+    # tracks a schema unique to its own freshly-provisioned tenant fixture,
+    # so it cannot corrupt another test's counters.
+    test "deactivate evicts the tenant's Admission entry (forget_tenant/1 is invoked)" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req075-admission-evict")
+      {:ok, schema} = TenantProvisioning.schema_name_for_tenant(tenant.tenant_id)
+
+      # establish tracking on the real singleton for this schema
+      assert {:ok, ref} = Admission.try_acquire({:tenant, schema})
+      assert Map.has_key?(:sys.get_state(Admission).tenants, schema)
+
+      resp =
+        build_conn(:post, "/#{tenant.tenant.slug}/deactivate", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert resp.status == 200
+
+      # forget_tenant/1 evicted this schema's entry
+      refute Map.has_key?(:sys.get_state(Admission).tenants, schema)
+
+      # the still-live, pre-eviction ref remains safely releasable (no raise)
+      assert :ok = Admission.release(ref)
     end
   end
 

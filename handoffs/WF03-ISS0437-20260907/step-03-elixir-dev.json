@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-03",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "03",
+  "from_agent": "ELIXIR-DEV",
+  "to_agent": "SECURITY-REVIEWER",
+  "file": "handoffs/WF03-ISS0437-20260907/step-03-elixir-dev.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T14:45:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-02f"],
+    "artifacts_in": ["lib/letflow/design/iss0437-admission-tenant-eviction.md"],
+    "artifacts_out": [
+      "lib/letflow/admission.ex",
+      "lib/letflow/routers/tenants.ex",
+      "lib/letflow/design/req216-admission-control-core.md",
+      "test/letflow/admission_test.exs",
+      "test/letflow/routers/tenants_test.exs"
+    ],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3",
+    "implementation_commit": "12611d23"
+  },
+  "task": {
+    "description": "Implement the validated ISS-0437 design: generation-tagged eviction of a deactivated tenant's Admission entry, wired at the router layer, plus REQ-216 doc corrections and 4 new/revised tests."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Added Admission.forget_tenant/2 (unconditional delete of tenants[schema], unconditional increment of tenant_generations[schema]). state.tenants entries gained generation field stamped in ensure_tenant_tracked/2. state.refs uniformly {pool_selector, generation|nil} for both :global and {:tenant,_} try_acquire clauses. release_tenant/2 -> release_tenant/3, generation-gated decrement for tenant refs, :global unchanged; handle_call({:release,...}) updated to destructure the new tuple. init/1 adds tenant_generations: %{}. Moduledoc and REQ-216 design doc corrected (append-only, OQ-2 marked resolved for the deactivation case, idle-never-deactivated case left flagged open). Wiring added in Routers.Tenants's handle_deactivate/2 (alias Letflow.Admission added, TenantProvisioning.schema_name_for_tenant/1 used to derive schema, forget_tenant/1 called after Identity.deactivate_tenant/1 succeeds) -- handle_reactivate/2 untouched per design SS4. Tests: 4 admission_test.exs cases (fairness-divisor shrink, absent-key tolerance for never-reactivated tenant, reactivation resumes tracking, composed deactivate->reactivate->stale-release race proving in_use lands at exactly the fresh count) -- all black-box, no :sys.get_state. 1 new integration test in routers/tenants_test.exs against the real application-supervised Admission singleton confirming forget_tenant/1 is invoked on successful deactivation. Verification: mix compile --warnings-as-errors clean; mix test test/letflow/admission_test.exs 22 passed; mix test test/letflow/routers/tenants_test.exs 21 passed; mix test test/letflow/plugs/admission_test.exs test/letflow/plugs/admission_pipeline_test.exs 20 passed no regression; mix letflow.check.test 434/436 passed, 2 pre-existing unrelated failures (Mix.Tasks.Letflow.CheckToolchainTest rust-pin tests failing on rustc :enoent -- rustc not installed in this sandbox, unrelated to any file touched). Scope confirmed: no change to try_acquire/2's algorithm or per_tenant_cap/1's formula, no route/controller signature changes beyond the one addition inside handle_deactivate/2, no new config, public Ref struct and release/2 try_acquire/2 signatures unchanged."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

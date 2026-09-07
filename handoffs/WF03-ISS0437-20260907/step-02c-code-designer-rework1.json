@@ -1,0 +1,34 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-02c",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0437-20260907/step-02c-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T13:05:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-02", "WF03-ISS0437-20260907-step-02b"],
+    "artifacts_in": [
+      "lib/letflow/admission.ex",
+      "handoffs/WF03-ISS0437-20260907/step-02b-code-design-validator.json"
+    ],
+    "artifacts_out": ["lib/letflow/design/iss0437-admission-tenant-eviction.md"],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3"
+  },
+  "task": {
+    "description": "Rework 1: address CODE-DESIGN-VALIDATOR's FAIL -- the deactivate->reactivate->stale-release race that could drive a tenant's in_use negative (uncapping it) via composing unconditional eviction (S2) with lazy reactivation (S4)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Chosen mechanism: per-schema server-side generation/epoch counter, never exposed on the public Ref struct (preserves the existing never-trust-caller-supplied-fields invariant on the release clause). New state field tenant_generations (schema => non_neg_integer), incremented (never deleted) by forget_tenant/2. state.tenants entries gain a generation field stamped at creation time from the current counter. state.refs values become {pool_selector, generation | nil} pairs captured at admission time in the same serialized handle_call. release_tenant/2 becomes arity-3: decrements only if the schema is present AND its stored generation matches the ref's captured generation; otherwise no-op (covers both absent-schema and present-but-stale-epoch cases). Floor-at-0 clamp alternative explicitly rejected with reasoning: it stops the negative excursion but silently under-counts the fresh epoch (a stale release still eats one of the new epoch's real slots), granting the reactivated tenant a spurious extra admission -- a relocated bug, not a fix. Traced the validator's exact 6-step interleaving: ends with tenants[A] = %{in_use: 1, generation: 1}, both stale releases hit the generation-mismatch no-op branch, ref3's count untouched, never negative, never over-permissive. Also traced: (1) a tenant deactivated and never reactivated still hits the plain absent-key branch, unaffected, no regression; (2) one stale ref plus one unrelated tenant's concurrent release proceeds normally since generations are tracked per-schema. New test 4 in S6: deactivate->reactivate->stale-release with two stale refs and a fresh admission in between, asserting in_use lands at exactly 1, via capacity-boundary black-box assertions (no :sys.get_state, matching existing test file convention). Test 2 narrowed to the never-reactivated case only, cross-referenced against test 4. Untouched per instruction: forget_tenant/2's public API shape (S1, only 'Effect on state' prose extended), router-level wiring decision and precedent (S3), REQ-216 doc-correction targets (S5(b) unchanged, S5(a) extended only to also correct the now-stale state-shape comment, a direct consequence of this fix). Self-check: grep for defmodule|def |defp |schema \"|Enum.|fn ->|case do|cond do|with do or pipe operator over the whole document returned zero matches -- no disguised executable code introduced describing the generation mechanism."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

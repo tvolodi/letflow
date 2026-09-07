@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0437-20260907-step-05",
+  "run_id": "WF03-ISS0437-20260907",
+  "workflow_id": "WF-03",
+  "step": "05",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0437-20260907/step-05-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-07T15:30:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-216"],
+    "issue_ids": ["ISS-0437"],
+    "related_handoff_ids": ["WF03-ISS0437-20260907-step-04"],
+    "artifacts_in": ["lib/letflow/admission.ex", "lib/letflow/routers/tenants.ex", "test/letflow/admission_test.exs", "test/letflow/routers/tenants_test.exs"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0437-20260907",
+    "base_commit": "50b5b0f3",
+    "implementation_commit": "12611d23"
+  },
+  "task": {
+    "description": "OTP-idiom/supervision/scope-creep/decision-record hard gate on ISS-0437's implementation, plus doc-correction and test-quality checks."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "OTP idiom PASS: new handle_call({:forget_tenant, schema}) clause does one atomic map-delete + map-update in a single serialized callback, matches existing handle_call style, no blocking calls, no split mutation. Supervision integrity PASS, no change confirmed (no new process, no spawn, InstanceSupervisor untouched). Scope creep PASS: every touched function in admission.ex and routers/tenants.ex is named in design SS8's scope list; try_acquire/2's algorithm and per_tenant_cap/1's formula byte-for-byte unchanged; handle_reactivate/2 untouched; no new config, no unrelated cleanup. Decision-record consistency PASS: this is Admission's internal fair-share bookkeeping, not a workflow-instance concurrency model, REQ-045/process-vs-row decision not implicated, no other decision record at risk. REQ-216 doc corrections PASS: admission.ex moduledoc and req216 design doc corrections are additive (original OQ-2 paragraphs intact), accurate, explicitly scoped to deactivation-triggered eviction only, residual idle-but-never-deactivated case still flagged open, no overstatement. Test quality PASS: all 4 admission_test.exs tests and the 1 tenants_test.exs test are genuine black-box coverage; Test 4 genuinely exercises the full deactivate->reactivate->stale-release composed interleaving (two stale live refs, fresh epoch admission, asserts fresh epoch's in_use unaffected), not a simplified stand-in. Real runs quoted: mix compile --warnings-as-errors clean; mix test test/letflow/admission_test.exs test/letflow/routers/tenants_test.exs -- 43 passed; combined with plug tests -- 63 passed, zero failures. Non-blocking observation filed (not a docs/issues entry, narrow/speculative): state.refs/state.tenants use raw untyped map/tuple shapes where a tagged struct could make an invalid generation/pool pairing unrepresentable -- consistent with this module's pre-existing style, not introduced by this diff, not required to fix. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established session precedent -- ELIXIR-DEV's own tests are already comprehensive and REVIEWER independently verified their quality above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

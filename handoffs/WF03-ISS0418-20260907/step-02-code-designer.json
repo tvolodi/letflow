@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0418-20260907-step-02",
+  "run_id": "WF03-ISS0418-20260907",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0418-20260907/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-07T09:59:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": ["REQ-170"],
+    "issue_ids": ["ISS-0418", "ISS-0352", "ISS-0406"],
+    "related_handoff_ids": ["WF03-ISS0418-20260907-step-01"],
+    "artifacts_in": [
+      "lib/mix/tasks/letflow.check.test.ex",
+      "lib/letflow/engine/wasm/invocation_lease.ex",
+      "test/letflow/engine/wasm/plugin_handler_test.exs"
+    ],
+    "artifacts_out": ["lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md"],
+    "branch_name": "feature/WF03-ISS0418-20260907",
+    "base_commit": "1e3a1d6f"
+  },
+  "task": {
+    "description": "Design the ISS-0418 fix: per-test process isolation for the isolated wasm_hang CI subprocess, replacing the reframed-away concurrency-cap approach, plus a correction to ISS-0418's own acceptance criteria."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Design doc written to lib/letflow/design/iss0418-wasm-hang-test-isolation-fix.md. Scope reframing stated explicitly in section 1: the original operator-configurable-cap AC is already satisfied by the existing InvocationLease (2026-09-05) but doesn't fix the flake (proven by ISS-0418's own post-fix CI data, ~50% unchanged). Recommended AC correction (append-only, per REQ-226 AC4 precedent): annotate the cap criterion as satisfied-for-its-own-purpose-but-not-sufficient, add a new criterion for per-test subprocess isolation verified by N consecutive clean local runs. Per-test isolation mechanism (section 4): LIVE-VERIFIED (not assumed) that mix test <file>:<line> --only wasm_hang does NOT compose -- line-targeting silently discards --only entirely, confirmed via --dry-run transcripts. Design uses file:line alone (already bypasses the default exclude). Enumeration is dynamic: a discovery subprocess runs mix test --only wasm_hang --dry-run, parses the Tests that would be executed block for file/line pairs, then spawns one real subprocess per discovered test via the existing stream_and_capture/2 helper reused unmodified, aggregating into the same report shape. Irreducible pair (plugin_handler_test.exs:485, 2 dispatches in one test body) needs no special-case code since file:line addressing is inherently test-body-atomic -- design mandates a one-line warning comment at the @tag site. Overhead measured live: ~1.7s per subprocess boot, ~5 extra boots ~10s added per green run, judged a clear win against 60-180s timeout recurrences. Confirmed lib/letflow/engine/wasm/invocation_lease.ex left exactly untouched -- no production call site changes. Verification: N=20 consecutive local mix letflow.check.test runs as primary gate. Two open questions named explicitly, not silently resolved. Self-checked: all fenced blocks contain only verified terminal transcripts and @type/@spec declarations, no executable logic."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

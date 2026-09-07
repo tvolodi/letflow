@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0525-20260907-step-01",
+  "run_id": "WF03-ISS0525-20260907",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0525-20260907/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "LOW",
+  "created_at": "2026-09-07T15:05:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0525"],
+    "related_handoff_ids": ["WF03-ISS0525-20260907-step-00"],
+    "artifacts_in": [
+      "test/letflow/sandbox_pool_test.exs",
+      "lib/letflow/sandbox_pool.ex",
+      ".github/workflows/ci.yml",
+      "docs/issues/ISS-0224.yaml"
+    ],
+    "branch_name": "feature/WF03-ISS0525-20260907",
+    "base_commit": "8c9c8682"
+  },
+  "task": {
+    "description": "Root-cause diagnosis of ISS-0525's SandboxPoolTest RT-9/RT-2 CI flake."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "ROOT CAUSE FOUND, not the originally-hypothesized cross-CI-job/cross-partition collision. Ruled that out first: .github/workflows/ci.yml's backend job has no matrix strategy, one job = one isolated postgres service container per GitHub Actions trigger; the two observed runs (34131891071 pass, 34131920822 fail) are two separate push/pull_request triggers on isolated runners, physically cannot share DB state; mix test --partitions assigns whole files to partitions so RT-2/RT-9 (same file) can never land in different partition processes either. REAL MECHANISM: RT-9 (sandbox_pool_test.exs:1286-1317) deliberately starts a real provisioning (Task.Supervisor.async_nolink/3, sandbox_pool.ex:606, running Ecto.Migrator.run/4) and only waits for provision_in_flight?/1 to become true, never waits for it to finish and never releases the claim. Teardown is LIFO: RT-9's own on_exit (drop_sandbox_schemas_created_since!) is registered BEFORE start_pool!'s on_exit (GenServer.stop), so ExUnit runs GenServer.stop FIRST while the async_nolink migration Task is still live -- SandboxPool has no terminate/2 callback (confirmed, grepped lib/letflow/sandbox_pool.ex) and the worker is async_nolink, so stopping the pool does nothing to it. RT-9's own on_exit cleanup (drop_sandbox_schemas_created_since!/1 -> resilient_drop_schema/1, lines 546-637) then races that still-live orphan: DROP SCHEMA needs a lock the still-running migration holds, retry_query_once/1 retries once (insufficient, orphan can still be running on retry), the second failure gets converted to {:error, exception} per ISS-0292's design and surfaces as Failure 1's flunk. The schema is genuinely left behind, still being written to by the orphan; RT-2 (sandbox_pool_test.exs:849-960, an innocent bystander, its own logic is correct) then straddles that leaked/still-mutating schema in its baseline/final diff, producing Failure 2. This is a NEW manifestation of a gap ISS-0224 explicitly NAMED AND DECLINED TO FIX at the time ('an async_nolink worker outlives a pool that dies mid-provisioning... nothing aborts a hung provisioning' -- accepted tradeoff over a linked Task that would strand every live claim on a provisioning crash), not a regression of ISS-0227 (unrelated dead-field removal) or ISS-0292 (hardened the cleanup helpers against an already-occurring Postgres error, worked exactly as designed here -- retry fired, failure converted rather than crashing the loop -- but never addressed WHY the query got canceled, a fundamentally different failure mode than the transient CPU-throttling blip ISS-0292 targeted). RECOMMENDATION: fix RT-9's test body to genuinely wait for the provisioning it deliberately leaves in flight (Process.monitor/1 the in-flight task_pid already visible in the asserted key-set, assert_receive {:DOWN,...} before the test ends) so the orphan no longer exists by the time either teardown step runs -- removes the race at its source. EXPLICITLY NOT RECOMMENDED: stacking more retry/timeout arithmetic onto resilient_drop_schema/retry_query_once again (ISS-0292's own history already records 3 prior CODE-DESIGN-VALIDATOR FAILs for exactly that shape of fix before landing on pass 4 -- a test-side fix removing the orphan is structurally cheaper and doesn't reopen that pattern). NOT RECOMMENDED as primary: documenting as accepted residual flake, since (unlike the pool's own async_nolink tradeoff) this specific gap is fixable at the test level, not fundamental to the design. Sample-size caveat stated explicitly: 1 failure in 2 observed CI runs (coin flip on n=2), but the mechanism is deterministic in principle and CPU-loaded CI runners make it more likely to surface, not less. Relevant files/lines: sandbox_pool_test.exs:1286-1317 (RT-9), :100-114 (start_pool!'s on_exit, LIFO ordering), :546-560/585-601/619-637 (cleanup helpers), :849-960 (RT-2, unmodified, correct), sandbox_pool.ex:606 (async_nolink dispatch, no terminate/2 anywhere in the file), .github/workflows/ci.yml:99-101,110-168 (confirms no matrix / per-job service container), docs/issues/ISS-0224.yaml's 'NOT FIXED, DISCLOSED' resolution paragraph."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

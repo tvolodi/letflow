@@ -1,4 +1,4 @@
-id: ISS-0445
+id: ISS-0523
 title: "T-DEFAULT-NO-FLAG-SCANS-REAL-CORPUS asserts run([]) == :ok against the LIVE handoffs/ corpus, so any other session's enum violation turns this branch's suite red"
 discovered_by: ORCH
 discovered_in_run: WF03-ISS0440-20260903
@@ -69,5 +69,17 @@ source: >
   3191/3192 passed, the single failure being this test at
   test/mix/tasks/letflow.lint_handoffs_test.exs:686, cleared by fixing another
   session's handoff rather than by touching any test or lib code.
-github_issue: 860
+queue_task_id: 523
+github_issue: 1053
 status: open
+renumbering_note: >
+  Originally filed as ISS-0445 (GH#860) on 2026-09-03, but never actually
+  registered as its own letflow-queue task at the time -- get_next_task
+  never surfaced it across this session's many polls. Registered fresh
+  on 2026-09-07 (ORCH, processing the post-ISS-0418 backlog), which
+  assigned queue task 523 and auto-created a new GitHub mirror, #1053,
+  per this project's established issue_ref = "ISS-" + task id
+  convention. Renumbered this file from ISS-0445.yaml to ISS-0523.yaml
+  to match, rather than leaving a permanent id/filename mismatch.
+  Original GH#860 closed as duplicate of #1053. All original content
+  below is preserved verbatim, unedited.

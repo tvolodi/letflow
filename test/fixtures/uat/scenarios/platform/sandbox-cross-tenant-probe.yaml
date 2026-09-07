@@ -7,6 +7,23 @@
 # synthetic fixtures under test/fixtures/simulation/<company>/scenarios/ instead. Do
 # not edit the ported content below except to keep it byte-identical to a re-pull of
 # the same commit.
+#
+# NOTE (ISS-0527, added by SECURITY-REVIEWER during this port's security review):
+# this scenario targets R-Co's own PW-12 / sys-agent-sandbox-ownership feature (an
+# orchestrator/implementer agent split with tenant-scoped sandbox claim/release,
+# R-Co's own docs/workflows.yaml + docs/processes/system/agent-sandbox-ownership.md,
+# status: DRAFT even in R-Co, never fully built there). Letflow has NOT built the
+# equivalent runtime-agent subsystem -- lib/letflow/router.ex's "Deferred routes"
+# table lists Letflow.Routers.AgentRequests/AgentResponses/AgentEvents as
+# post-S6 (runtime-agent subsystem), and docs/requirements.yaml has no SBX-*
+# requirements. Letflow DOES have a module named Letflow.SandboxPool
+# (lib/letflow/sandbox_pool.ex), but it is semantically unrelated: an internal
+# ephemeral-Postgres-schema pool for process-definition promotion/assertion-rerun,
+# with no tenant-facing API, no worker/assignment/coordinator concept, and no
+# claim/release semantics tied to tenant business data. Do NOT map this scenario's
+# "workspace"/"worker"/"coordinator" narrative onto Letflow.SandboxPool's
+# claim/1 / release/1 -- that would test the wrong mechanism. Treat this scenario
+# as BLOCKED/UNBUILT_FEATURE until Letflow's runtime-agent subsystem exists.
 ---
 id: platform-sandbox-cross-tenant-probe
 company_id: platform

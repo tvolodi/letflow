@@ -435,6 +435,90 @@ defmodule Mix.Tasks.Letflow.LintHandoffsTest do
     end
   end
 
+  # ==================================================================
+  # ISS-0443 -- unrecognized flags now raise instead of being silently
+  # discarded (regression, WF03-ISS0443-20260907)
+  #
+  # Spec: test/specs/ISS-0443.md. Design:
+  # lib/letflow/design/iss0443-lint-handoffs-strict-flag-parsing.md.
+  # Run: WF03-ISS0443-20260907, WF-03 Step 4.
+  #
+  # `resolve_dir/1`'s hand-walked `find_dir_flag/1` catch-all silently
+  # dropped any token it didn't recognize -- an EXISTING function whose
+  # unknown-flag behavior changed, not a from-scratch module. Per WF-03's
+  # ordinary rule (not the "code under test does not exist" clause),
+  # fail-first evidence is the pre-fix commit (c357f97a~1) checked out in a
+  # disposable worktree, not a mutant. See this test-designer's handoff
+  # result.summary for the quoted FAIL (at c357f97a~1) and PASS (this
+  # branch, at/after c357f97a) output.
+  # ==================================================================
+
+  describe "ISS-0443 -- resolve_dir/1 rejects an unrecognized flag (unit level)" do
+    test "F-UNKNOWN-FLAG-RAISES -- an unrecognized flag names itself and raises Mix.Error" do
+      assert_raise Mix.Error, ~r/unrecognized flag "--bogus-flag-xyz"/, fn ->
+        LintHandoffs.resolve_dir(["--bogus-flag-xyz"])
+      end
+    end
+
+    test "F-UNKNOWN-FLAG-AUTOFX-TYPO -- the issue's own motivating typo, --autofx, is rejected" do
+      assert_raise Mix.Error, ~r/unrecognized flag "--autofx"/, fn ->
+        LintHandoffs.resolve_dir(["--autofx"])
+      end
+    end
+
+    test "F-UNKNOWN-FLAG-DR-TYPO -- the issue's own motivating typo, --dr, is rejected" do
+      assert_raise Mix.Error, ~r/unrecognized flag "--dr"/, fn ->
+        LintHandoffs.resolve_dir(["--dr", "x"])
+      end
+    end
+
+    test "F-AUTOFIX-INVALID-VALUE -- --autofix=notabool (malformed value for a recognized flag) raises" do
+      assert_raise Mix.Error, ~r/invalid value "notabool" for flag "--autofix"/, fn ->
+        LintHandoffs.resolve_dir(["--autofix=notabool"])
+      end
+    end
+
+    test "F-BARE-POSITIONAL-REJECTED -- a bare positional argument (no leading --) raises" do
+      assert_raise Mix.Error, ~r/unexpected argument\(s\) \["foo"\]/, fn ->
+        LintHandoffs.resolve_dir(["foo"])
+      end
+    end
+  end
+
+  describe "ISS-0443 -- run/1 end-to-end: an unrecognized flag never produces a confident OK" do
+    test "T-UNKNOWN-FLAG-RUN-RAISES -- run/1 with an unrecognized flag raises" do
+      assert_raise Mix.Error, ~r/unrecognized flag "--bogus-flag-xyz"/, fn ->
+        capture_io(fn -> LintHandoffs.run(["--bogus-flag-xyz"]) end)
+      end
+    end
+
+    test "T-UNKNOWN-FLAG-RUN-NO-OK-BANNER -- confirms no OK/healthy banner is ever printed for a rejected flag" do
+      io =
+        capture_io(fn ->
+          try do
+            LintHandoffs.run(["--bogus-flag-xyz"])
+          rescue
+            Mix.Error -> :ok
+          end
+        end)
+
+      refute io =~ "OK --"
+      refute io =~ "new violations"
+    end
+
+    test "T-AUTOFIX-INVALID-VALUE-RUN-RAISES -- run/1 with --autofix=notabool raises, never runs the linter" do
+      assert_raise Mix.Error, ~r/invalid value "notabool" for flag "--autofix"/, fn ->
+        capture_io(fn -> LintHandoffs.run(["--autofix=notabool"]) end)
+      end
+    end
+
+    test "T-BARE-POSITIONAL-RUN-RAISES -- run/1 with a bare positional argument raises" do
+      assert_raise Mix.Error, ~r/unexpected argument\(s\) \["foo"\]/, fn ->
+        capture_io(fn -> LintHandoffs.run(["foo"]) end)
+      end
+    end
+  end
+
   describe "ISS-0440 -- guard_empty_scope/2 (empty --dir scope is a hard usage error)" do
     setup do
       dir =

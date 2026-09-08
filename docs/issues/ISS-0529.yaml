@@ -1,0 +1,63 @@
+id: ISS-0529
+title: >
+  CORS default origins omit http://localhost:4173 -- the exact host+port
+  combination ISS-0296 requires, so the SPA's tenant-config bootstrap is
+  browser-blocked and it silently falls back to a hardcoded Keycloak authority
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:20:00Z"
+severity: MAJOR
+tags: [frontend, cors, oidc, s8, uat]
+description: >
+  Found while discharging ISS-0296's live-browser login proof.
+  Letflow.Plugs.Cors's @default_origins was
+  ["http://localhost:5173", "http://127.0.0.1:4173"].
+
+  ISS-0296 established two independently-required workarounds for that proof,
+  both reproduced live in this session: the host must be `localhost` and not
+  `127.0.0.1` (Vite binds IPv6-only, so 127.0.0.1 is connection-refused), AND
+  the port must be 4173 -- the built SPA under `vite preview` -- because 5173's
+  dev server double-invokes the redirect under React 18 StrictMode and races PKCE.
+  Their combination, http://localhost:4173, was the one origin the allowlist did
+  not contain.
+
+  FAILURE MODE, observed live rather than reasoned about. The SPA's unauthenticated
+  GET /api/tenant-config bootstrap call was CORS-blocked in the browser
+  (net::ERR_FAILED; the server returned 200 with no access-control-allow-origin
+  header, and the OPTIONS preflight 404'd). The SPA does not surface that as an
+  error -- it silently falls back to a hardcoded default authority on port 8082.
+  In this multi-workspace checkout 8082 is a sibling workspace's Keycloak
+  container, so the login redirect went to the wrong identity provider entirely
+  and the proof failed with what looked like an OIDC/Keycloak fault. Diagnosed
+  only by capturing page navigations and failed requests directly.
+
+  This is why the CORS omission is MAJOR rather than trivial: the symptom appears
+  at the identity layer, several steps removed from its actual cause, and the
+  fallback is silent.
+
+  FIX (WF03-ISS0530-20260908): @default_origins now covers both the 5173
+  dev-server and 4173 preview-server ports in both their localhost and 127.0.0.1
+  spellings (browsers treat those as distinct origins). A comment at the constant
+  records why localhost:4173 specifically is load-bearing per ISS-0296/ISS-0529 so
+  it is not "tidied" away later. Two regression tests added to
+  test/letflow/plugs/cors_test.exs pinning localhost:4173 and 127.0.0.1:5173.
+  SECURITY-REVIEWER: PASS (additive allow-list change, no tenant-data path, no
+  credentials involved -- INV-4 n/a). REVIEWER: PASS.
+
+  VERIFICATION: Before: curl GET /api/tenant-config with Origin:
+  http://localhost:4173 returned 200 with no access-control-allow-origin header.
+  After: same call returns access-control-allow-origin: http://localhost:4173.
+  mix test test/letflow/plugs/cors_test.exs: 18 passed (16 + 2 regression).
+
+affected_files:
+  - lib/letflow/plugs/cors.ex
+  - test/letflow/plugs/cors_test.exs
+related:
+  - ISS-0296
+  - REQ-118
+  - REQ-133
+queue_task_id: 530
+github_issue_number: 1073
+resolving_run: WF03-ISS0530-20260908
+resolved_at: "2026-09-08T10:35:55Z"
+status: resolved

@@ -20,10 +20,13 @@ defmodule Letflow.Plugs.Cors do
     @default_origins)`, read **at request time** (not `compile_env` — origins
     differ per deploy environment and must not require a rebuild to change;
     this deliberately does NOT mirror `Letflow.Api.Error`'s `:problems_base_uri`
-    compile-time pattern). `@default_origins` (dev/test) is
-    `["http://localhost:5173", "http://127.0.0.1:4173"]` — no `*`, ever.
-    `config/runtime.exs` overrides this in prod via `CORS_ALLOWED_ORIGINS`,
-    fail-closed to `[]` when unset.
+    compile-time pattern). `@default_origins` (dev/test) covers both the
+    `:5173` dev-server and `:4173` preview-server ports in both their
+    `localhost` and `127.0.0.1` spellings — browsers treat those as distinct
+    origins, and ISS-0529 confirmed that omitting `localhost:4173` specifically
+    blocks the SPA's `/api/tenant-config` bootstrap with a silent fallback to a
+    hardcoded Keycloak authority. No `*`, ever. `config/runtime.exs` overrides
+    this in prod via `CORS_ALLOWED_ORIGINS`, fail-closed to `[]` when unset.
   * **Rejection is silent, not a 403.** CORS is a browser-enforced,
     response-header-driven mechanism — the server's only lever is which
     headers it emits. An unlisted `Origin` gets no CORS headers at all and
@@ -47,7 +50,14 @@ defmodule Letflow.Plugs.Cors do
 
   import Plug.Conn
 
-  @default_origins ["http://localhost:5173", "http://127.0.0.1:4173"]
+  # Both ports × both host spellings. ISS-0529: localhost:4173 was missing;
+  # its absence silently blocked the SPA's /api/tenant-config bootstrap.
+  @default_origins [
+    "http://localhost:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173"
+  ]
 
   # The method set Letflow's routers actually use (write methods per
   # `Letflow.Plugs.TenantStatus`'s `@write_methods`, plus GET/OPTIONS).

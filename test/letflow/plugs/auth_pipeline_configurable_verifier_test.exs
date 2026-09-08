@@ -178,6 +178,47 @@ defmodule Letflow.Plugs.AuthPipelineConfigurableVerifierTest do
     end
   end
 
+  describe "generic provisioning failure (ISS-0534: reason must be logged, not discarded)" do
+    test "a genuine username collision against a different external identity is rejected 500, and the discarded reason is logged" do
+      realm = unique_realm("provision-collision")
+      tenant = insert_tenant_for_realm!(realm)
+      {:ok, schema_name} = TenantProvisioning.schema_name_for_tenant(tenant.id)
+
+      # Pre-seed a user under a DIFFERENT external identity but the SAME
+      # username the incoming token will map to (ConfigurableTokenVerifierDouble's
+      # `claims_for/2` sets preferred_username to the raw `sub` value below) --
+      # this is Letflow.Identity.provision_oidc_user/4's genuine, non-race
+      # collision path (identity.ex ~L1517: `identity_matches?/2` is false since
+      # the external identity differs, so the original changeset error is
+      # propagated as `{:error, changeset}` -> `{:provision, changeset}` here).
+      %User{}
+      |> User.jit_changeset(%{
+        external_realm: "some-other-realm",
+        external_id: "some-other-external-id",
+        username: "colliding-user",
+        display_name: "Existing Colliding User",
+        email: "existing@example.com",
+        status: :active
+      })
+      |> Repo.insert!(prefix: schema_name)
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn =
+            call_pipeline(:post, [
+              {"authorization", "Bearer realm-token:#{realm}:sub=colliding-user"}
+            ])
+
+          assert conn.status == 500
+          assert conn.halted
+          assert %{"error" => "internal_error"} = Jason.decode!(conn.resp_body)
+        end)
+
+      assert log =~ "provisioning"
+      assert log =~ "Ecto.Changeset"
+    end
+  end
+
   describe "arbitrary test-chosen realm (proves the pipeline isn't hardcoded to bpm-default)" do
     test "a realm-token for an arbitrary test-chosen realm still flows through the full pipeline successfully" do
       realm = unique_realm("configurable-happy-path")

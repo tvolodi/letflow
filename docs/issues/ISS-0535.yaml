@@ -55,6 +55,27 @@ description: >
   so it survives future container restarts. A separate anti-patterns.md entry
   documents this class for future sessions.
 
+  ADDENDUM (ORCH, WF03-ISS0534-20260908, a separate/independent host --
+  letflow-1-postgres-1, not letflow-2/letflow-3): hit the same
+  versions_missing=[20260907020001] signature at essentially the same time,
+  from a THIRD distinct cause on a different host than either (1) or (2)
+  above -- 25 stale letflow_test* databases (letflow_test, letflow_test1-16,
+  letflow_test42/99/165/195/226/901/RV1/validator1) accumulated in
+  letflow-1-postgres-1's persisted volume from earlier runs, predating
+  migration 20260907020001 (the exact class docs/anti-patterns.md's "Stale
+  tenant_template schema surviving a migration-adding commit" entry already
+  documents, recurring for a second time on this specific host). True blast
+  radius on this host was much larger than admission_pipeline_test.exs's
+  5/8: 745 failures across 46 modules. Fix: dropped all 25 stale test
+  databases (never letflow_dev), with explicit user approval since the
+  auto-mode classifier blocks DROP DATABASE. Confirmed via clean re-run:
+  3448/3450 passed, zero versions_missing anywhere, zero AuthPipelineTest
+  regressions. This confirms the "stale tenant_template" class (anti-patterns.md)
+  and the "shared-Postgres connection exhaustion" class (this issue's own
+  root cause 1) are two DISTINCT environmental hazards that can both produce
+  the identical versions_missing symptom on different hosts running this
+  multi-workspace setup -- worth keeping both root causes on record rather
+  than assuming either one alone explains every future recurrence.
 affected_files:
   - (none -- environment-only fix, no application code change)
 related:

@@ -83,6 +83,8 @@ defmodule Letflow.Plugs.AuthPipeline do
 
   @behaviour Plug
 
+  require Logger
+
   import Plug.Conn
 
   alias Letflow.Identity
@@ -172,7 +174,8 @@ defmodule Letflow.Plugs.AuthPipeline do
       {:error, {:provision, :jit_disabled}} ->
         reject(conn, 403, "forbidden", "JIT provisioning disabled for this realm")
 
-      {:error, {:provision, _reason}} ->
+      {:error, {:provision, reason}} ->
+        Logger.error("JIT user provisioning failed reason=#{inspect(reason)}")
         reject(conn, 500, "internal_error", "user provisioning failed")
 
       {:error, {:api_token, _reason}} ->

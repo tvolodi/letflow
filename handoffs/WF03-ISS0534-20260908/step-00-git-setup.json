@@ -1,0 +1,33 @@
+{
+  "handoff_id": "WF03-ISS0534-20260908-step-00",
+  "run_id": "WF03-ISS0534-20260908",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0534-20260908/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T07:55:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0534", "ISS-0532", "ISS-0296"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0534.yaml",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0534-20260908",
+    "base_commit": "ee6976ca"
+  },
+  "task": {
+    "description": "Root-cause diagnosis (diagnosis only, not the fix) of ISS-0534: lib/letflow/plugs/auth_pipeline.ex:175 matches {:error, {:provision, _reason}} on the JIT-provisioning failure path and discards the reason entirely -- nothing on that path logs it, so a 500 'user provisioning failed' is completely undiagnosable from the server's own output (only a trace_id is returned, correlating to nothing written down). Discovered by ORCH during a live-browser audit (ADHOC-ENGINE-AUDIT-20260908) reconstructing the pipeline by hand in mix run to find the real cause was an Ecto changeset unique-constraint collision on username, itself caused by an environmental Keycloak-volume-reset issue (not the defect this issue tracks). Read lib/letflow/plugs/auth_pipeline.ex around line 175 and the full provision/JIT-provisioning code path (Letflow.Identity.provision_oidc_user/4) to confirm the exact match clause, what reason shapes {:provision, reason} can actually carry (changeset errors, other error atoms, etc.), and what logging infrastructure already exists elsewhere in the codebase for similar auth-path error cases (grep for Logger.error/Logger.warning near other {:error, ...} matches in this file or Letflow.Plugs more broadly) so the fix follows an established logging convention rather than inventing one. The issue also raises two SEPARATE considerations, explicitly NOT required to be fixed in this same pass unless trivial: (a) whether an external-identity-missed-but-username-taken collision should be its own distinct 409-shaped identity-conflict error rather than a generic 500, and (b) a dev-docs note about Keycloak-volume-reset breaking seeded logins silently. Recommend scope: is (a) an architecture decision requiring CODE-DESIGNER, or is the logging fix alone (adding a Logger.error call with the trace_id and the discarded reason) sufficient to close THIS issue's own stated defect ('the defect worth fixing is diagnosability, not the collision')? The issue's own text says the collision-classification question is worth considering 'separately' -- confirm whether that means it's explicitly out of scope for this run or should be flagged as a design question within it."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0534-20260908 created off main @ ee6976ca. docs/issues/ISS-0534.yaml written locally (verbatim from the queue task's own record) since the discovering session's own commit has not yet landed on main."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0534-20260908-step-04",
+  "run_id": "WF03-ISS0534-20260908",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0534-20260908/step-04-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T09:10:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0534"],
+    "related_handoff_ids": ["WF03-ISS0534-20260908-step-03"],
+    "artifacts_in": ["lib/letflow/plugs/auth_pipeline.ex", "test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0534-20260908",
+    "base_commit": "ee6976ca",
+    "implementation_commit": "76f3bf5c"
+  },
+  "task": {
+    "description": "OTP-idiom/scope-creep/decision-record hard gate on ISS-0534's auth pipeline logging fix."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Scope clean via git show --stat: exactly 2 files, auth_pipeline.ex (+4/-1) and the new test file (+41); the {:error, {:provision, reason}} clause still ends in the byte-identical reject(conn, 500, ...) call; no touch to req021-auth-plug-pipeline.md or a Keycloak-volume note. Idiom: require Logger placement mirrors definitions.ex:223's convention, message format matches definitions.ex:964-967's inspected-reason idiom exactly; :error level (vs definitions.ex's :warning) justified since this path returns 500 (server-side fault) vs definitions.ex's 422 (client-correctable rejection). Decision-record consistency independently re-verified: req021-auth-plug-pipeline.md SS5.4 only constrains the response BODY (no changeset detail in the response), says nothing about server-side logs; OQ-9's settled divergence is specifically about returning 500 instead of a pre-JIT fallback, untouched by this diff -- additive logging does not reopen or contradict either decision. Test quality confirmed genuine and deterministic: pre-seeds a colliding User row under a different external identity via User.jit_changeset/2, verified against identity.ex:1498-1533 that identity_matches?/2 being false propagates the real {:error, changeset} unconditionally -- no race, no mocking; correctly wraps only the pipeline call in ExUnit.CaptureLog.capture_log/1, asserts response and log content appropriately inside/outside the capture block. Regression check independently confirmed: re-ran admission_pipeline_test.exs directly, 3/8 passed 5 failed, root cause is Letflow.TenantFixture.provisioned_tenant!/1 reporting versions_missing=[20260907020001] despite the migration file existing and being listed in manifest_versions -- a tenant-provisioning/migration-fixture gap entirely orthogonal to AuthPipeline, 100% reproducible independent of this diff. Real runs quoted: mix compile --warnings-as-errors clean; mix format --check-formatted clean; mix test test/letflow/plugs/auth_pipeline_test.exs test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs -- 14 passed. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established session precedent -- ELIXIR-DEV's own regression test is already comprehensive for this single-clause fix and REVIEWER independently verified its quality above. NOTE FOR ORCH: the admission_pipeline_test.exs migration-fixture gap (versions_missing=[20260907020001]) is a real, reproducible, pre-existing bug worth its own tracked issue -- not filed by REVIEWER, flagged here per No Issue Left Local-Only."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

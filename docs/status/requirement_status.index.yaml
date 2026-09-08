@@ -2193,11 +2193,15 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 7
+    entries: 8
     note: >
-      Incremented to 7 by ORCH's own ISS-0535 SCOPE-CHANGE done-event append
+      Incremented to 8 by ORCH's own ISS-0534 SCOPE-CHANGE done-event append
+      (WF03-ISS0534-20260908) -- 404 lines at that point (25001 bytes), well
+      under the roll ceiling, composed on rebase with a concurrently-landed
+      sibling append.
+      Previously incremented to 7 by ORCH's own ISS-0535 SCOPE-CHANGE done-event append
       (WF03-ISS0535-20260908) -- environment-only issue fix, no code change.
-      Incremented to 6 by ORCH's own ISS-0391 SCOPE-CHANGE done-event append
+      Previously incremented to 6 by ORCH's own ISS-0391 SCOPE-CHANGE done-event append
       (chore/status-iss0391-20260907) -- 342 lines at that point (20861 bytes),
       well under the roll ceiling.
       Previously incremented to 5 by ORCH's own ISS-0527 SCOPE-CHANGE done-event append

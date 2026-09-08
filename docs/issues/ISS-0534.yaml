@@ -1,0 +1,79 @@
+id: ISS-0534
+title: "AuthPipeline discards the JIT-provisioning failure reason and logs nothing, so a 500 'user provisioning failed' is undiagnosable from the server's own output"
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:23:00Z"
+severity: MINOR
+tags: [identity, diagnosability, observability]
+description: >
+  Hit while discharging ISS-0296's live-browser proof. Every authenticated API call
+  returned:
+    HTTP 500 {"error":"internal_error","detail":"user provisioning failed"}
+
+  lib/letflow/plugs/auth_pipeline.ex:175 matches {:error, {:provision, _reason}} and
+  discards the reason, and nothing on that path logs it. The server log contained NOT ONE
+  line about the failure -- only a trace_id in the response header, which correlates to
+  nothing that was written down.
+
+  Diagnosis therefore required reconstructing the pipeline by hand in `mix run` --
+  resolving the tenant, deriving the schema, decoding the JWT, building the
+  ClaimMappingConfig, and calling Identity.provision_oidc_user/4 directly -- to surface
+  the actual cause, which was an Ecto changeset error:
+    username: {"has already been taken", [constraint: :unique, constraint_name: "users_username_index"]}
+
+  ROOT CAUSE OF THE UNDERLYING 500 (environmental, not an app defect): the Keycloak
+  container had been recreated with a fresh volume while the Postgres volume persisted, so
+  every seeded user's Keycloak `sub` had changed. JIT provisioning looks users up by
+  (external_id, external_realm), missed, attempted an INSERT, and collided with the
+  surviving row on the `username` unique index. All three seeded users were affected
+  (admin/worker/operator subs all differed from their DB rows). Realigning external_id to
+  the current subs resolved it and the full REQ-133 suite then passed 4/4.
+
+  THE DEFECT worth fixing is diagnosability, not the collision: a 500 on the authentication
+  path should log its reason at error level with the trace_id. Worth considering separately
+  whether this specific case -- external identity missed but username already taken -- should
+  be its own distinct error (a 409-shaped identity-conflict), since it means the IdP and the
+  local user store disagree about who a user is, which is an operator-actionable condition
+  and not an internal error.
+
+  Also worth a doc note: recreating the Keycloak volume without also resetting the Letflow
+  dev DB silently breaks every seeded login this way, and nothing currently warns about it.
+affected_files:
+  - lib/letflow/plugs/auth_pipeline.ex
+related:
+  - ISS-0532
+  - ISS-0296
+queue_task_id: 534
+github_issue: 1077
+status: resolved
+resolution: >
+  Resolved 2026-09-08 via WF03-ISS0534-20260908. Fixed by adding one
+  Logger.error call (via inspect/1) to lib/letflow/plugs/auth_pipeline.ex's
+  handle_auth_error/2, logging the previously-discarded {:provision, reason}
+  value before its unchanged 500 response -- no manual trace_id threading
+  needed, Letflow.Obs.Logger's formatter already attaches it automatically
+  from Logger.metadata(). ISSUE-FIXER traced every reachable reason shape
+  (Letflow.Identity.@type provisioning_error's open union plus a plug-layer
+  :invalid_tenant_id atom) and confirmed a naive %Ecto.Changeset{}-only fix
+  would have crashed on the atom cases -- inspect/1 handles all shapes
+  safely. SECURITY-REVIEWER traced User.jit_changeset/2 and confirmed no
+  reachable reason shape can carry a raw credential/token/password hash
+  (password_hash is unconditionally a fixed sentinel, never from caller
+  attrs) -- INV-4 PASS. Explicitly did NOT reclassify the 500 to a
+  distinguishing status code (would have silently reversed
+  req021-auth-plug-pipeline.md's own settled OQ-9 decision) and did NOT add
+  a Keycloak-volume-reset doc note (out of scope, unrelated file). New
+  regression test added proving the fix via a deterministic (non-race)
+  username-collision reproduction. Pipeline: ISSUE-FIXER -> ELIXIR-DEV ->
+  SECURITY-REVIEWER (PASS, INV-4 focus) -> REVIEWER (PASS) -> TEST-RUNNER.
+  Along the way, TEST-RUNNER's first full-suite attempt surfaced a much
+  larger pre-existing environmental problem on this host (letflow-1-postgres-1):
+  745 failures from 25 stale letflow_test* Postgres databases, a recurrence
+  of the same class WF03-ISS0399-20260907 already hit -- ORCH obtained user
+  approval to drop the stale databases, confirmed via a clean re-run
+  (3448/3450 passed, only the known unrelated rustc-absent failures
+  remaining), and filed ISS-0535 for this class before discovering a
+  sibling session had independently found and fixed a differently-rooted
+  cause of the same GH issue on a different host -- composed both root
+  causes into ISS-0535's own record on rebase and added an anti-patterns.md
+  recurrence note. Implementation commit 76f3bf5c.

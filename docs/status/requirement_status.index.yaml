@@ -2193,9 +2193,12 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 18
+    entries: 19
     note: >
-      Incremented to 18 by ORCH's own REQ-274 done-event append
+      Incremented to 19 by ORCH's own ISS-0547 SCOPE-CHANGE done-event append
+      (WF03-ISS0547-20260908) -- 707 lines at that point (43439 bytes), well
+      under the roll ceiling.
+      Previously incremented to 18 by ORCH's own REQ-274 done-event append
       (WF02-REQ274-20260908) -- 687 lines at that point (42399 bytes), well
       under the roll ceiling, composed after rebasing onto a sibling
       session's ISS-0546 fix.

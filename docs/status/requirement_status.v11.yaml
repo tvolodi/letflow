@@ -685,3 +685,23 @@ history:
       docs/migration/decisions/0020-frontend-architecture.md, independently
       flagged by both REQ-273's and REQ-274's own design-validation passes)
       landed first. ORCH will merge and release queue task 539 status:done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T22:18:45Z"
+    note: >
+      ISS-0547 (queue task 547, GH#1111) closed via WF03-ISS0547-20260908,
+      a direct-action §10 fix (single file). Discovered by
+      CODE-DESIGNER/CODE-DESIGN-VALIDATOR/FRONTEND-DEV during
+      WF02-REQ275-20260909 (REQ-275, out of scope for that requirement,
+      reported not fixed): web/src/components/ui/ConfirmDialog.tsx
+      (pre-existing) uses body/confirmText, while design-system.md 7.3
+      documented description/confirmLabel; cancelText/isLoading were
+      real, undocumented additive props. Fixed by correcting the spec
+      to match the shipped component (the cheaper of the two directions
+      named in the issue -- no call-site churn on
+      web/src/components/ui/ConflictResolver.tsx, ConfirmDialog's one
+      existing consumer) and documenting cancelText/isLoading with
+      their real defaults. docs/issues/ISS-0547.yaml created and
+      resolved. ORCH will merge and release queue task 547 status:done.

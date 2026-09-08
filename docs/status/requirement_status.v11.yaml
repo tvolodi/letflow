@@ -597,3 +597,44 @@ history:
       consuming page to validate it against. docs/issues/ISS-0545.yaml
       created and resolved. ORCH will merge and release queue task 545
       status:done.
+
+  - req: REQ-272
+    event: started
+    agent: ORCH
+    at: "2026-09-08T18:59:16Z"
+    note: >
+      WF02-REQ272-20260908 started (queue task 537, GH#1093). Build the Button,
+      StatusBadge and PageLayout design-system primitives per decision 0020 D2a,
+      group 1 of 3. docs/requirements.yaml entry for REQ-272 was missing until
+      this run's Step 00 -- registered in letflow-queue/GitHub by a prior
+      discovery session but never committed locally, same registration-gap
+      class as ISS-0445/ISS-0523/ISS-0533. ORCH added the entry (status:
+      in_progress) before proceeding to Step 1 (CODE-DESIGNER).
+
+  - req: REQ-272
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-08T20:57:02Z"
+    note: >
+      WF02-REQ272-20260908 done (queue task 537, GH#1093). Built 3 design-system
+      primitives in web/src/components/ui/ (Button, StatusBadge, PageLayout) plus
+      13 new tokens in web/src/styles/tokens.css, all against
+      docs/frontend/design-system.md sections 5/7.1/8 per decision 0020 D2a group 1
+      of 3 -- zero call sites at end of this requirement, matching its own stated
+      scope fence (page migration is REQ-276..278, not this run). Pipeline:
+      CODE-DESIGNER (1 rework round -- a token-audit gap CODE-DESIGN-VALIDATOR
+      caught) -> CODE-DESIGN-VALIDATOR (PASS on re-check) -> FRONTEND-DEV ->
+      SECURITY-REVIEWER (out of scope, no tenant-data path) -> REVIEWER (PASS) ->
+      TEST-DESIGNER -> TEST-DESIGN-VALIDATOR (PASS) -> TEST-RUNNER -> RELEASE-VALIDATOR
+      (independently re-ran everything, all 7 acceptance criteria confirmed against
+      real code/tests, PASS). Two incidental issues filed during this run, not fixed
+      here: ISS-0545 (a spec gap found in design-system.md) and ISS-0546 (missing
+      decision record docs/migration/decisions/0020-frontend-architecture.md --
+      this requirement's own description cites that file, but it does not exist on
+      disk; DOC-UPDATER confirmed the gap and left it for ISS-0546's own tracked
+      resolution rather than creating it here, per this step's own instruction not
+      to resolve that gap in Step 6). docs/requirements.yaml flipped in_progress ->
+      done. README.md's frontend section checked and left unchanged -- it is a
+      general pointer to web/README.md, not a component inventory, and these are
+      new/unused primitives with no documented current-behavior change. Next:
+      route to FRONTEND-DEV for Step Final (git merge).

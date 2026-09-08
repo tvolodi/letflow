@@ -5630,6 +5630,28 @@
       "backfilled": false,
       "last_known_step": "Direct-action §10 fix -- merge pending.",
       "note": "ISS-0547 (queue task 547, GH#1111), a MINOR naming-inconsistency discovered by CODE-DESIGNER/CODE-DESIGN-VALIDATOR/FRONTEND-DEV during a sibling run (WF02-REQ275-20260909, REQ-275, Toast/JsonEditor primitives) which explicitly fenced ConfirmDialog out of its own scope and only reported the divergence: web/src/components/ui/ConfirmDialog.tsx (pre-existing) uses body/confirmText, while design-system.md 7.3 documented description/confirmLabel; open/onConfirm/onCancel/title/confirmVariant all matched. cancelText/isLoading were real, undocumented additive props. Direct-action §10 fix (single file, no new public function/module/spec, no migration, not a supervision-tree file, not a tenant-data path, no test-asserted-behavior change): corrected the spec to match the shipped component rather than renaming ConfirmDialog.tsx's props and its one existing call site (web/src/components/ui/ConflictResolver.tsx) -- the cheaper of the two directions the issue itself named, with zero call-site churn -- and documented cancelText/isLoading with their real defaults. docs/issues/ISS-0547.yaml created and resolved. No code touched. Implementation commit 21fc4b7d."
+    },
+    {
+      "run_id": "WF02-REQ280-20260908",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-280",
+      "issue_id": null,
+      "queue_task_id": 541,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1097,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/identity/tenant.ex",
+        "lib/letflow/identity/tenant_settings.ex",
+        "lib/letflow/identity.ex"
+      ],
+      "branch_name": "feature/WF02-REQ280-20260908",
+      "started_at": "2026-09-08T22:29:28Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-280 (queue task 541, GH#1097) implements step 4 of decision record 0020's Sequencing: gives Letflow.Identity.Tenant a closed-vocabulary settings store for branding/locale. Design (zero rework cycles): a nullable :map (JSONB) settings column added directly to tenants (not a new table -- tenants is global/non-tenant-scoped, so test/support/tenant_fixture.ex's @expected_tenant_tables oracle does not apply, confirmed and stated explicitly), a new Letflow.Identity.TenantSettings custom Ecto.Type enforcing exactly 5 allowed keys (app_name, logo_url, brand_colors, locales, default_locale) and deterministically rejecting any other key at cast/1 with a typed, key-naming error, and a new Tenant.settings_changeset/2 casting ONLY :settings -- structurally parallel to and verified against the existing narrowly-cast changesets (admin_patch_changeset/2, status_changeset/2, update_changeset/2, create_changeset/3). Canonical brand colour named explicitly (web/src/styles/tokens.css:18's --color-brand-600 = #228be6); the other two values in record 0020's three-way inconsistency given explicit dispositions: #0B5FFF (mobile_tenant_config.ex's @default_branding) deferred to REQ-282 and left untouched, #2563EB (design-tokens/letflow.tokens.json) re-confirmed absent from the filesystem (superseded by REQ-120) by fresh find/grep at every pipeline stage. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV (migration ran clean, 83 targeted tests passed, explicitly flagged a full-suite run was not completed rather than claiming it was) -> SECURITY-REVIEWER (PASS -- closed-vocabulary enforcement, INV-2-shaped field-authorization isolation, and logo_url/brand_colors format validation all independently re-derived from source; one non-blocking note about Erlang regex $ matching before a trailing newline in the hex-colour check) -> REVIEWER (PASS -- independently reproduced 83/83, confirmed tenant_config.ex/mobile_tenant_config.ex byte-identical to main, confirmed the tenant_fixture.ex oracle claim directly) -> TEST-RUNNER (full suite 3491/3493 passed, 2 pre-existing rustc-absent failures unrelated to this branch; flagged a mix format gap on two files, which ORCH fixed directly and re-verified clean). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this project's established precedent, endorsed by REVIEWER despite this touching a migration and a new custom Ecto.Type. update_tenant_settings/2 added to identity.ex but wired to no route yet -- REQ-281/282's concern. Rebased through a real conflict in docs/requirements.yaml against a concurrently-merged sibling (REQ-275) -- both entries composed in impl_order sequence, neither discarded. Implementation commit bd7689a8 (format-fix), preceded by the substantive implementation commit."
     }
   ]
 }

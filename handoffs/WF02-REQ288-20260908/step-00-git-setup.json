@@ -1,0 +1,37 @@
+{
+  "handoff_id": "WF02-REQ288-20260908-step-00",
+  "run_id": "WF02-REQ288-20260908",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ288-20260908/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-08T23:30:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-288"],
+    "issue_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/expr.ex",
+      "lib/letflow/definitions.ex",
+      "lib/letflow/definitions/graph.ex",
+      "lib/letflow/engine/transition.ex",
+      "docs/migration/decisions/0020-frontend-architecture.md",
+      "test/fixtures/simulation/differential_corpus.json"
+    ],
+    "branch_name": "feature/WF02-REQ288-20260908",
+    "base_commit": "46d43a5d"
+  },
+  "task": {
+    "description": "See docs/requirements.yaml REQ-288 in full before starting -- it is fully self-contained with 10 ACs, an explicit grammar-freeze constraint (EXP-102 decision, do not extend Letflow.Engine.Expr), a required 3-way-call-site behavioral decision (create/2, update/2's validate_update_graph/1, validate_definition_graph/2), and a specific sharp edge to test (update/2 re-validating a whole graph making a stored bad-but-previously-valid condition block an unrelated edit). Design only -- no implementation code, no literal Elixir code blocks beyond bare signatures or verbatim citations of existing real code, per this project's disguised-executable-code convention. Re-verify every factual claim in the requirement text (line numbers, current caller list, current violation shape) against real source rather than trusting it."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF02-REQ288-20260908 created off main @ 46d43a5d. Queue task 543 claimed by letflow-orch. docs/requirements.yaml entry for REQ-288 was missing (queue-only, task_type: requirement) -- mirrored in full before dispatch, same pattern as REQ-273/274/280 this cycle."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

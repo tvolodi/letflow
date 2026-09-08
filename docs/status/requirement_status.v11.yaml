@@ -422,3 +422,19 @@ history:
       same flake confirming it persists at reduced rate -- acceptable for MINOR
       severity per ISS-0292 precedent. Verified: 23/23 sandbox_pool_test.exs
       locally. ORCH will merge and release queue task 536 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T10:35:55Z"
+    note: >
+      ISS-0529 resolved via WF03-ISS0530-20260908 (queue task 530, GH#1073).
+      MAJOR: @default_origins in lib/letflow/plugs/cors.ex omitted
+      http://localhost:4173, causing the SPA's /api/tenant-config bootstrap to
+      be CORS-blocked with a silent fallback to a hardcoded wrong Keycloak on
+      port 8082. Fix: expanded @default_origins to all 4 combinations (localhost
+      and 127.0.0.1 × 5173 and 4173); comment added at the constant recording
+      why localhost:4173 is load-bearing per ISS-0296/ISS-0529. 2 regression
+      tests added to cors_test.exs pinning localhost:4173 and 127.0.0.1:5173.
+      SECURITY-REVIEWER PASS (additive allow-list, no tenant-data path, INV-4
+      n/a). REVIEWER PASS. Verified: mix test test/letflow/plugs/cors_test.exs
+      18/18. ORCH will merge and release queue task 530 status:done.

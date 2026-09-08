@@ -30,6 +30,10 @@ defmodule Letflow.Plugs.CorsTest do
   @allowed_origin "http://localhost:5173"
   @other_allowed_origin "http://127.0.0.1:4173"
   @unlisted_origin "http://evil.example.com"
+  # ISS-0529 regression pins: localhost:4173 was missing and 127.0.0.1:5173
+  # was missing; both must stay in @default_origins.
+  @iss0529_origin_a "http://localhost:4173"
+  @iss0529_origin_b "http://127.0.0.1:5173"
 
   defp call(conn), do: Letflow.Router.call(conn, @opts)
 
@@ -136,6 +140,28 @@ defmodule Letflow.Plugs.CorsTest do
         |> call()
 
       assert get_resp_header(now_rejected_conn, "access-control-allow-origin") == []
+    end
+  end
+
+  # ── ISS-0529 regression: localhost:4173 and 127.0.0.1:5173 are in the allowlist ──
+
+  describe "ISS-0529 regression: localhost:4173 and 127.0.0.1:5173 are allowed" do
+    test "localhost:4173 (vite preview) gets access-control-allow-origin" do
+      conn =
+        conn(:get, "/api/tenant-config")
+        |> put_req_header("origin", @iss0529_origin_a)
+        |> call()
+
+      assert get_resp_header(conn, "access-control-allow-origin") == [@iss0529_origin_a]
+    end
+
+    test "127.0.0.1:5173 (vite dev server, loopback) gets access-control-allow-origin" do
+      conn =
+        conn(:get, "/api/tenant-config")
+        |> put_req_header("origin", @iss0529_origin_b)
+        |> call()
+
+      assert get_resp_header(conn, "access-control-allow-origin") == [@iss0529_origin_b]
     end
   end
 

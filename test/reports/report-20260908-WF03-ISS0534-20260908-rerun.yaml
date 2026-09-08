@@ -1,0 +1,95 @@
+run_id: WF03-ISS0534-20260908-rerun
+agent: TEST-RUNNER
+workflow: WF-03 (Issue Resolving), Step 5 final gate before merge to main -- RE-RUN
+timestamp_utc: "2026-09-08T09:50:00Z"
+branch: feature/WF03-ISS0534-20260908
+head_commit: e27d0949578663d0c435923f729f5f2385f811ec
+implementation_commit: 76f3bf5c
+subject: "fix(ISS-0534): log discarded JIT-provisioning failure reason"
+
+context: >
+  Re-run after ORCH (with explicit user approval) dropped the 25 stale letflow_test*
+  Postgres databases inside letflow-1-postgres-1 that caused 749 spurious failures
+  (versions_missing=[20260907020001], stale tenant_template predating that migration)
+  in the immediately prior run of this same gate (see
+  test/reports/report-20260908-WF03-ISS0534-20260908.yaml for that run's full
+  root-cause writeup; same failure class previously seen and fixed once before on
+  WF03-ISS0399-20260907).
+
+pre_check:
+  command: >
+    sudo docker exec letflow-1-postgres-1 psql -U letflow -d postgres -c
+    "SELECT datname FROM pg_database WHERE datname LIKE 'letflow_test%' ORDER BY datname;"
+  result: "0 rows -- confirmed all 25 stale letflow_test* databases are gone before running the suite."
+
+environment:
+  docker: "letflow-1-postgres-1 already running (port 5463 per untracked .env LETFLOW_DB_PORT), healthy, 4 days uptime. This session's own user lacks docker-group permission for `docker compose up -d` directly (permission denied on /var/run/docker.sock) but `sudo docker exec` works and confirmed the container is already up, so no compose action was needed."
+
+full_suite:
+  command: "mix letflow.check.test  (wraps scripts/test_parallel.sh, N=8 partitions via nproc, TEST_POOL_SIZE=10)"
+  result: FAIL (only on the 2 known pre-existing rustc failures)
+  combined_totals_across_8_partitions: "3444 tests, 6 properties, 2 failures (3448/3450 passed)"
+  per_partition:
+    - "partition-1: 538 tests, 0 properties, 0 failures, exit 0 -- Result: 538 passed"
+    - "partition-2: 292 tests, 2 properties, 0 failures, exit 0 -- Result: 294 passed (2 properties, 292 tests), 4 excluded"
+    - "partition-3: 397 tests, 2 properties, 0 failures, exit 0 -- Result: 399 passed (2 properties, 397 tests)"
+    - "partition-4: 461 tests, 2 properties, 0 failures, exit 0 -- Result: 463 passed (2 properties, 461 tests), 14 excluded"
+    - "partition-5: 528 tests, 0 properties, 0 failures, exit 0 -- Result: 528 passed"
+    - "partition-6: 404 tests, 0 properties, 0 failures, exit 0 -- Result: 404 passed"
+    - "partition-7: 440 tests, 0 properties, 2 failures, exit 2 -- Result: 438/440 passed, 1 excluded -- Failed: 2 tests"
+    - "partition-8: 384 tests, 0 properties, 0 failures, exit 0 -- Result: 384 passed, 3 excluded"
+
+failure_categorization:
+  - class: "pre-existing, tracked, rustc toolchain absence"
+    count: 2
+    location: "partition-7 only"
+    signature: "Mix.Tasks.Letflow.CheckToolchainTest -- ** (ErlangError) Erlang error: :enoent"
+    tests:
+      - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest) -- test/mix/tasks/letflow_check_toolchain_test.exs:69/76, running_rust_raw/0 -> running_rust_version/0"
+      - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest) -- same location"
+    attribution: "Confirmed pre-existing/environmental: rustc is not installed in this sandbox, System.cmd(\"rustc\", ...) returns :enoent. Exactly the failure class the dispatch briefed as expected. Not caused by 76f3bf5c."
+  - class: "stale tenant_template / versions_missing=[20260907020001]"
+    count: 0
+    verification: >
+      grep -c "versions_missing" across all 8 partition logs: partitions 1-7 have zero
+      occurrences. Partition 8 has 5 occurrences, but all reference a DIFFERENT, older
+      migration id (20260821000002, not 20260907020001), all but one show
+      versions_missing=[] (i.e. empty/no missing versions -- a benign diagnostic line,
+      not a failure), and the one non-empty occurrence
+      (schema=tenant_8ab1cf3117d047448ec6065abd4f6aca) is immediately followed by
+      "Result: 384 passed, 3 excluded" with no "Failed:" line for that partition at all --
+      i.e. whatever test exercised that incomplete-schema code path (consistent with
+      Letflow.IdentityMigrationTest's own deliberate "missing table" regression scenarios
+      seen earlier in that same log) PASSED. This confirms the stale-tenant_template
+      failure class that blocked the prior run is fully gone.
+  - class: "any other/unaccounted failure"
+    count: 0
+    note: "2 (rustc) is the entire failure count across the combined suite; no other failure signature exists in any partition log."
+
+targeted_check_on_this_branchs_actual_diff:
+  auth_pipeline_related_tests: >
+    Searched all 8 partition logs for AuthPipelineTest / ApiTokenAuthPipelineTest
+    occurrences: all instances found are normal teardown log lines
+    (LETFLOW_TENANT_FIXTURE phase=teardown ...), zero failure markers. No test
+    covering the module 76f3bf5c changed (AuthPipeline) failed.
+  conclusion: "76f3bf5c introduces no test regressions. The only 2 failures are the known pre-existing rustc-toolchain-absent class."
+
+verdict: PASS (modulo the pre-existing, briefed, environmental rustc gap)
+verdict_reasoning: >
+  The stale-tenant_template/versions_missing=[20260907020001] failure class that
+  blocked the prior run (749 failures) is completely gone after ORCH's database
+  cleanup -- verified both by direct pre-check (0 stale letflow_test* databases
+  remaining) and by grep evidence across all partition logs (no occurrence of that
+  migration id anywhere, and the one partition with an unrelated stale-schema
+  diagnostic line still passed all its tests). The suite now shows exactly the 2
+  pre-existing rustc :enoent failures in Mix.Tasks.Letflow.CheckToolchainTest, which
+  were explicitly flagged as expected/known-environmental in this run's dispatch and
+  are unrelated to 76f3bf5c or any code on this branch. Combined: 3448/3450 passed.
+  This gate is clear for ORCH to merge ISS-0534 to main.
+
+recommendation: >
+  Suggest DOC-UPDATER/ORCH add a docs/anti-patterns.md entry (if not already added
+  from the WF03-ISS0399-20260907 precedent) documenting: "if versions_missing failures
+  appear suite-wide across many unrelated test modules rather than confined to one
+  file, check for and drop stale letflow_test* Postgres databases in the long-lived
+  docker-compose volume before assuming a real regression."

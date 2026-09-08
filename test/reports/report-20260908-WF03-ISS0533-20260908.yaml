@@ -1,0 +1,137 @@
+run_id: WF03-ISS0533-20260908
+agent: TEST-RUNNER
+workflow: WF-03 (Issue Resolving), Step 4 final gate
+timestamp_utc: "2026-09-08T09:35:00Z"
+branch: feature/WF03-ISS0533-20260908
+head_commit: efa6d7ff
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - efa6d7ff "test(ISS-0533): regression tests for recursive metadata sanitization + rescue-branch fix"
+    - d985d626 "fix(ISS-0533): recursive metadata sanitization + level/message-preserving log rescue"
+    - a1fb7aac "fix(ISS-0533): correct jason_encodable?/1 mechanism in design doc"
+    - 8c154c23 "design(ISS-0533): recursive safe_value/1 + level/message-preserving rescue branch"
+    - 8186bd07 "chore(ISS-0533): file missing local issue record + diagnose JSON log encoding failure"
+
+format_check:
+  command: "mix format --check-formatted"
+  result: PASS
+  output: "(no output -- fully formatted)"
+
+compile_check:
+  command: "mix compile --force --warnings-as-errors"
+  result: PASS
+  output: |
+    Compiling 210 files (.ex)
+    Generated letflow app
+
+full_suite:
+  command: "scripts/test_parallel.sh"
+  n: 16
+  source: "nproc (default)"
+  result: FAIL (3 failures, all attributed as pre-existing/unrelated -- see below)
+  combined: "3448 tests, 6 properties, 3 failures (3451/3454 passed)"
+  per_partition:
+    - "partition 1: 240 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 161 tests, 0 properties, 0 failures, exit 0"
+    - "partition 3: 146 tests, 0 properties, 0 failures, exit 0"
+    - "partition 4: 255 tests, 1 property, 0 failures, exit 0"
+    - "partition 5: 256 tests, 0 properties, 1 failures, exit 2"
+    - "partition 6: 257 tests, 0 properties, 2 failures, exit 2"
+    - "partition 7: 160 tests, 0 properties, 0 failures, exit 0"
+    - "partition 8: 195 tests, 0 properties, 0 failures, exit 0"
+    - "partition 9: 302 tests, 0 properties, 0 failures, exit 0"
+    - "partition 10: 131 tests, 2 properties, 0 failures, exit 0"
+    - "partition 11: 251 tests, 2 properties, 0 failures, exit 0"
+    - "partition 12: 206 tests, 1 property, 0 failures, exit 0"
+    - "partition 13: 272 tests, 0 properties, 0 failures, exit 0"
+    - "partition 14: 147 tests, 0 properties, 0 failures, exit 0"
+    - "partition 15: 280 tests, 0 properties, 0 failures, exit 0"
+    - "partition 16: 189 tests, 0 properties, 0 failures, exit 0"
+
+remaining_failures:
+  - test: "Letflow.SandboxPoolTest: provisioning does not block the pool's mailbox (ISS-0224 regression) RT-6 (death path c): the provisioning worker Task crashing fails the claim without taking the pool, a slot or a schema with it"
+    location: "test/letflow/sandbox_pool_test.exs:1085 (assertion at :1118)"
+    partition: 5
+    error: >
+      Expected false or nil, got true -- refute MapSet.member?(final, o_schema)
+      failed; a schema (sandbox_a6ccad83dcc2406d9505a26ec31a26a3) that should
+      have been dropped was still present. Immediately preceded in the log by
+      "Postgrex.Protocol ... disconnected: ** (DBConnection.ConnectionError)
+      client ... exited" and a "SandboxPool: worker returned an unrecognized
+      result for op_kind=:drop ... :not_a_recognized_shape" error -- a live
+      concurrent-provisioning/drop timing race under heavy parallel load
+      (N=16 partitions all hitting the same Postgres instance).
+  - test: "Mix.Tasks.Letflow.Check.TestTest: mix letflow.check.test's re-pointed ISS-0069 gate (design doc section 1) passes (no raise) when the wrapper exits 0 and the target substring is absent from every partition log, even with unrelated warnings present"
+    location: "test/mix/tasks/letflow_check_test_test.exs:739"
+    partition: 6
+    error: >
+      ** (Mix.Error) mix letflow.check.test: FAILED -- `mix test --only
+      wasm_hang --dry-run` exited 0 but its "Tests that would be executed:"
+      block was empty or absent on BOTH the first attempt and a retry
+      attempt.
+  - test: "Mix.Tasks.Letflow.Check.TestTest: mix letflow.check.test's ISS-0524 wasm_hang discovery bounded retry + diagnosability (c) no-retry-needed path is unaffected -- existing passing-path fixture/test still passes"
+    location: "test/mix/tasks/letflow_check_test_test.exs:926"
+    partition: 6
+    error: "Same Mix.Error signature as above (wasm_hang dry-run discovery)."
+
+  attribution:
+    caused_by_this_branch_diff: false
+    diff_scope: >
+      `git diff --stat main...HEAD` shows exactly 5 files changed, all
+      ISS-0533 scope: docs/issues/ISS-0533.yaml, a design doc, lib/letflow/obs/logger.ex,
+      test/letflow/obs/logger_test.exs, test/specs/ISS-0533.md. Zero overlap
+      with test/letflow/sandbox_pool_test.exs, lib/letflow/sandbox_pool.ex,
+      lib/mix/tasks/letflow.check.test.ex, or
+      test/mix/tasks/letflow_check_test_test.exs.
+    reasoning: >
+      Failures 2 and 3 (partition 6) are the long-tracked, recurring
+      wasm_hang-discovery flake class in Mix.Tasks.Letflow.Check.TestTest,
+      with its own issue history (ISS-0352, ISS-0453, ISS-0418, ISS-0524) and
+      repeated recurrence entries in recent repo history (e.g. "chore(ORCH):
+      third wasm_hang data point, tally now 4/10", commit 4f7c7596, this same
+      session). Identical error signature to that class ("Tests that would be
+      executed:" block empty/absent on both dry-run attempts). Per "Failure
+      Attribution Is Structural, Never By Count-Matching," structurally
+      unrelated to this branch's diff.
+
+      Failure 1 (partition 5, SandboxPoolTest RT-6) is a different specific
+      test than any previously-filed instance I could find (ISS-0224/0227/
+      0292 opened and hardened this test class; ISS-0525, resolved
+      2026-09-07, fixed the same class's RT-9/RT-2 pair via a
+      Process.monitor-based orphan-worker fix, explicitly noting ISS-0224 had
+      declined at the time to fix "an async_nolink worker outlives a pool
+      that dies mid-provisioning" for the general case). RT-6 is exactly that
+      general "death path c" (a provisioning worker Task crashing) and the
+      observed symptom -- a live Postgrex disconnect immediately followed by
+      an unexpected drop-result shape and a schema left behind -- is the same
+      concurrent-provisioning/drop-race class, now surfacing on a variant
+      ISS-0525 did not touch. No existing docs/issues/ record names RT-6
+      specifically (searched sandbox_pool_test/SandboxPoolTest across
+      docs/issues/*.yaml). This branch touches neither
+      test/letflow/sandbox_pool_test.exs nor lib/letflow/sandbox_pool.ex, so
+      it structurally cannot have caused it, but unlike failures 2/3 this is
+      a NEW recurrence instance, not a previously-closed loop -- flagging for
+      ORCH/ISSUE-FIXER to file as a fresh issue (RT-6 variant of the
+      ISS-0224/0227/0292/0525 class) rather than silently absorbing it here,
+      per "No Issue Left Local-Only."
+
+verdict: PASS
+verdict_reasoning: >
+  mix format and mix compile --warnings-as-errors are both clean, with zero
+  warnings on 210 files. The full suite's only 3 failures are all
+  structurally unrelated to ISS-0533's diff (which touches only
+  lib/letflow/obs/logger.ex, its test file, and docs) -- 2 are the
+  established wasm_hang-discovery flake class, 1 is a new instance of the
+  established SandboxPool concurrent-provisioning-race flake class. None
+  overlap this branch's changed files. ISS-0533's own new coverage
+  (test/letflow/obs/logger_test.exs) is fully included in this run and
+  passed (partition-level Result: lines show zero failures outside
+  partitions 5/6's unrelated tests).
+
+next_action: "Route to ISSUE-FIXER for Step 5 close-out."
+
+notes_for_downstream:
+  - "Record another wasm_hang-class data point (ISS-0524/ISS-0418 lineage) for the ORCH tally -- 2 failures, both in test/mix/tasks/letflow_check_test_test.exs, both the '\"Tests that would be executed:\" block was empty or absent' signature."
+  - "NEW: file a fresh issue for SandboxPoolTest RT-6 (death path c, provisioning worker Task crashing) failing under heavy N=16 parallel load -- same class as ISS-0224/0227/0292/0525 but a variant ISS-0525's fix (RT-9/RT-2 specific) did not cover. Symptom: Postgrex.Protocol disconnect (DBConnection.ConnectionError) immediately followed by 'SandboxPool: worker returned an unrecognized result for op_kind=:drop ... :not_a_recognized_shape' and a schema left behind that should have been dropped. Full log excerpt in this run's partition-5.log around 14:27:58-14:27:59."

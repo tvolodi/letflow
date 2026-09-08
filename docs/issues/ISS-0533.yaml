@@ -1,0 +1,165 @@
+id: ISS-0533
+title: "JSON log formatter cannot encode non-Jason-encodable metadata, so Bandit/OTP startup and crash reports are emitted as level=error 'log encoding failed' lines that hide their own payload"
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:16:00Z"
+severity: MINOR
+status: resolved
+resolved_in_run: WF03-ISS0533-20260908
+resolved_at: "2026-09-08T09:35:46Z"
+tags: [observability, logging, diagnosability]
+description: >
+  Observed continuously while bringing the stack up for the ISS-0296 live-browser proof.
+
+  Letflow's JSON log formatter fails on any log event whose metadata contains a term with
+  no Jason.Encoder implementation, and emits a synthetic level=error entry reading
+  "log encoding failed: ..." with the original event stringified inside it.
+
+  Two concrete, reproducible instances:
+    1. Bandit's own startup line -- metadata carries plug: {Letflow.Router, []}. A perfectly
+       normal :info "Running Letflow.Router with Bandit 1.12.5 at 0.0.0.0:4000 (http)"
+       is therefore logged at level=error on EVERY boot of a healthy server.
+    2. OTP application_controller shutdown reports -- metadata carries a report_cb function
+       reference (&:application_controller.format_log/1). A port-conflict shutdown produced
+       ~25 consecutive "log encoding failed" error lines, none of which stated plainly that
+       port 4000 was already in use; that fact was only legible inside an escaped string.
+
+  WHY THIS MATTERS beyond noise: it inverts severity (healthy startup logs as error) and
+  degrades exactly the events that matter most (crash/shutdown reports), so an operator
+  grepping for level=error on a healthy instance gets false positives, while a real crash
+  is hardest to read. Separately noted during this session: the AuthPipeline provisioning
+  failure that produced a 500 (see ISS-0534) logged NOTHING at all, so the log was no help
+  in diagnosing it -- the two together mean the JSON log is currently unreliable in both
+  directions.
+
+  Suggested direction (not prescribed): give the formatter a total fallback for
+  non-encodable terms (inspect/1 the offending value and keep the event's original level
+  and message) rather than converting the whole event into an error about itself.
+affected_files:
+  - lib/letflow/obs/
+related:
+  - ISS-0534
+github_issue_number: 1076
+github_issue: "https://github.com/tvolodi/letflow/issues/1076"
+queue_task_id: 533
+scoping_note: >
+  Local docs/issues/ISS-0533.yaml record was missing at filing time -- only the
+  letflow-queue task and GitHub issue existed. Created by ISSUE-FIXER at
+  WF03-ISS0533-20260908's Step 0.5/1, correcting a self-referential id mismatch in the
+  queue task's own stored description (which called itself "id: ISS-0532" -- ISS-0532 is
+  a different, real issue, GH#1075). Content otherwise verbatim from the queue task's
+  description field as filed by the discovering ORCH session during
+  ADHOC-ENGINE-AUDIT-20260908. Confirmed via `gh issue view 1076` that the "see ISS-0533"
+  self-reference in the original body was a copy-paste artifact of the same id error --
+  the AuthPipeline provisioning-failure issue it describes is GH#1077 / ISS-0534, so the
+  cross-reference is corrected to ISS-0534 here.
+diagnosis:
+  root_cause: >
+    lib/letflow/obs/logger.ex `encode_entry/3`'s only defense against non-JSON-encodable
+    metadata values is `safe_value/1` (lines 177-181), which rewrites a value ONLY when
+    the value ITSELF is directly a pid, reference, function, or port. It does not recurse
+    into tuples, lists, or nested maps, and Jason.Encoder has no implementation for
+    Elixir tuples or functions at any nesting depth. Two concretely reproduced paths hit
+    this:
+
+    1. Bandit's `:info` startup metadata carries `plug: {Router, []}` -- a bare 2-tuple.
+       `safe_value/1`'s catch-all clause (`defp safe_value(v), do: v`) passes it through
+       unchanged, so `Jason.encode!/1` raises `Protocol.UndefinedError` on the tuple.
+    2. OTP `application_controller` exit/shutdown reports carry
+       `meta[:error_logger] = %{tag: ..., type: ..., report_cb: &fun/1}` -- the function
+       reference is nested ONE LEVEL INSIDE the `:error_logger` map value, not a top-level
+       meta key. `@beam_reserved_keys` (line 11) strips a top-level `:report_cb` key, but
+       does nothing for this case since the reserved key here is `:error_logger`, whose
+       *value* is an unexamined map containing the offending function. `safe_value/1`
+       again only inspects `meta[:error_logger]` shallowly (it's a map, hits the
+       catch-all), so the nested function reaches `Jason.encode!/1` unchanged and raises.
+
+    Both were reproduced directly:
+      - `Letflow.Obs.Logger.format/2` called with
+        `meta: %{plug: {MyApp.Router, []}}` raises inside `Jason.encode!/1` and falls into
+        the `rescue` branch at logger.ex:123-135, producing:
+        `{"level":"error", ..., "message":"log encoding failed: {:info, ..., %Protocol.UndefinedError{protocol: Jason.Encoder, value: {MyApp.Router, []}, ...}}"}`
+      - Booting the app for real (`mix run` against a refused dev-DB connection, which
+        triggers a real OTP application-shutdown cascade) produced ~25 consecutive
+        real `"log encoding failed: ... %Protocol.UndefinedError{... value: &:application_controller.format_log/1 ...}"`
+        lines, one per dependency application unwound during shutdown -- confirming
+        instance 2 exactly, including the precise nesting path
+        (`meta.error_logger.report_cb`) that the shallow top-level strip/safe_value logic
+        misses.
+
+    Beyond the immediate bug, the `rescue` branch itself (logger.ex:121-135) compounds the
+    problem: on any encode failure it discards the event's real `level` and `message`
+    entirely and replaces the whole entry with a synthetic `"level":"error"` /
+    `"component":"letflow"` entry whose `message` is an `inspect/1` dump of the raw
+    `{level, msg, meta, exception}` tuple. This is why a healthy `:info` boot line reads
+    as `level=error`, and why a real crash report's actual message becomes illegible
+    junk buried inside an escaped string instead of surfacing plainly.
+  fix_direction: >
+    Two changes are needed together (per the issue's own suggested direction):
+    1. Replace `safe_value/1`'s shallow is_pid/is_reference/is_function/is_port check
+       with a recursive/deep sanitizer that walks maps, lists, and tuples and rewrites
+       any value lacking a Jason.Encoder implementation (pids, refs, functions, ports,
+       tuples themselves, structs without an encoder, etc.) to its `inspect/1`
+       representation at the point where it's found -- so `plug: {Router, []}` becomes
+       `plug: "{Router, []}"` and `error_logger.report_cb` becomes a string, while
+       everything else in the map still encodes as real JSON.
+    2. Change the `rescue` branch so that if `Jason.encode!/1` still somehow fails after
+       deep-sanitization (defense in depth), it preserves the ORIGINAL `level` and
+       `message` fields and only replaces the additional-metadata portion with an
+       inspect'd fallback -- never silently promoting the entry to `level=error` or
+       discarding the true message.
+    Function/module to change: `Letflow.Obs.Logger.safe_value/1` and
+    `Letflow.Obs.Logger.encode_entry/3`'s rescue clause, both in
+    lib/letflow/obs/logger.ex.
+  reproduction_commands: >
+    From repo root, with LETFLOW_SECRETS_MASTER_KEY set (openssl rand -hex 32):
+      mix run --no-start -e '
+        alias Letflow.Obs.Logger, as: L
+        meta = %{plug: {MyApp.Router, []}}
+        IO.puts(L.format(%{level: :info, msg: {:string, "boot line"}, meta: meta}, %{}))
+      '
+    reproduces instance 1 directly. Instance 2 was reproduced by attempting `mix run`
+    against the shared dev DB without LETFLOW_DEV_DB_CONFIRMED=1 (a deliberate guard
+    unrelated to this issue), which triggers a real OTP application-controller shutdown
+    cascade and emits the exact `error_logger.report_cb` encoding failure for every
+    dependency application unwound.
+resolution_note: >
+  Fixed via WF03-ISS0533-20260908. `lib/letflow/obs/logger.ex`'s `safe_value/1` was
+  replaced with a depth-tracked recursive `safe_value/2` (module attribute
+  `@max_sanitize_depth 6`) that walks maps, lists, and tuples and rewrites any
+  non-Jason-encodable term (pids, refs, functions, ports, tuples, encoder-less structs)
+  to its `inspect/1` representation at the point it's found, instead of only checking
+  the value passed in shallowly. Both concrete reproductions in `diagnosis:` above
+  (Bandit's `plug: {Router, []}` tuple; OTP's nested `meta.error_logger.report_cb`
+  function reference) are now sanitized correctly.
+
+  CODE-DESIGNER's design went through one rework round: the first draft's struct
+  encodability check (`jason_encodable?/1`) used `Jason.Encoder.impl_for(v) != nil`,
+  which is a no-op for any struct falling back to `Jason.Encoder.Any` (the
+  `@fallback_to_any` gotcha) -- CODE-DESIGN-VALIDATOR caught this before implementation,
+  and the shipped `jason_encodable?/1` was corrected accordingly. ELIXIR-DEV also
+  restructured `encode_entry/3`'s `rescue` branch so a post-sanitization encode failure
+  (defense in depth) preserves the entry's real `level` and `message` instead of
+  silently promoting the whole entry to `level=error` with an inspect-dumped message, as
+  the old rescue branch did.
+
+  TEST-DESIGNER produced a real fail-then-pass proof: 10/15 passing pre-fix, 15/15
+  post-fix (`test/letflow/obs/logger_test.exs`, spec at `test/specs/ISS-0533.md`).
+  TEST-DESIGN-VALIDATOR independently reproduced that proof and, during review, found a
+  design-vs-shipped-code discrepancy at the `@max_sanitize_depth` boundary: the design
+  doc's original §1.2 wording claimed a container landing exactly at the cutoff is
+  "replaced wholesale by inspect/1", but the shipped code's `safe_value(v, 0)` ->
+  `safe_leaf/1` path only inspects leaf-shaped offenders (pid/reference/function/
+  port/tuple/encoder-less struct) at the cutoff -- a map or list landing exactly at the
+  cutoff is returned raw/unwalked, not inspected. Confirmed via direct repro this is
+  still safe in practice: any such raw container that fails `Jason.encode!/1` is caught
+  by `encode_entry/3`'s rescue branch, which preserves the real level/message rather
+  than crashing or mis-leveling the entry -- so this is a doc-accuracy gap (case (b)),
+  not a regression or a missed case in the fix itself. The design doc's §1.2 has been
+  corrected in this closeout commit to describe the actual cutoff behavior and name the
+  rescue branch as the true backstop guarantee.
+
+  TEST-RUNNER ran the full suite post-fix: 3451/3454, with the 3 failures all
+  structurally unrelated to this change (2 known `wasm_hang` flakes; 1 new
+  `SandboxPoolTest` RT-6 flake filed separately as ISS-0536 / GH#1081, already committed
+  to this branch by ORCH).

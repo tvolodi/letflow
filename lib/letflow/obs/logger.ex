@@ -57,6 +57,11 @@ defmodule Letflow.Obs.Logger do
 
   @sensitive_suffixes ["_token", "_secret", "_password", "_credential"]
 
+  # Work-bound (not a cycle guard — BEAM terms built through normal code cannot be
+  # cyclic) for safe_value/2's recursive descent into metadata. See design doc
+  # lib/letflow/design/iss0533-log-formatter-safe-value-recursion.md §1.2.
+  @max_sanitize_depth 6
+
   @doc """
   OTP `:logger_formatter` callback — validates the formatter config at setup time.
   """
@@ -122,16 +127,17 @@ defmodule Letflow.Obs.Logger do
       Jason.encode!(Map.merge(additional, base)) <> "\n"
     rescue
       e ->
-        fallback = %{
-          "timestamp" => ts,
-          "level" => "error",
-          "trace_id" => "",
-          "component" => "letflow",
-          "message" =>
-            "log encoding failed: #{inspect({level, msg, redact_sensitive(Map.drop(meta, @beam_reserved_keys)), e})}"
+        # Defense-in-depth net for a metadata term safe_value/1 did not anticipate
+        # (e.g. a non-finite float, invalid-UTF-8 binary — see design §2.1). The
+        # event's REAL level/message/timestamp/trace_id/component (base, computed
+        # above and never itself a source of this failure) are always preserved;
+        # only the additional-metadata portion is replaced.
+        fallback_additional = %{
+          "metadata_encode_error" => "log metadata encoding failed: #{inspect(e)}",
+          "metadata_raw" => inspect(additional)
         }
 
-        Jason.encode!(fallback) <> "\n"
+        Jason.encode!(Map.merge(fallback_additional, base)) <> "\n"
     end
   end
 
@@ -173,12 +179,41 @@ defmodule Letflow.Obs.Logger do
     end)
   end
 
-  # Converts non-JSON-safe BEAM values to their inspect representation.
-  defp safe_value(v) when is_pid(v), do: inspect(v)
-  defp safe_value(v) when is_reference(v), do: inspect(v)
-  defp safe_value(v) when is_function(v), do: inspect(v)
-  defp safe_value(v) when is_port(v), do: inspect(v)
-  defp safe_value(v), do: v
+  # Converts non-JSON-safe BEAM values to their inspect representation, recursively.
+  # Postcondition: the returned term is always Jason-encodable, at any input nesting
+  # depth up to @max_sanitize_depth, beyond which the remaining sub-term is inspected
+  # wholesale rather than walked further.
+  defp safe_value(v), do: safe_value(v, @max_sanitize_depth)
+
+  defp safe_value(v, 0), do: safe_leaf(v)
+
+  defp safe_value(v, _depth) when is_struct(v) do
+    if jason_encodable?(v), do: v, else: inspect(v)
+  end
+
+  defp safe_value(v, depth) when is_map(v) do
+    Map.new(v, fn {k, val} -> {k, safe_value(val, depth - 1)} end)
+  end
+
+  defp safe_value(v, depth) when is_list(v) do
+    Enum.map(v, &safe_value(&1, depth - 1))
+  end
+
+  defp safe_value(v, _depth) when is_tuple(v), do: inspect(v)
+
+  defp safe_value(v, _depth), do: safe_leaf(v)
+
+  # Non-container leaf: pid/reference/function/port get inspected; everything else
+  # (numbers, atoms, binaries, booleans, nil, already-encodable structs) passes through.
+  defp safe_leaf(v) when is_pid(v), do: inspect(v)
+  defp safe_leaf(v) when is_reference(v), do: inspect(v)
+  defp safe_leaf(v) when is_function(v), do: inspect(v)
+  defp safe_leaf(v) when is_port(v), do: inspect(v)
+  defp safe_leaf(v) when is_struct(v), do: if(jason_encodable?(v), do: v, else: inspect(v))
+  defp safe_leaf(v) when is_tuple(v), do: inspect(v)
+  defp safe_leaf(v), do: v
+
+  defp jason_encodable?(v), do: Jason.Encoder.impl_for(v) not in [nil, Jason.Encoder.Any]
 
   @doc """
   Replaces values for sensitive keys with `"[REDACTED]"`. Only top-level keys

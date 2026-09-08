@@ -1,0 +1,37 @@
+id: ISS-0536
+title: "SandboxPoolTest RT-6 (death path c) Postgrex disconnect/drop-race under N=16 concurrent load"
+discovered_by: TEST-RUNNER
+discovered_in_run: WF03-ISS0533-20260908
+discovered_at: "2026-09-08T09:20:00Z"
+severity: MINOR
+status: open
+tags: [flake, sandbox-pool, ci-load, test-only]
+description: >
+  Test-only flake, not a production defect. Discovered by TEST-RUNNER during
+  WF03-ISS0533-20260908's full-suite gate (scripts/test_parallel.sh, N=16
+  partitions). Letflow.SandboxPoolTest RT-6 ("death path c" -- provisioning
+  worker Task crashing) failed once out of 16 partitions with a Postgrex
+  disconnect + schema-drop race under heavy concurrent load.
+
+  Same general flake class as ISS-0224/ISS-0227/ISS-0292/ISS-0525
+  (SandboxPoolTest under CI-like concurrency), but no existing issue record
+  names RT-6 specifically -- ISS-0525 fixed the RT-9/RT-2 pair only, not RT-6.
+
+  Zero overlap with ISS-0533's own diff (lib/letflow/obs/logger.ex,
+  test/letflow/obs/logger_test.exs) -- purely an incidental finding from
+  running the full suite as WF03-ISS0533-20260908's Step-4 gate. Full-suite
+  result that run: 3448 tests, 3 failures (this RT-6 instance plus 2
+  already-tracked wasm_hang-class failures), zero overlap with the branch's
+  diff for any of the three.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+related:
+  - ISS-0224
+  - ISS-0227
+  - ISS-0292
+  - ISS-0525
+source: >
+  test/reports/report-20260908-WF03-ISS0533-20260908.yaml
+queue_task_id: 536
+github_issue_number: 1081
+github_issue: "https://github.com/tvolodi/letflow/issues/1081"

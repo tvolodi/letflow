@@ -334,4 +334,142 @@ defmodule Letflow.Obs.LoggerTest do
              "on field names (not values), so callers understand that a secret under an " <>
              "unrecognised key name is not caught"
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0533 — recursive metadata sanitization + level/message-preserving rescue
+  # See test/specs/ISS-0533.md for the full AC -> test-case mapping and rationale.
+  # ---------------------------------------------------------------------------
+
+  # Builds n levels of %{next: ...} nesting around `leaf`. build_nested(0, leaf) == leaf;
+  # build_nested(1, leaf) == %{next: leaf}; etc. Used to place a value at a precise,
+  # controllable nesting depth relative to @max_sanitize_depth (6).
+  defp build_nested(0, leaf), do: leaf
+  defp build_nested(n, leaf) when n > 0, do: %{next: build_nested(n - 1, leaf)}
+
+  defmodule FunRefTarget do
+    @moduledoc false
+    def some_fun(_), do: :ok
+  end
+
+  test "ISS-0533 AC1: Bandit-style tuple metadata does not raise; real level preserved; tuple inspected wholesale" do
+    event =
+      make_event(:info, "tuple metadata", %{plug: {Letflow.Obs.LoggerTest.FunRefTarget, []}})
+
+    decoded = format_and_decode(event)
+
+    assert decoded["level"] == "info",
+           "real event level must be preserved, not force-promoted to error"
+
+    assert decoded["message"] == "tuple metadata"
+
+    assert decoded["plug"] == "{Letflow.Obs.LoggerTest.FunRefTarget, []}",
+           "a tuple must be inspected wholesale (element-by-element decomposition would " <>
+             "turn it into a JSON array, not a string), got: #{inspect(decoded["plug"])}"
+  end
+
+  test "ISS-0533 AC2: nested function-reference metadata (OTP report_cb shape) does not raise; sanitized in place" do
+    event =
+      make_event(:warning, "report_cb metadata", %{
+        error_logger: %{report_cb: &FunRefTarget.some_fun/1}
+      })
+
+    decoded = format_and_decode(event)
+
+    assert decoded["level"] == "warn",
+           "real event level must be preserved through nested sanitization"
+
+    assert decoded["message"] == "report_cb metadata"
+
+    assert %{"report_cb" => report_cb_str} = decoded["error_logger"],
+           "error_logger metadata must survive as a nested object, got: #{inspect(decoded["error_logger"])}"
+
+    assert is_binary(report_cb_str) and report_cb_str =~ "FunRefTarget.some_fun/1",
+           "nested function reference must be sanitized to its inspected string form, " <>
+             "got: #{inspect(report_cb_str)}"
+  end
+
+  test "ISS-0533 AC3: a value exactly at @max_sanitize_depth (6 levels) is still sanitized" do
+    # build_nested(6, pid) places the pid as the value reached by exactly 6 map-recursion
+    # steps (depth 6 -> 5 -> 4 -> 3 -> 2 -> 1 -> 0), i.e. precisely at the documented
+    # cutoff — proving the boundary is inclusive, not off-by-one.
+    pid = self()
+    event = make_event(:info, "exactly at cutoff", %{deep: build_nested(6, pid)})
+
+    decoded = format_and_decode(event)
+
+    assert decoded["level"] == "info"
+    assert decoded["message"] == "exactly at cutoff"
+
+    refute Map.has_key?(decoded, "metadata_encode_error"),
+           "a value exactly at the depth cutoff must still be sanitized, not fall through " <>
+             "to the rescue-branch fallback"
+
+    inspected_pid = inspect(pid)
+
+    assert get_in(decoded, [
+             "deep",
+             "next",
+             "next",
+             "next",
+             "next",
+             "next",
+             "next"
+           ]) == inspected_pid,
+           "pid at exactly depth 6 must be sanitized to its inspected string form"
+  end
+
+  test "ISS-0533 AC3: a value one level beyond @max_sanitize_depth is left unsanitized at the cutoff (not crashed, not silently dropped) — real level/message still preserved" do
+    # build_nested(7, pid) places the pid one level past the 6-level recursion budget.
+    # Per the observed (verified) behaviour, safe_value/2's depth-0 clause hands any
+    # remaining sub-term to safe_leaf/1 without re-entering the map/list/tuple-specific
+    # clauses — so a *container* still present at the cutoff (here, the innermost %{next:
+    # pid} map) is returned as-is rather than itself being inspected. Since that raw
+    # container still contains an unsanitized pid, Jason.encode!/1 subsequently raises on
+    # it and encode_entry/3's rescue branch (ISS-0533 AC4) is what actually prevents a
+    # crash and preserves the real level/message — this is the concrete, reachable path
+    # that exercises that rescue branch, not a synthetic/mocked one.
+    pid = self()
+    event = make_event(:info, "one past cutoff", %{deep: build_nested(7, pid)})
+
+    decoded = format_and_decode(event)
+
+    assert decoded["level"] == "info",
+           "real level must survive even when the depth budget is exceeded"
+
+    assert decoded["message"] == "one past cutoff",
+           "real message must survive even when the depth budget is exceeded"
+  end
+
+  test "ISS-0533 AC4: encode_entry/3's rescue branch preserves the real level/message and only replaces the metadata portion" do
+    # Same underlying trigger as the depth-exceeded case above (a raw pid surviving past
+    # the sanitization cutoff, which Jason cannot encode) but asserted here specifically
+    # against AC4's own contract: base fields (level, message, timestamp, trace_id,
+    # component) come through untouched, and the failure is confined to a diagnostic
+    # replacement of the metadata fields — never a hardcoded "error" level or a generic
+    # "log encoding failed" message overwriting the real one (the pre-fix bug).
+    pid = self()
+
+    event =
+      make_event(:warning, "rescue branch real message", %{deep: build_nested(7, pid)})
+
+    decoded = format_and_decode(event)
+
+    assert decoded["level"] == "warn",
+           "rescue branch must not hardcode level to \"error\" — got #{inspect(decoded["level"])}"
+
+    assert decoded["message"] == "rescue branch real message",
+           "rescue branch must not replace the real message with a synthetic " <>
+             "\"log encoding failed\" string — got #{inspect(decoded["message"])}"
+
+    assert decoded["component"] != nil and decoded["component"] != "",
+           "rescue branch must not blank out component"
+
+    assert Map.has_key?(decoded, "metadata_encode_error"),
+           "rescue branch must surface a diagnostic marker instead of silently succeeding " <>
+             "or silently dropping the metadata"
+
+    refute Map.has_key?(decoded, "deep"),
+           "the original unencodable metadata field must not appear verbatim in the " <>
+             "successful fallback output"
+  end
 end

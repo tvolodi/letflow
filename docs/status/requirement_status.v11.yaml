@@ -538,3 +538,37 @@ history:
       ISS-0296.yaml flipped open -> resolved with a resolution_note. New
       UAT report written. ORCH will merge and release queue task 296
       status:done.
+
+  - req: REQ-273
+    event: done
+    agent: ORCH
+    at: "2026-09-08T19:45:26Z"
+    note: >
+      REQ-273 (queue task 538, GH#1094) implemented via
+      WF02-REQ273-20260908: populates tasks.form_schema at task activation
+      from node.attributes["form_schema"], reusing
+      Letflow.Definitions.JsonSchemaShape.check/1 for shape validation
+      (rejecting malformed input with the whole Multi.run/3 transaction
+      aborted, zero tasks row written) and relying on TaskActivation's
+      existing write-once instance_definition_snapshots-derived graph for
+      version pinning, requiring no new machinery. Per decision record
+      0020 D3, form_schema stays a rendering payload only -- confirmed by
+      SECURITY-REVIEWER (INV-2 PASS, grep-verified zero references in
+      variable_merge.ex/engine.ex's completion path) and by REVIEWER, that
+      it is never wired into output validation, and that
+      routers/tasks.ex's task_detail_map/3 allowlist stays untouched
+      (scope fence honored). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR
+      (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS) -> REVIEWER (PASS,
+      one non-blocking flag: docs/migration/decisions/0020-frontend-architecture.md,
+      cited by the requirement and design doc, does not actually exist in
+      repo history -- the behavior itself is independently verified
+      correct against real code regardless; worth a follow-up doc fix) ->
+      TEST-RUNNER (3473/3475 passed, 2 pre-existing rustc-absent failures
+      unrelated to this branch; flagged a mix format gap on the two new
+      test files, fixed directly by ORCH as a trivial follow-up commit,
+      re-verified clean). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per
+      this project's established precedent -- ELIXIR-DEV's own tests were
+      comprehensive (DB round-trip read-back, malformed-shape rejection,
+      version-pinning-after-promotion cases) and REVIEWER independently
+      verified their quality. ORCH will merge and release queue task 538
+      status:done.

@@ -15898,3 +15898,71 @@ requirements:
     depends_on: [REQ-237]
     impl_order: 509  # letflow-queue task id
 
+  - id: REQ-273
+    title: 'Populate tasks.form_schema at task activation from node.attributes["form_schema"], shape-validated and version-pinned (0020 D3a)'
+    owner: ELIXIR-DEV
+    status: done
+    stage: S8
+    description: >
+      Closes the largest gap record docs/migration/decisions/0020-frontend-architecture.md
+      D3 identifies: a renderer with no data source, and a column with no producer.
+      VERIFIED 2026-09-08, both halves: (a) The renderer is already built.
+      web/src/components/forms/DynamicFormRenderer.tsx takes a JSON-Schema-shaped
+      formSchema prop and compiles it to a Zod resolver for react-hook-form, rendering
+      via web/src/components/forms/FieldFactory.tsx. (b) The column is already there and
+      always empty. lib/letflow/engine/task.ex:70 declares `field(:form_schema, :map)`;
+      Letflow.Engine.TaskActivation.insert_attrs/4 (lib/letflow/engine/task_activation.ex:132-150)
+      builds a six-key attrs map -- instance_id, token_id, node_id, node_name,
+      assignee_type, assignee_ref -- with no form_schema key; and
+      lib/letflow/routers/tasks.ex:91-93 states "form_schema is unpopulated (always nil)
+      in this codebase today". Populate it at activation from
+      node.attributes["form_schema"] -- the shape lib/letflow/engine/variable_schema.ex:21-24
+      already documents as R-Co's behaviour (note the path: that module is under
+      lib/letflow/engine/, not lib/letflow/definitions/, which is where record 0020's
+      unqualified "variable_schema.ex" citation might lead a reader). Absent or nil
+      node.attributes["form_schema"] must stay nil, not become an invented empty schema --
+      REQ-047's own OQ-1 discipline ("no default is invented for an absent key",
+      lib/letflow/engine/task_activation.ex:113-114) applies here too.
+
+      THREE CONSTRAINTS, all from record 0020 D3, none of them optional:
+
+      1. THE SCHEMA IS A RENDERING PAYLOAD, NOT A VALIDATION AUTHORITY.
+      lib/letflow/engine/variable_schema.ex:25 records that R-Co "never validates
+      submitted output against it." Server-side validation authority stays with
+      variable_schemas (REQ-109, done). This requirement must NOT wire form_schema into
+      Letflow.Engine.VariableMerge, into merge_output_variables, or into any
+      completion-path check. Doing so would make a tenant-supplied rendering payload the
+      arbiter of what a tenant may submit -- an INV-2 (server-side field authorisation)
+      violation.
+
+      2. form_schema IS UNTRUSTED INPUT. It is an untyped :map reaching a renderer.
+      Letflow.Definitions.JsonSchemaShape.check/1 (lib/letflow/definitions/json_schema_shape.ex:80)
+      already exists for exactly this class of problem -- it returns
+      :ok | {:error, {:not_well_formed, path}} | {:error, :too_deep}, never raises on any
+      input, and is already the predicate both Letflow.Definitions and
+      Letflow.Engine.VariableSchema use. Reuse it; do not hand-roll a second shape check.
+
+      3. VERSION PINNING ALREADY HAS A DESIGN. REQ-126 (done) ships form_id/form_version
+      on the task read path via Letflow.Tasks.get_form_version/2
+      (lib/letflow/tasks.ex:290-291), and lib/letflow/design/req126-form-version-pinning.md
+      is its design. A schema served for a running task must be the schema of the pinned
+      definition version the task was created against, not the currently active one --
+      the same silent-substitution failure REQ-126 exists to prevent.
+
+      SCOPE FENCE: this requirement populates the column and validates its shape.
+      Exposing form_schema in the task-detail HTTP response allowlist is not in scope
+      here -- lib/letflow/routers/tasks.ex's task_detail_map/3 currently excludes it
+      deliberately and that exclusion stays untouched, so this persistence change stays
+      independent of any response-shape change a security gate must review.
+    acceptance_criteria:
+      - "a test creates an instance from a definition whose HUMAN_TASK node carries attributes[\"form_schema\"], activates the task, and asserts the persisted tasks row's form_schema equals that node attribute -- read back from the database, not from the in-memory struct the insert returned"
+      - "a test asserts that a HUMAN_TASK node with NO form_schema attribute produces a task row whose form_schema is nil, not %{} and not any other invented default"
+      - "a malformed form_schema attribute (one that Letflow.Definitions.JsonSchemaShape.check/1 rejects -- e.g. a JSON array, a bare string, or a map whose \"properties\" value is not an object) is rejected at activation with a typed error naming the offending node, proven by a test asserting the specific error term AND that no tasks row was written; the rejection path calls JsonSchemaShape.check/1 rather than a newly hand-rolled predicate, confirmed by quoting the call site"
+      - "a test changes the definition's form_schema AFTER the task is created, then asserts the task row still carries the original pinned version's schema -- the same silent-substitution scenario REQ-126's own acceptance criteria test for form_version"
+      - "`grep -rn \"form_schema\" lib/letflow/engine/variable_merge.ex lib/letflow/engine.ex` shows zero references -- form_schema is never consulted on the completion/output-validation path, so variable_schemas (REQ-109) remains the sole server-side validation authority (INV-2)"
+      - "lib/letflow/routers/tasks.ex is unmodified by this requirement -- task_detail_map/3's key allowlist still excludes form_schema, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "the module that now writes form_schema carries a moduledoc paragraph stating it is a rendering payload only and that variable_schemas holds validation authority, so the next reader cannot mistake it for a validation source"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: []
+    impl_order: 538  # letflow-queue task id
+

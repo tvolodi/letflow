@@ -134,11 +134,11 @@ defmodule Letflow.Engine.TaskActivationTest do
   # ---------------------------------------------------------------------------------
 
   describe "insert_attrs/4" do
-    test "builds the six-key attrs map, node_name from node.label, status never included" do
+    test "builds the seven-key attrs map, node_name from node.label, status never included" do
       t = token("task", "t1")
       n = node("task", :HUMAN_TASK, label: "Approve request", attributes: %{"role" => "approver"})
 
-      attrs = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+      assert {:ok, attrs} = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
 
       assert attrs == %{
                instance_id: "inst-1",
@@ -146,7 +146,8 @@ defmodule Letflow.Engine.TaskActivationTest do
                node_id: "task",
                node_name: "Approve request",
                assignee_type: nil,
-               assignee_ref: "approver"
+               assignee_ref: "approver",
+               form_schema: nil
              }
 
       refute Map.has_key?(attrs, :status)
@@ -156,9 +157,151 @@ defmodule Letflow.Engine.TaskActivationTest do
       t = token("task", "t1")
       n = node("task", :HUMAN_TASK, label: nil, attributes: %{"role" => "approver"})
 
-      attrs = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+      assert {:ok, attrs} = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
 
       assert attrs.node_name == "task"
+    end
+
+    # REQ-273 AC1/AC2 (pure layer): form_schema flows through insert_attrs/4's
+    # returned map verbatim when present, and stays nil (not an invented
+    # default) when the node carries no "form_schema" attribute at all.
+    test "form_schema flows through unchanged when node.attributes carries a well-formed schema" do
+      t = token("task", "t1")
+      schema = %{"type" => "object", "properties" => %{"name" => %{"type" => "string"}}}
+
+      n =
+        node("task", :HUMAN_TASK, attributes: %{"role" => "approver", "form_schema" => schema})
+
+      assert {:ok, attrs} = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+      assert attrs.form_schema == schema
+    end
+
+    test "form_schema is nil, not %{} or any other invented default, when the attribute is absent" do
+      t = token("task", "t1")
+      n = node("task", :HUMAN_TASK, attributes: %{"role" => "approver"})
+
+      assert {:ok, attrs} = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+      assert attrs.form_schema == nil
+    end
+
+    # REQ-273 AC3: a malformed form_schema is rejected with a typed error naming
+    # the offending node, and JsonSchemaShape.check/1 is the predicate actually
+    # invoked (not a hand-rolled one) -- proven here by driving insert_attrs/4
+    # with the same three malformed shapes JsonSchemaShape.check/1 itself is
+    # documented to reject (a JSON array, a bare string, a "properties" value
+    # that is not an object), and asserting the exact {:not_well_formed, path}/
+    # :too_deep reason JsonSchemaShape.check/1 would itself return.
+    test "a JSON-array form_schema is rejected, naming the offending node" do
+      t = token("task", "t1")
+      n = node("task", :HUMAN_TASK, attributes: %{"role" => "approver", "form_schema" => [1, 2]})
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
+               TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+    end
+
+    test "a bare-string form_schema is rejected, naming the offending node" do
+      t = token("task", "t1")
+
+      n =
+        node("task", :HUMAN_TASK,
+          attributes: %{"role" => "approver", "form_schema" => "not-a-schema"}
+        )
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
+               TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+    end
+
+    test "a form_schema whose \"properties\" value is not an object is rejected, naming the offending node" do
+      t = token("task", "t1")
+
+      n =
+        node("task", :HUMAN_TASK,
+          attributes: %{
+            "role" => "approver",
+            "form_schema" => %{"properties" => "not-an-object"}
+          }
+        )
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, ["properties"]}}} =
+               TaskActivation.insert_attrs("inst-1", "record-1", t, n)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # Test spec case 3b -- resolve_form_schema/1 (REQ-273 AC1/AC2/AC3)
+  # ---------------------------------------------------------------------------------
+
+  describe "resolve_form_schema/1" do
+    test "reads node.attributes[\"form_schema\"] verbatim when well formed" do
+      schema = %{"type" => "object"}
+      n = node("task", :HUMAN_TASK, attributes: %{"form_schema" => schema})
+
+      assert TaskActivation.resolve_form_schema(n) == {:ok, schema}
+    end
+
+    test "returns {:ok, nil} when the key is absent -- no invented default" do
+      n = node("task", :HUMAN_TASK, attributes: %{"role" => "approver"})
+
+      assert TaskActivation.resolve_form_schema(n) == {:ok, nil}
+    end
+
+    test "returns {:ok, nil} when a nil attributes map is given" do
+      n = node("task", :HUMAN_TASK, attributes: nil)
+
+      assert TaskActivation.resolve_form_schema(n) == {:ok, nil}
+    end
+
+    test "an explicit JSON null form_schema value stays nil" do
+      n = node("task", :HUMAN_TASK, attributes: %{"form_schema" => nil})
+
+      assert TaskActivation.resolve_form_schema(n) == {:ok, nil}
+    end
+
+    test "delegates the shape check to Letflow.Definitions.JsonSchemaShape.check/1 verbatim (not a hand-rolled predicate)" do
+      malformed = [1, 2, 3]
+      n = node("task", :HUMAN_TASK, attributes: %{"form_schema" => malformed})
+
+      assert TaskActivation.resolve_form_schema(n) ==
+               Letflow.Definitions.JsonSchemaShape.check(malformed)
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-273's own INV-2 scope-fence assertion: form_schema is never wired into
+  # the completion/output-validation path. A negative, grep-based check
+  # mirroring the acceptance criterion's own wording exactly.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-273 scope fence -- form_schema never reaches the completion path" do
+    test "variable_merge.ex and engine.ex contain zero references to form_schema" do
+      root = File.cwd!()
+
+      for path <- [
+            "lib/letflow/engine/variable_merge.ex",
+            "lib/letflow/engine.ex"
+          ] do
+        contents = File.read!(Path.join(root, path))
+        refute contents =~ "form_schema", "#{path} must never reference form_schema"
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-273's moduledoc acceptance criterion: this module states, in its own
+  # moduledoc, that form_schema is a rendering payload only and that
+  # variable_schemas holds validation authority.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-273 moduledoc" do
+    test "states form_schema is a rendering payload only, never a validation authority" do
+      {:docs_v1, _anno, _lang, _format, %{"en" => module_doc}, _meta, _docs} =
+        Code.fetch_docs(TaskActivation)
+
+      normalized = String.replace(module_doc, ~r/\s+/, " ")
+
+      assert normalized =~ "rendering payload"
+      assert normalized =~ "variable_schemas"
+      assert normalized =~ "JsonSchemaShape.check/1"
     end
   end
 

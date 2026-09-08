@@ -33,12 +33,25 @@ RateLimitBackpressure.tsx, SkeletonLayout.tsx, StaleVersionError.tsx, __tests__/
 
 ---
 
-## 1. Token audit — no new tokens needed
+## 1. Token audit — re-run section-by-section against the actual `tokens.css` file
 
-Every value section 5 (5.1–5.3), 7.1, and 8 require is already defined in
-`web/src/styles/tokens.css` (confirmed by reading the file in full alongside
-`design-system.md` section 2 — the two are already in sync for every token these
-three components touch):
+**Correction from validator rework:** the prior version of this section checked
+`design-system.md` §2 (colors) against `tokens.css` and found it in sync, then
+incorrectly assumed §3 (Typography) and §4 (Spacing & Layout) were in the same state
+without actually checking them. They are not. `web/src/styles/tokens.css` was read in
+full again for this rework (110 lines, reproduced above in the validator's own FAIL
+message) and contains **only** `--color-*`, `--surface-*`, `--text-primary/secondary/
+disabled/inverse`, `--border-*`, `--interactive-*`, `--shadow-*`, `--minimap-mask-
+color`, `--drop-shadow-overlay`, and `--color-avatar-*` — i.e. §2 (colors) plus a few
+later color-addendum tokens (REQ-144/145/146). **§3 (Typography) and §4 (Spacing &
+Layout) were never ported into `tokens.css` at all** — no `--space-*`, no `--text-xs/
+sm/base/lg/xl/2xl/3xl` type-scale entries (`tokens.css` does separately define
+`--text-primary/secondary/disabled/inverse`, which are unrelated *color* tokens that
+happen to share the `--text-` prefix — not to be confused with the type-scale
+`--text-xs/sm/base/lg` this design needs), no `--font-*` weight tokens, no `--radius-*`
+family. REQ-141 (which built `tokens.css`) scoped itself to `design-system.md` §2.1–2.2
+only (per REQ-120's design), so §3/§4 were out of that requirement's scope and remain
+unbuilt.
 
 | Spec need | Token(s) | Present in `tokens.css`? |
 |---|---|---|
@@ -47,50 +60,80 @@ three components touch):
 | Button danger fill/hover | `--interactive-danger`, `--interactive-danger-hover`, `--text-inverse` | Yes (lines 80–81) |
 | Button ghost text | `--text-secondary`, hover bg `--color-neutral-100` | Yes |
 | Button disabled/loading dimming | reuse `opacity`/`cursor` pattern already used in `ConfirmDialog.tsx` (no token, plain CSS values — consistent with existing precedent, not a literal *color*) | N/A |
+| Button size padding (§4 scale) | `--space-1`, `--space-2`, `--space-3`, `--space-4`, `--space-6` | **No** — see addendum below |
+| Button size font | `--text-sm`, `--text-base`, `--text-lg` | **No** — see addendum below |
+| Button size font weight | `--font-medium` | **No** — see addendum below |
+| Button border radius | `--radius-sm` | **No** — see addendum below |
 | StatusBadge — definition domain (5.1) | `--color-neutral-100/200/400/500/600`, `--text-secondary`, `--color-success-light/-dark/-success`, `--color-warning-light/-dark/-warning` | Yes |
 | StatusBadge — instance domain (5.2) | `--color-info-light/-dark/-info`, `--color-success-*`, `--color-neutral-*`, `--color-error-light/-dark/-error` | Yes |
 | StatusBadge — task domain (5.3) | `--color-info-light/-dark`, `--color-success-*`, `--color-neutral-200/-600` | Yes |
-| PageLayout content constraint | `--content-max-width` | Yes (tokens.css does not literally re-declare it — **see Open Question OQ-1 below**) |
-| PageLayout vertical rhythm | `--space-6` (24px) | Yes |
+| StatusBadge size padding | `--space-1`, `--space-2`, `--space-3` | **No** — see addendum below |
+| StatusBadge size font | `--text-xs`, `--text-sm` | **No** — see addendum below |
+| StatusBadge border radius | `--radius-full` | **No** — see addendum below |
+| PageLayout content constraint | `--content-max-width` | **No** — see addendum below |
+| PageLayout vertical rhythm | `--space-6` (24px) | **No** — see addendum below |
 
-**OQ-1 (flagged, not silently resolved):** `--content-max-width` is declared in
-`design-system.md` section 4 (`--content-max-width: 1280px;`) but a grep of
-`web/src/styles/tokens.css` (full file read above, 110 lines) shows **no
-`--content-max-width`, `--sidebar-width`, or `--panel-width` entries** — section 4's
-layout tokens were never copied into `tokens.css` when REQ-141 built it (REQ-141 built
-the file from `design-system.md` §2.1–2.2 per REQ-120's design; §4 was not in that
-scope). This is a genuine gap: PageLayout's acceptance criterion requires content
-constrained by `var(--content-max-width)`, but that custom property does not exist in
-the shipped stylesheet today.
+**OQ-1 (flagged, not silently resolved) — now folded into the addendum below:**
+`--content-max-width` is declared in `design-system.md` §4 (`--content-max-width:
+1280px;`) but does not exist in `tokens.css`, for the same reason none of §3/§4 exists
+there: REQ-141 never ported that section. This was previously treated as an isolated
+one-token gap; the rework above shows it's one entry in a larger missing family, all
+handled together below.
 
-**Resolution (design-step addendum, not silently invented):** add
-`--content-max-width: 1280px` to `web/src/styles/tokens.css`, sourced verbatim from
-`design-system.md` §4 (already-specified value, not a new invention — copying an
-existing spec value the token layer missed, same category of fix as REQ-144/145's
-addenda visible elsewhere in the file). `--sidebar-width` and `--panel-width` are
-**out of scope** for this addendum — nothing in Button/StatusBadge/PageLayout needs
-them; do not add unused tokens speculatively. `docs/frontend/design-system.md` does
-not need editing for this addendum since §4 already states the value correctly — only
-`tokens.css` is missing it. This is the "if a spec value has no matching token" case
-named in the requirement's own description, resolved explicitly here rather than left
-for FRONTEND-DEV to invent.
+**Resolution (design-step addendum, not silently invented):** every value below is
+copied verbatim from `design-system.md` §3 (Typography) and §4 (Spacing & Layout) —
+already-specified spec values the token layer missed, same category of fix as
+REQ-144/145/146's addenda visible elsewhere in `tokens.css`. Only the subset actually
+used by Button/StatusBadge/PageLayout is added; `design-system.md` §3/§4 also defines
+`--text-xl`, `--text-2xl`, `--text-3xl`, `--font-normal`, `--font-semibold`,
+`--font-bold`, `--space-8`, `--space-12`, `--space-16`, `--radius-md`, `--radius-lg`,
+`--sidebar-width`, `--panel-width` — none of which any of these three components need,
+so none of those are added speculatively.
 
-**Action for FRONTEND-DEV:** add exactly one line to `web/src/styles/tokens.css`
-inside the existing `:root { ... }` block (placement: alongside the other spacing/
-layout tokens is documented in `design-system.md` §4, but that section is not
-mirrored in `tokens.css` at all yet — so place it near `--surface-page`/layout-
-adjacent tokens, e.g. immediately after the `--interactive-*` block, with a comment
-`/* Content layout (REQ-272 addendum) */` matching this file's existing addendum
-comment style, e.g. `/* Warning-state additions (REQ-144 addendum) */`):
+**Action for FRONTEND-DEV:** add the following to `web/src/styles/tokens.css` inside
+the existing `:root { ... }` block, as new grouped sections (matching this file's
+existing addendum-comment convention, e.g. `/* Warning-state additions (REQ-144
+addendum) */`) placed near the end of the block, before the closing `}`:
 
 ```css
-/* Content layout (REQ-272 addendum) */
+/* Typography scale (REQ-272 addendum, subset of design-system.md §3) */
+--text-xs:   0.75rem;   /* 12px */
+--text-sm:   0.875rem;  /* 14px */
+--text-base: 1rem;      /* 16px */
+--text-lg:   1.125rem;  /* 18px */
+--font-medium: 500;
+
+/* Spacing scale (REQ-272 addendum, subset of design-system.md §4) */
+--space-1: 4px;
+--space-2: 8px;
+--space-3: 12px;
+--space-4: 16px;
+--space-6: 24px;
+
+/* Radius scale (REQ-272 addendum, subset of design-system.md §4) */
+--radius-sm:   4px;
+--radius-full: 9999px;
+
+/* Content layout (REQ-272 addendum, from design-system.md §4) */
 --content-max-width: 1280px;
 ```
 
-No change to `docs/frontend/design-system.md` §4 is required — the addendum is
-"tokens.css catches up to a spec value it missed," the same category REQ-120's design
-doc anticipated (§5 of that doc), not a new design decision.
+**Naming collision note (must not be missed at implementation time):** `tokens.css`
+already declares `--text-primary`, `--text-secondary`, `--text-disabled`,
+`--text-inverse` (lines 69–72) — semantic *color* tokens for text color. The new
+`--text-xs/sm/base/lg` type-scale tokens this addendum adds are a **different token
+family** (font-size, not color) that happens to share the `--text-` prefix, exactly as
+`design-system.md` itself defines both families side by side (§2.2 vs. §3). This is
+not a collision in practice — the four existing names and the four new names are
+disjoint strings — but FRONTEND-DEV should not conflate `--text-secondary` (a color)
+with `--text-sm` (a font size) when implementing.
+
+No change to `docs/frontend/design-system.md` §3/§4 is required for any of the above —
+the addendum is "`tokens.css` catches up to spec values it missed," the same category
+REQ-120's design doc anticipated (§5 of that doc), not a new design decision. This
+design doc specifies the exact names/values FRONTEND-DEV must add; adding them to the
+actual `tokens.css` file is FRONTEND-DEV's Step 3 implementation work, not this
+design step's.
 
 ---
 
@@ -343,8 +386,12 @@ section states the design intends zero hits, not that it has confirmed zero hits
 
 ## 6. Open questions (summary, not resolved here)
 
-- **OQ-1** — resolved as a design addendum: add `--content-max-width: 1280px` to
-  `tokens.css` (§1). Not silent — stated as the fix.
+- **OQ-1** — resolved as a design addendum: §1 now specifies the full set of missing
+  tokens (`--space-1/2/3/4/6`, `--text-xs/sm/base/lg`, `--font-medium`, `--radius-sm`,
+  `--radius-full`, `--content-max-width`) FRONTEND-DEV must add to `tokens.css`, with
+  exact names/values/comments. Not silent — stated as the fix, corrected from the
+  original narrower "just `--content-max-width`" framing after CODE-DESIGN-VALIDATOR's
+  rework feedback showed the whole §3/§4 family was missing, not just that one entry.
 - **OQ-2** — Button hover-state mechanism (inline JS toggle vs. scoped `<style>`
   block) is an implementation choice, not a token/spec question; either is
   acceptable.
@@ -365,6 +412,6 @@ section states the design intends zero hits, not that it has confirmed zero hits
 | `StatusBadge.tsx` API (status, domain, size) + one status per 5.1/5.2/5.3 token-tested | §3.1, §3.2, §3.5 |
 | `PageLayout.tsx` renders h1 title, actions slot, content area constrained by `--content-max-width` | §4.1, §4.3 |
 | Zero literal-colour guard hits across the three files | §5 |
-| New-token-or-explicit-nil statement | §1 (OQ-1: one new token, `--content-max-width`, added to `tokens.css`; no `design-system.md` edit needed since §4 already had the value) |
+| New-token-or-explicit-nil statement | §1 (OQ-1: twelve new tokens — `--space-1/2/3/4/6`, `--text-xs/sm/base/lg`, `--font-medium`, `--radius-sm`, `--radius-full`, `--content-max-width` — added to `tokens.css`; no `design-system.md` edit needed since §3/§4 already had the values, `tokens.css` just never ported them) |
 | No `web/src/pages/` file modified | Out of scope by construction — this design touches only `web/src/components/ui/` and `web/src/styles/tokens.css` |
 | `npm run type-check && lint && test && guards` all pass | Not verifiable at design time — FRONTEND-DEV's Step 3 responsibility; this design's token/type choices are constructed to satisfy `type-check` (exact prop types) and `guards` (no literals) by construction |

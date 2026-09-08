@@ -563,7 +563,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   @spec extract_test_list_block(String.t()) :: [String.t()]
   defp extract_test_list_block(output) do
     output
-    |> String.split("\n")
+    |> split_output_lines()
     |> Enum.drop_while(&(&1 != "Tests that would be executed:"))
     |> case do
       [] ->
@@ -600,7 +600,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
           {:header_found, window :: String.t(), terminator_reached? :: boolean()}
           | :header_not_found
   defp find_discovery_window(output, bound) do
-    lines = String.split(output, "\n")
+    lines = split_output_lines(output)
 
     case Enum.drop_while(lines, &(&1 != "Tests that would be executed:")) do
       [] ->
@@ -632,7 +632,7 @@ defmodule Mix.Tasks.Letflow.Check.Test do
   # actually occurred.
   @spec last_output_lines(String.t(), pos_integer()) :: String.t()
   defp last_output_lines(output, n) do
-    lines = String.split(output, "\n")
+    lines = split_output_lines(output)
     total = length(lines)
 
     tail = Enum.take(lines, -n)
@@ -642,6 +642,13 @@ defmodule Mix.Tasks.Letflow.Check.Test do
     else
       Enum.join(tail, "\n")
     end
+  end
+
+  # Splits output on \n and strips trailing \r from each line so CRLF output
+  # from Windows .bat fixtures matches the same header literals as Unix output.
+  @spec split_output_lines(String.t()) :: [String.t()]
+  defp split_output_lines(output) do
+    output |> String.split("\n") |> Enum.map(&String.trim_trailing(&1, "\r"))
   end
 
   @spec parse_wasm_hang_location!(String.t()) :: wasm_hang_location()

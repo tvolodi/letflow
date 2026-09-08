@@ -187,15 +187,44 @@ defp safe_leaf(v) when is_struct(v), do: if(jason_encodable?(v), do: v, else: in
 defp safe_leaf(v) when is_tuple(v), do: inspect(v)
 defp safe_leaf(v), do: v
 
-defp jason_encodable?(v), do: Jason.Encoder.impl_for(v) != nil
+defp jason_encodable?(v), do: Jason.Encoder.impl_for(v) not in [nil, Jason.Encoder.Any]
 ```
 
-`jason_encodable?/1` via `Jason.Encoder.impl_for/1` (returning the implementing module,
-or `nil` when the protocol has no implementation for that struct) is the exact
-mechanism — not a heuristic guess about which struct names are "known safe." This is
-the same question `Jason.encode!/1` itself answers internally; asking it here directly
-is more reliable than re-deriving the same answer some other way, and stays correct
-automatically if a struct later gains/loses a `@derive Jason.Encoder`.
+**Mechanism, corrected from an earlier draft of this design that was FAILed by
+CODE-DESIGN-VALIDATOR — verified by actually running it against this project's Jason
+dependency before being written here, not assumed.** `Jason.Encoder` in this project's
+Jason version declares `@fallback_to_any true` (`deps/jason/lib/encoder.ex`), which
+means `Jason.Encoder.impl_for/1` does **not** return `nil` for an encoder-less struct —
+it returns `Jason.Encoder.Any`, a catch-all implementation whose `encode/2` clause
+*raises* `Protocol.UndefinedError` at encode time rather than declining to implement.
+So `Jason.Encoder.impl_for(v) != nil` is true for every struct, encoder-having or not,
+and is not a usable "is this safe to hand to Jason unchanged" check. Verified directly
+(`mix run`/`elixir`, this checkout's actual `deps/jason`):
+
+```
+Jason.Encoder.impl_for(struct(HasEncoder, a: 1)) #=> Jason.Encoder.HasEncoder   (has @derive/defimpl)
+Jason.Encoder.impl_for(struct(NoEncoder, a: 1))  #=> Jason.Encoder.Any          (no impl — falls back)
+```
+
+The corrected check, `Jason.Encoder.impl_for(v) not in [nil, Jason.Encoder.Any]`,
+excludes both "truly no impl resolvable" (`nil` — not expected for a struct in practice,
+since `@fallback_to_any` always resolves to *something*, but excluded defensively) and
+"resolved only to the raising fallback" (`Jason.Encoder.Any`). Verified against both
+required cases plus two non-struct sanity checks:
+
+```
+check.(struct(HasEncoder, a: 1)) #=> true   (real impl — matches expectation)
+check.(struct(NoEncoder, a: 1))  #=> false  (fallback-only — matches expectation)
+check.(%{a: 1})                  #=> true   (plain map — Jason encodes maps natively)
+check.("string")                 #=> true   (binary — Jason encodes strings natively)
+```
+
+This is still the same underlying idea as before — ask the protocol system directly
+rather than guess by struct name, so the check stays correct automatically if a struct
+later gains/loses a `@derive Jason.Encoder` — just querying the resolved impl *module*
+against the known-raising fallback sentinel (`Jason.Encoder.Any`) instead of against
+`nil`, since `nil` is not the value this Jason version actually produces for the
+no-impl case.
 
 **Map key handling — deliberately unchanged, stated explicitly so it isn't read as an
 oversight:** `safe_value/2`'s map clause above sanitizes **values** only, not keys.

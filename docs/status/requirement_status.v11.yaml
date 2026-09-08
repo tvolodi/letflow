@@ -739,3 +739,15 @@ history:
       references (none found) and left unchanged -- these are new, unused primitives
       with no documented current-behavior change, same as REQ-272. Next: route to
       FRONTEND-DEV for Step Final (git merge).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T22:28:56Z"
+    note: >
+      ISS-0548 resolved via WF03-ISS0548-20260908 (queue task 548, GH#1112).
+      Added 5 --z-* stacking tokens to web/src/styles/tokens.css (--z-modal:500,
+      --z-conflict:550, --z-conflict-panel:560, --z-dialog:600, --z-toast:700)
+      and migrated 5 components off literal z-index values: ConfirmDialog,
+      ConfirmPromoteModal, ConflictResolver (×2), Toast. Rebased twice as
+      ISS-0547 and REQ-275 (Toast) landed on main concurrently. ORCH will
+      merge and release queue task 548 status:done.

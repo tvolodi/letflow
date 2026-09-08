@@ -134,4 +134,17 @@
 
   /* Font family (REQ-275 addendum, from design-system.md §3) */
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Stacking order (ISS-0548: single source of truth for z-index layers).
+     Never hand-pick a literal z-index -- add a token here instead.
+     --z-modal:          base modal overlays (ConfirmPromoteModal)
+     --z-conflict:       ConflictResolver backdrop
+     --z-conflict-panel: ConflictResolver sub-panel (above its own backdrop)
+     --z-dialog:         ConfirmDialog (above regular modals)
+     --z-toast:          Toast notifications (always topmost)            */
+  --z-modal:          500;
+  --z-conflict:       550;
+  --z-conflict-panel: 560;
+  --z-dialog:         600;
+  --z-toast:          700;
 }

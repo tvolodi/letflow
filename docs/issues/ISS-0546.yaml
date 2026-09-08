@@ -5,7 +5,9 @@ discovered_in_run: WF02-REQ272-20260908
 discovered_at: "2026-09-08T00:00:00Z"
 severity: MINOR
 tags: [documentation, provenance, decision-record, frontend, requirements]
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0546-20260909
+resolved_at: "2026-09-08T21:49:12Z"
 queue_task_id: 546
 github_issue: 1105
 affected_files:
@@ -259,3 +261,34 @@ diagnosis:
     frontend-architecture.md itself -- that is CODE-DESIGNER's Step 2 job, informed by
     the citations and synthesis above. No file under docs/migration/decisions/ was
     created or modified by this step.
+resolution_note: >
+  Resolved by backfilling docs/migration/decisions/0020-frontend-architecture.md, the
+  missing decision record cited as authority (D1/D1a, D2/D2a, D3/D3a) by REQ-272..289.
+  CODE-DESIGNER authored the record from the 8 citations gathered in this issue's
+  diagnosis, covering D1/D1a (backend: CEL-subset expression validation at definition
+  time via Letflow.Engine.Expr, plus a language-neutral conformance corpus required
+  before any second-language evaluator; tenant settings/branding as a closed, named
+  vocabulary with the platform default brand colour canonically sourced from
+  tokens.css, resolving the pre-existing 3-way #228be6/#2563EB/#0B5FFF drift), D2/D2a
+  (frontend: build design-system.md's specified UI primitives into
+  web/src/components/ui/, extending rather than replacing it, then migrate pages onto
+  them in later requirements; explicit, deliberate rejection of a third-party
+  component library on process grounds, accepting hand-built WCAG 2.1 AA a11y as the
+  known cost), and D3/D3a (form-schema: task.form_schema is a rendering payload only,
+  never a validation authority -- variable_schemas/REQ-109 remains sole validation
+  authority; untrusted input requiring JsonSchemaShape.check/1; served at the pinned
+  definition version per REQ-126's design), plus a numbered Sequencing section
+  (REQ-280 = step 4, REQ-288 = step 8, REQ-289 = step 9).
+
+  CODE-DESIGN-VALIDATOR independently fidelity-checked every specific factual claim in
+  the drafted record -- including the brand-colour 3-way drift and the exact D2/D3
+  text -- against the real code (tokens.css, mobile_tenant_config.ex,
+  JsonSchemaShape) and already-merged requirement text, and passed it. REVIEWER
+  passed it: no contradiction with any other decision record, and the backfill
+  framing is transparent, matching this project's own precedent (0019 was likewise
+  dated after its actual decision date). The record carries its own provenance
+  section stating plainly that it is a reconstructed backfill, not a
+  contemporaneously-authored record.
+
+  No ELIXIR-DEV/FRONTEND-DEV/SECURITY-REVIEWER/TEST-DESIGNER steps were needed -- this
+  was a docs-only fix with no code change and no executable surface.

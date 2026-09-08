@@ -2193,9 +2193,11 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 23
+    entries: 24
     note: >
-      Incremented to 23 by ORCH's own REQ-280 done-event append
+      Incremented to 24 by ORCH's own ISS-0549 SCOPE-CHANGE done-event append
+      (WF03-ISS0549-20260908) -- Button data-testid passthrough.
+      Previously incremented to 23 by ORCH's own REQ-280 done-event append
       (WF02-REQ280-20260908) -- 807 lines at that point (49393 bytes), well
       under the roll ceiling, composed after rebasing through two real
       conflicts: one in docs/requirements.yaml against sibling REQ-275, and

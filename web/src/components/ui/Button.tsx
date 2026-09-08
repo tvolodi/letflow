@@ -15,6 +15,7 @@ export interface ButtonProps {
   disabled?: boolean
   onClick?: () => void
   children: React.ReactNode
+  'data-testid'?: string
 }
 
 interface VariantStyle {
@@ -64,6 +65,7 @@ const SIZE_STYLES: Record<ButtonProps['size'], SizeStyle> = {
 
 export function Button(props: ButtonProps): React.ReactElement {
   const { variant, size, loading = false, disabled = false, onClick, children } = props
+  const testId = props['data-testid'] ?? 'ds-button'
 
   const [hovered, setHovered] = useState(false)
 
@@ -74,7 +76,7 @@ export function Button(props: ButtonProps): React.ReactElement {
   return (
     <button
       type="button"
-      data-testid="ds-button"
+      data-testid={testId}
       onClick={onClick}
       disabled={isDisabled}
       onMouseEnter={() => setHovered(true)}

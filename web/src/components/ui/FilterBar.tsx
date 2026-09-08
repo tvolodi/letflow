@@ -58,8 +58,8 @@ export function FilterBar(props: FilterBarProps): React.ReactElement {
       )}
 
       {showClear && (
-        <span data-testid="filter-bar-clear" style={{ marginLeft: 'auto' }}>
-          <Button variant="ghost" size="sm" onClick={onClear}>
+        <span style={{ marginLeft: 'auto' }}>
+          <Button variant="ghost" size="sm" onClick={onClear} data-testid="filter-bar-clear">
             Clear filters
           </Button>
         </span>

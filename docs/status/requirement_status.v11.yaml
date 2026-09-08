@@ -805,3 +805,13 @@ history:
       (REQ-275, Toast/JsonEditor primitives) -- both entries composed in
       impl_order sequence, neither discarded. ORCH will merge and release
       queue task 541 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T23:20:06Z"
+    note: >
+      ISS-0549 resolved via WF03-ISS0549-20260908 (queue task 549, GH#1117).
+      Added data-testid?: string to ButtonProps in Button.tsx, forwarded to
+      native <button> (default 'ds-button'). Retired FilterBar.tsx wrapper-span
+      data-testid workaround; margin span kept for flex layout. ORCH will
+      merge and release queue task 549 status:done.

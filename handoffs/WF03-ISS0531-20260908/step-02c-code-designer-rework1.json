@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0531-20260908-step-02c",
+  "run_id": "WF03-ISS0531-20260908",
+  "workflow_id": "WF-03",
+  "step": "02c",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "CODE-DESIGN-VALIDATOR",
+  "file": "handoffs/WF03-ISS0531-20260908/step-02c-code-designer-rework1.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T12:05:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-133", "REQ-019"],
+    "issue_ids": ["ISS-0531"],
+    "related_handoff_ids": ["WF03-ISS0531-20260908-step-02b"],
+    "artifacts_in": [],
+    "artifacts_out": ["lib/letflow/design/iss0531-tenant-slug-resolution-fix.md"],
+    "branch_name": "feature/WF03-ISS0531-20260908",
+    "base_commit": "226605d3"
+  },
+  "task": {
+    "description": "Rework 1: remove the disguised drop-in-fix TypeScript code block, replace with prose/decision-table description."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Replaced the fenced TypeScript block (former lines 67-78: DEFAULT_TENANT_REALM constant + if/return fix, copy-pasteable verbatim) with a plain-English decision table describing the same three-way branch (exact match on bpm-default -> return verbatim; starts with bpm- otherwise -> strip prefix; doesn't start with bpm- -> unchanged), plus one sentence noting evaluation order matters. No const/if/return/===/other executable TS syntax remains in that section. Two other fenced blocks confirmed legitimate on re-check: lines 18-20 quote the EXISTING/current buggy code verbatim as a citation (SS1 problem statement, describing what's there today), not proposed implementation -- evidence/diagnosis, not a fix to copy-paste; lines 46-48 are the function signature only (marked unchanged), explicitly permitted per the signatures/type-shapes-only convention. Everything else in the document (SS1 problem statement, SS3 hardcode-vs-pattern rationale, SS4 tradeoff discussion, SS5 open questions, SS6 implementation notes, SS7 test cases, SS8 acceptance-criteria mapping, tenant.ex/frontend-requirements.md citations) untouched."
+  },
+  "rework_count": 1,
+  "max_rework": 3
+}

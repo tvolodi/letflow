@@ -64,17 +64,19 @@ export function resolveTenantSlug(payload: JwtPayload): string | null
 3. If `iss` is absent, malformed, or has no `realms/<realm>` segment, return `null`
    (unchanged).
 
-Illustrative conditional shape (for clarity only — FRONTEND-DEV should still write this
-as idiomatic project TypeScript, not copy this verbatim):
+Decision table for the realm-to-slug mapping (replaces the current unconditional strip
+at today's lines 26–42; the two unchanged branches — `tenant_id` present, and no
+`realms/<realm>` segment found — are omitted from this table since they are untouched):
 
-```ts
-const DEFAULT_TENANT_REALM = 'bpm-default'
-// ...
-if (realm === DEFAULT_TENANT_REALM) {
-  return realm
-}
-return realm.startsWith('bpm-') ? realm.slice(4) : realm
-```
+| Extracted `<realm>` value | Returned slug |
+|---|---|
+| Exactly `"bpm-default"` | `"bpm-default"` (returned verbatim, unstripped) |
+| Starts with `"bpm-"` but is not exactly `"bpm-default"` | `<realm>` with the leading 4-character `"bpm-"` prefix removed |
+| Does not start with `"bpm-"` | `<realm>` unchanged |
+
+The exact-match check against the literal reserved value must be evaluated before the
+prefix-strip check, since `"bpm-default"` would otherwise also satisfy "starts with
+`bpm-`".
 
 The `tenant_id`-claim branch (step 1) and the URL-parsing/`try`/`catch` structure (the
 outer shape of the function) are unchanged — only the realm-to-slug mapping inside the

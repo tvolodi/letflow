@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF03-ISS0296-20260908-step-00",
+  "run_id": "WF03-ISS0296-20260908",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "UAT-RUNNER",
+  "file": "handoffs/WF03-ISS0296-20260908/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-08T18:45:00Z",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-133"],
+    "issue_ids": ["ISS-0296"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/requirements.yaml",
+      "web/playwright.config.ts",
+      "web/src/auth/tokenUtils.ts",
+      "lib/letflow/plugs/cors.ex",
+      "lib/letflow/plugs/auth_pipeline.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0296-20260908",
+    "base_commit": "04ec455f"
+  },
+  "task": {
+    "description": "ISS-0296: complete REQ-133's AC1-6 live-browser login proof. The config fix (correct Keycloak port/client_id) already landed and was curl-verified long ago. Extensive prior attempts hit browser-automation flakiness in this sandbox, NOT an app defect -- two real environment workarounds are already documented in the issue itself: (1) Vite's dev server binds IPv6-localhost only, not 127.0.0.1 -- use `localhost` not `127.0.0.1` in E2E_BASE_URL / any browser navigation target; (2) React 18 StrictMode double-invokes ProtectedRoute.tsx's redirect effect in `npm run dev` mode, causing signinRedirect() to fire twice with a PKCE-state race -- use `npm run build && npm run preview` (port 4173, matching playwright.config.ts's own default baseURL) rather than `npm run dev` for any live browser session. IMPORTANT CONTEXT since this issue was filed (2026-08-23): a sibling session's ADHOC-ENGINE-AUDIT-20260908 successfully got a real authenticated browser session working THIS SAME DAY and found several real downstream bugs from it (ISS-0529 through ISS-0536, all now fixed and merged: CORS localhost:4173 origin missing, tenant-slug bpm-default mismatch, SPA health-check 404s, JSON log formatter crash, sandbox pool flake, wasm_hang CRLF parsing) -- meaning the login flow itself should now actually work end-to-end in THIS environment, since ISS-0529 (CORS) through ISS-0531 (tenant-slug) were direct blockers/corruptors of exactly this login flow and are now fixed. This run may have a real chance of succeeding where the original 2026-08-23 attempt didn't, precisely because of what's been fixed since. Docker services already running: keycloak (port 8082, healthy, up 12 days) and postgres (port 5463, healthy, up 4 days). A persistent backend `mix run --no-halt` instance also appears to already be running on port 4000 (confirmed via `curl localhost:4000/health` returning 200) -- verify this is genuinely serving current code before trusting it; if stale, you may need to restart it. web/dist already exists from a prior build -- verify it's current (rebuild if needed) before running `npm run preview`."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0296-20260908 created off main @ 04ec455f."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

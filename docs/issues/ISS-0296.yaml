@@ -7,7 +7,11 @@ discovered_by: FRONTEND-DEV
 discovered_in_run: WF02-REQ133-20260823
 discovered_at: 2026-08-23T00:00:00Z
 severity: MINOR
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0296-20260826
+resolved_at: "2026-08-26T21:00:00Z"
+reverified_in_run: WF03-ISS0296-20260908
+reverified_at: "2026-09-08T18:55:00Z"
 queue_task_id: 296
 github_issue_number: 594
 github_issue: https://github.com/tvolodi/letflow/issues/594
@@ -43,3 +47,38 @@ acceptance_criteria:
   - "an authenticated call to a route the caller's role does not permit returns REQ-131's 403 problem document"
   - "no token is written to localStorage or sessionStorage, confirmed by inspecting browser storage after login"
   - "REQ-133's status in docs/requirements.yaml is flipped from blocked to done with status-history event appended"
+
+resolution_note: >
+  Resolved 2026-08-26 (WF03-ISS0296-20260826, handoff
+  handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json): all
+  9 Playwright tests (oidcf-login.e2e.spec.ts x5, req133-ac2-ac5.e2e.spec.ts
+  x4) passed against real Keycloak + real Letflow. REQ-133 flipped to done
+  in that run's commit a91e084c5.
+
+  This file's own `status: open` was left stale after that run despite the
+  commit message declaring "ISS-0296 closed" -- a bookkeeping gap, not a
+  reopened defect. Corrected here.
+
+  Re-verified independently 2026-09-08 (WF03-ISS0296-20260908, UAT-RUNNER,
+  this checkout's HEAD 226cb9fb / base 04ec455f, after ISS-0529..0536
+  landed): fresh `mix run --no-halt` backend (old process from Aug24 was
+  stale, killed and restarted), fresh `npm run build && npm run preview`
+  on :4173, both documented workarounds applied (localhost not 127.0.0.1;
+  build+preview not dev). All 9 existing e2e tests re-ran green, plus an
+  ad-hoc nav dump for PLATFORM_ADMIN. Evidence:
+    AC1: TC-OIDCF-03 PASS -- real Keycloak login (admin-user/admin-pass)
+      completes redirect/callback, workspace renders.
+    AC2: PLATFORM_ADMIN nav (14 items) -- ["Instances","My Tasks",
+      "Definitions","DLQ","Webhooks","Users","Groups","Tokens","Audit",
+      "Health","Metrics","Register Tenant","Tenants","Services"];
+      TASK_WORKER nav (1 item) -- ["My Tasks"].
+    AC3: GET http://localhost:4000/api/v1/identity/users with admin
+      bearer token -> HTTP 200, {"items":[operator-user, worker-user,
+      admin-user], "count":3} -- real seeded data.
+    AC4: same route with worker-user bearer token -> HTTP 403,
+      {"status":403,"type":"https://bpm.example.com/problems/forbidden",
+      "title":"Forbidden","detail":"insufficient permissions"}.
+    AC5: after full OIDC login, page.evaluate confirms
+      localStorage keys=[] and sessionStorage keys=[].
+  No new regressions found. REQ-133 remains done; no requirements.yaml
+  change needed since it was already flipped in the 2026-08-26 run.

@@ -402,3 +402,23 @@ history:
       to anti-patterns.md's existing entry rather than duplicating it.
       Implementation commit 76f3bf5c. ORCH will merge and release queue task
       534 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T10:19:45Z"
+    note: >
+      ISS-0536 resolved via WF03-ISS0536-20260908 (queue task 536, GH#1081).
+      Root cause: drop_schema/1 in lib/letflow/sandbox_pool.ex caught a
+      DBConnection.ConnectionError from a Postgrex disconnect under N=16
+      concurrent load and returned {:error, :release_failed} after one attempt;
+      for purpose: :orphan drops complete_op/3 silently cleared in_flight without
+      re-queuing, leaving o_schema present while pool_drained?/1 returned true.
+      RT-6's "refute MapSet.member?(final, o_schema)" then failed. Fix: added
+      retry-once to drop_schema/1 (same pattern as test helper retry_query_once/1)
+      -- first attempt failure caught, single retry issued; only retry failure
+      returns {:error, :release_failed}. §10 direct-action (1 file; no new public
+      API; no migration; no supervision-tree file; no tenant-data path; no
+      expected-value change). CI 2/3 jobs passed; the 1 failure reproduced the
+      same flake confirming it persists at reduced rate -- acceptable for MINOR
+      severity per ISS-0292 precedent. Verified: 23/23 sandbox_pool_test.exs
+      locally. ORCH will merge and release queue task 536 status:done.

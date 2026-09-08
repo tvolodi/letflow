@@ -815,3 +815,15 @@ history:
       native <button> (default 'ds-button'). Retired FilterBar.tsx wrapper-span
       data-testid workaround; margin span kept for flex layout. ORCH will
       merge and release queue task 549 status:done.
+  - req: REQ-287
+    event: started
+    agent: ORCH
+    at: "2026-09-08T22:54:12Z"
+    note: >
+      WF02-REQ287-20260909 started (queue task 542, GH#1098). Build the
+      PaginationControls design-system primitive per decision 0020 D2a, group 4 of
+      4 -- the fourth primitive in the page-template composition (PageLayout >
+      FilterBar > DataTable > PaginationControls). docs/requirements.yaml entry was
+      missing until this run's Step 00 -- same registration-gap class as
+      REQ-272/275. ORCH added the entry (status: in_progress) before proceeding to
+      Step 1 (CODE-DESIGNER).

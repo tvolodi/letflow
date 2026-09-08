@@ -122,6 +122,9 @@
   --space-4: 16px;
   --space-6: 24px;
 
+  /* Spacing scale extension (REQ-274 addendum, subset of design-system.md §4) */
+  --space-12: 48px;
+
   /* Radius scale (REQ-272 addendum, subset of design-system.md §4) */
   --radius-sm:   4px;
   --radius-full: 9999px;

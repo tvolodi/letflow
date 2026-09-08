@@ -398,6 +398,31 @@ Renders a form from a JSON Schema object:
 | `boolean` | `<input type="checkbox">` |
 | `string, maxLength > 200` | `<textarea>` |
 
+### 7.7 FilterBar
+
+```tsx
+<FilterBar
+  onClear={() => void}        // optional; shown only when at least one filter is active
+  activeCount={number}        // optional; badge count of currently-applied filters
+>
+  {/* filter controls — inputs, selects, StatusBadge-driven toggles, etc. */}
+</FilterBar>
+```
+
+- Renders its `children` (individual filter controls — the page composing
+  `FilterBar` owns each control's own state and change handling) in a single
+  horizontal row, wrapping to multiple rows on narrow viewports.
+- An optional "Clear filters" action appears at the row's trailing edge when
+  `onClear` is supplied and `activeCount` is greater than zero; clicking it calls
+  `onClear`.
+- `FilterBar` itself holds no filter *values* — it is a layout/chrome component
+  only. Each filter control inside it (a text input, a `<select>`, a date range,
+  etc.) is the composing page's own responsibility, consistent with `PageLayout`
+  (§8) also being a pure layout wrapper around content it does not own the state
+  of.
+- Background/border matches the page's card surface (`--surface-card`,
+  `--border-default`) so it reads as a distinct toolbar strip above `DataTable`.
+
 ---
 
 ## 8. Page Layout Template

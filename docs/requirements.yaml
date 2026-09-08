@@ -16020,3 +16020,71 @@ requirements:
     depends_on: []
     impl_order: 537  # letflow-queue task id
 
+  - id: REQ-274
+    title: "Build the DataTable and FilterBar design-system primitives against tokens.css (0020 D2a, group 2 of 3)"
+    owner: FRONTEND-DEV
+    status: done
+    stage: S8
+    description: >
+      Second of three sibling requirements building docs/frontend/design-system.md's
+      specified primitives, per docs/migration/decisions/0020-frontend-architecture.md
+      D2. This requirement covers DataTable (design-system.md section 7.2) and
+      FilterBar (named in section 8's PageLayout usage example but given no API
+      block of its own -- see the open question below). It is split from REQ-272 and
+      REQ-275 because DataTable alone carries four distinct behaviours (skeleton
+      loading, empty state, sticky header, sortable columns) plus a TanStack Table
+      column-definition contract, which is a full agent turn on its own. VERIFIED
+      2026-09-08: neither exists. `ls web/src/components/ui/` returns ConfirmDialog,
+      ConfirmPromoteModal, ConflictResolver, FetchError, JsonDiffView,
+      PermissionDenied, QueryStateBoundary, RateLimitBackpressure, SkeletonLayout,
+      StaleVersionError. Note that SkeletonLayout DOES exist and design-system.md
+      section 7.2 calls for "5 grey animated rows shown while isLoading" -- establish
+      whether SkeletonLayout can serve that, and reuse it if so rather than building
+      a second skeleton implementation.
+
+      Open question at drafting, RESOLVED status disputed: the queue task's own
+      description claimed "design-system.md now carries section 7.7 (FilterBar) and
+      7.8 (PaginationControls)" as an already-resolved fact. ORCH verified this
+      independently before dispatch (`grep -n "^### 7\.7\|^### 7\.8"
+      docs/frontend/design-system.md` on current main, and `git log --all -S"### 7.7"
+      -- docs/frontend/design-system.md`, zero hits across all history) and found it
+      FALSE -- no commit, on any branch, ever added those sections; REQ-272's merged
+      PR (#1106) did not touch design-system.md's section 7 content at all. This
+      requirement's own AC4 already anticipates this possibility ("FilterBar's API is
+      recorded in docs/frontend/design-system.md before or in the same change as its
+      implementation") so the false premise does not block the work: this requirement
+      adds design-system.md section 7.7 (FilterBar) itself, as part of the same
+      change as FilterBar.tsx's implementation. Section 7.8 (PaginationControls) is
+      NOT this requirement's concern -- it is not named in this requirement's title
+      or its own acceptance criteria, and is presumed to belong to REQ-275 (group 3)
+      or a later requirement; do not add PaginationControls here.
+
+      If building reveals the recorded API is wrong, correct design-system.md in the
+      same change rather than diverging from it in code. Build in
+      web/src/components/ui/ against web/src/styles/tokens.css, same rules as
+      REQ-272: no colour literals, and any missing token is a recorded
+      design-system.md + tokens.css addendum, not a silent literal. SCOPE FENCE:
+      builds the components and their tests only. Migrating any existing page's
+      hand-rolled table onto DataTable is REQ-276..278. DO NOT adopt a component
+      library -- record 0020 D2 rejects that.
+
+      NOTE (added by ORCH 2026-09-08): this requirement was registered in
+      letflow-queue (task 539) and filed on GitHub (#1095) by a prior discovery
+      session, but this docs/requirements.yaml entry itself was missing until ORCH
+      added it at WF02-REQ274-20260908's Step 00 -- the same registration-gap class
+      already seen with REQ-272/ISS-0445/ISS-0523/ISS-0533 this cycle. Content above
+      is the queue task's own description field, with ORCH's false-premise finding on
+      the FilterBar/PaginationControls "RESOLVED" claim inserted in place (the
+      original claim is preserved nowhere since acting on it as true would have
+      misled CODE-DESIGNER).
+    acceptance_criteria:
+      - "web/src/components/ui/DataTable.tsx exists and its props exactly match design-system.md section 7.2's declared API -- columns, data, isLoading, emptyMessage, onRowClick -- confirmed by quoting the component's TypeScript prop interface next to the spec block"
+      - "each of section 7.2's four stated behaviours has its own test asserting rendered output: skeleton rows while isLoading is true, the centered empty state when data is empty, a sticky header, and a column sort that toggles asc/desc on header click"
+      - "the decision on SkeletonLayout is stated explicitly -- either DataTable's loading state reuses web/src/components/ui/SkeletonLayout.tsx (quote the call site) or the reason it cannot is named concretely; 'built a new one' without that reason does not satisfy this criterion"
+      - "FilterBar's API is recorded in docs/frontend/design-system.md before or in the same change as its implementation, and web/src/components/ui/FilterBar.tsx matches what was recorded -- quote the added spec block and the implemented prop interface together"
+      - "a fresh grep for the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/components/ui/DataTable.tsx and FilterBar.tsx returns zero hits, quoted with the command"
+      - "no file under web/src/pages/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: []
+    impl_order: 539  # letflow-queue task id
+

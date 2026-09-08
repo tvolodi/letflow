@@ -5589,6 +5589,27 @@
       "backfilled": false,
       "last_known_step": "Direct-action §10 fix -- merge pending.",
       "note": "ISS-0545 (queue task 545, GH#1102), a MINOR spec-gap REVIEWER discovered mid-review of a still-in-flight sibling run (WF02-REQ272-20260908, not yet merged): docs/frontend/design-system.md 5.4 advertised StatusBadge's domain prop as accepting timer and dlq, but sections 5.1-5.3 (the spec's only status-to-token tables) define vocabulary for definition/instance/task only -- timer and dlq had no designed status vocabulary anywhere in the document. REQ-272's own StatusBadge.tsx already handles the gap defensively (neutral non-throwing fallback + dev-only console.warn), so nothing was broken in practice; this was a spec-overpromise, not a code defect. Direct-action §10 fix (single file, no new public function/module/spec, no migration, not a supervision-tree file, not a tenant-data path, no test-asserted-behavior change): narrowed 5.4's documented domain values to the three domains with real status tables, and left an explicit note directing whoever eventually builds a timer- or DLQ-facing page to add the domain and its own 5.1-5.3-equivalent status table back together, rather than inventing a vocabulary speculatively with no consuming page to validate it against. docs/issues/ISS-0545.yaml created (did not previously exist) and resolved. No code touched; REQ-272's own fallback behavior is unaffected either way. Implementation commit 5bedec95."
+    },
+    {
+      "run_id": "WF02-REQ274-20260908",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-274",
+      "issue_id": null,
+      "queue_task_id": 539,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1095,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/src/components/ui/DataTable.tsx",
+        "web/src/components/ui/FilterBar.tsx"
+      ],
+      "branch_name": "feature/WF02-REQ274-20260908",
+      "started_at": "2026-09-08T21:47:18Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-274 (queue task 539, GH#1095), group 2 of 3 in the design-system primitives batch (0020 D2). ORCH released this task once, mistakenly believing it was blocked on REQ-272 having already added design-system.md sections 7.7/7.8; re-examined and found the block was a false premise (git log -S across all history showed zero commits ever added those sections, and REQ-272's merged PR #1106 never touched section 7 at all) and that REQ-274's own AC4 already permits recording FilterBar's API in the same change as its implementation -- reclaimed and proceeded rather than staying stuck on a false blocker. Design (lib/letflow/design/req274-datatable-filterbar.md) needed 1 rework cycle: CODE-DESIGN-VALIDATOR caught a real false claim that --space-12 already existed in tokens.css when the scale actually stopped at --space-6; fixed by adding --space-12: 48px to tokens.css as an addendum (design-system.md's own spacing scale already documented 48px for it). Implementation: DataTable.tsx built on @tanstack/react-table (new dependency, confirmed headless-only via package-lock diff -- no bundled UI, satisfying record 0020 D2's no-component-library constraint) reusing SkeletonLayout.tsx directly for its loading state; FilterBar.tsx plus a new design-system.md section 7.7 inserted verbatim from the design doc (section 7.8 PaginationControls explicitly left out of scope). A real bug was found and fixed during implementation: useReactTable's table object stays referentially stable across renders (mutated internally, not replaced), so memoizing sorted rows on the table's own identity never recomputed after a sort click; fixed by reading table.getSortedRowModel().rows directly each render, with a genuine regression test verifying actual DOM row-order changes on repeated header clicks. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework, re-check PASS) -> FRONTEND-DEV -> REVIEWER (PASS, independently confirmed the sort-toggle test is a true regression test) -> TEST-RUNNER (241/241 unit tests, 48/48 guard tests, clean type-check/lint/build; TEST-RUNNER's environment lacked the asdf PATH setup to run mix compile itself, so ORCH ran it directly afterward and confirmed clean). SECURITY-REVIEWER out of scope (pure frontend UI components, no tenant-data path). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this project's established precedent, endorsed by REVIEWER's own independent test-quality check. Rebased cleanly onto main after a sibling session's ISS-0546 fix (backfilled the previously-missing docs/migration/decisions/0020-frontend-architecture.md, independently flagged by both REQ-273's and REQ-274's own design-validation passes) landed first. Implementation commit 20044ec3."
     }
   ]
 }

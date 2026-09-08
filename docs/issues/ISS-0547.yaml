@@ -1,0 +1,43 @@
+id: ISS-0547
+title: >
+  ConfirmDialog.tsx prop names diverge from design-system.md 7.3
+  (description/confirmLabel vs body/confirmText)
+discovered_by: CODE-DESIGNER / CODE-DESIGN-VALIDATOR / FRONTEND-DEV
+discovered_in_run: WF02-REQ275-20260909
+discovered_at: "2026-09-08T22:16:11Z"
+severity: MINOR
+tags: [docs, design-system, confirm-dialog, spec-gap, s8]
+description: >
+  Naming inconsistency, not a functional defect. Discovered during
+  WF02-REQ275-20260909 (REQ-275, Toast/JsonEditor primitives), confirmed
+  field-by-field against the real component. web/src/components/ui/ConfirmDialog.tsx
+  (pre-existing, built before design-system.md 7.3 was written or before it was
+  checked against the spec) uses `body` and `confirmText` as prop names, while
+  design-system.md 7.3 documented the ConfirmDialog API as `description` and
+  `confirmLabel`. open/onConfirm/onCancel/title/confirmVariant all matched;
+  ConfirmDialog additionally has `cancelText`/`isLoading` with no spec counterpart
+  (additive, not a conflict). REQ-275 explicitly fenced ConfirmDialog out of its own
+  scope (already exists, do not rebuild) and was instructed only to report this
+  divergence, not fix it.
+
+  FIX (WF03-ISS0547-20260908): corrected design-system.md 7.3 to document the real,
+  already-shipped API (`body`, `confirmText`, `cancelText`, `isLoading`) rather than
+  renaming ConfirmDialog.tsx's props and its one existing call site
+  (web/src/components/ui/ConflictResolver.tsx) -- the cheaper of the two directions
+  named in the issue, with no call-site churn. `cancelText` and `isLoading` are now
+  documented as real additive props with their actual defaults. Docs-only fix; no
+  application code touched.
+
+  §10 direct-action: exactly one file (docs/frontend/design-system.md); no new
+  public function/module/spec; no migration; not a supervision-tree file; not a
+  tenant-data path; no test-asserted-behavior change.
+
+affected_files:
+  - docs/frontend/design-system.md
+related:
+  - REQ-275
+queue_task_id: 547
+github_issue_number: 1111
+resolving_run: WF03-ISS0547-20260908
+resolved_at: "2026-09-08T22:25:00Z"
+status: resolved

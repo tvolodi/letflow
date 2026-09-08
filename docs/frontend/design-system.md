@@ -331,11 +331,19 @@ timer- or DLQ-facing page actually needs them (ISS-0545).
   onConfirm={() => void}
   onCancel={() => void}
   title="Cancel Instance?"
-  description="All open tasks will be cancelled. This action cannot be undone."
-  confirmLabel="Cancel Instance"
+  body="All open tasks will be cancelled. This action cannot be undone."
+  confirmText="Cancel Instance"
+  cancelText="Cancel"          // defaults to "Cancel"
   confirmVariant="danger"
+  isLoading={boolean}          // defaults to false; disables both buttons while true
 />
 ```
+
+This spec previously documented `description`/`confirmLabel` in place of the real,
+already-shipped `body`/`confirmText` props (ISS-0547) -- corrected here to match
+`web/src/components/ui/ConfirmDialog.tsx` rather than renaming the shipped
+component's props and its call site. `cancelText` and `isLoading` were undocumented
+additive props on the real component; both are now recorded above.
 
 All destructive actions (cancel instance, delete definition, revoke token, discard DLQ item) MUST use `ConfirmDialog`, not a plain `window.confirm`.
 

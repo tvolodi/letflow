@@ -16145,7 +16145,7 @@ requirements:
   - id: REQ-280
     title: "Give Letflow.Identity.Tenant a settings store -- schema, migration and changeset for tenant branding and locale (0020 D1a)"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Implements step 4 of docs/migration/decisions/0020-frontend-architecture.md's

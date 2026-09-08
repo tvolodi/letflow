@@ -751,3 +751,57 @@ history:
       ConfirmPromoteModal, ConflictResolver (×2), Toast. Rebased twice as
       ISS-0547 and REQ-275 (Toast) landed on main concurrently. ORCH will
       merge and release queue task 548 status:done.
+
+  - req: REQ-280
+    event: done
+    agent: ORCH
+    at: "2026-09-08T23:04:48Z"
+    note: >
+      REQ-280 (queue task 541, GH#1097) implemented via
+      WF02-REQ280-20260908: implements step 4 of decision record 0020's
+      Sequencing, giving Letflow.Identity.Tenant a closed-vocabulary
+      settings store for branding/locale. Design (zero rework cycles):
+      a nullable :map (JSONB) settings column added directly to tenants
+      (not a new table -- tenants is global/non-tenant-scoped, so
+      test/support/tenant_fixture.ex's @expected_tenant_tables oracle
+      does not apply, confirmed and stated explicitly per AC6), a new
+      Letflow.Identity.TenantSettings custom Ecto.Type enforcing exactly
+      5 allowed keys (app_name, logo_url, brand_colors, locales,
+      default_locale) and deterministically rejecting any other key at
+      cast/1 with a typed, key-naming error, and a new
+      Tenant.settings_changeset/2 casting ONLY :settings -- structurally
+      parallel to and verified against the existing narrowly-cast
+      changesets (admin_patch_changeset/2, status_changeset/2,
+      update_changeset/2, create_changeset/3). Canonical brand colour
+      named explicitly (web/src/styles/tokens.css:18's
+      --color-brand-600 = #228be6); the other two values in record
+      0020's three-way inconsistency given explicit dispositions:
+      #0B5FFF (mobile_tenant_config.ex's @default_branding) deferred to
+      REQ-282 and left untouched, #2563EB (design-tokens/letflow.tokens.json)
+      re-confirmed absent from the filesystem (superseded by REQ-120) by
+      fresh find/grep at every pipeline stage rather than trusted from
+      the requirement text. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR
+      (PASS, no rework) -> ELIXIR-DEV (migration ran clean, 83 targeted
+      tests passed, explicitly flagged that a full-suite run was not
+      completed rather than claiming it was) -> SECURITY-REVIEWER (PASS
+      -- closed-vocabulary enforcement, INV-2-shaped field-authorization
+      isolation, and logo_url/brand_colors format validation all
+      independently re-derived from source; one non-blocking note about
+      Erlang regex $ matching before a trailing newline in the hex-colour
+      check) -> REVIEWER (PASS -- independently reproduced 83/83,
+      confirmed tenant_config.ex/mobile_tenant_config.ex byte-identical
+      to main, confirmed the tenant_fixture.ex oracle claim directly) ->
+      TEST-RUNNER (full suite 3491/3493 passed, 2 pre-existing
+      rustc-absent failures unrelated to this branch; flagged a mix
+      format gap on two files, which ORCH fixed directly as a trivial
+      follow-up commit and re-verified clean). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR skipped per this project's established
+      precedent, endorsed by REVIEWER's own independent test-quality
+      check despite this touching a migration and a new custom Ecto.Type
+      (judged not novel enough to warrant a separate design pass).
+      update_tenant_settings/2 added to identity.ex but wired to no
+      route yet -- REQ-281/282's concern. Rebased through a real conflict
+      in docs/requirements.yaml against a concurrently-merged sibling
+      (REQ-275, Toast/JsonEditor primitives) -- both entries composed in
+      impl_order sequence, neither discarded. ORCH will merge and release
+      queue task 541 status:done.

@@ -2193,9 +2193,16 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 22
+    entries: 23
     note: >
-      Incremented to 22 by ORCH's own ISS-0548 SCOPE-CHANGE done-event append
+      Incremented to 23 by ORCH's own REQ-280 done-event append
+      (WF02-REQ280-20260908) -- 807 lines at that point (49393 bytes), well
+      under the roll ceiling, composed after rebasing through two real
+      conflicts: one in docs/requirements.yaml against sibling REQ-275, and
+      one here and in requirement_status.v11.yaml against sibling
+      WF03-ISS0548-20260908's own append (composed in chronological `at:`
+      order, ISS-0548 before REQ-280, neither discarded).
+      Previously incremented to 22 by ORCH's own ISS-0548 SCOPE-CHANGE done-event append
       (WF03-ISS0548-20260908) -- --z-* CSS token scale.
       Previously incremented to 21 by this run's (WF02-REQ275-20260909) rebase composing
       a REQ-275 started-event append (Step 00, landed pre-rebase as commit

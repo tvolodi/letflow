@@ -107,4 +107,25 @@
   --color-avatar-sky:    #0284c7;
   --color-avatar-rust:   #c2410c;
   --color-avatar-indigo: #4f46e5;
+
+  /* Typography scale (REQ-272 addendum, subset of design-system.md §3) */
+  --text-xs:   0.75rem;   /* 12px */
+  --text-sm:   0.875rem;  /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --font-medium: 500;
+
+  /* Spacing scale (REQ-272 addendum, subset of design-system.md §4) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  /* Radius scale (REQ-272 addendum, subset of design-system.md §4) */
+  --radius-sm:   4px;
+  --radius-full: 9999px;
+
+  /* Content layout (REQ-272 addendum, from design-system.md §4) */
+  --content-max-width: 1280px;
 }

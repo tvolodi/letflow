@@ -638,3 +638,50 @@ history:
       general pointer to web/README.md, not a component inventory, and these are
       new/unused primitives with no documented current-behavior change. Next:
       route to FRONTEND-DEV for Step Final (git merge).
+
+  - req: REQ-274
+    event: done
+    agent: ORCH
+    at: "2026-09-08T22:06:02Z"
+    note: >
+      REQ-274 (queue task 539, GH#1095) implemented via WF02-REQ274-20260908,
+      group 2 of 3 in the design-system primitives batch (0020 D2). ORCH
+      released this task once, mistakenly believing it was blocked on
+      REQ-272 adding design-system.md sections 7.7/7.8; re-examined and
+      found the block was a false premise (verified via
+      `git log --all -S"### 7.7"` across all history, zero hits; REQ-272's
+      merged PR never touched section 7) and that REQ-274's own AC4 already
+      allows recording FilterBar's API "before or in the same change" as
+      its implementation, so reclaimed and proceeded. Design
+      (lib/letflow/design/req274-datatable-filterbar.md) needed 1 rework
+      cycle: CODE-DESIGN-VALIDATOR caught a real false claim that
+      --space-12 already existed in tokens.css (the scale stopped at
+      --space-6); fixed by adding --space-12: 48px to tokens.css as an
+      addendum (design-system.md's own spacing scale already documented
+      48px for it) rather than substituting an existing token. Implemented
+      DataTable.tsx (TanStack Table for headless sort logic -- confirmed
+      no bundled UI, satisfying record 0020 D2's no-component-library
+      constraint; reuses SkeletonLayout.tsx directly for its loading state
+      rather than a second implementation) and FilterBar.tsx, plus a new
+      design-system.md section 7.7 (FilterBar) inserted verbatim from the
+      design doc. A real bug was found and fixed during implementation:
+      useReactTable's table object stays referentially stable across
+      renders (mutated internally, not replaced), so memoizing sorted rows
+      on the table's own identity never recomputed after a sort click;
+      fixed by reading table.getSortedRowModel().rows directly each
+      render. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework,
+      re-check PASS) -> FRONTEND-DEV -> REVIEWER (PASS, independently
+      confirmed the sort-toggle test is a genuine regression test that
+      would have caught the original bug) -> TEST-RUNNER (frontend gates
+      independently re-run: 241/241 unit tests, 48/48 guard tests, clean
+      type-check/lint/build; backend mix compile --warnings-as-errors
+      confirmed clean by ORCH directly after TEST-RUNNER's environment
+      lacked the asdf PATH setup to run it itself). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR skipped per this project's established
+      precedent, endorsed by REVIEWER's independent test-quality check.
+      SECURITY-REVIEWER out of scope (no tenant-data path, pure frontend
+      UI components). Rebased cleanly onto main after a sibling session's
+      ISS-0546 fix (backfilled the previously-missing
+      docs/migration/decisions/0020-frontend-architecture.md, independently
+      flagged by both REQ-273's and REQ-274's own design-validation passes)
+      landed first. ORCH will merge and release queue task 539 status:done.

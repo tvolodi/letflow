@@ -826,6 +826,27 @@ defmodule Letflow.Identity do
   @spec reactivate_tenant(slug :: String.t()) :: {:ok, Tenant.t()} | {:error, :not_found}
   def reactivate_tenant(slug), do: set_tenant_status(slug, :active)
 
+  @doc """
+  Partial-update of a tenant's `settings` only, via
+  `Tenant.settings_changeset/2` (REQ-280,
+  `lib/letflow/design/req280-tenant-settings-store.md` §8) — mirrors
+  `patch_tenant/2`'s shape exactly. Not itself called from any HTTP route
+  yet; wiring a write path to this function is REQ-281/282's scope.
+  """
+  @spec update_tenant_settings(slug :: String.t(), attrs :: map()) ::
+          {:ok, Tenant.t()} | {:error, :not_found} | {:error, Ecto.Changeset.t()}
+  def update_tenant_settings(slug, attrs) do
+    case Repo.get_by(Tenant, slug: slug) do
+      nil ->
+        {:error, :not_found}
+
+      %Tenant{} = tenant ->
+        tenant
+        |> Tenant.settings_changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
   defp set_tenant_status(slug, status) do
     case Repo.get_by(Tenant, slug: slug) do
       nil ->

@@ -60,12 +60,15 @@ defmodule Letflow.Identity.Tenant do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Letflow.Identity.TenantSettings
+
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "tenants" do
     field(:slug, :string)
     field(:display_name, :string)
     field(:status, Ecto.Enum, values: [:active, :migrating, :inactive], default: :active)
     field(:idp_realm_id, :string)
+    field(:settings, TenantSettings)
 
     timestamps()
   end
@@ -143,6 +146,170 @@ defmodule Letflow.Identity.Tenant do
     |> cast(attrs, [:status])
     |> validate_required([:status])
   end
+
+  @doc """
+  Changeset for writing a tenant's `:settings` (REQ-280,
+  `lib/letflow/design/req280-tenant-settings-store.md` §4) — casts **only**
+  `:settings`. Mirrors `admin_patch_changeset/2`'s and `status_changeset/2`'s
+  structural-impossibility discipline: `:status`, `:slug`, `:idp_realm_id`
+  and `:display_name` are all structurally absent from this changeset's
+  `cast/3` list, so none of them can ever be changed via this path,
+  regardless of what `attrs` contains.
+
+  No `validate_required/2` for `:settings` — a `nil` settings value ("tenant
+  configured nothing yet") is a legal, expected state, and this changeset may
+  also be called to clear settings back to `nil`.
+
+  The closed top-level key vocabulary (exactly `app_name`, `logo_url`,
+  `brand_colors`, `locales`, `default_locale`) is enforced by
+  `Letflow.Identity.TenantSettings`, the custom `Ecto.Type` used for this
+  field — an unrecognized top-level key is rejected by `cast/3` itself,
+  before this function's own per-key value validation ever runs.
+
+  Per-key value validation (design §5):
+
+    * `app_name` — non-empty string, at most 100 characters (a conservative
+      bound; no existing field in this schema states one either, so this
+      picks a typical display-name-class limit rather than leaving it
+      unbounded).
+    * `logo_url` — an absolute `http`/`https` URL (via `URI.parse/1`), or
+      `nil`.
+    * `brand_colors` — a map whose only allowed key is `"primary"` (the
+      current system has exactly one brand colour today, mirroring
+      `mobile_tenant_config.ex`'s `@default_branding["primary_color"]` —
+      see design §9 OQ-1; additional slots are new scope, not invented
+      here), whose value must be a 6-digit hex color (`#RRGGBB`).
+    * `locales` — a non-empty list of locale-shaped strings (light shape
+      check: `~r/^[a-z]{2,3}(-[A-Z]{2})?$/`, not full BCP-47/CLDR
+      validation — see design §9 OQ-3).
+    * `default_locale` — a single locale-shaped string that, when `locales`
+      is also present in the same write, must be a member of it.
+  """
+  @spec settings_changeset(t :: %__MODULE__{}, attrs :: map()) :: Ecto.Changeset.t()
+  def settings_changeset(tenant, attrs) do
+    tenant
+    |> cast(attrs, [:settings])
+    |> validate_change(:settings, &validate_settings_value/2)
+  end
+
+  defp validate_settings_value(:settings, settings) when is_map(settings) do
+    []
+    |> validate_app_name(settings)
+    |> validate_logo_url(settings)
+    |> validate_brand_colors(settings)
+    |> validate_locales_and_default_locale(settings)
+  end
+
+  defp validate_settings_value(:settings, _nil_or_other), do: []
+
+  @app_name_max_length 100
+
+  defp validate_app_name(errors, %{"app_name" => app_name}) do
+    cond do
+      not is_binary(app_name) or app_name == "" ->
+        [{:settings, "app_name must be a non-empty string of at most #{@app_name_max_length} characters"} | errors]
+
+      String.length(app_name) > @app_name_max_length ->
+        [{:settings, "app_name must be a non-empty string of at most #{@app_name_max_length} characters"} | errors]
+
+      true ->
+        errors
+    end
+  end
+
+  defp validate_app_name(errors, _settings), do: errors
+
+  defp validate_logo_url(errors, %{"logo_url" => nil}), do: errors
+
+  defp validate_logo_url(errors, %{"logo_url" => logo_url}) do
+    valid? =
+      is_binary(logo_url) and
+        (case URI.parse(logo_url) do
+           %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
+             true
+
+           _other ->
+             false
+         end)
+
+    if valid? do
+      errors
+    else
+      [{:settings, "logo_url must be an absolute http(s) URL"} | errors]
+    end
+  end
+
+  defp validate_logo_url(errors, _settings), do: errors
+
+  @brand_colors_allowed_keys ~w(primary)
+  @hex_color_regex ~r/^#[0-9A-Fa-f]{6}$/
+
+  defp validate_brand_colors(errors, %{"brand_colors" => brand_colors}) when is_map(brand_colors) do
+    unrecognized_key =
+      brand_colors
+      |> Map.keys()
+      |> Enum.find(fn key -> key not in @brand_colors_allowed_keys end)
+
+    cond do
+      unrecognized_key != nil ->
+        [{:settings, "unrecognized brand_colors key: #{inspect(unrecognized_key)}"} | errors]
+
+      true ->
+        Enum.reduce(brand_colors, errors, fn {key, value}, acc ->
+          if is_binary(value) and Regex.match?(@hex_color_regex, value) do
+            acc
+          else
+            [{:settings, "brand_colors.#{key} must be a 6-digit hex color (#RRGGBB)"} | acc]
+          end
+        end)
+    end
+  end
+
+  defp validate_brand_colors(errors, %{"brand_colors" => _not_a_map}) do
+    [{:settings, "brand_colors must be a map"} | errors]
+  end
+
+  defp validate_brand_colors(errors, _settings), do: errors
+
+  @locale_regex ~r/^[a-z]{2,3}(-[A-Z]{2})?$/
+
+  defp validate_locales_and_default_locale(errors, settings) do
+    errors
+    |> validate_locales(settings)
+    |> validate_default_locale(settings)
+  end
+
+  defp validate_locales(errors, %{"locales" => locales}) do
+    valid? =
+      is_list(locales) and locales != [] and
+        Enum.all?(locales, fn locale -> is_binary(locale) and Regex.match?(@locale_regex, locale) end)
+
+    if valid? do
+      errors
+    else
+      [{:settings, "locales must be a non-empty list of locale codes"} | errors]
+    end
+  end
+
+  defp validate_locales(errors, _settings), do: errors
+
+  defp validate_default_locale(errors, %{"default_locale" => default_locale} = settings) do
+    shape_valid? = is_binary(default_locale) and Regex.match?(@locale_regex, default_locale)
+
+    cond do
+      not shape_valid? ->
+        [{:settings, "default_locale must be one of the supplied locales"} | errors]
+
+      Map.has_key?(settings, "locales") and is_list(settings["locales"]) and
+          default_locale not in settings["locales"] ->
+        [{:settings, "default_locale must be one of the supplied locales"} | errors]
+
+      true ->
+        errors
+    end
+  end
+
+  defp validate_default_locale(errors, _settings), do: errors
 
   defp validate_default_tenant_pinning(changeset) do
     if get_field(changeset, :slug) == @default_tenant_slug do

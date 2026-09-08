@@ -126,6 +126,230 @@ defmodule Letflow.Identity.TenantTest do
     end
   end
 
+  describe "settings_changeset/2 (REQ-280)" do
+    test "casts settings but is structurally incapable of touching status/slug/idp_realm_id/display_name" do
+      tenant = %Tenant{
+        slug: unique_slug(),
+        display_name: "Original",
+        status: :active,
+        idp_realm_id: "realm-x"
+      }
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{
+          "settings" => %{"app_name" => "Acme"},
+          "status" => "inactive",
+          "slug" => "hijacked-slug",
+          "idp_realm_id" => "hijacked-realm",
+          "display_name" => "Hijacked"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :settings) == %{"app_name" => "Acme"}
+      # None of these were ever cast -- no change key at all, not merely unchanged.
+      refute Map.has_key?(changeset.changes, :status)
+      refute Map.has_key?(changeset.changes, :slug)
+      refute Map.has_key?(changeset.changes, :idp_realm_id)
+      refute Map.has_key?(changeset.changes, :display_name)
+    end
+
+    test "an absent/nil settings value is a valid changeset (tenant configured nothing yet)" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original"}
+
+      changeset = Tenant.settings_changeset(tenant, %{})
+
+      assert changeset.valid?
+      refute Map.has_key?(changeset.changes, :settings)
+    end
+
+    test "an unrecognized top-level key is rejected at write time with a typed error naming the key" do
+      tenant = %Tenant{slug: unique_slug(), display_name: "Original"}
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"unknown_key" => "value"}})
+
+      refute changeset.valid?
+      errors = errors_on(changeset)
+      assert %{settings: [message]} = errors
+      assert message =~ "unrecognized tenant setting key"
+      assert message =~ "unknown_key"
+    end
+
+    test "app_name: a valid value round-trips through the database" do
+      tenant = insert_tenant!()
+
+      {:ok, updated} =
+        tenant
+        |> Tenant.settings_changeset(%{"settings" => %{"app_name" => "Acme Corp"}})
+        |> Repo.update()
+
+      reloaded = Repo.get!(Tenant, updated.id)
+      assert reloaded.settings == %{"app_name" => "Acme Corp"}
+    end
+
+    test "app_name: a non-string value is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"app_name" => 12345}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "app_name: exceeding the 100-character bound is rejected" do
+      tenant = insert_tenant!()
+      too_long = String.duplicate("a", 101)
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"app_name" => too_long}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "logo_url: a valid absolute https URL round-trips through the database" do
+      tenant = insert_tenant!()
+
+      {:ok, updated} =
+        tenant
+        |> Tenant.settings_changeset(%{"settings" => %{"logo_url" => "https://example.com/logo.png"}})
+        |> Repo.update()
+
+      reloaded = Repo.get!(Tenant, updated.id)
+      assert reloaded.settings == %{"logo_url" => "https://example.com/logo.png"}
+    end
+
+    test "logo_url: a relative path (not an absolute http(s) URL) is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"logo_url" => "/relative/path.png"}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "logo_url: a non-http(s) scheme is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"logo_url" => "ftp://example.com/logo.png"}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "brand_colors: a valid #RRGGBB primary color round-trips through the database" do
+      tenant = insert_tenant!()
+
+      {:ok, updated} =
+        tenant
+        |> Tenant.settings_changeset(%{"settings" => %{"brand_colors" => %{"primary" => "#228be6"}}})
+        |> Repo.update()
+
+      reloaded = Repo.get!(Tenant, updated.id)
+      assert reloaded.settings == %{"brand_colors" => %{"primary" => "#228be6"}}
+    end
+
+    test "brand_colors: a non-hex-format value is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"brand_colors" => %{"primary" => "blue"}}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "brand_colors: an unrecognized inner key is rejected, naming the key" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{
+          "settings" => %{"brand_colors" => %{"secondary" => "#228be6"}}
+        })
+
+      refute changeset.valid?
+      assert %{settings: [message]} = errors_on(changeset)
+      assert message =~ "secondary"
+    end
+
+    test "locales: a valid non-empty list of locale codes round-trips through the database" do
+      tenant = insert_tenant!()
+
+      {:ok, updated} =
+        tenant
+        |> Tenant.settings_changeset(%{"settings" => %{"locales" => ["en", "en-US"]}})
+        |> Repo.update()
+
+      reloaded = Repo.get!(Tenant, updated.id)
+      assert reloaded.settings == %{"locales" => ["en", "en-US"]}
+    end
+
+    test "locales: a non-list value is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"locales" => "en"}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "locales: an empty list is rejected" do
+      tenant = insert_tenant!()
+
+      changeset = Tenant.settings_changeset(tenant, %{"settings" => %{"locales" => []}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "default_locale: a valid value that is a member of locales round-trips through the database" do
+      tenant = insert_tenant!()
+
+      {:ok, updated} =
+        tenant
+        |> Tenant.settings_changeset(%{
+          "settings" => %{"locales" => ["en", "fr"], "default_locale" => "fr"}
+        })
+        |> Repo.update()
+
+      reloaded = Repo.get!(Tenant, updated.id)
+      assert reloaded.settings == %{"locales" => ["en", "fr"], "default_locale" => "fr"}
+    end
+
+    test "default_locale: a value not present in locales is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{
+          "settings" => %{"locales" => ["en"], "default_locale" => "fr"}
+        })
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    test "default_locale: a wrong-type value is rejected" do
+      tenant = insert_tenant!()
+
+      changeset =
+        Tenant.settings_changeset(tenant, %{"settings" => %{"default_locale" => 42}})
+
+      refute changeset.valid?
+      assert %{settings: [_]} = errors_on(changeset)
+    end
+
+    defp insert_tenant! do
+      {:ok, tenant} =
+        Repo.insert(%Tenant{slug: unique_slug(), display_name: "Original"})
+
+      tenant
+    end
+  end
+
   defp errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->

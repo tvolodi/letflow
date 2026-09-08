@@ -8,6 +8,8 @@
  * TC-REQ287-01: "Showing X-Y of Z" summary text, known total
  * TC-REQ287-02/02b: Previous disabled on page 1 / enabled otherwise
  * TC-REQ287-03/03b: Next disabled on last page (known total) / enabled otherwise
+ * TC-REQ287-03c/03d: exact boundary page*pageSize === totalItems -> disabled /
+ *   one unit below the boundary -> enabled (kills a >= -> > mutant on line 37)
  * TC-REQ287-04: null-totalItems summary text omits "of Z"
  * TC-REQ287-05/05b/05c: null-totalItems Next disabled/enabled via hasNextPage,
  *   defaults to disabled when hasNextPage is omitted
@@ -74,6 +76,22 @@ describe('REQ-287 — PaginationControls', () => {
       <PaginationControls page={1} pageSize={25} totalItems={120} onPageChange={vi.fn()} />,
     )
     // page*pageSize = 25 < 120
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+  })
+
+  it('TC-REQ287-03c: Next is disabled at the exact boundary page*pageSize === totalItems', () => {
+    render(
+      <PaginationControls page={4} pageSize={30} totalItems={120} onPageChange={vi.fn()} />,
+    )
+    // page*pageSize = 120 === 120 (equal, not strictly greater)
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+
+  it('TC-REQ287-03d: Next is enabled one unit below the exact boundary', () => {
+    render(
+      <PaginationControls page={3} pageSize={30} totalItems={120} onPageChange={vi.fn()} />,
+    )
+    // page*pageSize = 90 < 120
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 

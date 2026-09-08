@@ -340,3 +340,25 @@ history:
       change) -- branch/PR/merge still followed GIT_MERGE.md's procedure.
       Merged as PR #1067. This closes the last open item in the R-Co
       UAT-scenario-porting thread.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T08:40:30Z"
+    note: >
+      ISS-0535 resolved via WF03-ISS0535-20260908 (queue task 535, GH#1078).
+      Environment-only fix, no application code change. Root cause: two stacked
+      environmental issues -- (1) letflow-2-postgres-1 (shared Postgres, port
+      5472) had reached max_connections=100 due to letflow-2's idle test pool
+      connections (~70-80 across letflow_test2/3/4), blocking mix ecto.create
+      with FATAL 53300 too_many_connections; (2) the original
+      versions_missing=[20260907020001] symptom was the stale-tenant_template
+      class already documented in docs/anti-patterns.md, already cleaned up on
+      this host by ISS-0399's own run (tenant_template.schema_migrations already
+      contains 20260907020001 -- confirmed direct read). @tenant_scoped_migration_manifest
+      in lib/letflow/tenant_provisioning.ex already includes 20260907020001 as its
+      last entry -- no manifest registration gap existed. Fix applied: ALTER SYSTEM
+      SET max_connections = 300 in letflow-2-postgres-1 followed by container
+      restart; setting is persisted via postgresql.auto.conf inside the container
+      volume. Verified: mix test test/letflow/plugs/admission_pipeline_test.exs
+      passes 8/8 post-fix. No handoff subagent chain (no code change). ORCH will
+      merge and release queue task 535 status:done.

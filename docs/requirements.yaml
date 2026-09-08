@@ -15901,7 +15901,7 @@ requirements:
   - id: REQ-273
     title: 'Populate tasks.form_schema at task activation from node.attributes["form_schema"], shape-validated and version-pinned (0020 D3a)'
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Closes the largest gap record docs/migration/decisions/0020-frontend-architecture.md

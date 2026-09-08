@@ -1,0 +1,110 @@
+run_id: WF02-REQ280-20260908
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-08T23:02:01Z"
+branch: feature/WF02-REQ280-20260908
+head_commit: 5b05548a
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - 5b05548a "feat(REQ-280): add tenant settings store -- schema, migration, changeset"
+    - 6dbf3b36 "feat(REQ-280): design tenant settings store"
+    - d077a458 "chore(ORCH): WF02-REQ280-20260908 register REQ-280 + git setup"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - handoffs/WF02-REQ280-20260908/step-00-git-setup.json
+    - lib/letflow/design/req280-tenant-settings-store.md
+    - lib/letflow/identity.ex
+    - lib/letflow/identity/tenant.ex
+    - lib/letflow/identity/tenant_settings.ex
+    - priv/repo/migrations/20260908000001_add_settings_to_tenants.exs
+    - test/letflow/identity/tenant_test.exs
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  n: 8
+  source: "nproc (default)"
+  result: FAIL
+  combined: "3487 tests, 6 properties, 2 failures (3491/3493 passed)"
+  per_partition:
+    - "partition 1: 561 tests, 0 properties, 0 failures, exit 0"
+    - "partition 2: 292 tests, 2 properties, 0 failures, exit 0"
+    - "partition 3: 397 tests, 2 properties, 0 failures, exit 0"
+    - "partition 4: 461 tests, 2 properties, 0 failures, exit 0"
+    - "partition 5: 530 tests, 0 properties, 0 failures, exit 0"
+    - "partition 6: 422 tests, 0 properties, 0 failures, exit 0"
+    - "partition 7: 440 tests, 0 properties, 2 failures, exit 2"
+    - "partition 8: 384 tests, 0 properties, 0 failures, exit 0"
+
+remaining_failures:
+  count: 2
+  location: "partition 7, test/mix/tasks/letflow_check_toolchain_test.exs (Mix.Tasks.Letflow.CheckToolchainTest)"
+  tests:
+    - "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running -- line 289"
+    - "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch -- line 274"
+  error: "** (ErlangError) Erlang error: :enoent, raised from System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true]) at lib/system.ex:1141, via running_rust_raw/0 -> running_rust_version/0"
+  attribution:
+    caused_by_this_branch_diff: false
+    reasoning: >
+      Route 1 (structural): test/mix/tasks/letflow_check_toolchain_test.exs and its
+      subject module Mix.Tasks.Letflow.CheckToolchainTest do not appear anywhere in
+      `git diff --name-only main...HEAD` (see diff_scope above) -- REQ-280's entire
+      footprint is the tenants.settings migration, Tenant schema/changeset,
+      TenantSettings custom Ecto.Type, and their own test file. Also independently
+      confirmed the mechanism directly: `which rustc` on this host returns nothing
+      (rustc is not on PATH in this environment), which is exactly the :enoent both
+      failures report from System.cmd("rustc", ["--version"], ...). This is the
+      documented "no rustc toolchain" environmental limitation, not a regression from
+      the tenants.settings JSONB column, TenantSettings type, or Tenant schema change.
+
+other_checks:
+  - command: "mix format --check-formatted"
+    result: FAIL
+    files_not_formatted:
+      - lib/letflow/identity/tenant.ex
+      - test/letflow/identity/tenant_test.exs
+    attribution:
+      caused_by_this_branch_diff: true
+      reasoning: >
+        Both unformatted files are in this branch's own diff (see diff_scope above) --
+        lib/letflow/identity/tenant.ex is new code from this REQ-280 change, and
+        test/letflow/identity/tenant_test.exs is its accompanying test file. This is a
+        genuine, branch-caused formatting violation, not environmental. Full diff
+        (cond-clause line wraps in validate_app_name/validate_logo_url/
+        validate_brand_colors/validate_locales, and three multi-line map-literal wraps
+        in tenant_test.exs) is in this run's raw tool output. Needs `mix format` run and
+        committed before merge.
+  - command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+    result: PASS
+    output: "Compiling 230 files (.ex); Generated letflow app -- no warnings, exit 0"
+
+verdict: FAIL
+verdict_reasoning: >
+  Backend test suite itself is effectively green for this change: 3491/3493 passed,
+  with the only 2 failures structurally and causally unrelated to REQ-280 (missing
+  rustc binary on this host, affecting only Mix.Tasks.Letflow.CheckToolchainTest).
+  mix compile --warnings-as-errors is clean. However, mix format --check-formatted
+  FAILS on two files this branch itself introduced/modified
+  (lib/letflow/identity/tenant.ex, test/letflow/identity/tenant_test.exs) -- a
+  genuine, branch-caused defect that blocks merge per this project's formatting gate.
+  Route back to ELIXIR-DEV to run `mix format` on these two files and re-submit; no
+  test-code defect and no application-logic defect found otherwise.
+
+next_action: "Route to ELIXIR-DEV: run `mix format` on lib/letflow/identity/tenant.ex and test/letflow/identity/tenant_test.exs, commit, re-run full suite + format check before RELEASE-VALIDATOR."
+
+notes_for_downstream:
+  - >
+    Did not attempt to fix the formatting myself -- TEST-RUNNER's scope is
+    test/letflow/process_instance_test.exs and test/support/data_case.ex only;
+    tenant.ex and tenant_test.exs are ELIXIR-DEV/TEST-DESIGNER-owned files from this
+    REQ.
+  - >
+    The 2 rust-pin failures are the same documented environmental class as prior runs
+    (missing rustc on this host's PATH) -- not new, not worsening, not this branch's
+    concern, but still worth noting they were not previously suppressed/xfailed and
+    will recur on every run on this host until rustc is installed or the test is
+    adjusted to skip when rustc is absent (out of scope for REQ-280).

@@ -213,7 +213,9 @@ defmodule Letflow.Identity.TenantTest do
 
       {:ok, updated} =
         tenant
-        |> Tenant.settings_changeset(%{"settings" => %{"logo_url" => "https://example.com/logo.png"}})
+        |> Tenant.settings_changeset(%{
+          "settings" => %{"logo_url" => "https://example.com/logo.png"}
+        })
         |> Repo.update()
 
       reloaded = Repo.get!(Tenant, updated.id)
@@ -234,7 +236,9 @@ defmodule Letflow.Identity.TenantTest do
       tenant = insert_tenant!()
 
       changeset =
-        Tenant.settings_changeset(tenant, %{"settings" => %{"logo_url" => "ftp://example.com/logo.png"}})
+        Tenant.settings_changeset(tenant, %{
+          "settings" => %{"logo_url" => "ftp://example.com/logo.png"}
+        })
 
       refute changeset.valid?
       assert %{settings: [_]} = errors_on(changeset)
@@ -245,7 +249,9 @@ defmodule Letflow.Identity.TenantTest do
 
       {:ok, updated} =
         tenant
-        |> Tenant.settings_changeset(%{"settings" => %{"brand_colors" => %{"primary" => "#228be6"}}})
+        |> Tenant.settings_changeset(%{
+          "settings" => %{"brand_colors" => %{"primary" => "#228be6"}}
+        })
         |> Repo.update()
 
       reloaded = Repo.get!(Tenant, updated.id)
@@ -256,7 +262,9 @@ defmodule Letflow.Identity.TenantTest do
       tenant = insert_tenant!()
 
       changeset =
-        Tenant.settings_changeset(tenant, %{"settings" => %{"brand_colors" => %{"primary" => "blue"}}})
+        Tenant.settings_changeset(tenant, %{
+          "settings" => %{"brand_colors" => %{"primary" => "blue"}}
+        })
 
       refute changeset.valid?
       assert %{settings: [_]} = errors_on(changeset)

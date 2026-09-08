@@ -207,10 +207,18 @@ defmodule Letflow.Identity.Tenant do
   defp validate_app_name(errors, %{"app_name" => app_name}) do
     cond do
       not is_binary(app_name) or app_name == "" ->
-        [{:settings, "app_name must be a non-empty string of at most #{@app_name_max_length} characters"} | errors]
+        [
+          {:settings,
+           "app_name must be a non-empty string of at most #{@app_name_max_length} characters"}
+          | errors
+        ]
 
       String.length(app_name) > @app_name_max_length ->
-        [{:settings, "app_name must be a non-empty string of at most #{@app_name_max_length} characters"} | errors]
+        [
+          {:settings,
+           "app_name must be a non-empty string of at most #{@app_name_max_length} characters"}
+          | errors
+        ]
 
       true ->
         errors
@@ -224,13 +232,13 @@ defmodule Letflow.Identity.Tenant do
   defp validate_logo_url(errors, %{"logo_url" => logo_url}) do
     valid? =
       is_binary(logo_url) and
-        (case URI.parse(logo_url) do
-           %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
-             true
+        case URI.parse(logo_url) do
+          %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
+            true
 
-           _other ->
-             false
-         end)
+          _other ->
+            false
+        end
 
     if valid? do
       errors
@@ -244,7 +252,8 @@ defmodule Letflow.Identity.Tenant do
   @brand_colors_allowed_keys ~w(primary)
   @hex_color_regex ~r/^#[0-9A-Fa-f]{6}$/
 
-  defp validate_brand_colors(errors, %{"brand_colors" => brand_colors}) when is_map(brand_colors) do
+  defp validate_brand_colors(errors, %{"brand_colors" => brand_colors})
+       when is_map(brand_colors) do
     unrecognized_key =
       brand_colors
       |> Map.keys()
@@ -282,7 +291,9 @@ defmodule Letflow.Identity.Tenant do
   defp validate_locales(errors, %{"locales" => locales}) do
     valid? =
       is_list(locales) and locales != [] and
-        Enum.all?(locales, fn locale -> is_binary(locale) and Regex.match?(@locale_regex, locale) end)
+        Enum.all?(locales, fn locale ->
+          is_binary(locale) and Regex.match?(@locale_regex, locale)
+        end)
 
     if valid? do
       errors

@@ -2719,3 +2719,12 @@ volume before suspecting the migration or the branch's application code — chec
 failing test's full log for `versions_missing` before doing anything else. This is
 specific to hosts running `docker compose`'s Postgres with a persistent volume across
 sessions; it will not reproduce against a freshly-created container.
+
+**Recurrence (ISS-0535, WF03-ISS0534-20260908, one day later):** hit again on this same
+host — 25 stale `letflow_test*` databases this time, `versions_missing=[20260907020001]`
+(a different migration, `add_scan_status_to_instance_attachments.exs` from the
+intervening ISS-0399 merge), 745 failures across 46 modules. Same fix, same result (drop
+the stale databases, re-run). Confirms this is a real recurring hazard on any host that
+keeps one `docker compose` Postgres volume alive across multiple migration-adding
+merges, not a one-off — expect it again after the next tenant-scoped migration lands
+unless the volume is periodically reset.

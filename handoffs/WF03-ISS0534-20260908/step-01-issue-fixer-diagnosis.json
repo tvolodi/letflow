@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0534-20260908-step-01",
+  "run_id": "WF03-ISS0534-20260908",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "ELIXIR-DEV",
+  "file": "handoffs/WF03-ISS0534-20260908/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T08:10:00Z",
+  "context": {
+    "stage": "S6",
+    "requirement_ids": [],
+    "issue_ids": ["ISS-0534"],
+    "related_handoff_ids": ["WF03-ISS0534-20260908-step-00"],
+    "artifacts_in": ["lib/letflow/plugs/auth_pipeline.ex", "lib/letflow/identity.ex", "lib/letflow/routers/definitions.ex"],
+    "branch_name": "feature/WF03-ISS0534-20260908",
+    "base_commit": "ee6976ca"
+  },
+  "task": {
+    "description": "Root-cause diagnosis of ISS-0534: AuthPipeline discards the JIT-provisioning failure reason and logs nothing."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Root cause confirmed at auth_pipeline.ex:175 (handle_auth_error/2): {:error, {:provision, _reason}} -> reject(conn, 500, ...), discards the bound reason, never logs it. No Logger.* call anywhere in lib/letflow/plugs/ (grep confirmed zero hits). reason's real type is an open union (Letflow.Identity.@type provisioning_error :: :jit_disabled | :realm_tenant_mismatch | :external_identity_collision | Ecto.Changeset.t() | term(), identity.ex:77-82), plus a plug-layer-only :invalid_tenant_id shape (auth_pipeline.ex:317) -- a naive fix assuming %Ecto.Changeset{} would crash on the atom cases, so any fix must use inspect/1 not pattern-specific traversal. trace_id already threaded automatically: api_pipeline.ex:120-121 mounts assign_trace_id immediately before AuthPipeline, Context.assign_trace_id/1 calls Logger.metadata(trace_id: trace_id) before setting the response header, and Letflow.Obs.Logger's formatter pulls trace_id from Logger.metadata() automatically onto every JSON log line -- a bare Logger.error call in the discard clause gets the same trace_id the response header carries with zero manual threading. Existing convention precedent: definitions.ex:964-967's Logger.warning with an inspected reason is the closest match, adapted to :error level since this path returns a 500. Scope determination: (a) reclassifying to a distinct 409-shaped identity-conflict error is EXPLICITLY OUT OF SCOPE -- req021-auth-plug-pipeline.md SS4.5/SS4.6/SS5.4/SS10 OQ-9 already deliberately decided both :external_identity_collision and Ecto.Changeset.t() map to 500 not a distinguishing status code, with REVIEWER sign-off already given; reversing that would silently re-decide a settled decision record per CLAUDE.md's core rule -- recommend filing as a separate follow-up referencing OQ-9, not folded into this fix. (b) the Keycloak-volume-reset dev-docs note is out of scope for ELIXIR-DEV/CODE-DESIGNER (docs, not auth_pipeline.ex, zero interaction with the logging fix) but trivial enough to tag along via DOC-UPDATER in the same PR if convenient. RECOMMENDED FIX (fully specified, no CODE-DESIGNER pass needed -- single-clause change, no new module/architecture decision): add require Logger to auth_pipeline.ex (currently absent), rename _reason to reason in the {:error, {:provision, reason}} clause, add one Logger.error call logging reason via inspect/1 before calling reject/4, matching definitions.ex's inspected-reason convention but at :error level."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

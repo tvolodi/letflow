@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0532-20260908-step-01",
+  "run_id": "WF03-ISS0532-20260908",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0532-20260908/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T10:30:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-116"],
+    "issue_ids": ["ISS-0532", "ISS-0530"],
+    "related_handoff_ids": ["WF03-ISS0532-20260908-step-00"],
+    "artifacts_in": ["web/src/api/health.ts", "web/src/hooks/useApiConnectivity.ts", "web/src/components/layout/ApiConnectivityBanner.tsx", "web/src/pages/admin/HealthDashboardPage.tsx", "lib/letflow/router.ex"],
+    "branch_name": "feature/WF03-ISS0532-20260908",
+    "base_commit": "851d0991"
+  },
+  "task": {
+    "description": "Root-cause diagnosis and scope recommendation for ISS-0532: SPA polls /health/ready and /api/v1/health, neither served by Letflow."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Root cause: useApiConnectivity.ts:38 calls healthReady() (health.ts:100-107), which GETs /health/ready -- not mounted by router.ex (confirmed live 404), and healthReady() swallows any error into return false, so a 404 looks identical to a real outage; useApiConnectivity therefore latches isOnline=false forever, and ApiConnectivityBanner.tsx:21-23 renders the false banner permanently regardless of actual platform health. Not a fresh discovery: docs/frontend/contract-gaps.md:115 (row 15, admin/health) already inventories this exact gap, citing router.ex's own moduledoc (lines 50-54): readiness is deliberately not ported, requires S6 observability subsystem probes that do not yet exist; contract-gaps.md classifies it NOT-YET-IMPLEMENTED, notes no REQ exists yet (S6 unexpanded). REQ-116 itself is a read-only inventory requirement (produced contract-gaps.md, explicitly forbidden from changing lib/ or web/src/) -- correctly recorded the gap but by design never closed it, no design doc exists for it since it's a doc-only requirement. Two /health/ready call sites: (1) useApiConnectivity.ts -- pure boolean liveness probe driving only the banner, no information content beyond up/down; (2) HealthDashboardPage.tsx (PLATFORM_ADMIN-only admin page) -- renders real database/scheduler component status from AdminHealthSnapshot, not cosmetic, but gated behind an admin-only route distinct from the site-wide banner bug. Separately, GET /api/v1/health (healthApi.get) is dead code -- zero callers anywhere in web/src. Feasibility of option (a) (port readiness): premature per the router's own moduledoc -- requires S6 observability subsystem probes that don't exist and S6 isn't even expanded into requirements; a real port today would mean either faking subsystem checks (dishonest signal) or building S6 out of order -- out of scope for a MAJOR-severity UI bug fix, would reopen a deliberate S4/router decision needing REVIEWER sign-off with no real subsystems to probe yet. RECOMMENDATION: option (b) -- point the connectivity banner's probe at the existing GET /health (liveness) instead of /health/ready, and gate/hide HealthDashboardPage (or degrade it to a liveness-only view) until a real S6-backed readiness endpoint exists, rather than silently faking subsystem statuses. Smaller, reversible, doesn't reopen the router's decision record, doesn't touch backend code. Simple enough for direct implementation, no fresh CODE-DESIGNER pass needed -- a two-file mechanical change (swap the fetch target in health.ts's healthReady(), adjust HealthDashboardPage.tsx/useAdminHealthSnapshot to either hide behind a readiness-not-available-yet state or degrade to liveness-only). Route to FRONTEND-DEV -- all affected files are web/src/, no SECURITY-REVIEWER or REVIEWER decision-record gate applies since option (b) doesn't touch lib/letflow/router.ex or reopen the S4 router decision."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

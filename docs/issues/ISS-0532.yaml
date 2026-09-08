@@ -1,0 +1,71 @@
+id: ISS-0532
+title: "SPA polls /health/ready and /api/v1/health, neither of which Letflow serves -- every authenticated session shows a false 'Platform is currently unavailable' banner"
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:26:00Z"
+severity: MAJOR
+tags: [frontend, api-contract, s8, uat]
+description: >
+  Found alongside ISS-0530 by inspecting the rendered authenticated workspace; invisible
+  to API-level tests.
+
+  web/src/api/health.ts calls GET /health/ready (readiness) and GET /api/v1/health
+  (admin health snapshot). Neither exists in Letflow. Confirmed live, with a valid
+  PLATFORM_ADMIN bearer token:
+    GET /health/ready      -> 404
+    GET /api/v1/health     -> 404 (401 unauthenticated, so this is route-absent, not authz)
+    GET /health            -> 200 {"status":"ok"}   <- the only health route that exists
+
+  This is a KNOWN, DELIBERATE backend gap rather than a regression: lib/letflow/router.ex's
+  own moduledoc states the readiness endpoint (R-Co routes/health.zig handleReady, backed
+  by src/api/health/readiness.zig + subsystems.zig) "is deliberately not ported." What was
+  never reconciled is that the SPA still calls it.
+
+  USER-VISIBLE EFFECT: ApiConnectivityBanner.tsx renders "Platform is currently unavailable
+  -- some actions may fail." across the top of every authenticated page, permanently, on a
+  platform that is in fact healthy. Screenshot: web/tests/screenshots/REQ133-AC5-authenticated.png.
+  A permanently-lit health warning is worse than none, since it trains operators to ignore
+  the real one.
+
+  NOT YET FIXED -- the resolution is a scope decision between two defensible options:
+  (a) port the readiness endpoint (reopens a deliberate S4 decision, so it needs REVIEWER
+  sign-off per CLAUDE.md's decision-record rule), or (b) point the SPA at the GET /health
+  that does exist and drop the admin snapshot until a backend endpoint exists. (b) is
+  smaller and reversible; (a) is what the SPA was actually designed against.
+affected_files:
+  - web/src/api/health.ts
+  - web/src/components/layout/ApiConnectivityBanner.tsx
+  - lib/letflow/router.ex
+related:
+  - ISS-0530
+  - REQ-116
+queue_task_id: 532
+github_issue: 1075
+status: resolved
+resolution: >
+  Resolved 2026-09-08 via WF03-ISS0532-20260908. ISSUE-FIXER recommended
+  option (b) (point the SPA at the existing GET /health, degrade the admin
+  dashboard rather than fabricate readiness data): option (a) (porting the
+  real readiness endpoint) was judged premature since it requires S6
+  observability subsystem probes that don't exist yet, and would reopen the
+  router's own deliberate non-port decision with no real subsystems to
+  probe. Fixed by FRONTEND-DEV (web/-only, no backend files touched):
+  healthReady() (web/src/api/health.ts) now calls the real GET /health
+  instead of the never-mounted GET /health/ready; useApiConnectivity.ts's
+  contract was unchanged, no edits needed there. Removed
+  getReadinessSnapshot/toSnapshotFromOk/toSnapshotFromDegraded and the
+  AdminHealthSnapshot/Readiness* types, confirmed genuinely dead (zero
+  remaining callers). web/src/pages/admin/HealthDashboardPage.tsx degrades
+  honestly to a LIVE/UNREACHABLE badge from the real health check plus a
+  plain "readiness not available yet (pending S6)" panel -- explicitly does
+  NOT fabricate database/scheduler status, per the diagnosis's own
+  requirement. GET /api/v1/health (healthApi.get, confirmed dead code, zero
+  callers anywhere) was left untouched as explicitly out of scope.
+  docs/frontend/contract-gaps.md's row 15 annotated in place. New/updated
+  tests prove the fix would fail against pre-fix code and pass against it:
+  banner correctly reflects real /health status, dashboard never renders
+  fake data. Pipeline: ISSUE-FIXER -> FRONTEND-DEV -> REVIEWER (PASS;
+  SECURITY-REVIEWER out of scope, no tenant-data path) -> TEST-RUNNER
+  (npm run check: 199/199 unit tests + 48/48 guard tests passed including a
+  full production build; mix compile --warnings-as-errors clean, confirming
+  zero backend impact). Implementation commit d2659d02.

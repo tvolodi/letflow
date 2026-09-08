@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0532-20260908-step-02",
+  "run_id": "WF03-ISS0532-20260908",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "FRONTEND-DEV",
+  "to_agent": "REVIEWER",
+  "file": "handoffs/WF03-ISS0532-20260908/step-02-frontend-dev.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T11:00:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-116"],
+    "issue_ids": ["ISS-0532"],
+    "related_handoff_ids": ["WF03-ISS0532-20260908-step-01"],
+    "artifacts_in": ["web/src/api/health.ts", "web/src/pages/admin/HealthDashboardPage.tsx"],
+    "artifacts_out": ["web/src/api/health.ts", "web/src/pages/admin/HealthDashboardPage.tsx", "web/tests/e2e/sh05-06.shell.e2e.spec.ts", "docs/frontend/contract-gaps.md"],
+    "branch_name": "feature/WF03-ISS0532-20260908",
+    "base_commit": "851d0991",
+    "implementation_commit": "d2659d02"
+  },
+  "task": {
+    "description": "Implement ISS-0532 option (b): point the connectivity banner and admin health page at the real GET /health, remove fabricated readiness data."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "healthReady() (health.ts) now calls GET /health instead of the never-mounted GET /health/ready. Removed getReadinessSnapshot/toSnapshotFromOk/toSnapshotFromDegraded and AdminHealthSnapshot/Readiness* types -- existed only to fabricate database/scheduler statuses from a 503/404 that never corresponded to real subsystem data. healthApi.get (GET /api/v1/health, confirmed dead code) left untouched, explicitly out of scope. useApiConnectivity.ts's contract with healthReady() unchanged, no edits needed there. HealthDashboardPage.tsx degrades honestly: a LIVE/UNREACHABLE badge from real GET /health, plus a plain readiness-not-available panel stating per-subsystem readiness isn't available yet (pending S6) -- no fabricated status, QueryStateBoundary wrapping preserved (required by the missing-query-state-boundary guard, initially removed then restored after the guard caught it). sh05-06.shell.e2e.spec.ts updated to stub /health instead of /health/ready. docs/frontend/contract-gaps.md row 15 annotated in place (not rewritten). New/updated tests: health.test.ts, useApiConnectivity.test.ex, ApiConnectivityBanner.test.tsx, HealthDashboardPage.test.tsx -- covering the real endpoint switch, banner show/hide correctness, and the honest not-available-yet panel (never fake data). Verification: npm run test -- 36 test files, 199 tests, all passed; npm run type-check clean; npm run lint clean, 0 warnings; npm run guards -- 48 tests passed including source-scan/bundle-scan. No live dev instance reachable (docker compose denied, no backend listening) -- verification unit/static-level only, permitted since no instance was already up. Backend confirmation: git diff --stat shows only contract-gaps.md and 4 files under web/; lib/letflow/router.ex and all other backend files untouched. SECURITY-REVIEWER out of scope: frontend-only health-check UI change, no tenant-data path."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

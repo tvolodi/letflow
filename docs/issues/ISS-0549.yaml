@@ -1,0 +1,37 @@
+id: ISS-0549
+title: "Button.tsx has no data-testid passthrough -- two consumers (FilterBar, PaginationControls) work around it identically"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ287-20260909
+discovered_at: "2026-09-08T23:05:59Z"
+severity: MINOR
+tags: [frontend, design-system, testing, s8]
+description: >
+  web/src/components/ui/Button.tsx (REQ-272) hardcoded data-testid="ds-button"
+  on its native <button> element with no prop to override or extend it. Two
+  consumers independently hit this and worked around it identically: FilterBar.tsx
+  wrapped its clear Button in <span data-testid="filter-bar-clear">, and
+  PaginationControls.tsx (REQ-287, pending) does the same for prev/next buttons.
+
+  FIX (WF03-ISS0549-20260908): Added optional data-testid?: string to
+  ButtonProps, extracted it from props and forwarded to the native <button>
+  element, defaulting to 'ds-button' when not supplied. Retired FilterBar.tsx's
+  wrapper-span testid workaround (the margin-only span wrapper is retained for
+  flex layout; only the redundant data-testid is moved to the Button itself).
+  PaginationControls.tsx (REQ-287, pending branch) should use the new prop
+  directly rather than the wrapper-span pattern when it merges.
+
+  TypeScript: only pre-existing DataTable.tsx errors (@tanstack/react-table
+  missing from REQ-274) -- not introduced by this fix.
+
+affected_files:
+  - web/src/components/ui/Button.tsx
+  - web/src/components/ui/FilterBar.tsx
+related:
+  - REQ-272
+  - REQ-287
+  - ISS-0548
+queue_task_id: 549
+github_issue_number: 1117
+resolving_run: WF03-ISS0549-20260908
+resolved_at: "2026-09-08T23:20:06Z"
+status: resolved

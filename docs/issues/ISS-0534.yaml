@@ -4,7 +4,6 @@ discovered_by: ORCH
 discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
 discovered_at: "2026-09-08T07:23:00Z"
 severity: MINOR
-status: open
 tags: [identity, diagnosability, observability]
 description: >
   Hit while discharging ISS-0296's live-browser proof. Every authenticated API call
@@ -68,10 +67,13 @@ resolution: >
   username-collision reproduction. Pipeline: ISSUE-FIXER -> ELIXIR-DEV ->
   SECURITY-REVIEWER (PASS, INV-4 focus) -> REVIEWER (PASS) -> TEST-RUNNER.
   Along the way, TEST-RUNNER's first full-suite attempt surfaced a much
-  larger pre-existing environmental problem (745 failures from 25 stale
-  letflow_test* Postgres databases, a recurrence of the same class
-  WF03-ISS0399-20260907 already hit) -- ORCH obtained user approval to drop
-  the stale databases, confirmed via a clean re-run (3448/3450 passed, only
-  the known unrelated rustc-absent failures remaining), and filed/resolved
-  ISS-0535 for that recurrence with an anti-patterns.md update. Implementation
-  commit 76f3bf5c.
+  larger pre-existing environmental problem on this host (letflow-1-postgres-1):
+  745 failures from 25 stale letflow_test* Postgres databases, a recurrence
+  of the same class WF03-ISS0399-20260907 already hit -- ORCH obtained user
+  approval to drop the stale databases, confirmed via a clean re-run
+  (3448/3450 passed, only the known unrelated rustc-absent failures
+  remaining), and filed ISS-0535 for this class before discovering a
+  sibling session had independently found and fixed a differently-rooted
+  cause of the same GH issue on a different host -- composed both root
+  causes into ISS-0535's own record on rebase and added an anti-patterns.md
+  recurrence note. Implementation commit 76f3bf5c.

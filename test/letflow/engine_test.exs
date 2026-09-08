@@ -912,6 +912,148 @@ defmodule Letflow.EngineTest do
   end
 
   # ---------------------------------------------------------------------------------
+  # REQ-273 -- tasks.form_schema is populated at activation from
+  # node.attributes["form_schema"], shape-validated via
+  # Letflow.Definitions.JsonSchemaShape.check/1, and pinned to the definition
+  # version the instance was created against. See
+  # lib/letflow/design/req273-form-schema-activation.md for the full design;
+  # pure-layer coverage (resolve_form_schema/1, insert_attrs/4's own
+  # {:ok, _}/{:error, _} shapes) lives in
+  # test/letflow/engine/task_activation_test.exs, not here. This block covers
+  # the DB-level acceptance criteria that require a real Ecto.Multi/Repo round
+  # trip: persisted-and-read-back-from-the-DB (AC1), absent-attribute-stays-nil
+  # (AC2), malformed-schema-rolls-back-the-whole-transaction (AC3), and
+  # version-pinning across a later promotion (AC4).
+  # ---------------------------------------------------------------------------------
+
+  defp graph_start_human_task_end_with_form_schema(form_schema) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver", "form_schema" => form_schema}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  describe "create/2 (REQ-273 AC1) -- form_schema is populated from node.attributes[\"form_schema\"]" do
+    test "the persisted tasks row's form_schema equals the node attribute, read back from the DB" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      schema = %{"type" => "object", "properties" => %{"comment" => %{"type" => "string"}}}
+      definition = active_definition!(schema_name, graph_start_human_task_end_with_form_schema(schema))
+
+      assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      # Read back from the DB via a fresh query, not the in-memory struct
+      # any earlier call returned.
+      [task] = Repo.all(Task, prefix: schema_name)
+      reloaded = Repo.get!(Task, task.id, prefix: schema_name)
+      assert reloaded.form_schema == schema
+    end
+  end
+
+  describe "create/2 (REQ-273 AC2) -- absent form_schema attribute stays nil, never an invented default" do
+    test "a HUMAN_TASK node with no form_schema attribute produces a task row whose form_schema is nil" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end())
+
+      assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
+
+      [task] = Repo.all(Task, prefix: schema_name)
+      reloaded = Repo.get!(Task, task.id, prefix: schema_name)
+      assert reloaded.form_schema == nil
+      refute reloaded.form_schema == %{}
+    end
+  end
+
+  describe "create/2 (REQ-273 AC3) -- a malformed form_schema is rejected at activation, no tasks row written" do
+    test "a JSON-array form_schema aborts create/2 with a typed error and zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      definition = active_definition!(schema_name, graph_start_human_task_end_with_form_schema([1, 2, 3]))
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+      assert projection_count(schema_name) == 0
+      assert token_count(schema_name) == 0
+    end
+
+    test "a bare-string form_schema aborts create/2 with a typed error and zero tasks rows" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(schema_name, graph_start_human_task_end_with_form_schema("not-a-schema"))
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+    end
+
+    test "a form_schema whose \"properties\" value is not an object aborts create/2 with a typed error" do
+      %{schema_name: schema_name} = provisioned_tenant()
+
+      definition =
+        active_definition!(
+          schema_name,
+          graph_start_human_task_end_with_form_schema(%{"properties" => "not-an-object"})
+        )
+
+      assert {:error, {:invalid_form_schema, "task", {:not_well_formed, ["properties"]}}} =
+               Engine.create(base_attrs(definition), prefix: schema_name)
+
+      assert task_count(schema_name) == 0
+    end
+  end
+
+  describe "create/2 (REQ-273 AC4) -- form_schema is pinned to the version the task was created against" do
+    test "promoting a new definition version with a different form_schema does not change the already-created task's form_schema" do
+      %{schema_name: schema_name} = provisioned_tenant()
+      process_name = unique_name("req273-form-pin")
+
+      schema_a = %{"type" => "object", "properties" => %{"a" => %{"type" => "string"}}}
+      schema_b = %{"type" => "object", "properties" => %{"b" => %{"type" => "string"}}}
+
+      v1 =
+        active_definition!(
+          schema_name,
+          graph_start_human_task_end_with_form_schema(schema_a),
+          %{name: process_name, version: "1.0.0"}
+        )
+
+      assert {:ok, _result} = Engine.create(base_attrs(v1), prefix: schema_name)
+      [task] = Repo.all(Task, prefix: schema_name)
+      assert Repo.get!(Task, task.id, prefix: schema_name).form_schema == schema_a
+
+      # Promote a NEW version, same process name, with a different
+      # form_schema on the same node -- Definitions.activate/2 atomically
+      # deprecates v1 in the same transaction (PD-03).
+      _v2 =
+        active_definition!(
+          schema_name,
+          graph_start_human_task_end_with_form_schema(schema_b),
+          %{name: process_name, version: "2.0.0"}
+        )
+
+      # The task created against v1 must still carry schema_a -- a fresh DB
+      # read, not the in-memory struct from the first insert.
+      reloaded = Repo.get!(Task, task.id, prefix: schema_name)
+      assert reloaded.form_schema == schema_a
+      refute reloaded.form_schema == schema_b
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
   # REQ-059 (PIN-01..PIN-04) -- pin resolution, recording, and inheritance,
   # integration-level: real Postgres, real Engine.create/2, real
   # INSTANCE_STARTED event payloads. See test/specs/REQ-059.md for the full

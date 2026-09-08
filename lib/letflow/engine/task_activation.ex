@@ -41,6 +41,24 @@ defmodule Letflow.Engine.TaskActivation do
   Every write this module drives happens inside the *caller's* already-open
   `Ecto.Multi`/transaction — matching the pattern `Letflow.EventStore.append/2`
   and `Letflow.Definitions.SnapshotStore.create/3` already establish.
+
+  ## `form_schema` is a rendering payload only (REQ-273)
+
+  `form_schema` is populated here from `node.attributes["form_schema"]`
+  verbatim. It is a UI rendering payload only, never a validation authority —
+  this module does not, and must never, feed it into
+  `Letflow.Engine.VariableMerge` or any output-variable validation path —
+  `variable_schemas` (REQ-109) remains the sole server-side validation
+  authority (see `lib/letflow/engine/variable_schema.ex`'s moduledoc, which
+  names this exact distinction and the table this module writes into). The only structural
+  check performed is `Letflow.Definitions.JsonSchemaShape.check/1`'s shape
+  well-formedness predicate — not a JSON-Schema meta-schema validator and not
+  a check against submitted task-completion output. The `graph` this module
+  is always handed (from either `create/2`'s just-resolved definition or a
+  later activation's `instance_definition_snapshots` row, never a fresh
+  `process_definitions` read — see `Letflow.Engine.fetch_graph/2`) is already
+  pinned to the version the instance was created against, so no additional
+  version-pinning logic is needed here.
   """
 
   import Ecto.Query
@@ -48,6 +66,7 @@ defmodule Letflow.Engine.TaskActivation do
   alias Ecto.Multi
   alias Letflow.Audit
   alias Letflow.Definitions.Graph
+  alias Letflow.Definitions.JsonSchemaShape
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.Task
   alias Letflow.Engine.Token
@@ -121,32 +140,79 @@ defmodule Letflow.Engine.TaskActivation do
   end
 
   @doc """
-  Builds the six-key attrs map for `Letflow.Engine.Task.insert_changeset/2`
-  (design §4.5). `node_name` falls back to `node.id` when `node.label` is
+  Resolves `form_schema` from `node.attributes["form_schema"]` (REQ-273),
+  mirroring `resolve_assignee/1`'s "no invented default for an absent key"
+  discipline (OQ-1): absent or explicit JSON `null` stays `nil`, never `%{}`
+  or any other invented default. Unlike `resolve_assignee/1`, this resolution
+  can fail — a non-nil value is shape-checked via
+  `Letflow.Definitions.JsonSchemaShape.check/1` (reused verbatim, not a new
+  predicate) before being accepted, since `form_schema` is untyped, untrusted
+  input reaching a renderer (constraint 2). Kept as its own named function
+  (design doc §7 OQ-1) rather than folded into `resolve_assignee/1`, since
+  that function's own shape (a plain tuple, cannot fail) doesn't fit a
+  resolution that can.
+  """
+  @spec resolve_form_schema(node :: Graph.Node.t()) ::
+          {:ok, term() | nil}
+          | {:error, {:not_well_formed, path :: [String.t()]}}
+          | {:error, :too_deep}
+  def resolve_form_schema(%Graph.Node{attributes: attributes}) do
+    case Map.get(attributes || %{}, "form_schema") do
+      nil ->
+        {:ok, nil}
+
+      form_schema ->
+        case JsonSchemaShape.check(form_schema) do
+          :ok -> {:ok, form_schema}
+          {:error, _reason} = error -> error
+        end
+    end
+  end
+
+  @doc """
+  Builds the seven-key attrs map for `Letflow.Engine.Task.insert_changeset/2`
+  (design §4.5/§1.2). `node_name` falls back to `node.id` when `node.label` is
   `nil` (design §4.2, OQ-2) — `tasks.node_name` is `null: false` but
   `Graph.Node.t().label` is nullable. `status` is never included: the
   schema's own `default: :pending` and `insert_changeset/2`'s own exclusion
   of `:status` from its cast list already make every inserted row `PENDING`
   by construction (INV-EE47-2).
+
+  `form_schema` (REQ-273) is resolved via `resolve_form_schema/1`, which can
+  fail a malformed attribute's shape check — this function therefore returns
+  `{:ok, map()}` on success and `{:error, {:invalid_form_schema, node_id,
+  reason}}` on a shape-check rejection, naming the offending node (`node.id`)
+  directly, so callers abort the whole `Multi.run/3` step rather than
+  proceeding to insert a task row for that node (design §2.2-§2.3).
   """
   @spec insert_attrs(
           instance_id :: Ecto.UUID.t(),
           token_record_id :: Ecto.UUID.t(),
           token :: Token.t(),
           node :: Graph.Node.t()
-        ) :: map()
+        ) ::
+          {:ok, map()}
+          | {:error, {:invalid_form_schema, node_id :: String.t(), reason :: term()}}
   def insert_attrs(instance_id, token_record_id, %Token{} = token, %Graph.Node{} = node) do
-    {assignee_type, assignee_ref} = resolve_assignee(node)
-    node_name = node.label || node.id
+    case resolve_form_schema(node) do
+      {:ok, form_schema} ->
+        {assignee_type, assignee_ref} = resolve_assignee(node)
+        node_name = node.label || node.id
 
-    %{
-      instance_id: instance_id,
-      token_id: token_record_id,
-      node_id: token.node_id,
-      node_name: node_name,
-      assignee_type: assignee_type,
-      assignee_ref: assignee_ref
-    }
+        {:ok,
+         %{
+           instance_id: instance_id,
+           token_id: token_record_id,
+           node_id: token.node_id,
+           node_name: node_name,
+           assignee_type: assignee_type,
+           assignee_ref: assignee_ref,
+           form_schema: form_schema
+         }}
+
+      {:error, reason} ->
+        {:error, {:invalid_form_schema, node.id, reason}}
+    end
   end
 
   @doc """
@@ -197,7 +263,7 @@ defmodule Letflow.Engine.TaskActivation do
     |> Enum.reduce_while({:ok, []}, fn %Token{} = token, {:ok, acc} ->
       with %Graph.Node{} = node <- find_node(graph.nodes, token.node_id) || :unknown_node,
            {:ok, token_record_id} <- fetch_token_record_id(id_map, token.token_id),
-           attrs <- insert_attrs(instance_id, token_record_id, token, node),
+           {:ok, attrs} <- insert_attrs(instance_id, token_record_id, token, node),
            {:ok, task} <- do_insert(repo, attrs, prefix) do
         {:cont, {:ok, [task | acc]}}
       else
@@ -302,7 +368,7 @@ defmodule Letflow.Engine.TaskActivation do
     |> Enum.reduce_while({:ok, []}, fn %Token{} = token, {:ok, acc} ->
       with {:ok, token_record_id} <- cast_token_record_id(token.token_id),
            %Graph.Node{} = node <- find_node(graph.nodes, token.node_id) || :unknown_node,
-           attrs <- insert_attrs(instance_id, token_record_id, token, node),
+           {:ok, attrs} <- insert_attrs(instance_id, token_record_id, token, node),
            {:ok, task} <- do_insert(repo, attrs, prefix) do
         {:cont, {:ok, [task | acc]}}
       else

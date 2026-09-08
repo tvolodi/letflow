@@ -587,7 +587,8 @@ defmodule Letflow.Engine.SubProcess do
       with %Graph.Node{} = node <-
              Enum.find(graph.nodes, &(&1.id == token.node_id)) || :unknown_node,
            {:ok, token_record_id} <- Map.fetch(id_map, token.token_id),
-           attrs <- TaskActivation.insert_attrs(child_instance_id, token_record_id, token, node),
+           {:ok, attrs} <-
+             TaskActivation.insert_attrs(child_instance_id, token_record_id, token, node),
            {:ok, task} <- insert_task(repo, attrs, prefix) do
         {:cont, {:ok, [task | acc]}}
       else

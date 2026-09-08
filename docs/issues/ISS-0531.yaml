@@ -45,4 +45,36 @@ related:
   - REQ-133
 queue_task_id: 531
 github_issue: 1074
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-08 via WF03-ISS0531-20260908. ISSUE-FIXER recommended
+  option (a) (fix the frontend heuristic): the "bpm-" + slug convention
+  (docs/frontend/frontend-requirements.md:205) is correct in general, but
+  the seeded default tenant is a pinned special case
+  (lib/letflow/identity/tenant.ex's @default_tenant_slug "bpm-default" and
+  validate_default_tenant_pinning/1, REQ-019-derived, requiring
+  idp_realm_id == "bpm-default" exactly) that the heuristic didn't know
+  about. Options (b) (mint a tenant_id JWT claim) and (c) (change the
+  seeded tenant's slug) were rejected: (b) is a multi-file Keycloak
+  provisioning lift repeating an already-documented unresolved mapper-drift
+  gap (contract-gaps.md:51-70); (c) would require revising tenant.ex's
+  enforced invariant and REQ-019's design record, silently re-deciding a
+  settled decision. CODE-DESIGNER's design (1 rework cycle -- first pass
+  FAILed for embedding a literal copy-pasteable TypeScript fix instead of
+  prose/decision-table, same disguised-code standard applied to Elixir
+  design docs) specified an exact-match check for "bpm-default" running
+  before the general prefix-strip, with a comment citing tenant.ex's
+  invariant as the sync-drift source of truth (an explicitly flagged,
+  accepted tradeoff rather than solved). FRONTEND-DEV implemented exactly
+  that in web/src/auth/tokenUtils.ts's resolveTenantSlug/1, added 4
+  regression tests, and proved a genuine fail-then-pass via a temporary
+  revert (independently reproduced by REVIEWER, not just trusted).
+  Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework) -> CODE-DESIGN-VALIDATOR
+  (1 re-check, PASS) -> FRONTEND-DEV -> REVIEWER (PASS; SECURITY-REVIEWER
+  out of scope) -> TEST-RUNNER (npm run check: 203/203 unit tests + 48/48
+  guard tests passed including a production build; mix compile
+  --warnings-as-errors clean confirming zero backend impact). Implementation
+  commit 3e2a713d. This closes the last item from the ADHOC-ENGINE-AUDIT-20260908
+  backlog that ORCH was working (ISS-0532/ISS-0531); other items from that
+  audit (ISS-0296, ISS-0529/0530, ISS-0533/0536) were independently picked
+  up and resolved by sibling sessions.

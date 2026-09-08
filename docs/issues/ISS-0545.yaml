@@ -1,0 +1,46 @@
+id: ISS-0545
+title: >
+  design-system.md 5.4 advertises StatusBadge domain values timer/dlq with no
+  status table anywhere in the spec
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ272-20260908
+discovered_at: "2026-09-08T19:15:01Z"
+severity: MINOR
+tags: [docs, design-system, status-badge, spec-gap, s8]
+description: >
+  Spec-gap, not a code defect. Discovered by REVIEWER during WF02-REQ272-20260908
+  Step 2d review. docs/frontend/design-system.md 5.4 (StatusBadge component API)
+  listed domain as accepting timer and dlq among its valid values, but sections
+  5.1/5.2/5.3 (the only status-to-token tables the spec defines) cover only
+  definition, instance, and task domains -- timer and dlq had no defined status
+  vocabulary or token mapping anywhere in the document. REQ-272's implementation
+  (web/src/components/ui/StatusBadge.tsx, on branch feature/WF02-REQ272-20260908,
+  not yet merged at the time this issue was picked up) handles this at the code
+  level with a neutral, non-throwing fallback rendering plus a dev-only
+  console.warn, so nothing crashes -- but a future consumer passing domain=timer
+  or domain=dlq would get an undefined product visual language, not a designed
+  one.
+
+  FIX (WF03-ISS0545-20260908): narrowed 5.4's documented API to the three domains
+  that actually have status tables (definition, instance, task), removing timer
+  and dlq from the advertised type comment, and added a note directing whoever
+  builds a timer- or DLQ-facing page to add both the domain back to 5.4 and its
+  own 5.1-5.3-equivalent status table at that point -- rather than inventing a
+  status vocabulary for those domains now, speculatively, with no consuming page
+  to validate it against. This is a docs-only fix; no application code was
+  touched (REQ-272's own StatusBadge.tsx fallback behavior is unaffected and
+  remains the correct defensive behavior regardless of what the spec documents).
+
+  §10 direct-action: exactly one file (docs/frontend/design-system.md); no new
+  public function/module/spec; no migration; not a supervision-tree file; not a
+  tenant-data path; no test-asserted-behavior change.
+
+affected_files:
+  - docs/frontend/design-system.md
+related:
+  - REQ-272
+queue_task_id: 545
+github_issue_number: 1102
+resolving_run: WF03-ISS0545-20260908
+resolved_at: "2026-09-08T20:05:00Z"
+status: resolved

@@ -572,3 +572,28 @@ history:
       version-pinning-after-promotion cases) and REVIEWER independently
       verified their quality. ORCH will merge and release queue task 538
       status:done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T19:57:53Z"
+    note: >
+      ISS-0545 (queue task 545, GH#1102) closed via WF03-ISS0545-20260908,
+      a direct-action §10 fix (single file). REVIEWER discovered during
+      WF02-REQ272-20260908's Step 2d review that
+      docs/frontend/design-system.md 5.4 advertised StatusBadge's domain
+      prop as accepting timer and dlq, but sections 5.1-5.3 (the only
+      status-to-token tables the spec defines) cover only definition,
+      instance, and task -- timer and dlq had no defined status
+      vocabulary anywhere in the document. REQ-272's own
+      StatusBadge.tsx (branch feature/WF02-REQ272-20260908, not yet
+      merged) already handles this defensively with a neutral
+      non-throwing fallback, so nothing was broken, but the spec
+      overpromised an undesigned API. Fixed by narrowing 5.4's
+      documented domain values to the three with real tables and
+      leaving a note directing whoever builds a timer- or DLQ-facing
+      page to add both the domain and its own status table back
+      together, rather than inventing a vocabulary now with no
+      consuming page to validate it against. docs/issues/ISS-0545.yaml
+      created and resolved. ORCH will merge and release queue task 545
+      status:done.

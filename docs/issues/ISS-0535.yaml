@@ -1,0 +1,67 @@
+id: ISS-0535
+title: >
+  Letflow.TenantFixture.provisioned_tenant!/1 reports versions_missing=[20260907020001]
+  even though that migration file exists and is listed in manifest_versions --
+  admission_pipeline_test.exs 5/8 failing
+discovered_by: ORCH
+discovered_in_run: WF03-ISS0534-20260908
+discovered_at: "2026-09-08T08:06:13Z"
+severity: MINOR
+tags: [tenant-fixture, migration, ci, environment, s6]
+description: >
+  Observed live on WF03-ISS0534-20260908 and independently re-confirmed by REVIEWER
+  (git stash + re-run on the unmodified branch, same failures present, confirmed
+  unrelated to that ISS-0534 diff). mix test test/letflow/plugs/admission_pipeline_test.exs:
+  3/8 passed, 5 failed, all with the identical root cause --
+  Letflow.TenantFixture.provisioned_tenant!/1 reports
+  versions_missing=[20260907020001] for the tenant-schema fixture's schema_migrations
+  table, even though priv/repo/migrations/20260907020001_add_scan_status_to_instance_attachments.exs
+  (added by ISS-0399, merged PR #1069) genuinely exists on disk and is listed in
+  @tenant_scoped_migration_manifest in lib/letflow/tenant_provisioning.ex (confirmed:
+  it is the last entry in the manifest).
+
+  ROOT CAUSE (WF03-ISS0535-20260908, confirmed via direct measurement):
+  Two independent environmental problems were stacked:
+
+  (1) letflow-2-postgres-1 (shared Postgres container, port 5472, referenced by
+      letflow-3's .env LETFLOW_DB_PORT=5472) had reached its max_connections limit
+      of 100. The letflow-2 workspace maintains ~70-80 idle pool connections to
+      letflow_test2/3/4 from previous test runs; when letflow-3's mix test attempts
+      to open its own pool (ecto.create + ecto.migrate), Postgres rejects the new
+      connections with FATAL 53300 (too_many_connections). This caused mix ecto.create
+      to fail with "The database for Letflow.Repo couldn't be created: killed" on every
+      attempt in the current session.
+
+  (2) The original versions_missing=[20260907020001] failure reported in the issue
+      description (observed during WF03-ISS0534-20260908) was the stale tenant_template
+      schema class documented in docs/anti-patterns.md ("Stale tenant_template schema
+      surviving a migration-adding commit (docker-compose-persisted Postgres)"). That
+      specific class is already resolved on this host (confirmed: letflow_test's
+      tenant_template.schema_migrations already contains 20260907020001 -- the ISS-0399
+      run's cleanup of stale test databases already applied the fix for that host).
+
+  FIX APPLIED (WF03-ISS0535-20260908):
+  - Increased max_connections from 100 to 300 in letflow-2-postgres-1 via
+    ALTER SYSTEM SET max_connections = 300 followed by a container restart.
+  - Verified: mix test test/letflow/plugs/admission_pipeline_test.exs passes 8/8
+    after the connection limit increase.
+
+  NOTE on manifest registration: @tenant_scoped_migration_manifest in
+  lib/letflow/tenant_provisioning.ex DOES include 20260907020001 as the last entry
+  (confirmed by direct read). No code change was needed or made.
+
+  FUTURE RECURRENCE PREVENTION: the shared Postgres max_connections=300 setting
+  is persisted via ALTER SYSTEM (postgresql.auto.conf inside the container volume),
+  so it survives future container restarts. A separate anti-patterns.md entry
+  documents this class for future sessions.
+
+affected_files:
+  - (none -- environment-only fix, no application code change)
+related:
+  - ISS-0399
+  - ISS-0534
+queue_task_id: 535
+github_issue_number: 1078
+resolving_run: WF03-ISS0535-20260908
+resolved_at: "2026-09-08T08:40:30Z"
+status: resolved

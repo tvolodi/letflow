@@ -1,0 +1,30 @@
+{
+  "handoff_id": "WF03-ISS0531-20260908-step-01",
+  "run_id": "WF03-ISS0531-20260908",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0531-20260908/step-01-issue-fixer-diagnosis.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T11:25:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-133", "REQ-019"],
+    "issue_ids": ["ISS-0531", "ISS-0296", "ISS-0529"],
+    "related_handoff_ids": ["WF03-ISS0531-20260908-step-00"],
+    "artifacts_in": ["web/src/auth/tokenUtils.ts", "web/src/auth/AuthProvider.tsx", "lib/letflow/identity/tenant.ex", "docs/frontend/frontend-requirements.md"],
+    "branch_name": "feature/WF03-ISS0531-20260908",
+    "base_commit": "226605d3"
+  },
+  "task": {
+    "description": "Root-cause diagnosis and scope recommendation for ISS-0531: SPA's tenant-slug-from-realm heuristic strips bpm- unconditionally, breaking the pinned default tenant."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Root cause: tokenUtils.ts:26-41's resolveTenantSlug/1 does realm.startsWith('bpm-') ? realm.slice(4) : realm unconditionally for every realm; AuthProvider.tsx:93-103 calls tenantsApi.getBySlug with the result, 404s for the default tenant, catch swallows it, tenantDisplayName stays null -> Unknown workspace. Heuristic is NOT globally wrong: frontend-requirements.md:205 documents the real convention realm = 'bpm-' + slug for ordinary tenants (e.g. acme1 <-> bpm-acme1), so stripping is correct in general. It's specifically wrong for the seeded default tenant because lib/letflow/identity/tenant.ex:73,85-86,147-160's validate_default_tenant_pinning/1 enforces (REQ-019-derived changeset invariant) that when slug == 'bpm-default', idp_realm_id MUST equal 'bpm-default' exactly -- slug and realm are pinned identical for this one tenant, breaking the general 'bpm-' + slug pattern by design. Not an R-Co-inherited misconception -- no R-Co doc found stating a convention that would make stripped 'default' correct; the only documented convention (frontend-requirements.md) supports the opposite conclusion. Feasibility of option (b) (mint tenant_id JWT claim): NOT a small config change -- contract-gaps.md:51-70 already documents an existing out-of-band Keycloak mapper drift gap (tracked realm JSON missing a required mapper, added manually via Admin REST API, explicitly flagged unresolved) that a new tenant_id mapper would repeat per-realm, plus likely backend claim-consumption changes -- multi-file, multi-role lift, not frontend-only. Feasibility of option (c) (change seeded tenant's slug): also bigger than it looks -- would require revising tenant.ex's enforced changeset invariant and REQ-019's design doc, exactly the kind of silently-re-decide-a-decision-record CLAUDE.md flags for REVIEWER sign-off, not a quiet seed-data edit. RECOMMENDATION: option (a) -- fix resolveTenantSlug/1 to special-case the default-tenant pinning (e.g. recognize bpm-default as a reserved realm whose slug equals the realm verbatim) rather than blindly stripping. Only option that doesn't touch a settled decision record or require Keycloak provisioning work. Exact implementation shape left to CODE-DESIGNER. Routing: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> FRONTEND-DEV (implement in tokenUtils.ts, add/update a unit test covering the bpm-default case) -> normal REVIEWER/TEST gates. No ELIXIR-DEV, no migration, no Keycloak config change needed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

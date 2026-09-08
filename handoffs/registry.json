@@ -5486,6 +5486,27 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- 2d095578 merged to main.",
       "note": "ISS-0536: SandboxPoolTest RT-6 flake under N=16 concurrent load. Root cause: drop_schema/1 in lib/letflow/sandbox_pool.ex caught a DBConnection.ConnectionError (Postgrex disconnect under concurrent test-runner load) and returned {:error, :release_failed} after one attempt; for purpose: :orphan drops complete_op/3 cleared in_flight without re-queuing, leaving o_schema present while pool_drained?/1 returned true. RT-6's refute MapSet.member?(final, o_schema) then failed. Same class as ISS-0292's pre-existing timing flake observation but never dedicated-fixed. Fix: added retry-once to drop_schema/1 (same pattern as test helper retry_query_once/1). §10 direct-action (1 file, lib/letflow/sandbox_pool.ex; no new public API; no migration; no supervision-tree file; no tenant-data path; no expected-value change in any test). CI ran 3 total backend-gate jobs (one initial pair + one re-run of the failing job); 2/3 passed, 1/3 reproduced the same flake confirming it persists at reduced rate -- acceptable for MINOR severity per ISS-0292 precedent. Needed rebase twice (branch was created before ISS-0533 and ISS-0534 PRs landed on main). Merged as PR #1083 (squash, 2d095578). Queue task 536 released status:done. GH#1081 closed by queue release."
+    },
+    {
+      "run_id": "WF03-ISS0532-20260908",
+      "workflow_id": "WF-03",
+      "requirement_id": "REQ-116",
+      "issue_id": "ISS-0532",
+      "queue_task_id": 532,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1075,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/src/api/health.ts",
+        "web/src/pages/admin/HealthDashboardPage.tsx"
+      ],
+      "branch_name": "feature/WF03-ISS0532-20260908",
+      "started_at": "2026-09-08T10:11:03Z",
+      "lock_released_at": "2026-09-08T10:28:07Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0532, found by a sibling session's live-browser audit (ADHOC-ENGINE-AUDIT-20260908) -- unintentionally claimed by ORCH via an unfiltered get_next_task call (the endpoint has no read-only/filtered mode, every call claims). SPA polled GET /health/ready and GET /api/v1/health, neither served by Letflow -- GET /health/ready's 404 was silently swallowed to false by healthReady()'s error handling, causing a permanent false 'Platform is currently unavailable' banner on every authenticated page. ISSUE-FIXER recommended option (b) over porting the real readiness endpoint (premature, requires S6 observability subsystem probes that don't exist yet, would reopen the router's own deliberate non-port decision recorded in its moduledoc). FRONTEND-DEV fixed web/-only, zero backend files touched: healthReady() now calls the real GET /health; useApiConnectivity.ts's contract unchanged, no edits needed. Removed getReadinessSnapshot/toSnapshotFromOk/toSnapshotFromDegraded and AdminHealthSnapshot/Readiness* types, confirmed genuinely dead (zero remaining callers, independently re-verified by REVIEWER via grep). HealthDashboardPage.tsx degrades honestly to a LIVE/UNREACHABLE badge plus a plain 'not available yet (pending S6)' panel -- explicitly does NOT fabricate database/scheduler status, per the diagnosis's own requirement, independently confirmed by REVIEWER reading the new implementation in full. GET /api/v1/health (healthApi.get, confirmed dead code) left untouched as explicitly out of scope. docs/frontend/contract-gaps.md's row 15 annotated in place, not rewritten. New/updated tests (health.test.ts, useApiConnectivity.test.ts, ApiConnectivityBanner.test.tsx, HealthDashboardPage.test.tsx) proven by REVIEWER to fail against pre-fix code and pass against the fix. Pipeline: ISSUE-FIXER -> FRONTEND-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out of scope, no tenant-data path) -> TEST-RUNNER (npm run check: 199/199 unit tests + 48/48 guard tests passed including a full production vite build; mix compile --warnings-as-errors clean confirming zero backend impact; git diff --stat main...HEAD -- lib/ priv/ confirmed empty). Implementation commit d2659d02."
     }
   ]
 }

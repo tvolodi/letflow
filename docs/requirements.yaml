@@ -15966,3 +15966,57 @@ requirements:
     depends_on: []
     impl_order: 538  # letflow-queue task id
 
+  - id: REQ-272
+    title: "Build the Button, StatusBadge and PageLayout design-system primitives against tokens.css (0020 D2a, group 1 of 3)"
+    owner: FRONTEND-DEV
+    status: in_progress
+    stage: S8
+    description: >
+      First of three sibling requirements building docs/frontend/design-system.md's
+      specified primitives, per docs/migration/decisions/0020-frontend-architecture.md
+      D2 ("Build the specified primitives, then migrate pages onto them"). Split by
+      primitive group because "build all the primitives" is eight components across
+      four spec sections and does not fit one agent turn. This requirement covers
+      three: Button (design-system.md section 7.1), StatusBadge (section 5, whose 5.4
+      gives the component API and whose 5.1/5.2/5.3 give the complete status-to-token
+      tables), and PageLayout (section 8). VERIFIED 2026-09-08: none of the three
+      exists. `ls web/src/components/ui/` returns ConfirmDialog, ConfirmPromoteModal,
+      ConflictResolver, FetchError, JsonDiffView, PermissionDenied,
+      QueryStateBoundary, RateLimitBackpressure, SkeletonLayout, StaleVersionError --
+      and nothing else. Re-verify at this requirement's own start. Build them in
+      web/src/components/ui/, which already holds this kind of thing (record 0020 D2:
+      "this extends that directory rather than inventing a new location"). Every
+      colour, spacing and typography value comes from a var(--token-name) in
+      web/src/styles/tokens.css (built by REQ-141, settled as the single token source
+      of truth by REQ-120) -- no hex, rgb or hsl literal anywhere, which the
+      literal-colour guard (web/tests/guards/forbidlist.ts, CMP-UI-06) already
+      enforces for web/src/components/ since that path carries no exemption. If a
+      spec value has no matching token in tokens.css, that is a design-step addendum
+      (name the new token and why, get it added to design-system.md section 2 and
+      tokens.css), exactly as REQ-142..145 required -- not a silent literal and not a
+      silent invention. SCOPE FENCE: this requirement builds the three components and
+      their tests. It does NOT migrate any existing page or component onto them --
+      that is REQ-276..278. A component built here having zero call sites at the end
+      of this requirement is the expected outcome, not an incomplete one. DO NOT
+      adopt a component library (Mantine/Radix/shadcn) as part of this. Record 0020
+      D2 rejects that explicitly and on process grounds; reopening it requires a new
+      decision record superseding that clause, not a divergence during
+      implementation.
+
+      NOTE (added by ORCH 2026-09-08): this requirement was registered in
+      letflow-queue (task 537) and filed on GitHub (#1093) by a prior discovery
+      session, but this docs/requirements.yaml entry itself was missing until ORCH
+      added it at WF02-REQ272-20260908's Step 00 -- the same registration-gap class
+      already seen with ISS-0445/ISS-0523 and ISS-0533 this cycle. Content above is
+      verbatim from the queue task's own description field.
+    acceptance_criteria:
+      - "web/src/components/ui/Button.tsx exists and its props exactly match design-system.md section 7.1's declared API -- variant ('primary'|'secondary'|'danger'|'ghost'), size ('sm'|'md'|'lg'), loading, disabled, onClick, children -- confirmed by quoting the component's TypeScript prop interface next to the spec block"
+      - "web/src/components/ui/StatusBadge.tsx exists with design-system.md section 5.4's API (status, domain, size) and a test asserts the resolved background/text/dot token for at least one status from EACH of sections 5.1, 5.2 and 5.3 (definition, instance, task), so a partially-implemented status table cannot pass"
+      - "web/src/components/ui/PageLayout.tsx exists and renders design-system.md section 8's three stated features: an h1 page title, an actions slot, and a content area constrained by var(--content-max-width) -- each asserted by a test against rendered output, not by inspecting source"
+      - "a fresh grep for the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/components/ui/Button.tsx, StatusBadge.tsx and PageLayout.tsx returns zero hits, quoted with the command"
+      - "if any design-system.md value required a token tokens.css did not already define, the new token is listed by name with its spec source, and both docs/frontend/design-system.md and web/src/styles/tokens.css are updated in the same change; if none was needed, that nil result is stated explicitly rather than left as silence"
+      - "no file under web/src/pages/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: []
+    impl_order: 537  # letflow-queue task id
+

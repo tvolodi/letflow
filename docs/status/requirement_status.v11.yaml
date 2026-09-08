@@ -597,3 +597,15 @@ history:
       consuming page to validate it against. docs/issues/ISS-0545.yaml
       created and resolved. ORCH will merge and release queue task 545
       status:done.
+
+  - req: REQ-272
+    event: started
+    agent: ORCH
+    at: "2026-09-08T18:59:16Z"
+    note: >
+      WF02-REQ272-20260908 started (queue task 537, GH#1093). Build the Button,
+      StatusBadge and PageLayout design-system primitives per decision 0020 D2a,
+      group 1 of 3. docs/requirements.yaml entry for REQ-272 was missing until
+      this run's Step 00 -- registered in letflow-queue/GitHub by a prior
+      discovery session but never committed locally, same registration-gap
+      class as ISS-0445/ISS-0523/ISS-0533. ORCH added the entry (status:

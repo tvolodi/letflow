@@ -467,3 +467,39 @@ history:
       SECURITY-REVIEWER PASS (additive allow-list, no tenant-data path, INV-4
       n/a). REVIEWER PASS. Verified: mix test test/letflow/plugs/cors_test.exs
       18/18. ORCH will merge and release queue task 530 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-08T11:26:01Z"
+    note: >
+      ISS-0531 resolved via WF03-ISS0531-20260908 (queue task 531, GH#1074),
+      found by a sibling session's live-browser audit (ADHOC-ENGINE-AUDIT-
+      20260908). SPA's resolveTenantSlug/1 stripped the "bpm-" realm prefix
+      unconditionally, correct in general (frontend-requirements.md's
+      documented "bpm-" + slug convention) but wrong for the seeded default
+      tenant, a pinned special case (tenant.ex's @default_tenant_slug
+      "bpm-default" + validate_default_tenant_pinning/1, REQ-019-derived,
+      requiring idp_realm_id == slug exactly) -- every authenticated session
+      rendered "Unknown workspace". ISSUE-FIXER rejected minting a tenant_id
+      JWT claim (multi-file Keycloak provisioning lift, repeats an
+      already-documented unresolved mapper-drift gap) and changing the
+      seeded tenant's slug (would silently re-decide REQ-019's settled
+      pinning invariant); recommended the smaller frontend-only fix.
+      CODE-DESIGNER's design needed 1 rework cycle (first pass embedded a
+      literal copy-pasteable TypeScript fix instead of prose/decision-table
+      -- the same disguised-code standard this project already enforces on
+      Elixir design docs, applied identically to TypeScript). Fixed:
+      resolveTenantSlug/1 now exact-matches "bpm-default" and returns it
+      verbatim before the general prefix-strip runs, with a comment citing
+      tenant.ex's invariant as an explicitly-flagged (not silently ignored)
+      sync-drift tradeoff. 4 regression tests added; fail-then-pass proven
+      via a temporary revert, independently reproduced by REVIEWER not just
+      trusted. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework) ->
+      CODE-DESIGN-VALIDATOR (1 re-check, PASS) -> FRONTEND-DEV -> REVIEWER
+      (PASS; SECURITY-REVIEWER out of scope) -> TEST-RUNNER (npm run check:
+      203/203 unit tests + 48/48 guard tests passed including a production
+      build; mix compile --warnings-as-errors clean). Implementation commit
+      3e2a713d. This closes the ADHOC-ENGINE-AUDIT-20260908 backlog items
+      ORCH picked up (ISS-0531, ISS-0532) -- other items from that audit
+      were independently resolved by sibling sessions. ORCH will merge and
+      release queue task 531 status:done.

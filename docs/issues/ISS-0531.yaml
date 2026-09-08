@@ -1,0 +1,80 @@
+id: ISS-0531
+title: "SPA derives the tenant slug by stripping the realm's `bpm-` prefix, but the seeded tenant's slug IS `bpm-default` -- every authenticated session renders 'Unknown workspace'"
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:26:00Z"
+severity: MAJOR
+tags: [frontend, identity, s8, uat]
+description: >
+  Found by looking at the authenticated workspace the live-browser login proof
+  (ISS-0296/ISS-0529) finally rendered -- NOT visible to any API-level test, because
+  every REQ-133 acceptance criterion passes while this is broken.
+
+  web/src/auth/tokenUtils.ts's resolveTenantSlug/1 falls back to the token issuer when
+  the token carries no tenant_id claim (Keycloak's does not), parsing the realm out of
+  `iss` and then applying: `realm.startsWith('bpm-') ? realm.slice(4) : realm`. For realm
+  `bpm-default` that yields slug `default`.
+
+  The seeded tenant's actual slug is `bpm-default` -- slug and idp_realm_id are BOTH
+  `bpm-default` (README's "Running it" section states this explicitly, and the DB
+  confirms: `SELECT slug, idp_realm_id FROM tenants` => `bpm-default|bpm-default`).
+
+  So AuthProvider.tsx's tenantsApi.getBySlug('default') 404s, the catch swallows it, and
+  tenantDisplayName stays null, which useTenantContext renders as the literal
+  'Unknown workspace' plus the dashboard's "Tenant name could not be loaded. Contact your
+  administrator." banner. Confirmed live:
+    GET /api/v1/tenants/default     -> 404
+    GET /api/v1/tenants/bpm-default -> 200
+  Screenshot evidence: web/tests/screenshots/REQ133-AC5-authenticated.png shows a fully
+  authenticated PLATFORM_ADMIN session with correct nav and user identity, titled
+  "Unknown workspace".
+
+  NOT YET FIXED and deliberately not fixed blind -- the correct resolution is a contract
+  decision, not a one-line edit, and it should be made by FRONTEND-DEV against
+  docs/frontend/: either (a) the prefix-stripping heuristic is wrong and slug should equal
+  the realm, (b) Letflow should mint a tenant_id claim so the SPA never guesses, or (c)
+  the seeded tenant's slug should not equal its realm. (b) is the only one that removes
+  the guessing entirely; (a) is the smallest change. The heuristic is R-Co-inherited and
+  should be checked against R-Co's own realm/slug convention before choosing.
+affected_files:
+  - web/src/auth/tokenUtils.ts
+  - web/src/auth/AuthProvider.tsx
+related:
+  - ISS-0296
+  - ISS-0529
+  - REQ-133
+queue_task_id: 531
+github_issue: 1074
+status: resolved
+resolution: >
+  Resolved 2026-09-08 via WF03-ISS0531-20260908. ISSUE-FIXER recommended
+  option (a) (fix the frontend heuristic): the "bpm-" + slug convention
+  (docs/frontend/frontend-requirements.md:205) is correct in general, but
+  the seeded default tenant is a pinned special case
+  (lib/letflow/identity/tenant.ex's @default_tenant_slug "bpm-default" and
+  validate_default_tenant_pinning/1, REQ-019-derived, requiring
+  idp_realm_id == "bpm-default" exactly) that the heuristic didn't know
+  about. Options (b) (mint a tenant_id JWT claim) and (c) (change the
+  seeded tenant's slug) were rejected: (b) is a multi-file Keycloak
+  provisioning lift repeating an already-documented unresolved mapper-drift
+  gap (contract-gaps.md:51-70); (c) would require revising tenant.ex's
+  enforced invariant and REQ-019's design record, silently re-deciding a
+  settled decision. CODE-DESIGNER's design (1 rework cycle -- first pass
+  FAILed for embedding a literal copy-pasteable TypeScript fix instead of
+  prose/decision-table, same disguised-code standard applied to Elixir
+  design docs) specified an exact-match check for "bpm-default" running
+  before the general prefix-strip, with a comment citing tenant.ex's
+  invariant as the sync-drift source of truth (an explicitly flagged,
+  accepted tradeoff rather than solved). FRONTEND-DEV implemented exactly
+  that in web/src/auth/tokenUtils.ts's resolveTenantSlug/1, added 4
+  regression tests, and proved a genuine fail-then-pass via a temporary
+  revert (independently reproduced by REVIEWER, not just trusted).
+  Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework) -> CODE-DESIGN-VALIDATOR
+  (1 re-check, PASS) -> FRONTEND-DEV -> REVIEWER (PASS; SECURITY-REVIEWER
+  out of scope) -> TEST-RUNNER (npm run check: 203/203 unit tests + 48/48
+  guard tests passed including a production build; mix compile
+  --warnings-as-errors clean confirming zero backend impact). Implementation
+  commit 3e2a713d. This closes the last item from the ADHOC-ENGINE-AUDIT-20260908
+  backlog that ORCH was working (ISS-0532/ISS-0531); other items from that
+  audit (ISS-0296, ISS-0529/0530, ISS-0533/0536) were independently picked
+  up and resolved by sibling sessions.

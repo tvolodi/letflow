@@ -21,8 +21,19 @@ export function resolveDisplayName(payload: JwtPayload): string {
 /**
  * Extract the tenant slug from the JWT payload.
  * Priority: payload.tenant_id claim → realm segment from payload.iss.
+ * The pinned default tenant's realm ("bpm-default") is returned verbatim rather than
+ * having its "bpm-" prefix stripped — see the DEFAULT_TENANT_REALM comment below.
  * Returns null if neither is available.
  */
+
+// The seeded default tenant is pinned so that slug === realm === "bpm-default" exactly
+// (unlike ordinary tenants, where realm = "bpm-" + slug). This mirrors
+// lib/letflow/identity/tenant.ex's `@default_tenant_slug "bpm-default"` module attribute
+// and the `validate_default_tenant_pinning/1` changeset invariant, which enforces that
+// this tenant's idp_realm_id equals "bpm-default" verbatim. If that backend value ever
+// changes, this literal must be updated to match — see tenant.ex's moduledoc.
+const DEFAULT_TENANT_REALM = 'bpm-default'
+
 export function resolveTenantSlug(payload: JwtPayload): string | null {
   if (payload.tenant_id) return payload.tenant_id
   if (payload.iss) {
@@ -32,6 +43,7 @@ export function resolveTenantSlug(payload: JwtPayload): string | null {
       const realmsIdx = parts.indexOf('realms')
       if (realmsIdx !== -1 && parts[realmsIdx + 1]) {
         const realm = parts[realmsIdx + 1]
+        if (realm === DEFAULT_TENANT_REALM) return realm
         return realm.startsWith('bpm-') ? realm.slice(4) : realm
       }
     } catch {

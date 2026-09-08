@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0531-20260908-step-02b",
+  "run_id": "WF03-ISS0531-20260908",
+  "workflow_id": "WF-03",
+  "step": "02b",
+  "from_agent": "CODE-DESIGN-VALIDATOR",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0531-20260908/step-02b-code-design-validator.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T11:55:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-133", "REQ-019"],
+    "issue_ids": ["ISS-0531"],
+    "related_handoff_ids": ["WF03-ISS0531-20260908-step-02"],
+    "artifacts_in": ["lib/letflow/design/iss0531-tenant-slug-resolution-fix.md", "web/src/auth/tokenUtils.ts", "lib/letflow/identity/tenant.ex"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0531-20260908",
+    "base_commit": "226605d3"
+  },
+  "task": {
+    "description": "Validate ISS-0531's tenant-slug resolution fix design."
+  },
+  "result": {
+    "status": "FAIL",
+    "note": "FAIL on disguised executable code: design doc SS2 lines 67-78 includes a fenced TypeScript block presented as illustrative-for-clarity-only, but it is the complete, correct, drop-in fix (DEFAULT_TENANT_REALM constant + the exact if-check + the exact fallback expression) -- copy-pasteable verbatim into resolveTenantSlug/1, not a signature/type shape. Same failure mode this project's own history already flagged and reworked twice for REQ-157 (literal Elixir code in a design doc), applying identically regardless of target language. The disclaimer that FRONTEND-DEV should write idiomatic TS rather than copy verbatim doesn't change what the block actually is. Per WF-02 Step 1b's rule, single-check failure fails the whole design, no partial credit. Other checks performed and recorded for CODE-DESIGNER's benefit (would need re-verification after rework since this is a full FAIL): tenant.ex claims verified accurate (@default_tenant_slug bpm-default at line 73, validate_default_tenant_pinning/1 at lines 147-160, one trivial off-by-one line citation slip only); frontend-requirements.md:205's convention accurately characterized; hardcode-vs-pattern reasoning sound, no shape-based rule can distinguish bpm-default from bpm-acme1 using the string alone; current buggy implementation description verified accurate against real tokenUtils.ts (lines 26-42) and AuthProvider.tsx (93-106); the 4 specified test cases would genuinely exercise the real code paths and catch a reversion (case 1 confirmed to fail against the actual unmodified bug via manual trace); sync-drift tradeoff honestly flagged, not hidden; scope confirmed frontend-only, no backend edits proposed; no TBD/deferred language found. REQUIRED REWORK: replace the literal TypeScript code block at lines 67-78 with a prose/decision-table description of the same three-way branch -- the narrative form already given correctly as steps 1-3 just above it is sufficient and should stand alone without a fenced code block. No other section needs changes based on this pass."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

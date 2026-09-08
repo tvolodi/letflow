@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0531-20260908-step-04",
+  "run_id": "WF03-ISS0531-20260908",
+  "workflow_id": "WF-03",
+  "step": "04",
+  "from_agent": "REVIEWER",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF03-ISS0531-20260908/step-04-reviewer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T13:00:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-133", "REQ-019"],
+    "issue_ids": ["ISS-0531"],
+    "related_handoff_ids": ["WF03-ISS0531-20260908-step-03"],
+    "artifacts_in": ["web/src/auth/tokenUtils.ts"],
+    "artifacts_out": [],
+    "branch_name": "feature/WF03-ISS0531-20260908",
+    "base_commit": "226605d3",
+    "implementation_commit": "3e2a713d"
+  },
+  "task": {
+    "description": "Scope-creep/correctness hard gate on ISS-0531's tenant-slug fix, plus independent fail-then-pass reproduction."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Scope clean: git show --stat confirms exactly 2 files touched (tokenUtils.ts +12/-0, tokenUtils.test.ts +43/-2), no backend file touched. Correctness confirmed: exact-match check for bpm-default (lines 46-47) runs before the prefix-strip, tenant_id-priority branch and try/catch scaffold byte-for-byte unchanged. Decision-record consistency confirmed: tenant.ex untouched, @default_tenant_slug/validate_default_tenant_pinning/1 remain sole source of truth, frontend fix only mirrors the pinned value as a literal, does not re-decide the invariant. Sync-drift comment confirmed present (tokenUtils.ts:29-34), explicitly names both tenant.ex symbols and states the literal must stay in sync. Test quality confirmed via INDEPENDENT reproduction (not trusted from FRONTEND-DEV's report): temporarily removed the fix line, re-ran tokenUtils.test.ex, TC-SH05-U01 failed exactly as expected (expected 'default' to be 'bpm-default'), other 15 passed; restored the line, all 16 passed; git status confirmed clean tree after restoring. Real run quoted: cd web && npm run check -- type-check clean, lint clean, test 36 files/203 tests passed, guards 4 files/48 tests passed, build succeeded (pre-existing unrelated chunk-size advisory only). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established session precedent -- FRONTEND-DEV's own 4 test cases already fully satisfy the design's specified coverage and REVIEWER independently verified their quality and genuineness above."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

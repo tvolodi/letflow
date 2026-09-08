@@ -16142,3 +16142,76 @@ requirements:
     depends_on: []
     impl_order: 540  # letflow-queue task id
 
+  - id: REQ-280
+    title: "Give Letflow.Identity.Tenant a settings store -- schema, migration and changeset for tenant branding and locale (0020 D1a)"
+    owner: ELIXIR-DEV
+    status: done
+    stage: S8
+    description: >
+      Implements step 4 of docs/migration/decisions/0020-frontend-architecture.md's
+      Sequencing. That record explicitly identifies itself as the pending decision
+      the gap was waiting on: lib/letflow/routers/mobile_tenant_config.ex's
+      moduledoc says every tenant currently gets identical locales/default_locale/
+      branding values, "a deliberate, explicitly-flagged placeholder (design OQ-1)
+      ... pending a future requirement that would give tenant branding its own
+      schema/migration/admin UI." Record 0020: "This record is that pending
+      decision." VERIFIED 2026-09-08: lib/letflow/identity/tenant.ex declares
+      exactly id (binary_id), slug, display_name, status (Ecto.Enum
+      active/migrating/inactive), idp_realm_id and timestamps(). There is no
+      settings, config, branding, locale or JSONB column. This requirement adds
+      the STORE ONLY -- migration, schema field, changeset and a closed allowlist
+      of what may be stored. It does not touch either bootstrap endpoint
+      (REQ-281/REQ-282) and does not apply any theme in the SPA (REQ-283). Keeping
+      it separate means the security-gated response-shape change is reviewed on
+      its own.
+
+      WHAT A TENANT MAY SUPPLY IS A CLOSED SET, per record 0020 D1's table: app
+      name, logo URL, and a small fixed set of brand colours for branding; locales
+      and default_locale for locale. The vocabulary is closed -- a tenant selects
+      from what the platform implemented; a tenant cannot introduce a new key.
+      This matters beyond tidiness: the values reach a pre-authentication public
+      endpoint in REQ-281/282, so an open-ended settings blob would mean an
+      unbounded disclosure surface. Store it so that an unknown key is rejected at
+      write time, not filtered at read time.
+
+      TENANT.EX HAS AN ESTABLISHED CHANGESET DISCIPLINE -- follow it rather than
+      inventing one. That module deliberately uses separate, narrowly-cast
+      changesets so a given write path is STRUCTURALLY incapable of touching a
+      field it should not: admin_patch_changeset/2 casts only :display_name,
+      status_changeset/2 casts only :status, and update_changeset/2 omits :slug
+      and :idp_realm_id from its cast list entirely so immutability needs no
+      runtime check. A settings write path must follow the same shape -- its own
+      changeset, casting only the settings field, unable to reach :status, :slug
+      or :idp_realm_id.
+
+      OPEN QUESTION for the design step, flagged rather than silently resolved:
+      record 0020 says the platform default colour "must be ONE value, from
+      tokens.css" and names the standing three-way inconsistency --
+      --color-brand-600 = #228be6 (web/src/styles/tokens.css:18), primary =
+      #2563EB (design-tokens/letflow.tokens.json, superseded by REQ-120), and
+      primary_color = "#0B5FFF" (lib/letflow/routers/mobile_tenant_config.ex:133's
+      @default_branding). Reconciling @default_branding to tokens.css's value is a
+      change to a live public endpoint's response body and therefore belongs with
+      REQ-282, not here. This requirement must NOT change @default_branding; it
+      must state which value it treats as canonical and defer the endpoint change.
+
+      A NEW TENANT-SCOPED TABLE, IF ANY, MUST BE ADDED TO
+      test/support/tenant_fixture.ex's @expected_tenant_tables oracle IN THE SAME
+      CHANGE -- see docs/anti-patterns.md, "A new tenant-scoped migration's
+      tables must be added to test/support/tenant_fixture.ex's
+      @expected_tenant_tables oracle in the SAME change", which records three
+      prior occurrences. If the chosen shape is a column on tenants rather than a
+      new table, state that explicitly so the reader knows the oracle was
+      considered and did not apply.
+    acceptance_criteria:
+      - "a migration adds tenant settings storage and `mix ecto.migrate` runs clean against a fresh database, with real output quoted; the migration's version prefix is confirmed not to collide with any existing file in priv/repo/migrations/ (per docs/anti-patterns.md's two-branches-same-version entry)"
+      - "Letflow.Identity.Tenant exposes a settings-writing changeset that casts ONLY the settings field -- a test asserts that passing :status, :slug and :idp_realm_id through that changeset produces no change to any of them, mirroring the structural-impossibility discipline admin_patch_changeset/2 and status_changeset/2 already use"
+      - "the storable key set is closed: a test writes an unrecognised key and asserts it is REJECTED at write time with a typed error naming the key, not silently stored, not silently dropped"
+      - "each key in the closed set (app name, logo URL, brand colour(s), locales, default_locale) has a test asserting a valid value round-trips through the database and an invalid value of the wrong type is rejected"
+      - "lib/letflow/routers/tenant_config.ex and lib/letflow/routers/mobile_tenant_config.ex are BOTH unmodified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits -- including @default_branding, whose reconciliation to tokens.css belongs to REQ-282"
+      - "if a new tenant-scoped table was created, test/support/tenant_fixture.ex's @expected_tenant_tables is updated in the same change; if a column on tenants was chosen instead, that choice is stated explicitly with the reason, so the oracle question is visibly answered rather than skipped"
+      - "the canonical platform-default brand colour is named explicitly with its source file:line, and the three-way inconsistency record 0020 documents is restated with which value this requirement treats as canonical and which requirement closes each remaining divergence -- each of the other two values gets an explicit disposition: #0B5FFF (mobile_tenant_config.ex @default_branding) is closed by REQ-282, and #2563EB (design-tokens/letflow.tokens.json) must be reported as superseded-and-absent, confirmed by re-running find/grep for that path at start; if the file has reappeared, say so and name the requirement that will close it rather than treating this criterion as satisfied by its absence"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: []
+    impl_order: 541  # letflow-queue task id
+

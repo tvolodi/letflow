@@ -16218,7 +16218,7 @@ requirements:
   - id: REQ-287
     title: "Build the PaginationControls design-system primitive against tokens.css (0020 D2a, group 4 of 4)"
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Build web/src/components/ui/PaginationControls.tsx to the API recorded in

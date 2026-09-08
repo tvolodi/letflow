@@ -949,7 +949,9 @@ defmodule Letflow.EngineTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       schema = %{"type" => "object", "properties" => %{"comment" => %{"type" => "string"}}}
-      definition = active_definition!(schema_name, graph_start_human_task_end_with_form_schema(schema))
+
+      definition =
+        active_definition!(schema_name, graph_start_human_task_end_with_form_schema(schema))
 
       assert {:ok, _result} = Engine.create(base_attrs(definition), prefix: schema_name)
 
@@ -978,7 +980,9 @@ defmodule Letflow.EngineTest do
   describe "create/2 (REQ-273 AC3) -- a malformed form_schema is rejected at activation, no tasks row written" do
     test "a JSON-array form_schema aborts create/2 with a typed error and zero tasks rows" do
       %{schema_name: schema_name} = provisioned_tenant()
-      definition = active_definition!(schema_name, graph_start_human_task_end_with_form_schema([1, 2, 3]))
+
+      definition =
+        active_definition!(schema_name, graph_start_human_task_end_with_form_schema([1, 2, 3]))
 
       assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
                Engine.create(base_attrs(definition), prefix: schema_name)
@@ -992,7 +996,10 @@ defmodule Letflow.EngineTest do
       %{schema_name: schema_name} = provisioned_tenant()
 
       definition =
-        active_definition!(schema_name, graph_start_human_task_end_with_form_schema("not-a-schema"))
+        active_definition!(
+          schema_name,
+          graph_start_human_task_end_with_form_schema("not-a-schema")
+        )
 
       assert {:error, {:invalid_form_schema, "task", {:not_well_formed, []}}} =
                Engine.create(base_attrs(definition), prefix: schema_name)

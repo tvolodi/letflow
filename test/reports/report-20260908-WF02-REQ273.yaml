@@ -1,0 +1,77 @@
+# REQ-273 -- final full-suite verification gate (TEST-RUNNER), pre-merge.
+# Real run: scripts/test_parallel.sh, N=8 partitions, against real Postgres
+# (Docker letflow-1-postgres-1, port 5463 via untracked .env LETFLOW_DB_PORT).
+# Combined result across all 8 partitions:
+#   3469 tests, 6 properties, 2 failures -- "3473/3475 passed"
+# `mix format --check-formatted`: FAILED -- 2 files not formatted (see below).
+# `mix compile --warnings-as-errors`: clean, no output, exit 0.
+
+requirement: REQ-273
+
+full_suite:
+  command: scripts/test_parallel.sh
+  partitions: 8
+  combined_tests: 3469
+  combined_properties: 6
+  combined_failures: 2
+  combined_passed: 3473
+  combined_total: 3475
+  per_partition: >
+    partition 1: 561 tests, 0 properties, 0 failures, exit 0
+    partition 2: 292 tests, 2 properties, 0 failures, exit 0
+    partition 3: 397 tests, 2 properties, 0 failures, exit 0
+    partition 4: 461 tests, 2 properties, 0 failures, exit 0
+    partition 5: 530 tests, 0 properties, 0 failures, exit 0
+    partition 6: 404 tests, 0 properties, 0 failures, exit 0
+    partition 7: 440 tests, 0 properties, 2 failures, exit 2
+    partition 8: 384 tests, 0 properties, 0 failures, exit 0
+
+failures:
+  - test: "rust pin (REQ-165) a matching rust pin reports OK with no mismatch"
+    module: Mix.Tasks.Letflow.CheckToolchainTest
+    location: test/mix/tasks/letflow_check_toolchain_test.exs:274
+    error: "** (ErlangError) Erlang error: :enoent, from System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141"
+    disposition: PRE_EXISTING_ENVIRONMENTAL
+    evidence: >
+      `which rustc` in this sandbox returns nothing (rustc is not installed / not
+      on PATH at all). This is unrelated to task_activation.ex/sub_process.ex
+      (REQ-273's own change set) -- it is a toolchain-provisioning test
+      (Mix.Tasks.Letflow.CheckToolchainTest) that requires a rustc binary this
+      environment has never had. The identical failure, same root cause, same
+      "2/34 failures in this module" shape, was already independently confirmed
+      and dispositioned as pre-existing/environmental in
+      test/reports/req208-meridian-scenario-findings.yaml (ISS-0068 class).
+  - test: "rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running"
+    module: Mix.Tasks.Letflow.CheckToolchainTest
+    location: test/mix/tasks/letflow_check_toolchain_test.exs:289
+    error: "** (ErlangError) Erlang error: :enoent, from System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141"
+    disposition: PRE_EXISTING_ENVIRONMENTAL
+    evidence: "Same rustc-missing root cause as above; same module, same test file."
+
+format_check:
+  command: mix format --check-formatted
+  result: FAILED
+  files_not_formatted:
+    - test/letflow/engine_test.exs
+    - test/letflow/engine/task_activation_test.exs
+  disposition: >
+    These are test files touched by this branch's test additions for REQ-273
+    (form_schema coverage in engine_test.exs and task_activation_test.exs).
+    NOT run through `mix format` before commit. This IS in scope for this
+    branch and must be fixed (run `mix format`) before merge -- routed back
+    for a formatting-only fix, does not require ELIXIR-DEV since it is test
+    code, not application code.
+
+compile_check:
+  command: mix compile --warnings-as-errors
+  result: PASSED
+  output: "(no output, exit 0 -- clean compile, zero warnings)"
+
+conclusion: >
+  3473/3475 tests passed. The 2 failures are pre-existing/environmental
+  (missing rustc binary in this sandbox, unrelated to task_activation.ex or
+  sub_process.ex) and are NOT caused by REQ-273's changes. However,
+  `mix format --check-formatted` FAILS on 2 test files this branch added/
+  modified (test/letflow/engine_test.exs, test/letflow/engine/task_activation_test.exs)
+  -- this must be fixed before merge. Recommend: run `mix format` on those two
+  files and re-verify, rather than merging with a failing format-check gate.

@@ -170,9 +170,7 @@ defmodule Letflow.Engine.TaskActivationTest do
       schema = %{"type" => "object", "properties" => %{"name" => %{"type" => "string"}}}
 
       n =
-        node("task", :HUMAN_TASK,
-          attributes: %{"role" => "approver", "form_schema" => schema}
-        )
+        node("task", :HUMAN_TASK, attributes: %{"role" => "approver", "form_schema" => schema})
 
       assert {:ok, attrs} = TaskActivation.insert_attrs("inst-1", "record-1", t, n)
       assert attrs.form_schema == schema

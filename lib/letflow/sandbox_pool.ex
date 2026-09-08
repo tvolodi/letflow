@@ -977,6 +977,14 @@ defmodule Letflow.SandboxPool do
     Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
     :ok
   rescue
-    _exception -> {:error, :release_failed}
+    # Retry once on transient Postgrex/DBConnection errors under concurrent load
+    # (ISS-0536 -- same pattern as test/letflow/sandbox_pool_test.exs retry_query_once/1).
+    _first ->
+      try do
+        Repo.query!(~s(DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE))
+        :ok
+      rescue
+        _exception -> {:error, :release_failed}
+      end
   end
 end

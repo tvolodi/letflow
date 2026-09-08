@@ -2193,8 +2193,10 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by ORCH's own ISS-0536 SCOPE-CHANGE done-event append
+      (WF03-ISS0536-20260908) -- drop_schema retry-once fix, rebased on main.
       Incremented to 8 by ORCH's own ISS-0534 SCOPE-CHANGE done-event append
       (WF03-ISS0534-20260908) -- 404 lines at that point (25001 bytes), well
       under the roll ceiling, composed on rebase with a concurrently-landed

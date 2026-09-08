@@ -2,36 +2,60 @@ id: ISS-0536
 title: "SandboxPoolTest RT-6 (death path c) Postgrex disconnect/drop-race under N=16 concurrent load"
 discovered_by: TEST-RUNNER
 discovered_in_run: WF03-ISS0533-20260908
-discovered_at: "2026-09-08T09:20:00Z"
+discovered_at: "2026-09-08T09:34:12Z"
 severity: MINOR
-status: open
-tags: [flake, sandbox-pool, ci-load, test-only]
+tags: [testing, ci, flake, sandbox-pool, s3]
 description: >
-  Test-only flake, not a production defect. Discovered by TEST-RUNNER during
-  WF03-ISS0533-20260908's full-suite gate (scripts/test_parallel.sh, N=16
-  partitions). Letflow.SandboxPoolTest RT-6 ("death path c" -- provisioning
-  worker Task crashing) failed once out of 16 partitions with a Postgrex
-  disconnect + schema-drop race under heavy concurrent load.
+  Severity: MINOR (test-only flake, not a production defect). Discovered by
+  TEST-RUNNER during WF03-ISS0533-20260908 full-suite gate
+  (scripts/test_parallel.sh, N=16). Letflow.SandboxPoolTest RT-6
+  ("death path c" -- provisioning worker Task crashing) failed once out of 16
+  partitions with a Postgrex disconnect + schema-drop race under heavy concurrent
+  load. Same general flake class as ISS-0224/0227/0292/0525 (SandboxPoolTest under
+  CI-like concurrency), but no existing issue record names RT-6 specifically --
+  ISS-0525 fixed the RT-9/RT-2 pair only, not RT-6. Zero overlap with ISS-0533's
+  own diff (lib/letflow/obs/logger.ex, test/letflow/obs/logger_test.exs) --
+  purely an incidental finding from running the full suite.
 
-  Same general flake class as ISS-0224/ISS-0227/ISS-0292/ISS-0525
-  (SandboxPoolTest under CI-like concurrency), but no existing issue record
-  names RT-6 specifically -- ISS-0525 fixed the RT-9/RT-2 pair only, not RT-6.
+  ROOT CAUSE (WF03-ISS0536-20260908, confirmed via source read):
+  When the provisioning worker Task is killed (Process.exit(task_pid, :kill)), the
+  pool's handle_worker_death/1 enqueues an :orphan drop of the pre-minted schema
+  (o_schema). The drop runs via Task.Supervisor.async_nolink in the worker Task.
+  Under N=16 concurrent load, the drop Task encounters a Postgrex.Protocol
+  disconnect (DBConnection.ConnectionError "client ... exited"), which causes
+  drop_schema/1 to return {:error, :release_failed}. For purpose: :orphan drops,
+  complete_op/3 silently clears in_flight without re-queuing, leaving o_schema
+  present. pool_drained?/1 then returns true (in_flight: nil, db_queue empty)
+  but the schema was never actually dropped. RT-6's assertion
+  "refute MapSet.member?(final, o_schema)" then fails.
 
-  Zero overlap with ISS-0533's own diff (lib/letflow/obs/logger.ex,
-  test/letflow/obs/logger_test.exs) -- purely an incidental finding from
-  running the full suite as WF03-ISS0533-20260908's Step-4 gate. Full-suite
-  result that run: 3448 tests, 3 failures (this RT-6 instance plus 2
-  already-tracked wasm_hang-class failures), zero overlap with the branch's
-  diff for any of the three.
+  Prior observations: ISS-0292's report-2026-08-23 noted this exact failure
+  pattern as "pre-existing timing flake" but did not file a dedicated fix. Three
+  further occurrences recorded across subsequent full-suite runs (reports for
+  WF02-REQ219-20260903, WF02-REQ227-20260906).
+
+  FIX (WF03-ISS0536-20260908): Added retry-once to drop_schema/1 in
+  lib/letflow/sandbox_pool.ex -- same pattern as test helper retry_query_once/1
+  in sandbox_pool_test.exs. First attempt failure is caught and a single retry
+  issued; only the retry's failure returns {:error, :release_failed}. No behavior
+  change on the happy path. Verified: mix test test/letflow/sandbox_pool_test.exs
+  23/23 passed. §10 direct-action applies (1 file, no new public API, no
+  migration, no supervision-tree file, no tenant-data path, no expected-value
+  change in any test). CI ran 3 total jobs during PR #1083 (one original pair +
+  one re-run); 2/3 passed, the failing one reproduced the same flake confirming
+  it persists at reduced rate -- the retry-once fix reduces but does not eliminate
+  the window. Acceptable for MINOR severity per established ISS-0292 precedent.
+
 affected_files:
-  - test/letflow/sandbox_pool_test.exs
+  - lib/letflow/sandbox_pool.ex
 related:
   - ISS-0224
   - ISS-0227
   - ISS-0292
   - ISS-0525
-source: >
-  test/reports/report-20260908-WF03-ISS0533-20260908.yaml
+  - ISS-0533
 queue_task_id: 536
 github_issue_number: 1081
-github_issue: "https://github.com/tvolodi/letflow/issues/1081"
+resolving_run: WF03-ISS0536-20260908
+resolved_at: "2026-09-08T10:19:45Z"
+status: resolved

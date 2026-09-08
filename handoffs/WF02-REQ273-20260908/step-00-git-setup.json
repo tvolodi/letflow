@@ -1,0 +1,38 @@
+{
+  "handoff_id": "WF02-REQ273-20260908-step-00",
+  "run_id": "WF02-REQ273-20260908",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ273-20260908/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-08T19:10:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-273"],
+    "issue_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "lib/letflow/engine/task.ex",
+      "lib/letflow/engine/task_activation.ex",
+      "lib/letflow/engine/variable_schema.ex",
+      "lib/letflow/definitions/json_schema_shape.ex",
+      "lib/letflow/tasks.ex",
+      "lib/letflow/design/req126-form-version-pinning.md",
+      "lib/letflow/routers/tasks.ex"
+    ],
+    "branch_name": "feature/WF02-REQ273-20260908",
+    "base_commit": "ebef735b"
+  },
+  "task": {
+    "description": "See docs/requirements.yaml REQ-273 in full before starting. Produce the design artefact for populating tasks.form_schema at task activation from node.attributes[\"form_schema\"], shape-validated via Letflow.Definitions.JsonSchemaShape.check/1, and version-pinned per REQ-126's precedent. Design only -- no implementation code, no literal Elixir code blocks (only bare function signatures / verbatim citations of existing real code for diagnostic purposes, per this project's own disguised-executable-code convention, most recently reapplied to TypeScript in ISS-0531). Cover all 8 acceptance criteria, the 3 constraints from decision record 0020 D3 (rendering-payload-only, untrusted-input shape validation via the existing predicate, version pinning against the task's pinned definition version not the live one), and the scope fence (tasks.ex's task_detail_map/3 allowlist stays untouched)."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF02-REQ273-20260908 created off main @ ebef735b. Queue task 538 claimed by letflow-orch."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

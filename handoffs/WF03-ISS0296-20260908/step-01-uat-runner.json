@@ -1,0 +1,32 @@
+{
+  "handoff_id": "WF03-ISS0296-20260908-step-01",
+  "run_id": "WF03-ISS0296-20260908",
+  "workflow_id": "WF-03",
+  "step": "01",
+  "from_agent": "UAT-RUNNER",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF03-ISS0296-20260908/step-01-uat-runner.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-08T19:20:00Z",
+  "context": {
+    "stage": "S4",
+    "requirement_ids": ["REQ-133"],
+    "issue_ids": ["ISS-0296"],
+    "related_handoff_ids": ["WF03-ISS0296-20260908-step-00"],
+    "artifacts_in": ["docs/requirements.yaml", "web/playwright.config.ts"],
+    "artifacts_out": ["docs/issues/ISS-0296.yaml", "test/uat-reports/uat-2026-09-08-WF03-ISS0296-20260908.yaml"],
+    "branch_name": "feature/WF03-ISS0296-20260908",
+    "base_commit": "04ec455f",
+    "implementation_commit": "16396bac"
+  },
+  "task": {
+    "description": "Attempt REQ-133's AC1-6 live-browser login proof for real."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Key finding: REQ-133 was already flipped to done in docs/requirements.yaml on 2026-08-26 (commit a91e084c5, run WF03-ISS0296-20260826), an ancestor of this branch's base -- the handoff's own framing and ISS-0296.yaml's status: open were stale bookkeeping, not accurate state, verified via git blame/log rather than trusted at face value. Did the substantive work anyway: an independent re-verification against CURRENT code, since the original 2026-08-26 evidence predated ISS-0529..0536 (CORS, tenant-slug, health-check, log-formatter, sandbox-pool, wasm_hang fixes) flagged as direct blockers of this exact login flow. Environment work performed for real: confirmed keycloak (8082)/postgres (5463) healthy; found the running backend (mix run --no-halt, PID 3945662) had been up since Aug24, 704 commits stale -- killed it, ran mix compile, generated a fresh LETFLOW_SECRETS_MASTER_KEY, restarted with LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt, confirmed GET /health -> 200; ran npm run build fresh in web/ (388 modules, 0 errors), npm run preview -- --port 4173 --host localhost, confirmed curl localhost:4173 -> 200. All 6 ACs proved with real evidence: admin OIDC login completes and lands on an authenticated view (TC-OIDCF-03 PASS); TASK_WORKER nav [My Tasks] vs PLATFORM_ADMIN nav (14 items, listed); GET /api/v1/identity/users with admin token -> 200 with 3 real seeded users; same route with worker token -> 403 RFC-9457 problem document; localStorage/sessionStorage both empty after login. 9/9 pre-existing Playwright e2e tests passed, no flakiness encountered this run -- consistent with ORCH's hypothesis that the intervening ISS-0529..0531 fixes removed the original blockers. docs/issues/ISS-0296.yaml flipped from open to resolved with a resolution_note documenting both the original 2026-08-26 pass and today's re-verification. New UAT report written. docs/requirements.yaml NOT touched -- REQ-133 was already done, re-flipping would be redundant/misleading about when it was actually completed."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

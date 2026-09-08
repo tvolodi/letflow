@@ -431,6 +431,62 @@ Renders a form from a JSON Schema object:
 - Background/border matches the page's card surface (`--surface-card`,
   `--border-default`) so it reads as a distinct toolbar strip above `DataTable`.
 
+### 7.8 PaginationControls
+
+```tsx
+<PaginationControls
+  page={number}                      // 1-indexed current page
+  pageSize={number}                  // current page size; one of 25, 50, 100
+  totalItems={number | null}         // null when the total row count is unknown
+                                      // (cursor-based pagination)
+  onPageChange={(page: number) => void}
+  onPageSizeChange={(pageSize: number) => void}  // optional; omit to hide the
+                                                  // page-size selector
+  hasNextPage={boolean}              // optional; only consulted when totalItems
+                                      // is null — whether another page exists
+                                      // beyond the current one (e.g. derived from
+                                      // an API response's next_cursor being
+                                      // non-null). Ignored when totalItems is a
+                                      // number — next-disabled is computed from
+                                      // page * pageSize >= totalItems instead.
+                                      // Treated as false (Next disabled) when
+                                      // omitted and totalItems is null.
+/>
+```
+
+- Summary text, `totalItems` known: `Showing {start}-{end} of {totalItems}`, where
+  `start = (page - 1) * pageSize + 1` and `end = min(page * pageSize, totalItems)`.
+- Summary text, `totalItems` null (cursor pagination): `Showing {start}-{end}`
+  (no "of Z" suffix), where `start = (page - 1) * pageSize + 1` and
+  `end = page * pageSize`. This assumes a full page except where `hasNextPage` says
+  otherwise; a partial last page may show an `end` slightly higher than the actual
+  last row's ordinal — accepted because no per-page row count is available to this
+  component.
+- "Previous" is disabled when `page <= 1`.
+- "Next" is disabled when: `totalItems` is a number and `page * pageSize >=
+  totalItems`; or `totalItems` is `null` and `hasNextPage` is not `true`.
+- Page-size selector (`<select>`, options `25`, `50`, `100`) renders only when
+  `onPageSizeChange` is supplied; entirely absent otherwise.
+- "Previous"/"Next" are real, focusable `<button>` elements (via this design
+  system's own `Button`) with visible text labels ("Previous"/"Next") — their
+  accessible name comes from that text content, and their disabled state is the
+  native `disabled` HTML attribute (not a styling-only affordance), satisfying
+  FNFR-03 (WCAG 2.1 AA).
+
+**Correction note (REQ-287):** this section did not exist before REQ-287 — §8's
+usage example referenced `<PaginationControls ... />` with no spec block behind it,
+the same situation REQ-274 left explicitly out of scope. A sixth prop, `hasNextPage`,
+was added beyond the requirement's originally recorded 5-prop list (`page`,
+`pageSize`, `totalItems`, `onPageChange`, `onPageSizeChange`) because that recorded
+API gave `PaginationControls` no way to compute the Next button's disabled state when
+`totalItems` is `null`. Confirmed against the two real hand-rolled pagination UIs in
+`web/src/pages/`: `AuditLogPage.tsx`'s `!nextCursor` and `InstanceBoardPage.tsx`'s
+`!instancesQuery.data.next_cursor` both already compute and use exactly this boolean
+today (gating their own "Next"/"Next page" buttons), so `hasNextPage` lets
+`PaginationControls` consume that existing signal directly. See
+`lib/letflow/design/req287-design-system-primitives-group4.md` §1 for the full
+comparison.
+
 ---
 
 ## 8. Page Layout Template

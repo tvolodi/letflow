@@ -2,10 +2,15 @@
  * E2E tests — Stage F1 Batch 2: API Connectivity Banner
  * Requirements: SH-06
  * Run: WF02-shf1b-20260528
+ * Updated: ISS-0532 (WF03-ISS0532-20260908) — the banner's probe was moved
+ * from the non-existent `GET /health/ready` to the real `GET /health`
+ * liveness endpoint (see `web/src/api/health.ts`'s ISS-0532 note and
+ * `docs/frontend/contract-gaps.md` row 15). These tests now stub `/health`
+ * to match.
  *
  * Directive T-2 compliance:
  *   - No MSW, no axios-mock-adapter, no manual fetch intercepts.
- *   - page.route() is used ONLY to stub GET /health/ready.  All other
+ *   - page.route() is used ONLY to stub GET /health.  All other
  *     application behaviour runs through the real frontend code.
  *
  * Directive T-3 compliance:
@@ -57,11 +62,11 @@ const TOKEN_TASK_WORKER = makeFakeJwt({
 test.describe('SH-06 — API Connectivity Banner', () => {
   // TC-SH06-01 ──────────────────────────────────────────────────────────────
 
-  test('TC-SH06-01: /health/ready returns 200 → connectivity-banner NOT visible', async ({
+  test('TC-SH06-01: /health returns 200 → connectivity-banner NOT visible', async ({
     page,
   }) => {
-    // Stub all /health/ready requests to return 200 for the lifetime of this test
-    await page.route('**/health/ready', (route) =>
+    // Stub all /health requests to return 200 for the lifetime of this test
+    await page.route('**/health', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -74,7 +79,7 @@ test.describe('SH-06 — API Connectivity Banner', () => {
     // Give the immediate mount check time to resolve and re-render
     await page.waitForTimeout(300)
 
-    // VERDICT: Screen shows no connectivity-banner when /health/ready returns 200
+    // VERDICT: Screen shows no connectivity-banner when /health returns 200
     await expect(page.getByTestId('connectivity-banner')).not.toBeAttached()
 
     await page.screenshot({ path: 'tests/screenshots/SH06-01-no-banner-when-healthy.png' })
@@ -82,14 +87,14 @@ test.describe('SH-06 — API Connectivity Banner', () => {
 
   // TC-SH06-02 ──────────────────────────────────────────────────────────────
 
-  test('TC-SH06-02: /health/ready returns 503 → connectivity-banner visible', async ({
+  test('TC-SH06-02: /health returns 503 → connectivity-banner visible', async ({
     page,
   }) => {
     // Route strategy:
     //   Call 1 → 200  (login validation — must succeed to reach the shell)
     //   Call 2+ → 503 (mount-time connectivity check → banner appears)
     let callCount = 0
-    await page.route('**/health/ready', (route) => {
+    await page.route('**/health', (route) => {
       callCount++
       if (callCount === 1) {
         route.fulfill({
@@ -117,7 +122,7 @@ test.describe('SH-06 — API Connectivity Banner', () => {
 
     await page.screenshot({ path: 'tests/screenshots/SH06-02-banner-visible-on-503.png' })
     // VERDICT: Screen shows connectivity-banner with "Platform is currently unavailable"
-    //          text after /health/ready returns 503 on mount
+    //          text after /health returns 503 on mount
   })
 
   // TC-SH06-03 ──────────────────────────────────────────────────────────────
@@ -127,7 +132,7 @@ test.describe('SH-06 — API Connectivity Banner', () => {
   }) => {
     // Phase 1: login succeeds (200), mount check returns 503 → banner shown
     let callCount = 0
-    await page.route('**/health/ready', (route) => {
+    await page.route('**/health', (route) => {
       callCount++
       if (callCount === 1) {
         route.fulfill({
@@ -154,9 +159,9 @@ test.describe('SH-06 — API Connectivity Banner', () => {
     })
     // VERDICT: Screen shows connectivity-banner after login with 503 mount check
 
-    // Phase 2: backend recovers — swap all future /health/ready calls to 200
-    await page.unroute('**/health/ready')
-    await page.route('**/health/ready', (route) =>
+    // Phase 2: backend recovers — swap all future /health calls to 200
+    await page.unroute('**/health')
+    await page.route('**/health', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',

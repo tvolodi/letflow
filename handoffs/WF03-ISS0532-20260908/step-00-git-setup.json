@@ -1,0 +1,35 @@
+{
+  "handoff_id": "WF03-ISS0532-20260908-step-00",
+  "run_id": "WF03-ISS0532-20260908",
+  "workflow_id": "WF-03",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ISSUE-FIXER",
+  "file": "handoffs/WF03-ISS0532-20260908/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T10:15:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-116"],
+    "issue_ids": ["ISS-0532", "ISS-0530"],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0532.yaml",
+      "web/src/api/health.ts",
+      "web/src/components/layout/ApiConnectivityBanner.tsx",
+      "lib/letflow/router.ex"
+    ],
+    "branch_name": "feature/WF03-ISS0532-20260908",
+    "base_commit": "851d0991"
+  },
+  "task": {
+    "description": "Root-cause diagnosis and scope recommendation (diagnosis only, not the fix) for ISS-0532: the SPA polls GET /health/ready and GET /api/v1/health, neither of which Letflow serves (confirmed live: both 404, only GET /health exists and returns 200 {\"status\":\"ok\"}), causing a permanently-shown false 'Platform is currently unavailable' banner on every authenticated page. lib/letflow/router.ex's own moduledoc already states the readiness endpoint (R-Co's routes/health.zig handleReady) 'is deliberately not ported.' Read lib/letflow/router.ex's full moduledoc/health-route section, REQ-116's requirement text and design doc (find it -- likely lib/letflow/design/req116-*.md), web/src/api/health.ts, and web/src/components/layout/ApiConnectivityBanner.tsx in full. The issue's own text names two defensible options, explicitly not pre-decided: (a) port the readiness endpoint (reopens a deliberate S4 decision, needs REVIEWER sign-off per CLAUDE.md's decision-record rule), or (b) point the SPA at the existing GET /health and drop the admin snapshot until a backend endpoint exists (smaller, reversible). Determine: what does REQ-116's own design doc say about this deliberate non-port decision -- is there a specific rationale recorded (e.g. R-Co's readiness check depends on subsystems Letflow doesn't have yet) that should inform which option is correct, or was it simply deferred without a stated reason? Check what GET /api/v1/health (the admin health snapshot) was actually supposed to return by reading R-Co's own equivalent if cited in any design doc, to judge whether option (b)'s 'drop the admin snapshot' loses real information the SPA's UI actually surfaces to an admin, or whether it's genuinely just cosmetic. Recommend (a) or (b) explicitly, with reasoning, or state clearly if this decision itself requires REVIEWER/CODE-DESIGNER sign-off before ELIXIR-DEV/FRONTEND-DEV can implement either option. Note: option (a) touches lib/letflow/router.ex (a Letflow backend file, ELIXIR-DEV's remit); option (b) touches web/src/api/health.ts and ApiConnectivityBanner.tsx (FRONTEND-DEV's remit) -- if (b) is chosen, this run should route to FRONTEND-DEV, not ELIXIR-DEV."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF03-ISS0532-20260908 created off main @ 851d0991. docs/issues/ISS-0532.yaml written locally (verbatim from the queue task's own record, discovered via an unintended get_next_task claim during ISS-0534's Step Final -- the endpoint claims on every call regardless of parameters, no read-only mode exists)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

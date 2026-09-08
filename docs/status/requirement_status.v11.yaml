@@ -503,3 +503,38 @@ history:
       ORCH picked up (ISS-0531, ISS-0532) -- other items from that audit
       were independently resolved by sibling sessions. ORCH will merge and
       release queue task 531 status:done.
+  - req: SCOPE-CHANGE
+    event: verified
+    agent: ORCH
+    at: "2026-09-08T18:51:30Z"
+    note: >
+      ISS-0296 (queue task 296, GH#594) closed via WF03-ISS0296-20260908.
+      UAT-RUNNER discovered the queue/issue-doc bookkeeping was stale: REQ-133
+      had already been flipped to done in docs/requirements.yaml on
+      2026-08-26 (commit a91e084c5, run WF03-ISS0296-20260826) -- an
+      ancestor of this branch's base -- verified via git blame/log rather
+      than trusted at face value from either the dispatch or ISS-0296.yaml's
+      own stale status: open. Did the substantive work anyway: an
+      independent live-browser re-verification against CURRENT code, since
+      the original 2026-08-26 evidence predated ISS-0529..0536 (CORS,
+      tenant-slug, health-check, log-formatter, sandbox-pool, wasm_hang
+      fixes) that this session's own ADHOC-ENGINE-AUDIT-20260908 found and
+      fixed as direct blockers of exactly this login flow. Set up a fresh
+      backend instance (killed a 704-commit-stale mix run --no-halt process
+      left running since Aug24, restarted current), a fresh frontend
+      production build+preview (npm run build && npm run preview, port
+      4173, per the issue's own documented React-18-StrictMode/PKCE-race
+      workaround). All 6 of REQ-133's original ACs re-proved with real
+      evidence: admin OIDC login completes to an authenticated view;
+      TASK_WORKER's narrower nav vs PLATFORM_ADMIN's 14-item nav, both
+      listed; a real authenticated GET /api/v1/identity/users call returned
+      3 real seeded users; the same route with a worker token returned a
+      real 403 RFC-9457 problem document, observed from the browser; no
+      token in localStorage/sessionStorage after login. 9/9 pre-existing
+      Playwright e2e tests passed, no flakiness this run -- consistent with
+      the hypothesis that the intervening fixes removed the original
+      blockers. docs/requirements.yaml NOT re-touched (REQ-133 already
+      done, re-flipping would misstate when it actually completed).
+      ISS-0296.yaml flipped open -> resolved with a resolution_note. New
+      UAT report written. ORCH will merge and release queue task 296
+      status:done.

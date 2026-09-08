@@ -1,11 +1,12 @@
 /**
  * Unit tests for tokenUtils.ts — pure function tests, no backend required.
- * Covers SH-01 (decodeTokenPayload) and SH-04 (resolveDisplayName).
- * Test cases: TC-SH01-U01..U07, TC-SH04-U01..U05
+ * Covers SH-01 (decodeTokenPayload), SH-04 (resolveDisplayName), and SH-05
+ * (resolveTenantSlug).
+ * Test cases: TC-SH01-U01..U07, TC-SH04-U01..U05, TC-SH05-U01..U04
  */
 
 import { describe, expect, it } from 'vitest'
-import { decodeTokenPayload, resolveDisplayName } from '../tokenUtils'
+import { decodeTokenPayload, resolveDisplayName, resolveTenantSlug } from '../tokenUtils'
 import type { JwtPayload } from '@/types/api'
 
 /**
@@ -99,5 +100,42 @@ describe('resolveDisplayName', () => {
     // Cast to bypass required fields — testing the runtime fallback
     const p = {} as JwtPayload
     expect(resolveDisplayName(p)).toBe('Unknown User')
+  })
+})
+
+// ── resolveTenantSlug ─────────────────────────────────────────────────────────
+
+describe('resolveTenantSlug', () => {
+  it('TC-SH05-U01: regression for ISS-0531 — realm bpm-default resolves to slug "bpm-default" verbatim, not "default"', () => {
+    const p: JwtPayload = {
+      sub: 'u1',
+      roles: [],
+      iss: 'http://localhost:8082/realms/bpm-default',
+    }
+    expect(resolveTenantSlug(p)).toBe('bpm-default')
+  })
+
+  it('TC-SH05-U02: ordinary tenant realm bpm-acme1 still strips the prefix to "acme1"', () => {
+    const p: JwtPayload = {
+      sub: 'u2',
+      roles: [],
+      iss: 'http://localhost:8081/realms/bpm-acme1',
+    }
+    expect(resolveTenantSlug(p)).toBe('acme1')
+  })
+
+  it('TC-SH05-U03: tenant_id claim takes priority over realm parsing, even for the default realm', () => {
+    const p: JwtPayload = {
+      sub: 'u3',
+      roles: [],
+      tenant_id: 'explicit-slug',
+      iss: 'http://localhost:8082/realms/bpm-default',
+    }
+    expect(resolveTenantSlug(p)).toBe('explicit-slug')
+  })
+
+  it('TC-SH05-U04: returns null when neither tenant_id nor iss is present', () => {
+    const p: JwtPayload = { sub: 'u4', roles: [] }
+    expect(resolveTenantSlug(p)).toBeNull()
   })
 })

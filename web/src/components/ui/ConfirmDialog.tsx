@@ -74,7 +74,7 @@ export function ConfirmDialog(props: ConfirmDialogProps): React.ReactElement | n
         position: 'fixed',
         inset: 0,
         background: 'var(--surface-overlay)',
-        zIndex: 600,
+        zIndex: 'var(--z-dialog)' as unknown as number,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

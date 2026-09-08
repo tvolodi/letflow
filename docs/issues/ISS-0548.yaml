@@ -1,0 +1,43 @@
+id: ISS-0548
+title: "No --z-* token scale exists -- 5+ components hand-pick z-index literals with no single source of stacking order"
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ275-20260909
+discovered_at: "2026-09-08T22:18:55Z"
+severity: MINOR
+tags: [frontend, css-tokens, design-system, s8]
+description: >
+  No --z-* CSS custom property family exists anywhere in
+  web/src/styles/tokens.css. Confirmed literal z-index values in use:
+  ConfirmDialog.tsx=600, ConfirmPromoteModal.tsx=500,
+  ConflictResolver.tsx=550/560, Toast.tsx (REQ-275, pending)=700. Each was
+  picked by eye with no single source of truth for the intended stacking
+  order. A future addition between two existing layers requires re-deriving
+  the whole ordering by reading every component.
+
+  FIX (WF03-ISS0548-20260908): Added 5 tokens to web/src/styles/tokens.css:
+    --z-modal:          500  (ConfirmPromoteModal, base modal overlays)
+    --z-conflict:       550  (ConflictResolver backdrop)
+    --z-conflict-panel: 560  (ConflictResolver sub-panel)
+    --z-dialog:         600  (ConfirmDialog, above regular modals)
+    --z-toast:          700  (Toast, always topmost -- REQ-275 should use this)
+  Migrated the 4 existing components onto the new tokens. Toast.tsx is on
+  the pending REQ-275 branch and should use --z-toast when it merges.
+  TypeScript requires "var(--z-dialog)" as unknown as number for inline
+  style zIndex -- this cast is intentional (CSS custom properties resolve
+  at runtime; TS only knows the type is string).
+
+  Note: web/src/components/ui/DataTable.tsx has pre-existing tsc errors
+  (missing @tanstack/react-table types) from REQ-274, unrelated to this fix.
+
+affected_files:
+  - web/src/styles/tokens.css
+  - web/src/components/ui/ConfirmDialog.tsx
+  - web/src/components/ui/ConfirmPromoteModal.tsx
+  - web/src/components/ui/ConflictResolver.tsx
+related:
+  - REQ-275
+queue_task_id: 548
+github_issue_number: 1112
+resolving_run: WF03-ISS0548-20260908
+resolved_at: "2026-09-08T22:28:56Z"
+status: resolved

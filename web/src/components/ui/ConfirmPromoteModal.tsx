@@ -18,7 +18,7 @@ export function ConfirmPromoteModal(props: ConfirmPromoteModalProps): React.Reac
         position: 'fixed',
         inset: 0,
         background: 'var(--surface-overlay)',
-        zIndex: 500,
+        zIndex: 'var(--z-modal)' as unknown as number,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

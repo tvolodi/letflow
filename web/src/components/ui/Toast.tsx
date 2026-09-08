@@ -112,7 +112,7 @@ export function ToastContainer(): React.ReactElement | null {
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-2)',
-        zIndex: 700,
+        zIndex: 'var(--z-toast)' as unknown as number,
       }}
     >
       {entries.map((entry) => (

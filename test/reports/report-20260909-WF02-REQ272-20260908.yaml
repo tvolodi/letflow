@@ -1,0 +1,176 @@
+run_id: WF02-REQ272-20260908
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T00:59:00Z"
+branch: feature/WF02-REQ272-20260908
+head_commit: 4186c364
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - 4186c364 "test(REQ-272): cover Button/StatusBadge/PageLayout design-system primitives"
+    - 4d0e5391 "feat(REQ-272): add Button, StatusBadge, PageLayout design-system primitives"
+    - ec46666e "design(REQ-272): rework token audit -- typography/spacing/radius family missing from tokens.css"
+    - 630acc71 "design(REQ-272): design Button, StatusBadge, PageLayout primitives against tokens.css"
+    - 5672d7f4 "chore(ORCH): register REQ-272 in requirements.yaml, flip in_progress, log started event [WF02-REQ272-20260908]"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  backend_files_touched: 4
+  backend_files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v11.yaml
+    - lib/letflow/design/req272-design-system-primitives-group1.md
+  note: >
+    Zero files under lib/, test/, or priv/repo/migrations/ -- confirms REQ-272 is
+    frontend-only as claimed. The 4 "backend" files above are requirement-bookkeeping
+    and a design doc only, not application/test code.
+
+frontend_suite:
+  location: "web/"
+  commands:
+    - command: "npm run type-check"
+      result: PASS
+      output: "tsc -b tsconfig.json -- no errors"
+    - command: "npm run lint"
+      result: PASS
+      output: "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 -- no errors"
+    - command: "npm test"
+      result: PASS
+      output: |
+        Test Files  39 passed (39)
+             Tests  229 passed (229)
+          Duration  7.22s
+      notes: >
+        Two expected stderr lines from StatusBadge.test.tsx (TC-REQ272-10, TC-REQ272-11)
+        logging "no status table entry for domain=... status=..." -- these are the
+        fallback-rendering tests deliberately exercising the neutral-fallback path, not
+        failures.
+    - command: "npm run guards"
+      result: PASS
+      output: |
+        Test Files  4 passed (4)
+             Tests  48 passed (48)
+        (includes a production `tsc -b && vite build` as part of bundle-scan.spec.ts;
+        build succeeded, only a pre-existing >500kB chunk-size advisory, no errors)
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  attempts:
+    - n: 16
+      source: "nproc (default)"
+      result: FAIL
+      combined: "0 tests, 0 properties, 0 failures (0/0 passed)"
+      diagnosis: >
+        All 16 partitions crashed before running any test: every partition log showed
+        DBConnection.ConnectionError during `mix ecto.migrate` ("connection not
+        available and request was dropped from queue after ~6000ms"). This was the
+        very first command against a freshly-started `docker compose up -d` Postgres
+        container on this host -- not attributed to this branch (zero backend diff).
+        Re-ran.
+    - n: 16
+      source: "nproc (default), re-run"
+      result: FAIL
+      combined: "1408 tests, 0 properties, 15 failures (1393/1408 passed)"
+      diagnosis: >
+        10 of 16 partitions still produced NO Result: line (DBConnection.ConnectionError
+        during test-helper setup: TenantSchemaReaper.sweep_orphans, tenant_template
+        advisory-lock acquisition). The 6 partitions that did run showed 15 failures,
+        all ExUnit.TimeoutError or tenant-fixture connection-checkout errors, scattered
+        across unrelated modules (auth pipeline, DLQ, tenant fixtures, engine, audit
+        routes) -- signature of Postgres connection-pool contention under 16-way
+        parallelism on this host, not a code defect. Investigated further: found 4
+        orphaned BEAM/erl processes from a separate TEST_PARALLEL_N=4 attempt (killed by
+        this tool's 590s command timeout, but whose child processes survived and kept
+        holding DB connections/locks against letflow_test3). Killed those orphans,
+        confirmed pg_stat_activity clear on letflow_test* databases, re-ran.
+    - n: 16
+      source: "nproc (default), after killing orphaned processes from a separate timed-out attempt"
+      result: FAIL
+      combined: "3451 tests, 6 properties, 9 failures (3448/3457 passed)"
+      per_partition:
+        - "partition 1: 241 tests, 0 failures, exit 0"
+        - "partition 2: 161 tests, 1 failure, exit 2"
+        - "partition 3: 146 tests, 0 failures, exit 0"
+        - "partition 4: 255 tests, 1 property, 1 failure, exit 2"
+        - "partition 5: 258 tests, 0 failures, exit 0"
+        - "partition 6: 257 tests, 1 failure, exit 2"
+        - "partition 7: 160 tests, 0 failures, exit 0"
+        - "partition 8: 195 tests, 2 failures, exit 2"
+        - "partition 9: 302 tests, 2 failures, exit 2"
+        - "partition 10: 131 tests, 2 properties, 0 failures, exit 0"
+        - "partition 11: 251 tests, 2 properties, 1 failure, exit 2"
+        - "partition 12: 206 tests, 1 property, 0 failures, exit 0"
+        - "partition 13: 272 tests, 0 failures, exit 0"
+        - "partition 14: 147 tests, 1 failure, exit 2"
+        - "partition 15: 280 tests, 0 failures, exit 0"
+        - "partition 16: 189 tests, 0 failures, exit 0"
+      diagnosis: >
+        All 16 partitions now produced a Result: line -- no crashes. 3451 tests (3457
+        including StreamData property counters) is consistent with this project's known
+        full-suite size (~3449, per test/reports/report-20260908-WF03-ISS0399-20260907.yaml).
+        9 remaining failures, all in test files outside REQ-272's diff:
+        Letflow.Routers.DefinitionsTest, Letflow.Routers.DlqTest,
+        Letflow.Scheduler.PollerTest, Letflow.Obs.AlertsTest,
+        Letflow.Support.TenantFixtureTest, Letflow.EngineTest,
+        Letflow.Engine.ReconstructionTest, Letflow.Repository.AttachmentsTest,
+        Letflow.Definitions.PromotionTest.
+
+remaining_failures:
+  count: 9
+  attribution:
+    caused_by_this_branch_diff: false
+    reasoning: >
+      8 of the 9 failures share the identical signature: `LETFLOW_TENANT_FIXTURE
+      phase=replay_failed ... clone_tenant_schema!/1 returned {:error, {:clone_failed,
+      %DBConnection.ConnectionError{message: "connection is closed because of an error,
+      disconnect or timeout" | "tcp recv: closed"}}}` (one variant instead shows a
+      Postgrex query_canceled). The 9th (Letflow.Scheduler.PollerTest, a
+      capacity/antagonist-contention test) is an ExUnit.TimeoutError. All 9 land in
+      completely unrelated subsystems (routers, scheduler, observability/alerts,
+      tenant-fixture infra, engine, repository/attachments, definitions/promotion) with
+      no shared application code path other than the shared TenantFixture/Postgres
+      connection infrastructure itself -- the classic signature of transient Postgres
+      connection-pool exhaustion under this host's 16-way parallel `mix test`, not a
+      defect in any of those modules. `git diff --name-only main...HEAD` (see
+      diff_scope above) confirms REQ-272's entire backend footprint is 4
+      requirement-bookkeeping/design-doc files -- zero overlap with any of the 9 failing
+      test files, their subject modules, or test/support/tenant_fixture.ex /
+      test/support/tenant_template.ex. Per "Failure Attribution Is Structural, Never By
+      Count-Matching" (evidence form (a): the failing modules and their dependencies do
+      not appear in this branch's diff), these are pre-existing/environmental, not a
+      regression introduced by REQ-272.
+
+verdict: PASS
+verdict_reasoning: >
+  Frontend suite (the actual scope of REQ-272: 3 new components, 13 new tokens) is
+  fully green -- type-check, lint, 229/229 unit tests (including all 26 new
+  Button/StatusBadge/PageLayout tests), and all 48 guard tests (including a clean
+  production build). Backend full suite ultimately ran clean of crashes at 3451
+  tests/9 failures once this host's Postgres connection-pool contention (present from
+  the very first invocation, before any code from this branch executed, and worsened
+  by orphaned processes from an unrelated timed-out local experiment) was cleared; the
+  9 remaining failures are structurally unrelated to REQ-272's zero-backend-file diff,
+  per the reasoning above.
+
+next_action: "Route to RELEASE-VALIDATOR"
+
+notes_for_downstream:
+  - >
+    This host's Postgres (docker-compose, port 5472 per this workspace's .env) showed
+    connection-pool contention severe enough to crash entire test partitions on both
+    the very first `scripts/test_parallel.sh` invocation of this session and a
+    follow-up attempt, before stabilizing on a third attempt. Worth a fresh
+    anti-patterns.md entry if this recurs on this host independent of any branch's
+    diff -- distinct from the existing "stale tenant_template" entry (no
+    versions_missing errors were observed here) and from the wasm_hang class (no
+    wasm_hang-tagged tests were involved).
+  - >
+    Do not leave a `bash scripts/test_parallel.sh` invocation running past a tool
+    timeout expecting it to be cleanly killed -- one such attempt (TEST_PARALLEL_N=4,
+    killed by this session's own 590s Bash timeout) left 4 orphaned BEAM/erl child
+    processes running and holding Postgres connections/advisory locks against
+    letflow_test3 for ~10 minutes afterward, which would have contaminated any
+    subsequent run against the same container had they not been found and killed
+    (`kill -9`) before the final clean re-run reported above.

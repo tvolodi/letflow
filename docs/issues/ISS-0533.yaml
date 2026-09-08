@@ -4,7 +4,9 @@ discovered_by: ORCH
 discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
 discovered_at: "2026-09-08T07:16:00Z"
 severity: MINOR
-status: open
+status: resolved
+resolved_in_run: WF03-ISS0533-20260908
+resolved_at: "2026-09-08T09:35:46Z"
 tags: [observability, logging, diagnosability]
 description: >
   Observed continuously while bringing the stack up for the ISS-0296 live-browser proof.
@@ -121,3 +123,43 @@ diagnosis:
     unrelated to this issue), which triggers a real OTP application-controller shutdown
     cascade and emits the exact `error_logger.report_cb` encoding failure for every
     dependency application unwound.
+resolution_note: >
+  Fixed via WF03-ISS0533-20260908. `lib/letflow/obs/logger.ex`'s `safe_value/1` was
+  replaced with a depth-tracked recursive `safe_value/2` (module attribute
+  `@max_sanitize_depth 6`) that walks maps, lists, and tuples and rewrites any
+  non-Jason-encodable term (pids, refs, functions, ports, tuples, encoder-less structs)
+  to its `inspect/1` representation at the point it's found, instead of only checking
+  the value passed in shallowly. Both concrete reproductions in `diagnosis:` above
+  (Bandit's `plug: {Router, []}` tuple; OTP's nested `meta.error_logger.report_cb`
+  function reference) are now sanitized correctly.
+
+  CODE-DESIGNER's design went through one rework round: the first draft's struct
+  encodability check (`jason_encodable?/1`) used `Jason.Encoder.impl_for(v) != nil`,
+  which is a no-op for any struct falling back to `Jason.Encoder.Any` (the
+  `@fallback_to_any` gotcha) -- CODE-DESIGN-VALIDATOR caught this before implementation,
+  and the shipped `jason_encodable?/1` was corrected accordingly. ELIXIR-DEV also
+  restructured `encode_entry/3`'s `rescue` branch so a post-sanitization encode failure
+  (defense in depth) preserves the entry's real `level` and `message` instead of
+  silently promoting the whole entry to `level=error` with an inspect-dumped message, as
+  the old rescue branch did.
+
+  TEST-DESIGNER produced a real fail-then-pass proof: 10/15 passing pre-fix, 15/15
+  post-fix (`test/letflow/obs/logger_test.exs`, spec at `test/specs/ISS-0533.md`).
+  TEST-DESIGN-VALIDATOR independently reproduced that proof and, during review, found a
+  design-vs-shipped-code discrepancy at the `@max_sanitize_depth` boundary: the design
+  doc's original §1.2 wording claimed a container landing exactly at the cutoff is
+  "replaced wholesale by inspect/1", but the shipped code's `safe_value(v, 0)` ->
+  `safe_leaf/1` path only inspects leaf-shaped offenders (pid/reference/function/
+  port/tuple/encoder-less struct) at the cutoff -- a map or list landing exactly at the
+  cutoff is returned raw/unwalked, not inspected. Confirmed via direct repro this is
+  still safe in practice: any such raw container that fails `Jason.encode!/1` is caught
+  by `encode_entry/3`'s rescue branch, which preserves the real level/message rather
+  than crashing or mis-leveling the entry -- so this is a doc-accuracy gap (case (b)),
+  not a regression or a missed case in the fix itself. The design doc's §1.2 has been
+  corrected in this closeout commit to describe the actual cutoff behavior and name the
+  rescue branch as the true backstop guarantee.
+
+  TEST-RUNNER ran the full suite post-fix: 3451/3454, with the 3 failures all
+  structurally unrelated to this change (2 known `wasm_hang` flakes; 1 new
+  `SandboxPoolTest` RT-6 flake filed separately as ISS-0536 / GH#1081, already committed
+  to this branch by ORCH).

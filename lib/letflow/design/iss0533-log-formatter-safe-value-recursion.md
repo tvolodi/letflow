@@ -130,13 +130,23 @@ insurance against a not-yet-seen but plausible one-or-two-levels-deeper case, wi
 leaving the bound so high that a genuinely pathological structure (e.g. a deeply nested
 struct dumped into metadata by mistake) still costs meaningful work before being cut off.
 
-**At the cutoff (depth exhausted mid-recursion):** the remaining sub-term, whatever
-shape it is, is replaced wholesale by `inspect/1` of itself — the same "no further
-structural interpretation past this point" treatment tuples and encoder-less structs
-already get at any depth (§1.1), just triggered here by depth rather than by type. This
-guarantees the function's own postcondition — **every value `safe_value/2` returns is
-individually Jason-encodable** — holds unconditionally, including at the depth
-boundary; it never returns a raw, unexamined sub-term just because the budget ran out.
+**At the cutoff (depth exhausted mid-recursion) — corrected 2026-09-08, WF03-ISS0533-20260908
+closeout, per TEST-DESIGN-VALIDATOR's finding:** the shipped behavior differs from the
+wording originally written here. `safe_value(v, 0)` dispatches to `safe_leaf/1`, which
+only rewrites the leaf-only offender shapes (pid/reference/function/port/tuple/an
+encoder-less struct); a *container* (map or list) that lands exactly at the cutoff falls
+through `safe_leaf/1`'s final clause (`defp safe_leaf(v), do: v`) and is returned
+**raw/unwalked, not inspected** — any non-encodable value still nested inside that
+container past the cutoff is not caught by `safe_value/2` itself at that point. The
+"every value `safe_value/2` returns is individually Jason-encodable, at any depth"
+guarantee is therefore upheld one level up the call stack, not by this function alone:
+`encode_entry/3`'s `rescue` branch (§2) is the actual backstop — if a stray raw
+container at the cutoff still fails `Jason.encode!/1`, the rescue branch catches it and
+preserves the real `level`/`message` rather than crashing or silently mis-leveling the
+entry. Confirmed via direct repro (TEST-DESIGN-VALIDATOR, WF03-ISS0533-20260908): a
+depth-6-boundary case is safely caught by the rescue branch with the original
+level/message intact — a doc-accuracy gap in this section's original wording, not a
+regression or a missed case in the shipped fix.
 
 ### 1.3 Before/after code sketch (shape only, not full implementation)
 

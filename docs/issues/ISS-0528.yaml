@@ -1,0 +1,53 @@
+id: ISS-0528
+title: >
+  wasm_hang discovery parses subprocess output with a bare \n split, so CRLF
+  lines never match the header literal -- both ISS-0524 tests fail and the
+  hard-failure message contradicts the raw output it prints
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:30:00Z"
+severity: MINOR
+tags: [windows, crlf, wasm-hang, iss-0524, s6]
+description: >
+  Found during an ad-hoc engine-completeness audit: mix test came back 3450/3452
+  with 2 DETERMINISTIC (not flaky) failures, both in
+  Mix.Tasks.Letflow.Check.TestTest -- test/mix/tasks/letflow_check_test_test.exs:739
+  and :926, i.e. ISS-0524 cases (a) and (c), introduced by commit 8c9c8682.
+
+  ROOT CAUSE: extract_test_list_block/1 and find_discovery_window/2 both located
+  the discovery header by strict equality against the bare literal
+  "Tests that would be executed:" after splitting captured output on \n only.
+  The Windows branch of the fake-mix fixture is a .bat using echo, which emits
+  CRLF, so the split produced "Tests that would be executed:\r", strict equality
+  failed, Enum.drop_while/2 consumed the entire stream, and the parse reported an
+  empty/absent block for output that plainly contained a header and one file:line
+  entry.
+
+  SECOND-ORDER DEFECT: because the diagnostic path shared the flaw, the
+  hard-failure message asserted the raw output "contains no Tests that would be
+  executed: header at all" and then printed that exact header immediately below
+  the claim -- actively misdirecting diagnosis toward the dry-run subprocess
+  rather than the parser.
+
+  FIX (WF03-ISS0529-20260908): added split_output_lines/1 (splits on \n then
+  String.trim_trailing(&1, "\r")) and routed extract_test_list_block/1,
+  find_discovery_window/2 and last_output_lines/2 through it so parser and
+  diagnostics normalize identically. Header/terminator literals, retry policy,
+  300-line window bound and the never-proceed-with-zero discipline all unchanged.
+  §10 direct-action (1 file, lib/mix/tasks/letflow.check.test.ex; split_output_lines/1
+  is private; no migration; not a supervision-tree file; no tenant-data path; no
+  expected-value changes in passing tests).
+
+  VERIFIED: mix test test/mix/tasks/letflow_check_test_test.exs:739 :926 -- 2/2
+  passed (was 0/2). mix compile --warnings-as-errors clean.
+
+affected_files:
+  - lib/mix/tasks/letflow.check.test.ex
+related:
+  - ISS-0524
+  - ISS-0418
+queue_task_id: 529
+github_issue_number: 1072
+resolving_run: WF03-ISS0529-20260908
+resolved_at: "2026-09-08T11:16:48Z"
+status: resolved

@@ -1,0 +1,31 @@
+{
+  "handoff_id": "WF03-ISS0531-20260908-step-02",
+  "run_id": "WF03-ISS0531-20260908",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "CODE-DESIGNER",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF03-ISS0531-20260908/step-02-code-designer.json",
+  "status": "COMPLETED",
+  "priority": "MEDIUM",
+  "created_at": "2026-09-08T11:40:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-133", "REQ-019"],
+    "issue_ids": ["ISS-0531"],
+    "related_handoff_ids": ["WF03-ISS0531-20260908-step-01"],
+    "artifacts_in": ["web/src/auth/tokenUtils.ts", "lib/letflow/identity/tenant.ex"],
+    "artifacts_out": ["lib/letflow/design/iss0531-tenant-slug-resolution-fix.md"],
+    "branch_name": "feature/WF03-ISS0531-20260908",
+    "base_commit": "226605d3"
+  },
+  "task": {
+    "description": "Design the corrected resolveTenantSlug/1 contract handling both ordinary tenants and the pinned default tenant."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Root fix: before applying the existing realm.startsWith('bpm-') ? realm.slice(4) : realm rule, check for the literal reserved realm bpm-default and return it verbatim (no stripping); all other branches (tenant_id-claim priority, try/catch URL parsing, non-bpm-prefixed fallback) unchanged. Hardcode chosen over a pattern rule: verified tenant.ex:73 really does define @default_tenant_slug bpm-default as a hardcoded module attribute, and validate_default_tenant_pinning/1 (lines 147-159) enforces idp_realm_id == bpm-default exactly for that one tenant -- no shape-based rule can distinguish realm bpm-default -> slug bpm-default from realm bpm-acme1 -> slug acme1 purely from string structure (both are bpm- + suffix), the distinguishing fact isn't recoverable from the string itself, so an exact-literal check mirroring tenant.ex's own hardcoded-constant style is correct and non-over-generalizing. Frontend-only hardcode recommended over a backend-signaled approach, per ISSUE-FIXER's diagnosis that minting a tenant_id JWT claim is a multi-file Keycloak-provisioning lift repeating an already-documented unresolved mapper-drift gap (contract-gaps.md:51-70). Known tradeoff explicitly flagged, not silently ignored: the literal bpm-default in tokenUtils.ts must stay in sync with tenant.ex's @default_tenant_slug, a future change to the pinned value would silently drift -- left for REVIEWER/TEST-DESIGNER to decide if a follow-up (shared constant, cross-reference comment) is warranted. Open questions listed, not resolved: whether a tenant literally slugged 'default' colliding with the ordinary-convention realm bpm-default is currently permitted by REQ-019's validations; a code comment cross-referencing tenant.ex should be added at the hardcoded check site. Test cases specified for web/src/auth/__tests__/tokenUtils.test.ts (currently doesn't test resolveTenantSlug at all): (1) realm bpm-default -> slug bpm-default (the regression test), (2) realm bpm-acme1 -> slug acme1 (general-case regression guard), (3) tenant_id claim still takes priority over realm parsing, (4) no iss/tenant_id -> null. Includes an acceptance-criteria-to-design-element mapping table (SS8)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

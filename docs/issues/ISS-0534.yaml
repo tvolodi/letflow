@@ -1,0 +1,48 @@
+id: ISS-0534
+title: "AuthPipeline discards the JIT-provisioning failure reason and logs nothing, so a 500 'user provisioning failed' is undiagnosable from the server's own output"
+discovered_by: ORCH
+discovered_in_run: ADHOC-ENGINE-AUDIT-20260908
+discovered_at: "2026-09-08T07:23:00Z"
+severity: MINOR
+status: open
+tags: [identity, diagnosability, observability]
+description: >
+  Hit while discharging ISS-0296's live-browser proof. Every authenticated API call
+  returned:
+    HTTP 500 {"error":"internal_error","detail":"user provisioning failed"}
+
+  lib/letflow/plugs/auth_pipeline.ex:175 matches {:error, {:provision, _reason}} and
+  discards the reason, and nothing on that path logs it. The server log contained NOT ONE
+  line about the failure -- only a trace_id in the response header, which correlates to
+  nothing that was written down.
+
+  Diagnosis therefore required reconstructing the pipeline by hand in `mix run` --
+  resolving the tenant, deriving the schema, decoding the JWT, building the
+  ClaimMappingConfig, and calling Identity.provision_oidc_user/4 directly -- to surface
+  the actual cause, which was an Ecto changeset error:
+    username: {"has already been taken", [constraint: :unique, constraint_name: "users_username_index"]}
+
+  ROOT CAUSE OF THE UNDERLYING 500 (environmental, not an app defect): the Keycloak
+  container had been recreated with a fresh volume while the Postgres volume persisted, so
+  every seeded user's Keycloak `sub` had changed. JIT provisioning looks users up by
+  (external_id, external_realm), missed, attempted an INSERT, and collided with the
+  surviving row on the `username` unique index. All three seeded users were affected
+  (admin/worker/operator subs all differed from their DB rows). Realigning external_id to
+  the current subs resolved it and the full REQ-133 suite then passed 4/4.
+
+  THE DEFECT worth fixing is diagnosability, not the collision: a 500 on the authentication
+  path should log its reason at error level with the trace_id. Worth considering separately
+  whether this specific case -- external identity missed but username already taken -- should
+  be its own distinct error (a 409-shaped identity-conflict), since it means the IdP and the
+  local user store disagree about who a user is, which is an operator-actionable condition
+  and not an internal error.
+
+  Also worth a doc note: recreating the Keycloak volume without also resetting the Letflow
+  dev DB silently breaks every seeded login this way, and nothing currently warns about it.
+affected_files:
+  - lib/letflow/plugs/auth_pipeline.ex
+related:
+  - ISS-0532
+  - ISS-0296
+queue_task_id: 534
+github_issue: 1077

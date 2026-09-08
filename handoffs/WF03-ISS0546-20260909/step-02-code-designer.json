@@ -1,0 +1,69 @@
+{
+  "handoff_id": "step02-WF03-ISS0546-20260909",
+  "run_id": "WF03-ISS0546-20260909",
+  "workflow_id": "WF-03",
+  "step": "02",
+  "from_agent": "ISSUE-FIXER",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF03-ISS0546-20260909/step-02-code-designer.json",
+  "created_at": "2026-09-09T00:00:00Z",
+  "started_at": "2026-09-09T00:00:00Z",
+  "completed_at": "2026-09-09T00:45:00Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-272", "REQ-273", "REQ-274", "REQ-275", "REQ-280", "REQ-287", "REQ-288", "REQ-289"],
+    "issue_ids": ["ISS-0546"],
+    "requirement_text": {
+      "ISS-0546": "docs/migration/decisions/0020-frontend-architecture.md does not exist -- cited as authority (D1/D1a, D2/D2a, D3/D3a) by REQ-272 through REQ-289 (8 sibling requirements). ISSUE-FIXER's diagnosis (docs/issues/ISS-0546.yaml) confirmed the file is genuinely missing (ls docs/migration/decisions/ tops out at 0019), gathered all 8 citations verbatim (from docs/requirements.yaml for the 2 already-merged REQ-272/273, and from GitHub issue bodies for the 6 not-yet-merged REQ-274/275/280/287/288/289), and synthesized what the citations jointly assert about D1, D2 and D3. The citations are specific and mutually consistent enough to reconstruct the decision's content rather than being an invented/fabricated rationale."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "docs/issues/ISS-0546.yaml",
+      "docs/requirements.yaml",
+      "docs/frontend/design-system.md",
+      "docs/migration/decisions/0019-defer-1c-typed-templates.md",
+      "docs/migration/decisions/0018-branch-protection-posture.md",
+      "lib/letflow/routers/mobile_tenant_config.ex"
+    ],
+    "owned_modules": [
+      "docs/migration/decisions/0020-frontend-architecture.md"
+    ],
+    "branch_name": "feature/WF03-ISS0546-20260909"
+  },
+  "task": {
+    "description": "Design (and, per this record's own convention, directly author -- decision records are the design artefact themselves, there is no separate 'design a decision record' step) docs/migration/decisions/0020-frontend-architecture.md, backfilling it to be CONSISTENT with all 8 citations gathered in docs/issues/ISS-0546.yaml's diagnosis section. Do not invent new architectural content beyond what the citations already assert -- the job is reconstruction from consistent, specific, repeated citations across 8 independently-filed requirements, not fresh design. Where a citation implies something the record must contain but does not give exact wording (e.g. Sequencing steps 1-3, 5-7, which are referenced by number via REQ-280=step4/REQ-288=step8/REQ-289=step9 but never quoted), state plausible content explicitly flagged as RECONSTRUCTED/INFERRED rather than presenting it as verbatim recovered text, OR scope the Sequencing section to only the steps actually evidenced (4, 8, 9) with an explicit note that intervening steps are not reconstructable from available citations. Follow this project's actual decision-record format (see format_reference in ISS-0546.yaml's diagnosis: numbered title, Status/Owner line, ## Question, reasoning sections, ## Decision, ## Recorded decision quoted, ## Review triggers, ## What this record does not decide) -- 0019 and 0018 are the templates to copy the shape of, not the content.",
+    "acceptance_criteria": [
+      "docs/migration/decisions/0020-frontend-architecture.md is created, following the project's decision-record format (title, Status/Owner line, ## Question, ## Decision with D1/D1a, D2/D2a, D3/D3a sub-sections, ## Recorded decision, ## Review triggers, ## What this record does not decide)",
+      "D2/D2a section asserts: build design-system.md's specified primitives into web/src/components/ui/ (extending, not replacing, that directory), migrate pages onto them as SEPARATE later requirements, and explicitly REJECT adopting a third-party component library (Mantine/Radix/shadcn) with the stated rationale (process grounds; hand-built a11y/WCAG 2.1 AA accepted as the cost) -- consistent with REQ-272/274/275/287's verbatim citations",
+      "D3/D3a section asserts: form_schema is a rendering payload only, never a server-side validation authority (variable_schemas/REQ-109 remains sole authority, INV-2-relevant); it is untrusted input to be shape-validated via Letflow.Definitions.JsonSchemaShape.check/1; and it must be served at the pinned definition version per REQ-126's design, never silently substituted -- consistent with REQ-273's verbatim citations",
+      "D1/D1a section asserts: tenant settings/branding uses a CLOSED, named vocabulary (app name, logo URL, a fixed brand-colour set, locales, default_locale), no open-ended blob, because the values reach a pre-authentication public endpoint; states the platform default brand colour is canonically tokens.css's value and names the 3-way #228be6/#2563EB/#0B5FFF inconsistency; requires authored CEL-subset expressions be validated at DEFINITION time via the real Letflow.Engine.Expr grammar; and requires a language-neutral conformance corpus exported from Expr's own tests to exist and be proven correct BEFORE any second-language (TS/Dart) evaluator is built -- consistent with REQ-280/288/289's verbatim citations, explicitly naming mobile_tenant_config.ex's OQ-1 placeholder as the gap D1 closes (REQ-280's 'This record is that pending decision' quote)",
+      "a ## Sequencing section exists, numbered, with steps 4 (tenant settings, REQ-280), 8 (Expr definition-time validation, REQ-288) and 9 (conformance corpus, REQ-289) matching those citations exactly; any other step content is either reconstructed-and-flagged or explicitly left unstated with a note that available citations do not evidence it",
+      "the record's Status/date is dated no later than 2026-09-08 (or states plainly that an exact original date cannot be recovered and gives the reconstruction's own dated-as-of date), consistent with every citing requirement's 'VERIFIED 2026-09-08' and design-system.md sections 7.7/7.8 being 'added 2026-09-08 ... under decision 0020 D2'",
+      "the record does NOT introduce any NEW architectural constraint beyond what is evidenced by the 8 citations in docs/issues/ISS-0546.yaml -- CODE-DESIGN-VALIDATOR should cross-check every assertion in the drafted record against a citation or an explicit RECONSTRUCTED/INFERRED flag",
+      "no requirement's own text in docs/requirements.yaml is modified by this step -- REQ-272/273 already merged referencing 0020 must remain consistent with the backfilled file's content without needing their own text changed; if CODE-DESIGNER finds a citation that CANNOT be made consistent with the others (a true contradiction, not just a gap), that is flagged explicitly rather than silently resolved by picking one side",
+      "handoff status flips to COMPLETED with next_action naming CODE-DESIGN-VALIDATOR"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Step 0.5 registry lookup: searched docs/issues/*.yaml for a prior resolved entry matching 'missing decision record cited as authority'. No match -- ISS-0523/ISS-0533 and REQ-272's own note reference a DIFFERENT prior class (a requirement/issue ENTRY missing from docs/requirements.yaml/docs/issues/, not a decision RECORD missing from docs/migration/decisions/). This is a new defect class for the project; not a recurrence, so no severity escalation under Step 0.5's recurrence rule.\n\nStep 1 diagnosis: confirmed via `ls docs/migration/decisions/` that the highest-numbered record is 0019-defer-1c-typed-templates.md -- no 0020 file exists anywhere in the repo. Gathered all 8 citations of decision 0020: REQ-272 and REQ-273 read directly from the already-merged docs/requirements.yaml (more authoritative than GitHub for those two, per the task's own guidance); REQ-274 (gh issue 1095), REQ-275 (1096), REQ-280 (1097), REQ-287 (1098), REQ-288 (1099) and REQ-289 (1100) fetched from GitHub since none of the six has merged yet (confirmed via `git log --oneline main | grep -iE 'REQ-274|REQ-275|REQ-280|REQ-287|REQ-288|REQ-289'` returning no hits, and `grep REQ-274|...` over docs/requirements.yaml returning no files). Full verbatim citation text, plus a per-citation 'asserts' synthesis line, is recorded in docs/issues/ISS-0546.yaml's diagnosis.citations_gathered.\n\nSynthesis (docs/issues/ISS-0546.yaml's diagnosis.synthesis, full text there): the 8 citations are mutually consistent, not contradictory, and specific enough to reconstruct rather than invent. D2/D2a (frontend, cited by REQ-272/274/275/287) = build design-system.md's primitives into web/src/components/ui/, migrate pages separately, explicitly reject adopting a component library. D3/D3a (form-schema, cited by REQ-273 only) = form_schema is a rendering payload not a validation authority, untrusted input requiring JsonSchemaShape.check/1, served at the pinned version per REQ-126. D1/D1a (backend, cited by REQ-280/288/289) = closed tenant-settings vocabulary + canonical tokens.css brand colour (resolving a real, named 3-way #228be6/#2563EB/#0B5FFF inconsistency), CEL-subset expressions validated at definition time via Letflow.Engine.Expr, and a conformance corpus required before any second-language evaluator. A numbered 'Sequencing' section is also evidenced (REQ-280=step4, REQ-288=step8, REQ-289=step9), implying unfilled steps 1-3/5-7 that no gathered citation quotes -- flagged for CODE-DESIGNER to either reconstruct-and-flag or explicitly scope around.\n\nAlso read docs/frontend/design-system.md's header (Version 0.1, dated 2026-05-20) -- it PREDATES decision 0020 (whose citing requirements are all dated/verified 2026-09-08), so 0020 did not originate design-system.md; it is a later decision that references and extends the pre-existing spec (REQ-287's citation confirms design-system.md sections 7.7/7.8 were 'added 2026-09-08 ... under decision 0020 D2'). Read docs/migration/decisions/0019 and 0018 in full to extract this project's actual decision-record format/template (numbered title, Status/Owner line, ## Question, weighted reasoning sections, ## Decision, ## Recorded decision quoted verbatim, ## Review triggers, ## What this record does not decide) -- recorded as format_reference in docs/issues/ISS-0546.yaml for CODE-DESIGNER to follow.\n\nDid NOT author docs/migration/decisions/0020-frontend-architecture.md itself -- per WF-03 Step 1, that is CODE-DESIGNER's job. docs/issues/ISS-0546.yaml was created (it did not exist locally at filing time, same registration-gap pattern as ISS-0533) with status: open and the full diagnosis; it will be flipped to resolved at this workflow's Step 5 once the record is authored, reviewed and merged.",
+    "artifacts_out": [
+      "docs/issues/ISS-0546.yaml"
+    ],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF03-ISS0546-20260909",
+      "commit_sha_list": [],
+      "remote_branch": null,
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "Route to CODE-DESIGNER for the decision-record backfill"
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

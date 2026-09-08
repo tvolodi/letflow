@@ -120,15 +120,29 @@ requirement's implementation step. See §5 for why this does not conflict with t
 | Sort indicator glyph color | `var(--text-secondary)` (inactive), `var(--text-primary)` (active) |
 | Empty-state icon color | `var(--color-neutral-400)` |
 | Empty-state message text | `var(--text-secondary)`, `var(--text-base)` |
-| Empty-state vertical padding | `var(--space-12)` |
+| Empty-state vertical padding | `var(--space-12)` — **new token, see addendum below** |
 | Row-click cursor (only when `onRowClick` set) | plain CSS value `pointer` — not a color token, no token needed |
 
-No token gap: every value above already exists in `web/src/styles/tokens.css`
-(confirmed by reading the file in full — `--surface-card`, `--border-default`,
-`--text-secondary`, `--text-primary`, `--text-sm`, `--text-base`, `--font-medium`,
-`--space-2`, `--space-4`, `--space-12`, `--color-neutral-50`, `--color-neutral-400`
-are all present, several of them added by REQ-272's addendum). See §4 for the
-explicit confirmation this criterion requires.
+**Token gap found and corrected (rework fix, CODE-DESIGN-VALIDATOR cycle 1):** the
+prior version of this section and §4 claimed `--space-12` already existed in
+`web/src/styles/tokens.css`. Re-verified directly against the file
+(`grep -n "\-\-space-" web/src/styles/tokens.css`): the scale currently stops at
+`--space-6: 24px` — only `--space-1/2/3/4/6` exist. `--space-12` does not. Every
+*other* token in the table above was independently re-checked the same way (see §4
+for the full re-verification) and all of them do exist. Resolution, per this
+project's "any missing token is a recorded design-system.md + tokens.css addendum,
+not a silent literal" rule: **add `--space-12: 48px` to `tokens.css` as an explicit
+addendum**, not substitute an existing smaller token. `--space-12` is not an
+invented value — `design-system.md` §4 already names it in its spacing scale
+(`4, 8, 12, 16, 24, 32, 48, 64` px, i.e. `--space-12` = 48px) — the token layer
+simply never ported it, the same category of gap REQ-272's design doc found and
+fixed for `--space-1/2/3/4/6`/`--text-xs..lg`/`--font-medium`/`--radius-sm/full`/
+`--content-max-width`. Substituting `--space-6` (24px) was considered and rejected:
+24px reads as normal inter-row spacing elsewhere in this same table (`--space-2
+var(--space-4)` for body/header cell padding), so reusing it for the empty state
+would make that state look under-padded relative to a "centered icon + message"
+treatment — 48px is the design-system's own next scale step up, not an arbitrary
+choice. See §4 for the exact `tokens.css` addition text.
 
 ### 1.4 Behavioral mechanism — the four §7.2 behaviors
 
@@ -388,20 +402,57 @@ No token gap: every value above already exists in `tokens.css`.
 
 ## 4. Token-literal confirmation (per AC "zero literal-colour hits", carried from REQ-272's convention)
 
-**No new tokens need to be added to `tokens.css` or `design-system.md` §2 for either
-component.** Every token referenced in §1.3 and §3.2 above (`--surface-card`,
-`--border-default`, `--text-secondary`, `--text-primary`, `--text-sm`, `--text-base`,
-`--font-medium`, `--space-2`, `--space-3`, `--space-4`, `--space-12`,
+**Rework fix (CODE-DESIGN-VALIDATOR cycle 1):** the version of this section
+CODE-DESIGN-VALIDATOR FAILed claimed every cited token already existed, including
+`--space-12`. That was false — re-checked directly (not from memory) via:
+
+```bash
+grep -n -- "--space-" web/src/styles/tokens.css
+```
+
+which returns only `--space-1: 4px`, `--space-2: 8px`, `--space-3: 12px`,
+`--space-4: 16px`, `--space-6: 24px` (lines ~119–123 of the current file).
+`--space-12` is absent. Every other token cited anywhere in this design doc was
+then re-verified the same way — one `grep -oE -- '--[a-z0-9-]+'` pass over both this
+file and `tokens.css`, diffed — and confirmed present with no further gaps. The
+full corrected list:
+
+**Tokens confirmed present in `web/src/styles/tokens.css` (no addendum needed):**
+`--surface-card`, `--border-default`, `--text-secondary`, `--text-primary`,
+`--text-sm`, `--text-base`, `--font-medium`, `--space-2`, `--space-3`, `--space-4`,
 `--color-neutral-50`, `--color-neutral-200`, `--color-neutral-400`, `--radius-sm`,
-`--radius-full`, `--interactive-primary`) already exists in
-`web/src/styles/tokens.css` as read in full for this design — including the
-`--space-*`/`--text-*`/`--font-medium`/`--radius-*` family REQ-272 already ported in
-(lines 111–130 of the current file). Non-color values used above (padding
-magnitudes already expressed via `--space-*`, which are themselves the only
-sizing tokens this design needs) require no new token family. FRONTEND-DEV must
-still run the literal-color grep from the acceptance criteria after building; this
-section states the design's intent, not a post-build confirmation this design step
-cannot perform.
+`--radius-full`, `--interactive-primary` — all present, several added by REQ-272's
+own addendum (the `--space-*`/`--text-*`/`--font-medium`/`--radius-*` family at
+lines 111–130 of the current file).
+
+**Token requiring a new addendum:** `--space-12`, used once, for the DataTable
+empty-state's vertical padding (§1.3). Per this requirement's own instruction ("any
+missing token is a recorded design-system.md + tokens.css addendum, not a silent
+literal") and REQ-272's established precedent for exactly this situation (a value
+`design-system.md` §4 already specifies but `tokens.css` never ported), the fix is
+addendum (b): add the token, not substitute an existing one — see §1.3 for why
+`--space-6` was considered and rejected as an ill-fitting substitute.
+
+**Action for FRONTEND-DEV:** add the following to `web/src/styles/tokens.css`
+inside the existing `:root { ... }` block, near the other `REQ-272 addendum`
+spacing-scale group (`--space-1` through `--space-6`, currently around lines
+118–123), following the same addendum-comment convention:
+
+```css
+/* Spacing scale extension (REQ-274 addendum, subset of design-system.md §4) */
+--space-12: 48px;
+```
+
+No change to `docs/frontend/design-system.md` §4 is required — `--space-12: 48px`
+is already implied by its existing spacing-scale sentence ("Spacing values: `4, 8,
+12, 16, 24, 32, 48, 64` px"); this addendum is `tokens.css` catching up to a value
+the spec already names, identical in kind to REQ-272's own addendum, not a new
+design decision.
+
+No other new tokens are needed for either `DataTable` or `FilterBar`; `design-system.md`
+§2 (colors) needs no change at all. FRONTEND-DEV must still run the literal-color
+grep from the acceptance criteria after building; this section states the design's
+verified intent, not a post-build confirmation this design step cannot perform.
 
 ---
 

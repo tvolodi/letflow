@@ -5424,6 +5424,27 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0527, the follow-up ISS-0526's own design recommended for R-Co's 18-file platform-operator UAT corpus. Reused ISS-0526's already-validated design pattern (lib/letflow/design/iss0526-uat-scenario-corpus-destination.md SS0-SS3) without a fresh CODE-DESIGNER/CODE-DESIGN-VALIDATOR pass, since the destination/header/pipeline_test-handling conventions were identical and already gated. Ported all 18 tests/simulation/scenarios/platform/*.yaml files verbatim into test/fixtures/uat/scenarios/platform/*.yaml, filename platform- prefix stripped matching ISS-0526's per-company stripping convention. Corrected the issue's own '~7' pipeline_test: estimate to the real count of 12 (independently re-confirmed by REVIEWER via grep against the pinned commit), none resolving to an existing spec in either R-Co's or letflow's web/tests/e2e/pipelines/ tree, each annotated with a NOTE (ISS-0527) reusing ISS-0526's wording pattern. Two files flagged for SECURITY-REVIEWER per this issue's own acceptance criteria: attachment-cross-tenant-probe.yaml confirmed a sound, currently-testable UAT target already matching Letflow's implemented INV-1 cross-tenant-404 mechanism (req211-instance-attachments-core.md); sandbox-cross-tenant-probe.yaml found to target R-Co's own unbuilt runtime-agent subsystem (router.ex's Deferred routes table confirms Letflow.Routers.AgentRequests/AgentResponses/AgentEvents don't exist yet) with narrative terminology (workspace/worker/coordinator/claim/release) that could be mis-mapped by a future UAT-RUNNER invocation onto the semantically-unrelated Letflow.SandboxPool module (an internal ephemeral-Postgres-schema pool for process-definition promotion, no tenant-facing API or claim/release-of-tenant-data semantics) -- a clarifying NOTE was applied directly (non-blocking finding, mechanical addition, re-verified as valid YAML post-edit) disclaiming the relationship and marking the scenario BLOCKED/UNBUILT_FEATURE. .claude/agents/uat-runner.md and docs/agents/workflows/WF-05_uat_run.md updated to reflect the platform/ corpus now being present (no longer 'deferred', ISS-0526's own wording had been company-specific) plus a security-severity note on the two probe scenarios. test/fixtures/simulation/ and ISS-0526's previously-ported swiftroute/vortex/meridian directories confirmed completely untouched throughout, independently re-verified by REVIEWER via git diff --stat. Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER (PASS, applied fix) -> REVIEWER (PASS, independently re-verified byte-fidelity for 10 of 18 files and the applied NOTE's factual claims) -> TEST-RUNNER (3431/3433 passed, 2 pre-existing unrelated rustc-absent failures, zero SandboxPoolTest failures confirming ISS-0525's fix continues to hold, confirmed no ExUnit file references the new fixtures since they're consumed by UAT-RUNNER not mix test). Implementation commits ec21d779, 1f48b630. This closes the R-Co UAT-scenario-porting thread opened by ISS-0393 (S7 backlog) -- no further follow-up filed."
+    },
+    {
+      "run_id": "WF03-ISS0535-20260908",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0535",
+      "queue_task_id": 535,
+      "queue_agent_id": "orch-letflow",
+      "github_issue_number": 1078,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/issues/ISS-0535.yaml",
+        "docs/status/requirement_status.v11.yaml"
+      ],
+      "branch_name": "feature/WF03-ISS0535-20260908",
+      "started_at": "2026-09-08T08:27:06Z",
+      "lock_released_at": "2026-09-08T08:54:47Z",
+      "released_lock": true,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- eb3f33bc merged to main.",
+      "note": "ISS-0535: environment-only fix, no application code change. Root cause confirmed by direct measurement: letflow-2-postgres-1 (shared Postgres, port 5472) had max_connections=100 saturated by letflow-2's idle test pool (~70-80 connections across letflow_test2/3/4), blocking mix ecto.create with FATAL 53300. The original versions_missing=[20260907020001] symptom was the stale-tenant_template class documented in docs/anti-patterns.md, already cleaned up on this host by ISS-0399's run (tenant_template.schema_migrations confirmed to already contain 20260907020001). @tenant_scoped_migration_manifest in lib/letflow/tenant_provisioning.ex confirmed to already include 20260907020001 as its last entry -- no manifest registration gap. Fix: ALTER SYSTEM SET max_connections=300 on letflow-2-postgres-1 (persisted via postgresql.auto.conf inside container volume). Verified: mix test test/letflow/plugs/admission_pipeline_test.exs 8/8 passed post-fix. No producer/validator chain needed (no code change). Merged as PR #1079 (squash, eb3f33bc). Queue task 535 released status:done. GH#1078 already closed by queue release."
     }
   ]
 }

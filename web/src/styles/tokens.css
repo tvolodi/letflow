@@ -131,4 +131,7 @@
 
   /* Content layout (REQ-272 addendum, from design-system.md §4) */
   --content-max-width: 1280px;
+
+  /* Font family (REQ-275 addendum, from design-system.md §3) */
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }

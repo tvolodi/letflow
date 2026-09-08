@@ -236,10 +236,16 @@ Use an 8 px base grid. Spacing values: `4, 8, 12, 16, 24, 32, 48, 64` px.
 ```tsx
 <StatusBadge
   status="ACTIVE"          // string key from above tables
-  domain="instance"        // "definition" | "instance" | "task" | "timer" | "dlq"
+  domain="instance"        // "definition" | "instance" | "task"
   size="sm"                // "sm" | "md" (default md)
 />
 ```
+
+`domain` is limited to the three values with a defined status vocabulary above
+(5.1-5.3). `timer` and `dlq` are not yet covered by this spec — no status
+vocabulary or token mapping is defined for either domain. Add them back to
+this list, alongside their own 5.1-5.3-equivalent status table, once a
+timer- or DLQ-facing page actually needs them (ISS-0545).
 
 ---
 

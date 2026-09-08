@@ -425,6 +425,35 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
+    at: "2026-09-08T10:28:07Z"
+    note: >
+      ISS-0532 resolved via WF03-ISS0532-20260908 (queue task 532, GH#1075),
+      found by a sibling session's live-browser audit (ADHOC-ENGINE-AUDIT-
+      20260908). SPA polled GET /health/ready and GET /api/v1/health,
+      neither served by Letflow -- GET /health/ready's 404 was silently
+      swallowed to false by healthReady()'s error handling, causing a
+      permanent false "Platform is currently unavailable" banner on every
+      authenticated page. ISSUE-FIXER recommended option (b) over porting
+      the real readiness endpoint (premature, requires S6 observability
+      subsystem probes that don't exist yet, would reopen the router's own
+      deliberate non-port decision). FRONTEND-DEV fixed web/-only, zero
+      backend files touched: healthReady() now calls the real GET /health;
+      removed getReadinessSnapshot/toSnapshotFromOk/toSnapshotFromDegraded
+      and AdminHealthSnapshot/Readiness* types (confirmed genuinely dead);
+      HealthDashboardPage.tsx degrades honestly to a LIVE/UNREACHABLE badge
+      plus a plain "not available yet (pending S6)" panel -- explicitly does
+      NOT fabricate database/scheduler status; GET /api/v1/health
+      (confirmed dead code) left untouched as out of scope. New/updated
+      tests prove the fix would fail pre-fix and pass post-fix. Pipeline:
+      ISSUE-FIXER -> FRONTEND-DEV -> REVIEWER (PASS; SECURITY-REVIEWER out
+      of scope) -> TEST-RUNNER (npm run check: 199/199 unit tests + 48/48
+      guard tests passed including a full production build; mix compile
+      --warnings-as-errors clean confirming zero backend impact).
+      Implementation commit d2659d02. ORCH will merge and release queue
+      task 532 status:done.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
     at: "2026-09-08T10:35:55Z"
     note: >
       ISS-0529 resolved via WF03-ISS0530-20260908 (queue task 530, GH#1073).

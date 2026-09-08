@@ -41,4 +41,31 @@ related:
   - REQ-116
 queue_task_id: 532
 github_issue: 1075
-status: open
+status: resolved
+resolution: >
+  Resolved 2026-09-08 via WF03-ISS0532-20260908. ISSUE-FIXER recommended
+  option (b) (point the SPA at the existing GET /health, degrade the admin
+  dashboard rather than fabricate readiness data): option (a) (porting the
+  real readiness endpoint) was judged premature since it requires S6
+  observability subsystem probes that don't exist yet, and would reopen the
+  router's own deliberate non-port decision with no real subsystems to
+  probe. Fixed by FRONTEND-DEV (web/-only, no backend files touched):
+  healthReady() (web/src/api/health.ts) now calls the real GET /health
+  instead of the never-mounted GET /health/ready; useApiConnectivity.ts's
+  contract was unchanged, no edits needed there. Removed
+  getReadinessSnapshot/toSnapshotFromOk/toSnapshotFromDegraded and the
+  AdminHealthSnapshot/Readiness* types, confirmed genuinely dead (zero
+  remaining callers). web/src/pages/admin/HealthDashboardPage.tsx degrades
+  honestly to a LIVE/UNREACHABLE badge from the real health check plus a
+  plain "readiness not available yet (pending S6)" panel -- explicitly does
+  NOT fabricate database/scheduler status, per the diagnosis's own
+  requirement. GET /api/v1/health (healthApi.get, confirmed dead code, zero
+  callers anywhere) was left untouched as explicitly out of scope.
+  docs/frontend/contract-gaps.md's row 15 annotated in place. New/updated
+  tests prove the fix would fail against pre-fix code and pass against it:
+  banner correctly reflects real /health status, dashboard never renders
+  fake data. Pipeline: ISSUE-FIXER -> FRONTEND-DEV -> REVIEWER (PASS;
+  SECURITY-REVIEWER out of scope, no tenant-data path) -> TEST-RUNNER
+  (npm run check: 199/199 unit tests + 48/48 guard tests passed including a
+  full production build; mix compile --warnings-as-errors clean, confirming
+  zero backend impact). Implementation commit d2659d02.

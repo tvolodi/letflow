@@ -639,6 +639,17 @@ history:
       new/unused primitives with no documented current-behavior change. Next:
       route to FRONTEND-DEV for Step Final (git merge).
 
+  - req: REQ-275
+    event: started
+    agent: ORCH
+    at: "2026-09-08T22:04:10Z"
+    note: >
+      WF02-REQ275-20260909 started (queue task 540, GH#1096). Build the Toast and
+      JsonEditor design-system primitives per decision 0020 D2a, group 3 of 3.
+      docs/requirements.yaml entry for REQ-275 was missing until this run's Step 00
+      -- same registration-gap class as REQ-272/ISS-0546. ORCH added the entry
+      (status: in_progress) before proceeding to Step 1 (CODE-DESIGNER).
+
   - req: REQ-274
     event: done
     agent: ORCH
@@ -705,3 +716,26 @@ history:
       existing consumer) and documenting cancelText/isLoading with
       their real defaults. docs/issues/ISS-0547.yaml created and
       resolved. ORCH will merge and release queue task 547 status:done.
+
+  - req: REQ-275
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-08T22:34:05Z"
+    note: >
+      WF02-REQ275-20260909 done (queue task 540, GH#1096). Built Toast (plus the
+      useToast hook in web/src/hooks/) and JsonEditor design-system primitives in
+      web/src/components/ui/, plus a new --font-mono token in web/src/styles/tokens.css,
+      against docs/frontend/design-system.md sections 7.4/7.5 per decision 0020 D2a
+      group 3 of 3 -- zero call sites at end of this requirement, matching REQ-272's
+      and REQ-273's own scope fence. ConfirmDialog (section 7.3) confirmed not
+      rebuilt. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR -> FRONTEND-DEV ->
+      SECURITY-REVIEWER (out of scope, no tenant-data path) -> REVIEWER (PASS) ->
+      TEST-DESIGNER -> TEST-DESIGN-VALIDATOR (PASS) -> TEST-RUNNER -> RELEASE-VALIDATOR
+      (independently re-ran everything, all 7 acceptance criteria confirmed against
+      real code/tests, PASS). Two incidental issues filed during this run, not fixed
+      here: ISS-0547 (GH#1111, ConfirmDialog section-7.3 spec divergence) and
+      ISS-0548 (GH#1112, z-index token-scale tech debt). docs/requirements.yaml
+      flipped in_progress -> done. README.md checked for Toast/JsonEditor/useToast
+      references (none found) and left unchanged -- these are new, unused primitives
+      with no documented current-behavior change, same as REQ-272. Next: route to
+      FRONTEND-DEV for Step Final (git merge).

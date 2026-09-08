@@ -16088,3 +16088,57 @@ requirements:
     depends_on: []
     impl_order: 539  # letflow-queue task id
 
+  - id: REQ-275
+    title: "Build the Toast and JsonEditor design-system primitives against tokens.css (0020 D2a, group 3 of 3)"
+    owner: FRONTEND-DEV
+    status: done
+    stage: S8
+    description: >
+      Third of three sibling requirements building docs/frontend/design-system.md's
+      specified primitives, per docs/migration/decisions/0020-frontend-architecture.md
+      D2. This requirement covers Toast (design-system.md section 7.4, including the
+      useToast hook its spec block imports from '../hooks/useToast') and JsonEditor
+      (section 7.5). VERIFIED 2026-09-08: neither exists under web/src/components/ui/.
+      Re-verify at this requirement's own start, and check web/src/hooks/ for an
+      existing useToast before creating one. Section 7's remaining two components are
+      deliberately NOT in this requirement's scope, for opposite reasons:
+      - ConfirmDialog (section 7.3) ALREADY EXISTS at web/src/components/ui/ConfirmDialog.tsx.
+        Do not rebuild it. If it diverges from section 7.3's stated API (open,
+        onConfirm, onCancel, title, description, confirmLabel, confirmVariant), that
+        divergence is a finding to report, not something to fix under this
+        requirement.
+      - DynamicForm (section 7.6) is served by the already-built
+        web/src/components/forms/DynamicFormRenderer.tsx, whose data source is
+        REQ-273's concern, not a primitive-building one.
+      Toast carries four specified behaviours that are easy to half-implement and each
+      need their own assertion: top-right stacking, auto-dismiss at 4s for
+      success/info and 8s for error with a manual close, a maximum of 4 simultaneous
+      toasts with older ones dropping off, and aria-live="polite" for success versus
+      "assertive" for errors. The aria-live distinction is an accessibility contract
+      (FNFR-03, WCAG 2.1 AA), not a styling detail -- record 0020 D2 notes a11y is the
+      most expensive NFR to satisfy by hand and that hand-building it is the accepted
+      cost of rejecting a component library, so it must actually be asserted rather
+      than assumed. Build in web/src/components/ui/ (and web/src/hooks/ for useToast)
+      against web/src/styles/tokens.css, same rules as REQ-272: no colour literals,
+      and any missing token is a recorded design-system.md + tokens.css addendum.
+      SCOPE FENCE: builds the components and their tests only. Replacing existing ad
+      hoc toast/alert usage in pages is REQ-276..278. DO NOT adopt a component library
+      -- record 0020 D2 rejects that.
+
+      NOTE (added by ORCH 2026-09-09): registered in letflow-queue (task 540) and
+      filed on GitHub (#1096) by a prior discovery session, but this
+      docs/requirements.yaml entry itself was missing until ORCH added it at
+      WF02-REQ275-20260909's Step 00 -- same registration-gap class as REQ-272,
+      ISS-0445/0523/0533/0546. Content above is verbatim from the queue task's own
+      description field.
+    acceptance_criteria:
+      - "web/src/components/ui/Toast.tsx and the useToast hook exist, and useToast exposes success, error and warning as design-system.md section 7.4's spec block calls them, including the second { description } argument shown on the error example -- confirmed by quoting the hook's TypeScript signature next to the spec block"
+      - "each of section 7.4's four stated behaviours has its own test: auto-dismiss timing differing between success (4s) and error (8s) with a manual close on the error, a cap of 4 simultaneous toasts with the oldest dropping off when a fifth arrives, top-right stacking order, and aria-live='polite' on success versus aria-live='assertive' on error asserted against rendered DOM attributes"
+      - "web/src/components/ui/JsonEditor.tsx exists with section 7.5's API (value, onChange receiving (value, isValid), label, height, readOnly), and tests assert its three stated behaviours: an error state for invalid JSON, pretty-printing on blur, and onChange reporting isValid false for malformed input"
+      - "web/src/components/ui/ConfirmDialog.tsx is NOT rebuilt or rewritten by this requirement (confirmed by `git diff --stat`); if its existing API diverges from design-system.md section 7.3, the divergence is reported field by field as a finding, and if it does not diverge that nil result is stated explicitly rather than left as silence"
+      - "a fresh grep for the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/components/ui/Toast.tsx, web/src/components/ui/JsonEditor.tsx and the new hook file returns zero hits, quoted with the command"
+      - "no file under web/src/pages/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: []
+    impl_order: 540  # letflow-queue task id
+

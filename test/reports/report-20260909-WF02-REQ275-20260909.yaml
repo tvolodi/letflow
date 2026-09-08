@@ -1,0 +1,95 @@
+run_id: WF02-REQ275-20260909
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T03:29:00Z"
+branch: feature/WF02-REQ275-20260909
+head_commit: ca65e12d
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - ca65e12d "test(REQ-275): add test coverage for Toast/useToast/JsonEditor primitives"
+    - 6393f472 "feat(REQ-275): add Toast, useToast, JsonEditor design-system primitives"
+    - 07f1ed44 "design(REQ-275): Toast/useToast/JsonEditor design-system primitives (group 3 of 3)"
+    - 1b6baf24 "chore(ORCH): register REQ-275 in requirements.yaml, flip in_progress, log started event [WF02-REQ275-20260909]"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v11.yaml
+    - lib/letflow/design/req275-design-system-primitives-group3.md
+    - web/src/components/ui/JsonEditor.tsx
+    - web/src/components/ui/Toast.tsx
+    - web/src/components/ui/__tests__/JsonEditor.test.tsx
+    - web/src/components/ui/__tests__/Toast.test.tsx
+    - web/src/hooks/__tests__/useToast.test.ts
+    - web/src/hooks/useToast.ts
+    - web/src/styles/tokens.css
+    - web/tests/specs/REQ-275.md
+  note: >
+    Zero files under lib/*.ex, lib/*.exs, or priv/repo/migrations/ -- confirms REQ-275
+    is frontend-only as claimed. lib/letflow/design/req275-design-system-primitives-group3.md
+    is a design doc (markdown), not application code. docs/requirements.yaml and
+    docs/status/* are requirement bookkeeping.
+
+frontend_suite:
+  location: "web/"
+  commands:
+    - command: "npm run type-check"
+      result: PASS
+      output: "tsc -b tsconfig.json -- no errors, no output"
+    - command: "npm run lint"
+      result: PASS
+      output: "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0 -- no errors, no output"
+    - command: "npm test"
+      result: PASS
+      output: |
+        Test Files  42 passed (42)
+             Tests  251 passed (251)
+          Duration  13.67s
+      notes: >
+        Includes the 22 new REQ-275 tests: src/hooks/__tests__/useToast.test.ts (7
+        tests), src/components/ui/__tests__/JsonEditor.test.tsx (9 tests),
+        src/components/ui/__tests__/Toast.test.tsx (6 tests). Two expected stderr lines
+        from StatusBadge.test.tsx (pre-existing, unrelated to this branch) logging
+        fallback-badge warnings for unresolved (domain,status) pairs -- deliberate
+        fallback-path tests, not failures.
+    - command: "npm run guards"
+      result: PASS
+      output: |
+        Test Files  4 passed (4)
+             Tests  48 passed (48)
+        (includes a production `tsc -b && vite build` as part of bundle-scan.spec.ts;
+        build succeeded -- 393 modules transformed, only a pre-existing >500kB
+        vendor-chunk-size advisory, no errors)
+
+backend_suite:
+  ran: false
+  command: "mix compile --warnings-as-errors"
+  result: PASS
+  output: "exit 0, no output (no warnings, no errors)"
+  full_suite_skipped_reasoning: >
+    REQ-275 is frontend-only. `git diff --name-only main...HEAD` (see diff_scope above)
+    confirms zero files under lib/ or priv/repo/migrations/ changed -- only web/ files,
+    one markdown design doc, and requirement-bookkeeping YAML. This session has already
+    run the full `scripts/test_parallel.sh` backend suite multiple times today
+    (immediately prior, for WF02-REQ272-20260908 -- see
+    test/reports/report-20260909-WF02-REQ272-20260908.yaml) with a clean/near-clean
+    result (3451 tests, 9 failures, all structurally attributed to this host's Postgres
+    connection-pool contention, unrelated to any code diff). Given zero backend diff on
+    this branch, a full re-run would not add attribution value beyond the compile
+    sanity check; skipped per this task's explicit judgment-call instruction. If
+    RELEASE-VALIDATOR's independent re-run surfaces backend failures, they should by
+    construction be pre-existing/environmental rather than caused by this branch.
+
+verdict: PASS
+verdict_reasoning: >
+  Frontend suite (the entire scope of REQ-275: Toast, useToast, JsonEditor, 1 new
+  token) is fully green -- type-check clean, lint clean, 251/251 unit tests (including
+  all 22 new tests), 48/48 guard tests, and a clean production build. Backend sanity
+  check (`mix compile --warnings-as-errors`) passes with zero warnings/errors. No
+  application code under lib/ or priv/repo/migrations/ was touched by this branch.
+
+next_action: "Route to RELEASE-VALIDATOR"

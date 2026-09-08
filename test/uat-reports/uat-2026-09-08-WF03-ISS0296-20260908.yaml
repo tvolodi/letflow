@@ -1,0 +1,127 @@
+run_id: WF03-ISS0296-20260908
+date: "2026-09-08"
+agent: UAT-RUNNER
+scope: >
+  REQ-133 AC1-6 re-verification (ISS-0296). REQ-133 was already flipped to
+  `done` in docs/requirements.yaml on 2026-08-26 (commit a91e084c5,
+  WF03-ISS0296-20260826) with its own real Playwright evidence. This run's
+  purpose was to independently re-prove the same six acceptance criteria
+  against the CURRENT checkout (HEAD 226cb9fb on top of base 04ec455f),
+  after ISS-0529..0536 landed (CORS, tenant-slug, health-check, log
+  formatter, sandbox pool, wasm_hang fixes) -- because those fixes were
+  direct blockers of this exact login flow and the 2026-08-26 evidence
+  predates them. Not a stage-7 scenario-corpus run; this is a targeted
+  requirement-acceptance proof, same discipline as WF-05 (real HTTP/real
+  browser, no mocks, verdict = observed state not absence-of-error).
+
+environment:
+  docker:
+    keycloak: "letflow-1-keycloak-1, port 8082->8080, healthy, up 12 days"
+    postgres: "letflow-1-postgres-1, port 5463->5432, healthy, up 4 days"
+  backend: >
+    A pre-existing `mix run --no-halt` process (PID 3945662) had been running
+    continuously since Aug24 -- stale relative to HEAD 226cb9fb (704 commits
+    ahead of that process's likely build). Killed and restarted fresh:
+    `mix compile` (1 file), then `LETFLOW_SECRETS_MASTER_KEY=<fresh
+    openssl rand -hex 32> LETFLOW_DEV_DB_CONFIRMED=1 mix run --no-halt`,
+    backgrounded. Confirmed listening on :4000, GET /health -> 200
+    {"status":"ok"}. (Unrelated warning noise in the log from a stale
+    tenant schema's scheduler poll -- not this login flow's tenant, not
+    investigated further here.)
+  frontend: >
+    `cd web && npm run build` (fresh, not trusting existing dist/) --
+    388 modules, built in 6.17s, 0 errors. `npm run preview -- --port 4173
+    --host localhost`, confirmed `curl http://localhost:4173` -> 200.
+  workarounds_applied:
+    - "used 'localhost' not '127.0.0.1' for E2E_BASE_URL and preview --host (Vite dev binds IPv6-localhost only -- N/A for preview but applied for consistency and because helpers.ts normalizes 127.0.0.1 -> localhost for the IdP URL to match the token issuer)"
+    - "used npm run build && npm run preview (port 4173) rather than npm run dev, avoiding the React 18 StrictMode double-invoke PKCE-state race"
+  keycloak_config: "http://localhost:8082/realms/bpm-default (current docker-compose.yml default, no LETFLOW_KEYCLOAK_PORT override) -- matches web/tests/e2e/helpers.ts's own fallback default, so no .env.local override was needed this run"
+
+test_execution:
+  suite: "web/tests/e2e/oidcf-login.e2e.spec.ts + web/tests/e2e/req133-ac2-ac5.e2e.spec.ts (pre-existing specs from the 2026-08-26 run)"
+  command: "E2E_BASE_URL=http://localhost:4173 BPM_IDP_BASE_URL=http://localhost:8082 npx playwright test tests/e2e/oidcf-login.e2e.spec.ts tests/e2e/req133-ac2-ac5.e2e.spec.ts --reporter=list"
+  result: "9 passed (12.8s), 0 failed"
+  plus: >
+    One ad-hoc, not-committed Playwright spec (written, run, then deleted)
+    to dump PLATFORM_ADMIN's full nav list for direct comparison against
+    AC2's already-logged TASK_WORKER nav list, since the existing spec logs
+    only the worker side.
+
+acceptance_criteria_evidence:
+  AC1_admin_login:
+    verdict: PASS
+    evidence: >
+      TC-OIDCF-03 ("real Keycloak login succeeds and workspace is shown")
+      PASS. Real browser: unauthenticated GET / redirects to
+      http://localhost:8082/realms/bpm-default/protocol/openid-connect/auth
+      with PKCE params (TC-OIDCF-02, also PASS); admin-user/admin-pass
+      submitted on Keycloak's real login form; browser returns to / with
+      the SPA's AppShell rendered (logout-button, user-display-name, Users
+      nav link visible per the spec's own assertions).
+  AC2_worker_narrower_nav:
+    verdict: PASS
+    evidence: >
+      TASK_WORKER (worker-user/worker-pass) nav, observed via
+      page.getByRole('link').allTextContents() after real login:
+      ["My Tasks"] (1 item).
+      PLATFORM_ADMIN (admin-user/admin-pass) nav, same method, same real
+      login flow: ["Instances","My Tasks","Definitions","DLQ","Webhooks",
+      "Users","Groups","Tokens","Audit","Health","Metrics",
+      "Register Tenant","Tenants","Services"] (14 items).
+      Worker nav is a strict subset containing only "My Tasks" --
+      demonstrably narrower.
+  AC3_authenticated_api_call:
+    verdict: PASS
+    evidence: |
+      Request: GET http://localhost:4000/api/v1/identity/users
+      Authorization: Bearer <admin-user JWT from Keycloak password grant>
+      Response: HTTP 200
+      {"items":[
+        {"username":"operator-user","display_name":"Operator User","email":"operator@letflow.local","auth_source":"oidc","status":"active",...},
+        {"username":"worker-user","display_name":"Worker User","email":"worker@letflow.local","auth_source":"oidc","status":"active",...},
+        {"username":"admin-user","display_name":"Admin User","email":"admin@letflow.local","auth_source":"oidc","status":"active",...}
+      ],"next_cursor":null,"count":3}
+      Real seeded users returned, not a stub.
+  AC4_forbidden_403:
+    verdict: PASS
+    evidence: |
+      Request: GET http://localhost:4000/api/v1/identity/users
+      Authorization: Bearer <worker-user JWT from Keycloak password grant>
+      Response: HTTP 403
+      {"status":403,"type":"https://bpm.example.com/problems/forbidden","title":"Forbidden","trace_id":"2df9b615-fd82-4beb-a8f6-d4949d0d681e","detail":"insufficient permissions"}
+      Matches REQ-131's RFC-9457 problem-document shape (status/type/title
+      present). Observed both from the browser context (Playwright
+      `request` fixture, real network call, same origin config as the
+      live app) and independently reproduced via curl for this report.
+  AC5_no_token_in_storage:
+    verdict: PASS
+    evidence: >
+      REQ133-AC5 spec, after a real completed OIDC login (admin-user):
+      page.evaluate(() => Object.keys(localStorage)) -> []
+      page.evaluate(() => Object.keys(sessionStorage)) -> []
+      No JWT-shaped value (three dot-separated base64 segments) found in
+      either storage's values. Consistent with OidcManager's
+      InMemoryWebStorage per FNFR-06.
+  AC6_status_flip:
+    verdict: "N/A -- already done"
+    evidence: >
+      docs/requirements.yaml REQ-133 status was already `done` (flipped
+      2026-08-26, commit a91e084c5, ancestor of this branch's base
+      04ec455f). No requirements.yaml change made this run. The remaining
+      bookkeeping gap this run found and fixed: docs/issues/ISS-0296.yaml
+      still carried `status: open` despite the 2026-08-26 commit message
+      declaring "ISS-0296 closed" -- flipped to `status: resolved` with a
+      resolution_note documenting both the original 2026-08-26 pass and
+      this run's independent re-verification.
+
+overall_verdict: PASS
+notes: >
+  No fabricated passes: every claim above is backed by a quoted real
+  request/response, a real Playwright assertion result, or a real
+  page.evaluate() readback against a live browser session driving a
+  freshly built/served SPA and a freshly restarted backend. No scenario
+  hit the 2026-08-23 flakiness this issue was originally filed for --
+  both documented workarounds were sufficient and no further diagnosis of
+  that flakiness was needed. docs/requirements.yaml was not modified
+  (REQ-133 already done); docs/issues/ISS-0296.yaml was updated to
+  `resolved`.

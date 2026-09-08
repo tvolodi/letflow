@@ -15969,7 +15969,7 @@ requirements:
   - id: REQ-272
     title: "Build the Button, StatusBadge and PageLayout design-system primitives against tokens.css (0020 D2a, group 1 of 3)"
     owner: FRONTEND-DEV
-    status: in_progress
+    status: done
     stage: S8
     description: >
       First of three sibling requirements building docs/frontend/design-system.md's

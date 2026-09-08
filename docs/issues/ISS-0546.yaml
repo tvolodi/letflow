@@ -1,0 +1,294 @@
+id: ISS-0546
+title: "docs/migration/decisions/0020-frontend-architecture.md does not exist -- cited as authority (D1a/D2a/D3a) by REQ-272 through REQ-289"
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ272-20260908
+discovered_at: "2026-09-08T00:00:00Z"
+severity: MINOR
+tags: [documentation, provenance, decision-record, frontend, requirements]
+status: resolved
+resolved_in_run: WF03-ISS0546-20260909
+resolved_at: "2026-09-08T21:49:12Z"
+queue_task_id: 546
+github_issue: 1105
+affected_files:
+  - docs/migration/decisions/0020-frontend-architecture.md
+  - docs/requirements.yaml
+related:
+  - REQ-272
+  - REQ-273
+  - REQ-274
+  - REQ-275
+  - REQ-280
+  - REQ-287
+  - REQ-288
+  - REQ-289
+description: >
+  Discovered by RELEASE-VALIDATOR during WF02-REQ272-20260908 Step 5.
+  docs/migration/decisions/0020-frontend-architecture.md is cited by REQ-272 through
+  REQ-289 (8 sibling requirements, a rollout registered in letflow-queue/GitHub by a
+  prior discovery session on 2026-09-08) as the authority for D1/D1a (backend:
+  expression validation, tenant settings/branding), D2/D2a (frontend: design-system
+  primitives, no component library), and D3/D3a (form-schema: renderer/data-source
+  split). The file does not exist -- decision records only go up to
+  0019-defer-1c-typed-templates.md. This did not block REQ-272 or REQ-273 (both merged;
+  built correctly regardless of the citation), but every sibling requirement in the
+  batch cites the same missing record. This is a documentation/provenance gap, not a
+  code defect: fix direction is to author/backfill the record (likely, given how
+  specific and consistent the citations are) or correct each citation.
+source: >
+  GH#1105 (queue task 546), filed by RELEASE-VALIDATOR at WF02-REQ272-20260908 Step 5.
+scoping_note: >
+  Local docs/issues/ISS-0546.yaml record was missing at filing time -- only the
+  letflow-queue task and GitHub issue existed. Created by ISSUE-FIXER at
+  WF03-ISS0546-20260909's Step 0.5/1, the same registration-gap class already seen with
+  ISS-0445/ISS-0523, ISS-0533 and REQ-272/273 this cycle (per docs/requirements.yaml's
+  own note on REQ-272). NOTE: that prior class is about a requirement/issue *entry*
+  missing from docs/requirements.yaml/docs/issues/ -- this issue itself is a DIFFERENT
+  class: a *decision record* cited as authority is missing from
+  docs/migration/decisions/. Registry lookup (Step 0.5) found no prior resolved entry
+  for a missing-decision-record class; this is a new defect class for this project.
+diagnosis:
+  root_cause: >
+    docs/migration/decisions/0020-frontend-architecture.md was never authored, despite
+    being cited by name (with three sub-decision labels D1/D1a, D2/D2a, D3/D3a) as
+    settled authority across 8 requirements (REQ-272 through REQ-289) filed by a single
+    discovery session on 2026-09-08. `ls docs/migration/decisions/` confirms the
+    highest-numbered record is 0019-defer-1c-typed-templates.md (decided 2026-09-02,
+    recorded 2026-09-05) -- there is no 0020 file, draft or otherwise, anywhere in the
+    repo (confirmed: no file under docs/migration/decisions/ or elsewhere named
+    0020-frontend-architecture.md or containing that exact string as a path).
+
+    The citations are too specific and too mutually consistent to be a single
+    requirement's invented rationale -- three independently-labelled sub-decisions
+    (D1/D1a, D2/D2a, D3/D3a) recur verbatim across 8 requirement bodies filed together,
+    each citing a DIFFERENT clause for a DIFFERENT purpose (frontend primitives vs.
+    backend expression validation vs. tenant settings vs. form-schema), and REQ-280
+    additionally states outright: "Record 0020: 'This record is that pending decision.'"
+    referring to mobile_tenant_config.ex's own moduledoc, which already (independent of
+    this batch, pre-existing code) flags tenant branding as "a deliberate,
+    explicitly-flagged placeholder (design OQ-1) ... pending a future requirement." This
+    is strong evidence a real architecture decision WAS made (verbally/informally, or in
+    a discovery session's own scratch notes that were never promoted to
+    docs/migration/decisions/) and the discovery session that filed REQ-272..289 wrote
+    requirements against that decision's content while never actually creating the
+    decision-record file itself -- a drafting/promotion gap, not a fabrication: the
+    citations are consistent enough to reconstruct, not contradictory or confused.
+
+    Why existing gates didn't catch it: REQ-VALIDATOR (WF-02 Step 1b) checks a
+    requirement's own testability/sizing/depends_on, not whether an external file a
+    requirement CITES actually exists on disk -- there is no cross-check step in WF-01/
+    WF-02 that verifies a cited docs/migration/decisions/ path resolves. REQ-272's own
+    RELEASE-VALIDATOR (WF-02 Step 5, whose job IS closer to this kind of independent
+    re-derivation) is exactly what caught it, on the very first requirement built
+    against the phantom citation -- it just didn't block REQ-272 because none of
+    REQ-272's OWN acceptance criteria actually depended on the file's existence (only on
+    following the constraints the citation described, which it did).
+  citations_gathered:
+    - source: "docs/requirements.yaml REQ-272 (status: done, merged), title"
+      quote: >
+        "Build the Button, StatusBadge and PageLayout design-system primitives against
+        tokens.css (0020 D2a, group 1 of 3)"
+    - source: "docs/requirements.yaml REQ-272 description"
+      quote: >
+        "First of three sibling requirements building docs/frontend/design-system.md's
+        specified primitives, per docs/migration/decisions/0020-frontend-architecture.md
+        D2 (\"Build the specified primitives, then migrate pages onto them\").
+        ... Build them in web/src/components/ui/, which already holds this kind of
+        thing (record 0020 D2: \"this extends that directory rather than inventing a new
+        location\"). ... DO NOT adopt a component library (Mantine/Radix/shadcn) as part
+        of this. Record 0020 D2 rejects that explicitly and on process grounds;
+        reopening it requires a new decision record superseding that clause, not a
+        divergence during implementation."
+      asserts: >
+        D2/D2a = build design-system.md's specified UI primitives in
+        web/src/components/ui/ (extending that existing directory, not a new location),
+        then migrate pages onto them in later requirements; explicitly REJECTS adopting
+        a third-party component library (Mantine/Radix/shadcn) "on process grounds."
+    - source: "docs/requirements.yaml REQ-273 (status: done, merged), title"
+      quote: >
+        'Populate tasks.form_schema at task activation from
+        node.attributes["form_schema"], shape-validated and version-pinned (0020 D3a)'
+    - source: "docs/requirements.yaml REQ-273 description"
+      quote: >
+        "Closes the largest gap record docs/migration/decisions/0020-frontend-
+        architecture.md D3 identifies: a renderer with no data source, and a column
+        with no producer. ... THREE CONSTRAINTS, all from record 0020 D3, none of them
+        optional: 1. THE SCHEMA IS A RENDERING PAYLOAD, NOT A VALIDATION AUTHORITY.
+        ... Server-side validation authority stays with variable_schemas (REQ-109,
+        done). ... 2. form_schema IS UNTRUSTED INPUT. ... 3. VERSION PINNING ALREADY HAS
+        A DESIGN. REQ-126 (done) ships form_id/form_version..."
+      asserts: >
+        D3/D3a = form_schema is a rendering payload only, never a validation authority
+        (server-side authority stays with variable_schemas/REQ-109); it is untrusted
+        input requiring shape-validation via JsonSchemaShape.check/1; and it must be
+        served at the pinned definition version (reusing REQ-126's version-pinning
+        design), not the currently-active definition.
+    - source: "gh issue 1095 (REQ-274, DataTable/FilterBar, not yet merged), body"
+      quote: >
+        "Second of three sibling requirements building docs/frontend/design-system.md's
+        specified primitives, per docs/migration/decisions/0020-frontend-
+        architecture.md D2. ... DO NOT adopt a component library -- record 0020 D2
+        rejects that."
+      asserts: "Same D2 assertion as REQ-272 -- primitives-first, no component library."
+    - source: "gh issue 1096 (REQ-275, Toast/JsonEditor, not yet merged), body"
+      quote: >
+        "Third of three sibling requirements building docs/frontend/design-system.md's
+        specified primitives, per docs/migration/decisions/0020-frontend-
+        architecture.md D2. ... record 0020 D2 notes a11y is the most expensive NFR to
+        satisfy by hand and that hand-building it is the accepted cost of rejecting a
+        component library, so it must actually be asserted rather than assumed. ...
+        DO NOT adopt a component library -- record 0020 D2 rejects that."
+      asserts: >
+        Extends D2's rationale: rejecting a component library was a deliberate tradeoff
+        that accepted a11y (accessibility, WCAG 2.1 AA) as the most expensive NFR to
+        hand-build, and D2 says so explicitly enough that it must be tested, not assumed.
+    - source: "gh issue 1097 (REQ-280, tenant settings, not yet merged), body"
+      quote: >
+        "Implements step 4 of docs/migration/decisions/0020-frontend-architecture.md's
+        Sequencing. That record explicitly identifies itself as the pending decision the
+        gap was waiting on: lib/letflow/routers/mobile_tenant_config.ex's moduledoc says
+        every tenant currently gets identical locales/default_locale/branding values,
+        'a deliberate, explicitly-flagged placeholder (design OQ-1) ... pending a future
+        requirement that would give tenant branding its own schema/migration/admin UI.'
+        Record 0020: 'This record is that pending decision.' ... WHAT A TENANT MAY
+        SUPPLY IS A CLOSED SET, per record 0020 D1's table: app name, logo URL, and a
+        small fixed set of brand colours for branding; locales and default_locale for
+        locale. ... record 0020 says the platform default colour 'must be ONE value,
+        from tokens.css' and names the standing three-way inconsistency..."
+      asserts: >
+        D1/D1a (tenant-settings half) = a closed, named vocabulary of storable
+        tenant-settings keys (app name, logo URL, a fixed brand-colour set, locales,
+        default_locale) -- no open-ended settings blob; the platform default brand
+        colour must be a single canonical value sourced from tokens.css, resolving a
+        pre-existing three-way inconsistency (tokens.css's --color-brand-600 = #228be6,
+        design-tokens/letflow.tokens.json's #2563EB [superseded by REQ-120], and
+        mobile_tenant_config.ex's @default_branding #0B5FFF). Also has a "Sequencing"
+        section with numbered steps -- REQ-280 is step 4 of it.
+    - source: "gh issue 1098 (REQ-287, PaginationControls, not yet merged), body"
+      quote: >
+        "Build web/src/components/ui/PaginationControls.tsx to the API recorded in
+        docs/frontend/design-system.md section 7.8, added 2026-09-08 alongside section
+        7.7 under decision 0020 D2. Section 8's page template composes PageLayout >
+        FilterBar > DataTable > PaginationControls. REQ-272 builds PageLayout, REQ-274
+        builds DataTable and FilterBar; without this requirement the fourth member of
+        that composition is specified and unbuilt..."
+      asserts: >
+        Same D2 lineage -- confirms design-system.md sections 7.7 (FilterBar) and 7.8
+        (PaginationControls) were added 2026-09-08 specifically "under decision 0020
+        D2," i.e. 0020 (or its drafting) postdates and extends the pre-existing
+        design-system.md (dated 2026-05-20) rather than having originated it.
+    - source: "gh issue 1099 (REQ-288, Expr definition-time validator, not yet merged), body"
+      quote: >
+        "Record docs/migration/decisions/0020-frontend-architecture.md Sequencing step
+        8 requires that D1a expressions be validated 'at definition time so a bad one
+        fails at authoring, not at render.' ... DO NOT EXTEND OR 'COMPLETE' THE GRAMMAR.
+        ... It is a CEL SUBSET by decision, not by omission..."
+      asserts: >
+        D1/D1a (expression half) = authored expressions (CEL-subset, per the
+        already-closed EXP-102 decision) must be validated at DEFINITION time via the
+        real grammar (Letflow.Engine.Expr), not only via the current structural/lexical
+        check, so authoring-time failures surface at authoring rather than at
+        render/evaluation time. This is Sequencing step 8.
+    - source: "gh issue 1100 (REQ-289, Expr conformance corpus, not yet merged), body"
+      quote: >
+        "Implements the first half of step 9 of docs/migration/decisions/0020-frontend-
+        architecture.md's Sequencing. Record 0020 D1a calls this 'the single most
+        important piece of work this clause creates' and requires that IT PRECEDE ANY
+        CLIENT EVALUATOR: 'Building a second implementation before the corpus exists is
+        how the two drift apart before anyone can measure it.' REQ-293 (TypeScript) and
+        REQ-294 (Dart) both depend on this requirement for exactly that reason."
+      asserts: >
+        D1/D1a (expression half, continued) = a language-neutral conformance corpus
+        exported from Letflow.Engine.Expr's own tests MUST exist and be proven correct
+        BEFORE any second (client-side TypeScript/Dart) expression evaluator is built,
+        specifically to prevent implementation drift. This is Sequencing step 9, with
+        further numbered steps implied (REQ-290 CI drift guard, REQ-291 x-ui vocabulary
+        extension, REQ-293/294 client evaluators, referenced as later dependents).
+  synthesis: >
+    All 8 citations are mutually consistent and jointly describe ONE coherent
+    architecture decision with three clauses (D1, D2, D3), each with an "a" sub-label
+    (D1a, D2a, D3a) apparently marking an implementation/rollout phase of the same
+    clause, plus a numbered "Sequencing" section ordering the rollout (REQ-280 = step 4,
+    REQ-288 = step 8, REQ-289 = step 9 -- implying steps 1-3, 5-7 exist and are covered
+    by requirements outside this batch or not yet filed). To be consistent with every
+    citation above, the backfilled record needs to assert, at minimum:
+
+    D1/D1a (backend): (a) tenant settings/branding is stored as a CLOSED, named
+    vocabulary (app name, logo URL, a fixed brand-colour set, locales, default_locale) —
+    no open-ended blob — because these values reach a pre-authentication public
+    endpoint; (b) the platform default brand colour is canonically tokens.css's value,
+    resolving the pre-existing 3-way #228be6/#2563EB/#0B5FFF inconsistency; (c) authored
+    CEL-subset expressions must be validated at DEFINITION time using the real grammar
+    (Letflow.Engine.Expr), not just structurally; (d) a language-neutral conformance
+    corpus derived from Expr's own tests must exist and be proven correct BEFORE any
+    second-language (TypeScript/Dart) evaluator is built, to prevent drift.
+
+    D2/D2a (frontend): build docs/frontend/design-system.md's already-specified UI
+    primitives into web/src/components/ui/ (extending, not replacing, that directory),
+    THEN migrate existing pages onto them in later requirements -- primitives and
+    migrations are deliberately separate requirements. Explicitly and deliberately
+    REJECTS adopting a third-party component library (Mantine/Radix/shadcn) "on process
+    grounds," accepting hand-built WCAG 2.1 AA accessibility as the known cost of that
+    rejection.
+
+    D3/D3a (form-schema): task.form_schema is a RENDERING PAYLOAD ONLY, never a
+    server-side validation authority (variable_schemas/REQ-109 remains sole validation
+    authority — wiring form_schema into any completion-path check would be an INV-2
+    violation); it is untrusted input requiring shape validation via the existing
+    Letflow.Definitions.JsonSchemaShape.check/1; and it must be served at the
+    definition's PINNED version (reusing REQ-126's form_version design), never silently
+    substituted from the currently-active definition.
+
+    The record also needs a "Sequencing" section with at least 9 numbered steps (REQ-280
+    = step 4, REQ-288 = step 8, REQ-289 = step 9), and should be dated on or before
+    2026-09-08 (every REQ-27x/28x citing it carries "VERIFIED 2026-09-08" and
+    design-system.md's sections 7.7/7.8 are stated as "added 2026-09-08 ... under
+    decision 0020 D2").
+  format_reference: >
+    docs/migration/decisions/0019-defer-1c-typed-templates.md (most recent prior
+    record) establishes this project's actual decision-record convention: a numbered
+    title (`# NNNN — <short title>`), a `Status: decided (<disposition>, <date>).
+    Owner: <who>` line, a `## Question` section stating what was asked and by whom, one
+    or more numbered/weighted reasoning sections, a `## Decision: **VERDICT**` section
+    (quoting the actual filed/source text verbatim where one exists, not paraphrased),
+    a `## Recorded decision (...), quoted` block, a `## Review triggers` section naming
+    what would reopen the decision, and a `## What this record does not decide` section
+    scoping it explicitly. 0018-branch-protection-posture.md follows the same shape
+    (Status/Owner line, `## Question`, `## Decision`). CODE-DESIGNER should follow this
+    same template for the backfilled 0020 record rather than inventing a new one.
+  what_this_step_did_not_do: >
+    Per WF-03 Step 1, this diagnosis does NOT author docs/migration/decisions/0020-
+    frontend-architecture.md itself -- that is CODE-DESIGNER's Step 2 job, informed by
+    the citations and synthesis above. No file under docs/migration/decisions/ was
+    created or modified by this step.
+resolution_note: >
+  Resolved by backfilling docs/migration/decisions/0020-frontend-architecture.md, the
+  missing decision record cited as authority (D1/D1a, D2/D2a, D3/D3a) by REQ-272..289.
+  CODE-DESIGNER authored the record from the 8 citations gathered in this issue's
+  diagnosis, covering D1/D1a (backend: CEL-subset expression validation at definition
+  time via Letflow.Engine.Expr, plus a language-neutral conformance corpus required
+  before any second-language evaluator; tenant settings/branding as a closed, named
+  vocabulary with the platform default brand colour canonically sourced from
+  tokens.css, resolving the pre-existing 3-way #228be6/#2563EB/#0B5FFF drift), D2/D2a
+  (frontend: build design-system.md's specified UI primitives into
+  web/src/components/ui/, extending rather than replacing it, then migrate pages onto
+  them in later requirements; explicit, deliberate rejection of a third-party
+  component library on process grounds, accepting hand-built WCAG 2.1 AA a11y as the
+  known cost), and D3/D3a (form-schema: task.form_schema is a rendering payload only,
+  never a validation authority -- variable_schemas/REQ-109 remains sole validation
+  authority; untrusted input requiring JsonSchemaShape.check/1; served at the pinned
+  definition version per REQ-126's design), plus a numbered Sequencing section
+  (REQ-280 = step 4, REQ-288 = step 8, REQ-289 = step 9).
+
+  CODE-DESIGN-VALIDATOR independently fidelity-checked every specific factual claim in
+  the drafted record -- including the brand-colour 3-way drift and the exact D2/D3
+  text -- against the real code (tokens.css, mobile_tenant_config.ex,
+  JsonSchemaShape) and already-merged requirement text, and passed it. REVIEWER
+  passed it: no contradiction with any other decision record, and the backfill
+  framing is transparent, matching this project's own precedent (0019 was likewise
+  dated after its actual decision date). The record carries its own provenance
+  section stating plainly that it is a reconstructed backfill, not a
+  contemporaneously-authored record.
+
+  No ELIXIR-DEV/FRONTEND-DEV/SECURITY-REVIEWER/TEST-DESIGNER steps were needed -- this
+  was a docs-only fix with no code change and no executable surface.

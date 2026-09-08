@@ -5569,6 +5569,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-273 (queue task 538, GH#1094), one of the newly-surfaced REQ-272..289 backlog batch: populates tasks.form_schema at task activation from node.attributes[\"form_schema\"], closing decision record 0020 D3's gap of a renderer (web/src/components/forms/DynamicFormRenderer.tsx, already built) with no data source and a column (lib/letflow/engine/task.ex's form_schema field, already declared) with no producer. Not yet in docs/requirements.yaml when claimed (queue-only, task_type: requirement) -- ORCH mirrored the full queue task content into a new REQ-273 entry before dispatching, since the queue description was already fully self-contained (8 ACs, 3 constraints, a scope fence). Design (lib/letflow/design/req273-form-schema-activation.md) needed zero rework cycles: reuses Letflow.Definitions.JsonSchemaShape.check/1 directly for shape validation (no hand-rolled predicate), achieves version-pinning via TaskActivation's existing write-once instance_definition_snapshots-derived graph (zero new machinery, unlike REQ-126 which needed a new read), and keeps form_schema strictly a rendering payload -- explicitly never wired into Letflow.Engine.VariableMerge or any completion-path check (INV-2). insert_attrs/4's return shape changed from a bare map to {:ok, map()} | {:error, {:invalid_form_schema, node_id, reason}}, aborting the whole Multi.run/3 transaction on a malformed schema (zero tasks row written) -- both call sites (task_activation.ex's own, and sub_process.ex's) updated to match. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV (152 tests passed on first pass) -> SECURITY-REVIEWER (PASS -- INV-1/INV-2/INV-8 all independently re-derived, not trusted from the design doc) -> REVIEWER (PASS -- confirmed all insert_attrs/4 call sites updated via grep, tests genuinely comprehensive not superficial, one non-blocking flag: docs/migration/decisions/0020-frontend-architecture.md, cited by the requirement and design doc, does not actually exist in repo history; the behavior itself is independently correct regardless, worth a documentation follow-up) -> TEST-RUNNER (3473/3475 passed, 2 pre-existing rustc-absent failures unrelated to this branch; flagged a mix format gap on the two new test files, which ORCH fixed directly as a trivial follow-up commit and re-verified clean). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this project's established precedent, endorsed explicitly by REVIEWER's own independent check of test quality. Implementation commit 3860abe2, format-fix commit 4198125c."
+    },
+    {
+      "run_id": "WF03-ISS0545-20260908",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0545",
+      "queue_task_id": 545,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1102,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/frontend/design-system.md"
+      ],
+      "branch_name": "feature/WF03-ISS0545-20260908",
+      "started_at": "2026-09-08T19:56:25Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Direct-action §10 fix -- merge pending.",
+      "note": "ISS-0545 (queue task 545, GH#1102), a MINOR spec-gap REVIEWER discovered mid-review of a still-in-flight sibling run (WF02-REQ272-20260908, not yet merged): docs/frontend/design-system.md 5.4 advertised StatusBadge's domain prop as accepting timer and dlq, but sections 5.1-5.3 (the spec's only status-to-token tables) define vocabulary for definition/instance/task only -- timer and dlq had no designed status vocabulary anywhere in the document. REQ-272's own StatusBadge.tsx already handles the gap defensively (neutral non-throwing fallback + dev-only console.warn), so nothing was broken in practice; this was a spec-overpromise, not a code defect. Direct-action §10 fix (single file, no new public function/module/spec, no migration, not a supervision-tree file, not a tenant-data path, no test-asserted-behavior change): narrowed 5.4's documented domain values to the three domains with real status tables, and left an explicit note directing whoever eventually builds a timer- or DLQ-facing page to add the domain and its own 5.1-5.3-equivalent status table back together, rather than inventing a vocabulary speculatively with no consuming page to validate it against. docs/issues/ISS-0545.yaml created (did not previously exist) and resolved. No code touched; REQ-272's own fallback behavior is unaffected either way. Implementation commit 5bedec95."
     }
   ]
 }

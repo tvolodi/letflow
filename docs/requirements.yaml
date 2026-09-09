@@ -17072,7 +17072,7 @@ requirements:
     title: Extend the x-ui vocabulary with visible_when, computed and cross-field validation in Expr's grammar, validated at definition time (0020 D1a step 8, part 2 of 2)
     owner: ELIXIR-DEV
     impl_order: 561  # letflow-queue task id
-    status: pending
+    status: in_progress
     stage: S8
     description: >
       Implements the second half of step 8 of

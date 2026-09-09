@@ -1,0 +1,55 @@
+{
+  "handoff_id": "8f1e2a3c-1b4d-4e5a-9c2f-000000000002",
+  "run_id": "WF02-REQ277-20260909",
+  "workflow_id": "WF-02",
+  "step": "00b",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF02-REQ277-20260909/step-00b-rebase-reverify.json",
+  "created_at": "2026-09-09T12:10:00Z",
+  "started_at": "2026-09-09T12:10:00Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-277"],
+    "requirement_text": {
+      "REQ-277": "Second of three sibling page-migration requirements implementing docs/migration/decisions/0020-frontend-architecture.md D2b. Split by page directory on the same basis REQ-142..145 split REQ-141. This requirement covers web/src/pages/definitions/ and web/src/pages/dlq/. MEASURED SCOPE 2026-09-08: definitions/ 2 of 3 files, 105 occurrences; dlq/ 2 of 3 files, 96 occurrences -- 201 occurrences combined, counted by running the literal-colour guard's own regex (web/tests/guards/forbidlist.ts's hex/rgb/hsl alternation) over web/src/pages/definitions and web/src/pages/dlq --include='*.tsx' --include='*.ts'. Re-verify at this requirement's own start since counts drift. Both halves of the migration, in one pass per file: replace each hand-rolled table, button, badge, layout wrapper and toast with the corresponding primitive from REQ-272/274/275, and replace every remaining colour literal with the matching var(--token-name) from web/src/styles/tokens.css. Record 0020: \"A tenant's brand colour cannot reach a hard-coded literal\" -- this is a precondition for REQ-283's theming, not a cleanup. Note that dlq/ and definitions/ both render JSON payloads; web/src/components/ui/JsonDiffView.tsx already exists and REQ-275 adds JsonEditor. Establish which of the two (if either) each existing JSON display should become, and state the answer -- do not leave a third hand-rolled JSON renderer in place unexamined. If a page needs a colour design-system.md's palette does not cover, that is a design-step addendum, not a silent invention. DO NOT weaken, broaden or edit web/tests/guards/forbidlist.ts under this requirement -- the pages/ exemption stays exactly as it is until REQ-279 deletes it. This requirement is independent of REQ-276 and REQ-278 -- it touches only definitions/ and dlq/ and does not need either landed first or after."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["8f1e2a3c-1b4d-4e5a-9c2f-000000000001"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ277-20260909/step-00-git-setup.json",
+      "lib/letflow/design/req277-page-migration-definitions-dlq.md"
+    ],
+    "owned_modules": ["web/src/pages/definitions/", "web/src/pages/dlq/", "web/src/styles/tokens.css", "docs/frontend/design-system.md"]
+  },
+  "task": {
+    "description": "This branch (feature/WF02-REQ277-20260909) is a genuinely prior WF-02 run for REQ-277 that ORCH has confirmed reached DOC-UPDATER but never Step Final -- see handoffs/WF02-REQ277-20260909/step-00-git-setup.json's result.summary for the full investigation (read it first). PR #1137 is already open for this branch; do not open a duplicate. Your job now is to bring this stale branch current and independently re-verify it, not to redo the implementation.\n\n1. You are already on branch feature/WF02-REQ277-20260909, which is 14 commits behind main (last common ancestor b2f1443, main has since merged REQ-278, REQ-280..286, decision-0023, and an S10 stage addition). Fetch origin main and rebase onto it: `git fetch origin main && git rebase origin/main`. Expect a textual conflict in docs/requirements.yaml (this branch's DOC-UPDATER commit only touches REQ-277's status line and a status-history append; main's intervening commits touch unrelated lines and add the S10 stage block) -- this should be a clean, non-overlapping resolution: keep BOTH sides' changes (main's S10 addition and REQ-278/280-286 changes, AND this branch's REQ-277 status:done flip plus its own status-history append). Read the actual conflict markers per GIT_MERGE.md's rebase-conflict-handling section (note --ours/--theirs are INVERTED during rebase vs merge) rather than guessing. If docs/status/*.yaml also conflicts, apply the same non-overlapping-append resolution.\n2. After the rebase completes cleanly, verify no file outside REQ-277's owned_modules (web/src/pages/definitions/, web/src/pages/dlq/, web/src/styles/tokens.css, docs/frontend/design-system.md, lib/letflow/design/req277-page-migration-definitions-dlq.md, docs/requirements.yaml, docs/status/) differs from main: `git diff main --stat` after rebase should show ONLY those paths (plus this run's own handoffs/WF02-REQ277-20260909/ files).\n3. Re-verify the requirement's own acceptance criteria still hold against the rebased tree -- re-run the literal-colour guard regex scoped to web/src/pages/definitions/ and web/src/pages/dlq/ and confirm zero unjustified hits, and confirm web/tests/guards/forbidlist.ts is still byte-identical to main's copy (this requirement must not touch it).\n4. Run the four gates from web/, quoting real output: `npm run type-check && npm run lint && npm test && npm run guards`. This branch's PR body claims 284/284 unit tests and 48/48 guard tests passed before -- re-confirm on the rebased tree, do not assume the old numbers still hold.\n5. Run `mix letflow.check` (or at minimum `mix compile --warnings-as-errors` and `mix letflow.check_deferral_staleness` specifically) to confirm the backend gate that was failing on the stale PR (REQ-279's blocked-by:REQ-277 deferral going stale) is now resolved by the rebase -- it should be, since after rebasing this branch's own docs/requirements.yaml will match main's up to this branch's own REQ-277 status:done change, and REQ-279's deferral note references REQ-277 by id, not by a snapshot, so once this branch's tip literally contains 'REQ-277: done' the same way main will after this merges, the check should evaluate consistently. If it still fails, diagnose why before reporting PASS.\n6. Push the rebased branch: plain `git push origin feature/WF02-REQ277-20260909` will be rejected non-fast-forward (expected, since rebase rewrites every commit) -- use `git push --force-with-lease origin feature/WF02-REQ277-20260909` per GIT_MERGE.md step 6's authorization (this is your own run's own branch, explicitly authorized).\n7. Complete this handoff with real command output for every step above, not a claim. Do not touch REVIEWER/SECURITY-REVIEWER/TEST-DESIGN-VALIDATOR/TEST-RUNNER/RELEASE-VALIDATOR's own jobs -- ORCH will dispatch fresh instances of those next since none of their prior verdicts (claimed only in PR #1137's body, with zero corresponding handoff files ever committed) can be trusted as independent verification per core-directives.md's producer/validator rule. Your job here is exactly: rebase clean, confirm scope, confirm the 4 frontend gates and the backend deferral-staleness check pass on the rebased tree, push.",
+    "acceptance_criteria": [
+      "git rebase origin/main completes with all conflicts resolved by composing both sides, not discarding either",
+      "git diff main --stat (post-rebase) touches only REQ-277's owned_modules plus this run's own handoffs/ and docs/requirements.yaml/docs/status/ entries",
+      "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted",
+      "mix letflow.check_deferral_staleness (or full mix letflow.check) passes on the rebased tree",
+      "git push --force-with-lease origin feature/WF02-REQ277-20260909 succeeds"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "PENDING dispatch — not yet actioned by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ277-20260909",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ277-20260909",
+      "push_status": "skipped",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1137",
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

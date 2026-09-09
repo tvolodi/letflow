@@ -1105,6 +1105,90 @@ defmodule Letflow.Definitions.GraphTest do
   end
 
   # ---------------------------------------------------------------------
+  # validate_node_attributes/1 -- CHK-20 (REQ-291): HUMAN_TASK form_schema
+  # x-ui logic keys, delegated to Letflow.Definitions.FormSchemaExpressions.
+  # Full algorithmic coverage (all 4 violation codes, scope rule, cycle
+  # detection) lives in test/letflow/definitions/form_schema_expressions_test.exs
+  # -- this describe block proves the wiring itself: that CHK-20 actually
+  # calls the delegate from inside validate_node_attributes/1, and that it
+  # is scoped to HUMAN_TASK nodes only.
+  # ---------------------------------------------------------------------
+
+  describe "validate_node_attributes/1 -- CHK-20: HUMAN_TASK form_schema x-ui logic, wiring proof" do
+    test "a HUMAN_TASK node with a well-formed form_schema x-ui logic key passes validation" do
+      attributes = %{
+        "role" => "manager",
+        "form_schema" => %{
+          "type" => "object",
+          "properties" => %{
+            "amount" => %{"type" => "number"},
+            "note" => %{"type" => "string", "x-ui" => %{"visible_when" => "amount > 0"}}
+          }
+        }
+      }
+
+      g = graph([attr_node("h1", :HUMAN_TASK, attributes)], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+
+    test "a HUMAN_TASK node with an invalid x-ui expression -- the delegate's violation appears in validate_node_attributes/1's result" do
+      attributes = %{
+        "role" => "manager",
+        "form_schema" => %{
+          "type" => "object",
+          "properties" => %{
+            "note" => %{"type" => "string", "x-ui" => %{"visible_when" => "amount > (1000"}}
+          }
+        }
+      }
+
+      g = graph([attr_node("h1", :HUMAN_TASK, attributes)], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert :form_schema_expression_invalid in codes(result)
+    end
+
+    test "a HUMAN_TASK node with a computed-field cycle -- surfaces :form_schema_computed_field_cycle" do
+      attributes = %{
+        "role" => "manager",
+        "form_schema" => %{
+          "type" => "object",
+          "properties" => %{
+            "fieldA" => %{"type" => "string", "x-ui" => %{"computed" => "fieldB"}},
+            "fieldB" => %{"type" => "string", "x-ui" => %{"computed" => "fieldA"}}
+          }
+        }
+      }
+
+      g = graph([attr_node("h1", :HUMAN_TASK, attributes)], [])
+
+      result = Graph.validate_node_attributes(g)
+      assert result.valid == false
+      assert codes(result) == [:form_schema_computed_field_cycle]
+    end
+
+    test "a non-HUMAN_TASK node carrying a form_schema-shaped attribute is never checked by CHK-20 (no-op on other types)" do
+      attributes = %{
+        "form_schema" => %{
+          "type" => "object",
+          "properties" => %{
+            "note" => %{"type" => "string", "x-ui" => %{"visible_when" => "amount > (1000"}}
+          }
+        }
+      }
+
+      g = graph([attr_node("sp1", :SUB_PROCESS, attributes)], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+
+    test "a HUMAN_TASK node with no form_schema attribute at all is valid ('form_schema' is optional at this check)" do
+      g = graph([attr_node("h1", :HUMAN_TASK, %{"role" => "manager"})], [])
+      assert Graph.validate_node_attributes(g) == %{valid: true, violations: []}
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # REQ-288 -- CHK-17 grammar tightening. check_cel_syntax/1 now routes
   # through Letflow.Engine.Expr.translate_cel_to_expr/1 -> parse_strict/1
   # instead of valid_cel_syntax?/1. See

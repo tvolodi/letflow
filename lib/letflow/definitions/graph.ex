@@ -61,6 +61,17 @@ defmodule Letflow.Definitions.Graph do
   optional `interface` attribute — see that module's moduledoc for the full
   SPC-02 contract and the explicit SPC-01-out-of-scope statement.
 
+  ## HUMAN_TASK form_schema x-ui logic check (CHK-20, REQ-291)
+
+  CHK-20 (`check_form_schema_expressions/1`, REQ-291) delegates to
+  `Letflow.Definitions.FormSchemaExpressions` for a HUMAN_TASK node's
+  optional `form_schema` attribute's `x-ui.visible_when`/`x-ui.computed`/
+  `x-ui.cross_field_validation` keys — mirroring CHK-18's own shape exactly
+  (filter nodes by type, `flat_map` into the delegate). See that module's
+  moduledoc for the full contract; see
+  `lib/letflow/design/req291-x-ui-logic-keys.md` for the gate-approved
+  design.
+
   ## CHK-17 grammar tightening (REQ-288)
 
   `check_cel_syntax/1` routes each edge's non-blank `condition` through
@@ -204,6 +215,10 @@ defmodule Letflow.Definitions.Graph do
             | :sub_process_interface_schema_invalid
             | :sub_process_interface_duplicate_name
             | :human_task_no_fallback_edge
+            | :form_schema_x_ui_logic_malformed
+            | :form_schema_expression_invalid
+            | :form_schema_expression_out_of_scope
+            | :form_schema_computed_field_cycle
 
     @type t :: %__MODULE__{
             code: code(),
@@ -367,11 +382,13 @@ defmodule Letflow.Definitions.Graph do
   Runs the 4 per-node-type attribute checks (CHK-09..CHK-12, PD-05) plus
   CHK-18 (`check_sub_process_interface/1`, REQ-032 — SUB_PROCESS's optional
   `interface` attribute, delegated to `Letflow.Definitions.SubProcessInterface`)
-  against every node in `graph` and returns every violation found — never
-  short-circuits, same unconditional-concatenation construction as
-  `validate_graph/1`. Does not call `validate_graph/1` and does not verify
-  structural validity as a precondition — see the moduledoc's "Ordering
-  contract" note.
+  plus CHK-20 (`check_form_schema_expressions/1`, REQ-291 — HUMAN_TASK's
+  optional `form_schema` attribute's `x-ui` logic keys, delegated to
+  `Letflow.Definitions.FormSchemaExpressions`) against every node in `graph`
+  and returns every violation found — never short-circuits, same
+  unconditional-concatenation construction as `validate_graph/1`. Does not
+  call `validate_graph/1` and does not verify structural validity as a
+  precondition — see the moduledoc's "Ordering contract" note.
   """
   @spec validate_node_attributes(t()) :: result()
   def validate_node_attributes(%__MODULE__{} = graph) do
@@ -381,7 +398,8 @@ defmodule Letflow.Definitions.Graph do
         &check_service_task_endpoint/1,
         &check_service_task_timeout/1,
         &check_timer_duration/1,
-        &check_sub_process_interface/1
+        &check_sub_process_interface/1,
+        &check_form_schema_expressions/1
       ]
       |> Enum.flat_map(& &1.(graph))
 
@@ -828,6 +846,28 @@ defmodule Letflow.Definitions.Graph do
     |> Enum.filter(&(&1.node_type == :SUB_PROCESS))
     |> Enum.flat_map(fn node ->
       Letflow.Definitions.SubProcessInterface.validate_node_interface(node.id, node.attributes)
+    end)
+  end
+
+  # CHK-20: a HUMAN_TASK node's optional "form_schema" attribute's
+  # x-ui.visible_when/x-ui.computed/x-ui.cross_field_validation keys, if
+  # present, must be well-formed, in-scope Letflow.Engine.Expr expressions
+  # with no computed-field reference cycle -- delegated entirely to
+  # Letflow.Definitions.FormSchemaExpressions (REQ-291). Filtered to
+  # HUMAN_TASK nodes only, the only node type
+  # Letflow.Engine.TaskActivation ever resolves a form_schema for. No-op on
+  # a node of any other type, an absent form_schema, or a form_schema that
+  # fails JsonSchemaShape.check/1 (that failure is reported at activation
+  # time instead, per REQ-273).
+  @spec check_form_schema_expressions(t()) :: [Violation.t()]
+  defp check_form_schema_expressions(%__MODULE__{nodes: nodes}) do
+    nodes
+    |> Enum.filter(&(&1.node_type == :HUMAN_TASK))
+    |> Enum.flat_map(fn node ->
+      Letflow.Definitions.FormSchemaExpressions.validate_node_form_schema(
+        node.id,
+        node.attributes
+      )
     end)
   end
 

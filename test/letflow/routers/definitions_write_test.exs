@@ -973,4 +973,87 @@ defmodule Letflow.Routers.DefinitionsWriteTest do
       assert updated.graph == gateway_graph_map("Approval Gateway")
     end
   end
+
+  describe "REQ-291 -- CHK-20 inherits update/2's uniform 'no diff-against-stored-graph carve-out' disposition" do
+    alias Letflow.Definitions.ProcessDefinition
+    alias Letflow.Repo
+
+    # A HUMAN_TASK node whose form_schema x-ui.visible_when references a
+    # name that is not a declared property of its own form_schema --
+    # rejected by CHK-20 (REQ-291), same "no check before REQ-291 shipped"
+    # story REQ-288's own AC7 test tells for CHK-17/edge conditions: this
+    # graph could never have been constructed pre-REQ-291 through
+    # Definitions.create/2 (CHK-20 would already reject it there too), so
+    # this test proves the forward case instead -- an unrelated node edit
+    # in the same graph is rejected because a *different* node's form_schema
+    # expression is out of scope, establishing the same disposition REQ-288
+    # established for edges, now proven for form-field expressions too.
+    defp human_task_graph_map(gw_label) do
+      %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{
+            "id" => "h1",
+            "node_type" => "HUMAN_TASK",
+            "label" => gw_label,
+            "attributes" => %{
+              "role" => "manager",
+              "form_schema" => %{
+                "type" => "object",
+                "properties" => %{
+                  "note" => %{
+                    "type" => "string",
+                    "x-ui" => %{"visible_when" => "amount_typo > 0"}
+                  }
+                }
+              }
+            }
+          },
+          %{"id" => "e", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e0", "source" => "start", "target" => "h1"},
+          %{"id" => "e1", "source" => "h1", "target" => "e"}
+        ]
+      }
+    end
+
+    defp insert_pre_req291_definition!(schema_name) do
+      attrs = %{
+        name: unique_name("req291-chk20"),
+        version: "1.0.0",
+        graph: human_task_graph_map("Review"),
+        created_by: Ecto.UUID.generate()
+      }
+
+      %ProcessDefinition{}
+      |> ProcessDefinition.create_changeset(attrs)
+      |> Repo.insert(prefix: schema_name)
+    end
+
+    test "an unrelated label-only graph edit is rejected -- the untouched node's pre-existing out-of-scope expression still fires" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req291-chk20a")
+
+      assert {:ok, definition} = insert_pre_req291_definition!(tenant.schema_name)
+      assert definition.status == :draft
+
+      # The offending HUMAN_TASK node's form_schema is left completely
+      # untouched -- only its label changes.
+      unrelated_edit = human_task_graph_map("Review (renamed)")
+
+      assert {:error, {:graph_validation_failed, violations}} =
+               Definitions.update(definition.id, %{graph: unrelated_edit},
+                 prefix: tenant.schema_name
+               )
+
+      assert Enum.any?(violations, fn v ->
+               v.code == :form_schema_expression_out_of_scope and v.message =~ "amount_typo"
+             end)
+
+      # Confirm this is the CHOSEN uniform disposition, not an accident:
+      # the row is untouched in the database (the update never wrote).
+      assert {:ok, unchanged} = Definitions.get_by_id(definition.id, prefix: tenant.schema_name)
+      assert unchanged.graph == human_task_graph_map("Review")
+    end
+  end
 end

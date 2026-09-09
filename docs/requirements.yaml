@@ -16573,7 +16573,7 @@ requirements:
     impl_order: 562  # letflow-queue task id, GH#1151. Registered 2026-09-09 by ORCH once
       # $QUEUE_AUTH_TOKEN became available; depends_on resolved to queue ids [550, 551, 552]
       # (REQ-276/277/278), all satisfied.
-    status: pending
+    status: in_progress
     stage: S8
     description: >
       The completion test for

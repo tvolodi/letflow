@@ -6034,5 +6034,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-302 (queue task 565, GH#1159) answers two independent column-semantics questions for entity storage (split from REQ-295 after REQ-VALIDATOR's second sizing gate) -- new decision record docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md, deliberately its own file (parallel session to REQ-295's 0024, no ordering dependency). Sub-question 1: ON DELETE RESTRICT for promoted FK columns, reconciled against Records.delete_record/2's soft-delete-only application path (records.ex:199-219, :289-298) -- RESTRICT fails loudly against an out-of-band hard DELETE rather than silently losing data; CASCADE/SET NULL/NO ACTION each explicitly rejected. Sub-question 2: per-field search_strategy (:plain default, :fulltext opt-in) for localized text, matching the only existing full-text precedent (Definitions.search/2, ILIKE-only). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: a records.ex citation overshot by 5 lines into an unrelated function, fixed) -> SECURITY-REVIEWER (PASS -- confirmed RESTRICT's actual Postgres failure mode is a loud auditable error, no cross-tenant FK risk) -> REVIEWER (PASS -- confirmed the on_delete: :restrict precedent real though not perfectly uniform, flagged as a non-blocking nit already tracked under ISS-0225; confirmed no accidental coupling between the two sub-questions; confirmed 0023/0024 both untouched). Both gates recorded in 0025's own distinct sign-off sections. No dependents' deferral hatches reference REQ-302."
     }
+,
+    {
+      "run_id": "WF02-REQ296-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-296",
+      "issue_id": null,
+      "queue_task_id": 566,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1160,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/entities/definition/ddl.ex"
+      ],
+      "branch_name": "feature/WF02-REQ296-20260909",
+      "started_at": "2026-09-09T20:35:46Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-296 (queue task 566, GH#1160) implements the DDL-generation half of decision 0023 -- Letflow.Entities.Definition.DDL.generate_table_ddl/2, a pure function returning raw SQL CREATE TABLE text matching REQ-295's execution mechanism. Two independent promotion triggers (FK membership, queried: true); :json never promoted (defence-in-depth). All identifiers validated via an anchored allowlist regex, enum values quote-doubled, decimal precision/scale integer-guarded -- SECURITY-REVIEWER independently traced every value reaching the generated SQL and found no injection vector. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, flagged 2 non-blocking test gaps) -> REVIEWER (PASS, closed those 2 gaps directly, 24 tests total, full suite re-run solo confirming only pre-existing rustc-absent failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (comprehensive coverage independently confirmed twice). Extension point for REQ-301 stated in moduledoc, not implemented."
+    }
   ]
 }

@@ -546,3 +546,53 @@ history:
       broader recovery shape. Full investigation and one genuine
       acceptance-criteria gap found (AC3's null literal kind untracked)
       in handoffs/WF02-REQ289-20260909/step-00-git-setup.json.
+
+  - req: REQ-289
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-09T17:33:49Z"
+    note: >
+      REQ-289 (queue task 544, GH#1100) implemented via
+      WF02-REQ289-20260909: exports a 40-entry language-neutral
+      conformance corpus (priv/expr_conformance/corpus.json) derived
+      from test/letflow/engine/expr_test.exs, covering all 6 comparison
+      operators, and/or/not, all 5 literal kinds (number, string,
+      boolean, null, and the null-asymmetry case added to close AC3's
+      gap), all 5 arithmetic operators, unary negation, dotted variable
+      paths, and all 8 builtins named by
+      Letflow.Engine.Expr.builtin_function_names/0 -- the coverage test
+      is driven by that function's return value, not a hand-copied
+      list. Includes the three divergence-prone semantics record 0020
+      D1a calls out by name: ASCII-only lower/upper, trim's 4-character
+      ASCII whitespace set, and all 3 infinity markers (:infinity,
+      :neg_infinity, :nan) from float division. Distinguishes parse
+      failures from eval failures with dedicated entries of each, and a
+      test asserting they are not interchangeable. Companion schema doc
+      at lib/letflow/design/req289-expr-conformance-corpus.md documents
+      both the JSON encodings chosen for the infinity markers and for
+      failure outcomes, and the corpus location's rationale, recorded
+      in docs/migration/decisions/0020-frontend-architecture.md's
+      amended D1a Implementation record (REVIEWER-signed). Recovery of
+      a genuinely prior, real implementation
+      (origin/feature/WF02-REQ289-20260909, commit dc031e61 / 0fbfb9e9
+      after rebase) that had died before any bookkeeping landed --
+      ORCH's Step 00 force-released the dead queue lock, rebased
+      cleanly onto current main, and found one real acceptance-criteria
+      gap (AC3's null literal kind untracked): closed by commit
+      c7b00ce7, adding corpus entry expr-040 (transcribing
+      expr_test.exs's null-asymmetry comparison case) and retagging
+      expr-039 with lit:null, per a CODE-DESIGN-VALIDATOR-approved
+      design addendum. test/fixtures/simulation/differential_corpus.json,
+      its REQ-209 test, and lib/letflow/engine/expr.ex confirmed
+      unmodified by git diff, per the requirement's own hard scope
+      fence (EXP-102). RELEASE-VALIDATOR independently re-derived and
+      PASSED all 10 acceptance criteria (not trusted from the recovered
+      branch's own prior reports). REQ-290 (CI drift guard + version
+      marker) and REQ-292 (Elixir evaluator wiring) both depend on this
+      corpus and were previously scoped around its absence from
+      docs/requirements.yaml -- see REQ-290's own `depends_on:
+      [REQ-289]` and its blocked-by deferral comment, both of which now
+      have a real, done blocker rather than a placeholder; re-scoping
+      either deferral, or registering REQ-290 in the queue, is left to
+      ORCH's own routing decision, not resolved here. docs/requirements.yaml
+      flipped in_progress -> done.

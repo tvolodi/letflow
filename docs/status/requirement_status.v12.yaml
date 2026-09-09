@@ -271,3 +271,61 @@ history:
       by mix letflow.check_deferral_staleness's own cycle detector on
       the first attempt, fixed before it ever left this machine). ORCH
       will merge and release queue task 556 status:done.
+
+  - req: REQ-284
+    event: done
+    agent: ORCH
+    at: "2026-09-09T09:16:18Z"
+    note: >
+      REQ-284 (queue task 560, GH#1145) implemented via
+      WF02-REQ284-20260909: a closed x-ui.widget vocabulary (5 widgets --
+      rich-text-lite, masked-input, searchable-select, rating, slider)
+      documented in docs/frontend/x-ui-widget-vocabulary.md and
+      registered into web/src/components/forms/fieldRegistry.ts (was an
+      empty Map). Deliberately small set: each covers an interaction
+      design-system.md section 7.6's built-in type-to-input table
+      structurally cannot express, each needs zero backend dependency
+      (a file-upload/remote-search widget was excluded for exactly that
+      reason), and none touch scripting/visibility logic (deferred, not
+      rejected, to decision 0020 D1a's separate track). CODE-DESIGNER
+      surfaced a real gap during design: web/src/components/forms/
+      DynamicFormRenderer.tsx does NOT call FieldFactory/fieldRegistry
+      today -- it has its own duplicate inline switch -- so these
+      widgets are not yet reachable from the real task-completion UI.
+      CODE-DESIGN-VALIDATOR independently confirmed this is real (traced
+      the actual imports/call graph) but correctly judged it a
+      clearly-flagged, scope-compliant limitation rather than a FAIL:
+      none of REQ-284's 8 ACs require that wiring, and the requirement's
+      own scope fence anticipated a pipeline-boundary question. Also
+      required and delivered: a keying-mechanism fix (FieldFactory.tsx
+      switched from looking up fieldRegistry by JSON-Schema type to a
+      new, additive TaskFormField.xUiWidget field, matching decision
+      0020 D3's actual "keyed by an x-ui.widget name" wording) --
+      confirmed additive/minimal by both CODE-DESIGN-VALIDATOR and
+      REVIEWER, not a bigger pipeline change than the scope fence
+      permits. REVIEWER read all 5 widget implementations directly
+      (not just the reported grep) specifically to rule out an
+      injection risk in rich-text-lite (the classic "rich text" trap) --
+      confirmed it's a plain textarea whose toolbar only splices literal
+      markdown-lite token strings into a plain string, never parses or
+      renders anything as HTML; no eval/new Function/dangerouslySetInnerHTML/
+      innerHTML anywhere in any of the 5 widgets. Pipeline: CODE-DESIGNER
+      -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> FRONTEND-DEV ->
+      REVIEWER (PASS -- independently read all 5 widgets for injection
+      risk, confirmed ARIA contracts against actual rendered DOM not
+      just test assertions) -> TEST-RUNNER (backend mix compile
+      confirmed zero impact; frontend gates independently re-run:
+      320/320 unit tests, 48/48 guard tests). SECURITY-REVIEWER out of
+      scope (pure frontend, no tenant-data path). Merge-time bookkeeping:
+      flipping REQ-284 to done expired two sibling blocked-by deferrals
+      (REQ-291, REQ-293). REQ-291 had no live blocker left at all (its
+      other dependency, REQ-288, was already done) -- registered it
+      properly in the queue (task 561, GH#1147) rather than a fake
+      re-scope. REQ-293 still has two live dependencies (REQ-290,
+      REQ-292) -- re-scoped to REQ-290, verified no cycle. Also updated
+      test/mix/tasks/letflow_check_deferral_staleness_test.exs's
+      T-LIVE-DEFERRED-COUNT assertions (9 -> 8, and the exact id list)
+      to match the real, re-derived post-merge state -- caught locally
+      before pushing this time, having been caught by CI itself on the
+      REQ-286 merge two turns ago. ORCH will merge and release queue
+      task 560 status:done.

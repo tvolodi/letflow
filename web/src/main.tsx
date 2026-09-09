@@ -5,9 +5,14 @@ import { RouterProvider } from 'react-router-dom'
 import './styles/tokens.css'
 import { router } from './router'
 import { fetchTenantConfig } from './auth/tenantConfig'
+import { registerBuiltinWidgets } from './components/forms/widgets'
 
 // Pre-warm tenant config cache so OIDC config is ready before the first auth redirect.
 void fetchTenantConfig(window.location.hostname)
+
+// REQ-284 — populate fieldRegistry with the closed x-ui.widget vocabulary
+// before the first render.
+registerBuiltinWidgets()
 
 const queryClient = new QueryClient({
   defaultOptions: {

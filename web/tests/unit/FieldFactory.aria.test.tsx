@@ -133,7 +133,7 @@ describe('GRD-UI-07 — FieldFactory ARIA wiring', () => {
       ariaDescribedBy: string | undefined
       ariaErrorMessage: string | undefined
     } | null = null
-    fieldRegistry.set('org.acme.rating', {
+    fieldRegistry.set('org.acme.rating.widget', {
       renderInput: ({ fieldName, register, ariaRequired, ariaDescribedBy, ariaErrorMessage }) => {
         captured = { ariaRequired, ariaDescribedBy, ariaErrorMessage }
         return (
@@ -159,7 +159,13 @@ describe('GRD-UI-07 — FieldFactory ARIA wiring', () => {
     })
     renderField(
       'rating',
-      { type: 'org.acme.rating', title: 'Rating', required: true, description: 'Pick 1-5' },
+      {
+        type: 'string',
+        xUiWidget: 'org.acme.rating.widget',
+        title: 'Rating',
+        required: true,
+        description: 'Pick 1-5',
+      },
       'Required',
     )
     expect(captured).not.toBeNull()
@@ -175,15 +181,20 @@ describe('GRD-UI-07 — FieldFactory ARIA wiring', () => {
     expect(screen.getByText('Pick 1-5')).toHaveAttribute('id', 'rating-hint')
   })
 
-  it('TC-FF-08: registry miss falls through to defaultBuiltinRenderer (full attr set emitted)', () => {
-    // org.acme.unregistered is not in the registry AND not a builtin
-    // type, so no input renders. The FieldFactory contract here is
-    // "render nothing" (the label is still emitted). We assert that
-    // the registry-miss path doesn't crash and the sentinel still
-    // exists.
-    renderField('miss', { type: 'org.acme.unregistered', title: 'Unregistered', required: true })
-    // The label is rendered even with no input.
+  it('TC-FF-08: registry miss (unrecognised xUiWidget) falls through to the built-in renderer for the field type (REQ-284)', () => {
+    // 'org.acme.unregistered' is not a registered x-ui.widget name. Per
+    // REQ-284 the registry is keyed by xUiWidget, not by JSON-Schema type,
+    // so the field's real type ('string') is untouched and the built-in
+    // switch has a real case to fall into — it renders the field, it does
+    // not error and does not disappear.
+    renderField('miss', {
+      type: 'string',
+      xUiWidget: 'org.acme.unregistered',
+      title: 'Unregistered',
+      required: true,
+    })
     expect(screen.getByText(/Unregistered/)).toBeVisible()
+    expect(screen.getByLabelText(/Unregistered/)).toBeInTheDocument()
     expect(FIELD_REGISTRY_SENTINEL_KEY).toBe('__field_registry_sentinel__')
   })
 

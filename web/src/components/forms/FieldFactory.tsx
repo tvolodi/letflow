@@ -48,8 +48,11 @@ export function renderFormField(
   const ariaDescribedBy = joinHintIds([description ? hintId(fieldName) : null])
   const ariaErrorMessage = ariaInvalid ? errorId(fieldName) : undefined
 
-  // ── Registry routing (CMP-UI-05) ────────────────────────────────────────────
-  const renderer: FieldTypeRenderer | undefined = fieldRegistry.get(fieldType)
+  // ── Registry routing (CMP-UI-05 / REQ-284) ──────────────────────────────────
+  // Keyed by the closed x-ui.widget name (REQ-284 §3), not the JSON-Schema
+  // type: `fieldType` above still drives every built-in-switch branch below,
+  // untouched by an unrecognised or absent xUiWidget (AC4).
+  const renderer: FieldTypeRenderer | undefined = fieldRegistry.get(fieldDef.xUiWidget ?? '')
   if (renderer) {
     const element = renderer.renderInput({
       fieldName,

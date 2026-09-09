@@ -1,0 +1,36 @@
+{
+  "handoff_id": "WF02-REQ284-20260909-step-00",
+  "run_id": "WF02-REQ284-20260909",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "CODE-DESIGNER",
+  "file": "handoffs/WF02-REQ284-20260909/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-09T08:53:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-284"],
+    "issue_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "web/src/components/forms/fieldRegistry.ts",
+      "web/src/components/forms/FieldFactory.tsx",
+      "web/src/components/forms/DynamicFormRenderer.tsx",
+      "docs/frontend/design-system.md",
+      "docs/migration/decisions/0020-frontend-architecture.md"
+    ],
+    "branch_name": "feature/WF02-REQ284-20260909",
+    "base_commit": "8cd1385d"
+  },
+  "task": {
+    "description": "See docs/requirements.yaml REQ-284 in full before starting -- it is fully self-contained with 8 ACs. Two deliverables required: a recorded closed x-ui.widget vocabulary document, and fieldRegistry populated with matching platform code. Hard constraints: no tenant-authored JavaScript/scripting runtime ever, field logic (visible_when/computed/cross-field) is deferred (not rejected) to a separate track citing decision 0020 D1a, unknown widget names must degrade to the built-in renderer not error, client-side validation from form_schema is a UX affordance only (variable_schemas/REQ-109 remains sole server-side authority). Design only -- no implementation code, no literal TypeScript/JSX code blocks beyond bare signatures or verbatim citations of existing real code. Re-verify fieldRegistry.ts/FieldFactory.tsx's current state yourself rather than trusting the description."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF02-REQ284-20260909 created off main @ 8cd1385d. Queue task 560 claimed by letflow-orch (registered by ORCH earlier this session as a merge-time bookkeeping fix for a stale REQ-286 deferral -- see docs/status/requirement_status.v12.yaml's REQ-286 entry for the full story). Already registered in docs/requirements.yaml (status: pending, impl_order: 560)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

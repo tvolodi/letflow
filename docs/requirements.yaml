@@ -16795,7 +16795,7 @@ requirements:
     title: Define the closed x-ui widget vocabulary and populate fieldRegistry with its platform widgets (0020 D1c, forms half)
     owner: FRONTEND-DEV
     impl_order: 560  # letflow-queue task id
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements the forms half of step 6 of
@@ -17065,7 +17065,7 @@ requirements:
   - id: REQ-291
     title: Extend the x-ui vocabulary with visible_when, computed and cross-field validation in Expr's grammar, validated at definition time (0020 D1a step 8, part 2 of 2)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-284 -- REQ-284 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    impl_order: 561  # letflow-queue task id
     status: pending
     stage: S8
     description: >
@@ -17231,7 +17231,7 @@ requirements:
   - id: REQ-293
     title: TypeScript evaluator for the Expr grammar, passing the conformance corpus, wired into DynamicFormRenderer (0020 D1a step 10)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-284 -- REQ-284 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-284 (queue task 560) landed 2026-09-09; REQ-290 and REQ-292 are still pending, and this entry's own depends_on: [REQ-284, REQ-290, REQ-292] makes it unstartable until all three land, so the deferral re-scopes to the next live blocker rather than expiring
     status: pending
     stage: S8
     description: >

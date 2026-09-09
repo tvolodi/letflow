@@ -25,6 +25,25 @@ export interface TaskFormField {
   // UI hints
   placeholder?: string
   widget?: 'textarea' | 'code-editor' | 'rich-text'
+
+  /**
+   * REQ-284 — the closed `x-ui.widget` vocabulary name (see
+   * docs/frontend/x-ui-widget-vocabulary.md). Left as a bare `string` (not a
+   * union of the five documented names) so an unrecognised tenant-supplied
+   * value round-trips to FieldFactory instead of being coerced/dropped by a
+   * type cast — that is what makes the degrade-to-builtin-type behaviour
+   * (AC4) observable at all. `undefined` means "no override; render per
+   * design-system.md §7.6."
+   */
+  xUiWidget?: string
+
+  /**
+   * REQ-284 — companion `x-ui.mask` value, consumed only by the
+   * `masked-input` widget (one of `'phone-us' | 'postal-us' | 'currency-usd'`
+   * per the vocabulary document). Left as a bare `string` for the same
+   * round-tripping reason as `xUiWidget`; ignored by every other widget.
+   */
+  xUiMask?: string
 }
 
 export interface ValidationError {

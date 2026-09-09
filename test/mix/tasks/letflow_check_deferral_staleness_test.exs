@@ -1062,7 +1062,21 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # confirmed live via `MIX_ENV=test mix run --no-start -e` calling
       # File.read!("docs/requirements.yaml") |> audit(), returning
       # deferral_count == 7, stale_count == 0. The detector is unchanged.
-      assert result.deferral_count == 7
+      #
+      # UPDATE (WF02-REQ279-20260909): the count dropped from 7 to 6.
+      # Flipping REQ-279 to done (this requirement -- REQ-276/277/278's
+      # completion test, deleting the literal-colour guard's web/src/pages/
+      # exemption; npm run guards re-verified clean, no violation was
+      # masked) expired REQ-283's `blocked-by: REQ-279` deferral. REQ-283's
+      # other dependency, REQ-281, was already done -- no live blocker left
+      # at all, so ORCH registered it properly (queue task 563, GH#1154)
+      # rather than inventing a re-scope target, the same pattern used for
+      # REQ-284 and REQ-291 earlier this session. That removes REQ-283 from
+      # the deferred set entirely. Net: 7 - 1 = 6. Re-derived, not guessed:
+      # confirmed live via `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 6, stale_count == 0. The detector is unchanged.
+      assert result.deferral_count == 6
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -1074,7 +1088,6 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
                "REQ-223",
                "REQ-224",
-               "REQ-283",
                "REQ-290",
                "REQ-292",
                "REQ-293",

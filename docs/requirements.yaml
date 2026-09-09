@@ -16794,7 +16794,7 @@ requirements:
   - id: REQ-284
     title: Define the closed x-ui widget vocabulary and populate fieldRegistry with its platform widgets (0020 D1c, forms half)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-286 -- REQ-286 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    impl_order: 560  # letflow-queue task id
     status: pending
     stage: S8
     description: >
@@ -16951,7 +16951,7 @@ requirements:
     title: Expose form_schema in the task-detail response, under a security gate (0020 D3, exposure half)
     owner: ELIXIR-DEV
     impl_order: 556
-    status: pending
+    status: done
     stage: S8
     description: >
       REQ-273 populates tasks.form_schema at activation but is explicitly
@@ -17147,7 +17147,7 @@ requirements:
   - id: REQ-292
     title: Server-side re-evaluation of visible_when, computed and cross-field validation on task completion (0020 D1a step 11, the authority half)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-286 -- REQ-286 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    # impl_order: UNREGISTERED -- blocked-by: REQ-291 -- REQ-286 (queue task 556) landed 2026-09-09; REQ-290 and REQ-291 are still pending, and this entry's own depends_on: [REQ-286, REQ-290, REQ-291] makes it unstartable until all three land. Scoped to REQ-291 rather than REQ-290 specifically to avoid a blocked-by cycle: REQ-290's own deferral is separately scoped to REQ-292 (this entry) as a workaround for REQ-289 being absent from this file -- REQ-290 <-> REQ-292 would be a live cycle if this entry also pointed back at REQ-290
     status: pending
     stage: S8
     description: >

@@ -219,3 +219,55 @@ history:
       states explicitly the app ships English-only strings by design and
       translating UI strings is a separate later requirement, per AC7.
       ORCH will merge and release queue task 555 status:done.
+
+  - req: REQ-286
+    event: done
+    agent: ORCH
+    at: "2026-09-09T08:28:43Z"
+    note: >
+      REQ-286 (queue task 556, GH#1129) implemented via
+      WF02-REQ286-20260909: exposes REQ-273's write-once tasks.form_schema
+      column as a 14th key in lib/letflow/routers/tasks.ex's
+      task_detail_map/3 -- response-shaping on a tenant data path, under
+      a security gate against INV-1/INV-2/INV-5. Mechanism: a single
+      Map.put reading task.form_schema directly off the already-fetched,
+      already-scoped struct -- no new query/join. Deliberately scoped to
+      task_detail_map/3 only, not task_list_item_map/2 (no AC exercises
+      list/inbox routes). Version-pinning (AC3) proven automatic rather
+      than built: grepped every changeset touching Letflow.Engine.Task
+      and confirmed only insert_changeset/2 ever casts :form_schema --
+      complete_changeset/2 and assignment_changeset/2 don't, and no
+      fourth changeset or raw Repo.update exists anywhere in the repo --
+      so reading the column back IS reading the pinned value, with
+      nothing to build. CODE-DESIGNER additionally found and fixed a
+      second stale moduledoc reference (a comment above
+      task_list_item_map/2) the requirement's own AC5 didn't name but
+      said the same false thing. SECURITY-REVIEWER named all three
+      invariants explicitly per AC4: INV-1 (tenant isolation) traced
+      end-to-end -- Authorize plug derives prefix server-side from
+      auth_context.tenant_id, never caller input; tasks has no tenant_id
+      column (schema-per-tenant, decision 0006 D2) -- confirming
+      form_schema can never cross tenant boundaries; INV-2 (field
+      authorization) confirmed via the same already-scoped struct, no
+      new fetch path; INV-5 (no oracle) confirmed the not-found branch is
+      untouched, the new Map.put only runs on the success path.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework
+      -- independently re-verified the version-pinning-is-automatic
+      proof and the full cross-tenant leak trace against real source) ->
+      ELIXIR-DEV -> SECURITY-REVIEWER (PASS) -> REVIEWER (PASS --
+      independently reproduced 56/56, confirmed both moduledoc rewrites
+      read consistently with each other) -> TEST-RUNNER (full suite
+      3544/3546 passed, 2 pre-existing rustc-absent failures unrelated).
+      Merge-time bookkeeping: flipping REQ-286 to done expired two
+      sibling blocked-by deferrals (REQ-284 and REQ-292, both scoped to
+      REQ-286). REQ-284's OTHER dependency (REQ-273) was also already
+      done, leaving it with no live blocker at all -- registered it
+      properly in the queue (task 560, GH#1145) rather than inventing a
+      fake re-scope target. REQ-292 still has two live dependencies
+      (REQ-290, REQ-291) -- re-scoped its deferral to REQ-291, not
+      REQ-290, specifically to avoid creating a blocked-by cycle (REQ-290's
+      own pre-existing deferral is separately scoped to REQ-292 itself,
+      as a workaround for REQ-289 being absent from this file -- caught
+      by mix letflow.check_deferral_staleness's own cycle detector on
+      the first attempt, fixed before it ever left this machine). ORCH
+      will merge and release queue task 556 status:done.

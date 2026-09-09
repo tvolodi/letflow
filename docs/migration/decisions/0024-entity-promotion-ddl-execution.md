@@ -515,10 +515,102 @@ current §2 text as written.
 
 ## REVIEWER sign-off
 
-(Pending — filed after this record, per REQ-295's acceptance criteria.
-Scope: whether extending `Letflow.TenantProvisioning` with the DDL-execution
-and dual-write functions in §1–3 fits that module's existing idiom, or
-needs the kind of dedicated supervision/idiom treatment REQ-045's
-process-vs-row decision required; whether the `ColumnPromotion` state
-machine is consistent with this project's other state-machine-shaped
-decision records.)
+**Verdict: PASS.**
+
+**Arity nit fixed.** SECURITY-REVIEWER's re-check flagged the companion
+design doc's §4 as still referencing `backfill_column_promotion/2` after §2
+was fixed to `/1`. Grepped the file: line 129 (§2) defines
+`backfill_column_promotion(promotion_id :: Ecto.UUID.t())` — one argument —
+and line 199 (§4, "What this design does not fix") still read
+`backfill_column_promotion/2`. Confirmed it was really stale (not a second
+genuine argument hiding there — §4's sentence is about the verification
+query inside the function, not about its signature). Corrected `/2` to `/1`
+in `lib/letflow/design/req295-entity-promotion-ddl-execution.md` line 199 as
+part of this review pass — a single arity-number correction, not a
+substantive change, so it did not need to route back to CODE-DESIGNER.
+
+**Idiom fit: extending `Letflow.TenantProvisioning` is the right shape, no
+dedicated supervision review needed.** Read
+`lib/letflow/tenant_provisioning.ex` in full structure (module list via
+`defmodule`/`def`/`defp` grep) and `lib/letflow/application.ex`'s
+supervision tree. `Letflow.TenantProvisioning` is a plain module — no
+`use GenServer`/`Supervisor`/`Agent`, no registered process, not listed
+anywhere in `Letflow.Application`'s `children` list (which only names
+`Letflow.Supervisor.Infrastructure`, `.Pollers`, `.PollersBreaker`, `.Http`).
+Its existing functions (`provision_tenant_schema/1`, `replay_migrations/2`,
+`schema_name_for_tenant/1`) are ordinary `{:ok, _} | {:error, _}`-returning
+functions invoked synchronously by callers, with concurrency arbitrated by
+the per-schema `pg_advisory_xact_lock` pattern, not by process isolation.
+This is exactly the same shape REQ-045 already settled for
+`Letflow.Engine` ("concurrency arbitrated by Postgres row/advisory locks,
+not a supervised process per instance" — see `Letflow.Engine`'s own
+moduledoc and `Letflow.InstanceSupervisor`'s deliberately-empty one). The
+new functions in design doc §2 (`register_column_promotion/4`,
+`run_column_promotion/1`, `run_column_promotion_for_all_tenants/1`,
+`retry_failed_column_promotion/1`, `backfill_column_promotion/1`,
+`activate_column_promotion/1`, `suspend_column_promotion/2`, and the two
+read accessors) are all plain functions of the same shape, reusing the same
+advisory-lock pattern and the same `{:ok, _} | {:error, _}` convention —
+they slot into the existing module without adding a process, a registered
+name, or any change to `Letflow.Application`'s children list. There is no
+REQ-045-style question here because the record never proposes a process in
+the first place; unlike REQ-045 (which had to choose between "process per
+instance" and "row locks" for a *new* subsystem), 0024 is extending a
+module whose row/lock-based idiom is already fixed precedent, and it
+follows that precedent rather than reopening it. No dedicated
+supervision/idiom review is needed beyond this confirmation.
+
+**State machine internally consistent, §1–§4 tell one story.** Traced the
+diagram in the design doc against the decision record's prose:
+`pending -> ddl_applied` (§1, DDL success) gates the dual-write branch
+described in §3 ("From `ddl_applied` onward, the projector's write path...
+dual-writes"); `ddl_applied -> backfilling -> backfilled` (§1/§3) is exactly
+the window `column_promotion_dual_write?/3` returns `true` for (design doc
+§2); `backfilled -> active` is the single transition that flips
+`query_eligible` (§3 step 3, design doc `activate_column_promotion/1`),
+which is the same flag `column_promotion_query_eligible?/3` exposes to
+`Allowlist`. §4's rollback (`suspend_column_promotion/2`) sets
+`query_eligible: false` while leaving `status` at `"active"` — the design
+doc's state diagram calls this out explicitly as not a separate stored
+string ("`suspended` is not a `status` transition away from `active`"),
+matching §4's own text that this is deliberate so the row's history of
+reaching `active` is not lost. The corrective-backfill cycle
+(`active -> backfilling -> backfilled -> active`, repeatable) is stated in
+both the design doc's diagram and 0024 §4's prose identically. No section
+contradicts another; §3's backfill-window reasoning references
+`column_promotion_dual_write?/3` and `column_promotion_query_eligible?/3`,
+both of which now match the fixed single-argument (`promotion_id`-only)
+signatures throughout §2 after `a6517ea1` — confirmed by re-reading the
+full design doc, not just the SECURITY-REVIEWER re-check's report of it.
+
+**Decision-record consistency confirmed.** 0023's additive-only/demotion-
+forbidden rule (0023 lines 73-79, "Demotion is forbidden. A promoted column
+is never dropped...") is respected throughout 0024 §4: rollback is
+allowlist-exclusion (`query_eligible := false`) plus a corrective promotion
+that re-derives *values*, never a schema change to the existing column, and
+a wrong-type column is handled by promoting a new, differently-named column
+rather than narrowing/retyping the old one in place — 0024 states this
+explicitly does not conflict with 0023's rule "which governs DDL shape, not
+row content." 0024 does not reopen the storage shape, the promotion rule,
+or the entity-vs-blob test — its own "What this record does not decide"
+section names this and the text above it is consistent with that scope
+fence. No 0022 bucket/sequencing rule is implicated by this record (0024 is
+platform-infrastructure work, not a pack-specific deliverable, and does not
+touch bucket assignment). `git diff main...HEAD --stat` shows changes
+confined to the two decision docs, the design doc, and
+`docs/requirements.yaml` — no `lib/letflow/entities/`,
+`lib/letflow/tenant_provisioning.ex`, `lib/letflow/tenant_provisioning/`, or
+`priv/repo/migrations/` file is touched, matching REQ-295's own scope fence
+("Implementation. No `lib/letflow/entities/`, `lib/letflow/tenant_provisioning*`,
+or migration file is touched by this record").
+
+**Format sanity check.** Section shape (Question / Decision / Reasoning /
+Consequences / What this record does not decide / sign-off sections) matches
+0022's and 0023's established structure; CODE-DESIGN-VALIDATOR already
+confirmed this in full, no further re-derivation needed here.
+
+This is a design-time verdict, per REQ-295's own framing: it assesses
+whether the proposed mechanism, as now specified (design doc post-fix,
+decision record as written), is idiomatically sound and internally
+consistent — it is. TEST-DESIGNER may proceed once this requirement's other
+gates (if any remain) are satisfied.

@@ -196,7 +196,7 @@ new module — per 0024 §1's reasoning. All return the module's established
   Postgres column type for `column_spec`) — a small, mechanical piece left
   to REQ-296's own implementation.
 - The exact row-count-parity verification query used in
-  `backfill_column_promotion/2` — left to REQ-296, within the contract that
+  `backfill_column_promotion/1` — left to REQ-296, within the contract that
   it must be a real check, not a no-op, before `backfilled` is reached.
 - Batching/chunking for very large entity types under
   `rebuild_projection/2` — 0024's "Cost accepted, not hidden" paragraph

@@ -1,0 +1,117 @@
+run_id: WF02-REQ281-20260909
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T06:16:40Z"
+branch: feature/WF02-REQ281-20260909
+head_commit: effb2747
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - effb2747 "feat(REQ-281): add branding third key to GET /api/tenant-config"
+    - 1fc64f4b "docs(REQ-281): design GET /api/tenant-config's third branding key"
+    - 451ad3a9 "chore(ORCH): WF02-REQ281-20260909 git setup"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - handoffs/WF02-REQ281-20260909/step-00-git-setup.json
+    - lib/letflow/design/req281-tenant-config-branding-key.md
+    - lib/letflow/routers/tenant_config.ex
+    - test/letflow/routers/req078_supporting_routes_test.exs
+    - test/letflow/routers/tenant_config_test.exs
+  note: >
+    Adds a third response key, `branding`, to pre-authentication GET /api/tenant-config,
+    and changes resolve_realm/2's internal return shape in
+    lib/letflow/routers/tenant_config.ex.
+
+static_checks:
+  - command: "mix format --check-formatted"
+    result: FAIL
+    output: |
+      ** (Mix) mix format failed due to --check-formatted.
+      The following files are not formatted:
+
+      lib/letflow/routers/tenant_config.ex
+
+               |
+      215 215  |  defp resolve_realm(slug, host) when is_binary(slug) do
+      216 216  |    case Identity.safe_get_tenant_by_slug(slug, "tenant-config") do
+      217     -|      {:ok, %Tenant{idp_realm_id: realm_id} = tenant} when is_binary(realm_id) and realm_id != "" ->
+          217 +|      {:ok, %Tenant{idp_realm_id: realm_id} = tenant}
+          218 +|      when is_binary(realm_id) and realm_id != "" ->
+      218 219  |        {realm_id, tenant}
+      219 220  |
+    notes: >
+      Real, branch-caused defect: the guard clause on line 217 exceeds the
+      configured line_length and mix format wants it wrapped across two lines.
+      This is in lib/letflow/routers/tenant_config.ex, the file this branch
+      changes (resolve_realm/2 itself). Not environmental -- confirmed by the
+      file being in this branch's diff scope and the offending line being part
+      of the new/changed code. Needs a fix from ELIXIR-DEV (run `mix format`)
+      before merge; do not report this as pre-existing.
+  - command: "mix compile --warnings-as-errors"
+    result: PASS
+    output: "(no output -- clean compile, zero warnings, zero errors)"
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 8
+  result: FAIL (2 known-unrelated failures)
+  output: |
+    partition 1: 584 tests, 0 properties, 2 failures, exit 2
+    partition 2: 364 tests, 2 properties, 0 failures, exit 0
+    partition 3: 382 tests, 0 properties, 0 failures, exit 0
+    partition 4: 415 tests, 1 property, 0 failures, exit 0
+    partition 5: 515 tests, 3 properties, 0 failures, exit 0
+    partition 6: 485 tests, 0 properties, 0 failures, exit 0
+    partition 7: 424 tests, 0 properties, 0 failures, exit 0
+    partition 8: 360 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3529 tests, 6 properties, 2 failures (3533/3535 passed)
+  failures:
+    - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: >
+        `which rustc` and `which cargo` both fail (no such binaries anywhere on
+        this host), yet .tool-versions pins `rust 1.97.1`. The test's own
+        running_rust_raw/0 helper only pattern-matches {output, 0} / _ -> nil
+        around System.cmd, but System.cmd itself raises ErlangError :enoent
+        when the executable does not exist at all (as opposed to exiting
+        non-zero), so the helper's own rescue path is never reached. File is
+        untouched by this branch (last touched by REQ-165 commit 0aa95935,
+        unrelated to tenant-config). Same failure class previously seen and
+        classified identically in report-20260909-WF02-REQ288-20260908.yaml.
+    - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: "Same rustc-absent cause as above, same test file."
+  resolve_realm_coverage: >
+    test/letflow/routers/tenant_config_test.exs and
+    test/letflow/routers/mobile_tenant_config_test.exs (both exercise
+    resolve_realm/2 and GET /api/tenant-config, directly and indirectly) both
+    ran in partition 8, which reported 0 failures, exit 0. No other test file
+    in the suite calls resolve_realm/2 or hits GET /api/tenant-config.
+  cross_check_no_other_regressions: >
+    Only partition 1's log contains any numbered failure block across all 8
+    partition logs; both failures are the rustc-absent CheckToolchainTest
+    cases. No test anywhere else in the 3535-test suite failed.
+
+verdict: FAIL -- one real, branch-caused defect (mix format), suite tests otherwise green modulo known-environmental rustc gap
+verdict_reasoning: >
+  3533/3535 tests pass; the only 2 failures are the known rustc-absent
+  CheckToolchainTest cases (case b, pre-existing/environmental, unrelated to
+  REQ-281). tenant_config_test.exs and mobile_tenant_config_test.exs, which
+  directly exercise the changed resolve_realm/2 return shape and the
+  GET /api/tenant-config endpoint, pass cleanly. mix compile
+  --warnings-as-errors is clean. However mix format --check-formatted FAILS
+  on lib/letflow/routers/tenant_config.ex itself -- a real formatting defect
+  introduced by this branch's changes to resolve_realm/2 (line 217's guard
+  clause exceeds line_length and needs re-wrapping). This is not a false
+  positive and not routable as pre-existing: the file and the exact changed
+  function are in this branch's diff. Do not merge until this is fixed
+  (`mix format lib/letflow/routers/tenant_config.ex` and re-verify).
+next_action: "Route lib/letflow/routers/tenant_config.ex format fix back to ELIXIR-DEV, then re-run TEST-RUNNER before RELEASE-VALIDATOR."

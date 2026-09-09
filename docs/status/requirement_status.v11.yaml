@@ -1086,3 +1086,42 @@ history:
       docs-only closure of a stale issue file whose description
       accurately reflected the code at discovery time but predates a
       fix that has since landed. Direct-action §10 (single file).
+
+  - req: REQ-278
+    event: done
+    agent: ORCH
+    at: "2026-09-09T05:32:30Z"
+    note: >
+      REQ-278 (queue task 552, GH#1125) implemented via
+      WF02-REQ278-20260909: third of three sibling page-migration
+      requirements (0020 D2b), migrating web/src/pages/instances/,
+      tasks/ and dashboard/ onto design-system primitives and off
+      colour literals. No CODE-DESIGNER pass, same mechanical-migration
+      precedent as REQ-276. Per-file evidence for the three large named
+      files: InstanceBoardPage.tsx 527->496 lines (style={{ 51->28),
+      InstanceDetailPage.tsx 407->368 lines (style={{ 46->23),
+      TaskInboxPage.tsx 452->408 lines (style={{ 50->45) -- real
+      structural reduction, not a bare colour-value swap.
+      TaskInboxPage's card-row list deliberately kept off DataTable
+      (its own e2e tests assert a fixed data-testid=task-row div
+      structure DataTable can't reproduce -- REVIEWER independently
+      confirmed this against the real e2e spec files, not trusted from
+      the report). TenantDashboardPage 167->167 lines, colour-only
+      (no table/button/pagination to replace) -- REVIEWER verified this
+      is genuine literal-to-token substitution inside pre-existing
+      style objects, not a missed migration. Zero new tokens needed.
+      FRONTEND-DEV used internal parallel subagents on the same working
+      tree during implementation and reported mid-task file-revert
+      scares from a concurrent stash/checkout; ORCH did not trust the
+      self-reported resolution and independently re-verified the branch
+      state directly (clean tree, single commit, exactly 5 files
+      touched) and re-ran the guard regex and type-check itself before
+      routing to REVIEWER, who was explicitly briefed to scrutinize for
+      concurrent-edit damage (orphaned imports, half-migrated blocks,
+      duplicated JSX) and found none. Pipeline: FRONTEND-DEV -> REVIEWER
+      (PASS, elevated scrutiny) -> TEST-RUNNER (backend mix compile
+      confirmed zero impact; frontend gates independently re-run:
+      287/287 unit tests, 48/48 guard tests). TEST-DESIGNER skipped --
+      pure markup substitution, zero new test surface, existing tests
+      pass unmodified. ORCH will merge and release queue task 552
+      status:done.

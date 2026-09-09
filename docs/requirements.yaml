@@ -18518,3 +18518,438 @@ requirements:
       - "REVIEWER has reviewed the new record for idiom/decision-record consistency and its verdict is recorded the same way, distinct from SECURITY-REVIEWER's verdict -- two named gates, not one combined paragraph standing in for both"
       - "git diff shows no file under lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, lib/letflow/tenant_provisioning/, or priv/repo/migrations/ touched by this requirement -- quoted with the command"
     depends_on: []
+
+  - id: REQ-303
+    title: Design decision record for a SolutionPack entity_definitions section -- schema versioning, install semantics, and confirming the form-schema gap is already closed
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S10
+    description: >
+      Re-verify at start rather than trusting this description:
+      Letflow.Definitions.SolutionPack's pack_document @type
+      (lib/letflow/definitions/solution_pack.ex:186-195) still has exactly
+      four content sections -- definitions, service_catalog_entries (always
+      [] on export, rejected with {:error, :unsupported_pack_section} on a
+      non-empty value at install, see check_unsupported_sections/1 around
+      line 539-540), variable_schemas, and manifest.required_roles
+      (read-only advisory, creates no role). Confirm there is still no
+      entity_definitions key anywhere in that type or in parse_document/1
+      (lines 401-422) before designing against its absence.
+
+      bucket: B. This is generic pack-format platform capability -- any
+      tenant's entity definitions travel through it, nothing here names an
+      exam, per 0022's rule 1.
+
+      THIS IS S10 GAP 13 ONLY, NOT PART OF THE REQ-295..302 BATCH, AND SAYS
+      SO EXPLICITLY IN ITS OWN OUTPUT SO A LATER READER DOES NOT MERGE THE
+      TWO TRACKS. Gap 13 and decision 0023 (REQ-295..302's subject) were
+      both found by the same 2026-09-09 architecture review, but they are
+      independent: 0023 is about entity STORAGE shape (per-entity-type
+      tables, promoted columns, the subject of Letflow.Entities.Records and
+      priv/repo/migrations/); gap 13 is about the pack format's DELIVERY
+      sections, entirely within Letflow.Definitions.SolutionPack and
+      Letflow.Entities.Definitions. Closing 0023's work does not add a pack
+      section, and adding a pack section does not need 0023's storage
+      answer -- an entity_definitions pack section installs definitions via
+      Letflow.Entities.Definitions.create_definition/2 regardless of how a
+      record's promoted columns eventually get created. This requirement's
+      new decision record must state this independence explicitly in its
+      own text (not only inherit it from this description), so a reader who
+      opens only the decision record still sees it.
+
+      WHAT THIS REQUIREMENT PRODUCES: a new decision record,
+      docs/migration/decisions/0026-<slug>.md (CODE-DESIGNER chooses the
+      slug; it must name what the record decides, e.g. something naming
+      "solution pack entity definitions", not restate "0026"), plus a
+      design artefact under lib/letflow/design/ giving ELIXIR-DEV enough to
+      build the export and install sides against without re-deriving the
+      mechanism. It implements NO lib/ code -- see the scope fence below.
+
+      THE RECORD MUST SETTLE, WITH A CONCRETE ANSWER FOR EACH, NOT A
+      RESTATEMENT OF THE QUESTION:
+
+      1. SCHEMA VERSIONING. bpm_export_schema_version currently reuses
+      Letflow.Definitions.ExportImport's @export_schema_version constant
+      ("bpm/definition/v1", lib/letflow/definitions/export_import.ex:34) --
+      deliberately, per this module's own moduledoc: "one version constant
+      in the codebase, not two." Adding an entity_definitions section
+      raises three sub-questions the record must answer concretely: (a)
+      does the version string itself change (a new constant, a bumped
+      suffix, or does it stay "bpm/definition/v1" because the version
+      identifies the ENVELOPE format, not which optional sections are
+      present); (b) what does an OLD pack (no entity_definitions key) mean
+      to a NEW installer that supports the section -- and note
+      parse_document/1's fetch_list/2 helper (lines 433-439) already
+      defaults ANY missing list key, including a future
+      "entity_definitions", to [] -- state explicitly whether this existing
+      default-to-[] behavior is the intended compatibility stance for an
+      old pack against a new installer, or whether it needs a different
+      signal (this is an already-written behavior the record must either
+      ratify or override, not something to design from scratch); (c) what
+      a NEW pack (entity_definitions present and non-empty) means to an OLD
+      installer that has never heard of the section -- given
+      check_unsupported_sections/1's existing precedent of hard-rejecting
+      unrecognized non-empty content (see point 4 below), state whether the
+      same stance applies here or whether a version bump makes the old
+      installer's schema-version check the correct rejection point instead.
+
+      2. INSTALL SEMANTICS FOR ENTITY DEFINITIONS. Read
+      lib/letflow/entities/definitions.ex in full before designing:
+      create_definition/2 (lines 104-141) always inserts a new row with
+      status: :inactive (line 159); activate_definition/4 (lines ~397-421)
+      is a separate call that promotes one row to :active and demotes every
+      sibling under the same (tenant_id, name) to :inactive
+      (promote_and_demote_siblings/2, lines ~432-460), reusing
+      Letflow.Repository.Activation.activate_group/5 unchanged. Decide and
+      state concretely: does a packed entity definition install as
+      :inactive only (mirroring create_definition/2's own default, requiring
+      a separate activation step after install, consistent with process
+      definitions which also install without any activation machinery
+      touched), or does install also call activate_definition/4 for each
+      packed entity definition (a stronger claim that changes what "pack
+      installed" means for entity definitions specifically, since no other
+      pack-installed artefact type is auto-activated by SolutionPack.install/3
+      today). State what happens on a NAME COLLISION with an existing entity
+      definition in the tenant: EntityDefinition's changeset
+      (lib/letflow/entities/entity_definition.ex) enforces
+      unique_constraint(:name, name: <the tenant+name+logical_shape_version
+      constraint>) -- read that module's constraint names in full and state
+      whether a colliding name (same name, different or same shape) surfaces
+      as a {:error, {:persistence, changeset}} that aborts the WHOLE install
+      transaction (the only answer consistent with
+      SolutionPack.install/3's documented ALL-OR-NOTHING stance --
+      "installed_definition.status is always installed... Letflow.Definitions.create/2
+      has no upsert, no skip and no idempotent branch," moduledoc lines
+      75-94) or whether the record proposes something else, and if so,
+      justify the divergence from the existing all-or-nothing precedent
+      explicitly rather than silently introducing a skip/upsert branch this
+      module has never had for any other section.
+
+      3. THE FORM-SCHEMA QUESTION -- VERIFY THIS FIRST, IT MAY ALREADY BE
+      CLOSED. Read lib/letflow/definitions/graph.ex (the
+      check_form_schema_expressions/1 check, CHK-20, around lines 852-870),
+      lib/letflow/definitions/form_schema_expressions.ex in full, and
+      lib/letflow/routers/tasks.ex around lines 87-107 and 561-573 before
+      concluding anything. State plainly in the record what this
+      requirement's own pre-dispatch investigation found: form_schema is
+      NOT a standalone artefact anywhere in this codebase -- it is an
+      optional attribute on a HUMAN_TASK node's attributes map INSIDE a
+      process definition's graph (attributes["form_schema"]), validated by
+      Graph's own CHK-20 check and resolved at task activation "from the
+      node's form_schema attribute in the version-pinned [definition]"
+      (routers/tasks.ex:97). SolutionPack.pack_definition/1
+      (solution_pack.ex, the export helper around line 375-385) already
+      embeds definition.graph verbatim into the packed definition's graph
+      field, and parse_definition/1 (install side, lines 454-468) already
+      round-trips an arbitrary graph map including whatever attributes it
+      carries. CONSEQUENCE TO STATE EXPLICITLY: a process definition's
+      form schemas already travel through the EXISTING definitions pack
+      section with no code change, because they are not extracted out of
+      the graph anywhere in the pack pipeline. The stage file's gap-13 row
+      framing ("no form-schema section" as a defect) does NOT survive
+      contact with the code as stated -- the real, narrower gap is entity
+      definitions only. If this requirement's own re-verification finds
+      this analysis wrong (e.g. finds an actual standalone form-schema
+      artefact this description missed), say so and design for whatever is
+      actually found instead -- but the record must show the check was
+      done, either way, with file:line citations, not assume the gap row's
+      framing was correct.
+
+      4. THE service_catalog_entries PRECEDENT. That section is
+      deliberately unsupported: export always emits [], and install rejects
+      any non-empty array with {:error, :unsupported_pack_section} rather
+      than guessing an install policy (moduledoc lines 38-53,
+      check_unsupported_sections/1 lines 539-540). State whether
+      entity_definitions follows the SAME "reject a section the installer
+      doesn't yet support, never silently discard tenant-supplied content"
+      pattern for any interim where export is built before install (or vice
+      versa) -- i.e. if this requirement's implementation work is split
+      across two agent turns, what must the not-yet-updated side do with a
+      populated entity_definitions key so that no tenant-supplied content is
+      ever silently dropped.
+
+      5. INV-1 TENANT SCOPING. Every export/3 read and install/3 write in
+      this module runs under opts[:prefix], derived solely from
+      Letflow.Api.Context.scoped_repo_opts/1 -- solely from the
+      authenticated token's tenant_id (moduledoc lines 58-68). No function
+      in this module accepts a caller-supplied tenant id, schema name, or
+      slug. Letflow.Entities.Definitions.create_definition/2 and
+      activate_definition/4 both already take an explicit prefix argument
+      and derive tenant_id from it the same way (see that module's own
+      moduledoc, lines 20-25). State explicitly that the design introduces
+      no new caller-supplied tenant identifier anywhere in the
+      entity_definitions install path -- this needs SECURITY-REVIEWER sign
+      off specifically on this point, not just a general pass.
+
+      SCOPE FENCE: this requirement writes
+      docs/migration/decisions/0026-*.md and a design artefact under
+      lib/letflow/design/. It implements no lib/ code, creates no
+      migration, and does not touch lib/letflow/definitions/solution_pack.ex,
+      lib/letflow/entities/, priv/repo/migrations/, or any test file.
+      REQ-304 and REQ-305 are where the export and install sides actually
+      get built from this record's answers.
+    acceptance_criteria:
+      - "docs/migration/decisions/0026-*.md exists, is a real decision record following this project's existing format (Question/Decision/Reasoning/Consequences/What this record does not decide/REVIEWER sign-off sections, matching 0022's/0023's/0024's/0025's own shape), and answers all five numbered questions in this requirement's description with a concrete, named mechanism for each -- not a restatement of the question or a list of options left open"
+      - "the record states explicitly, in its own text (not only by reference to this requirement), that gap 13 and decision 0023 are independent tracks -- 0023 is storage shape, gap 13 is pack delivery format -- and that neither is a precondition of the other"
+      - "the record states a concrete answer for schema versioning: whether bpm_export_schema_version changes, and what an old pack means to a new installer and a new pack means to an old installer, explicitly addressing fetch_list/2's existing default-missing-key-to-[] behavior (lib/letflow/definitions/solution_pack.ex:433-439) as either the ratified compatibility stance or an overridden one"
+      - "the record states a concrete answer for install semantics: whether a packed entity definition installs as :inactive only or is also activated, and what happens on a name collision with an existing entity definition, reconciled explicitly against SolutionPack.install/3's documented all-or-nothing, no-upsert precedent (quoted from the moduledoc)"
+      - "the record contains a section, citing lib/letflow/definitions/graph.ex, lib/letflow/definitions/form_schema_expressions.ex, and lib/letflow/routers/tasks.ex by file and line, that states where form_schema actually lives (a HUMAN_TASK node attribute inside a process definition's graph, not a standalone artefact) and states explicitly whether a separate pack section for it is needed -- with the reasoning that packed definitions already carry their graphs, and therefore already carry any form_schema attributes their HUMAN_TASK nodes have, verbatim quoted or cited"
+      - "the record states whether entity_definitions follows service_catalog_entries's reject-until-supported pattern for any interim between export-side and install-side landing, referencing check_unsupported_sections/1 by name"
+      - "the record states explicitly that no new caller-supplied tenant identifier is introduced anywhere in the entity_definitions path, and SECURITY-REVIEWER's sign-off section addresses this point by name, not only a general pass/fail"
+      - "REVIEWER has reviewed the record for idiom/decision-record consistency with 0022 and 0023 and with this project's existing decision-record format generally, and its verdict is recorded distinctly from SECURITY-REVIEWER's verdict. Do NOT cite records 0024 or 0025: they do not exist yet -- they are the deliverables of REQ-295 and REQ-302 respectively, on the entity-STORAGE track this requirement is deliberately independent of. If either happens to have landed by the time this runs, reading it is optional context, never a precondition"
+      - "git diff shows no file under lib/letflow/definitions/solution_pack.ex, lib/letflow/entities/, priv/repo/migrations/, or test/ touched by this requirement -- quoted with the command"
+    depends_on: []
+
+  - id: REQ-304
+    title: Add the entity_definitions section to SolutionPack export -- emit packed entity definitions alongside process definitions
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      Re-verify at start rather than trusting this description: read
+      docs/migration/decisions/0026-*.md (produced by REQ-303) in full
+      before writing any code -- its answers to schema versioning and the
+      service_catalog_entries-style interim-rejection question govern
+      exactly what this requirement is allowed to emit and how. Also
+      re-read lib/letflow/definitions/solution_pack.ex's export/3 and its
+      helpers (pack_each_definition/2, pack_definition/1,
+      pack_variable_schemas/1, roughly lines 256-397) and
+      lib/letflow/entities/definitions.ex's get_definition_by_name/2 and
+      list_definitions/2 to confirm the exact function signatures this
+      requirement calls are unchanged from what REQ-303's design assumed.
+
+      bucket: B. Exporting entity definitions into a pack document is
+      generic platform capability for any tenant's any entity type --
+      nothing here names an exam, per 0022's rule 1.
+
+      THIS IS S10 GAP 13, EXPORT SIDE ONLY, AND IS INDEPENDENT OF THE
+      REQ-295..302 BATCH (0023/entity storage) -- see REQ-303's own
+      description for the full independence argument; do not block this
+      requirement on any REQ-295..302 entry and do not treat 0023 as a
+      prerequisite.
+
+      WHAT TO BUILD: extend SolutionPack.export/3's accepted input and its
+      pack_document output per 0026's design -- concretely, a new
+      entity_definition_names (or whatever parameter shape 0026 specifies)
+      argument or an extension of the existing definition_ids list so
+      callers can name entity definitions to include, a new
+      entity_definitions key on the returned pack_document map holding one
+      packed entry per named entity definition (shape per 0026: at minimum
+      the definition's name, display_name, definition_json, and enough of
+      Letflow.Entities.EntityDefinition's persisted fields to round-trip
+      through install -- follow 0026's exact field list, do not invent
+      one), and update the pack_document @type (lines 186-195) to declare
+      the new key with its own @typedoc, matching the existing
+      packed_definition/packed_variable_schema typedoc style. Each named
+      entity definition is read via
+      Letflow.Entities.Definitions.get_definition_by_name/2 (or the
+      equivalent lookup 0026 specifies) under the caller's own opts[:prefix]
+      -- INV-1: no caller-supplied tenant id anywhere in this path, same
+      pattern export/3 already uses for process definitions
+      (Definitions.get_by_id/2 under opts[:prefix], moduledoc lines 58-68).
+      A named entity definition that does not exist in the caller's tenant
+      produces an error in the same shape export/3 already uses for a
+      missing process definition ({:error, {:definition_not_found, id}}) --
+      reuse that exact error tuple shape unless 0026 specifies a distinct
+      one, and if so use 0026's.
+
+      SCOPE FENCE: this requirement touches only
+      lib/letflow/definitions/solution_pack.ex (export/3 and its private
+      helpers, the pack_document/packed_entity_definition @type
+      declarations) and, if 0026's design calls for it, a small read-only
+      addition to lib/letflow/entities/definitions.ex limited to a lookup
+      function with no write behavior. It does NOT touch install/3, does
+      NOT touch lib/letflow/routers/solution_packs.ex's route handlers
+      beyond what's needed to pass the new parameter through if 0026's
+      design requires it at the route layer (if 0026 defers the route-layer
+      change to a later requirement, leave routers/solution_packs.ex
+      untouched and say so in the completion report), and does NOT modify
+      entity_definitions install/activation logic in any way -- that is
+      REQ-305. It creates no migration.
+    acceptance_criteria:
+      - "SolutionPack.pack_document's @type declares an entity_definitions key per 0026's design, with its own @typedoc distinct from packed_definition and packed_variable_schema -- quoted from the diff"
+      - "export/3 (or its 0026-specified new arity) accepts a way to name entity definitions to include and returns them under the pack_document's entity_definitions key, each entry containing at minimum the entity definition's name, display_name, and definition_json -- demonstrated with an iex or test invocation whose real output is quoted, not asserted"
+      - "every entity definition read during export runs under opts[:prefix] with no caller-suppliable tenant id anywhere in the new code path -- grep for tenant_id/schema_name/prefix parameters in the diff and quote the result showing none is caller-supplied outside the existing opts[:prefix] convention"
+      - "naming a nonexistent entity definition (wrong name, or a name belonging to another tenant's schema) produces the error shape 0026 specifies, verified with a real call whose output is quoted, not described"
+      - "export/3 with no entity definitions named still returns entity_definitions: [] and is otherwise byte-for-byte compatible with its pre-change output for a process-definitions-only export -- run the existing export/3 test suite and quote a real passing result showing no regression"
+      - "mix compile --warnings-as-errors succeeds -- quoted output"
+      - "git diff --name-only shows no file under lib/letflow/definitions/solution_pack_install.ex or any file this description did not name touched by this requirement"
+    depends_on: [REQ-303]
+
+  - id: REQ-305
+    title: Add entity_definitions install to SolutionPack.install/3 -- parse, validate, create, and error taxonomy per REQ-303's design
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      Re-verify at start rather than trusting this description: read
+      docs/migration/decisions/0026-*.md (REQ-303) in full before writing
+      any code, specifically its install-semantics answer (does a packed
+      entity definition install :inactive only or also get activated; what
+      happens on a name collision) and its schema-versioning answer. Also
+      re-read SolutionPack.install/3 and its full step sequence (moduledoc
+      lines ~75-144, code at parse_document/1 lines 401-422,
+      check_unsupported_sections/1 lines 539-540,
+      check_schema_version/1 lines 542-548, and the transactional body
+      after those pure-parse steps) and
+      lib/letflow/entities/definitions.ex's create_definition/2 (lines
+      104-169) and activate_definition/4 (lines ~397-421) in full -- do not
+      assume this description's line numbers are still current; confirm
+      them.
+
+      bucket: B. Installing entity definitions from a pack is generic
+      platform capability for any tenant's any entity type -- nothing here
+      names an exam, per 0022's rule 1.
+
+      THIS IS S10 GAP 13, INSTALL SIDE, AND IS INDEPENDENT OF THE
+      REQ-295..302 BATCH (0023/entity storage) -- see REQ-303's
+      description for the independence argument; do not block this
+      requirement on any REQ-295..302 entry.
+
+      WHAT TO BUILD: extend parse_document/1 to read an entity_definitions
+      list (via fetch_list/2, same helper already used for definitions/
+      variable_schemas/service_catalog_entries, so a missing key still
+      defaults to [] per that helper's existing behavior -- confirm 0026
+      ratified this as the compatibility stance for an old pack against
+      this new installer, and if 0026 says otherwise, implement 0026's
+      answer instead), with its own parse_entity_definition/1 validating
+      required fields (name, display_name, definition_json at minimum, plus
+      whatever 0026's field list specifies) the same defensive way
+      parse_definition/1 and parse_variable_schema/1 already do (fetch_string/2,
+      fetch_object/2, {:error, :invalid_pack_document} on any malformed
+      entry). Inside install/3's existing transaction, after step 6
+      (definitions created) and before or alongside step 7 (variable
+      schemas), add a new step that calls
+      Letflow.Entities.Definitions.create_definition/2 once per parsed
+      entity definition under the caller's own prefix, and -- per 0026's
+      install-semantics answer -- either stops there (packed entity
+      definitions land :inactive, matching create_definition/2's own
+      default) or additionally calls activate_definition/4, exactly as
+      0026 specifies; do not choose between these yourself if 0026 already
+      answered it. A create_definition/2 {:error, {:persistence,
+      changeset}} (name collision) or {:error, {:validation, violations}}
+      MUST abort and roll back the entire install transaction, consistent
+      with install/3's existing all-or-nothing behavior for process
+      definitions and variable schemas -- no partial commit, no silent
+      skip. Extend install_result's @type and the returned map with an
+      installed_entity_definitions key (shape mirrors installed_definition:
+      source name, new id, status) so a caller can see what was installed,
+      matching the existing installed_definitions field's shape and
+      intent. Extend install_error's @type with whatever new error tuples
+      this path introduces (e.g. a malformed-entity-definition tuple
+      mirroring {:error, {:malformed_variable_schema, ...}}'s shape).
+
+      ERROR TAXONOMY, PER 0026: if 0026's "interim reject-until-supported"
+      answer (question 4 in REQ-303) applies to this requirement's own
+      landing order relative to REQ-304, implement exactly what it
+      specifies for a document carrying a populated entity_definitions key
+      before this requirement lands (this should not arise if REQ-304 lands
+      first per depends_on below, but state in the completion report which
+      order actually happened and that no tenant-supplied content was ever
+      silently discarded).
+
+      SCOPE FENCE: this requirement touches only
+      lib/letflow/definitions/solution_pack.ex's install/3 and its private
+      parse/step helpers, and calls (never modifies)
+      lib/letflow/entities/definitions.ex's existing public functions. It
+      does NOT modify Letflow.Entities.Definitions,
+      Letflow.Entities.EntityDefinition, or any file under
+      lib/letflow/entities/ -- if 0026's design requires a change there,
+      that is a gap in 0026 to flag back to CODE-DESIGNER, not something to
+      quietly build here. It creates no migration and does not touch
+      export/3 beyond what REQ-304 already left in place.
+    acceptance_criteria:
+      - "install/3 accepts a pack document whose entity_definitions key holds one or more well-formed entries and installs each via Letflow.Entities.Definitions.create_definition/2 (and activate_definition/4 if and only if 0026 specifies auto-activation) under the caller's own opts[:prefix] -- demonstrated with a real call whose output (the returned install_result including installed_entity_definitions) is quoted, not described"
+      - "a name collision with an existing entity definition in the tenant aborts the ENTIRE install transaction -- no process definitions, variable schemas, or other entity definitions from the same pack are left committed -- verified with a real test asserting zero new rows across every affected table after the failed install, output quoted"
+      - "a malformed entity_definitions entry (missing name, missing definition_json, or wrong type) is rejected with a typed error tuple before any database write -- the transaction step count / query log shows zero queries issued for that install attempt, or equivalent evidence quoted"
+      - "a pack document with no entity_definitions key at all (an old pack) installs exactly as it did before this requirement, byte-for-byte compatible -- run install/3's existing pre-change test suite and quote a real passing result showing no regression"
+      - "install_result's installed_entity_definitions entries and install_error's new error tuples match @type declarations exactly -- mix dialyzer (if configured in this project) or mix compile --warnings-as-errors quoted showing no type mismatch"
+      - "INV-1: grep the diff for any caller-suppliable tenant id, schema name, or slug parameter reaching Letflow.Entities.Definitions.create_definition/2 or activate_definition/4 other than opts[:prefix] -- quote the grep showing none exists"
+      - "SECURITY-REVIEWER has signed off specifically on the name-collision abort behavior and the absence of a caller-supplied tenant identifier, recorded in this requirement's own completion artefact"
+      - "git diff --name-only shows no file under lib/letflow/entities/ touched by this requirement -- quoted with the command"
+    depends_on: [REQ-303, REQ-304]
+
+  - id: REQ-306
+    title: Test coverage for entity_definitions pack export/install -- round-trip, name-collision rollback, old-pack compatibility, malformed-entry rejection
+    owner: TEST-DESIGNER
+    status: pending
+    stage: S10
+    description: >
+      Re-verify at start rather than trusting this description: read
+      REQ-304's and REQ-305's actual landed diffs (not just their
+      requirement text) before writing tests -- the exact field names on
+      entity_definitions pack entries, the exact new error tuples, and
+      whether install auto-activates are all decided by 0026 and
+      implemented by those two requirements, not by this one. Also locate
+      SolutionPack's existing test file (grep test/ for
+      SolutionPackTest or solution_pack_test.exs) and read its existing
+      export/install test structure in full before adding to it, so new
+      tests match its existing fixture/setup conventions rather than
+      inventing a parallel style.
+
+      bucket: B. Test coverage for a generic pack-format capability --
+      nothing here names an exam, per 0022's rule 1.
+
+      THIS IS S10 GAP 13 TEST COVERAGE, INDEPENDENT OF THE REQ-295..302
+      BATCH -- see REQ-303's description for the independence argument.
+
+      WHAT TO COVER, minimum set, each as a real runnable ExUnit test, no
+      skipped or pending cases:
+
+      1. ROUND-TRIP. Export a tenant's entity definition(s) via the
+      REQ-304 export path, install the resulting pack document into a
+      DIFFERENT tenant schema via the REQ-305 install path, and assert the
+      installed entity definition's definition_json (and any other
+      0026-specified fields) matches the source exactly.
+
+      2. NAME-COLLISION ROLLBACK. Install a pack whose entity_definitions
+      section names an entity definition that already exists (same name)
+      in the target tenant, alongside at least one process definition and
+      one variable schema in the same pack document, and assert the WHOLE
+      install fails and NOTHING from that pack -- not the process
+      definition, not the variable schema, not any OTHER entity definition
+      in the same pack -- is left committed. Query every affected table
+      directly in the test, don't just check the returned error tuple.
+
+      3. MALFORMED ENTRY REJECTION. At least one test per malformed shape
+      REQ-305 introduced a typed error for (missing name, missing
+      definition_json, wrong field type) -- each asserting the specific
+      error tuple 0026/REQ-305 defined, and that zero rows were written.
+
+      4. OLD-PACK COMPATIBILITY. A pack document built by literally
+      omitting the entity_definitions key (not by setting it to []) still
+      installs successfully with today's pre-change behavior for its
+      definitions/variable_schemas sections -- this is the fetch_list/2
+      default-to-[] behavior 0026 was asked to ratify or override; assert
+      whichever it actually decided.
+
+      5. INV-1 CROSS-TENANT ISOLATION. Attempt to export an entity
+      definition by name from tenant A while authenticated (opts[:prefix])
+      as tenant B; assert the same not-found error shape export/3 already
+      returns for a cross-tenant process-definition id, never that tenant
+      A's definition content.
+
+      6. AUTO-ACTIVATION BEHAVIOR (only if 0026 specified it): assert a
+      freshly-installed entity definition's status matches exactly what
+      0026 decided (:inactive-only, or :active via activate_definition/4)
+      -- do not assume either; assert whichever 0026 actually settled on.
+
+      SCOPE FENCE: this requirement writes test code only, under test/ (the
+      existing SolutionPack test file, extended, plus a new file only if
+      the existing one's structure genuinely doesn't fit -- state which in
+      the completion report). It does not modify
+      lib/letflow/definitions/solution_pack.ex, lib/letflow/entities/, or
+      any other lib/ file. If writing these tests surfaces a real defect in
+      REQ-304's or REQ-305's implementation, report it per the incidental-issue
+      process (docs/agents/protocols/ISSUE_QUEUE.md) rather than fixing it
+      here.
+    acceptance_criteria:
+      - "a round-trip test exports an entity definition from one tenant and installs it into a different tenant, and asserts the installed row's definition_json (and every other 0026-specified field) equals the source exactly -- real test output quoted"
+      - "a name-collision test installs a multi-section pack (entity definition + process definition + variable schema) against a tenant that already has a same-name entity definition, and asserts zero new rows across ALL affected tables (process_definitions, variable_schemas, entity_definitions) after the failure -- queried directly in the test body, real output quoted"
+      - "at least one test exists per malformed-entity-definition error tuple REQ-305 introduced, each asserting the specific typed error and zero rows written -- real output quoted"
+      - "an old-pack-compatibility test omits the entity_definitions key entirely (not an empty list) and asserts the install still succeeds for its other sections exactly as before this requirement's changes -- real output quoted"
+      - "a cross-tenant export test asserts the same not-found error shape as the existing cross-tenant process-definition case, never leaking tenant A's entity definition content to a tenant B caller -- real output quoted"
+      - "mix test for the extended/new test file passes in full, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "TEST-DESIGN-VALIDATOR confirms every MUST acceptance criterion in REQ-304 and REQ-305 has a corresponding runnable test in this requirement's output -- a mapping table or explicit list in the completion artefact, not an assertion of coverage"
+      - "git diff --name-only shows only files under test/ touched by this requirement -- quoted with the command"
+    depends_on: [REQ-304, REQ-305]

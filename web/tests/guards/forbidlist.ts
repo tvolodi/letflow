@@ -52,9 +52,6 @@ export const PATTERNS: GuardPattern[] = [
     appliesTo: 'both',
     allowedPaths: [
       'web/src/styles/tokens.css',
-      // web/src/pages/ contains hex literals not covered by REQ-142..145 (component scope).
-      // Follow-on requirements will migrate them; exempted here to unblock the guard tightening.
-      'web/src/pages/',
       // The app CSS bundle (index-*.js) contains tokens.css CSS injected as a
       // JS string by Vite. tokens.css is the one legitimate home for raw colour
       // values; its compiled representation is equally exempt. The source-scan

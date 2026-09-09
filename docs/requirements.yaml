@@ -16573,7 +16573,7 @@ requirements:
     impl_order: 562  # letflow-queue task id, GH#1151. Registered 2026-09-09 by ORCH once
       # $QUEUE_AUTH_TOKEN became available; depends_on resolved to queue ids [550, 551, 552]
       # (REQ-276/277/278), all satisfied.
-    status: pending
+    status: done
     stage: S8
     description: >
       The completion test for
@@ -16746,7 +16746,9 @@ requirements:
   - id: REQ-283
     title: Apply tenant branding as CSS custom-property overrides on tokens.css in the SPA (0020 D1c, theming half)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-279 -- REQ-279 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    impl_order: 563  # letflow-queue task id, GH#1154. Registered 2026-09-09 by ORCH
+      # once REQ-279 (queue task 562) flipped to done and REQ-281 (queue task 553)
+      # was already done -- both live dependencies satisfied, no re-scope needed.
     status: pending
     stage: S8
     description: >

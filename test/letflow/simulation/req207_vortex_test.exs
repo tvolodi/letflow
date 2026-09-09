@@ -912,6 +912,16 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # Signal 3 below remains the real gate, and it was re-verified live rather
       # than assumed when this allowlist was extended: neither context module
       # exists, and both router rows are still in the reserved/unbuilt table.
+      #
+      # UPDATE (S10 gap 13, 2026-09-10): REQ-304 joins the allowlist. It adds an
+      # entity_definitions section to Letflow.Definitions.SolutionPack's pack
+      # document so a solution pack can CARRY an entity definition -- delivery,
+      # not runtime. It mounts no route and builds no context module, so the
+      # disposition is unaffected for the same reason as the entries above.
+      # Signal 3 was re-verified live again here rather than assumed: still no
+      # lib/letflow/entities.ex, no lib/letflow/entity_query.ex, no entity
+      # router module under lib/letflow/routers/, and Letflow.Routers.Entities
+      # still present only as a reserved/unbuilt row in router.ex.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -938,7 +948,8 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-296",
           "REQ-299",
           "REQ-300",
-          "REQ-302"
+          "REQ-302",
+          "REQ-304"
         ])
 
       refute Enum.empty?(entity_title_matches),

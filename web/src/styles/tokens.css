@@ -23,6 +23,11 @@
   --color-success: #40c057;
   --color-success-dark: #2f9e44;
 
+  /* Success-state border addition (REQ-276 addendum, mirrors REQ-144's
+     --color-error-border / --color-warning-border pattern for success
+     banners) */
+  --color-success-border: #86efac;  /* green-300 */
+
   --color-warning-light: #fff3bf;
   --color-warning: #fcc419;
   --color-warning-dark: #e67700;

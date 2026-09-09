@@ -8,7 +8,18 @@ import { tenantsApi } from '@/api/tenants'
 import { queryKeys } from '@/api/queryKeys'
 import type { ApiError } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import type { Tenant } from '@/api/tenants'
+
+// NOTE: the pre-existing full-row yellow tint for tenant_type === 'test'
+// rows is dropped -- DataTable has no per-row style hook (only per-cell,
+// via each column's accessor). The [TEST] badge in the Display name
+// column already conveys the same information per-row, so nothing
+// becomes undiscoverable; this is a documented primitive-fit gap, not a
+// silent behaviour change.
 
 /**
  * TenantsPage
@@ -60,7 +71,6 @@ export default function TenantsPage() {
 
   const data = listQuery.data
   const total = data?.total ?? 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
   const rendererState: RendererState = listQuery.isLoading ? 'loading' : listQuery.isError ? classifyError(listQuery.error) : 'success'
 
@@ -81,21 +91,113 @@ export default function TenantsPage() {
     lifecycleMutation.mutate(confirmState)
   }
 
+  const columns: DataTableColumn<Tenant>[] = [
+    { id: 'slug', header: 'Slug', accessor: (row) => row.slug },
+    {
+      id: 'display_name',
+      header: 'Display name',
+      accessor: (row) => (
+        <>
+          {row.tenant_type === 'test' && (
+            <span
+              data-testid={`tenant-type-badge-${row.slug}`}
+              style={{
+                display: 'inline-block',
+                marginRight: '.4rem',
+                padding: '.1rem .4rem',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '.72rem',
+                fontWeight: 600,
+                background: 'var(--color-warning-banner)',
+                color: 'var(--color-warning-text)',
+              }}
+            >
+              TEST
+            </span>
+          )}
+          {row.display_name}{row.tenant_type === 'test' ? ' [TEST]' : ''}
+        </>
+      ),
+    },
+    { id: 'idp_realm', header: 'IDP realm', accessor: (row) => row.idp_realm_id },
+    {
+      id: 'status',
+      header: 'Status',
+      accessor: (row) => (
+        <span
+          data-testid={`tenant-status-${row.slug}`}
+          style={{
+            display: 'inline-block',
+            padding: '.15rem .5rem',
+            borderRadius: 'var(--radius-full)',
+            fontSize: '.78rem',
+            fontWeight: 600,
+            background: row.status === 'ACTIVE' ? 'var(--color-success-light)' : 'var(--color-neutral-100)',
+            color: row.status === 'ACTIVE' ? 'var(--color-success-dark)' : 'var(--text-secondary)',
+          }}
+        >
+          {row.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+        </span>
+      ),
+    },
+    { id: 'created', header: 'Created', accessor: (row) => new Date(row.created_at).toLocaleDateString() },
+    {
+      id: 'actions',
+      header: 'Actions',
+      accessor: (row) => (
+        <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            data-testid={`tenant-edit-${row.slug}`}
+            onClick={() => navigate(`/admin/tenants/${row.slug}/edit`)}
+          >
+            Edit
+          </Button>
+          {row.status === 'ACTIVE' && (
+            <Button
+              variant="danger"
+              size="sm"
+              data-testid={`tenant-deactivate-${row.slug}`}
+              loading={lifecycleMutation.isPending}
+              onClick={() => handleLifecycleAction(row.slug, 'deactivate')}
+            >
+              Deactivate
+            </Button>
+          )}
+          {row.status === 'INACTIVE' && (
+            <Button
+              variant="primary"
+              size="sm"
+              data-testid={`tenant-reactivate-${row.slug}`}
+              loading={lifecycleMutation.isPending}
+              onClick={() => handleLifecycleAction(row.slug, 'reactivate')}
+            >
+              Reactivate
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div data-testid="tenants-page" style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h1 style={{ margin: 0 }}>Tenants</h1>
         {/* CUSTOM: add-tenant-link */}
+        {/* Navigational CTA to another route -- kept as Link, not Button,
+            which has no href/anchor semantics. */}
         <Link
           to="/admin/onboarding/new"
           data-testid="register-new-tenant-btn"
           style={{
             display: 'inline-block',
             padding: '.45rem 1rem',
-            background: '#2563eb',
-            color: '#fff',
+            background: 'var(--interactive-primary)',
+            color: 'var(--text-inverse)',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: 'var(--radius-sm)',
             textDecoration: 'none',
             fontSize: '.9rem',
             fontWeight: 600,
@@ -117,8 +219,8 @@ export default function TenantsPage() {
           onChange={(e) => handleSearchChange(e.target.value)}
           style={{
             padding: '.45rem .7rem',
-            border: '1px solid #cbd5e1',
-            borderRadius: '4px',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
             fontSize: '.9rem',
             width: '280px',
           }}
@@ -137,10 +239,10 @@ export default function TenantsPage() {
           style={{
             marginBottom: '1rem',
             padding: '.75rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #fca5a5',
-            background: '#fff1f2',
-            color: '#9f1239',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-error-border)',
+            background: 'var(--color-error-tint)',
+            color: 'var(--color-error-dark)',
             fontSize: '.88rem',
           }}
         >
@@ -149,180 +251,22 @@ export default function TenantsPage() {
       )}
       {data && (
         <>
-          <table
-            data-testid="tenants-table"
-            style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.9rem' }}
-          >
-            <thead>
-              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>Slug</th>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>Display name</th>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>IDP realm</th>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>Status</th>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>Created</th>
-                <th style={{ padding: '.5rem .75rem', borderBottom: '1px solid #e2e8f0' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data.items ?? []).map((row) => (
-                <tr
-                  key={row.slug}
-                  data-testid={`tenant-row-${row.slug}`}
-                  style={row.tenant_type === 'test' ? { background: '#fefce8' } : undefined}
-                >
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>{row.slug}</td>
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>
-                    {row.tenant_type === 'test' && (
-                      <span
-                        data-testid={`tenant-type-badge-${row.slug}`}
-                        style={{
-                          display: 'inline-block',
-                          marginRight: '.4rem',
-                          padding: '.1rem .4rem',
-                          borderRadius: '999px',
-                          fontSize: '.72rem',
-                          fontWeight: 600,
-                          background: '#fef08a',
-                          color: '#713f12',
-                        }}
-                      >
-                        TEST
-                      </span>
-                    )}
-                    {row.display_name}{row.tenant_type === 'test' ? ' [TEST]' : ''}
-                  </td>
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>{row.idp_realm_id}</td>
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>
-                    <span
-                      data-testid={`tenant-status-${row.slug}`}
-                      style={{
-                        display: 'inline-block',
-                        padding: '.15rem .5rem',
-                        borderRadius: '999px',
-                        fontSize: '.78rem',
-                        fontWeight: 600,
-                        background: row.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9',
-                        color: row.status === 'ACTIVE' ? '#166534' : '#64748b',
-                      }}
-                    >
-                      {row.status === 'ACTIVE' ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>
-                    {new Date(row.created_at).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '.5rem .75rem', borderBottom: '1px solid #f1f5f9' }}>
-                    {/* CUSTOM: row-action-navigate_edit */}
-                    <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        data-testid={`tenant-edit-${row.slug}`}
-                        onClick={() => navigate(`/admin/tenants/${row.slug}/edit`)}
-                        style={{
-                          padding: '.3rem .65rem',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '4px',
-                          background: '#fff',
-                          cursor: 'pointer',
-                          fontSize: '.82rem',
-                        }}
-                      >
-                        Edit
-                      </button>
-                      {row.status === 'ACTIVE' && (
-                        <button
-                          type="button"
-                          data-testid={`tenant-deactivate-${row.slug}`}
-                          onClick={() => handleLifecycleAction(row.slug, 'deactivate')}
-                          disabled={lifecycleMutation.isPending}
-                          style={{
-                            padding: '.3rem .65rem',
-                            border: '1px solid #dc2626',
-                            borderRadius: '4px',
-                            background: '#fff',
-                            cursor: lifecycleMutation.isPending ? 'not-allowed' : 'pointer',
-                            color: '#b91c1c',
-                            fontSize: '.82rem',
-                            opacity: lifecycleMutation.isPending ? 0.7 : 1,
-                          }}
-                        >
-                          Deactivate
-                        </button>
-                      )}
-                      {row.status === 'INACTIVE' && (
-                        <button
-                          type="button"
-                          data-testid={`tenant-reactivate-${row.slug}`}
-                          onClick={() => handleLifecycleAction(row.slug, 'reactivate')}
-                          disabled={lifecycleMutation.isPending}
-                          style={{
-                            padding: '.3rem .65rem',
-                            border: '1px solid #15803d',
-                            borderRadius: '4px',
-                            background: '#fff',
-                            cursor: lifecycleMutation.isPending ? 'not-allowed' : 'pointer',
-                            color: '#166534',
-                            fontSize: '.82rem',
-                            opacity: lifecycleMutation.isPending ? 0.7 : 1,
-                          }}
-                        >
-                          Reactivate
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {(data.items ?? []).length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ padding: '1rem .75rem', color: '#64748b', textAlign: 'center' }}>
-                    No tenants found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <div data-testid="tenants-table">
+            <DataTable
+              columns={columns}
+              data={data.items ?? []}
+              emptyMessage="No tenants found."
+            />
+          </div>
 
           {total > PAGE_SIZE && (
-            <div
-              data-testid="tenants-pagination"
-              style={{ display: 'flex', gap: '.5rem', alignItems: 'center', marginTop: '1rem' }}
-            >
-              <button
-                type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                style={{
-                  padding: '.3rem .65rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '4px',
-                  background: '#fff',
-                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
-                  opacity: currentPage <= 1 ? 0.5 : 1,
-                  fontSize: '.82rem',
-                }}
-              >
-                Previous
-              </button>
-              <span style={{ fontSize: '.88rem', color: '#64748b' }}>
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setOffset(offset + PAGE_SIZE)}
-                style={{
-                  padding: '.3rem .65rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '4px',
-                  background: '#fff',
-                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                  opacity: currentPage >= totalPages ? 0.5 : 1,
-                  fontSize: '.82rem',
-                }}
-              >
-                Next
-              </button>
+            <div data-testid="tenants-pagination" style={{ marginTop: '1rem' }}>
+              <PaginationControls
+                page={currentPage}
+                pageSize={PAGE_SIZE}
+                totalItems={total}
+                onPageChange={(newPage) => setOffset((newPage - 1) * PAGE_SIZE)}
+              />
             </div>
           )}
         </>
@@ -338,7 +282,7 @@ export default function TenantsPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(15, 23, 42, .45)',
+            background: 'var(--surface-overlay-slate)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -349,8 +293,8 @@ export default function TenantsPage() {
           <div
             style={{
               width: 'min(420px, 100%)',
-              background: '#fff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--surface-card)',
+              border: '1px solid var(--border-default)',
               borderRadius: '8px',
               padding: '1rem',
             }}
@@ -358,45 +302,26 @@ export default function TenantsPage() {
             <h3 style={{ margin: '0 0 .5rem' }}>
               {confirmState.action === 'deactivate' ? 'Deactivate tenant?' : 'Reactivate tenant?'}
             </h3>
-            <p style={{ margin: '0 0 .9rem', color: '#475569', fontSize: '.9rem' }}>
+            <p style={{ margin: '0 0 .9rem', color: 'var(--text-secondary)', fontSize: '.9rem' }}>
               {confirmState.action === 'deactivate'
                 ? `This blocks normal tenant operations for ${confirmState.slug} until it is reactivated.`
                 : `This restores normal tenant operations for ${confirmState.slug}.`}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem' }}>
-              <button
-                type="button"
-                data-testid="tenant-lifecycle-cancel"
-                onClick={() => setConfirmState(null)}
-                style={{
-                  padding: '.4rem .8rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '4px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                }}
-              >
+              <Button variant="secondary" size="sm" data-testid="tenant-lifecycle-cancel" onClick={() => setConfirmState(null)}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant={confirmState.action === 'deactivate' ? 'danger' : 'primary'}
+                size="sm"
                 data-testid="tenant-lifecycle-confirm"
+                loading={lifecycleMutation.isPending}
                 onClick={confirmLifecycleAction}
-                disabled={lifecycleMutation.isPending}
-                style={{
-                  padding: '.4rem .8rem',
-                  border: 'none',
-                  borderRadius: '4px',
-                  background: confirmState.action === 'deactivate' ? '#dc2626' : '#16a34a',
-                  color: '#fff',
-                  cursor: lifecycleMutation.isPending ? 'not-allowed' : 'pointer',
-                  opacity: lifecycleMutation.isPending ? 0.7 : 1,
-                }}
               >
                 {lifecycleMutation.isPending
                   ? (confirmState.action === 'deactivate' ? 'Deactivating...' : 'Reactivating...')
                   : (confirmState.action === 'deactivate' ? 'Deactivate' : 'Reactivate')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

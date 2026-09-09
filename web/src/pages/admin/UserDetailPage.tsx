@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { DeactivateUserDialog } from '@/components/admin/users/DeactivateUserDialog'
 import { useAdminGroups, useAdminRoles, useAdminUser, useDeactivateAdminUser, useUpdateAdminUser } from '@/hooks/useAdminUsers'
 import type { User } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
 function userId(user: User): string {
@@ -35,6 +36,7 @@ export default function UserDetailPage() {
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
   const [showDeactivate, setShowDeactivate] = useState(false)
   const [submitMessage, setSubmitMessage] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     if (!userQuery.data) return
@@ -63,7 +65,7 @@ export default function UserDetailPage() {
   return (
     <div style={{ padding: '1.5rem', maxWidth: 900 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <button type="button" onClick={() => navigate('/admin/users')}>Back</button>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/admin/users')}>Back</Button>
         <h2 style={{ margin: 0 }}>User details</h2>
       </div>
 
@@ -74,6 +76,7 @@ export default function UserDetailPage() {
       >
       {userQuery.data && (
         <form
+          ref={formRef}
           data-testid="admin-user-detail-form"
           onSubmit={(event) => {
             event.preventDefault()
@@ -118,7 +121,7 @@ export default function UserDetailPage() {
 
           <div style={{ marginTop: 16 }}>
             <h3 style={{ marginBottom: 8 }}>Role assignments</h3>
-            <div style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: 10 }}>
+            <div style={{ border: '1px solid var(--border-default)', borderRadius: 6, padding: 10 }}>
               {(rolesQuery.data?.items ?? []).map((role) => {
                 const checked = selectedRoleIds.includes(role.id)
                 return (
@@ -142,7 +145,7 @@ export default function UserDetailPage() {
 
           <div style={{ marginTop: 16 }}>
             <h3 style={{ marginBottom: 8 }}>Group memberships</h3>
-            <div style={{ border: '1px solid #d1d5db', borderRadius: 6, padding: 10 }}>
+            <div style={{ border: '1px solid var(--border-default)', borderRadius: 6, padding: 10 }}>
               {(groupsQuery.data?.items ?? []).map((group) => {
                 const gid = group.group_id ?? group.id
                 const checked = selectedGroupIds.includes(gid)
@@ -168,13 +171,22 @@ export default function UserDetailPage() {
           {submitMessage && <p role="status" data-testid="admin-user-submit-message">{submitMessage}</p>}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button type="submit" disabled={updateUser.isPending} data-testid="admin-user-save">
-              {updateUser.isPending ? 'Saving...' : 'Save changes'}
-            </button>
+            <span data-testid="admin-user-save">
+              <Button
+                variant="primary"
+                size="md"
+                loading={updateUser.isPending}
+                onClick={() => formRef.current?.requestSubmit()}
+              >
+                {updateUser.isPending ? 'Saving...' : 'Save changes'}
+              </Button>
+            </span>
             {status === 'ACTIVE' && (
-              <button type="button" onClick={() => setShowDeactivate(true)} data-testid="admin-user-deactivate">
-                Deactivate
-              </button>
+              <span data-testid="admin-user-deactivate">
+                <Button variant="secondary" size="md" onClick={() => setShowDeactivate(true)}>
+                  Deactivate
+                </Button>
+              </span>
             )}
           </div>
         </form>

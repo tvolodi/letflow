@@ -4,6 +4,8 @@ import { groupsApi, usersApi } from '@/api/identity'
 import { queryKeys } from '@/api/queryKeys'
 import type { Group, User } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
 
@@ -104,20 +106,49 @@ export default function GroupsPage() {
     })
   }, [members, users?.items])
 
+  const columns: DataTableColumn<GroupRow>[] = [
+    { id: 'name', header: 'Name', accessor: (g) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{g.name}</span> },
+    { id: 'display_name', header: 'Display name', accessor: groupTitle },
+    { id: 'members', header: 'Members', accessor: (g) => groupMembers(g) },
+    {
+      id: 'description',
+      header: 'Description',
+      accessor: (g) => <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{g.description ?? '—'}</span>,
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      accessor: (g) => {
+        const memberCount = groupMembers(g)
+        return (
+          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+            <Button variant="primary" size="sm" onClick={() => setActiveGroup(g)}>
+              Manage members
+            </Button>
+            {!g.is_system && memberCount === 0 && (
+              <Button variant="danger" size="sm" onClick={() => setPendingDelete(g)}>
+                Delete
+              </Button>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Groups</h2>
-        <button
-          onClick={() => setCreating(true)}
-          style={{ marginLeft: 'auto', padding: '.4rem .9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-        >
-          + New Group
-        </button>
+        <span style={{ marginLeft: 'auto' }}>
+          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+            + New Group
+          </Button>
+        </span>
       </div>
 
       {creating && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div style={{ background: 'var(--surface-page)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '1.25rem', marginBottom: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem' }}>Create group</h3>
           {(['name', 'display_name', 'description'] as const).map((f) => (
             <div key={f} style={{ marginBottom: '.75rem' }}>
@@ -125,13 +156,13 @@ export default function GroupsPage() {
               <input
                 value={form[f]}
                 onChange={(e) => setForm((p) => ({ ...p, [f]: e.target.value }))}
-                style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', boxSizing: 'border-box' }}
               />
             </div>
           ))}
           <div style={{ display: 'flex', gap: '.5rem' }}>
-            <button onClick={() => createGroup.mutate(form)} style={{ padding: '.4rem .9rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}>Save</button>
-            <button onClick={() => setCreating(false)} style={{ padding: '.4rem .9rem', background: '#6b7280', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}>Cancel</button>
+            <Button variant="primary" size="sm" onClick={() => createGroup.mutate(form)}>Save</Button>
+            <Button variant="secondary" size="sm" onClick={() => setCreating(false)}>Cancel</Button>
           </div>
         </div>
       )}
@@ -144,65 +175,27 @@ export default function GroupsPage() {
         }
         columns={[{ widthPercent: 25 }, { widthPercent: 30 }, { widthPercent: 10 }, { widthPercent: 25 }, { widthPercent: 10 }]}
       >
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.9rem' }}>
-        <thead>
-          <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-            <th style={{ padding: '.6rem .8rem' }}>Name</th>
-            <th style={{ padding: '.6rem .8rem' }}>Display name</th>
-            <th style={{ padding: '.6rem .8rem' }}>Members</th>
-            <th style={{ padding: '.6rem .8rem' }}>Description</th>
-            <th style={{ padding: '.6rem .8rem' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((g) => {
-            const id = groupId(g)
-            const memberCount = groupMembers(g)
-            return (
-              <tr key={id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '.6rem .8rem', fontFamily: 'monospace', fontSize: '.85rem' }}>{g.name}</td>
-                <td style={{ padding: '.6rem .8rem' }}>{groupTitle(g)}</td>
-                <td style={{ padding: '.6rem .8rem' }}>{memberCount}</td>
-                <td style={{ padding: '.6rem .8rem', color: '#64748b', fontSize: '.85rem' }}>{g.description ?? '—'}</td>
-                <td style={{ padding: '.6rem .8rem' }}>
-                  <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={() => setActiveGroup(g)}
-                      style={{ padding: '.25rem .6rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.8rem' }}
-                    >
-                      Manage members
-                    </button>
-                    {!g.is_system && memberCount === 0 && (
-                      <button
-                        onClick={() => setPendingDelete(g)}
-                        style={{ padding: '.25rem .6rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.8rem' }}
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <DataTable
+        columns={columns}
+        data={groups}
+        emptyMessage="No groups found."
+      />
 
       {activeGroup && (
-        <div role="dialog" aria-modal="true" aria-label="Manage group members" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 30 }}>
-          <div style={{ background: '#fff', width: 'min(720px, 100%)', borderRadius: '12px', padding: '1.25rem', maxHeight: '85vh', overflow: 'auto' }}>
+        <div role="dialog" aria-modal="true" aria-label="Manage group members" style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay-slate)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 30 }}>
+          <div style={{ background: 'var(--surface-card)', width: 'min(720px, 100%)', borderRadius: '12px', padding: '1.25rem', maxHeight: '85vh', overflow: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'start', marginBottom: '1rem' }}>
               <div>
                 <h3 style={{ margin: 0 }}>Manage members</h3>
-                <p style={{ margin: '.25rem 0 0', color: '#64748b' }}>{groupTitle(activeGroup)}</p>
+                <p style={{ margin: '.25rem 0 0', color: 'var(--text-secondary)' }}>{groupTitle(activeGroup)}</p>
               </div>
-              <button onClick={() => { setActiveGroup(null); setSelectedUserId('') }} style={{ padding: '.25rem .6rem', background: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Close</button>
+              <Button variant="ghost" size="sm" onClick={() => { setActiveGroup(null); setSelectedUserId('') }}>Close</Button>
             </div>
 
             <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem', alignItems: 'end', flexWrap: 'wrap' }}>
               <label style={{ display: 'grid', gap: '.25rem', minWidth: '18rem', flex: '1 1 18rem' }}>
                 <span style={{ fontSize: '.875rem', fontWeight: 600 }}>Add member</span>
-                <select value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} style={{ padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}>
+                <select value={selectedUserId} onChange={(event) => setSelectedUserId(event.target.value)} style={{ padding: '.45rem .7rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}>
                   <option value="">Select a user</option>
                   {availableUsers.map((user) => {
                     const id = user.id ?? user.user_id ?? ''
@@ -210,40 +203,37 @@ export default function GroupsPage() {
                   })}
                 </select>
               </label>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
+                loading={addMember.isPending}
+                disabled={!selectedUserId}
                 onClick={() => {
                   if (!selectedUserId) return
                   addMember.mutate({ groupId: groupId(activeGroup), userId: selectedUserId })
                 }}
-                disabled={!selectedUserId || addMember.isPending}
-                style={{ padding: '.45rem .8rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Add member
-              </button>
+              </Button>
             </div>
 
             <div>
               <h4 style={{ margin: '0 0 .75rem' }}>Current members</h4>
               {(members ?? []).length === 0 ? (
-                <p style={{ margin: 0, color: '#64748b' }}>No members in this group.</p>
+                <p style={{ margin: 0, color: 'var(--text-secondary)' }}>No members in this group.</p>
               ) : (
                 <div style={{ display: 'grid', gap: '.5rem' }}>
                   {(members ?? []).map((user) => {
                     const id = user.id ?? user.user_id ?? ''
                     return (
-                      <div key={id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '.7rem .85rem' }}>
+                      <div key={id} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', border: '1px solid var(--border-default)', borderRadius: '8px', padding: '.7rem .85rem' }}>
                         <div>
                           <div style={{ fontWeight: 600 }}>{user.display_name}</div>
-                          <div style={{ color: '#64748b', fontSize: '.875rem' }}>{user.email}</div>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '.875rem' }}>{user.email}</div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeMember.mutate({ groupId: groupId(activeGroup), userId: id })}
-                          style={{ padding: '.25rem .6rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.8rem' }}
-                        >
+                        <Button variant="danger" size="sm" onClick={() => removeMember.mutate({ groupId: groupId(activeGroup), userId: id })}>
                           Remove
-                        </button>
+                        </Button>
                       </div>
                     )
                   })}
@@ -257,22 +247,22 @@ export default function GroupsPage() {
       </QueryStateBoundary>
 
       {pendingDelete && (
-        <div role="dialog" aria-modal="true" aria-label="Delete group" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 40 }}>
-          <div style={{ background: '#fff', width: 'min(520px, 100%)', borderRadius: '12px', padding: '1.25rem' }}>
+        <div role="dialog" aria-modal="true" aria-label="Delete group" style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay-slate)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', zIndex: 40 }}>
+          <div style={{ background: 'var(--surface-card)', width: 'min(520px, 100%)', borderRadius: '12px', padding: '1.25rem' }}>
             <h3 style={{ marginTop: 0 }}>Delete group?</h3>
-            <p style={{ color: '#475569' }}>Delete {groupTitle(pendingDelete)} only if it is empty. This action cannot be undone.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>Delete {groupTitle(pendingDelete)} only if it is empty. This action cannot be undone.</p>
             <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setPendingDelete(null)} style={{ padding: '.45rem .8rem', background: '#e2e8f0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-              <button
-                type="button"
+              <Button variant="secondary" size="md" onClick={() => setPendingDelete(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                size="md"
                 onClick={() => {
                   deleteGroup.mutate(groupId(pendingDelete))
                   setPendingDelete(null)
                 }}
-                style={{ padding: '.45rem .8rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
               >
                 Delete group
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { Button } from '@/components/ui/Button'
 import {
   getOnboardingStatus,
   type OnboardingFormValues,
@@ -124,11 +125,11 @@ export default function OnboardingProgressPage() {
             style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}
           >
             <Spinner />
-            <span style={{ color: '#475569', fontSize: '.95rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
               Setting up tenant — this may take a moment…
             </span>
           </div>
-          <p style={{ color: '#94a3b8', fontSize: '.85rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-xs)' }}>
             Onboarding ID: <code>{onboardingId}</code>
           </p>
         </>
@@ -139,32 +140,20 @@ export default function OnboardingProgressPage() {
           role="alert"
           style={{
             padding: '.85rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #fca5a5',
-            background: '#fff1f2',
-            color: '#9f1239',
-            fontSize: '.88rem',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-error-border)',
+            background: 'var(--color-error-tint)',
+            color: 'var(--color-error-dark)',
+            fontSize: 'var(--text-sm)',
             marginBottom: '1.25rem',
           }}
         >
           <p style={{ margin: '0 0 .75rem 0' }}>
             Unable to check onboarding status. The service may be temporarily unavailable.
           </p>
-          <button
-            onClick={handleRetry}
-            style={{
-              padding: '.4rem .9rem',
-              background: '#1d4ed8',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '.85rem',
-            }}
-          >
+          <Button variant="primary" size="sm" onClick={handleRetry}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -186,13 +175,13 @@ function Spinner() {
         cy="12"
         r="10"
         fill="none"
-        stroke="#cbd5e1"
+        style={{ stroke: 'var(--border-default)' }}
         strokeWidth="3"
       />
       <path
         d="M12 2 A10 10 0 0 1 22 12"
         fill="none"
-        stroke="#1d4ed8"
+        style={{ stroke: 'var(--interactive-primary)' }}
         strokeWidth="3"
         strokeLinecap="round"
       />

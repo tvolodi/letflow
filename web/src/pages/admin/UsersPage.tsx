@@ -5,8 +5,16 @@ import { queryKeys } from '@/api/queryKeys'
 import type { User } from '@/types/api'
 import { useNavigate } from 'react-router-dom'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+
+// NOTE: user active/inactive is rendered as a tokenized custom badge, not
+// StatusBadge (REQ-272) -- StatusBadgeDomain has no "user" member (only
+// definition|instance|task|timer|dlq), so it cannot type-check this status
+// pair without extending the primitive itself, which is out of this
+// mechanical migration's scope.
 
 function roleList(user: User): string[] {
   return Array.isArray(user.roles) ? user.roles : []
@@ -60,17 +68,38 @@ export default function UsersPage() {
     setter(selectedIds.includes(roleId) ? selectedIds.filter((id) => id !== roleId) : [...selectedIds, roleId])
   }
 
+  const columns: DataTableColumn<User>[] = [
+    { id: 'username', header: 'Username', accessor: displayUsername },
+    { id: 'display_name', header: 'Display name', accessor: (u) => u.display_name },
+    { id: 'email', header: 'Email', accessor: (u) => u.email },
+    {
+      id: 'roles',
+      header: 'Roles',
+      accessor: (u) => (
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{roleList(u).join(', ')}</span>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessor: (u) => (
+        <span style={{ color: u.is_active ? 'var(--color-success-dark)' : 'var(--text-disabled)', fontWeight: 600, fontSize: 'var(--text-xs)' }}>
+          {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+        </span>
+      ),
+    },
+    { id: 'created', header: 'Created', accessor: (u) => new Date(u.created_at).toLocaleDateString('en-US') },
+  ]
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Users</h2>
-        <button
-          onClick={() => setCreating(true)}
-          data-testid="admin-users-new"
-          style={{ marginLeft: 'auto', padding: '.4rem .9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-        >
-          + New User
-        </button>
+        <span style={{ marginLeft: 'auto' }} data-testid="admin-users-new">
+          <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+            + New User
+          </Button>
+        </span>
       </div>
 
       <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
@@ -79,20 +108,17 @@ export default function UsersPage() {
           value={searchDraft}
           onChange={(e) => setSearchDraft(e.target.value)}
           placeholder="Search users"
-          style={{ width: '20rem', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
+          style={{ width: '20rem', padding: '.45rem .7rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', boxSizing: 'border-box' }}
         />
-        <button
-          onClick={() => setSearchApplied(searchDraft)}
-          style={{ padding: '.4rem .9rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-        >
+        <Button variant="primary" size="sm" onClick={() => setSearchApplied(searchDraft)}>
           Apply
-        </button>
+        </Button>
       </div>
 
       {creating && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+        <div style={{ background: 'var(--surface-page)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '1.25rem', marginBottom: '1.25rem' }}>
           <h3 style={{ margin: '0 0 1rem' }}>Create user</h3>
-          {error && <p style={{ color: '#dc2626', marginBottom: '.75rem', fontSize: '.875rem' }}>{error}</p>}
+          {error && <p style={{ color: 'var(--color-error)', marginBottom: '.75rem', fontSize: 'var(--text-sm)' }}>{error}</p>}
           {([
             { key: 'username', label: 'Username', type: 'text' },
             { key: 'display_name', label: 'Display name', type: 'text' },
@@ -106,7 +132,7 @@ export default function UsersPage() {
                 aria-label={f.label}
                 value={form[f.key]}
                 onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
-                style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '.9rem', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '.45rem .7rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', boxSizing: 'border-box' }}
               />
             </div>
           ))}
@@ -127,19 +153,12 @@ export default function UsersPage() {
           </div>
 
           <div style={{ display: 'flex', gap: '.5rem' }}>
-            <button
-              onClick={() => createUser.mutate()}
-              disabled={createUser.isPending}
-              style={{ padding: '.4rem .9rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-            >
+            <Button variant="primary" size="sm" loading={createUser.isPending} onClick={() => createUser.mutate()}>
               Create user
-            </button>
-            <button
-              onClick={() => { setCreating(false); setError(null) }}
-              style={{ padding: '.4rem .9rem', background: '#6b7280', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-            >
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => { setCreating(false); setError(null) }}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -154,34 +173,13 @@ export default function UsersPage() {
         }
         columns={[{ widthPercent: 20 }, { widthPercent: 25 }, { widthPercent: 25 }, { widthPercent: 15 }, { widthPercent: 10 }, { widthPercent: 5 }]}
       >
-      <table data-testid="admin-users-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.9rem' }}>
-        <thead>
-          <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-            <th style={{ padding: '.6rem .8rem' }}>Username</th>
-            <th style={{ padding: '.6rem .8rem' }}>Display name</th>
-            <th style={{ padding: '.6rem .8rem' }}>Email</th>
-            <th style={{ padding: '.6rem .8rem' }}>Roles</th>
-            <th style={{ padding: '.6rem .8rem' }}>Status</th>
-            <th style={{ padding: '.6rem .8rem' }}>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data?.items ?? []).map((u: User) => (
-            <tr key={u.id ?? u.user_id ?? `${u.email}-${u.created_at}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={{ padding: '.6rem .8rem' }}>{displayUsername(u)}</td>
-              <td style={{ padding: '.6rem .8rem' }}>{u.display_name}</td>
-              <td style={{ padding: '.6rem .8rem' }}>{u.email}</td>
-              <td style={{ padding: '.6rem .8rem', fontSize: '.8rem', color: '#64748b' }}>{roleList(u).join(', ')}</td>
-              <td style={{ padding: '.6rem .8rem' }}>
-                <span style={{ color: u.is_active ? '#16a34a' : '#9ca3af', fontWeight: 600, fontSize: '.8rem' }}>
-                  {u.is_active ? 'ACTIVE' : 'INACTIVE'}
-                </span>
-              </td>
-              <td style={{ padding: '.6rem .8rem' }}>{new Date(u.created_at).toLocaleDateString('en-US')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div data-testid="admin-users-table">
+        <DataTable
+          columns={columns}
+          data={data?.items ?? []}
+          emptyMessage="No users found."
+        />
+      </div>
       </QueryStateBoundary>
 
     </div>

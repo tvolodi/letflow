@@ -7,8 +7,19 @@ import type { CursorPage } from '@/types/api'
 import { JsonDiffView } from '@/components/ui/JsonDiffView'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+
+// NOTE: this table keeps native <table> markup rather than DataTable
+// (REQ-274) because each row supports an inline expand-to-diff affordance
+// (a second <tr> rendering JsonDiffView) that DataTable's column/row model
+// has no concept of -- DataTable supports only sorting, not expandable
+// sub-rows (see its moduledoc). Colours are still fully tokenized, and
+// pagination is delegated to PaginationControls (cursor-based: totalItems
+// is unknown, so hasNextPage drives the Next button per PaginationControls'
+// own documented cursor-pagination case).
 
 function isValidIsoDate(value?: string): boolean {
   if (!value) return true
@@ -71,7 +82,7 @@ export default function AuditLogPage() {
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Audit Log</h2>
-        {isFetching && <span style={{ fontSize: '.8rem', color: '#0369a1' }}>Refreshing…</span>}
+        {isFetching && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-dark)' }}>Refreshing…</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '.65rem', marginBottom: '1rem' }}>
@@ -82,7 +93,7 @@ export default function AuditLogPage() {
             setCursorStack([])
           }}
           placeholder="Actor ID"
-          style={{ padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+          style={{ padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
         />
         <input
           value={resourceType}
@@ -91,7 +102,7 @@ export default function AuditLogPage() {
             setCursorStack([])
           }}
           placeholder="Resource type"
-          style={{ padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+          style={{ padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
         />
         <input
           value={from}
@@ -100,7 +111,7 @@ export default function AuditLogPage() {
             setCursorStack([])
           }}
           placeholder="From (ISO8601)"
-          style={{ padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+          style={{ padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
         />
         <input
           value={to}
@@ -109,7 +120,7 @@ export default function AuditLogPage() {
             setCursorStack([])
           }}
           placeholder="To (ISO8601)"
-          style={{ padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+          style={{ padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
         />
         <select
           value={pageSize}
@@ -117,7 +128,7 @@ export default function AuditLogPage() {
             setPageSize(Number(e.target.value))
             setCursorStack([])
           }}
-          style={{ padding: '.45rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+          style={{ padding: '.45rem .6rem', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)' }}
         >
           <option value={25}>25 / page</option>
           <option value={50}>50 / page</option>
@@ -126,7 +137,7 @@ export default function AuditLogPage() {
       </div>
 
       {!validFilters && (
-        <div style={{ marginBottom: '1rem', padding: '.75rem .9rem', borderRadius: '6px', border: '1px solid #fdba74', background: '#fff7ed', color: '#9a3412' }}>
+        <div style={{ marginBottom: '1rem', padding: '.75rem .9rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-warning-border)', background: 'var(--color-warning-tint)', color: 'var(--color-warning-text)' }}>
           Please enter valid ISO8601 date filters and ensure from ≤ to.
         </div>
       )}
@@ -142,12 +153,12 @@ export default function AuditLogPage() {
         columns={[{ widthPercent: 5 }, { widthPercent: 20 }, { widthPercent: 20 }, { widthPercent: 25 }, { widthPercent: 20 }, { widthPercent: 10 }]}
       >
         {validFilters && !hasResults && (
-          <div style={{ marginBottom: '1rem', color: '#64748b' }}>No audit entries matched the selected filters.</div>
+          <div style={{ marginBottom: '1rem', color: 'var(--text-secondary)' }}>No audit entries matched the selected filters.</div>
         )}
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
         <thead>
-          <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
+          <tr style={{ background: 'var(--surface-page)', textAlign: 'left' }}>
             <th style={{ padding: '.6rem .8rem' }}></th>
             <th style={{ padding: '.6rem .8rem' }}>Time</th>
             <th style={{ padding: '.6rem .8rem' }}>Actor</th>
@@ -159,30 +170,31 @@ export default function AuditLogPage() {
         <tbody>
           {(data?.items ?? []).map((e: AuditEntry) => (
             <Fragment key={e.id}>
-              <tr key={e.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+              <tr key={e.id} style={{ borderBottom: '1px solid var(--border-default)' }}>
                 <td style={{ padding: '.5rem .8rem' }}>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       setExpandedRows((prev) => ({ ...prev, [e.id]: !prev[e.id] }))
                     }}
-                    style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem', padding: '.1rem .35rem' }}
                   >
                     {expandedRows[e.id] ? '−' : '+'}
-                  </button>
+                  </Button>
                 </td>
-                <td style={{ padding: '.5rem .8rem', color: '#64748b', fontFamily: 'monospace', fontSize: '.8rem', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '.5rem .8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}>
                   {new Date(e.occurred_at).toLocaleString()}
                 </td>
-                <td style={{ padding: '.5rem .8rem', fontSize: '.8rem', fontFamily: 'monospace' }}>{e.actor_display_name ?? e.actor_id}</td>
-                <td style={{ padding: '.5rem .8rem', fontFamily: 'monospace', fontSize: '.8rem', fontWeight: 600 }}>{e.action}</td>
-                <td style={{ padding: '.5rem .8rem', fontSize: '.8rem', color: '#64748b' }}>
+                <td style={{ padding: '.5rem .8rem', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>{e.actor_display_name ?? e.actor_id}</td>
+                <td style={{ padding: '.5rem .8rem', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{e.action}</td>
+                <td style={{ padding: '.5rem .8rem', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
                   {e.resource_type} / {e.resource_id}
                 </td>
-                <td style={{ padding: '.5rem .8rem', fontFamily: 'monospace', fontSize: '.8rem', color: '#94a3b8' }}>{e.ip_address ?? '—'}</td>
+                <td style={{ padding: '.5rem .8rem', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{e.ip_address ?? '—'}</td>
               </tr>
               {expandedRows[e.id] && (
                 <tr>
-                  <td colSpan={6} style={{ padding: '.6rem .8rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  <td colSpan={6} style={{ padding: '.6rem .8rem', background: 'var(--surface-page)', borderBottom: '1px solid var(--border-default)' }}>
                     <JsonDiffView before={e.before_state} after={e.after_state} />
                   </td>
                 </tr>
@@ -192,23 +204,20 @@ export default function AuditLogPage() {
         </tbody>
       </table>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
-        <button
-          onClick={() => setCursorStack((prev) => prev.slice(0, -1))}
-          disabled={cursorStack.length === 0}
-          style={{ padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: cursorStack.length === 0 ? '#f1f5f9' : '#fff', cursor: cursorStack.length === 0 ? 'not-allowed' : 'pointer' }}
-        >
-          Previous
-        </button>
-        <button
-          onClick={() => {
-            if (nextCursor) setCursorStack((prev) => [...prev, nextCursor])
+      <div style={{ marginTop: '1rem' }}>
+        <PaginationControls
+          page={cursorStack.length + 1}
+          pageSize={pageSize}
+          totalItems={null}
+          hasNextPage={Boolean(nextCursor)}
+          onPageChange={(newPage) => {
+            if (newPage < cursorStack.length + 1) {
+              setCursorStack((prev) => prev.slice(0, -1))
+            } else if (nextCursor) {
+              setCursorStack((prev) => [...prev, nextCursor])
+            }
           }}
-          disabled={!nextCursor}
-          style={{ padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: !nextCursor ? '#f1f5f9' : '#fff', cursor: !nextCursor ? 'not-allowed' : 'pointer' }}
-        >
-          Next
-        </button>
+        />
       </div>
       </QueryStateBoundary>
     </div>

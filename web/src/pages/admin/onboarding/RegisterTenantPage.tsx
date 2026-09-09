@@ -5,14 +5,21 @@
  * On success navigates to OnboardingProgressPage with form values in router state.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { Button } from '@/components/ui/Button'
 import {
   submitOnboarding,
   OnboardingApiError,
   type OnboardingFormValues,
 } from '@/api/onboarding'
+
+// NOTE: the Realm Config / Client Config disclosure buttons below stay
+// native <button> elements, not Button (REQ-272) -- Button's model is a
+// fixed-size inline-flex control (sm/md/lg padding, centred content); it
+// has no full-width / text-align:left mode, which this collapsible
+// section header requires. Colours are still fully tokenized.
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -152,14 +159,14 @@ const inputStyle: React.CSSProperties = {
   display: 'block',
   width: '100%',
   padding: '.45rem .65rem',
-  border: '1px solid #cbd5e1',
-  borderRadius: '4px',
-  fontSize: '.9rem',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--text-base)',
   boxSizing: 'border-box',
 }
 
 const errorStyle: React.CSSProperties = {
-  color: '#dc2626',
+  color: 'var(--color-error)',
   fontSize: '.8rem',
   marginTop: '.2rem',
 }
@@ -169,7 +176,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '.3rem',
   fontWeight: 600,
   fontSize: '.87rem',
-  color: '#374151',
+  color: 'var(--text-primary)',
 }
 
 const fieldGroupStyle: React.CSSProperties = {
@@ -222,6 +229,7 @@ export default function RegisterTenantPage() {
   const [idempotencyKey] = useState<string>(() => crypto.randomUUID())
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState<{ banner: string; progressLink?: string } | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const [realmOpen, setRealmOpen] = useState(false)
   const [clientOpen, setClientOpen] = useState(false)
 
@@ -313,10 +321,10 @@ export default function RegisterTenantPage() {
           style={{
             marginBottom: '1.25rem',
             padding: '.75rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #fca5a5',
-            background: '#fff1f2',
-            color: '#9f1239',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-error-border)',
+            background: 'var(--color-error-tint)',
+            color: 'var(--color-error-dark)',
             fontSize: '.88rem',
           }}
         >
@@ -324,7 +332,7 @@ export default function RegisterTenantPage() {
           {apiError.progressLink && (
             <>
               {' '}
-              <a href={apiError.progressLink} style={{ color: '#1d4ed8' }}>
+              <a href={apiError.progressLink} style={{ color: 'var(--interactive-primary)' }}>
                 View progress
               </a>
             </>
@@ -332,13 +340,13 @@ export default function RegisterTenantPage() {
         </div>
       )}
 
-      <form onSubmit={(e) => { void handleSubmit(e) }} noValidate>
+      <form ref={formRef} onSubmit={(e) => { void handleSubmit(e) }} noValidate>
         {/* Slug */}
         <div style={fieldGroupStyle}>
           <label style={labelStyle} htmlFor="slug">Slug</label>
           <input
             id="slug"
-            style={{ ...inputStyle, borderColor: errors.slug ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.slug ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.slug}
             onChange={(e) => setField('slug', e.target.value)}
             autoComplete="off"
@@ -351,7 +359,7 @@ export default function RegisterTenantPage() {
           <label style={labelStyle} htmlFor="display_name">Display Name</label>
           <input
             id="display_name"
-            style={{ ...inputStyle, borderColor: errors.display_name ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.display_name ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.display_name}
             onChange={(e) => setField('display_name', e.target.value)}
           />
@@ -364,7 +372,7 @@ export default function RegisterTenantPage() {
           <input
             id="admin_email"
             type="email"
-            style={{ ...inputStyle, borderColor: errors.admin_email ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.admin_email ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.admin_email}
             onChange={(e) => setField('admin_email', e.target.value)}
             autoComplete="off"
@@ -377,7 +385,7 @@ export default function RegisterTenantPage() {
           <label style={labelStyle} htmlFor="admin_username">Admin Username</label>
           <input
             id="admin_username"
-            style={{ ...inputStyle, borderColor: errors.admin_username ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.admin_username ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.admin_username}
             onChange={(e) => setField('admin_username', e.target.value)}
             autoComplete="off"
@@ -390,7 +398,7 @@ export default function RegisterTenantPage() {
           <label style={labelStyle} htmlFor="admin_display_name">Admin Display Name</label>
           <input
             id="admin_display_name"
-            style={{ ...inputStyle, borderColor: errors.admin_display_name ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.admin_display_name ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.admin_display_name}
             onChange={(e) => setField('admin_display_name', e.target.value)}
           />
@@ -402,7 +410,7 @@ export default function RegisterTenantPage() {
           <label style={labelStyle} htmlFor="hostname">Hostname</label>
           <input
             id="hostname"
-            style={{ ...inputStyle, borderColor: errors.hostname ? '#dc2626' : '#cbd5e1' }}
+            style={{ ...inputStyle, borderColor: errors.hostname ? 'var(--border-error)' : 'var(--border-default)' }}
             value={form.hostname}
             onChange={(e) => setField('hostname', e.target.value)}
             placeholder="tenant.example.com"
@@ -419,51 +427,27 @@ export default function RegisterTenantPage() {
                 style={{
                   ...inputStyle,
                   flex: 1,
-                  borderColor: errors.redirect_uris && idx === 0 ? '#dc2626' : '#cbd5e1',
+                  borderColor: errors.redirect_uris && idx === 0 ? 'var(--border-error)' : 'var(--border-default)',
                 }}
                 value={uri}
                 onChange={(e) => setRedirectUri(idx, e.target.value)}
                 placeholder="https://app.example.com/callback"
               />
               {form.redirect_uris.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeRedirectUri(idx)}
-                  style={{
-                    padding: '.4rem .7rem',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '4px',
-                    background: '#fff',
-                    cursor: 'pointer',
-                    color: '#dc2626',
-                    fontSize: '.85rem',
-                  }}
-                >
+                <Button variant="danger" size="sm" onClick={() => removeRedirectUri(idx)}>
                   Remove
-                </button>
+                </Button>
               )}
             </div>
           ))}
           {errors.redirect_uris && <div style={errorStyle}>{errors.redirect_uris}</div>}
-          <button
-            type="button"
-            onClick={addRedirectUri}
-            style={{
-              marginTop: '.25rem',
-              padding: '.35rem .7rem',
-              border: '1px solid #cbd5e1',
-              borderRadius: '4px',
-              background: '#fff',
-              cursor: 'pointer',
-              fontSize: '.82rem',
-            }}
-          >
+          <Button variant="secondary" size="sm" onClick={addRedirectUri}>
             + Add URI
-          </button>
+          </Button>
         </div>
 
         {/* Realm config (collapsible) */}
-        <div style={{ marginBottom: '1rem', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+        <div style={{ marginBottom: '1rem', border: '1px solid var(--border-default)', borderRadius: '6px' }}>
           <button
             type="button"
             onClick={() => setRealmOpen((v) => !v)}
@@ -471,19 +455,19 @@ export default function RegisterTenantPage() {
               width: '100%',
               textAlign: 'left',
               padding: '.65rem 1rem',
-              background: '#f8fafc',
+              background: 'var(--surface-page)',
               border: 'none',
               borderRadius: realmOpen ? '6px 6px 0 0' : '6px',
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '.87rem',
-              color: '#374151',
+              color: 'var(--text-primary)',
             }}
           >
             {realmOpen ? '▾' : '▸'} Realm Config (optional)
           </button>
           {realmOpen && (
-            <div style={{ padding: '1rem', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ padding: '1rem', borderTop: '1px solid var(--border-default)' }}>
               <div style={fieldGroupStyle}>
                 <label style={labelStyle} htmlFor="realm_token_lifetime">
                   Default Token Lifetime (seconds)
@@ -543,7 +527,7 @@ export default function RegisterTenantPage() {
         </div>
 
         {/* Client config (collapsible) */}
-        <div style={{ marginBottom: '1.5rem', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+        <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border-default)', borderRadius: '6px' }}>
           <button
             type="button"
             onClick={() => setClientOpen((v) => !v)}
@@ -551,19 +535,19 @@ export default function RegisterTenantPage() {
               width: '100%',
               textAlign: 'left',
               padding: '.65rem 1rem',
-              background: '#f8fafc',
+              background: 'var(--surface-page)',
               border: 'none',
               borderRadius: clientOpen ? '6px 6px 0 0' : '6px',
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '.87rem',
-              color: '#374151',
+              color: 'var(--text-primary)',
             }}
           >
             {clientOpen ? '▾' : '▸'} Client Config (optional)
           </button>
           {clientOpen && (
-            <div style={{ padding: '1rem', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ padding: '1rem', borderTop: '1px solid var(--border-default)' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', cursor: 'pointer', fontSize: '.87rem' }}>
                 <input
                   type="checkbox"
@@ -576,22 +560,14 @@ export default function RegisterTenantPage() {
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            padding: '.55rem 1.4rem',
-            background: submitting ? '#94a3b8' : '#1d4ed8',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: 600,
-            fontSize: '.9rem',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-          }}
+        <Button
+          variant="primary"
+          size="md"
+          loading={submitting}
+          onClick={() => formRef.current?.requestSubmit()}
         >
           {submitting ? 'Submitting…' : 'Register Tenant'}
-        </button>
+        </Button>
       </form>
     </div>
   )

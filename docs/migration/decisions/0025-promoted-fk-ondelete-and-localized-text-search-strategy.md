@@ -382,7 +382,106 @@ INV-1 risk is introduced by this design.
 
 ## REVIEWER sign-off
 
-(Pending. Stated interest per REQ-302: idiom consistency — whether the
-chosen `ON DELETE` behavior and localized-text column strategy fit the
-soft-delete and full-text-search idioms already established elsewhere in
-the codebase.)
+**Status: PASS** (2026-09-09, `REVIEWER`, REQ-302).
+
+**Scope note.** Same as SECURITY-REVIEWER's: this is a design-time review
+of a decision record, `git diff --stat main...HEAD` shows only this file
+and a `docs/requirements.yaml` status line — no `lib/letflow/entities/`,
+no `lib/letflow/tenant_provisioning*`, no `priv/repo/migrations/` diff.
+Review is against the record's proposed mechanisms' idiom fit, not
+against code.
+
+**1. `ON DELETE RESTRICT` fit — sound, independent of precedent framing.**
+The exclusion reasoning for `CASCADE` (irreversible cross-table tenant
+data loss with no `entity_events` replay path) and `SET NULL` (forces
+nullability onto columns that model required references, silent
+audit-trail-defeating detachment) and `NO ACTION` (deferrability buys
+nothing against this schema's non-cyclic FK topology) each stand on their
+own technical merits, independent of any precedent count.
+
+**2. Precedent claim is real but overstated as stated — flagged, not
+disqualifying.** I independently grepped `on_delete:` across
+`lib/letflow/design/*.md` and `priv/repo/migrations/*.exs`. The three
+citations (req043, req054, req211) are accurate quotes of real, matching
+`:restrict` precedent using the same "fails loudly instead of silently
+losing tenant data" reasoning. But the picture is more mixed than "the
+established, repeated idiom for exactly this shape of FK" suggests:
+`priv/repo/migrations/20260822000102_create_group_members_tenant_scoped.exs`
+uses `on_delete: :nothing` on `user_id` for the *identical* "no delete
+path exists anywhere in this codebase yet" shape — and its own header
+comment (ISS-0225) flags this as untested territory rather than a
+considered `:restrict` vs `:nothing` choice, i.e. an acknowledged,
+open inconsistency in the codebase's own idiom, not a reconciled one.
+The record should have surfaced this counter-example and either
+distinguished it or noted the open inconsistency, rather than presenting
+the three same-reasoning citations as if `:restrict` were uncontested for
+this exact shape. The other `on_delete: :nothing` sites I found
+(`instance_definition_snapshots.definition_id`,
+`promotion_assertion_runs.review_id`) are genuinely distinguishable —
+those reference rows that *are* actively deleted in practice (a
+definition, a review), where `:nothing`/`:restrict`-would-block was the
+live design question, unlike this record's "no delete path exists at
+all yet" premise — so they are not counter-examples to the same shape.
+Net: the citation is accurate but incomplete, and the "established,
+repeated idiom" framing oversells uniformity that doesn't fully exist.
+This does not change the verdict — per sub-question 1's own reasoning
+(point 1 above), `RESTRICT` is the correct choice on its technical
+merits regardless of how uniform the existing codebase actually is, and
+the record's own reasoning doesn't rest on a headcount of precedent. Filed
+as an idiom-fit observation the record's author (or a later reader
+reconciling `group_members`) should know about, not a defect that
+invalidates the decision.
+
+**3. Full-text-search idiom fit — confirmed accurate, no missed
+precedent.** `lib/letflow/definitions.ex:79-88` is exactly the `search/2`
+moduledoc section cited, and its text ("adds zero new indexes (no
+`idx_def_name`, no GIN/`tsvector` index)") is accurately characterized as
+the sole existing full-text-search precedent, landing on the simple
+option. `grep -rn "tsvector\|GIN" lib/ --include="*.ex"` returns only that
+same moduledoc line — no other `tsvector`/GIN precedent anywhere in
+`lib/` that this record should have reconciled against instead. The
+record correctly treats `tsvector` as new territory for this codebase.
+
+**4. Internal consistency — no accidental coupling found.** Sub-question
+1 (`ON DELETE`) and sub-question 2 (`search_strategy` plain/`tsvector`)
+are decided, reasoned, and consequenced entirely independently in the
+record's text — neither the `RESTRICT` choice nor its reasoning
+references localized-text columns, and neither the `:plain`/`:fulltext`
+choice nor its reasoning references FK delete behavior. The
+`Consequences` section states the independence explicitly and correctly
+(REQ-298 and REQ-301 each consume one answer, with no cross-reference
+between them). Matches the requirement's own "no compositional
+relationship" framing.
+
+**5. Decision-record consistency — confirmed, nothing re-decided.**
+`git diff main...HEAD -- docs/migration/decisions/0023-entity-storage-hybrid.md`
+and the equivalent for `0024` are both empty — neither prior record is
+touched. `0025`'s "What this record does not decide" section correctly
+disclaims re-opening `0023`'s promotion rule, additive-only/no-demotion
+rule, and entity-vs-blob test, and correctly disclaims `0024`'s
+DDL-execution mechanism, partial-failure semantics, backfill, and
+rollback story. The two new decisions here (the `ON DELETE` clause,
+and the plain-vs-`tsvector` per-field choice) are genuinely the two
+questions `0023` left open (named explicitly in `0023`'s own text per
+this record's Question section) and nothing more.
+
+**6. Format — matches established shape.** Section order (Question,
+Decision, Reasoning, Consequences, What this record does not decide,
+SECURITY-REVIEWER sign-off, REVIEWER sign-off) matches `0023`/`0024`'s
+own shape.
+
+**7/8. `0024` untouched, scope clean.** `git diff main...HEAD -- docs/migration/decisions/0024-entity-promotion-ddl-execution.md`
+is empty. `git diff --stat main...HEAD` shows only this record and a
+`docs/requirements.yaml` status line — no `lib/letflow/entities/`, no
+`lib/letflow/tenant_provisioning.ex`/`tenant_provisioning/`, no
+`priv/repo/migrations/` diff.
+
+**Verdict: PASS.** Both sub-decisions fit their respective established
+idioms on independent technical merits. One precedent-citation gap noted
+above (item 2) — the record's "established, repeated idiom" framing for
+`ON DELETE RESTRICT` overlooks `group_members`'s `on_delete: :nothing`
+counter-example of the identical "no delete path yet" shape (itself an
+acknowledged open inconsistency, ISS-0225, not something this record
+introduced) — but it does not change the correctness of the `RESTRICT`
+choice, which is independently justified. No scope creep, no re-decided
+question, no accidental coupling between the two sub-questions.

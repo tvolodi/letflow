@@ -968,10 +968,24 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # stale_count == 0, both deferrals verdict: :legitimate with
       # scope: {:blocked_by, "REQ-222"}. The detector is unchanged.
       #
-      # This count drops back toward 0 as REQ-222 merges and REQ-223/224 are
+      # UPDATE (decision 0020, 2026-09-09): the count moved from 2 to 10, which
+      # is this test doing its job rather than a regression -- its own note
+      # above says the count "is expected to move as the corpus changes; what
+      # is asserted permanently is `stale_count == 0`". Record 0020's
+      # requirement expansion (REQ-272..294) added 8 `blocked-by:`-scoped
+      # deferrals: REQ-279 (-> REQ-276), REQ-283 (-> REQ-279), REQ-284
+      # (-> REQ-286), REQ-290 (-> REQ-292), REQ-291 (-> REQ-284), REQ-292
+      # (-> REQ-286), REQ-293 (-> REQ-284), REQ-294 (-> REQ-290), joining the
+      # pre-existing REQ-223/224 (-> REQ-222). All 10 are verdict
+      # :legitimate. Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 10, stale_count == 0. The detector is unchanged.
+      #
+      # This count drops as each blocker merges and the blocked entry is
       # registered; it rises again with any new deferral. `stale_count`,
       # however, must stay 0 -- that one IS the invariant.
-      assert result.deferral_count == 2
+      assert result.deferral_count == 10
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -979,7 +993,18 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # non-vacuous, and would catch a deferral that merely stopped being
       # counted.
       assert Enum.all?(result.deferrals, &(&1.verdict == :legitimate))
-      assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == ["REQ-223", "REQ-224"]
+      assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
+               "REQ-223",
+               "REQ-224",
+               "REQ-279",
+               "REQ-283",
+               "REQ-284",
+               "REQ-290",
+               "REQ-291",
+               "REQ-292",
+               "REQ-293",
+               "REQ-294"
+             ]
     end
 
     test "T-REG-STILL-GREEN -- the bounded `status` addition kept ISS-0231 green" do

@@ -5965,5 +5965,27 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-283 (queue task 563, GH#1154) applies tenant branding as CSS custom-property overrides on tokens.css (0020 D1c, theming half). New BrandingProvider mounted at app root, closed one-key allowlist (brand_colors.primary -> --color-brand-600) matching the server-side @brand_colors_allowed_keys ~w(primary) closure, plain <img src> logo rendering with alt sourced only from appName. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> FRONTEND-DEV -> SECURITY-REVIEWER (PASS -- allowlist iteration direction and alt-attribute sourcing both independently confirmed safe, zero eval/dangerouslySetInnerHTML/innerHTML, CSS values set via safe setProperty API) -> REVIEWER (1 rework cycle: AC1's computed-CSS-value test initially only exercised applyBrandingColors() directly, not the real BrandingProvider wiring; FRONTEND-DEV added a render-level test with a genuine fail-first proof, REVIEWER independently reproduced the fail-first break itself, re-check PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (337 tests across 53 files already map every AC, independently re-run by both SECURITY-REVIEWER and REVIEWER). No dependents deferred against REQ-283 -- no cascade this time."
     }
+,
+    {
+      "run_id": "WF02-REQ295-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-295",
+      "issue_id": null,
+      "queue_task_id": 564,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1158,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions",
+        "lib/letflow/design"
+      ],
+      "branch_name": "feature/WF02-REQ295-20260909",
+      "started_at": "2026-09-09T17:04:15Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-295 (queue task 564, GH#1158) answers decision 0023's DDL-execution open question -- new decision record docs/migration/decisions/0024-entity-promotion-ddl-execution.md plus a companion design doc for REQ-296 onward. Design-only, no lib/ code. Extends Letflow.TenantProvisioning (new ColumnPromotion functions) rather than a manifest reuse, dedicated migrator, or inline promotion-path execution. Per-tenant partial-failure state machine via a new entity_column_promotions table. Backfill via rebuild_projection/2 replay with dual-write + query_eligible gating typed_column dispatch. Rollback via allowlist-exclusion + corrective re-promotion, never a drop/narrow (0023's additive-only rule respected). entity_record_latest recommended for retirement. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: missing file:line citation, fixed) -> SECURITY-REVIEWER (1 rework: cross-tenant DDL risk from independently-sourced tenant_id/promotion_id parameters, fixed by deriving tenant_id from the loaded promotion row; re-check PASS) -> REVIEWER (PASS -- confirmed extending TenantProvisioning inherits REQ-045's already-settled process-vs-row precedent, no new supervision review needed). Both gates named by 0023's own closing sentence recorded in 0024's own sign-off sections. No dependents deferred against REQ-295."
+    }
   ]
 }

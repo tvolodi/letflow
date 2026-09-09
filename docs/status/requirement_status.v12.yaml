@@ -528,3 +528,69 @@ history:
       assertions, independently confirmed by both SECURITY-REVIEWER and
       REVIEWER re-running the full suite themselves. No dependents
       deferred against REQ-283 -- no cascade to fix this time.
+  - req: REQ-295
+    event: done
+    agent: ORCH
+    at: "2026-09-09T17:26:12Z"
+    note: >
+      REQ-295 (queue task 564, GH#1158) implemented via
+      WF02-REQ295-20260909: answers decision 0023's DDL-execution open
+      question with a new decision record,
+      docs/migration/decisions/0024-entity-promotion-ddl-execution.md,
+      plus a companion design artefact
+      (lib/letflow/design/req295-entity-promotion-ddl-execution.md) for
+      REQ-296 onward to build against. Design-only -- no lib/ code, no
+      migration. Registered into docs/requirements.yaml at this run's
+      Step 00 (same registration-gap class as REQ-272/275/287/289 --
+      existed in the queue but not the file).
+      Q1 (what runs the DDL): Letflow.TenantProvisioning, extended with
+      new ColumnPromotion functions -- not its existing manifest
+      mechanism (wrong shape for N already-live tenant schemas with
+      real data, versus N freshly-provisioned empty ones), not a
+      dedicated migrator (would reimplement TenantProvisioning's
+      already-reviewed identifier-injection safety argument a second
+      time), not the promotion path itself (a cross-tenant reach INV-1
+      forbids).
+      Q2 (partial failure): per-tenant, not atomic -- new global table
+      entity_column_promotions, states pending -> ddl_applied ->
+      backfilling -> backfilled -> active, plus ddl_failed and an
+      independent query_eligible flag.
+      Q3 (backfill): replay through rebuild_projection/2, not an
+      inline UPDATE -- dual-write into both the new column and
+      field_values during the backfill window, with query_eligible
+      gating :typed_column dispatch so a not-yet-backfilled row is
+      provably unreachable via the new column path (:json_field is the
+      only possible dispatch until backfilled -> active).
+      Q4 (rollback): never a drop/narrow (0023's additive-only rule
+      respected throughout) -- immediate correction is
+      query_eligible := false (fail closed, excludes from the query
+      allowlist), the actual fix ships as a corrective re-backfill or a
+      brand-new promotion under a new name.
+      entity_record_latest recommendation: retire, not migrate -- no
+      deployment holds entity records and every entity type gets its
+      own per-type table under 0023 regardless of promotion.
+      0023's "Open question" section amended to point at 0024 by path
+      -- verified via a diff scoped to only that section, nothing else
+      in 0023 changed.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework cycle:
+      a missing file:line citation for allowlist.ex's typed_columns/0,
+      alongside two correctly-cited functions -- fixed, re-check PASS)
+      -> SECURITY-REVIEWER (1 rework cycle: a real cross-tenant
+      DDL-execution risk -- the design doc's mutating functions took
+      tenant_id and promotion_id as two independently-sourced,
+      uncross-checked parameters, so a caller could in principle pair
+      one tenant's tenant_id with another tenant's promotion_id and run
+      DDL against the wrong schema. CODE-DESIGNER fixed by dropping
+      tenant_id as an independent parameter entirely, deriving it from
+      the loaded ColumnPromotion row instead -- re-check PASS,
+      independently re-traced by SECURITY-REVIEWER) -> REVIEWER (PASS
+      -- confirmed extending TenantProvisioning, a plain unsupervised
+      module arbitrating concurrency via pg_advisory_xact_lock, needs
+      no new supervision-tree review since it inherits REQ-045's
+      already-settled process-vs-row precedent rather than making a new
+      choice; fixed one trivial stale-arity doc nit directly rather
+      than routing back for something that small). Both required gates
+      (0023's own closing sentence: "needs its own design and its own
+      SECURITY-REVIEWER and REVIEWER gates") are recorded in 0024's own
+      distinct sign-off sections. No dependents deferred against
+      REQ-295 -- no cascade to fix.

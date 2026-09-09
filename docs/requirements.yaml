@@ -16532,7 +16532,7 @@ requirements:
   - id: REQ-279
     title: Delete the literal-colour guard's web/src/pages/ exemption -- D2's completion test (0020 D2b)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-276 -- REQ-276 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    # impl_order: UNREGISTERED -- blocked-by: REQ-277 -- REQ-276 (queue task 550) landed 2026-09-09; REQ-277 and REQ-278 are still pending, and this entry's own depends_on: [REQ-276, REQ-277, REQ-278] makes it unstartable until all three land, so the deferral re-scopes to the next live blocker rather than expiring
     status: pending
     stage: S8
     description: >

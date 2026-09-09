@@ -16749,7 +16749,7 @@ requirements:
     impl_order: 563  # letflow-queue task id, GH#1154. Registered 2026-09-09 by ORCH
       # once REQ-279 (queue task 562) flipped to done and REQ-281 (queue task 553)
       # was already done -- both live dependencies satisfied, no re-scope needed.
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Implements the theming half of step 6 of

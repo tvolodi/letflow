@@ -48,7 +48,7 @@ description: >
 affected_files:
   - lib/letflow/engine/transition.ex
   - lib/letflow/definitions/graph.ex
-github_issue: https://github.com/tvolodi/letflow/issues/157
+github_ref: GH-157
 status: resolved
 resolved_by: ISSUE-FIXER
 resolved_in_run: WF03-ISS0042-20260818

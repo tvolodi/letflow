@@ -1,4 +1,4 @@
-id: PENDING
+id: ISS-0558
 title: "REQ-201 alerts.ex: emission dedup row not cleared on trigger re-arm, silently blocks re-fire for instance_error_stuck with repeated error_reason"
 discovered_by: REVIEWER
 discovered_in_run: WF02-REQ201-20260830
@@ -37,3 +37,5 @@ description: >
 affected_files:
   - lib/letflow/obs/alerts.ex
   - lib/letflow/obs/alert_hook_emission_state.ex
+queue_ref: Q-558
+github_ref: GH-1132

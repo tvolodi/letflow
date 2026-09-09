@@ -93,8 +93,8 @@ resolution_note: >
   left open, since the GitHub issue and the underlying defect are both
   genuinely resolved -- only this filename's own status bookkeeping was
   never updated.
-github_issue: 357
-queue_task_id: 171
+github_ref: GH-357
+queue_ref: Q-171
 related_issues:
   - ISS-0065
   - ISS-0069

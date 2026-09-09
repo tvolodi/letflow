@@ -130,8 +130,8 @@ related:
   - ISS-0085
   - ISS-0086
   - ISS-0076
-github_issue: https://github.com/tvolodi/letflow/issues/304
-queue_task_id: 166   # backfilled 2026-08-20 per GH#313 (see closeout note below).
+github_ref: GH-304
+queue_ref: Q-166   # backfilled 2026-08-20 per GH#313 (see closeout note below).
   # Originally null here (filed under pre-2026-08-20 ISSUE_QUEUE.md, same gap as
   # ISS-0086); the resolution section below's "GH#304 is now closed" claim predates
   # ISS-0092's incident (ORCH's release_lock mistakenly transitioned unrelated queue

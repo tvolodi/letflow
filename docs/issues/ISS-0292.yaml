@@ -22,8 +22,8 @@ description: >
   signature, but the code defect stood on its own regardless.
 affected_files:
   - test/letflow/sandbox_pool_test.exs
-queue_task_id: 292
-github_issue: 585
+queue_ref: Q-292
+github_ref: GH-585
 status: resolved
 resolved_in_run: WF03-ISS0292-20260823
 resolved_at: "2026-08-23T09:18:03Z"

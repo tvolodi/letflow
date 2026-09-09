@@ -9,8 +9,8 @@ severity: MINOR
 status: resolved
 resolved_in_run: ORCH-direct-20260826
 resolved_at: "2026-08-26T16:50:00Z"
-queue_task_id: 344
-github_issue_number: 663
+queue_ref: Q-344
+github_ref: GH-663
 description: >
   PR #661 (WF03-ISS0343-20260826) backend CI failed lint_handoffs with 2 H2
   violations: handoffs/WF03-ISS0216-20260826/step-final-git-merge.json

@@ -61,8 +61,8 @@ affected_files:
 related:
   - ISS-0452
   - ISS-0446
-queue_task_id: 454
-github_issue: 870
+queue_ref: Q-454
+github_ref: GH-870
 status: resolved
 resolved_in_run: WF03-ISS0454-20260904
 resolved_at: "2026-09-04T03:10:00Z"

@@ -62,7 +62,7 @@ affected_files:
   - lib/letflow/tenant_provisioning.ex
   - lib/letflow/engine/pin_rebind.ex
   - test/letflow/engine/pin_rebind_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/269
+github_ref: GH-269
 status: resolved
 resolved_in_run: WF03-ISS0072-20260819
 resolved_at: "2026-08-19T17:10:00Z"

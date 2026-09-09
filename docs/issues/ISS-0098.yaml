@@ -22,8 +22,8 @@ description: >
   REQ-112 is docs-only and does not itself read R-Co to answer this).
 affected_files:
   - lib/letflow/design/req052-instance-cancellation.md
-queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
-github_issue: https://github.com/tvolodi/letflow/issues/326
+queue_ref: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_ref: GH-326
 status: resolved
 resolved_in_run: WF03-ISS0278-20260822
 resolved_at: "2026-08-22T15:14:15Z"

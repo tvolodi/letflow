@@ -43,8 +43,8 @@ related:
   - ISS-0198  # the amendment these riders refine
   - ISS-0191  # the linter that loads the schema fence rider 1 concerns
 
-queue_task_id: 201
-github_issue: https://github.com/tvolodi/letflow/issues/392
+queue_ref: Q-201
+github_ref: GH-392
 github_issue_note: >
   register_task created both the queue task (201) and its mirrored GitHub issue (#392)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

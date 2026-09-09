@@ -27,8 +27,8 @@ source: >
   handoffs/WF02-REQ206-20260901/step-02a-elixir-dev.json (result.issues),
   handoffs/WF02-REQ206-20260901/step-05-release-validator.json (independent
   re-confirmation).
-queue_task_id: 389
-github_issue: 768
+queue_ref: Q-389
+github_ref: GH-768
 status: resolved
 resolved_in_run: WF03-ISS0389-20260905
 resolved_at: "2026-09-05T04:35:00Z"

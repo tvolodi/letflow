@@ -28,8 +28,8 @@ affected_files:
 related:
   - REQ-113  # scripts/test_parallel.sh design lineage this file's own §6/§7 build on -- not directly related, only same design-doc family
 
-queue_task_id: 228
-github_issue: 466
+queue_ref: Q-228
+github_ref: GH-466
 github_issue_note: >
   register_task created both the queue task (228) and its mirrored GitHub
   issue (466) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

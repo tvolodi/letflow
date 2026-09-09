@@ -110,8 +110,8 @@ related:
   - ISS-0106  # the run that discovered this finding and filed it
   - ISS-0215  # live current-day evidence found while diagnosing this issue
 
-queue_task_id: 177
-github_issue: https://github.com/tvolodi/letflow/issues/363
+queue_ref: Q-177
+github_ref: GH-363
 
 status: resolved
 resolved_in_run: WF03-ISS0177-20260821

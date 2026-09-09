@@ -76,4 +76,4 @@ resolution_note: >
   test/specs/ISS-0060.md. Passed CODE-DESIGN-VALIDATOR (1 rework: column-shape
   defect), SECURITY-REVIEWER, REVIEWER, TEST-DESIGN-VALIDATOR (1 rework: naming
   length), TEST-RUNNER (914 tests, 0 failures). Run-id: WF03-ISS0060-20260819.
-github_issue: https://github.com/tvolodi/letflow/issues/207
+github_ref: GH-207

@@ -67,8 +67,8 @@ affected_files:
 related:
   - ISS-0117  # the run whose gate surfaced this
 
-queue_task_id: 195
-github_issue: https://github.com/tvolodi/letflow/issues/383
+queue_ref: Q-195
+github_ref: GH-383
 github_issue_note: >
   Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (195) and its mirrored GitHub issue (#383) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
 status: resolved

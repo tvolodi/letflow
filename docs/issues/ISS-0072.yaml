@@ -58,7 +58,7 @@ affected_files:
   - lib/letflow/event_store/registry.ex
   - lib/letflow/engine.ex
   - lib/letflow/engine/pin_rebind.ex
-github_issue: https://github.com/tvolodi/letflow/issues/257
+github_ref: GH-257
 status: resolved
 resolved_at: "2026-08-19T13:19:25Z"
 fix_landed_on_branch: feature/WF03-ISS0072-20260819

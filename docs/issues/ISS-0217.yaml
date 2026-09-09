@@ -36,8 +36,8 @@ related:
   - ISS-0194  # a related but distinct connection-budget issue, already resolved
   - ISS-0212  # ditto
 
-queue_task_id: 217
-github_issue: https://github.com/tvolodi/letflow/issues/441
+queue_ref: Q-217
+github_ref: GH-441
 github_issue_note: >
   register_task created both the queue task (217) and its mirrored GitHub issue (441)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not

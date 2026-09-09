@@ -35,8 +35,8 @@ affected_files:
 related:
   - ISS-0418
   - ISS-0453
-queue_task_id: 456
-github_issue: 875
+queue_ref: Q-456
+github_ref: GH-875
 status: instrumented
 superseded_by: ISS-0418
 resolved_in_run: WF03-ISS0456-20260904

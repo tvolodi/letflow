@@ -56,8 +56,8 @@ related:
 source: >
   PR #1059 (WF03-ISS0524-20260907), GitHub Actions Backend gate run
   34131920822, partition 4 of 4.
-queue_task_id: 525
-github_issue: 1060
+queue_ref: Q-525
+github_ref: GH-1060
 status: resolved
 resolution: >
   Resolved 2026-09-07 via WF03-ISS0525-20260907. ISSUE-FIXER ruled out

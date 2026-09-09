@@ -96,8 +96,8 @@ diagnosis_note: >
 source: >
   docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
   independent per-requirement re-verification of REQ-208).
-queue_task_id: 411
-github_issue: 807
+queue_ref: Q-411
+github_ref: GH-807
 status: resolved
 resolved_at: "2026-09-03T15:19:03Z"
 orch_routing_note: >

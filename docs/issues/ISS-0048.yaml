@@ -55,8 +55,8 @@ affected_files:
 status: resolved
 resolved_in_run: WF03-ISS0048-20260818
 resolved_at: "2026-08-18T23:02:37Z"
-github_issue: https://github.com/tvolodi/letflow/issues/198
-queue_task_id: 115
+github_ref: GH-198
+queue_ref: Q-115
 registration_note: >
   Not registered on GitHub or in letflow-queue at time of filing (2026-08-18T12:11:57Z),
   a "No Issue Left Local-Only" gap -- closed retroactively by ORCH (hetzner-orch) at

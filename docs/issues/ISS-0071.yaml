@@ -57,7 +57,7 @@ description: >
   item.
 affected_files:
   - lib/letflow/engine/sub_process.ex
-github_issue: https://github.com/tvolodi/letflow/issues/255
+github_ref: GH-255
 status: resolved
 resolved_in_run: WF03-ISS0071-20260819
 resolved_at: "2026-08-19T16:09:15Z"

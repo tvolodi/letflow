@@ -43,4 +43,4 @@ affected_files:
   - test/letflow/engine_test.exs
 status: fixed
 fixed_by: WF02-REQ047-20260818
-github_issue: https://github.com/tvolodi/letflow/issues/192
+github_ref: GH-192

@@ -16,7 +16,7 @@ description: >
   and was unrelated to the ISS-0096/REQ-147 branch that surfaced it.
 affected_files:
   - handoffs/WF02-REQ116-20260822/step-00-git-setup.json
-github_issue: 557
+github_ref: GH-557
 status: resolved
 resolved_in_run: WF03-ISS0283-20260822
 resolved_at: 2026-08-22T17:11:56Z

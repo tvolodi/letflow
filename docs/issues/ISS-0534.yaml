@@ -43,8 +43,8 @@ affected_files:
 related:
   - ISS-0532
   - ISS-0296
-queue_task_id: 534
-github_issue: 1077
+queue_ref: Q-534
+github_ref: GH-1077
 status: resolved
 resolution: >
   Resolved 2026-09-08 via WF03-ISS0534-20260908. Fixed by adding one

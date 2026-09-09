@@ -42,8 +42,8 @@ related:
   - ISS-0224  # successor: provisioning blocks the pool mailbox, scoped out of this fix
   - ISS-0219  # the TEST_PARALLEL_N sizing issue that led to running at N=4 here (from the filing)
 
-queue_task_id: 220
-github_issue: 450
+queue_ref: Q-220
+github_ref: GH-450
 github_issue_note: >
   register_task created both the queue task (220) and its mirrored GitHub issue
   (450) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

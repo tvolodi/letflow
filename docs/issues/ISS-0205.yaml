@@ -45,8 +45,8 @@ related:
   - ISS-0198  # the earlier gate that ruled on the same question independently
   - ISS-0191  # the linter that could check git_evidence completeness mechanically
 
-queue_task_id: 205
-github_issue: https://github.com/tvolodi/letflow/issues/396
+queue_ref: Q-205
+github_ref: GH-396
 github_issue_note: >
   register_task created both the queue task (205) and its mirrored GitHub issue (#396) in one
   call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The

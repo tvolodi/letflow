@@ -26,8 +26,8 @@ related:
 source: >
   lib/letflow/design/req211-instance-attachments-core.md §4.0 item 8;
   REVIEWER handoff, WF02-REQ211-20260901 step-02d.
-queue_task_id: 399
-github_issue: 781
+queue_ref: Q-399
+github_ref: GH-781
 status: resolved
 scoping_note: >
   ISSUE-FIXER investigated (WF03-ISS0399-20260901, 2026-09-01) and

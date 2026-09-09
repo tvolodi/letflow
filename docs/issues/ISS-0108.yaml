@@ -129,10 +129,10 @@ related:
   - ISS-0064
   - ISS-0109
   - ISS-0113  # the sandbox-mode-leak investigation this issue's mechanism depends on
-queue_task_id: 174  # corrected from 173 -- get_next_task returned task 174 for this
+queue_ref: Q-174  # corrected from 173 -- get_next_task returned task 174 for this
                      # issue (same github_issue #360); 173 in the original filing may
                      # be a stale/duplicate registration, not re-derived here
-github_issue: https://github.com/tvolodi/letflow/issues/360
+github_ref: GH-360
 github_issue_note: >
   Filed by ORCH on RELEASE-VALIDATOR's behalf. letflow-queue's register_task
   auto-created its own mirror, https://github.com/tvolodi/letflow/issues/361,

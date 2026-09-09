@@ -51,7 +51,7 @@ description: >
   forwarded per docs/agents/protocols/ISSUE_QUEUE.md.
 affected_files:
   - lib/letflow/tenant_provisioning/registration.ex
-github_issue: https://github.com/tvolodi/letflow/issues/85
+github_ref: GH-85
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0027-20260817

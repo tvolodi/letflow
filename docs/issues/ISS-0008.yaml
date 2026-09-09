@@ -53,7 +53,7 @@ affected_files:
   - lib/letflow/events/transition_event.ex
   - test/letflow/process_instance_test.exs
   - test/letflow/parallel_approval_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/12
+github_ref: GH-12
 status: resolved
 resolved_at: 2026-08-15T19:59:00Z
 resolution: >

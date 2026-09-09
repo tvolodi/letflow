@@ -92,7 +92,7 @@ fix_note: >
   at discovery time (2026-08-19); this note, not an edit to the historical
   text, is the correction. The live forward-looking `/5` references in
   REQ-109's own docs/requirements.yaml entry WERE updated to `/7`.
-github_issue: https://github.com/tvolodi/letflow/issues/212
+github_ref: GH-212
 superseded_scoping_note: >
   SUPERSEDED 2026-08-19T19:10:03Z by `scoping_note` below -- its central claim
   (that this is blocked on an unanswered product decision about a :HUMAN_TASK

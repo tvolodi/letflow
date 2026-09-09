@@ -45,8 +45,8 @@ source: >
   letflow-3 checkout after `mix deps.get`; advisory text quoted verbatim
   from that output. Dependency wiring confirmed by reading mix.exs and
   mix.lock.
-queue_task_id: 420
-github_issue: 824
+queue_ref: Q-420
+github_ref: GH-824
 
 status: resolved
 resolved_in_run: WF03-ISS0420-20260902

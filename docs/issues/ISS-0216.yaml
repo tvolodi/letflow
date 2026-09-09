@@ -36,8 +36,8 @@ related:
   - REQ-067  # the run whose security gate raised it
   - REQ-072  # the future work that will make this reachable
 
-queue_task_id: 216
-github_issue: https://github.com/tvolodi/letflow/issues/439
+queue_ref: Q-216
+github_ref: GH-439
 github_issue_note: >
   `register_task` created both the queue task (216) and its mirrored GitHub issue
   (#439) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately

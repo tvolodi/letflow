@@ -55,8 +55,8 @@ source: >
   by report. The fix was verified (16/16, mutant caught at 15/16 with the
   correct test failing, clean revert confirmed) before main's own concurrent
   merge made that branch's continuation moot.
-queue_task_id: 513
-github_issue: 1008
+queue_ref: Q-513
+github_ref: GH-1008
 status: resolved
 resolved_in_run: WF03-ISS0513-20260906
 resolved_at: "2026-09-06T01:10:00Z"

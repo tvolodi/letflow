@@ -51,8 +51,8 @@ affected_files:
 status: resolved
 resolved_in_run: WF03-ISS0065-20260819
 resolved_at: "2026-08-19T03:42:42Z"
-github_issue: 221
-queue_task_id: 121
+github_ref: GH-221
+queue_ref: Q-121
 related_issues:
   - ISS-0059
 resolution_note: >

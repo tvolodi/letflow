@@ -71,7 +71,7 @@ affected_files:
   - test/letflow/sandbox_pool/fixture_loader_test.exs
   - test/letflow/definitions/service_scope_validator_test.exs
   - priv/repo/migrations/20260816163103_create_event_type_registry.exs
-github_issue: https://github.com/tvolodi/letflow/issues/166
+github_ref: GH-166
 status: resolved
 resolved_by: ISSUE-FIXER
 resolved_in_run: WF03-ISS0044-20260818

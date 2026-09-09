@@ -54,7 +54,7 @@ description: >
   in this run.
 affected_files:
   - .claude/agents/security-reviewer.md
-github_issue: https://github.com/tvolodi/letflow/issues/84
+github_ref: GH-84
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0026-20260817

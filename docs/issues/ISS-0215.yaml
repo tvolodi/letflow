@@ -24,8 +24,8 @@ affected_files:
 related:
   - ISS-0177  # the process-gap investigation this evidence supports
 
-queue_task_id: 215
-github_issue: https://github.com/tvolodi/letflow/issues/432
+queue_ref: Q-215
+github_ref: GH-432
 github_issue_note: >
   register_task created both the queue task (215) and its mirrored GitHub issue (432) in
   one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

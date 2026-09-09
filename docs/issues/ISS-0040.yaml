@@ -56,7 +56,7 @@ description: >
   being caught only when it happens to block a full suite run.
 affected_files:
   - test/letflow/definitions/service_scope_validator_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/122
+github_ref: GH-122
 status: resolved
 resolved_in_run: WF02-REQ042-20260817
 resolved_at: "2026-08-17T22:00:00Z"

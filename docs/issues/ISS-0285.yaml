@@ -26,8 +26,8 @@ description: >
 affected_files:
   - docs/agents/protocols/TASK_QUEUE.md
   - docs/agents/protocols/ISSUE_QUEUE.md
-queue_task_id: 285
-github_issue: 562
+queue_ref: Q-285
+github_ref: GH-562
 status: open
 follow_up: >
   Filed as tvolodi/letflow-queue#5 (2026-08-22, ORCH LOOP-20260822-orch),
@@ -73,7 +73,7 @@ further_occurrences:
       lightweight way per this record's protocol before this entry was
       added. See run history around 2026-08-22 for detail.
   - queue_task_id: 119
-    github_issue_number: 212
+    github_ref: GH-212
     occurred_at: "2026-08-22T18:33:07Z"
     detected_by: ORCH (LOOP-20260822-orch, later iteration)
     finding: >

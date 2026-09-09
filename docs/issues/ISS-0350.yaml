@@ -7,8 +7,8 @@ discovered_in_run: WF02-REQ153-20260827
 discovered_at: "2026-08-27T05:55:00Z"
 severity: MAJOR
 status: resolved
-queue_task_id: 350
-github_issue: 674
+queue_ref: Q-350
+github_ref: GH-674
 description: >
   During WF02-REQ153-20260827 Step Final (git-merge), a concurrent session
   (different host, git identity Vladimir Titenko <tvolodi@gmail.com>) pushed

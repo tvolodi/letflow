@@ -36,8 +36,8 @@ source: >
   after PR #895's own admin-override merge, made to fix a wording issue in
   0018's own Verification log, before this discovery itself prompted
   routing that very fix through a PR instead.
-queue_task_id: 467
-github_issue: 896
+queue_ref: Q-467
+github_ref: GH-896
 status: resolved
 resolved_in_run: WF03-ISS0467-20260904
 resolved_at: "2026-09-04T19:24:00Z"

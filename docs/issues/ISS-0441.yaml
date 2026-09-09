@@ -95,8 +95,8 @@ source: >
   the design for claiming CI made a violation "structurally impossible to
   merge" and cited PR #848's own merged-with-FAILURE rollup as the
   counterexample.
-queue_task_id: 441
-github_issue: 851
+queue_ref: Q-441
+github_ref: GH-851
 status: resolved
 resolved_in_run: WF03-ISS0441-20260904
 resolved_at: "2026-09-04T16:35:00Z"

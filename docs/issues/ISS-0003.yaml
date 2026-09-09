@@ -26,7 +26,7 @@ description: >
   settles on, ideally matching 0002's).
 affected_files:
   - docs/migration/decisions/0001-web-framework.md
-github_issue: https://github.com/tvolodi/letflow/issues/5
+github_ref: GH-5
 status: resolved
 resolved_at: 2026-08-15T19:05:33Z
 resolution: >

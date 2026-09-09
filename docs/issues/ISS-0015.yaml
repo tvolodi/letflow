@@ -87,7 +87,7 @@ affected_files:
   - lib/letflow/application.ex
   - config/test.exs
   - config/dev.exs
-github_issue: https://github.com/tvolodi/letflow/issues/71
+github_ref: GH-71
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0015-20260817

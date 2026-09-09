@@ -27,8 +27,8 @@ description: >
   read R-Co to answer this).
 affected_files:
   - lib/letflow/design/req062-sub-process-runtime.md
-queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
-github_issue: https://github.com/tvolodi/letflow/issues/329
+queue_ref: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_ref: GH-329
 status: resolved
 resolved_in_run: unknown (backfill) -- fix landed via PR #337, "fix(sub_process): apply registry variable-type schemas to output merge, close GH#329", merged 2026-08-20T04:28:01Z
 resolved_at: 2026-08-20T04:28:01Z

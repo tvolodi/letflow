@@ -83,8 +83,8 @@ affected_files:
   - docs/status/requirement_status.yaml
   - docs/anti-patterns.md
   - docs/agents/instructions/core-directives.md
-queue_task_id: 186
-github_issue: https://github.com/tvolodi/letflow/issues/373
+queue_ref: Q-186
+github_ref: GH-373
 status: resolved
 resolved_in_run: WF03-ISS0119-20260821
 resolved_at: "2026-08-21T08:57:06Z"

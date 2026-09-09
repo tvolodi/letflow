@@ -117,8 +117,8 @@ affected_files:
   - test/docs/requirement_status_invariants_test.exs
   - test/support/status_history.ex
 
-queue_task_id: 193
-github_issue: https://github.com/tvolodi/letflow/issues/381
+queue_ref: Q-193
+github_ref: GH-381
 github_issue_note: >
   Filed by ORCH on CODE-DESIGN-VALIDATOR's behalf per ISSUE_QUEUE.md step 2a:
   register_task created both the queue task (193) and its mirrored GitHub issue

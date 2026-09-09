@@ -74,8 +74,8 @@ related:
   - ISS-0033  # precedent: an interrupted run's registry entry is left untouched, resume appended
   - ISS-0190  # the wider handoff schema-conformance backlog
 
-queue_task_id: 192
-github_issue: https://github.com/tvolodi/letflow/issues/380
+queue_ref: Q-192
+github_ref: GH-380
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (192) and its mirrored GitHub issue (#380) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
 status: resolved

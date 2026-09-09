@@ -65,7 +65,7 @@ affected_files:
   - docs/requirements.yaml
   - docs/agents/protocols/TASK_QUEUE.md
 status: resolved
-github_issue: https://github.com/tvolodi/letflow/issues/314
+github_ref: GH-314
 related:
   - ISS-0087
 scoping_note: >

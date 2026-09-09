@@ -48,8 +48,8 @@ affected_files:
   - lib/letflow/design/iss064-orphaned-tenant-schemas-fix.md
   - test/test_helper.exs
 
-queue_task_id: 178
-github_issue: https://github.com/tvolodi/letflow/issues/364
+queue_ref: Q-178
+github_ref: GH-364
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (178) and its mirrored GitHub issue (#364) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 status: resolved

@@ -114,7 +114,7 @@ fix_note: >
   and docs/anti-patterns.md's "Inheriting a claim from a record instead of
   re-deriving it from the source" entry, which treats
   "unreachable/unavailable in this environment" as an expiring claim.
-github_issue: https://github.com/tvolodi/letflow/issues/296
+github_ref: GH-296
 scoping_note: >
   Filed by ORCH during REQ-109's re-gate rather than fixed inline, for two
   reasons. (a) REQ-109 already edits this exact moduledoc under its AC9;

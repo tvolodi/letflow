@@ -49,8 +49,8 @@ related:
   - ISS-0220  # the run that found this and scoped it out (§12); its INV-SP-T4 is the limit this issue lifts
   - ISS-0048  # owner-crash reclaim -- its §6 invariants must all be re-verified against an async flow
 
-queue_task_id: 224
-github_issue: 457
+queue_ref: Q-224
+github_ref: GH-457
 github_issue_note: >
   register_task created both the queue task (224) and its mirrored GitHub issue (457)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not

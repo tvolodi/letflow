@@ -61,7 +61,7 @@ resolution: >
   Added a pointer note to req049-variable-merge.md's original §10 recipe
   (the source this moduledoc's recipe was copied from) so a future reader
   doesn't reintroduce the same false positive by copying it. GH#301 closed.
-github_issue: https://github.com/tvolodi/letflow/issues/301
+github_ref: GH-301
 related:
   - ISS-0075
   - ISS-0077

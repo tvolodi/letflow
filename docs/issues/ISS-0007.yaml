@@ -39,7 +39,7 @@ affected_files:
   - docs/migration/stage-1-identity.md
   - docs/migration/stage-2-event-store-definitions.md
   - docs/migration/stage-3-instance-engine.md
-github_issue: https://github.com/tvolodi/letflow/issues/10
+github_ref: GH-10
 status: resolved
 resolved_in_run: WF02-REQ022-20260816
 resolved_at: 2026-08-16T10:43:18Z

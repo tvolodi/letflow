@@ -19,8 +19,8 @@ description: >
   itself read R-Co to answer this).
 affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
-queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
-github_issue: https://github.com/tvolodi/letflow/issues/325
+queue_ref: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_ref: GH-325
 status: resolved
 resolution: >
   PROVENANCE (historical, not current decision authority):

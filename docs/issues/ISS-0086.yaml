@@ -144,8 +144,8 @@ related:
   - ISS-0085
   - ISS-0087
   - ISS-0076
-github_issue: https://github.com/tvolodi/letflow/issues/303
-queue_task_id: null   # never registered via register_task -- filed under the pre-2026-08-20
+github_ref: GH-303
+queue_ref: null   # never registered via register_task -- filed under the pre-2026-08-20
   # ISSUE_QUEUE.md, which didn't call letflow-queue at all (see docs/anti-patterns.md's
   # matching entry). One real get_next_task reconciliation attempt during the resolving
   # run returned a different, newer task (#163/ISS-0088) -- not this one -- and was

@@ -35,8 +35,8 @@ source: >
   TEST-DESIGNER's incidental finding during WF03-ISS0404-20260902's
   project-wide grep for the fixed-SHA defect class (see
   lib/letflow/design/iss0404-regression-verification.md).
-queue_task_id: 413
-github_issue: 809
+queue_ref: Q-413
+github_ref: GH-809
 status: resolved
 resolved_in_run: WF03-ISS0413-20260902
 resolved_at: "2026-09-02T16:05:00Z"

@@ -26,7 +26,7 @@ description: >
   resurfaces as claimable) is not yet clearly a single root cause worth its
   own fix task from two occurrences alone.
 affected_files: []
-github_issue: 564
+github_ref: GH-564
 status: resolved
 resolved_in_run: session queue-loop, ORCH direct (docs-only)
 resolved_at: 2026-08-22T18:40:00Z

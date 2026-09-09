@@ -16,8 +16,8 @@ description: >
 affected_files:
   - web/src/pages/admin/UserDetailPage.tsx
   - web/src/router.tsx
-queue_task_id: 289
-github_issue: 577
+queue_ref: Q-289
+github_ref: GH-577
 status: resolved
 resolved_in_run: WF03-ISS0289-20260823
 resolved_at: 2026-08-23T03:39:09Z

@@ -37,8 +37,8 @@ related:
   - ISS-0022  # the same staleness class, on a different snapshot count
   - ISS-0206  # the other open issue against the same section 1.2
 
-queue_task_id: 208
-github_issue: https://github.com/tvolodi/letflow/issues/399
+queue_ref: Q-208
+github_ref: GH-399
 github_issue_note: >
   `register_task` created both the queue task (208) and its mirrored GitHub issue (#399)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

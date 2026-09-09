@@ -1,6 +1,6 @@
 id: ISS-0330
-queue_task_id: 330
-github_issue_number: 633
+queue_ref: Q-330
+github_ref: GH-633
 title: "requirement_status_invariants_test.exs A4b/A9 failures: REQ-122 done event missing agent: field introduced by direct main push (70632a3)"
 status: resolved
 resolved_at: "2026-08-24T04:54:12Z"

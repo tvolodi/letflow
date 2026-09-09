@@ -77,8 +77,8 @@ source: >
   confirmation and corpus-wide verification that no real handoff currently
   triggers it), plus this issue's own resolving run's Step 1 diagnosis at
   handoffs/WF03-ISS0457-20260904/step-01-issue-fixer-diagnosis.json.
-queue_task_id: 457
-github_issue: 877
+queue_ref: Q-457
+github_ref: GH-877
 status: resolved
 resolved_in_run: WF03-ISS0457-20260904
 resolved_at: "2026-09-04T09:37:43Z"

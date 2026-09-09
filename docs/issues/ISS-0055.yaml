@@ -25,7 +25,7 @@ affected_files:
 status: resolved
 resolved_in_run: ORCH-direct-20260818 (hetzner-orch, verification-only, no code change needed)
 resolved_at: "2026-08-18T22:26:30Z"
-github_issue: https://github.com/tvolodi/letflow/issues/194
+github_ref: GH-194
 resolution_note: >
   Stale duplicate, confirmed on independent re-check rather than assumed: this is the
   same finding as ISS-0053 (same file, same describe/test pair, same GH#194 -- filed

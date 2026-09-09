@@ -39,8 +39,8 @@ affected_files:
 related:
   - ISS-0530
   - REQ-116
-queue_task_id: 532
-github_issue: 1075
+queue_ref: Q-532
+github_ref: GH-1075
 status: resolved
 resolution: >
   Resolved 2026-09-08 via WF03-ISS0532-20260908. ISSUE-FIXER recommended

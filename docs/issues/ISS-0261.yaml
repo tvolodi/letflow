@@ -54,8 +54,8 @@ affected_files:
 related:
   - ISS-0258  # the run whose TEST-DESIGN-VALIDATOR built and deleted the throwaway original, and recorded this follow-up
 
-queue_task_id: 261
-github_issue: 509
+queue_ref: Q-261
+github_ref: GH-509
 github_issue_note: >
   ORCH registered queue task 261 / GitHub issue 509 ahead of this run per
   ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

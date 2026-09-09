@@ -110,6 +110,16 @@ defmodule Letflow.MixProject do
         # fast, non-compiling checks so a violation surfaces in seconds, not
         # after a full compile+test cycle.
         "letflow.check_async_sandbox_reachability",
+        # 2026-09-09: enforces ISSUE_QUEUE.md's "Numbering schema" -- three
+        # registries (local ISS-NNNN, queue Q-N, GitHub GH-N) number
+        # independently from 1, so an unprefixed cross-reference is ambiguous.
+        # A pure column-0 textual scan over docs/issues/*.yaml: no compile step
+        # and no shared parse target with any neighbour, so it has no ordering
+        # dependency either direction. Placed with the other fast,
+        # non-compiling checks so a violation surfaces in seconds. It exists as
+        # a gate because the rule it replaces ("ISS-0187 is queue task 187") was
+        # documented too, and decayed to 172/305 with nothing re-checking it.
+        "letflow.check_issue_refs",
         "format --check-formatted",
         "compile --warnings-as-errors",
         "letflow.check.test"

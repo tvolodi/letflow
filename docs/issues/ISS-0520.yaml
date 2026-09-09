@@ -28,8 +28,8 @@ description: >
 affected_files: []
 related:
   - ISS-0519
-queue_task_id: 520
-github_issue: 1040
+queue_ref: Q-520
+github_ref: GH-1040
 status: resolved
 resolved_in_run: WF02-REQ229-20260906
 resolved_at: "2026-09-07T00:51:21Z"

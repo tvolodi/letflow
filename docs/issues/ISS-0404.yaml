@@ -38,8 +38,8 @@ source: >
   docs/anti-patterns.md, "A test scoped to one specific historical commit
   SHA breaks the moment that commit is squash-merged away" entry,
   Recurrence paragraph.
-queue_task_id: 404
-github_issue: 793
+queue_ref: Q-404
+github_ref: GH-793
 status: resolved
 resolved_in_run: WF03-ISS0404-20260902
 resolved_at: "2026-09-02T12:14:07Z"

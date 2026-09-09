@@ -63,8 +63,8 @@ source: >
   completed in this session (exit 0). Migration count from
   `ls priv/repo/migrations | wc -l` (69); per-provisioning cost quoted
   from Letflow.SandboxPool's own moduledoc measurement.
-queue_task_id: 423
-github_issue: 827
+queue_ref: Q-423
+github_ref: GH-827
 
 status: open
 

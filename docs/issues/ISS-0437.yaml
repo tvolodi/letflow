@@ -36,8 +36,8 @@ source: >
   (CODE-DESIGN-VALIDATOR's PASS verdict, carrying forward
   CODE-DESIGNER's own escalation from
   handoffs/WF02-REQ216-20260902/step-01c-code-designer-rework.json).
-queue_task_id: 437
-github_issue: 843
+queue_ref: Q-437
+github_ref: GH-843
 status: resolved
 resolution: >
   Resolved 2026-09-07 via WF03-ISS0437-20260907. ISSUE-FIXER's diagnosis

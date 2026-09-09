@@ -74,8 +74,8 @@ source: >
   as a follow-on; CODE-DESIGN-VALIDATOR confirmed no lint or compile-time guard
   exists; REVIEWER recorded a MINOR that it must actually be filed rather than
   left as stated intent.
-queue_task_id: 512
-github_issue: 1000
+queue_ref: Q-512
+github_ref: GH-1000
 numbering_note: >
   GH#1000's own title reads "ISS-0512: enforce no async:true test file may
   reach Sandbox.mode/2" -- a pre-filing numbering slip (the issue was

@@ -59,8 +59,8 @@ source: >
   WF03-ISS0393-20260907's ELIXIR-DEV escalation, confirmed by ORCH via
   direct diff of all 11 real R-Co scenario files against letflow's
   synthetic counterparts.
-queue_task_id: 526
-github_issue: 1062
+queue_ref: Q-526
+github_ref: GH-1062
 status: resolved
 resolution: >
   Resolved 2026-09-07 via WF03-ISS0526-20260907. All 11 named tenant-business

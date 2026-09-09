@@ -72,7 +72,7 @@ resolution_note: >
   when the fix landed. `resolved_at` is the GitHub closedAt date with time
   zeroed, the best available approximation -- the actual fix-landing run id
   was not recorded in the closing comment.
-github_issue: https://github.com/tvolodi/letflow/issues/308
+github_ref: GH-308
 related:
   - ISS-0063
 scoping_note: >

@@ -19,7 +19,7 @@ affected_files:
   - docs/issues/ISS-0108.yaml
   - docs/issues/ISS-0112.yaml
   - docs/issues/ISS-0113.yaml
-github_issue: 548
+github_ref: GH-548
 status: resolved
 resolved_in_run: WF03-ISS0277-20260822
 resolved_at: 2026-08-22T17:20:00Z

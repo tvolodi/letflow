@@ -82,8 +82,8 @@ affected_files:
   - test/letflow/engine/service_task_dispatcher_test.exs
 related:
   - REQ-214
-github_issue: https://github.com/tvolodi/letflow/issues/867
-queue_task_id: 452
+github_ref: GH-867
+queue_ref: Q-452
 status: resolved
 resolved_in_run: ADHOC-ADR0017-20260903
 resolved_at: "2026-09-03T20:59:39Z"

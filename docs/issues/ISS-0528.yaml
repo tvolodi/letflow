@@ -46,8 +46,8 @@ affected_files:
 related:
   - ISS-0524
   - ISS-0418
-queue_task_id: 529
-github_issue_number: 1072
+queue_ref: Q-529
+github_ref: GH-1072
 resolving_run: WF03-ISS0529-20260908
 resolved_at: "2026-09-08T11:16:48Z"
 status: resolved

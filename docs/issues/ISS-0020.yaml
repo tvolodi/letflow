@@ -88,7 +88,7 @@ affected_files:
   - lib/letflow/event_store/archived_event.ex
   - lib/letflow/event_store/instance_projection.ex
   - lib/letflow/event_store/stored_payload.ex
-github_issue: https://github.com/tvolodi/letflow/issues/76
+github_ref: GH-76
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0020-20260817

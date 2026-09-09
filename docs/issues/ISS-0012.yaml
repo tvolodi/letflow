@@ -54,7 +54,7 @@ description: >
   formatting one, so the wording cannot simply be reused).
 affected_files:
   - README.md
-github_issue: https://github.com/tvolodi/letflow/issues/68
+github_ref: GH-68
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0012-20260817

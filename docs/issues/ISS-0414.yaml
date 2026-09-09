@@ -35,8 +35,8 @@ related:
 source: >
   ISSUE-FIXER's diagnosis handoff during WF03-ISS0410-20260902, closing
   ISS-0410/ISS-0409 as no_defect.
-queue_task_id: 414
-github_issue: 811
+queue_ref: Q-414
+github_ref: GH-811
 status: resolved
 resolved_in_run: WF03-ISS0414-20260902
 resolved_at: "2026-09-02T15:30:00Z"

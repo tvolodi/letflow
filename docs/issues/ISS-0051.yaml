@@ -43,7 +43,7 @@ affected_files:
   - test/letflow/engine_test.exs
 status: resolved
 fixed_by: WF02-REQ047-20260818
-github_issue: https://github.com/tvolodi/letflow/issues/192
+github_ref: GH-192
 reconciliation_note: >
   A concurrent host (WF03-ISS0050-20260818, ISSUE-FIXER, discovered_at
   21:37:12Z -- earlier than this run's own 21:53:46Z discovery, but merged to

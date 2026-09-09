@@ -45,7 +45,7 @@ description: >
   since-fixed mistake earlier this session -- see docs/issues/ISS-0039.yaml).
 affected_files:
   - lib/letflow/definitions/promotion_review_store.ex
-github_issue: https://github.com/tvolodi/letflow/issues/127
+github_ref: GH-127
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0041-20260817

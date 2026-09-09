@@ -29,8 +29,8 @@ related:
 source: >
   test/reports/report-20260902-WF03-ISS0404-20260902.yaml, TEST-RUNNER's
   incidental finding during WF03-ISS0404-20260902's full-suite gate.
-queue_task_id: 412
-github_issue: 808
+queue_ref: Q-412
+github_ref: GH-808
 status: resolved
 resolved_in_run: WF03-ISS0412-20260902
 resolved_at: "2026-09-02T16:50:00Z"

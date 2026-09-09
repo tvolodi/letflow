@@ -63,8 +63,8 @@ related:
   - ISS-0191  # the linter that would catch this class; this is its measured backlog
   - ISS-0117  # the three recovery-marker keys, deliberately excluded from this fix
 
-queue_task_id: 190
-github_issue: https://github.com/tvolodi/letflow/issues/378
+queue_ref: Q-190
+github_ref: GH-378
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (190) and its mirrored GitHub issue (#378) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan -- see docs/anti-patterns.md's 2026-08-21 update on why scanning cannot reserve a number.
 status: resolved

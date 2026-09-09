@@ -69,8 +69,8 @@ affected_files:
   - lib/letflow/engine/reconstruction.ex
   - lib/letflow/engine.ex
   - docs/migration/decisions/0005-pin-formatting-toolchain.md
-queue_task_id: 170
-github_issue: https://github.com/tvolodi/letflow/issues/354
+queue_ref: Q-170
+github_ref: GH-354
 github_issue_note: >
   letflow-queue's register_task auto-created its own mirror issue,
   https://github.com/tvolodi/letflow/issues/355, on registration of task

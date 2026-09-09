@@ -63,8 +63,8 @@ affected_files:
   - web/tests/e2e/uat-tenant-url.e2e.spec.ts
   - lib/letflow/design/iss0295-e2e-keycloak-config-consolidation.md
   - web/tests/unit/iss-0295-e2e-idp-config.test.ts
-queue_task_id: 295
-github_issue: 591
+queue_ref: Q-295
+github_ref: GH-591
 status: resolved
 resolved_in_run: WF03-ISS0295-20260823
 resolved_at: 2026-08-23T10:29:29Z

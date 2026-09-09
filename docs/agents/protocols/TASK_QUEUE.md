@@ -260,11 +260,18 @@ human/agent reading the file can cross-reference which queue task it maps to:
   new `impl_order:` field, or a comment — see the migration note below).
 - `task_type: "issue"` → **the response's `issue_ref` is the record's filename**:
   `docs/issues/<issue_ref>.yaml`, e.g. `docs/issues/ISS-0187.yaml`, with `id:` inside
-  matching it. Its `queue_task_id:` field (added 2026-08-20, `ISSUE_QUEUE.md`'s matching
-  update) carries the same integer — `ISS-0187` ↔ task `187`. That equality is what makes
-  a later WF-03 run able to `set_lock` the exact task directly, derivable from the
-  filename alone, instead of gambling on `get_next_task`'s claim order (see "A human names
-  a specific issue" below).
+  matching it. Its **`queue_ref:`** field carries that task id, prefixed — task `187` is
+  written `queue_ref: Q-187`.
+
+  **The id equality this bullet used to assert is SUPERSEDED (2026-09-09).** It read:
+  *"carries the same integer — `ISS-0187` ↔ task `187`. That equality is what makes a
+  later WF-03 run able to `set_lock` the exact task directly, derivable from the filename
+  alone."* Measured across `docs/issues/`, that held for 172 of 305 records — 27
+  contradict it (`ISS-0030` is task `Q-76`) and 104 predate the queue. **Never derive a
+  `set_lock` target from a filename.** Read `queue_ref` from the yaml; it is correct for
+  every record rather than a majority, and `null` there means the issue was never
+  registered. Full statement, including the `Q-`/`GH-`/`ISS-` prefixes and the gate that
+  enforces them: `ISSUE_QUEUE.md`'s "Numbering schema" section.
 
 **A new issue discovered mid-run still gets a number** — this is the literal
 requirement from the design brief. `register_task` is the only source of `impl_order`

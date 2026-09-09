@@ -85,8 +85,8 @@ related:
   - ISS-0201  # three wording riders on the amended section, from this run's REVIEWER gate
   - ISS-0196  # reproduced live during this run's Step 1; evidence recorded there
 
-queue_task_id: 198
-github_issue: https://github.com/tvolodi/letflow/issues/388
+queue_ref: Q-198
+github_ref: GH-388
 github_issue_note: >
   Filed by ORCH per ISSUE_QUEUE.md step 2a: register_task created both the queue task (198) and its mirrored GitHub issue (#388) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
 status: resolved

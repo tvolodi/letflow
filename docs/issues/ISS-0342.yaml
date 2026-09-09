@@ -22,8 +22,8 @@ resolution_note: >
   Verified: mix letflow.lint_handoffs -> "OK -- 0 new violations across 991
   handoff files (25 pre-existing grandfathered, traced to ISS-0190)"; full
   mix test re-run clean, 2062 passed, 0 failed.
-queue_task_id: 342
-github_issue_number: 657
+queue_ref: Q-342
+github_ref: GH-657
 description: >
   PR #656 (WF02-REQ151-20260826) backend CI job (mix letflow.check ->
   lint_handoffs) failed on both CI runs, structurally attributed as

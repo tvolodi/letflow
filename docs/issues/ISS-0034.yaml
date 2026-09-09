@@ -33,7 +33,7 @@ description: >
   to file and forward, not silently correct inline.
 affected_files:
   - docs/migration/stage-2-event-store-definitions.md
-github_issue: https://github.com/tvolodi/letflow/issues/107
+github_ref: GH-107
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF02-REQ030-20260817-merge

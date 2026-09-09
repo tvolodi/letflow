@@ -18,8 +18,8 @@ affected_files:
   - scripts/test_parallel.sh
   - config/test.exs
   - docs/migration/decisions/0009-test-parallel-pool-sizing.md
-queue_task_id: 194
-github_issue: 382
+queue_ref: Q-194
+github_ref: GH-382
 status: resolved
 resolved_in_run: WF03-ISS0194-20260821
 resolved_at: "2026-08-21T12:12:16Z"

@@ -56,7 +56,7 @@ description: >
   docs/agents/protocols/ISSUE_QUEUE.md filed and forwarded, not fixed here.
 affected_files:
   - .formatter.exs
-github_issue: https://github.com/tvolodi/letflow/issues/72
+github_ref: GH-72
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0016-20260817

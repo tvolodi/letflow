@@ -21,7 +21,7 @@ description: >
   step has an independent validating step).
 affected_files:
   - lib/letflow/design/req135-keycloak-provider-port-boundary.md
-github_issue: 574
+github_ref: GH-574
 status: resolved
 resolved_in_run: session queue-loop, ORCH direct + one fresh REVIEWER dispatch
 resolved_at: 2026-08-23T00:58:00Z

@@ -44,8 +44,8 @@ related:
   - ISS-0202
   - ISS-0209
 
-queue_task_id: 262
-github_issue: 510
+queue_ref: Q-262
+github_ref: GH-510
 
 status: resolved
 resolved_at: "2026-08-22T08:30:00Z"

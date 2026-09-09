@@ -91,8 +91,8 @@ see_also:
   - ISS-0193   # the other residual hardening on this same mechanism -- declare-to-silence in known_anomalies:/A5, plus the roll-boundary route. One run could reasonably close both.
   - ISS-0119   # the run that built the mechanism and resolved the original defect
 
-queue_task_id: 199
-github_issue: https://github.com/tvolodi/letflow/issues/389
+queue_ref: Q-199
+github_ref: GH-389
 github_issue_note: >
   register_task created both the queue task (199) and the mirrored GitHub issue
   (#389) in one call; `gh issue create` was deliberately NOT called separately,

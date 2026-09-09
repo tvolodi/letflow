@@ -55,7 +55,7 @@ description: >
   folded into a requirement it does not belong to.
 affected_files:
   - test/letflow/event_store/migrations_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/86
+github_ref: GH-86
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0028-20260817

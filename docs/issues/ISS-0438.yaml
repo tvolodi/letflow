@@ -66,8 +66,8 @@ source: >
   R-Co subsystem sizes measured with ls/wc against
   c:\Users\tvolo\dev\ai-dala\R-Co\src\entities\; absence from both stage
   docs and from docs/requirements.yaml verified by grep.
-queue_task_id: 438
-github_issue: 845
+queue_ref: Q-438
+github_ref: GH-845
 
 status: resolved
 resolved_in_run: WF03-ISS0438-20260904

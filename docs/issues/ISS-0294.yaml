@@ -19,7 +19,7 @@ description: >
   consecutive local test runs green, full mix letflow.check clean, real CI
   green), so no defect in the delivered work.
 affected_files: []
-github_issue: 590
+github_ref: GH-590
 status: resolved
 resolved_in_run: session queue-loop, ORCH direct (no code change)
 resolved_at: 2026-08-23T09:38:00Z

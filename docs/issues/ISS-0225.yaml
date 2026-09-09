@@ -38,8 +38,8 @@ affected_files:
 related:
   - REQ-074  # the run whose security gate raised it
 
-queue_task_id: 225
-github_issue: 461
+queue_ref: Q-225
+github_ref: GH-461
 github_issue_note: >
   register_task created both the queue task (225) and its mirrored GitHub
   issue (461) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

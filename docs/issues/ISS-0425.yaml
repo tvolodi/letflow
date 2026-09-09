@@ -77,8 +77,8 @@ source: >
   opts, and by grepping lib/ for strategy:/max_restarts (two strategy
   sites, neither setting intensity) and for Task.Supervisor children
   (six).
-queue_task_id: 425
-github_issue: 829
+queue_ref: Q-425
+github_ref: GH-829
 
 status: resolved
 resolved_in_run: ORCH-direct-20260904-ISS0425-reconcile

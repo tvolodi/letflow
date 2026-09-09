@@ -103,8 +103,8 @@ source: >
   at pickup time (2026-09-04) against docs/issues/ISS-0438.yaml (resolved)
   and lib/letflow/design/iss0438-entity-subsystem-scoping.md, whose own §5
   (AC6) independently states this same sequencing relationship.
-queue_task_id: 439
-github_issue: 846
+queue_ref: Q-439
+github_ref: GH-846
 acceptance_criteria:
   - "The decision to defer, and the three reasons for it, are recorded somewhere a
     future reader will find before re-proposing the idea -- a decision record under

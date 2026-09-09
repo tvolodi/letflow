@@ -71,8 +71,8 @@ related:
   - ISS-0116  # sibling successor issue, same family, same session
   - ISS-0112  # broader fixture-adoption issue, still open
 
-queue_task_id: 214
-github_issue: https://github.com/tvolodi/letflow/issues/424
+queue_ref: Q-214
+github_ref: GH-424
 github_issue_note: >
   register_task created both the queue task (214) and its mirrored GitHub issue (424)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not

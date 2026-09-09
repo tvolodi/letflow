@@ -24,7 +24,7 @@ affected_files:
   - test/letflow/engine_sub_process_test.exs
   - test/letflow/engine/sub_process_test.exs
   - test/letflow/routers/tasks_test.exs
-github_issue: 559
+github_ref: GH-559
 status: resolved
 resolved_in_run: WF03-ISS0284-20260822
 resolved_at: 2026-08-22T18:28:43Z

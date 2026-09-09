@@ -62,8 +62,8 @@ source: >
   during WF03-ISS0446-20260904; root cause confirmed by ORCH via
   docker inspect against the live container (healthcheck "pg_isready -U
   letflow", interval 2s, POSTGRES_DB=letflow_dev).
-queue_task_id: 455
-github_issue: 872
+queue_ref: Q-455
+github_ref: GH-872
 status: resolved
 
 resolution: >

@@ -51,8 +51,8 @@ related:
   - ISS-0277  # sibling reconciliation finding (GH#548) -- different mechanism, see resolution_note
   - ISS-0279  # process-gap follow-up filed by this run
 
-queue_task_id: 278
-github_issue: 549
+queue_ref: Q-278
+github_ref: GH-549
 
 status: resolved
 resolved_in_run: WF03-ISS0278-20260822

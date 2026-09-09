@@ -41,7 +41,7 @@ description: >
 affected_files:
   - docs/migration/decisions/0003-ecto-schema-strategy.md
   - docs/requirements.yaml
-github_issue: https://github.com/tvolodi/letflow/issues/7
+github_ref: GH-7
 status: resolved
 resolved_at: 2026-08-15T19:37:00Z
 resolution: >

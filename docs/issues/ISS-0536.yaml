@@ -54,8 +54,8 @@ related:
   - ISS-0292
   - ISS-0525
   - ISS-0533
-queue_task_id: 536
-github_issue_number: 1081
+queue_ref: Q-536
+github_ref: GH-1081
 resolving_run: WF03-ISS0536-20260908
 resolved_at: "2026-09-08T10:19:45Z"
 status: resolved

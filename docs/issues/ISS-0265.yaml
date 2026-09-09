@@ -29,8 +29,8 @@ affected_files:
 related:
   - ISS-0260
   - ISS-0262
-queue_task_id: 265
-github_issue: 523
+queue_ref: Q-265
+github_ref: GH-523
 status: resolved
 resolved_in_run: WF03-ISS0265-20260822
 resolved_at: "2026-08-22T10:35:22Z"

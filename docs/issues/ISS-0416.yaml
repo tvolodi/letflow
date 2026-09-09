@@ -37,8 +37,8 @@ related:
 source: >
   ORCH's own verification runs during WF03-ISS0409-20260902 (seed-varied
   repeated mix test invocations of service_catalog_test.exs).
-queue_task_id: 416
-github_issue: 813
+queue_ref: Q-416
+github_ref: GH-813
 status: no_defect
 verdict_in_run: WF03-ISS0416-20260902
 verdict_at: "2026-09-02T13:16:00Z"

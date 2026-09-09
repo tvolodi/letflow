@@ -41,5 +41,5 @@ description: >
 affected_files:
   - test/letflow/definitions/promotion_review_store_test.exs
   - test/letflow/identity_test.exs
-github_issue: null   # gh available and authenticated, but issue filed as already-resolved local record only per this project's convention of not opening GH issues for same-session self-resolved findings; open to filing on request
+github_ref: null   # gh available and authenticated, but issue filed as already-resolved local record only per this project's convention of not opening GH issues for same-session self-resolved findings; open to filing on request
 status: resolved

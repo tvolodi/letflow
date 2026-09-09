@@ -29,8 +29,8 @@ related:
 source: >
   lib/letflow/design/req052-instance-cancellation.md (section 4, OQ-2),
   handoffs/WF03-ISS0397-20260901/step-06-issue-fixer-close.json.
-queue_task_id: 402
-github_issue: 789
+queue_ref: Q-402
+github_ref: GH-789
 status: resolved
 resolved_in_run: WF03-ISS0402-20260905
 resolved_at: "2026-09-05T02:55:00Z"

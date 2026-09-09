@@ -45,8 +45,8 @@ affected_files:
 related:
   - ISS-0423
   - ISS-0445
-queue_task_id: 480
-github_issue: 933
+queue_ref: Q-480
+github_ref: GH-933
 status: resolved
 resolution: >
   RESOLVED by WF03-ISS0480-20260905, PR #1002, squash-merged as 162379ae.

@@ -99,7 +99,7 @@ resolution: >
 
   Full test suite green after the fix (variable-merge/variable-schema files:
   42/42; see PR for the full run). Closing GH#300.
-github_issue: https://github.com/tvolodi/letflow/issues/300
+github_ref: GH-300
 related:
   - ISS-0063
   - ISS-0076

@@ -73,8 +73,8 @@ recurrence:
       499cee7) rather than after completion; that is a per-run workaround by one session,
       not a rule, and does not resolve this issue.
 
-queue_task_id: 196
-github_issue: https://github.com/tvolodi/letflow/issues/386
+queue_ref: Q-196
+github_ref: GH-386
 github_issue_note: >
   Filed by ORCH on REVIEWER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (196) and its mirrored GitHub issue (#386) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
 status: resolved

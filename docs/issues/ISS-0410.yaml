@@ -46,8 +46,8 @@ duplicate_note: >
 source: >
   docs/status/S7-release-2026-09-02.yaml (WF-04 Step 2, RELEASE-VALIDATOR's
   independent mix letflow.check.test re-run).
-queue_task_id: 410
-github_issue: 806
+queue_ref: Q-410
+github_ref: GH-806
 status: no_defect
 verdict_in_run: WF03-ISS0410-20260902
 verdict_at: "2026-09-02T12:22:40Z"

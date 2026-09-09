@@ -42,8 +42,8 @@ related:
   - ISS-0191  # the linter that would host a mechanical check
   - ISS-0200  # the run that measured it
 
-queue_task_id: 202
-github_issue: https://github.com/tvolodi/letflow/issues/393
+queue_ref: Q-202
+github_ref: GH-393
 github_issue_note: >
   register_task created both the queue task (202) and its mirrored GitHub issue (#393) in one
   call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The

@@ -26,8 +26,8 @@ affected_files:
 
 related: []
 
-queue_task_id: 257
-github_issue: 499
+queue_ref: Q-257
+github_ref: GH-499
 github_issue_note: >
   register_task created both the queue task (257) and its mirrored GitHub
   issue (499) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

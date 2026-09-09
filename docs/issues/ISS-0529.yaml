@@ -56,8 +56,8 @@ related:
   - ISS-0296
   - REQ-118
   - REQ-133
-queue_task_id: 530
-github_issue_number: 1073
+queue_ref: Q-530
+github_ref: GH-1073
 resolving_run: WF03-ISS0530-20260908
 resolved_at: "2026-09-08T10:35:55Z"
 status: resolved

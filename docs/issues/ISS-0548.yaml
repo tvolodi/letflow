@@ -36,8 +36,8 @@ affected_files:
   - web/src/components/ui/ConflictResolver.tsx
 related:
   - REQ-275
-queue_task_id: 548
-github_issue_number: 1112
+queue_ref: Q-548
+github_ref: GH-1112
 resolving_run: WF03-ISS0548-20260908
 resolved_at: "2026-09-08T22:28:56Z"
 status: resolved

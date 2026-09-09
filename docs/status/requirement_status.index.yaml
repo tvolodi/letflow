@@ -2351,9 +2351,16 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 3
+    entries: 4
     note: >
-      Incremented to 3 by ORCH's own REQ-284 done-event append
+      Incremented to 4 by ORCH's own REQ-277 started-event append
+      (WF02-REQ277-20260909 Step 00b, rebase resumption) -- 353 lines at
+      that point (21795 bytes), well under the roll ceiling. This event's
+      commit was originally authored against volume 11 while it was still
+      current/open; volume 11 closed before this branch reached Step Final,
+      so the append was redirected here per the closed volume's own
+      redirection rule rather than appended to the frozen file.
+      Previously incremented to 3 by ORCH's own REQ-284 done-event append
       (WF02-REQ284-20260909) -- 331 lines at that point (20164 bytes),
       well under the roll ceiling.
       Previously incremented to 2 by ORCH's own REQ-286 done-event append

@@ -2191,11 +2191,29 @@ volumes:
 
   - volume: 11
     path: docs/status/requirement_status.v11.yaml
-    status: current
+    status: closed
     opened: 2026-09-07
-    entries: 33
+    closed: 2026-09-09
+    entries: 34
+    lines: 1212
+    bytes_working_tree: 74041
+    frozen_prefix_lines: 1212
+    frozen_prefix_sha256: "78427a0febd3802257a1cfa1a8ba1f0f185e3f5b7ec693abc8172730722f8e3d"
     note: >
-      Incremented to 33 by ORCH's own REQ-281 done-event append
+      Closed 2026-09-09 by ORCH's own REQ-282 done-event append
+      (WF02-REQ282-20260909), which brought this file to 1212 lines / 74041
+      bytes -- over the 1200-line roll ceiling flagged as imminent by the
+      prior note below. Rolled to volume 12
+      (docs/status/requirement_status.v12.yaml) per the standard procedure:
+      the triggering entry itself stays in this volume (matching the
+      v9->v10 and v10->v11 precedents), a closure footer was appended, and
+      v12 was created with this volume's header text carried forward
+      verbatim (volume number, opening date, predecessor path updated).
+      Incremented to 34 by ORCH's own REQ-282 done-event append
+      (WF02-REQ282-20260909) -- 1168 lines at that point BEFORE this
+      append (71349 bytes), crossing to 1212 lines (74041 bytes) after,
+      triggering this closure.
+      Previously incremented to 33 by ORCH's own REQ-281 done-event append
       (WF02-REQ281-20260909) -- 1168 lines at that point (71349 bytes).
       ONLY ~32 LINES OF MARGIN LEFT before the 1200-line ceiling. The
       VERY NEXT append to this volume MUST roll to volume 12 first --
@@ -2324,6 +2342,19 @@ volumes:
       under the roll ceiling.
       Opened by ORCH at feature/WF03-ISS0437-20260907's Step Final, successor
       to volume 10. Created with volume 10's header text verbatim (volume
+      number, opening date and predecessor path updated) and an empty
+      `history:` list, per this index's `roll_rule.on_exceed` procedure.
+      `entries:` will be incremented per HOW-TO-APPEND step 6 as real
+      appends land.
+
+  - volume: 12
+    path: docs/status/requirement_status.v12.yaml
+    status: current
+    opened: 2026-09-09
+    entries: 0
+    note: >
+      Opened by ORCH at feature/WF02-REQ282-20260909's Step Final, successor
+      to volume 11. Created with volume 11's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty
       `history:` list, per this index's `roll_rule.on_exceed` procedure.
       `entries:` will be incremented per HOW-TO-APPEND step 6 as real

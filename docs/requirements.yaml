@@ -16639,7 +16639,7 @@ requirements:
     title: Serve per-tenant branding from GET /api/mobile/tenant-config and reconcile @default_branding to tokens.css, under SECURITY-REVIEWER gate (0020 D1b, mobile endpoint)
     owner: ELIXIR-DEV
     impl_order: 554
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements the mobile half of step 5 of

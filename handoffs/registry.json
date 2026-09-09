@@ -5795,6 +5795,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-281 (queue task 553, GH#1126) adds tenant branding as a third response key to the pre-authentication GET /api/tenant-config endpoint -- an explicit SECURITY CHANGE per the endpoint's own moduledoc, with SECURITY-REVIEWER as a required (not optional) gate. Design decisions, independently re-verified by CODE-DESIGN-VALIDATOR: branding discloses only app_name/logo_url/brand_colors (a proper subset of REQ-280's 5-key settings vocabulary -- locales/default_locale excluded, since the requirement's own 'acceptable for an app name, a logo URL and a brand colour' text is a closed enumeration, not illustrative examples); per-sub-key fallback to new, independent platform-default constants (deliberately NOT reusing mobile_tenant_config.ex's stale @default_branding, whose reconciliation is REQ-282's job); resolve_realm/2 threads the already-fetched %Tenant{} through to avoid a second DB lookup. SECURITY-REVIEWER independently traced all four never-error paths (resolvable-no-branding, unknown slug, malformed slug, simulated DB failure via a null-byte slug hitting Postgrex's encode failure) and confirmed byte-identical output -- no tenant-existence oracle; confirmed the response stays hand-built via named Map.get/3 calls, never a wholesale merge; flagged one non-blocking defense-in-depth note (read-side trusts stored brand_colors verbatim rather than re-validating inner keys, acceptable given solid write-time enforcement in a single-writer architecture). REVIEWER independently reproduced 96/96 targeted tests, confirmed mobile_tenant_config.ex byte-identical to main, confirmed the moduledoc's security-change paragraph now names the third key and extends the gate to a fourth. TEST-RUNNER's full suite run (3533/3535, 2 pre-existing rustc-absent failures unrelated) caught a real mix format gap on the exact function this requirement changed -- fixed directly by ORCH and re-verified clean. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, required gate) -> REVIEWER (PASS) -> TEST-RUNNER (format fix required, then clean). Implementation commit effb2747, format-fix commit b6a7f5a2."
+    },
+    {
+      "run_id": "WF02-REQ282-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-282",
+      "issue_id": null,
+      "queue_task_id": 554,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1127,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/routers/mobile_tenant_config.ex"
+      ],
+      "branch_name": "feature/WF02-REQ282-20260909",
+      "started_at": "2026-09-09T06:30:37Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-282 (queue task 554, GH#1127) is the mobile sibling of REQ-281, a DIFFERENT shape of security change -- converts three ALREADY-EXISTING GET /api/mobile/tenant-config response keys (locales, default_locale, branding) from global constants to tenant-varying for the first time, invalidating the endpoint's own prior 'byte-identical by construction' moduledoc claim. resolve_realm_id/1 restructured to resolve_tenant_config/1 returning {realm_id, settings}, three independent per-key fallback helpers (not all-or-nothing). Brand-colors shape stays FLAT (primary_color, not REQ-281's nested brand_colors map) -- only the VALUE reconciles: '#0B5FFF' -> '#228be6' (tokens.css's canonical --color-brand-600, REQ-280's finding). Anti-enumeration edge case (OQ-A) resolved deliberately: a tenant found but with no idp_realm_id has its settings forced to nil too, collapsing that case into the same branch as 'not found'. SECURITY-REVIEWER (required gate, not optional) independently traced all 4 never-error paths plus the OQ-A collapse and confirmed the three newly-varying keys are structurally forced identical (not just claimed) when no tenant-specific settings apply -- no new tenant-existence oracle. Moduledoc's stale 'global, not per-tenant' and 'byte-identical by construction' claims both rewritten to correctly name environment_kind as the sole remaining true invariant. REVIEWER independently reproduced 29/29 targeted tests and flagged one cosmetic stale test-describe string as non-blocking -- ORCH fixed it directly, hitting and resolving a real Erlang atom-length limit along the way (an over-long combined describe+test name crashed compilation with a SystemLimitError). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV (ran mix format proactively, closing the gap REQ-281 hit) -> SECURITY-REVIEWER (PASS, required gate) -> REVIEWER (PASS, one cosmetic non-blocking flag, fixed) -> TEST-RUNNER (full suite 3542/3544 passed, 2 pre-existing rustc-absent failures unrelated). Also closed out the docs/status/requirement_status.v11.yaml volume, which crossed its 1200-line roll ceiling on this same append -- rolled to v12 per the standard procedure. Implementation commit 71d2742f, description-fix commit 4d25da0b."
     }
   ]
 }

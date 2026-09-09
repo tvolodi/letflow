@@ -55,14 +55,32 @@ defmodule Letflow.Routers.MobileTenantConfig do
        but has no realm bound" from "the DB call failed" — none of them
        functions as an existence oracle.
 
-  A caller **can** still infer that a slug is bound to some realm when it
-  gets back a non-default `realm_url` — unavoidable, since telling the app
-  which realm to authenticate against is this endpoint's entire purpose, and
-  it is the same information any user of that tenant already sees at their
-  own login screen. `locales`, `default_locale`, `branding` and
-  `environment_kind` are never tenant-derived (see below), so only one of the
-  five fields varies by slug at all — the other four are byte-identical
-  across every branch by construction.
+  A caller can also infer, from a non-default `branding`, `locales` or
+  `default_locale` value, that a resolved slug belongs to a tenant that
+  configured its own settings — this is the same bounded, unavoidable
+  inference this endpoint already makes via a non-default `realm_url`
+  (record 0020's anti-enumeration argument, restated here rather than
+  assumed carried over from an earlier version of this text): telling the
+  mobile app which realm, branding, and locale defaults apply to a tenant is
+  this endpoint's entire purpose, and every one of those values is exactly
+  what any user of that tenant already sees at their own login/bootstrap
+  screen — none of them is information withheld from a legitimate user of
+  the tenant in question. What remains invariant is not "four of five fields
+  never vary" (that claim no longer holds after REQ-282) but the
+  **never-error guarantee itself**: an unknown slug, a lookup failure, and a
+  missing `?slug=` parameter are structurally indistinguishable from each
+  other and from "a resolved tenant that never configured any settings" —
+  all four converge on the identical platform-default values for `branding`,
+  `locales`, and `default_locale`, because all four route through the same
+  `settings = nil` input to the same fallback helpers (see below). Only a
+  genuine settings hit — a resolvable slug bound to a tenant that has
+  written its own `app_name`/`logo_url`/`brand_colors`/`locales`/
+  `default_locale` — can ever produce a non-default value for these three
+  fields, exactly mirroring how only a resolvable slug with a bound realm
+  can ever produce a non-default `realm_url`. `environment_kind` is the one
+  field that is still, and remains, byte-identical across every branch by
+  construction (env-derived, not tenant-derived, not touched by this
+  requirement).
 
   ## What this endpoint discloses, and what it must never disclose
 
@@ -76,18 +94,24 @@ defmodule Letflow.Routers.MobileTenantConfig do
   attribute. **Adding a sixth key to this response is a security change, not
   a feature.**
 
-  ## `locales` / `default_locale` / `branding` / `environment_kind` are global, not per-tenant
+  ## locales / default_locale / branding are per-tenant; environment_kind remains global
 
-  `Letflow.Identity.Tenant`'s schema has no locale, branding, or environment
-  column, and this module adds none (no migration — see design §5 OQ-1).
-  These four fields are sourced from application config/env, the same
-  `System.get_env/1`-at-point-of-use style as `Letflow.Routers.TenantConfig`'s
-  `idp_base_url/0`, with hardcoded defaults. Consequently every tenant on
-  this backend currently gets identical `locales`/`default_locale`/
-  `branding` values — this is a deliberate, explicitly-flagged placeholder
-  (design OQ-1), not a bug, pending a future requirement that would give
-  tenant branding its own schema/migration/admin UI. Only `realm_url` varies
-  by resolved slug.
+  `Letflow.Identity.Tenant`'s `:settings` column (`Letflow.Identity.TenantSettings`,
+  REQ-280) stores a tenant's own `app_name`, `logo_url`, `brand_colors`,
+  `locales` and `default_locale`, written through
+  `Letflow.Identity.update_tenant_settings/2` and validated at write time by
+  `Tenant.settings_changeset/2`. As of REQ-282, this endpoint reads that
+  column: `locales`, `default_locale` and `branding` each resolve per
+  sub-key from the resolved tenant's stored `settings` where set, and from a
+  platform default (`@default_locales`, `@default_locale`, `@default_branding`)
+  where not. A tenant that never wrote any settings, an unresolvable slug, a
+  lookup failure, and a missing `?slug=` parameter all still produce the
+  platform-default values for these three fields — see the never-error
+  section above for why that convergence is exact, not approximate.
+  `environment_kind` remains the one field genuinely sourced from application
+  config/env (`LETFLOW_ENVIRONMENT_KIND`), unrelated to any tenant, unchanged
+  by this requirement — it is global in the sense the whole paragraph used to
+  claim of all four fields; the other three no longer are.
 
   ## Slug resolution — `?slug=` only, no `?host=` branch (design OQ-2)
 
@@ -130,7 +154,7 @@ defmodule Letflow.Routers.MobileTenantConfig do
   @default_branding %{
     "app_name" => "Letflow",
     "logo_url" => nil,
-    "primary_color" => "#0B5FFF"
+    "primary_color" => "#228be6"
   }
   @default_environment_kind "development"
 
@@ -155,24 +179,33 @@ defmodule Letflow.Routers.MobileTenantConfig do
     conn = fetch_query_params(conn)
     slug = non_empty(Map.get(conn.query_params, "slug"))
 
-    realm_id = resolve_realm_id(slug)
+    {realm_id, settings} = resolve_tenant_config(slug)
 
-    Response.ok(conn, mobile_config_map(realm_id))
+    Response.ok(conn, mobile_config_map(realm_id, settings))
   end
 
   # Keyed only on ?slug= -- no ?host= branch (design OQ-2). A hit with a
-  # non-nil, non-empty idp_realm_id wins; every other case (miss, nil realm,
-  # lookup error, missing/absent slug) falls through to the default realm.
-  @spec resolve_realm_id(slug :: String.t() | nil) :: String.t()
-  defp resolve_realm_id(nil), do: @default_realm
+  # non-nil, non-empty idp_realm_id wins and its (possibly nil) :settings is
+  # threaded straight through, so mobile_config_map/2's fallback helpers never
+  # perform a second, independent DB lookup for the same slug in the same
+  # request. Every other case (miss, nil/empty realm, lookup error,
+  # missing/absent slug) falls through to the default realm with settings
+  # forced to nil (design §2 OQ-A resolution: a tenant found but with no
+  # usable realm is treated as "not usably provisioned" across the board,
+  # not just for realm_url, keeping the resolved-or-not distinction a single
+  # boolean rather than split per-field).
+  @spec resolve_tenant_config(slug :: String.t() | nil) ::
+          {realm_id :: String.t(), settings :: map() | nil}
+  defp resolve_tenant_config(nil), do: {@default_realm, nil}
 
-  defp resolve_realm_id(slug) when is_binary(slug) do
+  defp resolve_tenant_config(slug) when is_binary(slug) do
     case Identity.safe_get_tenant_by_slug(slug, "mobile-tenant-config") do
-      {:ok, %Tenant{idp_realm_id: realm_id}} when is_binary(realm_id) and realm_id != "" ->
-        realm_id
+      {:ok, %Tenant{idp_realm_id: realm_id, settings: settings}}
+      when is_binary(realm_id) and realm_id != "" ->
+        {realm_id, settings}
 
       _miss_or_nil_realm_or_error ->
-        @default_realm
+        {@default_realm, nil}
     end
   end
 
@@ -191,23 +224,73 @@ defmodule Letflow.Routers.MobileTenantConfig do
   # sixth key here is a security change -- see the moduledoc.
   @doc """
   Builds the hand-built 5-key mobile tenant-config response map for the
-  given (already-resolved) `realm_id`. Never derived from
-  `%Letflow.Identity.Tenant{}` or `Map.from_struct/1` -- see the moduledoc's
-  INV-2 allowlist statement. `locales`, `default_locale` and `branding` are
-  global static defaults (design OQ-1); `environment_kind` is env-derived.
+  given (already-resolved) `realm_id` and the resolved tenant's `settings`
+  (or `nil`). Never derived from `%Letflow.Identity.Tenant{}` or
+  `Map.from_struct/1` -- see the moduledoc's INV-2 allowlist statement.
+  `locales`, `default_locale` and `branding` each resolve per sub-key from
+  `settings` where set and from a platform default otherwise (REQ-282);
+  `environment_kind` is env-derived and remains the one true global constant.
   """
-  @spec mobile_config_map(realm_id :: String.t()) :: %{
+  @spec mobile_config_map(realm_id :: String.t(), settings :: map() | nil) :: %{
           required(String.t()) => String.t() | [String.t()] | map()
         }
-  def mobile_config_map(realm_id) do
+  def mobile_config_map(realm_id, settings) do
     %{
       "realm_url" => idp_base_url() <> "/realms/" <> realm_id,
-      "locales" => @default_locales,
-      "default_locale" => @default_locale,
-      "branding" => @default_branding,
+      "locales" => locales_from_settings(settings),
+      "default_locale" => default_locale_from_settings(settings),
+      "branding" => branding_from_settings(settings),
       "environment_kind" => environment_kind()
     }
   end
+
+  # ── Per-key fallback helpers (REQ-282, design §2/§3) ──────────────────────
+  #
+  # Three independently-varying keys, three separate helpers -- not one
+  # combined helper returning a 3-tuple -- so a tenant with stored `locales`
+  # but no `branding` gets its own `locales` and the platform-default
+  # `branding`, and vice versa (per-sub-key, not all-or-nothing, fallback
+  # discipline). `settings == nil` (tenant absent/miss/error/no-settings-ever-
+  # written) makes every helper return its full platform-default value.
+
+  @spec branding_from_settings(settings :: map() | nil) :: %{
+          required(String.t()) => String.t() | nil | map()
+        }
+  defp branding_from_settings(settings) when is_map(settings) do
+    %{
+      "app_name" => Map.get(settings, "app_name", @default_branding["app_name"]),
+      "logo_url" => Map.get(settings, "logo_url", @default_branding["logo_url"]),
+      "primary_color" => primary_color_from_settings(settings)
+    }
+  end
+
+  defp branding_from_settings(_nil_or_other), do: @default_branding
+
+  # brand_colors is stored nested (REQ-280 shape: %{"primary" => ...}), but
+  # this endpoint's disclosed branding shape stays FLAT (design §3) -- an
+  # explicit, named-key translation at the read boundary, not a structural
+  # copy of the stored shape. Missing either level (no "brand_colors" key at
+  # all, or a brand_colors map without "primary") falls through to the flat
+  # default in the same expression -- no partial nil leaking into
+  # primary_color in place of a string.
+  defp primary_color_from_settings(settings) do
+    case Map.get(settings, "brand_colors") do
+      %{"primary" => primary} when is_binary(primary) -> primary
+      _absent_or_incomplete -> @default_branding["primary_color"]
+    end
+  end
+
+  @spec locales_from_settings(settings :: map() | nil) :: [String.t()]
+  defp locales_from_settings(settings) when is_map(settings),
+    do: Map.get(settings, "locales", @default_locales)
+
+  defp locales_from_settings(_nil_or_other), do: @default_locales
+
+  @spec default_locale_from_settings(settings :: map() | nil) :: String.t()
+  defp default_locale_from_settings(settings) when is_map(settings),
+    do: Map.get(settings, "default_locale", @default_locale)
+
+  defp default_locale_from_settings(_nil_or_other), do: @default_locale
 
   # Read at the point of use via System.get_env/1, never threaded through a
   # struct field and never logged (INV-4). Neither is secret material -- an

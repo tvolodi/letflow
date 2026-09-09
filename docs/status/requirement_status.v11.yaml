@@ -1166,3 +1166,75 @@ history:
       rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, required gate) ->
       REVIEWER (PASS) -> TEST-RUNNER (format fix required, then clean).
       ORCH will merge and release queue task 553 status:done.
+
+  - req: REQ-282
+    event: done
+    agent: ORCH
+    at: "2026-09-09T07:12:11Z"
+    note: >
+      REQ-282 (queue task 554, GH#1127) implemented via
+      WF02-REQ282-20260909: mobile sibling of REQ-281, a DIFFERENT
+      shape of security change -- converts three ALREADY-EXISTING
+      GET /api/mobile/tenant-config response keys (locales,
+      default_locale, branding) from global constants to tenant-varying
+      for the first time, invalidating the endpoint's own prior
+      "byte-identical by construction" moduledoc claim. resolve_realm_id/1
+      restructured to resolve_tenant_config/1 returning {realm_id,
+      settings}, three independent per-key fallback helpers (not
+      all-or-nothing). Brand-colors shape stays FLAT (primary_color,
+      not REQ-281's nested brand_colors map) -- no AC requested a shape
+      change, only the VALUE reconciles: "#0B5FFF" -> "#228be6"
+      (tokens.css's canonical --color-brand-600, REQ-280's finding).
+      Anti-enumeration edge case (OQ-A) resolved deliberately: a tenant
+      found but with no idp_realm_id has its settings forced to nil
+      too, collapsing that case into the same branch as "not found" --
+      CODE-DESIGN-VALIDATOR confirmed this is the conservative default
+      and doesn't need further specificity. SECURITY-REVIEWER (required
+      gate, not optional) independently traced all 4 never-error paths
+      plus the OQ-A collapse and confirmed the three newly-varying keys
+      are structurally forced identical (not just claimed) when no
+      tenant-specific settings apply -- no new tenant-existence oracle.
+      Moduledoc's stale "global, not per-tenant" and "byte-identical by
+      construction" claims both rewritten to correctly name
+      environment_kind as the sole remaining true invariant and restate
+      record 0020's bounded anti-enumeration argument. REVIEWER
+      independently reproduced 29/29 targeted tests and flagged one
+      cosmetic stale test-describe string (overclaiming universality
+      post-fix) as non-blocking -- ORCH fixed it directly rather than
+      leaving it, hitting and resolving a real Erlang atom-length limit
+      along the way (an over-long combined describe+test name crashed
+      compilation with a SystemLimitError). Pipeline: CODE-DESIGNER ->
+      CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV (ran mix
+      format proactively this time, closing the gap REQ-281 hit) ->
+      SECURITY-REVIEWER (PASS, required gate) -> REVIEWER (PASS, one
+      cosmetic non-blocking flag, fixed) -> TEST-RUNNER (full suite
+      3542/3544 passed, 2 pre-existing rustc-absent failures unrelated).
+      ORCH will merge and release queue task 554 status:done.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 11 — CLOSED 2026-09-09. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-07 through
+# 2026-09-09 (34 entries, lines 1-1212). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at feature/WF02-REQ282-20260909's
+# REQ-282 done-event append, whose own append brought this file to 1212 lines,
+# over its declared roll_rule ceiling (max_lines: 1200) -- confirmed via
+# `wc -l` on the working-tree file per this volume's own "WHEN THIS VOLUME IS
+# FULL" procedure. Reads of this volume are TARGETED reads only -- a line
+# range or a pattern match, never a whole-file read. Use whichever your shell
+# has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v12.yaml
+#
+# Why this file was closed: WF02-REQ282-20260909's own REQ-282 done-event
+# append brought the on-disk count to 34 entries across 1212 lines -- over the
+# roll ceiling. No entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

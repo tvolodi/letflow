@@ -652,7 +652,8 @@ defmodule Letflow.Obs.AlertsTest do
 
       # Step 4: write-before-deliver already left the stale emission row.
       assert %AlertHookEmissionState{last_emitted_key: ^expected_emitted_key} =
-               Repo.get_by(AlertHookEmissionState,
+               Repo.get_by(
+                 AlertHookEmissionState,
                  [hook_id: "iss0558-hook", trigger_key: trigger_key],
                  prefix: schema_name
                )
@@ -674,7 +675,8 @@ defmodule Letflow.Obs.AlertsTest do
       assert trigger_state!(schema_name, trigger_key).is_armed == true
 
       # Step 7: the fix's direct, independently-checkable effect.
-      refute Repo.get_by(AlertHookEmissionState,
+      refute Repo.get_by(
+               AlertHookEmissionState,
                [hook_id: "iss0558-hook", trigger_key: trigger_key],
                prefix: schema_name
              )
@@ -735,7 +737,8 @@ defmodule Letflow.Obs.AlertsTest do
       trigger_key = "dlq_depth_threshold"
 
       assert %AlertHookEmissionState{last_emitted_key: "depth:6"} =
-               Repo.get_by(AlertHookEmissionState,
+               Repo.get_by(
+                 AlertHookEmissionState,
                  [hook_id: "iss0558-dlq-hook", trigger_key: trigger_key],
                  prefix: schema_name
                )
@@ -744,7 +747,8 @@ defmodule Letflow.Obs.AlertsTest do
       Alerts.run_detection(schema_name, base_tick_context(%{dlq_count: 3}))
       assert trigger_state!(schema_name, trigger_key).is_armed == true
 
-      refute Repo.get_by(AlertHookEmissionState,
+      refute Repo.get_by(
+               AlertHookEmissionState,
                [hook_id: "iss0558-dlq-hook", trigger_key: trigger_key],
                prefix: schema_name
              )

@@ -430,7 +430,11 @@ defmodule Letflow.Obs.Alerts do
   # must not inherit a stale dedup row) and upserts the trigger state, both in
   # one Ecto.Multi/transaction so no observer can see one write without the
   # other (design §2).
-  @spec rearm_and_clear_emissions(attrs :: map(), trigger_key :: String.t(), tenant_schema :: String.t()) ::
+  @spec rearm_and_clear_emissions(
+          attrs :: map(),
+          trigger_key :: String.t(),
+          tenant_schema :: String.t()
+        ) ::
           {:ok, term()} | {:error, term(), term(), map()}
   defp rearm_and_clear_emissions(attrs, trigger_key, tenant_schema) do
     emission_query =

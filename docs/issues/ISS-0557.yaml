@@ -28,8 +28,39 @@ description: >
   Mitigation options (for a future requirement):
   - Spawn a Task under a Task.Supervisor for per-hook delivery (async, doesn't block Poller)
   - Or impose a firm cap on max_attempts and max_backoff_ms for alert hooks via config validation
-affected_files:
-  - lib/letflow/obs/alerts.ex
-  - lib/letflow/scheduler/poller.ex
+
+  RESOLUTION (WF03-ISS0557-20260909): this defect no longer exists in current
+  code -- ALREADY FIXED by ISS-0429 (resolved 2026-09-02, three days before
+  this issue was even filed/picked up from the 2026-08-30 discovery run).
+  Verified directly against lib/letflow/obs/alerts.ex's current source: `git
+  log -1 --format='%ci' <ISS-0429's design-doc commit>` = 2026-09-02 20:52:56
+  UTC; ISS-0429's resolved_at = 2026-09-02T22:40:00Z; this issue's own
+  discovered_at = 2026-08-30T00:00:00Z -- the description above accurately
+  reflects the code as it existed when REVIEWER discovered it during
+  WF02-REQ201-20260830, but that snapshot predates ISS-0429's fix.
+
+  Current fire_hooks/4 (alerts.ex ~line 484) dispatches deliver_with_retry/4
+  as a fire-and-forget task via `Task.Supervisor.start_child(
+  Letflow.Obs.Alerts.TaskSupervisor, fn -> deliver_with_retry(...) end)` --
+  exactly the first mitigation option this issue itself proposed ("Spawn a
+  Task under a Task.Supervisor for per-hook delivery"). The module's own
+  moduledoc documents this explicitly under "## OQ-4 resolution ... --
+  superseded by ISS-0429": a new supervised child,
+  `{Task.Supervisor, name: Letflow.Obs.Alerts.TaskSupervisor}`, was added to
+  Letflow.Application purely to isolate deliver_with_retry/4's HTTP delivery
+  work (including its Process.sleep backoff) from the Poller's own process.
+  `Process.sleep/1` still runs inside deliver_with_retry/4, but on the
+  detached Task, not on Letflow.Scheduler.Poller's GenServer process -- the
+  Poller's handle_info(:tick, _) no longer blocks on it, closing exactly the
+  starvation risk this issue describes.
+
+  No code change made here -- direct-action §10 (docs-only, this issue file).
+  This is being closed as already-resolved-by-a-different-run, not
+  fixed-in-this-run, per the issue's own AC ("fixed or explicitly declined
+  with reasoning") -- the reasoning being that no defect currently exists to
+  fix.
 queue_ref: Q-557
 github_ref: GH-1131
+resolving_run: WF03-ISS0557-20260909
+resolved_at: "2026-09-09T05:05:00Z"
+status: resolved_not_applicable

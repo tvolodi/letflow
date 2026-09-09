@@ -2193,9 +2193,13 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 30
+    entries: 31
     note: >
-      Incremented to 30 by ORCH's own ISS-0558 SCOPE-CHANGE done-event append
+      Incremented to 31 by ORCH's own ISS-0557 SCOPE-CHANGE cancelled-event
+      append (WF03-ISS0557-20260909) -- 1088 lines at that point (66559
+      bytes), still under the roll ceiling (1200 lines/120000 bytes) but
+      close -- a roll to volume 12 is likely within the next few appends.
+      Previously incremented to 30 by ORCH's own ISS-0558 SCOPE-CHANGE done-event append
       (WF03-ISS0558-20260909) -- 1062 lines at that point (65124 bytes),
       still under the roll ceiling (1200 lines/120000 bytes) but getting
       closer -- watch for a roll within the next several appends.

@@ -1060,3 +1060,29 @@ history:
       from two earlier near-misses this session), verified 19/19
       alerts_test.exs passing and all static gates clean locally before
       every push. ORCH will merge and release queue task 558 status:done.
+
+  - req: SCOPE-CHANGE
+    event: cancelled
+    agent: ORCH
+    at: "2026-09-09T04:59:50Z"
+    note: >
+      ISS-0557 (queue task 557, GH#1131) closed via
+      WF03-ISS0557-20260909 as resolved_not_applicable, not fixed --
+      the defect it describes (Letflow.Obs.Alerts.deliver_with_retry/4's
+      Process.sleep backoff blocking Letflow.Scheduler.Poller's
+      GenServer message queue during HTTP retries) no longer exists in
+      current code. REVIEWER discovered this 2026-08-30
+      (WF02-REQ201-20260830), but ISS-0429 (resolved 2026-09-02, three
+      days before this issue was picked up) already moved
+      deliver_with_retry/4 off the Poller's process entirely via
+      Task.Supervisor.start_child(Letflow.Obs.Alerts.TaskSupervisor,
+      fn -> deliver_with_retry(...) end) -- exactly the first mitigation
+      option ISS-0557's own text proposed ("Spawn a Task under a
+      Task.Supervisor for per-hook delivery"). Verified directly against
+      current lib/letflow/obs/alerts.ex source (fire_hooks/4's real
+      dispatch call, and the module's own moduledoc documenting this
+      under "OQ-4 resolution -- superseded by ISS-0429") rather than
+      trusted from either issue's own text. No code change made --
+      docs-only closure of a stale issue file whose description
+      accurately reflected the code at discovery time but predates a
+      fix that has since landed. Direct-action §10 (single file).

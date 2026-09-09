@@ -16999,16 +16999,109 @@ requirements:
     depends_on: [REQ-273]
 
 
-  # NOTE (2026-09-09): REQ-290 depends on REQ-289, which is NOT in this file yet --
-  # it is in flight on origin/feature/WF02-REQ289-20260909 (corpus at
-  # priv/expr_conformance/corpus.json) and lands with that branch's own yaml entry.
-  # The depends_on below is correct and deliberately left pointing at it; if a
-  # dependency check flags it as orphaned, the fix is to merge REQ-289's branch,
-  # not to weaken this edge.
+  - id: REQ-289
+    title: "Export a language-neutral conformance corpus from Letflow.Engine.Expr's own tests (0020 D1a step 9, part 1 of 2)"
+    owner: ELIXIR-DEV
+    impl_order: 544  # letflow-queue task id
+    status: pending
+    stage: S8
+    description: >
+      Implements the first half of step 9 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing. Record
+      0020 D1a calls this "the single most important piece of work this clause
+      creates" and requires that IT PRECEDE ANY CLIENT EVALUATOR: "Building a
+      second implementation before the corpus exists is how the two drift apart
+      before anyone can measure it." REQ-293 (TypeScript) and REQ-294 (Dart) both
+      depend on this requirement for exactly that reason.
+
+      WHAT EXISTS ALREADY, and why it is not this, verified 2026-09-08:
+      test/fixtures/simulation/differential_corpus.json holds 15 entries
+      (gw-001 through gw-015), each shaped {condition_id, source_definition_id,
+      source_definition_version, source_gateway_node_id, condition_text, context,
+      expected_result}, consumed by test/letflow/engine/expr_differential_corpus_test.exs
+      (REQ-209). It is a port of R-Co's conditions_v1.json. It is inadequate as a
+      conformance corpus on three counts, and REPLACING it is not in scope either --
+      it is a regression fixture with its own provenance: (a) every entry is a
+      boolean gateway condition, so it exercises none of REQ-197's arithmetic, none
+      of REQ-198's 8 builtins, and no non-boolean result -- which is exactly what a
+      `computed` field produces; (b) its per-entry keys are gateway-specific
+      (source_gateway_node_id, source_definition_id) and carry no meaning for a
+      form-field evaluator; (c) it records no expected-FAILURE cases, and a corpus
+      that cannot express "this expression must be rejected" cannot test D1a
+      constraint 4, that a client meeting an expression it cannot evaluate fails
+      loudly rather than guesses.
+
+      THIS REQUIREMENT: produce a corpus derived from test/letflow/engine/expr_test.exs
+      (895 lines) -- the Elixir implementation's own test suite, which is what
+      record 0020 names as the source -- covering the whole grammar surface:
+      variable references including dotted paths, all 6 comparison operators,
+      and/or/not, all 4 literal kinds (number, string, boolean, null), all 5
+      binary arithmetic operators, unary negation, all 8 pure builtins (length,
+      lower, upper, trim, contains, startsWith, endsWith, coalesce), and the
+      decided edge semantics a naive second implementation gets wrong: ASCII-only
+      case conversion in lower and upper (R-Co's lower("CAFE" with an accented E)
+      is the ASCII-only result, NOT the Unicode-aware one), trim's 4-character
+      ASCII whitespace set rather than Unicode whitespace, and the
+      signed-infinity and NaN division results (:infinity, :neg_infinity, :nan).
+      Those three are the highest-value entries in the whole corpus precisely
+      because they are the ones a from-scratch TypeScript or Dart evaluator will
+      implement the obvious way and get wrong.
+
+      THE CORPUS FORMAT IS THE DELIVERABLE, NOT JUST ITS CONTENT. It is read by
+      three runtimes, two of which do not exist yet. So it must be plain JSON
+      with no Elixir-specific encoding: no atoms, no tuples, no sigils. The three
+      infinity markers Expr returns as atoms need an explicit, documented JSON
+      representation, and so does the distinction between an expected parse
+      failure and an expected evaluation failure -- these are different outcomes
+      and a corpus that conflates them will let a client pass by failing at the
+      wrong stage. Decide and document both encodings; do not leave a client
+      author to infer them.
+
+      OPEN QUESTION, flagged rather than silently resolved: record 0020 does not
+      say where the corpus file lives, and the answer matters because two clients
+      outside test/ must read it -- a Dart test in apps/mobile/ (a directory that
+      does not exist yet) cannot reasonably reach into Letflow's test/fixtures/.
+      Propose a location with its rationale in the design step and get REVIEWER
+      sign-off; do not place it by default. Whatever is chosen, the corpus must
+      not become a second SOURCE of truth: it is generated from or checked
+      against expr_test.exs, and REQ-290 is what enforces that.
+
+      SCOPE FENCE: this requirement produces the corpus and the Elixir-side proof
+      that Expr passes it. It does not write the CI drift guard (REQ-290), does
+      not modify test/fixtures/simulation/differential_corpus.json or its REQ-209
+      test, and writes no TypeScript or Dart.
+
+      NOTE (added by ORCH 2026-09-09): registered in letflow-queue (task 544) and
+      filed on GitHub (#1100) by a prior discovery session; a real implementation
+      already exists on origin/feature/WF02-REQ289-20260909 (commit dc031e61,
+      "feat(req289): language-neutral expression conformance corpus"), but that
+      branch predates several requirements merged to main since (REQ-287/288
+      among them) and needs a rebase before it can land -- this docs/requirements.yaml
+      entry itself was missing until now, the same registration-gap class as
+      REQ-272/275/287. Registered here (status: pending, matching reality --
+      the branch is real but unmerged) specifically to unblock REQ-290's and
+      REQ-292's `blocked-by:` deferral scopes, which require a corpus id to
+      exist to be S3-valid; this entry's status should be flipped to done by
+      whichever session actually rebases and merges origin/feature/WF02-REQ289-20260909,
+      not by editing this entry's content otherwise. Content above is verbatim
+      from the queue task's own description field.
+    acceptance_criteria:
+      - "a JSON corpus file exists at the location REVIEWER signed off on, and every entry has at minimum an id, the expression source, the input variables, and the expected outcome -- with the exact schema documented in a companion document, not only inferable from the data"
+      - "an ExUnit test iterates every corpus entry through Letflow.Engine.Expr and asserts the recorded outcome, and it passes -- quote the real mix test output including the entry count"
+      - "the corpus covers every construct in the grammar, proven by a test that enumerates coverage rather than by inspection: all 6 comparison operators, and/or/not, all 4 literal kinds, all 5 arithmetic operators, unary negation, dotted variable paths, and all 8 names returned by Letflow.Engine.Expr.builtin_function_names/0 -- the builtin check must be driven by that function's return value, so a future builtin cannot be added without the corpus failing"
+      - "the corpus contains explicit entries for the three divergence-prone semantics, each with a field or comment naming why it is there: ASCII-only lower/upper (including a non-ASCII input whose expected value is the ASCII-only result), trim's 4-character ASCII whitespace set, and division producing each of the three infinity markers"
+      - "the corpus contains expected-failure entries, and its schema distinguishes a parse failure from an evaluation failure -- a test asserts at least one of each and asserts that they are NOT interchangeable, so a client cannot pass by failing at the wrong stage"
+      - "the JSON encoding chosen for the three infinity markers and for failure outcomes is documented in the companion document with its rationale, and the corpus contains no Elixir-specific encoding: a grep of the corpus file for leading-colon atom, tuple-brace and sigil syntax returns zero hits, quoted with the command"
+      - "the corpus file's location and the reason for it are recorded in a docs/migration/decisions/ record (new, or an existing one amended) and REVIEWER signed off -- cited by record id in the completion report"
+      - "test/fixtures/simulation/differential_corpus.json and test/letflow/engine/expr_differential_corpus_test.exs are unmodified, proven by git diff -- REQ-209's regression fixture keeps its own provenance"
+      - "mix letflow.check passes, with real output quoted"
+      - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement -- the grammar is defined there and is not extended, narrowed, or `completed` toward CEL; expr.ex's own moduledoc warns that completing CEL support against @unsupported_call_markers acts against the closed EXP-102 decision"
+    depends_on: []
+
   - id: REQ-290
     title: Guard the conformance corpus against drift from Letflow.Engine.Expr in CI, and pin the corpus version marker (0020 D1a step 9, part 2 of 2)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-292 -- REQ-290 guards the corpus REQ-289 produces; REQ-289's own entry lands with origin/feature/WF02-REQ289-20260909 (that branch predates REQ-287/288 and needs a rebase first). Scoped to REQ-292 -- the nearest live in-corpus successor that cannot proceed without this guard -- because a blocked-by naming an id absent from this file is an unfalsifiable suppression and is correctly rejected. RE-SCOPE TO REQ-289 once its branch merges.
+    # impl_order: UNREGISTERED -- blocked-by: REQ-289 -- REQ-290 guards the corpus REQ-289 produces (depends_on: [REQ-289]); REQ-289 is now registered (queue task 544) as status: pending, so this scope names its real, live blocker directly rather than the REQ-292 workaround previously needed while REQ-289 was absent from this file.
     status: pending
     stage: S8
     description: >
@@ -17072,7 +17165,7 @@ requirements:
     title: Extend the x-ui vocabulary with visible_when, computed and cross-field validation in Expr's grammar, validated at definition time (0020 D1a step 8, part 2 of 2)
     owner: ELIXIR-DEV
     impl_order: 561  # letflow-queue task id
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Implements the second half of step 8 of
@@ -17153,7 +17246,7 @@ requirements:
   - id: REQ-292
     title: Server-side re-evaluation of visible_when, computed and cross-field validation on task completion (0020 D1a step 11, the authority half)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-291 -- REQ-286 (queue task 556) landed 2026-09-09; REQ-290 and REQ-291 are still pending, and this entry's own depends_on: [REQ-286, REQ-290, REQ-291] makes it unstartable until all three land. Scoped to REQ-291 rather than REQ-290 specifically to avoid a blocked-by cycle: REQ-290's own deferral is separately scoped to REQ-292 (this entry) as a workaround for REQ-289 being absent from this file -- REQ-290 <-> REQ-292 would be a live cycle if this entry also pointed back at REQ-290
+    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-291 (queue task 561) landed 2026-09-09; REQ-290 is still pending, and this entry's own depends_on: [REQ-286, REQ-290, REQ-291] makes it unstartable until it lands too. Now safe to scope directly to REQ-290 (previously avoided to prevent a cycle, since REQ-290's own deferral pointed back at this entry) -- REQ-290's deferral has been re-scoped to REQ-289 (now registered as queue task 544), so the chain is REQ-292 -> REQ-290 -> REQ-289, no cycle
     status: pending
     stage: S8
     description: >

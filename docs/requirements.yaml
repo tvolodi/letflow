@@ -16278,7 +16278,7 @@ requirements:
   - id: REQ-288
     title: "Make Letflow.Engine.Expr the definition-time validator for authored expressions, replacing Graph.valid_cel_syntax?/1's structural check (0020 D1a step 8, part 1 of 2)"
     owner: ELIXIR-DEV
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Record docs/migration/decisions/0020-frontend-architecture.md Sequencing

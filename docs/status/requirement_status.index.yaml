@@ -2193,9 +2193,13 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 26
+    entries: 27
     note: >
-      Incremented to 26 by this run's (WF02-REQ287-20260909) second Step Final
+      Incremented to 27 by ORCH's own REQ-288 done-event append
+      (WF02-REQ288-20260908) -- 914 lines at that point (55812 bytes), well
+      under the roll ceiling, composed after rebasing through two real
+      conflicts in docs/requirements.yaml against siblings this run.
+      Previously incremented to 26 by this run's (WF02-REQ287-20260909) second Step Final
       rebase onto origin/main (main advanced again between the first rebase
       and merge attempt), composing this branch's own two REQ-287 appends
       (started-event Step 00 and DOC-UPDATER's done-event Step 6) with main's

@@ -880,3 +880,48 @@ history:
       chronological ordering (20 passed with the inversion present), so
       nothing is corrected -- it is recorded here so a later reader does
       not mistake it for a clock error or a corrupted append.
+  - req: REQ-296
+    event: done
+    agent: ORCH
+    at: "2026-09-09T23:08:01Z"
+    note: >
+      REQ-296 (queue task 566, GH#1160) implemented via
+      WF02-REQ296-20260909: DDL-generation half of decision 0023 --
+      Letflow.Entities.Definition.DDL.generate_table_ddl/2, a pure
+      function taking a Definition.t() plus a table_name and returning
+      raw SQL CREATE TABLE text, matching REQ-295's raw-SQL execution
+      mechanism (confirmed against 0024's own text, not assumed).
+      Structural columns match entity_record_latest (minus entity_type,
+      since each new table is single-type by construction). Two
+      independent promotion triggers -- FK-field membership (promoted
+      regardless of queried) and queried: true (promoted regardless of
+      FK membership); a field satisfying neither stays only inside
+      field_values jsonb. All 7 non-json field_type() values map to a
+      concrete Postgres type; :json fields are never promoted via a
+      defence-in-depth filter independent of the trigger check (beyond
+      Validator's already-enforced Rule 3). Both table_name and every
+      column identifier are validated against an anchored allowlist
+      regex before interpolation (not a blocklist), enum values are
+      quote-doubled before embedding in CHECK constraints, and decimal
+      precision/scale are integer-guarded with a safe numeric fallback
+      -- no SQL-injection vector found by SECURITY-REVIEWER's
+      independent trace of every value that reaches the generated SQL
+      string. Extension point for REQ-301's future locale-generated-
+      column case stated in the moduledoc, not implemented. Pipeline:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) ->
+      ELIXIR-DEV -> SECURITY-REVIEWER (PASS -- independently confirmed
+      the identifier-validation regex, enum escaping and decimal
+      guards, ran the real ephemeral-Postgres test itself; flagged two
+      non-blocking test-coverage gaps) -> REVIEWER (PASS -- closed
+      SECURITY-REVIEWER's two flagged gaps directly rather than routing
+      back to ELIXIR-DEV for something that small, bringing the suite
+      to 24 tests; independently re-ran the full suite solo after
+      diagnosing an earlier concurrent-mix-test-invocation flake in
+      ServiceCatalogTest, confirmed only the 2 pre-existing rustc-absent
+      failures remain). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped --
+      24 tests already map every acceptance criterion with real,
+      non-tautological assertions including a genuine ephemeral-Postgres
+      round-trip, independently confirmed by both SECURITY-REVIEWER and
+      REVIEWER. No blocked-by deferral hatches reference REQ-296 --
+      REQ-297/298/301 (its real dependents) remain unstartable
+      regardless via the queue's own depends_on tracking.

@@ -5692,6 +5692,27 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-276 (queue task 550, GH#1123) migrated all 14 files in web/src/pages/admin/ onto the design-system primitives (DataTable, Button, StatusBadge, PaginationControls, useToast from REQ-272/274/275/287) and off colour literals (388 occurrences re-measured at start, one-day drift from the queue description's 397 count). No CODE-DESIGNER pass was run -- ORCH judged this a mechanical migration with no architecture decision, which REVIEWER later confirmed held. FRONTEND-DEV completed this in two batches, correctly stopping at a deliberate boundary after the first 7 files rather than doing a partial, unrecorded sweep, and was resumed to finish the remaining 7. One new token added (--color-success-border, mirroring the existing --color-error-border/--color-warning-border addendum pattern). Several sound per-file judgment calls made explicit rather than forced: UsersPage kept a custom status badge (StatusBadgeDomain has no user member), AuditLogPage kept a native table for its expand-to-diff row pattern (DataTable has no sub-row concept), RegisterTenantPage kept native disclosure toggles, UserDetailPage used formRef.requestSubmit() to work around Button lacking type=submit, TokensPage's migration incidentally fixed a pre-existing 5-th/7-td markup bug. web/tests/guards/forbidlist.ts confirmed untouched throughout. Pipeline: FRONTEND-DEV (two batches) -> REVIEWER (PASS -- independently re-ran the guard regex over all 14 files directly, spot-checked 4 files' primitive wiring for genuineness, confirmed no fetch/mutation/query was added anywhere in the diff so the SECURITY-REVIEWER skip held) -> TEST-RUNNER (backend mix compile confirmed clean/zero-impact; frontend gates independently re-run: 281/281 unit tests, 48/48 guard tests). Rebased through a large structural conflict in docs/requirements.yaml: a concurrent DOC-UPDATER batch (PR #1130) had independently filed REQ-276 itself (as part of a 15-requirement batch reconciling decision record 0020) at status:pending with a fuller depends_on list ([REQ-272, REQ-274, REQ-275, REQ-287]) -- composed into ONE entry rather than a duplicate, keeping the DOC-UPDATER batch's fuller registration and its accurate depends_on, updating only status to done; the remaining 14 sibling requirements in that batch (REQ-277 through REQ-29X) were kept entirely untouched. Implementation commits dade26ed, 592f6ef6."
+    },
+    {
+      "run_id": "WF03-ISS0559-20260909",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0559",
+      "queue_task_id": 559,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1135,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/src/components/ui/Button.tsx",
+        "web/src/pages/definitions/DefinitionEditorPage.tsx"
+      ],
+      "branch_name": "feature/WF03-ISS0559-20260909",
+      "started_at": "2026-09-09T03:45:36Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0559 (queue task 559, GH#1135), a MINOR UX-fidelity regression REVIEWER discovered during WF02-REQ277-20260909's own page migration: web/src/components/ui/Button.tsx had no title/tooltip prop or pressed/active-state prop, so migrating hand-rolled toolbar buttons onto it silently dropped both -- a validation-hint tooltip on Save, an auto-arrange tooltip on Re-layout, and the toggled visual state on Show/Hide Raw JSON. No CODE-DESIGNER pass -- purely additive, well-specified optional props with no interface conflict. Fixed: added title?: string (plain passthrough) and pressed?: boolean (sets aria-pressed, swaps to a per-variant activeBackground when true and not disabled, disabled correctly still takes precedence). Deliberate decision: toggle buttons stay on the Button primitive via pressed rather than reverting to hand-rolled markup, since a hand-rolled fallback would reintroduce the exact drift the Button migration exists to eliminate. Migrated the 3 affected DefinitionEditorPage.tsx toolbar buttons to actually manifest and fix the regression now, since REQ-277's own full page migration branch (origin/feature/WF02-REQ277-20260909) is still unmerged -- Export and Promote-to-Production deliberately left on the old toolbarButtonStyle() helper, out of scope. Pipeline: FRONTEND-DEV -> REVIEWER (PASS -- independently confirmed the pressed/disabled precedence logic, the title passthrough has no side effects, all 6 new tests assert genuine rendered output; flagged non-blocking that REQ-277's own pending branch will likely touch these same 3 lines again on rebase) -> TEST-RUNNER (backend mix compile confirmed zero impact; frontend gates independently re-run: 287/287 unit tests, 48/48 guard tests)."
     }
   ]
 }

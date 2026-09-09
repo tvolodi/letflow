@@ -228,25 +228,22 @@ humanless-pipeline premise is why this project is entitled to.
   and REQ-228/229/230/231 are built against it. This is a supersession, in
   0003's sense, not a greenfield choice.
 
-## Open question — blocks implementation, not this decision
+## Open question — answered by 0024
 
 **How a promotion's DDL is executed, per tenant, in a humanless pipeline.**
 
-Everything above is settled. This is not, and it is the one place where being
-wrong is expensive and reversible only by moving data:
-
-- What runs the DDL across every tenant schema — an extension of
-  `Letflow.TenantProvisioning`'s manifest, a dedicated migrator, or the
-  promotion path itself?
-- What happens to a tenant whose DDL fails midway, when others have succeeded?
-  Is a promotion atomic across tenants, or per-tenant with a repair path?
-- Does a promotion backfill run inline or as a replay through
-  `rebuild_projection/2`, and what serves reads while it runs?
-- What is the rollback story, given that demotion is forbidden?
-
-This needs its own design and its own `SECURITY-REVIEWER` and `REVIEWER`
-gates. **No implementation requirement may be filed against this record until
-it is answered.**
+**Answered.** See
+[`0024-entity-promotion-ddl-execution.md`](0024-entity-promotion-ddl-execution.md)
+(REQ-295, 2026-09-09), pending its own `SECURITY-REVIEWER` and `REVIEWER`
+gates recorded in that record's own sections. It resolves all four
+sub-questions originally listed here — the DDL-execution mechanism
+(`Letflow.TenantProvisioning`, extended), per-tenant partial-failure
+semantics (a new `entity_column_promotions` table), backfill (a replay
+through `rebuild_projection/2`, gated by dual-write), and rollback
+(allowlist exclusion plus a corrective promotion, never a drop/narrow) — and
+states a recommendation on `entity_record_latest`'s retirement. **No
+implementation requirement may be filed against this record until 0024's own
+gates pass.**
 
 ## Consequences
 

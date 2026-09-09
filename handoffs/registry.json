@@ -5990,6 +5990,28 @@
       "recovery_note": "handoffs/WF02-REQ289-20260909/step-00-git-setup.json -- broader than (a-1): a genuinely prior, real WF-02 run for REQ-289 left one real commit (dc031e61, design doc + decision addendum + 39-entry corpus + test file) on origin/feature/WF02-REQ289-20260909 but died with zero handoffs/ files ever committed and no PR ever opened -- queue task 544 was left locked by an unrecoverable agent_id (~16h stale, force-released per TASK_QUEUE.md's dead-host path). ORCH investigated, confirmed the implementation substantially real and in-scope, rebased it onto current main (one composed conflict in decision 0020), and resumed rather than restarted -- but found and is now addressing one genuine acceptance-criteria gap (AC3 null-literal coverage) via the full remaining pipeline rather than trusting the prior run's own uncommitted/self-contradicting REVIEWER claim.",
       "last_known_step": "Step Final COMPLETED PASS -- merged to main as 81f005d8 (PR #1157, squash, no override needed). Full chain run fresh after Step 00's recovery: CODE-DESIGNER addendum (closed the null-literal gap: new tag lit:null, new entry expr-040, retagged expr-039) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER PASS (out of scope) -> REVIEWER PASS (independently re-derived the null-asymmetry semantic against expr_test.exs, real sign-off replacing the open placeholder in decision 0020) -> TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (existing test iterates the corpus generically, no new hardcoded logic needed) -> TEST-RUNNER PASS (3591/3591) -> RELEASE-VALIDATOR PASS (independently re-verified all 10 ACs from a cold read) -> DOC-UPDATER (status pending -> done).",
       "note": "REQ-289 (queue task 544, GH#1100) exports a language-neutral conformance corpus (40 entries) from Letflow.Engine.Expr's own tests per decision 0020 D1a step 9 (1 of 2) -- required to land before REQ-293 (TypeScript) or REQ-294 (Dart) can begin their own evaluators. Recovered a genuinely prior, real implementation (see recovery_note) rather than restarting from scratch, and closed one real acceptance-criteria gap found during recovery (AC3's null literal kind -- the coverage-enumeration test never tracked lit:null, and the corpus only covered the arithmetic-error half of Expr's documented null-asymmetry semantic). Merged 2026-09-09T17:45:54Z as commit 81f005d8. Merge-time bookkeeping: flipping REQ-289 to done expired REQ-290's blocked-by: REQ-289 deferral (its sole dependency) -- registered it properly in the queue (task 572, GH#1168) rather than inventing a re-scope target. Full diagnosis in handoffs/WF02-REQ289-20260909/step-00-git-setup.json."
+
+    },
+    {
+      "run_id": "WF02-REQ295-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-295",
+      "issue_id": null,
+      "queue_task_id": 564,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1158,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions",
+        "lib/letflow/design"
+      ],
+      "branch_name": "feature/WF02-REQ295-20260909",
+      "started_at": "2026-09-09T17:04:15Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-295 (queue task 564, GH#1158) answers decision 0023's DDL-execution open question -- new decision record docs/migration/decisions/0024-entity-promotion-ddl-execution.md plus a companion design doc for REQ-296 onward. Design-only, no lib/ code. Extends Letflow.TenantProvisioning (new ColumnPromotion functions) rather than a manifest reuse, dedicated migrator, or inline promotion-path execution. Per-tenant partial-failure state machine via a new entity_column_promotions table. Backfill via rebuild_projection/2 replay with dual-write + query_eligible gating typed_column dispatch. Rollback via allowlist-exclusion + corrective re-promotion, never a drop/narrow (0023's additive-only rule respected). entity_record_latest recommended for retirement. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: missing file:line citation, fixed) -> SECURITY-REVIEWER (1 rework: cross-tenant DDL risk from independently-sourced tenant_id/promotion_id parameters, fixed by deriving tenant_id from the loaded promotion row; re-check PASS) -> REVIEWER (PASS -- confirmed extending TenantProvisioning inherits REQ-045's already-settled process-vs-row precedent, no new supervision review needed). Both gates named by 0023's own closing sentence recorded in 0024's own sign-off sections. No dependents deferred against REQ-295."
     }
   ]
 }

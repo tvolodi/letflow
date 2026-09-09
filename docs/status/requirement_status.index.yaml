@@ -2368,9 +2368,21 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 11
+    entries: 12
     note: >
-      Incremented to 11 by ORCH's own REQ-295 started-event append for the
+      Recounted to 12 by WF02-REQ295-20260909's own merge of origin/main
+      (docs/status/requirement_status.v12.yaml conflicted: this run's own
+      REQ-295 done-event append collided with a concurrently-merged
+      REQ-289 started/done pair and the REQ-295..302 batch's own started
+      event, PR #1166 merged as afe964bf). Resolved by composing all four
+      events in chronological `at:` order (REQ-289 started 16:33:54Z ->
+      REQ-295 done 17:26:12Z -> REQ-289 done 17:33:49Z -> REQ-295 started
+      18:03:52Z) rather than discarding either side, then recounting
+      directly from the composed file (`grep -c "^  - req:"
+      docs/status/requirement_status.v12.yaml` = 12 on-disk entries)
+      rather than carrying forward either side's number, per this
+      index's own established composition precedent.
+      Previously incremented to 11 by ORCH's own REQ-295 started-event append for the
       REQ-295..302 entity-storage batch (decision 0023, PR #1166 merged as
       afe964bf) -- 670 lines at that point (41677 bytes), well under the
       roll ceiling.

@@ -17615,7 +17615,7 @@ requirements:
     title: Answer decision 0023's DDL-execution open question -- new decision record plus design, gating every entity-storage implementation requirement
     owner: CODE-DESIGNER
     impl_order: 564  # letflow-queue task id
-    status: pending
+    status: done
     stage: S10
     description: >
       docs/migration/decisions/0023-entity-storage-hybrid.md ("Entity

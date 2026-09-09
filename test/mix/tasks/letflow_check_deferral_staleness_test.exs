@@ -954,11 +954,26 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # S10 joins `active` the moment any of REQ-295..302 goes
       # in_progress/done/blocked, which for this batch means the moment
       # REQ-295 or REQ-302 (its two design roots) is picked up.
+      #
+      # UPDATE (WF02-REQ295-20260909): S10 moved from inactive to active
+      # within the same merge window -- REQ-295 (stage S10, status done) is
+      # the first S10 requirement to reach in_progress/done/blocked, same
+      # transition every other stage made on its own first non-pending
+      # requirement. `active` gains "S10"; `inactive` returns to [].
+      # Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> Mix.Tasks.Letflow.CheckDeferralStaleness.audit()
+      # against the live corpus, returning
+      # active == ["S0","S1","S10","S2","S3","S4","S5","S6","S7","S8","S9"]
+      # (String.< ordering puts "S10" before "S2"), inactive == [],
+      # violations == 0. Test-data-only update; the detector in
+      # lib/mix/tasks/letflow.check_deferral_staleness.ex is unchanged and
+      # correct -- it caught this drift exactly as designed.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
-      assert inactive == ["S10"]
+      assert active == ["S0", "S1", "S10", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
+      assert inactive == []
     end
 
     test "T-LIVE-DEFERRED-COUNT -- the staleness rule is now load-bearing, not vacuous",

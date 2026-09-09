@@ -162,19 +162,88 @@ implementation time (see the REQ-284 implementation report). `rich-text-lite`
 in particular stores and echoes its markdown-lite tokens as plain text —
 never parsed to HTML by this widget (§1.1).
 
-## §6. Field logic is deferred, not rejected
+## §6. Field logic: `visible_when`, `computed`, and cross-field validation (REQ-291)
 
-No conditional-visibility or computed-field widget is part of this
-vocabulary. **This is not a rejection of field logic on principle — the
-opposite: decision 0020's clause D1a (added 2026-09-08, on the mobile
-offline-forms requirement) *permits* `visible_when`, `computed` fields and
-cross-field validation, expressed in the `Letflow.Engine.Expr` grammar,
-evaluated client-side for interactivity with mandatory server-side
-re-evaluation on submit. Field logic is excluded from REQ-284 only because
-D1a's own sequencing (steps 8-12) makes it a separate track whose first
-deliverable is a language-neutral conformance corpus (step 9), not a
-widget. A later reader must not treat this vocabulary's silence on field
-logic as D1a having been re-closed here — it has not.**
+REQ-291 is the resolution of the deferral this section used to state (a
+prior version of this section, titled "Field logic is deferred, not
+rejected," said only that decision 0020's clause D1a *permitted* field
+logic on a later track — it is not a second deferral: this section states
+that logic's actual semantics, and REQ-291's implementation validates them
+at definition time).
+
+Three new keys extend the `x-ui` object (the same object REQ-284 already
+established for `widget`/`mask`, nested under
+`form_schema.properties.<field_name>["x-ui"]`, never a sibling top-level
+key):
+
+| Key | Shape | Semantics |
+|---|---|---|
+| `x-ui.visible_when` | `string` — a `Letflow.Engine.Expr`-grammar expression | Evaluates to a boolean; `false` hides the field. Absent key ⇒ field is always visible. |
+| `x-ui.computed` | `string` — a `Letflow.Engine.Expr`-grammar expression | The field's value is populated by evaluating this expression; the field becomes not user-editable when present. Absent key ⇒ field is a normal user-editable field. |
+| `x-ui.cross_field_validation` | `{"expression": string, "message": string}` | `expression` must evaluate to a boolean; `false` means the form does not validate and `message` is the text shown to the user. May reference any in-scope sibling field, not only its own field's value. Absent key ⇒ no cross-field rule from this field. |
+
+**Variable scope and naming — no `"variables."` prefix, flat sibling scope
+only.** A field expression is written directly against sibling field
+names, e.g. `amount > 1000`, never `variables.amount > 1000` — a form
+field is not a process variable, and carrying that unrelated convention's
+prefix into a different namespace would suggest a shared namespace that
+does not exist. The set of names a field expression may reference is
+*exactly* the top-level keys of the same `form_schema`'s `"properties"`
+map, addressed as single-segment bare identifiers. A multi-segment dotted
+path is **always** out of scope, unconditionally — there is no nested-field
+addressing model for form-field expressions.
+
+**Absent/null input to a `computed` field's expression:** the field
+evaluates to `nil`, uniformly, regardless of the specific cause. Whether
+the failure is an absent (undefined) referenced field, a referenced field
+holding an explicit JSON `null` that then causes a downstream
+type-mismatch, or any other expression evaluation error, the outcome is
+the same single value — `nil` — not a per-cause table. This is the one
+statement REQ-292 (server), REQ-293 (TypeScript client) and REQ-294 (Dart
+client) must all implement identically.
+
+**Evaluation order.** `computed` fields evaluate first, in a
+definition-time-proven-acyclic dependency order (a computed field may
+reference another computed field; a reference cycle of any length —
+self-reference, 2-node, or longer — is rejected at definition time).
+`visible_when` and cross-field validation expressions evaluate after every
+`computed` field has produced its value, in any order relative to each
+other, and can never themselves participate in a cycle (nothing lets
+another expression reference a `visible_when` or cross-field-validation
+"result").
+
+**Submit disposition: both a hidden field's value and a computed field's
+value are submitted, not dropped.** Neither a `visible_when: false`-hidden
+field's value nor a `computed` field's value is dropped or filtered
+client-side. Quoting record 0020 D1a's constraint 3 directly: "A
+client-supplied value for a `computed` or hidden field is therefore an
+*input to be checked*, never a value to be stored on trust." The server
+(REQ-292) is what turns "submitted" into "trusted or not" — this document
+and REQ-291's validator do not implement that authority, only the
+client-side disposition every client must agree on.
+
+**Security boundary — client-side hiding is a UX affordance only, never
+access control (record 0020 D1a).** A field whose visibility is
+security-relevant must be **omitted from the schema entirely** on the
+server side before the schema is served to any client — the server never
+relies on `visible_when` to keep a security-relevant field away from a
+user who should not see it. Relatedly, D1a requires that an expression may
+not reference anything the client was not already given: an expression
+referencing a name that is not a declared property of the same
+`form_schema` is rejected at definition time, exactly like a multi-segment
+path.
+
+**Validated at definition time.** All of the above — malformed key shape,
+syntactically invalid expressions, out-of-scope variable references, and
+computed-field dependency cycles — is checked when a definition is
+created, updated, or validated, not only discovered at render time.
+`Letflow.Definitions.FormSchemaExpressions` is the validator
+(`lib/letflow/definitions/form_schema_expressions.ex`), wired into
+`Letflow.Definitions.Graph.validate_node_attributes/1` as CHK-20. A
+violation surfaces one of four `Violation.code()` atoms:
+`:form_schema_x_ui_logic_malformed`, `:form_schema_expression_invalid`,
+`:form_schema_expression_out_of_scope`, and
+`:form_schema_computed_field_cycle`.
 
 ## §7. Client-side validation is a UX affordance only
 
@@ -202,3 +271,10 @@ as a validation boundary.**
 - No backend change: `tasks.form_schema` stays unpopulated (REQ-273's job);
   this requirement only prepares the renderer side for when real schemas
   start arriving.
+- `x-ui.visible_when`/`x-ui.computed`/`x-ui.cross_field_validation`'s
+  *evaluation* (client-side interactivity or server-side re-evaluation) is
+  not implemented by this document's own requirement (REQ-284) or by
+  REQ-291 — REQ-291 validates that the expressions exist and are
+  well-formed and in-scope at definition time only; REQ-292 (server),
+  REQ-293 (TypeScript client) and REQ-294 (Dart client) implement
+  evaluation.

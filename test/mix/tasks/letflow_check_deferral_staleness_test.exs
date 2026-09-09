@@ -1018,6 +1018,32 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # via `MIX_ENV=test mix run --no-start -e` calling
       # File.read!("docs/requirements.yaml") |> audit(), returning
       # deferral_count == 8, stale_count == 0. The detector is unchanged.
+      #
+      # UPDATE (WF02-REQ291-20260909): flipping REQ-291 to done expired
+      # REQ-292's `blocked-by: REQ-291` deferral. REQ-292's remaining live
+      # dependency is REQ-290, but REQ-292 -> REQ-290 could not point there
+      # directly yet: REQ-290's own deferral was scoped to REQ-292 as a
+      # workaround for its true dependency, REQ-289, being entirely absent
+      # from this file (a genuine registration gap, not a design choice --
+      # REQ-289 is queue task 544/GH#1100, with real implementation work
+      # sitting unmerged on origin/feature/WF02-REQ289-20260909). Registered
+      # REQ-289 as a `pending` entry (matching reality -- unmerged, not
+      # done) to give REQ-290 a real blocker to point at directly, which
+      # freed REQ-292 to point at REQ-290 without forming a cycle. New
+      # chain: REQ-292 -> REQ-290 -> REQ-289 (linear, acyclic). REQ-291
+      # itself dropped out of the deferred set (no longer deferred, it is
+      # done), and REQ-289 entering the set as a fresh deferred-nothing
+      # NON-deferred registered pending entry does not add to the deferred
+      # count either (it carries no `blocked-by:` hatch of its own). Net:
+      # one id (REQ-291) replaced by nothing in the set composition, count
+      # unchanged at 8. Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 8, stale_count == 0, ids unchanged except
+      # REQ-292's scope target (REQ-291 -> REQ-290) and REQ-290's scope
+      # target (REQ-292 -> REQ-289) internally -- the id SET itself
+      # (which entries are deferred) is unchanged, only their scope
+      # targets moved. The detector is unchanged.
       assert result.deferral_count == 8
       assert result.stale_count == 0
 

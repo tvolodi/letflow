@@ -83,16 +83,29 @@ defmodule Letflow.Routers.Tasks do
 
   ## Response allowlists (INV-2, AC5)
 
-  `task_list_item_map/2` (11 keys) / `task_detail_map/3` (13 keys, adds
-  `correlation_key`/`updated_at`) are hand-built maps, never a
+  `task_list_item_map/2` (11 keys) / `task_detail_map/3` (14 keys, adds
+  `correlation_key`/`updated_at`/`form_schema`) are hand-built maps, never a
   `Jason.Encoder`/struct-wholesale encoding — matching
   `Letflow.Routers.Identity`'s `user_map/1` discipline exactly. `claimed_by`
   is omitted entirely (no Letflow schema column exists yet — REQ-085's own
-  concern). `form_schema`/`output_variables`/`completed_by`/`completed_at`/
-  `cancelled_at` are also excluded — none is named by any REQ-083 acceptance
-  criterion, and `form_schema` is unpopulated (always `nil`) in this codebase
-  today (REQ-047 §4.4's own open question) — a distinct concern from
-  `form_id`/`form_version` below (identity/version, not rendering payload).
+  concern). `output_variables`/`completed_by`/`completed_at`/`cancelled_at`
+  remain excluded — none is named by any REQ-083 or REQ-286 acceptance
+  criterion. `form_schema` (REQ-286) is exposed on the task-detail response
+  only, not on `task_list_item_map/2` (so `GET /tasks`/`GET /tasks/inbox` do
+  not carry it) — sourced directly from the task's own `form_schema` column,
+  which `Letflow.Engine.TaskActivation` (REQ-273) populates once, at
+  activation, from the node's `form_schema` attribute in the version-pinned
+  graph the instance was created or last promoted against. No `Task`
+  changeset ever writes this column a second time (`insert_changeset/2` is
+  the only one that casts it), so reading the column back is automatically
+  the version pinned at activation — no live re-fetch of the current process
+  definition, and no additional pinning mechanism, is involved. `null` is
+  served, not omitted, when a task's node carries no `form_schema` (the
+  common case until definitions start authoring one). This requirement
+  introduces no validation of submitted task-completion output against this
+  schema; `variable_schemas` (REQ-109) remains the sole server-side
+  validation authority — `form_schema` here is a rendering payload only,
+  never fed into `Letflow.Engine.VariableMerge` or any output-variable check.
 
   `form_id`/`form_version` (REQ-126, `lib/letflow/design/req126-form-version-pinning.md`)
   are the two new keys as of this requirement — `form_id` is the task's own
@@ -517,9 +530,10 @@ defmodule Letflow.Routers.Tasks do
   # Nine base keys, hand-built -- never a Jason.Encoder derivation over
   # %Letflow.Engine.Task{} -- plus form_id/form_version (REQ-126), eleven
   # keys total. output_variables/completed_by/completed_at/cancelled_at/
-  # inserted_at/updated_at are deliberately excluded (see moduledoc, design
-  # §5.5); tasks.form_schema (the unrelated, still-unpopulated rendering
-  # payload) is also excluded -- see moduledoc.
+  # inserted_at/updated_at are deliberately excluded from this function (see
+  # moduledoc, design §5.5); tasks.form_schema is likewise excluded from this
+  # function specifically -- it is exposed only on task_detail_map/3's output
+  # (REQ-286), not here, so GET /tasks and GET /tasks/inbox do not carry it.
   #
   # form_id is task.node_id itself (no join needed -- REQ-126 design §4.3);
   # form_version is threaded in by the caller, sourced from the
@@ -543,9 +557,9 @@ defmodule Letflow.Routers.Tasks do
   end
 
   @doc false
-  # Same eleven keys as task_list_item_map/2, plus correlation_key and
-  # updated_at -- thirteen keys total. No claimed_by (no Letflow schema
-  # column exists yet; see moduledoc).
+  # Same eleven keys as task_list_item_map/2, plus correlation_key,
+  # updated_at, and form_schema (REQ-286) -- fourteen keys total. No
+  # claimed_by (no Letflow schema column exists yet; see moduledoc).
   @spec task_detail_map(
           Letflow.Engine.Task.t(),
           correlation_key :: String.t() | nil,
@@ -556,6 +570,7 @@ defmodule Letflow.Routers.Tasks do
     |> task_list_item_map(form_version)
     |> Map.put("correlation_key", correlation_key)
     |> Map.put("updated_at", DateTime.to_iso8601(task.updated_at))
+    |> Map.put("form_schema", task.form_schema)
   end
 
   # task.status is loaded as one of :pending/:completed/:cancelled; the

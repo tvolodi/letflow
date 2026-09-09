@@ -292,7 +292,9 @@ defmodule Letflow.Routers.TasksTest do
     "token_id"
   ]
 
-  @task_detail_keys Enum.sort(@task_list_item_keys ++ ["correlation_key", "updated_at"])
+  @task_detail_keys Enum.sort(
+                      @task_list_item_keys ++ ["correlation_key", "updated_at", "form_schema"]
+                    )
 
   # ══════════════════════════════════════════════════════════════════════
   # AC1 -- end-to-end coverage for all three handlers, list/inbox paginated
@@ -543,7 +545,7 @@ defmodule Letflow.Routers.TasksTest do
       end
     end
 
-    test "GET /tasks/:id shape is exactly the ten allowlisted keys (no claimed_by, no form_schema, etc.)",
+    test "GET /tasks/:id shape is exactly the eleven allowlisted keys (no claimed_by, etc.) -- form_schema is present (REQ-286), served as null for a task with no schema (AC2)",
          %{tenant: tenant} do
       task = insert_task!(tenant, %{})
 
@@ -553,8 +555,9 @@ defmodule Letflow.Routers.TasksTest do
       body = Jason.decode!(conn.resp_body)
 
       assert Map.keys(body) |> Enum.sort() == @task_detail_keys
+      assert Map.has_key?(body, "form_schema")
+      assert is_nil(body["form_schema"])
       refute Map.has_key?(body, "claimed_by")
-      refute Map.has_key?(body, "form_schema")
       refute Map.has_key?(body, "output_variables")
       refute Map.has_key?(body, "completed_by")
       refute Map.has_key?(body, "completed_at")
@@ -1013,6 +1016,125 @@ defmodule Letflow.Routers.TasksTest do
       body = Jason.decode!(conn.resp_body)
       refute is_nil(body["form_id"])
       refute is_nil(body["form_version"])
+    end
+  end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-286 -- expose form_schema on the task-detail response only.
+  # AC2 (nil case) is covered by "AC5/INV-2: response allowlists" above
+  # (`is_nil(body["form_schema"])` for a task whose node carries none).
+  # ══════════════════════════════════════════════════════════════════════
+
+  # Same single-hop START -> HUMAN_TASK("task") -> END shape as
+  # graph_human_task_end/0, with a "form_schema" node attribute added --
+  # REQ-273's activation path (Letflow.Engine.TaskActivation.resolve_form_schema/1)
+  # persists this onto the activated task's own `form_schema` column.
+  defp graph_human_task_end_with_form_schema(schema) do
+    %{
+      "nodes" => [
+        %{"id" => "start", "node_type" => "START"},
+        %{
+          "id" => "task",
+          "node_type" => "HUMAN_TASK",
+          "attributes" => %{"role" => "approver", "form_schema" => schema}
+        },
+        %{"id" => "end", "node_type" => "END"}
+      ],
+      "edges" => [
+        %{"id" => "e1", "source" => "start", "target" => "task"},
+        %{"id" => "e2", "source" => "task", "target" => "end"}
+      ]
+    }
+  end
+
+  describe "REQ-286 AC1: form_schema appears in the task-detail response for a task whose definition node carries one" do
+    setup do: %{tenant: TenantFixture.provisioned_tenant!(slug_prefix: "req286-ac1")}
+
+    test "GET /tasks/:id serves the exact form_schema persisted by REQ-273 at activation",
+         %{tenant: tenant} do
+      schema = %{
+        "type" => "object",
+        "properties" => %{"comment" => %{"type" => "string"}}
+      }
+
+      {_instance_id, task} =
+        start_instance_with_pending_task!(tenant, graph_human_task_end_with_form_schema(schema))
+
+      # Confirm REQ-273 genuinely persisted the schema onto the task row --
+      # this HTTP-level test asserts the served value equals what REQ-273
+      # persisted, not merely what task_detail_map/3 does in isolation.
+      persisted = Repo.get!(EngineTask, task.id, prefix: tenant.schema_name)
+      assert persisted.form_schema == schema
+
+      conn =
+        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["form_schema"] == schema
+    end
+  end
+
+  describe "REQ-286 AC3: the served schema is the version pinned to the task, not the definition's current one" do
+    test "advancing the definition's form_schema after the task is activated does not change the already-served schema" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req286-ac3")
+      process_name = unique_name("req286-form-pin")
+
+      v1_schema = %{"type" => "object", "properties" => %{"comment" => %{"type" => "string"}}}
+
+      v1 =
+        active_definition_named!(
+          tenant,
+          process_name,
+          "1.0.0",
+          graph_human_task_end_with_form_schema(v1_schema)
+        )
+
+      start_attrs = %{
+        definition_id: v1.id,
+        initial_variables: %{"seed" => "value"},
+        actor_id: Ecto.UUID.generate(),
+        idempotency_key: unique_idempotency_key("req286-ac3-start")
+      }
+
+      assert {:ok, _result} = Engine.create(start_attrs, prefix: tenant.schema_name)
+
+      [task] = Repo.all(EngineTask, prefix: tenant.schema_name)
+      assert task.status == :pending
+
+      # Promote a NEW definition version (same process name) whose "task"
+      # node carries a DIFFERENT form_schema, strictly after the task above
+      # was already activated against v1.
+      v2_schema = %{"type" => "object", "properties" => %{"reason" => %{"type" => "string"}}}
+
+      v2 =
+        active_definition_named!(
+          tenant,
+          process_name,
+          "2.0.0",
+          graph_human_task_end_with_form_schema(v2_schema)
+        )
+
+      assert v2.status == :active
+
+      v1_reloaded =
+        Repo.get!(Letflow.Definitions.ProcessDefinition, v1.id, prefix: tenant.schema_name)
+
+      assert v1_reloaded.status == :deprecated
+
+      # The task's served form_schema must still be v1's, never v2's --
+      # proof form_schema is read off the task's own write-once column
+      # (pinned at activation), not re-derived from the process's currently
+      # active definition.
+      conn =
+        build_conn(:get, "/#{task.id}", tenant, roles: ["PLATFORM_ADMIN"])
+        |> dispatch()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["form_schema"] == v1_schema
+      refute body["form_schema"] == v2_schema
     end
   end
 

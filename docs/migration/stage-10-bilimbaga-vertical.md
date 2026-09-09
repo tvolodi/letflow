@@ -50,11 +50,14 @@ written in Elixir, and not one whose code transfers. What transfers is the domai
 model, the requirement set, the UX, and the acceptance scenarios. The Go code
 does not.
 
-## The nine platform gaps
+## The twelve platform gaps
 
-Verified against `lib/` and `web/` on 2026-09-09. **Every one of these is bucket
-B, and all of them close before any bucket-A pack work begins** — a pack cannot be
-authored against a platform whose data-model surface has no HTTP route.
+Verified against `lib/` and `web/` on 2026-09-09. Gaps 10–12 were added by
+`REVIEWER`'s sign-off on 0021 (see that record's amendment to reasoning §1).
+**Every one of these is bucket B, and all of them close before any bucket-A pack
+work begins** — a pack cannot be authored against a platform whose data-model
+surface has no HTTP route, and no question bank can be authored against one with
+no relations and no queryable localized fields.
 
 | # | Gap | State on 2026-09-09 | Owner |
 |---|---|---|---|
@@ -67,10 +70,14 @@ authored against a platform whose data-model surface has no HTTP route.
 | 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | `REQ-284`, `REQ-291`, `REQ-292`, `REQ-293` — all `pending` | filed |
 | 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | `REQ-285` — `pending` | filed |
 | 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | `REQ-281`, `REQ-282`, `REQ-283`, `REQ-286` — all `pending` | filed |
+| 10 | **Relations between entity records.** `Letflow.Entities.Query.Compiler` has no `join`/`preload`; `fk_def`'s `references_entity` is validated for shape and self-reference only, with no write-time referential enforcement. BilimBaga's question model is five related tables. | **Unowned.** Blocks P2 | to file |
+| 11 | **Queryable localized fields.** Per-locale content as `:json` cannot be `queried: true` (Validator Rule 3, `:queried_json_conflict`), so a trilingual question bank cannot be searched or filtered. Platform counterpart of gap 8, which covers `web/` only. | **Unowned.** Blocks P2 | to file |
+| 12 | **Bulk import/export of entity *records*.** `Letflow.Definitions.ExportImport` moves definitions, not records. BilimBaga has `pg_trgm`-backed import/export (`011_pg_trgm_import_export`). | **Unowned** | to file |
 
 Gaps 7–9 are already filed as 0020 follow-on work and are not S10's to re-file;
-S10 depends on them and says so. Gaps 1–6 are new bucket-B requirements this
-stage must file first.
+S10 depends on them and says so. Gaps 1–6 and 10–12 are new bucket-B requirements
+this stage must file first. Gaps 10 and 11 are the two that make P2's exit
+condition reachable at all — see the phase table's note.
 
 ## Phases
 
@@ -80,8 +87,8 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
 | **P0** | This stage file, decision 0021, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
-| **P1** | Close gaps 1–6; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all nine closed |
-| **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir** |
+| **P1** | Close gaps 1–6 and 10–12; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all twelve closed |
+| **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Unreachable until gaps 10 and 11 close — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
 | **P5** | Parity: BilimBaga's 19 Playwright spec files (168 `test()` blocks) re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
@@ -91,6 +98,21 @@ P2 is the stage's real test. If the question bank, exam configuration and
 assignment lifecycle cannot be expressed as definitions, the premise of 0021
 reasoning §1 is wrong, and that is a finding worth stopping on rather than
 routing around by moving the work into bucket C.
+
+**Part of that finding is already in.** `REVIEWER`'s 2026-09-09 sign-off on 0021
+established from the code — not from a P2 attempt — that the question bank is not
+expressible as an entity definition today: no relations (gap 10) and no queryable
+localized fields (gap 11). Those two rows are re-marked **B, then A** in 0021's
+§1 table. The response is to close the platform gaps, not to move the question
+bank into bucket C; **expanding P2 into bucket-A requirements before gaps 10 and
+11 close is blocked.** If closing them turns out to be disproportionate, *that*
+is the finding worth stopping on, and it belongs in a new decision record rather
+than in a quiet reclassification.
+
+Also flagged there, for P3's scoping: `backend/internal/sessions/` carries
+adaptive question selection (`SelectNextAdaptiveQuestion`, `026_adaptive_exam`)
+and short-text autograding (`027_short_text_autograding`). Neither is expressible
+as a static process definition; both should be assumed bucket C.
 
 ## Bucket-C inventory
 
@@ -141,5 +163,13 @@ metric.
 
 ## REVIEWER sign-off
 
-(None yet — the stage has not started. No S10 requirement exists, no
-`lib/letflow/exam/` directory exists, and no pack document has been authored.)
+**2026-09-09 — `REVIEWER`, on decision 0021 and this stage file's first
+revision.** PASS on the vertical decision; recorded disagreement on 0021
+reasoning §1's cost model. The full sign-off is in
+[`decisions/0021-bilimbaga-vertical.md`](decisions/0021-bilimbaga-vertical.md);
+its consequences for this file are gaps 10–12, P1's and P2's revised exit
+conditions, and the block on expanding P2 before gaps 10 and 11 close.
+
+No implementation sign-off yet — the stage has not started. No S10 requirement
+exists, no `lib/letflow/exam/` directory exists, and no pack document has been
+authored.

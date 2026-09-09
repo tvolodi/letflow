@@ -178,10 +178,14 @@ stages:
       installed via SolutionPack.install/3), B (generic, tenant-agnostic
       platform capability -- may not name exams), or C (exam-specific
       runtime, requiring REVIEWER sign-off that A and B were tried
-      first). Nine platform gaps close before any bucket-A work starts;
-      six of them are unowned today, the largest being an
+      first). Twelve platform gaps close before any bucket-A work
+      starts; nine of them are unowned today. The largest is an
       entity-records HTTP surface (Letflow.Routers.Entities, deferred
-      in lib/letflow/router.ex and owned by no requirement).
+      in lib/letflow/router.ex and owned by no requirement); gaps 10
+      and 11 -- relations between entity records, and queryable
+      localized fields -- were added by REVIEWER's 2026-09-09 sign-off
+      and block P2, because the question bank is not expressible as an
+      entity definition until they close.
       The second stage that ports no R-Co source (S9 is the first) --
       it lives in docs/migration/ by naming convention only. Depends on
       S4 (API surface), S6 (service-task dispatch, scheduler,

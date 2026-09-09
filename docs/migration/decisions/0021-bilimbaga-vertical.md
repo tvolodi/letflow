@@ -88,19 +88,22 @@ estimate — it is a mapping against modules that exist today:
 |---|---|---|
 | `auth`, `rbac`, `users`, `tenant`, `middleware`, `ratelimit` | `Letflow.Identity` + `Letflow.Identity.RoleRegistry` + Keycloak OIDC (decision 0002) + `Letflow.Plugs.ApiPipeline` + schema-per-tenant (decisions 0003/0006) | — (delete) |
 | `audit` | `Letflow.Audit` + `Letflow.EventStore` | — (delete) |
-| `questions`, `categories`, `tags`, `departments`, `exams` (config), `exam_assignments` | `Letflow.Entities.Definition` documents + `Letflow.Entities.Records` (event-sourced) + `Letflow.Entities.Record.Projector` | A |
+| `categories`, `tags`, `departments`, `exams` (config), `exam_assignments` | `Letflow.Entities.Definition` documents + `Letflow.Entities.Records` (event-sourced) + `Letflow.Entities.Record.Projector` | A |
+| `questions` (five related tables, per-locale rows) | the same, **but not as the entity subsystem stands** — see REVIEWER amendment below | **B, then A** |
 | hiding correct answers from a candidate's response | `Letflow.Entities.Query.FieldGrants` — field-level redaction, already built (REQ-231) | A |
-| multilingual content (kk/ru/en) | per-locale map fields in the entity definition | A |
+| multilingual content (kk/ru/en) | per-locale map fields in the entity definition — `:json`, therefore **not queryable** under Validator Rule 3 | **B, then A** |
 | exam lifecycle: assign → notify → take → grade → certify → expire | a process definition on `Letflow.Engine`; manual grading is a user task with `form_schema` | A |
 | auto-grading rules | sandboxed Lua (`lib/letflow/engine/lua/`, decision 0014) — grading logic ships *in the pack* | A |
 | versioning, promotion, packaging, export/import of all of the above | `Letflow.Definitions.{Promotion,SnapshotStore,ExportImport,SolutionPack}` | free |
 
 BilimBaga hand-wrote each of these against its own 30-migration schema. Under
-Letflow they are configuration of subsystems that already pass their own gates,
-under a tenant-isolation invariant (INV-1) that `SECURITY-REVIEWER` enforces on
-every write path. The second vertical after BilimBaga costs a fraction of the
-first; that is the entire argument for a platform, and S10 is where it either
-holds or doesn't.
+Letflow **most** of them are configuration of subsystems that already pass their
+own gates, under a tenant-isolation invariant (INV-1) that `SECURITY-REVIEWER`
+enforces on every write path. Two rows are not — they need bucket-B platform work
+before they can become definitions, and the REVIEWER amendment below states
+which and why. The second vertical after BilimBaga costs a fraction of the first;
+that is the entire argument for a platform, and S10 is where it either holds or
+doesn't.
 
 **2. A fork loses the shared gate, which is this project's whole premise.** This
 is decision 0011's reasoning §3 applied unchanged: a change made in a fork passes
@@ -131,8 +134,9 @@ implementation to diff against than from a green-field one.
 
 **5. The cost is real and is stated here rather than discovered later.** Roughly
 seven Go packages are rewritten with no line-level port path, the analytics tier
-has nothing to sit on today (gap 2 in the stage file), and nine platform gaps
-must close before bucket-A work can start. The offsetting fact is that
+has nothing to sit on today (gap 2 in the stage file), and twelve platform gaps
+must close before bucket-A work can start (nine as first filed, plus the three
+this record's REVIEWER sign-off adds). The offsetting fact is that
 BilimBaga's 19 live Playwright spec files (168 `test()` blocks) are a
 ready-made, independent acceptance
 corpus — S10 does not have to invent its own definition of parity, and
@@ -181,7 +185,7 @@ corpus — S10 does not have to invent its own definition of parity, and
   R-Co source (S9 is the first) — it lives in `docs/migration/` by naming
   convention only, and that directory's framing as a *historical* record does not
   extend to it.
-- **Nine platform gaps become bucket-B requirements**, filed and closed before any
+- **Twelve platform gaps become bucket-B requirements**, filed and closed before any
   bucket-A pack work begins. The full table — what is already filed (`REQ-281`–
   `REQ-286`, `REQ-291`–`REQ-293`) and what is not (an entity-records HTTP
   surface; an aggregation query surface; attachments beyond `instance_attachments`;
@@ -199,5 +203,89 @@ corpus — S10 does not have to invent its own definition of parity, and
 
 ## REVIEWER sign-off
 
-(None yet — this record is the stage's precondition, filed before any S10
-requirement exists.)
+**PASS on the decision, with a recorded disagreement on reasoning §1's cost
+model (2026-09-09, `REVIEWER`).**
+
+The decision itself — vertical, not fork, not federation — stands as written, and
+§2 and §3 are correct as derived. §2 applies 0011 §3 unchanged; §3's point that
+federation makes INV-1 unauditable in the place `SECURITY-REVIEWER` enforces it
+is the strongest argument in the record. Nothing below reopens the choice.
+
+What does not survive review is §1's claim that the mapped subsystems are
+"already built, generically." Three of its rows were checked against the entity
+subsystem's actual capability rather than its intent, and do not hold:
+
+1. **The question bank is not expressible as an entity definition today.**
+   `Letflow.Entities.Definition.field_type` is a closed set (`:string`,
+   `:integer`, `:decimal`, `:boolean`, `:date`, `:datetime`, `:enum`, `:json`).
+   BilimBaga's question model (`009_questions.up.sql`, `FR-BB22`) is five tables
+   — `questions`, `question_translations`, `answer_options`,
+   `answer_translations`, `question_tags`: two one-to-many relations and a
+   many-to-many, with per-locale rows.
+
+2. **Localized content becomes unqueryable.** §1's answer to multilingual
+   content is "per-locale map fields," which means `:json`, and
+   `Letflow.Entities.Definition.Validator`'s Rule 3
+   (`queried_json_violations/1`, message `"a :json field cannot be queried:
+   true"`) forbids a `:json` field from being `queried: true`. A question bank's
+   primary screen is search and filter over stems. Marking this row A and free
+   is wrong in a way that surfaces on the first admin screen.
+
+3. **There are no joins, and foreign keys are declarative only.**
+   `Letflow.Entities.Query.Compiler` contains no `join` or `preload` (the only
+   `left_join` under `lib/letflow/entities/` is `FieldGrants`' own internal
+   anti-join). `fk_def` exists in a definition, but `references_entity` is
+   validated for shape and self-reference in
+   `Letflow.Entities.Definition.Validator` only — there is no cross-entity
+   referential enforcement at write time in `Letflow.Entities.Record.Validator`.
+   Reading a question with its options and tags is a multi-entity read the query
+   DSL cannot express in one query.
+
+**Consequence for the stage, and the operative half of this sign-off.** P2's
+exit condition as filed — a working question bank "and **zero** exam-specific
+Elixir" — is unreachable on the current entity subsystem. The stage file says P2
+is S10's real test and that failing it means §1 is wrong. That finding is
+available now, from the code, rather than at P2: §1 is *partly* wrong already,
+and the honest response is to move the work rather than to discover it late. The
+two rows above are re-marked **B, then A** in §1's table.
+
+Three gaps are therefore missing from the stage file's nine, and P1 is not
+complete without them:
+
+- **Gap 10 — relations between entity records.** One-to-many and many-to-many,
+  with joined reads in the query DSL, and write-time referential enforcement to
+  match the `fk_def` a definition already declares.
+- **Gap 11 — queryable localized fields.** A localized-text field type that is
+  filterable and sortable per locale, rather than `:json` under Rule 3. This is
+  the platform-level counterpart of gap 8 (`REQ-285`, i18n in `web/`), which
+  covers the client only.
+- **Gap 12 — bulk import/export of entity records.** BilimBaga has `pg_trgm`-backed
+  import/export (`011_pg_trgm_import_export`); `Letflow.Definitions.ExportImport`
+  moves *definitions*, not records.
+
+All three are bucket B by rule 1 — none of them needs to name an exam.
+
+**Two further observations, not blocking.**
+
+- **Reasoning §5 understates what is discarded.** `backend/internal/sessions/`
+  is 997 lines of service, and it carries adaptive question selection
+  (`SelectNextAdaptiveQuestion`, `026_adaptive_exam`) and short-text autograding
+  (`027_short_text_autograding`). Neither appears in this record or the stage
+  file. Adaptive sequencing in particular is not expressible as a static process
+  definition and should be assumed bucket C when P3 is scoped.
+
+- **The process-vs-row paragraph reaches the right answer via a weaker argument
+  than the one available.** It calls a timed session "a *higher*-write version of
+  the same case." `Letflow.Engine`'s moduledoc is narrower than that: REQ-045
+  resolved the shape "for EE-01's own scope only" and explicitly allows that "the
+  answer may legitimately differ for later engine subsystems." The stronger
+  evidence is the reference implementation — BilimBaga runs no per-session
+  process either; `SaveAnswer`/`SubmitSession` are plain transactional calls
+  against `exam_sessions`, and the deadline is a stored `expires_at` column, not
+  a live timer. The conclusion holds; the citation should be that, not the
+  analogy.
+
+Gate status: this record is **not** blocked. It is the stage's precondition and
+may stand. What is blocked is expanding P2 into bucket-A requirements before
+gaps 10 and 11 close — a pack authored against the entity subsystem as it stands
+today would fail at its first queryable localized field.

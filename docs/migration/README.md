@@ -135,10 +135,13 @@ neither stage's requirements are guesses about Letflow's internals:
 
 **S10 is not expanded and must not be expanded early (2026-09-09).** Its
 requirements would be guesses in exactly the way the rule anticipates:
-six of the nine platform gaps it depends on are unowned, and the largest
-(an entity-records HTTP surface) has no route shape yet, so a bucket-A
-pack requirement written today would be authored against an interface
-nobody has designed. Expand P0 first — the `FR-BB` → `REQ-xxx`
+nine of the twelve platform gaps it depends on are unowned, and the
+largest (an entity-records HTTP surface) has no route shape yet, so a
+bucket-A pack requirement written today would be authored against an
+interface nobody has designed. REVIEWER's 2026-09-09 sign-off on 0021
+sharpens this: the question bank is not expressible as an entity
+definition until the relations and localized-field gaps close, so P2 is
+blocked outright rather than merely premature. Expand P0 first — the `FR-BB` → `REQ-xxx`
 translation with a bucket declared on each — and expand P1's bucket-B
 gap-closing requirements before any bucket-A pack work. See
 [stage-10-bilimbaga-vertical.md](stage-10-bilimbaga-vertical.md).

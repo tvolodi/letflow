@@ -871,4 +871,106 @@ defmodule Letflow.Routers.DefinitionsWriteTest do
       assert log =~ "service_not_registered"
     end
   end
+
+  # ══════════════════════════════════════════════════════════════════════
+  # REQ-288 AC7 -- Definitions.update/2's sharp edge: the stricter CHK-17
+  # grammar check applies uniformly, so a stored definition whose edge
+  # condition already fails the grammar (but passed the old structural
+  # check when it was created) becomes un-updatable via any request that
+  # touches :graph -- even one that only edits an unrelated node's label.
+  # See lib/letflow/design/req288-expr-definition-validator.md §3.
+  # ══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-288 AC7 -- update/2's sharp edge" do
+    alias Letflow.Definitions.Graph
+    alias Letflow.Definitions.ProcessDefinition
+    alias Letflow.Repo
+
+    # An EXCLUSIVE_GATEWAY graph whose non-default edge (e1) carries a
+    # condition that `valid_cel_syntax?/1` (the OLD check) accepts but the
+    # real grammar rejects (an @unsupported_call_markers construct --
+    # `matches(`, a CEL macro neither R-Co nor Letflow ever implemented).
+    @bad_condition "variables.description.matches(\"^A\")"
+
+    defp gateway_graph_map(gw_label) do
+      %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{"id" => "gw", "node_type" => "EXCLUSIVE_GATEWAY", "label" => gw_label},
+          %{"id" => "a", "node_type" => "END"},
+          %{"id" => "b", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e0", "source" => "start", "target" => "gw"},
+          %{"id" => "e1", "source" => "gw", "target" => "a", "condition" => @bad_condition},
+          %{"id" => "e2", "source" => "gw", "target" => "b", "is_default" => true}
+        ]
+      }
+    end
+
+    # Inserts a DRAFT process_definition row directly via the schema
+    # changeset -- deliberately NOT through Definitions.create/2, since
+    # create/2 now also rejects @bad_condition under REQ-288's uniform
+    # disposition (§3). This simulates a row that was created BEFORE
+    # REQ-288 shipped, when only the old structural check ran.
+    defp insert_pre_req288_definition!(schema_name) do
+      attrs = %{
+        name: unique_name("req288-ac7"),
+        version: "1.0.0",
+        graph: gateway_graph_map("Approval Gateway"),
+        created_by: Ecto.UUID.generate()
+      }
+
+      %ProcessDefinition{}
+      |> ProcessDefinition.create_changeset(attrs)
+      |> Repo.insert(prefix: schema_name)
+    end
+
+    test "sanity: @bad_condition is accepted by the OLD check but rejected by the new grammar" do
+      assert Graph.valid_cel_syntax?(@bad_condition) == true
+
+      assert {:error, :unsupported_cel_feature} =
+               Letflow.Engine.Expr.translate_cel_to_expr(@bad_condition)
+    end
+
+    test "an unrelated label-only graph edit is rejected -- the untouched edge's pre-existing grammar-invalid condition still fires" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req288-ac7a")
+
+      assert {:ok, definition} = insert_pre_req288_definition!(tenant.schema_name)
+      assert definition.status == :draft
+
+      # The offending edge's condition (e1, @bad_condition) is left
+      # completely untouched -- only the gateway node's label changes.
+      unrelated_edit = gateway_graph_map("Approval Gateway (renamed)")
+
+      assert {:error, {:graph_validation_failed, violations}} =
+               Definitions.update(definition.id, %{graph: unrelated_edit},
+                 prefix: tenant.schema_name
+               )
+
+      assert Enum.any?(violations, fn v ->
+               v.code == :invalid_cel_syntax and v.message =~ "e1"
+             end)
+
+      # Confirm this is the CHOSEN uniform disposition, not an accident:
+      # the row is untouched in the database (the update never wrote).
+      assert {:ok, unchanged} = Definitions.get_by_id(definition.id, prefix: tenant.schema_name)
+      assert unchanged.graph == gateway_graph_map("Approval Gateway")
+    end
+
+    test "an update that never touches :graph succeeds normally on the same stored definition" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req288-ac7b")
+
+      assert {:ok, definition} = insert_pre_req288_definition!(tenant.schema_name)
+
+      assert {:ok, updated} =
+               Definitions.update(definition.id, %{description: "an unrelated description edit"},
+                 prefix: tenant.schema_name
+               )
+
+      assert updated.description == "an unrelated description edit"
+      # The pre-existing grammar-invalid condition is still there, untouched.
+      assert updated.graph == gateway_graph_map("Approval Gateway")
+    end
+  end
 end

@@ -1103,4 +1103,159 @@ defmodule Letflow.Definitions.GraphTest do
       assert :isolated_node in codes(result)
     end
   end
+
+  # ---------------------------------------------------------------------
+  # REQ-288 -- CHK-17 grammar tightening. check_cel_syntax/1 now routes
+  # through Letflow.Engine.Expr.translate_cel_to_expr/1 -> parse_strict/1
+  # instead of valid_cel_syntax?/1. See
+  # lib/letflow/design/req288-expr-definition-validator.md for the design.
+  # ---------------------------------------------------------------------
+
+  describe "REQ-288 AC1 -- Engine.Expr is now reachable from lib/letflow/definitions/" do
+    # This is a literal reachability proof, not a runtime assertion -- kept
+    # here as an executable record so it is re-derived, not merely claimed,
+    # every time this suite runs. The commands are the exact AC1 evidence.
+    test "grep for Engine.Expr under lib/letflow/definitions/ returns at least one hit (was zero before REQ-288)" do
+      {output, 0} = System.cmd("grep", ["-rn", "Engine.Expr", "lib/letflow/definitions/"])
+      hits = output |> String.split("\n", trim: true)
+
+      # Before REQ-288: `grep -rn "Engine.Expr" lib/letflow/definitions/` -> zero
+      # output (confirmed in the design doc §1 re-verification and in the
+      # requirement's own "THE GAP" paragraph). After: at least the
+      # `alias Letflow.Engine.Expr` line plus the `Expr.translate_cel_to_expr/1`/
+      # `Expr.parse_strict/1` calls inside `check_cel_syntax/1`'s helper in
+      # lib/letflow/definitions/graph.ex.
+      assert length(hits) > 0
+      assert Enum.any?(hits, &String.contains?(&1, "graph.ex"))
+    end
+  end
+
+  describe "REQ-288 AC2 -- three grammar-rejected-but-valid_cel_syntax?-accepted expressions, tightening proven both ways" do
+    # (a) an @unsupported_call_markers construct ("matches(" -- a CEL macro
+    # neither R-Co nor Letflow ever implemented, EXP-102).
+    @unsupported_marker_condition "variables.description.matches(\"^A\")"
+    # (b) an unknown function name -- not one of the 8 REQ-198 builtins, so
+    # bare-identifier-then-"(" is not valid call syntax in this grammar.
+    @unknown_function_condition "variables.frobnicate(variables.x)"
+    # (c) lexically balanced (no unbalanced bracket/quote, no bare
+    # leading/trailing operator) but not parseable: a second, chained "=="
+    # with no further left-hand operand slot -- this grammar's cmp_expr
+    # accepts exactly one comparison, so "a == b == c" leaves "== c" as
+    # unconsumed trailing input.
+    @chained_comparison_condition "variables.a == variables.b == variables.c"
+
+    test "valid_cel_syntax?/1 (the OLD check) accepts all three -- proving the tightening actually narrows something" do
+      assert Graph.valid_cel_syntax?(@unsupported_marker_condition) == true
+      assert Graph.valid_cel_syntax?(@unknown_function_condition) == true
+      assert Graph.valid_cel_syntax?(@chained_comparison_condition) == true
+    end
+
+    test "the NEW check (via validate_edge_conditions/1) rejects the @unsupported_call_markers construct" do
+      g = gateway_condition_graph(@unsupported_marker_condition)
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_cel_syntax]
+    end
+
+    test "the NEW check (via validate_edge_conditions/1) rejects the unknown function name" do
+      g = gateway_condition_graph(@unknown_function_condition)
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_cel_syntax]
+    end
+
+    test "the NEW check (via validate_edge_conditions/1) rejects the lexically-balanced-but-unparseable chained comparison" do
+      g = gateway_condition_graph(@chained_comparison_condition)
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      assert codes(result) == [:invalid_cel_syntax]
+    end
+
+    # A minimal graph carrying `condition` on an EXCLUSIVE_GATEWAY's
+    # non-default edge, alongside a default sibling edge -- matches this
+    # file's own existing CHK-17 test convention (see the
+    # "validate_edge_conditions/1 — CHK-17" describe block above).
+    defp gateway_condition_graph(condition) do
+      graph(
+        [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+        [
+          cond_edge("e1", "gw", "a", condition, false),
+          cond_edge("e2", "gw", "b", nil, true)
+        ]
+      )
+    end
+  end
+
+  describe "REQ-288 AC3 -- the Violation.message carries parse_strict/1's line/column/token_text/reason" do
+    test "a trailing comparison operator with no right operand, across two lines, produces a violation naming line 2, column 3" do
+      # "variables.amount >\n  " translates to "amount >\n  ", whose
+      # tokenizer reaches end-of-input on line 2, column 3 (2 leading
+      # spaces then EOF) -- confirmed directly against
+      # Letflow.Engine.Expr.parse_strict/1 in this same test, not merely
+      # asserted.
+      condition = "variables.amount >\n  "
+
+      assert {:ok, expr_source} = Letflow.Engine.Expr.translate_cel_to_expr(condition)
+
+      assert {:error, %{line: 2, column: 3, token_text: "", message: message}} =
+               Letflow.Engine.Expr.parse_strict(expr_source)
+
+      assert message =~ "end of input"
+
+      g = gateway_condition_graph_ac3(condition)
+      result = Graph.validate_edge_conditions(g)
+      assert result.valid == false
+      [violation] = result.violations
+      assert violation.code == :invalid_cel_syntax
+      assert violation.message =~ "line 2, column 3"
+      assert violation.message =~ "end of input"
+    end
+
+    defp gateway_condition_graph_ac3(condition) do
+      graph(
+        [node("gw", :EXCLUSIVE_GATEWAY), node("a", :END), node("b", :END)],
+        [
+          cond_edge("e1", "gw", "a", condition, false),
+          cond_edge("e2", "gw", "b", nil, true)
+        ]
+      )
+    end
+  end
+
+  describe "REQ-288 AC4/AC5/AC8 -- the differential corpus and the grammar-unchanged/no-evidence caveats" do
+    # AC5 (grammar unchanged): `lib/letflow/engine/expr.ex` was NOT modified by
+    # REQ-288 -- `git diff` for this branch shows this file with zero changed
+    # lines. This requirement reads `translate_cel_to_expr/1` and
+    # `parse_strict/1` from a new caller (`Graph.check_cel_syntax/1`); it adds
+    # no token, operator, builtin, or accepted grammar construct. See
+    # `lib/letflow/design/req288-expr-definition-validator.md` §4.
+    #
+    # AC8 (fixture-limits caveat, stated explicitly, not left to be inferred):
+    # all 15 `condition_text` entries in
+    # `test/fixtures/simulation/differential_corpus.json` use only
+    # comparisons, `&&`/`||`, `!`, parentheses, and dotted `variables.` paths
+    # -- no CEL macro, no `in`, no `?`, no unknown function name, no
+    # unterminated construct appears anywhere in the fixture. This test
+    # passing is evidence the *grammar itself* has not regressed on
+    # known-good input; it is explicitly NOT evidence that any *stored
+    # tenant row* passes the stricter check, since the fixture was never
+    # populated from tenant data and contains no example of the constructs
+    # REQ-288 newly rejects (see AC7's separate, dedicated test for that
+    # question, in `test/letflow/definitions_test.exs`).
+
+    @corpus_path "test/fixtures/simulation/differential_corpus.json"
+    @corpus @corpus_path |> File.read!() |> Jason.decode!()
+
+    test "all 15 differential_corpus.json entries still validate successfully under the new grammar-backed check" do
+      assert length(@corpus) == 15
+
+      for %{"condition_id" => id, "condition_text" => condition_text} <- @corpus do
+        assert {:ok, expr_source} = Letflow.Engine.Expr.translate_cel_to_expr(condition_text),
+               "condition #{id} (#{inspect(condition_text)}) failed translate_cel_to_expr/1"
+
+        assert {:ok, _ast} = Letflow.Engine.Expr.parse_strict(expr_source),
+               "condition #{id} (#{inspect(condition_text)}) failed parse_strict/1"
+      end
+    end
+  end
 end

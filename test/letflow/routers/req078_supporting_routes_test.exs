@@ -538,6 +538,95 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
   end
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-288 AC9/AC10 -- the validate endpoint's response SHAPE is unchanged by
+  # the CHK-17 grammar tightening: still 200/{"status","findings",...} for
+  # valid, still 422/{"errors": [{"code","message"}]} for findings, only the
+  # POPULATION of findings/errors differs for input that the old check
+  # accepted but the new grammar-backed check rejects. See
+  # lib/letflow/design/req288-expr-definition-validator.md §2.
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-288 AC9/AC10: /validate response shape is unchanged by the CHK-17 grammar tightening" do
+    # An @unsupported_call_markers construct ("matches(") -- accepted by the
+    # OLD structural check (Graph.valid_cel_syntax?/1), rejected by the real
+    # grammar (Letflow.Engine.Expr.translate_cel_to_expr/1).
+    @grammar_invalid_condition "variables.description.matches(\"^A\")"
+
+    defp gateway_graph_with_bad_condition do
+      %{
+        "nodes" => [
+          %{"id" => "start", "node_type" => "START"},
+          %{"id" => "gw", "node_type" => "EXCLUSIVE_GATEWAY"},
+          %{"id" => "a", "node_type" => "END"},
+          %{"id" => "b", "node_type" => "END"}
+        ],
+        "edges" => [
+          %{"id" => "e0", "source" => "start", "target" => "gw"},
+          %{
+            "id" => "e1",
+            "source" => "gw",
+            "target" => "a",
+            "condition" => @grammar_invalid_condition
+          },
+          %{"id" => "e2", "source" => "gw", "target" => "b", "is_default" => true}
+        ]
+      }
+    end
+
+    test "a fully valid graph still returns 200 with the unchanged {status, findings, definition_id, validated_at} shape" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req288-ac9-valid")
+      definition = active_definition!(tenant.schema_name)
+
+      resp =
+        build_conn(:post, "/#{definition.id}/validate", tenant, [])
+        |> Letflow.Routers.Definitions.call(@definitions_opts)
+
+      assert resp.status == 200
+      body = Jason.decode!(resp.resp_body)
+      assert body["status"] == "valid"
+      assert body["findings"] == []
+      assert body["definition_id"] == definition.id
+      assert is_binary(body["validated_at"])
+    end
+
+    test "a condition accepted by the OLD check but rejected by the new grammar returns 422 with the unchanged errors[].{code,message} shape" do
+      tenant = TenantFixture.provisioned_tenant!(slug_prefix: "req288-ac9-invalid")
+      graph = gateway_graph_with_bad_condition()
+
+      # Sanity: this is exactly the tightening under test -- the old check
+      # would have accepted this condition.
+      assert Graph.valid_cel_syntax?(@grammar_invalid_condition) == true
+
+      definition = seed_definition_with_graph!(tenant.schema_name, graph)
+
+      resp =
+        build_conn(:post, "/#{definition.id}/validate", tenant, [])
+        |> Letflow.Routers.Definitions.call(@definitions_opts)
+
+      assert resp.status == 422
+      body = Jason.decode!(resp.resp_body)
+      assert is_list(body["errors"])
+      assert [error] = body["errors"]
+      assert Map.keys(error) |> Enum.sort() == ["code", "message"]
+      assert error["code"] == "invalid_cel_syntax"
+      assert error["message"] =~ "e1"
+
+      # violation_map/1 needed no code change: population differs, shape
+      # does not -- confirmed by comparing against calling the validator
+      # directly on the same graph, exactly like T-12a/T-12b above.
+      assert {:ok, direct_graph} = Graph.from_map(graph)
+
+      expected_violations =
+        (Graph.validate_graph(direct_graph).violations ++
+           Graph.validate_node_attributes(direct_graph).violations ++
+           Graph.validate_edge_conditions(direct_graph).violations)
+        |> Enum.map(fn v -> %{"code" => Atom.to_string(v.code), "message" => v.message} end)
+
+      assert body["errors"] == expected_violations
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # AC5 -- metrics tenant-exposure rule: RETIRED. REQ-194 (design
   # req194-prometheus-metrics.md §9) removed Letflow.Routers.Metrics entirely and
   # replaced it with Letflow.Routers.MetricsExposition (GET /metrics, global,

@@ -5733,6 +5733,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0558 (queue task 558, GH#1132) closed via WF03-ISS0558-20260909: a real production correctness bug in Letflow.Obs.Alerts. evaluate_trigger/7's FIRED->ARMED re-arm branch never cleared stale alert_hook_emission_state dedup rows, so an alert that fired, had its delivery exhausted, then recovered and fired again with the same emitted_key was silently dropped forever (write-before-deliver idempotency pattern). CODE-DESIGNER's design found the bug genuinely broader than originally reported: affects instance_error_stuck, dlq_depth_threshold, AND scheduler_lag_threshold (all three lack any structural guarantee their emitted_key changes across a re-arm cycle) -- REQ-201's own AC-2 test only happened to pass because its two DLQ-depth crossings used different sample values, not because the trigger type is immune. CODE-DESIGN-VALIDATOR independently re-verified this broader-scope claim against real source rather than trusting it. A separate, unrelated, pre-existing bug was also found (webhook_subscription_paused's sample=1/threshold=0 shape can never actually reach the re-arm branch at all) and deliberately left unfixed, flagged as a follow-up candidate. Fix: new rearm_and_clear_emissions/3, an Ecto.Multi wrapping delete_all (filtered by trigger_key only, no hook_id filter -- deliberately broader so a since-disabled-then-re-enabled hook can't inherit a stale dedup row) plus the existing trigger-state upsert, both prefix-scoped to the same tenant schema, committed in one Repo.transaction/2. Two new regression tests reproduce fire -> exhaust delivery -> recover/re-arm -> re-fire with an IDENTICAL emitted_key -> assert the second delivery actually happens now -- one for instance_error_stuck, one for dlq_depth_threshold using the same depth value on both crossings (unlike AC-2's original test). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS -- confirmed both Ecto.Multi steps share the same tenant-schema prefix, confirmed the delete query is parameterized, confirmed the deliberately-no-hook_id-filter delete scope can't cross trigger_key boundaries) -> REVIEWER (PASS -- independently confirmed the two non-re-arm branches are genuinely untouched, confirmed the dlq_depth_threshold regression test uses an identical depth value on both crossings by design, flagged that docs/issues/ISS-0558.yaml predated this fix and was missing a resolution field, which ORCH then added) -> TEST-RUNNER (full suite 3523/3525 passed, 2 pre-existing rustc-absent failures unrelated to this branch; specifically checked all alert/poller-adjacent test files for incidental breakage -- none found). ORCH independently caught and fixed a real mix format gap on two files before pushing (learned from two earlier near-misses this session) and ran all static gates locally before every push."
+    },
+    {
+      "run_id": "WF03-ISS0557-20260909",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0557",
+      "queue_task_id": 557,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1131,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/issues/ISS-0557.yaml"
+      ],
+      "branch_name": "feature/WF03-ISS0557-20260909",
+      "started_at": "2026-09-09T04:57:55Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Direct-action §10 fix -- merge pending.",
+      "note": "ISS-0557 (queue task 557, GH#1131) closed via WF03-ISS0557-20260909 as resolved_not_applicable, not fixed -- the defect it describes (Letflow.Obs.Alerts.deliver_with_retry/4's Process.sleep backoff blocking Letflow.Scheduler.Poller's GenServer message queue during HTTP retries) no longer exists in current code. REVIEWER discovered this 2026-08-30 (WF02-REQ201-20260830), but ISS-0429 (resolved 2026-09-02, three days before this issue was picked up) already moved deliver_with_retry/4 off the Poller's process entirely via Task.Supervisor.start_child(Letflow.Obs.Alerts.TaskSupervisor, fn -> deliver_with_retry(...) end) -- exactly the first mitigation option ISS-0557's own text proposed. Verified directly against current lib/letflow/obs/alerts.ex source (fire_hooks/4's real dispatch call, and the module's own moduledoc documenting this under 'OQ-4 resolution -- superseded by ISS-0429') rather than trusted from either issue's own text. No code change made -- docs-only closure of a stale issue file whose description accurately reflected the code at discovery time but predates a fix that has since landed. Direct-action §10 (single file). Implementation commit a3581089."
     }
   ]
 }

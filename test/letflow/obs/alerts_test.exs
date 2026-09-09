@@ -604,4 +604,169 @@ defmodule Letflow.Obs.AlertsTest do
       refute_receive {:webhook_test_server_request, _}, 300
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0558: re-arm must clear alert_hook_emission_state, or an identical
+  # emitted_key on a later firing cycle is silently swallowed by
+  # check_and_record_emission/4's write-before-deliver dedup.
+  # ---------------------------------------------------------------------------
+
+  describe "ISS-0558: instance_error_stuck re-arm clears stale emission row" do
+    test "fire (exhausted) -> re-arm -> fire again with same error_reason actually delivers" do
+      %{schema_name: schema_name} = provisioned_tenant("iss0558-a")
+      bad_server = WebhookTestServer.start(500, "internal error")
+      instance_id = Ecto.UUID.generate()
+      error_reason = "connection refused to downstream service"
+
+      put_alert_config(
+        enabled: true,
+        thresholds: [error_stuck_minutes: 10],
+        hooks: [
+          hook_config(bad_server.url, hook_id: "iss0558-hook", max_attempts: 2)
+        ]
+      )
+
+      # Step 1-2: fire, delivery guaranteed to exhaust (server always 500s).
+      log =
+        capture_log(fn ->
+          Alerts.run_detection(
+            schema_name,
+            base_tick_context(%{
+              stuck_instances: [
+                %{instance_id: instance_id, error_reason: error_reason, stuck_minutes: 10}
+              ]
+            })
+          )
+
+          Process.sleep(200)
+        end)
+
+      # Step 3: exhaustion confirmed, no side-channel delivery.
+      assert log =~ "alert delivery exhausted"
+      assert Dlq.count_entries(prefix: schema_name) == 0
+
+      trigger_key = "instance_error_stuck:#{instance_id}"
+
+      expected_emitted_key =
+        "#{instance_id}:#{:crypto.hash(:md5, error_reason) |> Base.encode16(case: :lower)}"
+
+      # Step 4: write-before-deliver already left the stale emission row.
+      assert %AlertHookEmissionState{last_emitted_key: ^expected_emitted_key} =
+               Repo.get_by(AlertHookEmissionState,
+                 [hook_id: "iss0558-hook", trigger_key: trigger_key],
+                 prefix: schema_name
+               )
+
+      assert trigger_state!(schema_name, trigger_key).is_armed == false
+
+      # Step 5-6: recovery drives the re-arm branch (stuck_minutes now at/below
+      # the effective threshold, per evaluate_stuck_instance/4's own
+      # `effective_threshold = max(threshold_minutes - 1, 0)`).
+      Alerts.run_detection(
+        schema_name,
+        base_tick_context(%{
+          stuck_instances: [
+            %{instance_id: instance_id, error_reason: error_reason, stuck_minutes: 5}
+          ]
+        })
+      )
+
+      assert trigger_state!(schema_name, trigger_key).is_armed == true
+
+      # Step 7: the fix's direct, independently-checkable effect.
+      refute Repo.get_by(AlertHookEmissionState,
+               [hook_id: "iss0558-hook", trigger_key: trigger_key],
+               prefix: schema_name
+             )
+
+      # Step 8-9: fire again with the SAME error_reason (identical emitted_key)
+      # against a server that would actually accept delivery. Before the fix,
+      # check_and_record_emission/4 would still match the stale row and
+      # fire_hooks/4 would skip dispatch -- receive_request/1 would time out.
+      good_server = WebhookTestServer.start(200, "ok")
+
+      put_alert_config(
+        enabled: true,
+        thresholds: [error_stuck_minutes: 10],
+        hooks: [
+          hook_config(good_server.url, hook_id: "iss0558-hook", max_attempts: 2)
+        ]
+      )
+
+      Alerts.run_detection(
+        schema_name,
+        base_tick_context(%{
+          stuck_instances: [
+            %{instance_id: instance_id, error_reason: error_reason, stuck_minutes: 10}
+          ]
+        })
+      )
+
+      req = receive_request()
+      body = Jason.decode!(req.body)
+      assert body["trigger"] == "instance_error_stuck"
+      assert body["instance_id"] == instance_id
+      assert body["error_reason"] == error_reason
+    end
+  end
+
+  describe "ISS-0558: dlq_depth_threshold re-arm also clears stale emission row" do
+    test "fire (exhausted) -> re-arm -> fire again with same depth actually delivers" do
+      %{schema_name: schema_name} = provisioned_tenant("iss0558-b")
+      bad_server = WebhookTestServer.start(500, "internal error")
+
+      put_alert_config(
+        enabled: true,
+        thresholds: [dlq_depth_threshold: 5],
+        hooks: [
+          hook_config(bad_server.url, hook_id: "iss0558-dlq-hook", max_attempts: 2)
+        ]
+      )
+
+      # Fire at depth 6, delivery guaranteed to exhaust.
+      log =
+        capture_log(fn ->
+          Alerts.run_detection(schema_name, base_tick_context(%{dlq_count: 6}))
+          Process.sleep(200)
+        end)
+
+      assert log =~ "alert delivery exhausted"
+
+      trigger_key = "dlq_depth_threshold"
+
+      assert %AlertHookEmissionState{last_emitted_key: "depth:6"} =
+               Repo.get_by(AlertHookEmissionState,
+                 [hook_id: "iss0558-dlq-hook", trigger_key: trigger_key],
+                 prefix: schema_name
+               )
+
+      # Re-arm (depth falls back below threshold).
+      Alerts.run_detection(schema_name, base_tick_context(%{dlq_count: 3}))
+      assert trigger_state!(schema_name, trigger_key).is_armed == true
+
+      refute Repo.get_by(AlertHookEmissionState,
+               [hook_id: "iss0558-dlq-hook", trigger_key: trigger_key],
+               prefix: schema_name
+             )
+
+      # Fire again with the SAME depth (identical emitted_key "depth:6") against
+      # a server that would actually accept delivery.
+      good_server = WebhookTestServer.start(200, "ok")
+
+      put_alert_config(
+        enabled: true,
+        thresholds: [dlq_depth_threshold: 5],
+        hooks: [
+          hook_config(good_server.url, hook_id: "iss0558-dlq-hook", max_attempts: 2)
+        ]
+      )
+
+      Alerts.run_detection(schema_name, base_tick_context(%{dlq_count: 6}))
+
+      req = receive_request()
+      body = Jason.decode!(req.body)
+      assert body["trigger"] == "dlq_depth_threshold"
+      assert body["current_depth"] == 6
+    end
+  end
 end

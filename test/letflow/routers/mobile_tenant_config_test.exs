@@ -293,4 +293,250 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
       assert moduledoc =~ "never disclose"
     end
   end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 AC1 -- exactly 5 keys, response map hand-built, never derived from
+  # %Tenant{}; constructing function quoted verbatim from source
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 AC1: exactly 5 top-level keys; response map hand-built, never derived from %Tenant{}" do
+    test "mobile_config_map/2 is the sole, hand-built constructor -- quoted verbatim from source" do
+      source = File.read!("lib/letflow/routers/mobile_tenant_config.ex")
+
+      assert source =~ "def mobile_config_map(realm_id, settings) do"
+      assert source =~ "\"realm_url\" => idp_base_url() <> \"/realms/\" <> realm_id,"
+      assert source =~ "\"locales\" => locales_from_settings(settings),"
+      assert source =~ "\"default_locale\" => default_locale_from_settings(settings),"
+      assert source =~ "\"branding\" => branding_from_settings(settings),"
+      assert source =~ "\"environment_kind\" => environment_kind()"
+    end
+
+    test "GET /api/mobile/tenant-config still returns exactly the 5 documented keys" do
+      {conn, body} = get_mobile_config()
+
+      assert conn.status == 200
+      assert Map.keys(body) |> Enum.sort() == @expected_keys
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 AC2 -- identical shape/status/key-set across all 4 never-error
+  # paths: resolvable slug, unknown slug, missing ?slug=, simulated failure
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 AC2: all four never-error paths produce byte-identical bodies (no stored settings)" do
+    test "resolvable slug with no stored settings, unknown slug, missing ?slug=, and a simulated DB failure all agree" do
+      tenant_no_settings =
+        insert_tenant!(%{
+          slug: unique_slug("req282-no-settings"),
+          display_name: "REQ-282 No Settings Tenant",
+          idp_realm_id: unique_realm("req282-no-settings")
+        })
+
+      {conn_resolvable, body_resolvable} = get_mobile_config(tenant_no_settings.slug)
+      {conn_unknown, body_unknown} = get_mobile_config(unique_slug("req282-unknown"))
+      {conn_missing, body_missing} = get_mobile_config()
+
+      # Simulated DB failure: Identity.safe_get_tenant_by_slug/2's rescue
+      # clause is triggered by a slug value Postgrex cannot encode as a query
+      # parameter (a null byte is invalid inside a Postgres text value) --
+      # the same mechanism tenant_config_test.exs uses for its own AC2.
+      {conn_db_failure, body_db_failure} = get_mobile_config(<<0>>)
+
+      for conn <- [conn_resolvable, conn_unknown, conn_missing, conn_db_failure] do
+        assert conn.status == 200
+      end
+
+      for body <- [body_resolvable, body_unknown, body_missing, body_db_failure] do
+        assert Map.keys(body) |> Enum.sort() == @expected_keys
+      end
+
+      # locales/default_locale/branding are byte-identical across all four
+      # paths -- all four converge on the {@default_realm, nil} input to
+      # mobile_config_map/2's fallback helpers.
+      for field <- ["locales", "default_locale", "branding"] do
+        assert body_resolvable[field] == body_unknown[field]
+        assert body_unknown[field] == body_missing[field]
+        assert body_missing[field] == body_db_failure[field]
+      end
+
+      assert body_resolvable["branding"] == %{
+               "app_name" => "Letflow",
+               "logo_url" => nil,
+               "primary_color" => "#228be6"
+             }
+
+      assert body_resolvable["locales"] == ["en"]
+      assert body_resolvable["default_locale"] == "en"
+
+      # realm_url legitimately differs for the resolvable tenant, but the
+      # three no-tenant-equivalent paths agree with each other on it too.
+      assert body_unknown["realm_url"] == body_missing["realm_url"]
+      assert body_missing["realm_url"] == body_db_failure["realm_url"]
+      assert body_unknown["realm_url"] =~ "/realms/bpm-default"
+      refute body_resolvable["realm_url"] =~ "/realms/bpm-default"
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 AC3 -- a tenant WITH stored branding/locales gets its own values
+  # (per-sub-key fallback), a tenant WITHOUT gets platform defaults
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 AC3: stored settings are actually read; per-sub-key fallback, not all-or-nothing" do
+    test "a tenant with a full stored settings map gets its own branding, locales and default_locale" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug("req282-full-settings"),
+          display_name: "REQ-282 Full Settings Tenant",
+          idp_realm_id: unique_realm("req282-full-settings")
+        })
+
+      assert {:ok, _updated} =
+               Identity.update_tenant_settings(tenant.slug, %{
+                 "settings" => %{
+                   "app_name" => "Acme Corp",
+                   "logo_url" => "https://acme.example.com/logo.png",
+                   "brand_colors" => %{"primary" => "#ff00aa"},
+                   "locales" => ["en", "fr"],
+                   "default_locale" => "fr"
+                 }
+               })
+
+      {conn, body} = get_mobile_config(tenant.slug)
+
+      assert conn.status == 200
+
+      assert body["branding"] == %{
+               "app_name" => "Acme Corp",
+               "logo_url" => "https://acme.example.com/logo.png",
+               "primary_color" => "#ff00aa"
+             }
+
+      assert body["locales"] == ["en", "fr"]
+      assert body["default_locale"] == "fr"
+    end
+
+    test "a tenant with a PARTIAL stored settings map (only locales) falls back independently for branding/default_locale" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug("req282-partial-settings"),
+          display_name: "REQ-282 Partial Settings Tenant",
+          idp_realm_id: unique_realm("req282-partial-settings")
+        })
+
+      assert {:ok, _updated} =
+               Identity.update_tenant_settings(tenant.slug, %{
+                 "settings" => %{"locales" => ["de"]}
+               })
+
+      {conn, body} = get_mobile_config(tenant.slug)
+
+      assert conn.status == 200
+      assert body["locales"] == ["de"]
+      assert body["default_locale"] == "en"
+
+      assert body["branding"] == %{
+               "app_name" => "Letflow",
+               "logo_url" => nil,
+               "primary_color" => "#228be6"
+             }
+    end
+
+    test "a tenant with NO stored settings at all (settings == nil) gets the full platform-default values" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug("req282-nil-settings"),
+          display_name: "REQ-282 Nil Settings Tenant",
+          idp_realm_id: unique_realm("req282-nil-settings")
+        })
+
+      assert tenant.settings == nil
+
+      {conn, body} = get_mobile_config(tenant.slug)
+
+      assert conn.status == 200
+      assert body["locales"] == ["en"]
+      assert body["default_locale"] == "en"
+
+      assert body["branding"] == %{
+               "app_name" => "Letflow",
+               "logo_url" => nil,
+               "primary_color" => "#228be6"
+             }
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 OQ-A -- a resolved tenant with a nil idp_realm_id has its settings
+  # suppressed too (design's recommended resolution), not just its realm_url
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 OQ-A: a tenant found but with no usable realm gets platform-default branding too" do
+    test "a slug with nil idp_realm_id AND stored settings still gets platform-default branding/locales" do
+      tenant =
+        insert_tenant!(%{
+          slug: unique_slug("req282-nilrealm-settings"),
+          display_name: "REQ-282 Nil Realm With Settings Tenant",
+          idp_realm_id: nil
+        })
+
+      assert {:ok, _updated} =
+               Identity.update_tenant_settings(tenant.slug, %{
+                 "settings" => %{"app_name" => "Should Not Leak Co"}
+               })
+
+      {conn, body} = get_mobile_config(tenant.slug)
+
+      assert conn.status == 200
+      assert body["realm_url"] =~ "/realms/bpm-default"
+
+      assert body["branding"] == %{
+               "app_name" => "Letflow",
+               "logo_url" => nil,
+               "primary_color" => "#228be6"
+             }
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 AC5 -- @default_branding's primary_color is reconciled to the
+  # canonical platform default (tokens.css --color-brand-600)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 AC5: @default_branding's primary_color equals the canonical platform default" do
+    test "served default primary_color is #228be6, not the stale #0B5FFF" do
+      {conn, body} = get_mobile_config()
+
+      assert conn.status == 200
+      assert body["branding"]["primary_color"] == "#228be6"
+      refute body["branding"]["primary_color"] == "#0B5FFF"
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # REQ-282 AC4 -- moduledoc rewrite: neither the old invariance claim nor the
+  # old "byte-identical by construction" sentence survives unchanged
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "REQ-282 AC4: moduledoc no longer claims branding/locales/default_locale are global" do
+    test "moduledoc states the new per-tenant behavior and no longer claims four fields are byte-identical by construction" do
+      {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} =
+        Code.fetch_docs(Letflow.Routers.MobileTenantConfig)
+
+      normalized = String.replace(moduledoc, ~r/\s+/, " ")
+
+      assert normalized =~ "locales / default_locale / branding are per-tenant"
+      assert normalized =~ "Letflow.Identity.TenantSettings"
+
+      assert normalized =~
+               "`environment_kind` is the one field that is still, and remains, byte-identical across every branch by construction"
+
+      refute normalized =~
+               "the other four are byte-identical across every branch by construction"
+
+      refute normalized =~
+               "locales / default_locale / branding / environment_kind are global, not per-tenant"
+    end
+  end
 end

@@ -16846,7 +16846,7 @@ requirements:
     title: Adopt an i18n layer in web/ -- library, supported locale set, fallback chain, and the bare .toLocale*() call sites (0020 step 7)
     owner: FRONTEND-DEV
     impl_order: 555
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements step 7 of

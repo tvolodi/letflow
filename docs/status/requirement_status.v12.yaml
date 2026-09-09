@@ -167,3 +167,55 @@
 
 
 history:
+  - req: REQ-285
+    event: done
+    agent: ORCH
+    at: "2026-09-09T07:51:58Z"
+    note: >
+      REQ-285 (queue task 555, GH#1128) implemented via
+      WF02-REQ285-20260909: adopts react-intl as web/'s i18n layer
+      (decision record docs/migration/decisions/0021-web-i18n-library.md,
+      chosen over i18next -- most .toLocale*() call sites are module-scope
+      helper functions, not JSX-inline, so react-intl's imperative
+      createIntl()/IntlShape API reaches them without restructuring call
+      signatures; i18next has no native date-formatter of its own,
+      leaving it with zero load-bearing usage until a future translation
+      requirement -- the same "partial subsystem, no producer" shape
+      this project's own decisions already reject elsewhere). Re-verified
+      REQ-127's 2026-08-22 survey rather than inheriting it: counts
+      drifted from 25/27/20 to 25 grep-matched lines / 26 actual
+      invocations / 19 files (a UsersPage.tsx consolidation). All 26
+      converted, 0 left bare (26=26). The hardcoded 'en-US' site (now at
+      UsersPage.tsx:91 after the consolidation) no longer hardcodes a
+      locale. New fallback chain (web/src/i18n/sessionLocale.ex): tenant
+      default_locale > browser preference > hardcoded "en" (not
+      "en-US"), 10 curated PLATFORM_SUPPORTED_LOCALES, 5 testable cases
+      (exceeds AC3's minimum 3). A genuine, honestly-flagged gap: no
+      current requirement wires a tenant's default_locale to the web SPA
+      (REQ-281's endpoint excludes locale data by design; REQ-282's
+      mobile endpoint doesn't reach the web SPA; REQ-283 is CSS/branding
+      only) -- shipped with tenantDefaultLocale defaulting to null in
+      production (browser-preference and hardcoded-fallback tiers only,
+      in practice) but the mechanism is fully testable today via an
+      injectable tenant-default value, documented as an open dependency
+      for a future requirement rather than a silent workaround. Design
+      needed 1 rework cycle: CODE-DESIGN-VALIDATOR caught a real
+      self-contradicting factual error (a claim that the frontend
+      TenantConfig interface already gained a branding key "since
+      REQ-281," when REQ-281 only changed the backend response shape --
+      the design's own later section correctly attributed frontend
+      consumption to REQ-283's still-pending scope). Pipeline:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework, re-check PASS) ->
+      FRONTEND-DEV -> REVIEWER (PASS -- independently re-ran the
+      completeness grep for all three toLocale* variants across web/src/
+      and confirmed zero remaining hits, not just trusting the reported
+      26=26 claim; confirmed react-intl's imperative API is genuinely
+      used at module scope as the decision record's own reasoning
+      requires, no divergence toward hooks-everywhere that would have
+      undermined it) -> TEST-RUNNER (backend mix compile confirmed zero
+      impact; frontend gates independently re-run: 310/310 unit tests,
+      48/48 guard tests). SECURITY-REVIEWER out of scope (pure frontend,
+      no tenant-data path). Policy doc (docs/frontend/frontend-requirements.md)
+      states explicitly the app ships English-only strings by design and
+      translating UI strings is a separate later requirement, per AC7.
+      ORCH will merge and release queue task 555 status:done.

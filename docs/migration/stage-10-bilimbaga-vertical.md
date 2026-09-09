@@ -18,12 +18,25 @@ solution pack, and a bounded `lib/letflow/exam/` runtime**, with its screens in
 `web/`.
 
 The port source and reference implementation is `c:\Users\tvolo\dev\BilimBaga\`
-(Go 1.22 / Chi / `sqlx` / PostgreSQL 16, React 18 SPA, 22 live Playwright
-scenarios). Its full product specification is
-`c:\Users\tvolo\dev\BilimBaga\corporate_exam_platform_roadmap.md`, and its
-requirements are numbered `FR-BB{phase}{section}`. Every S10 requirement that
-implements one cites its `FR-BB` number, the same way S1–S8 requirements cite an
-R-Co source path.
+(Go 1.25 / Chi / `sqlx` / PostgreSQL 16, React 19 SPA, 19 Playwright spec files
+carrying 168 `test()` blocks). Its product specification is
+`c:\Users\tvolo\dev\BilimBaga\corporate_exam_platform_roadmap.md`, which is
+organised as `## Phase N` / `### N.M` sections and carries **no** requirement
+identifiers of its own.
+
+BilimBaga's requirement IDs are `FR-BB<phase><section>` — `FR-BB22` (question
+model), `FR-BB35` (session creation), and so on — but they are **not defined in
+the roadmap**. They appear only as citations: in migration headers
+(`009_questions.up.sql`: "Migration 009: FR-BB22 — Question Model"), in Go
+source, and in `.github/agents/`. 78 distinct IDs are in use, and the numbering
+is not uniformly two-digit — `FR-BB001`, `FR-BB110`–`FR-BB114` and
+`FR-BB310`–`FR-BB318` all occur.
+
+So the citation rule is: **every S10 requirement that ports a BilimBaga
+behaviour cites the `FR-BB` ID carried by the migration or package it ports
+from**, the same way S1–S8 requirements cite an R-Co source path. Where no
+`FR-BB` ID exists for a behaviour, cite the roadmap section (`§3.5`) instead.
+Reconstructing a canonical `FR-BB` index is P0 work, not a precondition to it.
 
 ## This stage ports no R-Co source
 
@@ -66,12 +79,12 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
-| **P0** | This stage file, decision 0021, the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
+| **P0** | This stage file, decision 0021, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
 | **P1** | Close gaps 1–6; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all nine closed |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir** |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
-| **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not shadcn/ui |
-| **P5** | Parity: BilimBaga's 22 Playwright scenarios re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
+| **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
+| **P5** | Parity: BilimBaga's 19 Playwright spec files (168 `test()` blocks) re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
 
 P2 is the stage's real test. If the question bank, exam configuration and
@@ -99,12 +112,20 @@ metric.
   exists for service-task scripts. Whether pack-supplied grading scripts pass
   through the same audit path, or need their own, is a P2 design question with a
   `SECURITY-REVIEWER` interest.
-- **Whether `service_catalog_entries` in a pack document unblocks here.**
-  `Letflow.Definitions.SolutionPack` currently **rejects** a non-empty
-  `service_catalog_entries` array (`{:error, :unsupported_pack_section}`), with the
-  policy decision left to `REQ-192`. Gaps 4 and 5 both want a packed catalog entry.
-  If `REQ-192` has not landed when P1 starts, S10 either waits on it or ships those
-  entries out-of-band — not a question to answer before the requirement exists.
+- **Whether `service_catalog_entries` in a pack document unblocks here — and who
+  now owns that policy.** `Letflow.Definitions.SolutionPack` currently **rejects**
+  a non-empty `service_catalog_entries` array
+  (`lib/letflow/definitions/solution_pack.ex`'s `check_unsupported_sections/1` →
+  `{:error, :unsupported_pack_section}`). That module's moduledoc and its inline
+  comment defer the policy to `REQ-192` — but **`REQ-192` is already `done`**
+  (S6, "Port services.zig's route surface onto the service catalog"), and it
+  landed the route surface *without* lifting the pack restriction. So the
+  deferral is stale: no open requirement owns packed catalog entries, and waiting
+  on `REQ-192` is not an option S10 has.
+
+  Gaps 4 and 5 both want a packed catalog entry. S10 must therefore either file
+  the policy requirement itself as bucket B, or ship those entries out-of-band.
+  Correcting the stale `REQ-192` pointer in `solution_pack.ex` is a P1 chore.
 - **AI-assisted authoring (BilimBaga phase 7).** Deliberately not phased above. It
   is the least load-bearing feature in the product and the most likely to be
   redesigned; it gets a phase when parity (P5) is real.

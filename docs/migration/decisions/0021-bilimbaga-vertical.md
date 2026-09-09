@@ -7,11 +7,13 @@ Status: decided (2026-09-09, user-directed). Owner: `ORCH` (stage S10).
 `c:\Users\tvolo\dev\BilimBaga\` is a working corporate exam platform for
 organizations — multilingual question banks, configurable timed sessions,
 auto-grading, certificates with QR verification, analytics, tenant branding, and
-AI-assisted authoring. As of 2026-09-09 it is a Go 1.22 / Chi / `sqlx`
+AI-assisted authoring. As of 2026-09-09 it is a Go 1.25 / Chi / `sqlx`
 application over PostgreSQL 16 (30 numbered migration pairs, `001_init` …
-`030_reset_admin_password`; 25 domain packages under `backend/internal/`), a
-React 18 + TypeScript + Vite + Tailwind + shadcn/ui SPA under `frontend/`, and a
-Playwright suite of 22 live end-to-end scenarios. It has its own agent pipeline
+`030_reset_admin_password`; 25 packages under `backend/internal/`, of which 19
+are domain packages and six — `api`, `router`, `db`, `config`, `ctxkeys`,
+`health` — are infrastructure), a React 19 + TypeScript + Vite 6 + Tailwind 4
+SPA under `frontend/`, and a Playwright suite of 19 spec files carrying 168
+`test()` blocks. It has its own agent pipeline
 (`.github/agents/`, `.claude/commands/`) with an Orchestrator, a Business
 Analyst, and a UAT Runner.
 
@@ -131,7 +133,8 @@ implementation to diff against than from a green-field one.
 seven Go packages are rewritten with no line-level port path, the analytics tier
 has nothing to sit on today (gap 2 in the stage file), and nine platform gaps
 must close before bucket-A work can start. The offsetting fact is that
-BilimBaga's 22 live Playwright scenarios are a ready-made, independent acceptance
+BilimBaga's 19 live Playwright spec files (168 `test()` blocks) are a
+ready-made, independent acceptance
 corpus — S10 does not have to invent its own definition of parity, and
 `RELEASE-VALIDATOR` can re-derive it rather than trust it.
 
@@ -140,9 +143,11 @@ corpus — S10 does not have to invent its own definition of parity, and
 - **No framework or stack re-decisions.** 0001 (Plug/Bandit, no Phoenix), 0003
   (Ecto schema strategy), 0011 (React SPA), 0012 (Flutter tier), and 0014
   (Lua/WASM scripting) all stand unchanged. S10 introduces no new runtime
-  language and no new client framework. BilimBaga's Go, and its shadcn/ui
-  dependency, do not come with it: `web/`'s own design system (0020) is what its
-  screens are built from.
+  language and no new client framework. BilimBaga's Go does not come with it,
+  and neither does its own component layer: `web/`'s design system (0020) is
+  what its screens are built from. (BilimBaga's `frontend/` is Tailwind 4 with
+  hand-rolled components; earlier drafts of this record called it shadcn/ui,
+  which its `package.json` does not carry.)
 - **The exam session is not a process instance, and not a supervised process.**
   Stated here so it cannot be quietly re-decided. `REQ-045` and
   `Letflow.Engine`'s "Process-vs-row decision" settled the running-instance shape

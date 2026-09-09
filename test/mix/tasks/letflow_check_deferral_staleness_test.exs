@@ -935,11 +935,30 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
       # inactive == [], violations == 0. Test-data-only update; the detector
       # is unchanged and correct.
+      # UPDATE (S10 expansion, 2026-09-09): OQ-5's predicted event happened a
+      # fifth time -- S10 (bilimbaga-vertical) was expanded via WF-01 into
+      # REQ-295..REQ-302 (8 requirements, all `pending`), the entity-storage
+      # batch for docs/migration/decisions/0023-entity-storage-hybrid.md.
+      # Same rule as the S5/S6/S7 expansions: `pending` does not confer
+      # activity (F-PENDING-NOT-ACTIVE), so S10 is present but :inactive --
+      # the same state S5, S6 and S7 each passed through before their first
+      # requirement landed. `active` is unchanged; `inactive` moves from []
+      # to ["S10"]. Re-derived, not guessed: `MIX_ENV=test mix run -e`
+      # calling Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 (passed
+      # File.read!("docs/requirements.yaml") -- audit/1 takes file content,
+      # not a path) against the live corpus returned
+      # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
+      # inactive == ["S10"], violations == 0. Test-data-only update; the
+      # detector in lib/mix/tasks/letflow.check_deferral_staleness.ex is
+      # unchanged and correct -- it caught this drift exactly as designed.
+      # S10 joins `active` the moment any of REQ-295..302 goes
+      # in_progress/done/blocked, which for this batch means the moment
+      # REQ-295 or REQ-302 (its two design roots) is picked up.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
       assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
-      assert inactive == []
+      assert inactive == ["S10"]
     end
 
     test "T-LIVE-DEFERRED-COUNT -- the staleness rule is now load-bearing, not vacuous",

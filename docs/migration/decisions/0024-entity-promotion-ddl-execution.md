@@ -432,6 +432,87 @@ This is a design-time verdict only: it assesses whether the mechanism, if
 built exactly as specified today, would satisfy INV-1 — it does not, and
 cannot, verify running code, since none exists yet.
 
+---
+
+**RE-CHECK (2026-09-09, fix commit `a6517ea1`) — supersedes the FAIL above.
+Verdict: PASS.**
+
+Re-derived independently against the current text of
+`lib/letflow/design/req295-entity-promotion-ddl-execution.md` §2 (not taken
+on CODE-DESIGNER's report), invariant INV-1, scope test applies for the
+same reason as the original review (new DDL-execution mechanism plus a new
+global bookkeeping table gating cross-tenant DDL fan-out).
+
+**Fix verified, Option A as claimed.** Every mutating function in §2 that
+previously took an independent `tenant_id` alongside `promotion_id` now
+takes only `promotion_id` (plus `reason` on `suspend_column_promotion/2`,
+which is not an identifier and carries no cross-tenant risk):
+`run_column_promotion/1`, `retry_failed_column_promotion/1`,
+`backfill_column_promotion/1`, `activate_column_promotion/1`,
+`suspend_column_promotion/2`. Checked the full function list in §2, not
+just these five: `register_column_promotion/4` takes an explicit
+`tenant_ids :: [Ecto.UUID.t()] | :all` but never a `promotion_id` alongside
+it — it *creates* rows rather than acting on a pre-existing one, so there
+is no second identifier for a caller-supplied `tenant_id` to disagree
+with. `run_column_promotion_for_all_tenants/1` takes only a
+`promotion_ref :: {entity_type, attribute}` tuple, no `tenant_id` at all,
+and fans out to `run_column_promotion/1` per row it loads itself. The two
+read accessors, `column_promotion_query_eligible?/3` and
+`column_promotion_dual_write?/3`, take `tenant_id` but no `promotion_id` —
+they are keyed directly by the `(tenant_id, entity_type, attribute)`
+unique index, not by a DDL-target lookup, so there is no pair of
+independently-sourced identifiers to cross-check there either. No function
+anywhere in §2 retains the old two-independent-parameter shape.
+
+**Traced `run_column_promotion/1` specifically, as the highest-risk
+function.** Per §2's text: it loads the `ColumnPromotion` row by
+`promotion_id` first (`{:error, :promotion_not_found}` if absent), then
+reads `tenant_id` *off that same row* and resolves `schema_name` from it
+via `Repo.get_by(Registration, tenant_id: promotion.tenant_id)` — the same
+path `replay_migrations/2` already uses. The column spec (`entity_type`,
+`attribute`, `column_name`) driving the `ALTER TABLE ... ADD COLUMN`
+statement is read from that identical row. Both the DDL target schema and
+the DDL content now derive from one single loaded record; there is no
+caller-supplied `tenant_id` parameter left to disagree with it. This
+closes the exact gap the prior FAIL identified.
+
+**No remaining path.** Grepped the full design doc for every `tenant_id`
+and `promotion_id` occurrence (28 hits) — none pair the two as independent
+parameters on any function signature. `0024.md`'s own prose (Decision,
+Reasoning, Consequences, "What this record does not decide") was not
+touched by fix commit `a6517ea1` (`git show --stat a6517ea1` shows only
+the design-doc file changed) and was re-read in full for this re-check:
+none of those sections assert or depend on the old two-parameter shape —
+the Consequences section's INV-1 note ("a column-promotion DDL run must be
+traceable to exactly the `tenant_id`/`schema_name` pair on its
+`ColumnPromotion` row") already anticipated exactly this fix and does not
+contradict it.
+
+**Sign-off sections intact.** This section (the prior FAIL, left in place
+above rather than deleted, with this re-check appended to supersede it)
+and the `## REVIEWER sign-off` section below are both untouched by
+`a6517ea1` (confirmed via `git show --stat`, which touched only the design
+doc) and untouched by this edit except for this appended block.
+
+**Sanity re-pass on the original review's other checks** (unaffected by
+this specific fix, confirmed still holding): identifier-safety still
+reuses `schema_name_for_tenant/1`/`Registration.changeset/2`'s
+`@schema_name_format` regex, no new identifier-construction path added;
+`entity_column_promotions` reads/writes are still scoped by the
+`(tenant_id, entity_type, attribute)` unique index; no implicit human
+check anywhere in the register → run → backfill → activate flow.
+
+One nit, not a security finding: design doc §4 line ~199 still refers to
+"`backfill_column_promotion/2`" (stale arity — the function is now `/1`).
+Documentation-only inconsistency, does not reintroduce the two-parameter
+signature anywhere; not a blocker, worth ELIXIR-DEV fixing opportunistically
+when REQ-296 implements against this doc.
+
+This re-check, like the one it supersedes, is a design-time verdict: it
+assesses whether the mechanism, if built exactly as specified now, would
+satisfy INV-1. It does. REQ-296 onward should implement against the
+current §2 text as written.
+
 ## REVIEWER sign-off
 
 (Pending — filed after this record, per REQ-295's acceptance criteria.

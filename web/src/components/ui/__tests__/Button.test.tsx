@@ -84,3 +84,67 @@ describe('REQ-272 — Button', () => {
     expect(screen.queryByTestId('ds-button-spinner')).not.toBeInTheDocument()
   })
 })
+
+describe('ISS-0559 — Button title and pressed props', () => {
+  it('TC-ISS0559-01: title is forwarded to the native title attribute', () => {
+    render(
+      <Button variant="secondary" size="sm" title="Auto-arrange nodes using Dagre layout">
+        Re-layout
+      </Button>,
+    )
+    expect(screen.getByTestId('ds-button')).toHaveAttribute(
+      'title',
+      'Auto-arrange nodes using Dagre layout',
+    )
+  })
+
+  it('TC-ISS0559-02: omitting title renders no title attribute', () => {
+    render(
+      <Button variant="secondary" size="sm">
+        Re-layout
+      </Button>,
+    )
+    expect(screen.getByTestId('ds-button')).not.toHaveAttribute('title')
+  })
+
+  it('TC-ISS0559-03: pressed sets aria-pressed=true and a toggled background', () => {
+    render(
+      <Button variant="secondary" size="sm" pressed data-testid="btn-toggle">
+        Hide Raw JSON
+      </Button>,
+    )
+    const btn = screen.getByTestId('btn-toggle')
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    expect(btn.style.background).toBe('var(--color-neutral-200)')
+  })
+
+  it('TC-ISS0559-04: pressed=false renders aria-pressed=false and the base background', () => {
+    render(
+      <Button variant="secondary" size="sm" pressed={false} data-testid="btn-toggle">
+        Show Raw JSON
+      </Button>,
+    )
+    const btn = screen.getByTestId('btn-toggle')
+    expect(btn).toHaveAttribute('aria-pressed', 'false')
+    expect(btn.style.background).toBe('var(--surface-card)')
+  })
+
+  it('TC-ISS0559-05: omitting pressed renders no aria-pressed attribute', () => {
+    render(
+      <Button variant="secondary" size="sm" data-testid="btn-plain">
+        Export
+      </Button>,
+    )
+    expect(screen.getByTestId('btn-plain')).not.toHaveAttribute('aria-pressed')
+  })
+
+  it('TC-ISS0559-06: disabled takes precedence over pressed for background', () => {
+    render(
+      <Button variant="secondary" size="sm" pressed disabled data-testid="btn-toggle">
+        Hide Raw JSON
+      </Button>,
+    )
+    const btn = screen.getByTestId('btn-toggle')
+    expect(btn.style.background).toBe('var(--surface-card)')
+  })
+})

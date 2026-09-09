@@ -22,6 +22,7 @@ import { graphToFlow } from '@/utils/canvas/graphToFlow'
 import { flowToGraph } from '@/utils/canvas/flowToGraph'
 import { validateSubProcessInterface } from '@/utils/canvas/interfaceValidation'
 import { useCanvasHistoryStore } from '@/stores/canvasHistoryStore'
+import { Button } from '@/components/ui/Button'
 import { ConfirmPromoteModal } from '@/components/ui/ConfirmPromoteModal'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
@@ -620,38 +621,39 @@ export default function DefinitionEditorPage() {
           )}
           {!isReadOnly && (
             <>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 data-testid="btn-show-raw-json"
                 onClick={() => setShowRawJson(!showRawJson)}
-                style={toolbarButtonStyle(showRawJson ? 'var(--color-neutral-200, #e9ecef)' : undefined)}
+                pressed={showRawJson}
               >
                 {showRawJson ? 'Hide Raw JSON' : 'Show Raw JSON'}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 data-testid="btn-auto-layout"
                 onClick={() => setAutoLayoutCounter((c) => c + 1)}
-                style={toolbarButtonStyle(undefined)}
                 title="Auto-arrange nodes using Dagre layout"
               >
                 Re-layout
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 data-testid="btn-save-definition"
                 onClick={handleSave}
+                loading={create.isPending}
                 disabled={create.isPending || validationErrors.some((e) => e.severity === 'error')}
                 title={
                   validationErrors.some((e) => e.severity === 'error')
                     ? 'Fix validation errors before saving.'
                     : undefined
                 }
-                style={{
-                  ...toolbarButtonStyle('var(--interactive-primary, #228be6)'),
-                  color: '#fff',
-                  fontWeight: 500,
-                }}
               >
                 {create.isPending ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
             </>
           )}
           {isReadOnly && (

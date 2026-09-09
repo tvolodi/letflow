@@ -53,7 +53,8 @@ does not.
 ## The thirteen platform gaps
 
 Verified against `lib/` and `web/` on 2026-09-09, and re-checked against `main`
-when this branch rebased. Gaps 10–12 were added by
+at each rebase — the filed rows move quickly, so trust `docs/requirements.yaml`
+over this column if they ever disagree. Gaps 10–12 were added by
 `REVIEWER`'s sign-off on 0022 (see that record's amendment to reasoning §1).
 **Every one of these is bucket B, and all of them close before any bucket-A pack
 work begins** — a pack cannot be authored against a platform whose data-model
@@ -68,9 +69,9 @@ no relations and no queryable localized fields.
 | 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
 | 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
 | 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | to file |
-| 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | `REQ-284`, `REQ-291`, `REQ-292`, `REQ-293` — all `pending` | filed |
+| 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | Partly closed 2026-09-09 — `REQ-284` `done` (closed vocabulary + `fieldRegistry`); `REQ-291`, `REQ-292`, `REQ-293` (the `Expr` evaluators) still `pending` | filed |
 | 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | **Closed 2026-09-09** — `REQ-285` `done` (react-intl, decision 0021) | closed |
-| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | Partly closed 2026-09-09 — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding); `REQ-283` (SPA theming), `REQ-286` (`form_schema`) still `pending` | filed |
+| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | Mostly closed 2026-09-09 — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding), `REQ-286` `done` (`form_schema` exposed); only `REQ-283` (SPA theming) still `pending` | filed |
 | 10 | **Relations between entity records.** `Letflow.Entities.Query.Compiler` has no `join`/`preload`; `fk_def`'s `references_entity` is validated for shape and self-reference only, with no referential enforcement. **Now a consequence of [decision 0023](decisions/0023-entity-storage-hybrid.md)**, not separate work — per-entity-type tables with promoted FK columns make joins expressible for the first time. | **Unowned.** Blocks P2; blocked itself by 0023's open question | to file |
 | 11 | **Localized-text field type.** Re-scoped by 0023: entity-content localization is blob-stored (it follows its parent's lifecycle), and becomes searchable via generated columns per locale when `queried: true`. Not a relations problem and not an i18n-layer problem — gap 8 (`REQ-285`, client-side) is a different concern that this does not depend on. | **Unowned.** Blocks P2 | to file |
 | 12 | **Bulk import/export of entity *records*.** `Letflow.Definitions.ExportImport` moves definitions, not records. BilimBaga has `pg_trgm`-backed import/export (`011_pg_trgm_import_export`). | **Unowned** | to file |

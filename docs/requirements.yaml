@@ -180,8 +180,9 @@ stages:
       runtime, requiring REVIEWER sign-off that A and B were tried
       first). Thirteen platform gaps close before any bucket-A work
       starts; ten of them are unowned as of 2026-09-09 (REQ-281,
-      REQ-282 and REQ-285 have landed on main, closing gap 8 and half
-      of gap 9). Gaps 10 and 11 are consequences of decision 0023
+      REQ-282, REQ-284, REQ-285 and REQ-286 have landed on main,
+      closing gap 8, most of gap 9 and part of gap 7). Gaps 10 and 11
+      are consequences of decision 0023
       (entity storage: per-entity-type tables with a hybrid
       column/blob shape) and are blocked on its open question; gap 13
       is that SolutionPack's document format cannot carry entity

@@ -1883,3 +1883,6 @@
 2026-09-09T15:12:13Z | DONE | WF-02 | WF02-REQ277-20260909 | ORCH -> main | merged 27b51cfc via PR #1137, squash, no --admin override needed
 2026-09-09T15:13:54Z | RELEASE_LOCK | WF-02 | WF02-REQ277-20260909 | ORCH -> letflow-queue | task 551 done (force-released, original locking agent_id unrecoverable, completion confirmed via merged commit 27b51cfc)
 2026-09-09T16:33:54Z | RECOVERY_START | WF-02 | WF02-REQ289-20260909 | ORCH direct | GH#1100 named by user; queue task 544 force-released (dead prior run) and re-locked orch-req289; resuming real prior implementation on feature/WF02-REQ289-20260909, rebased onto main, one MAJOR gap found (AC3 null-literal coverage)
+2026-09-09T17:36:04Z | REGISTER_TASK | WF-02 | n/a | ORCH -> letflow-queue | REQ-290 registered as task 572 (GH#1168), depends_on [544]
+2026-09-09T17:45:54Z | DONE | WF-02 | WF02-REQ289-20260909 | ORCH -> main | merged 81f005d8 via PR #1157, squash, no override needed
+2026-09-09T17:46:12Z | RELEASE_LOCK | WF-02 | WF02-REQ289-20260909 | ORCH -> letflow-queue | task 544 done

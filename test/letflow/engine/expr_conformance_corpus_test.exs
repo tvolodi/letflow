@@ -136,10 +136,9 @@ defmodule Letflow.Engine.ExprConformanceCorpusTest do
         |> Enum.flat_map(& &1["grammar_constructs"])
         |> Enum.filter(&String.starts_with?(&1, "builtin:"))
         |> Enum.map(&String.replace_prefix(&1, "builtin:", ""))
-        |> Enum.map(&String.to_existing_atom/1)
         |> MapSet.new()
 
-      required = Expr.builtin_function_names() |> MapSet.new()
+      required = Expr.builtin_function_names() |> Enum.map(&Atom.to_string/1) |> MapSet.new()
       missing = MapSet.difference(required, covered_builtin_names)
 
       assert MapSet.size(missing) == 0,

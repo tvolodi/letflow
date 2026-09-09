@@ -1,0 +1,50 @@
+# ISS-0559 -- Button.tsx title/pressed props + DefinitionEditorPage.tsx toolbar
+# buttons restored. Frontend-only change (no lib/letflow/, no priv/repo/migrations/
+# files touched). Per ORCH's explicit dispatch for this run, verification scope was:
+# (1) mix compile --warnings-as-errors from repo root, to confirm zero backend
+# impact -- NOT the full scripts/test_parallel.sh backend suite, since no backend
+# file is in this run's diff; (2) web/'s own full check chain. All commands run for
+# real, foreground, blocking; output quoted below is real, not inferred.
+
+issue: ISS-0559
+branch: feature/WF03-ISS0559-20260909
+
+backend_check:
+  command: "mix compile --warnings-as-errors"
+  exit_code: 0
+  output: "(no output -- already compiled, 0 warnings, 0 errors)"
+  conclusion: "Confirmed zero backend impact."
+  note: >
+    Full scripts/test_parallel.sh backend suite NOT run this pass -- out of scope
+    per ORCH's explicit dispatch instructions for this frontend-only change (no
+    lib/letflow/ or priv/repo/migrations/ files in the diff). RELEASE-VALIDATOR
+    independently re-verifies per core-directives.md and may choose to run it.
+
+frontend_checks:
+  - command: "npm run type-check"
+    result: PASS
+    output: "> tsc -b tsconfig.json  (no errors)"
+  - command: "npm run lint"
+    result: PASS
+    output: "> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0  (no output, 0 warnings/errors)"
+  - command: "npm test"
+    result: PASS
+    test_files: "45 passed (45)"
+    tests: "287 passed (287)"
+    duration: "12.32s"
+    note: >
+      Two expected stderr lines from StatusBadge.test.tsx (REQ-272 TC-REQ272-10/11)
+      are the test's own intentional "no status table entry -- rendering fallback
+      badge" warnings, asserted by the test itself, not failures.
+  - command: "npm run guards"
+    result: PASS
+    test_files: "4 passed (4)"
+    tests: "48 passed (48)"
+    duration: "22.44s"
+    note: >
+      Includes a real production build (tsc -b && vite build) as part of
+      bundle-scan.spec.ts -- build succeeded, 2098 modules transformed, only a
+      chunk-size-limit advisory (vendor chunk 1.23MB), not an error.
+
+overall: PASS
+next_action: "Route to RELEASE-VALIDATOR"

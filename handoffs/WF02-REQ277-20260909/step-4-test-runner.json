@@ -1,0 +1,51 @@
+{
+  "handoff_id": "8f1e2a3c-1b4d-4e5a-9c2f-000000000007",
+  "run_id": "WF02-REQ277-20260909",
+  "workflow_id": "WF-02",
+  "step": "04",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-RUNNER",
+  "file": "handoffs/WF02-REQ277-20260909/step-4-test-runner.json",
+  "created_at": "2026-09-09T12:23:39Z",
+  "started_at": "2026-09-09T12:23:39Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-277"],
+    "requirement_text": {
+      "REQ-277": "Second of three sibling page-migration requirements implementing docs/migration/decisions/0020-frontend-architecture.md D2b. This requirement covers web/src/pages/definitions/ and web/src/pages/dlq/. Replace hand-rolled tables/buttons/badges/layout wrappers/toasts with DataTable/Button/StatusBadge/PaginationControls primitives, and replace every colour literal with the matching var(--token-name) from web/src/styles/tokens.css."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["8f1e2a3c-1b4d-4e5a-9c2f-000000000006"],
+    "artifacts_in": ["handoffs/WF02-REQ277-20260909/step-3b-test-design-validator.json"],
+    "owned_modules": ["web/src/pages/definitions/", "web/src/pages/dlq/", "web/src/styles/tokens.css", "docs/frontend/design-system.md"]
+  },
+  "task": {
+    "description": "Run Step 4 (full test run) for WF-02/REQ-277 on branch feature/WF02-REQ277-20260909 (already checked out). TEST-DESIGN-VALIDATOR passed Step 3b. This is a frontend-only change with zero lib/ or priv/repo/migrations/ diff (confirmed by every prior gate). Run the BACKEND full suite via scripts/test_parallel.sh (per WF-02 Step 4's procedure) since docs/requirements.yaml and docs/status/ were touched by this run's DOC-UPDATER work and this is still a mixed-repo run -- confirm zero backend regression even though the code diff itself is frontend-only. Also run the FOUR frontend gates from web/ (npm run type-check && npm run lint && npm test && npm run guards) as this run's own primary validation surface, quoting real output for both. Apply core-directives.md's Failure Attribution Is Structural rule to any backend failures found -- this suite is known to carry pre-existing failures; attribute structurally (route 1/2/3), never by count-matching. Run everything synchronously in your own foreground tool calls per core-directives.md's 'No Background Wait For A Cross-Turn Notification' -- do not background scripts/test_parallel.sh or npm test and wait for a notification; block on it in this same turn no matter how long it takes.",
+    "acceptance_criteria": [
+      "scripts/test_parallel.sh run to completion, combined pass/fail totals reported with the derived partition count and its source",
+      "any backend failure structurally attributed (route 1/2/3) or reported unattributed -- never by count-matching against a prior run",
+      "npm run type-check && npm run lint && npm test && npm run guards all run to completion from web/ with real output quoted",
+      "test/reports/report-<date>-WF02-REQ277-20260909.yaml written with the actual output"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "PENDING dispatch — not yet actioned by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ277-20260909",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ277-20260909",
+      "push_status": "skipped",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1137",
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

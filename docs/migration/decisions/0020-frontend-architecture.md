@@ -112,6 +112,31 @@ visibility (`visible_when`), computed fields and cross-field validation are
 "Client-side logic and the offline constraint" below for why this is not a
 contradiction of the next paragraph, and for the rules that keep it safe.
 
+#### Implementation record: REQ-289 corpus location and schema
+
+1. **Canonical path:** `priv/expr_conformance/corpus.json` — placed in `priv/` so it is
+   a first-class OTP artifact accessible via `:code.priv_dir(:letflow)` from Elixir and
+   via a deterministic relative filesystem path from TypeScript and Dart consumers.
+2. **Companion schema document:** `lib/letflow/design/req289-expr-conformance-corpus.md`
+   — the authoritative source for the JSON schema, `$marker` sentinel encoding, the
+   closed `grammar_constructs` tag vocabulary, and the failure-kind enum. Implementations
+   must read this document for schema semantics; the corpus file contains only data.
+3. **REQ-293 and REQ-294 dependency:** both MUST consume `priv/expr_conformance/corpus.json`
+   directly and are forbidden from building their own corpus or diverging from it. They
+   must not begin implementation before this path exists on `main` (enforced by the
+   sequencing in Sequencing step 9 above).
+4. **Builtin gate:** `priv/expr_conformance/corpus.json` must cover every name returned
+   by `Letflow.Engine.Expr.builtin_function_names/0`. Adding a new builtin to that
+   function without a corresponding corpus entry with the matching `builtin:<name>` tag
+   will fail `test/letflow/engine/expr_conformance_corpus_test.exs`'s coverage-enumeration
+   test, which is the intended gate.
+5. **REVIEWER sign-off:** recorded once WF02-REQ289-20260909's real REVIEWER step
+   runs against this branch -- the earlier placeholder language here is removed
+   because no handoff file for that step was ever committed (see this run's own
+   Step 00 investigation).
+
+### D2 / D2a — Frontend: design-system primitives, no component library
+
 **Rejected: a general scripting runtime in the client.** Arbitrary tenant script
 — Lua, JS, WASM, anything Turing-complete — stays out. That needs a sandbox,
 resource limits and an injection-review gate, i.e. it is `0014`'s problem, not a

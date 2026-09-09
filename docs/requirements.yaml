@@ -17557,7 +17557,7 @@ requirements:
     impl_order: 564  # letflow-queue task id, GH#1158. Registered 2026-09-09 by ORCH
       # once $QUEUE_AUTH_TOKEN was available -- same registration-gap class as
       # REQ-272/275/287/289.
-    status: in_progress
+    status: done
     stage: S10
     description: >
       docs/migration/decisions/0023-entity-storage-hybrid.md ("Entity storage:

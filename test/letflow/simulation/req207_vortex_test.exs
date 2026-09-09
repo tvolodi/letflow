@@ -897,6 +897,19 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # lib/letflow/design/iss0438-entity-subsystem-scoping.md). REQ-225..231 *plan*
       # the subsystem; none of them *build* it -- that's still gated on Signal 3 below,
       # so their presence here doesn't change the BLOCKED_ON_DEPENDENCY disposition.
+      #
+      # UPDATE (WF02-REQ295-20260909): REQ-295's title ("...gating every
+      # entity-storage implementation requirement") matches the word-bounded
+      # "entity" regex via "entity-storage" -- a real, expected addition, not
+      # a surprise. REQ-295 answers decision 0023's DDL-execution open
+      # question with a new decision record plus a design artefact; it is
+      # design-only (no lib/ code, confirmed by that requirement's own scope
+      # fence excluding lib/letflow/entities/) and does not build the
+      # subsystem Signal 3 checks for, so BLOCKED_ON_DEPENDENCY is unchanged.
+      # Added to allowed_ids for the same reason REQ-225..231 were: it plans
+      # (here, designs the storage layer for) the subsystem without building
+      # it. Re-derived, not guessed: the failing assertion itself named the
+      # new preceding line ("  - id: REQ-295") when this landed.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -918,7 +931,8 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-228",
           "REQ-229",
           "REQ-230",
-          "REQ-231"
+          "REQ-231",
+          "REQ-295"
         ])
 
       refute Enum.empty?(entity_title_matches),

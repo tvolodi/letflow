@@ -370,13 +370,67 @@ independently remembered in two places — the failure shape
 
 ## SECURITY-REVIEWER sign-off
 
-(Pending — filed after this record, per REQ-295's acceptance criteria.
-Scope: assess §1's chosen mechanism, and the `ColumnPromotion`/dual-write
-design in §2–3, against
-`docs/agents/instructions/security-invariants.md` INV-1 — specifically
-whether a column-promotion DDL run can be triggered against, or executed
-against, a tenant schema other than the one named on its
-`ColumnPromotion` row.)
+**Verdict: FAIL.** Invariant assessed: INV-1 (tenant data isolation),
+scope test applies — this record proposes new DDL-execution functions on
+`Letflow.TenantProvisioning` plus a new global table
+(`entity_column_promotions`) that gates cross-tenant DDL fan-out; this is
+a design-time review of the proposed mechanism, not a review of shipped
+code (none exists yet — REQ-296 onward builds it), per REQ-295's own
+framing.
+
+**What is sound.** §1's identifier-safety argument genuinely reuses the
+existing, already-reviewed mechanism: `run_column_promotion/2` resolves
+`schema_name` via `Repo.get_by(Registration, tenant_id: ...)`, the same
+path `replay_migrations/2` uses today (`lib/letflow/tenant_provisioning.ex`),
+and `Registration.changeset/2`'s `@schema_name_format` regex
+(`~r/^tenant_[0-9a-f]{32}$/`, `lib/letflow/tenant_provisioning/registration.ex`
+lines 43, 59) independently re-validates that shape at write time — no new
+identifier-construction path is introduced. The `entity_column_promotions`
+table's read accessors (`column_promotion_query_eligible?/3`,
+`column_promotion_dual_write?/3`) are keyed by `(tenant_id, entity_type,
+attribute)`, matching the unique index, so a read is scoped by construction
+the same way `Registration` rows are looked up by `tenant_id`. No implicit
+human check is relied on anywhere — the whole flow (register → run → backfill
+→ activate) is programmatic per the design doc's function contracts.
+
+**The gap (BLOCKER).** The companion design doc's mutating functions —
+`run_column_promotion/2`, `retry_failed_column_promotion/2`,
+`backfill_column_promotion/2`, `activate_column_promotion/2`,
+`suspend_column_promotion/2` (`lib/letflow/design/req295-entity-promotion-ddl-execution.md`
+§2) — all take `tenant_id` and `promotion_id` as two **independent**
+caller-supplied parameters, with no stated contract that the function must
+verify `promotion_id`'s own stored `tenant_id` agrees with the `tenant_id`
+argument before acting. `run_column_promotion/2` resolves the DDL target
+schema from the `tenant_id` *parameter*, but resolves the column spec
+(`entity_type`, `attribute`, `column_name`) from the `ColumnPromotion` row
+looked up by `promotion_id` — two independently-sourced values with no
+specified cross-check. A caller that passes tenant A's `tenant_id` together
+with tenant B's `promotion_id` (a plausible bug in a future admin/API
+caller REQ-296 or later builds, not a contrived attack) would run DDL
+derived from tenant B's promotion metadata against tenant A's schema — a
+promotion intended for one tenant's schema executing against another's,
+exactly the failure shape REQ-295 names as a tenant-isolation breach, not a
+data-quality bug. This is precisely the "safety property that holds only
+as long as two places agree, with nothing that re-checks that they still
+do" pattern this same record's §1 reasoning invokes against a *different*
+design option (`docs/anti-patterns.md`'s "documented equality that
+silently stopped being true") — it reappears here at the argument-pair
+level instead of the module-boundary level the record examined.
+
+**What the record must add before this gate can PASS.** For every function
+in design doc §2 that takes both `tenant_id` and `promotion_id`: either (a)
+drop `tenant_id` as a separate parameter and derive it from the loaded
+`ColumnPromotion` row itself, or (b) keep both parameters but specify
+explicitly that the function first loads the row by `promotion_id`, compares
+its stored `tenant_id` to the argument, and returns an error (e.g.
+`{:error, :tenant_mismatch}`) before any DDL/replay/state-transition runs if
+they disagree. Either fix must land in the design doc (and/or this record)
+before REQ-296 implements against it — this is a design-contract gap, not
+an implementation detail left open deliberately.
+
+This is a design-time verdict only: it assesses whether the mechanism, if
+built exactly as specified today, would satisfy INV-1 — it does not, and
+cannot, verify running code, since none exists yet.
 
 ## REVIEWER sign-off
 

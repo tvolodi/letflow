@@ -50,9 +50,9 @@
     "issues": [],
     "git_evidence": {
       "branch_name": "feature/WF02-REQ277-20260909",
-      "commit_sha_list": [],
+      "commit_sha_list": ["0955d5de"],
       "remote_branch": "origin/feature/WF02-REQ277-20260909",
-      "push_status": "pending",
+      "push_status": "pushed",
       "pr_url": "https://github.com/tvolodi/letflow/pull/1137",
       "pr_create_error": null
     },

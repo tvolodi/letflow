@@ -2771,3 +2771,30 @@ is expected to supply. And a convention with no validating step decays exactly t
 producer/validator principle applies to the project's own conventions, not only to its
 requirements. That is why the schema landed with a gate wired into `mix letflow.check`
 rather than a paragraph in a protocol file, which is what the superseded rule had.
+
+## Modelling many-to-many as an array of references on the parent record
+
+An early draft of the entity-storage analysis proposed giving a parent
+record an array column of referenced ids (a question row holding a
+`tag_ids` array), with a GIN index, as the way to express many-to-many
+between entity records. It was rejected before it was built; recorded here
+because it is a natural-looking shape that will be re-proposed otherwise.
+
+Why it is wrong for this project specifically:
+
+- **Unindexed by default.** Without an explicit GIN index it degrades to a
+  scan, which is the exact problem the storage decision exists to fix.
+- **Nowhere to put join attributes.** A relationship that carries its own
+  data (`sort_order`, `assigned_at`, `weight`) has no home on an array
+  element, and the moment one is needed the shape has to be rebuilt.
+- **Invisible to `FieldGrants`.** `Letflow.Entities.Query.FieldGrants`
+  (REQ-231) redacts at *field* granularity on a record. Values inside an
+  array on someone else's row cannot be field-redacted, so any relationship
+  whose existence is itself sensitive cannot be governed.
+
+**Correct alternative:** a join is an ordinary entity type whose promoted
+columns happen to be two foreign keys, with a `constraint_def` of
+`type: :unique` over the pair, and its own `field_values` blob for any
+attributes the relationship carries. See
+`docs/migration/decisions/0023-entity-storage-hybrid.md`, "Many-to-many is
+not a special case".

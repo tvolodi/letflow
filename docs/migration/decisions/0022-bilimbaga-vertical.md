@@ -134,9 +134,10 @@ implementation to diff against than from a green-field one.
 
 **5. The cost is real and is stated here rather than discovered later.** Roughly
 seven Go packages are rewritten with no line-level port path, the analytics tier
-has nothing to sit on today (gap 2 in the stage file), and twelve platform gaps
-must close before bucket-A work can start (nine as first filed, plus the three
-this record's REVIEWER sign-off adds). The offsetting fact is that
+has nothing to sit on today (gap 2 in the stage file), and thirteen platform gaps
+must close before bucket-A work can start (nine as first filed, three added by
+this record's REVIEWER sign-off, and a thirteenth — the pack format itself —
+found by the follow-on architecture review that produced decision 0023). The offsetting fact is that
 BilimBaga's 19 live Playwright spec files (168 `test()` blocks) are a
 ready-made, independent acceptance
 corpus — S10 does not have to invent its own definition of parity, and
@@ -288,5 +289,16 @@ All three are bucket B by rule 1 — none of them needs to name an exam.
 
 Gate status: this record is **not** blocked. It is the stage's precondition and
 may stand. What is blocked is expanding P2 into bucket-A requirements before
-gaps 10 and 11 close — a pack authored against the entity subsystem as it stands
-today would fail at its first queryable localized field.
+gaps 10, 11 and 13 close — a pack authored against the entity subsystem as it
+stands today would fail at its first queryable localized field, and could not be
+packaged at all.
+
+**Amended the same day.** A follow-on architecture review found the cause
+underneath gaps 10 and 11 — the shared-table/JSONB storage model — and resolved
+it in [`0023-entity-storage-hybrid.md`](0023-entity-storage-hybrid.md), which
+supersedes REQ-228's storage design and makes gaps 10 and 11 consequences of
+itself rather than separate work. It also found gap 13: `SolutionPack`'s document
+format has no `entity_definitions` section and no form-schema section, so bucket
+A's own delivery vehicle cannot carry two of the four things bucket A consists
+of. That is a more fundamental blocker on P2 than either gap this sign-off
+originally raised.

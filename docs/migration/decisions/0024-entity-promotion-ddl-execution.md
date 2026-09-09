@@ -1,0 +1,387 @@
+# 0024 — Entity-column-promotion DDL execution: mechanism, failure semantics, backfill and rollback
+
+Status: decided (2026-09-09, `CODE-DESIGNER`, REQ-295), pending its own
+`SECURITY-REVIEWER` and `REVIEWER` gates (sections below, not yet filled in).
+Owner: `ORCH` (answers `0023-entity-storage-hybrid.md`'s named open question;
+blocks every implementation requirement filed against 0023 until both gates
+below pass).
+
+## Question
+
+`0023-entity-storage-hybrid.md` decided the entity-storage shape — per-
+entity-type tables, a promoted-column/blob hybrid, additive-only promotion,
+demotion forbidden — but named one open question that blocks every
+implementation requirement against it, verbatim:
+
+> How a promotion's DDL is executed, per tenant, in a humanless pipeline.
+
+Four sub-questions were named and none was answered:
+
+1. What runs the DDL across every tenant schema — an extension of
+   `Letflow.TenantProvisioning`'s manifest, a dedicated migrator, or the
+   promotion path itself?
+2. What happens to a tenant whose DDL fails midway, when others have
+   succeeded? Atomic across tenants, or per-tenant with a repair path?
+3. Does a promotion's backfill run inline or as a replay through
+   `rebuild_projection/2`, and what serves reads while it runs?
+4. What is the rollback story, given that demotion is forbidden?
+
+This record answers all four. It does not reopen anything 0023 already
+decided (the storage shape, the promotion rule, additive-only/demotion-
+forbidden, the entity-vs-blob test) — see "What this record does not
+decide" below.
+
+## Decision
+
+**A promoted attribute moves through six explicit per-`(tenant, entity_type,
+attribute)` states, tracked in one new table, driven by new functions added
+to `Letflow.TenantProvisioning` (extending that module, not replacing it or
+building a second one beside it), with dual-write bridging every window
+where a stale read would otherwise be possible.**
+
+### 1. What runs the DDL: `Letflow.TenantProvisioning`, extended — not its
+existing manifest, and not a second module
+
+The DDL runs from new functions added to `Letflow.TenantProvisioning`
+itself (a new file, `lib/letflow/tenant_provisioning/column_promotion.ex`,
+holding a new Ecto schema — same pattern this module already uses for
+`Registration`), reusing three things that module already has and that are
+already reviewed:
+
+- `schema_name_for_tenant/1`'s validated `tenant_[0-9a-f]{32}` shape and the
+  `Registration.schema_name` it produces — the only thing this codebase
+  trusts to interpolate into a DDL identifier.
+- The per-schema `pg_advisory_xact_lock(hashtext($1))` pattern
+  `provision_tenant_schema/1` already takes before touching a schema (see
+  `lib/letflow/tenant_provisioning.ex` lines 258–274).
+- The module's established `{:ok, _} | {:error, _}` convention
+  (`backend_developer_guide.md` §3.5), which `replay_migrations/2` already
+  follows for its own DDL-adjacent call.
+
+**It does not reuse `tenant_scoped_migrations/0`'s `@tenant_scoped_migration_manifest`
+or `Ecto.Migrator.run/4`.** That mechanism is a fixed, hand-curated list of
+`{version, module, filename}` triples, each backed by a compiled `.exs` file
+under `priv/repo/migrations/` that a developer or agent adds to the
+manifest as a source-code change (`lib/letflow/tenant_provisioning.ex` lines
+352–507). A column promotion is triggered by an entity definition being
+edited — an arbitrary, tenant-authored event with no compiled migration
+file behind it, no version number known ahead of time, and no "run every
+pending migration for this schema" semantics that make sense: `all: true`
+against the manifest is right when every tenant must converge on one
+platform schema, and wrong when the operation in question is "add one
+column to one entity type's table," scoped to whichever tenants share that
+entity type. `Ecto.Migrator.run/4` also fails at the batch level — the
+`try/rescue` around it (lines 330–348) cannot tell which of several pending
+migrations raised, and a promotion needs a failure recorded against exactly
+one `(tenant, entity_type, attribute)` triple, not "the batch." The new
+functions instead build and execute one `ALTER TABLE ... ADD COLUMN ...`
+statement per promotion, directly, the same way `provision_tenant_schema/1`
+already executes `CREATE SCHEMA IF NOT EXISTS "#{schema_name}"` directly
+rather than through the migrator (line 274) — this decision extends that
+existing precedent, not the neighbouring one.
+
+**Why not (b), a dedicated migrator module.** A separate module would have
+to reimplement the exact same identifier-safety argument
+`Letflow.TenantProvisioning`'s design doc §3.1 already makes and
+`SECURITY-REVIEWER` has already passed against ISS-0027/GH#85: that
+`schema_name` is safe to interpolate *because* it only ever comes from
+`schema_name_for_tenant/1`'s output, guarded a second time by
+`Registration.changeset/2`'s format validation. A second module asserting
+"my `schema_name` input is also safe" independently is the exact failure
+shape `docs/anti-patterns.md`'s "documented equality that silently stopped
+being true" entry warns about — a safety property that holds only as long
+as two places agree, with nothing that re-checks that they still do. Living
+inside `Letflow.TenantProvisioning` means there is exactly one place that
+is allowed to know what a safe `schema_name` looks like.
+
+**Why not (c), the promotion path itself.** "The promotion path" is
+whatever code reacts to one tenant's admin (or a pack install) editing an
+entity definition to mark a field `queried: true` or as an `fk_def`. Under
+option (c) that single request handler would, inline, open connections
+against and run DDL against *every other tenant's* schema that shares the
+entity type — a request scoped to tenant A reaching into tenant B..N's
+schemas as a side effect of handling A's HTTP request. That is precisely
+the "internal path with no exception" INV-1 forbids: the promotion decision
+is tenant-A-scoped (it is A's definition edit, or a pack install A
+triggered), but its DDL execution is not, and INV-1 does not carve out an
+exception for "the path that happens to have decided a promotion is
+needed." It also collapses two things 0023 already keeps apart — deciding
+*that* an attribute promotes (a Definition-shape fact, evaluated once) and
+*executing* that promotion against N independently-lived schemas (an
+operational fan-out with its own failure modes) — into one request/response
+cycle, with no retry boundary distinct from the definition edit that
+triggered it.
+
+### 2. Partial-failure semantics: per-tenant, with a dedicated state table —
+not atomic across tenants
+
+A promotion is **not** atomic across tenants. Requiring N independent
+Postgres schemas to commit-or-rollback together needs a distributed
+transaction this project has never taken on for any other tenant-fanout
+operation (`provision_tenant_schema/1` and `replay_migrations/2` are both
+already single-tenant, invoked once per tenant, with no cross-tenant
+transaction). A promotion is instead a batch of independent per-tenant
+attempts, each succeeding or failing on its own.
+
+**New table, `entity_column_promotions`** (global/`public` schema, in the
+same trust tier as `tenant_schemas` — column promotions are platform
+bookkeeping, not tenant business data), one row per `(tenant_id,
+entity_type, attribute)`:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `binary_id` | PK |
+| `tenant_id` | `uuid` | FK to `tenants.id` |
+| `entity_type` | `string` | matches the entity definition's type name |
+| `attribute` | `string` | the promoted field's name |
+| `column_name` | `string` | the physical column name (normally `= attribute`, distinct field in case of a future collision-avoidance rename) |
+| `status` | `string`, one of `pending \| ddl_applied \| backfilling \| backfilled \| active \| ddl_failed \| suspended` | see the state machine below |
+| `query_eligible` | `boolean`, default `false` until `active` | independent of `status` — see rollback (§4) |
+| `last_error` | `string`, nullable | set on `ddl_failed`, cleared on retry |
+| `attempted_at`, `ddl_applied_at`, `backfilled_at`, `activated_at` | `naive_datetime`, nullable | one timestamp per state transition actually reached |
+| `inserted_at`, `updated_at` | timestamps | standard |
+
+Unique index on `(tenant_id, entity_type, attribute)`.
+
+**What a tenant stuck in `ddl_failed` reads/writes through.** Old,
+blob-only path, unconditionally. The physical column may or may not exist
+(a failure can occur mid-statement or in a post-DDL verification step);
+either way `query_eligible` is `false`, so — per §1 of the decision below —
+the query layer never dispatches to it, and the projector's write path
+(§3) never targets a column whose promotion row is not at least
+`ddl_applied`. That tenant is not "unavailable" — normal reads and writes
+against that entity type continue exactly as before the promotion was
+attempted; only the promoted attribute's query surface is unaffected by
+uncommitted work. Repair is a retry of the same DDL step for that one
+`(tenant_id, entity_type, attribute)` row, not a whole-batch re-run.
+
+### 3. Backfill: replay through `rebuild_projection/2`, gated by dual-write
+so a filter never sees a partial column
+
+**Backfill runs as a replay through
+`Letflow.Entities.Record.Projector.rebuild_projection/2`**
+(`lib/letflow/entities/record/projector.ex:181`, scoped with
+`entity_type: <the promoted type>` per its own `opts` argument, `prefix:`
+the tenant's schema) — not as one inline `UPDATE ... SET`. Three reasons,
+not just "replay is the existing mechanism":
+
+- `rebuild_projection/2` re-derives the current-state row from the event
+  log, which is authoritative over whatever the current `field_values` blob
+  happens to hold (a soft-deleted, corrected, or superseded record is
+  handled the same way a fresh projection is) — an inline `UPDATE ... SET
+  new_col = field_values->>'attr'` instead trusts the current projection
+  row as ground truth, which is exactly the assumption 0023 reasoning §2
+  calls out replay as existing to avoid.
+- The per-`field_type()` cast/validation logic a new column's value needs
+  already lives in the projector's own upsert path
+  (`upsert_record_latest/3`, per 0023's Consequences section); an inline
+  `UPDATE` would have to reimplement that casting as raw SQL, a second copy
+  of type-coercion logic that can drift from the first.
+- `rebuild_projection/2` already takes an `entity_type` scope and iterates
+  per-instance internally (`resolve_entity_types/2`,
+  `rebuild_each_entity_type/2`), which is exactly the boundary a promotion
+  needs — replay only the one entity type being promoted, in the one
+  tenant currently being backfilled.
+
+**What a concurrent read sees for a record not yet backfilled: the JSONB
+value, via dual-write — never a partial column, and never a blocked read.**
+This is enforced by construction, not by timing, through the state
+machine's ordering:
+
+1. `pending` → `ddl_applied`: the column now exists (nullable) in the
+   physical table, but the promotion row is not yet `backfilled`/`active`.
+   **From `ddl_applied` onward, the projector's write path for this
+   `(tenant, entity_type, attribute)` dual-writes** — every create/update
+   through `Letflow.Entities.Records` writes the attribute's value to
+   *both* the new column and `field_values` (the blob key is not dropped
+   the moment the column exists; that only happens at `active`, step 3
+   below). This is the one behavioural change to the write path this
+   record requires; it is scoped to exactly the columns currently mid-
+   promotion, and it is what makes the JSONB value trustworthy for every
+   row written *during* backfill, not only the rows that predate it.
+2. `ddl_applied` → `backfilling` → `backfilled`: `rebuild_projection/2`
+   replays existing (pre-promotion) records into the new column. Reads
+   during this window are unaffected — `query_eligible` is still `false`,
+   so `Letflow.Entities.Query.Allowlist`'s per-tenant, per-entity-type
+   builder (0023's Consequences section: "`typed_columns/0` becomes
+   per-entity-type") continues to report this attribute as a `:json_field`
+   entry for this tenant, and `Letflow.Entities.Query.Compiler`'s
+   `build_filter_dynamic/2` (`lib/letflow/entities/query/compiler.ex:172`)
+   dispatches it through the `:json_field` clause — reading `field_values`,
+   which dual-write has kept current for every row, old and new, throughout
+   this window. The `:typed_column` clause (`compiler.ex:163`) is never
+   reached for this attribute in this tenant until step 3.
+3. `backfilled` → `active`: a verification step (row-count parity between
+   non-null values in the new column and live, non-deleted records of that
+   entity type for that tenant) must pass before this transition is taken.
+   Only then does `query_eligible` flip to `true`, which is the single flag
+   the extended `Allowlist` builder (REQ-299's scope) must consult before
+   including the attribute as a `:typed_column` entry for that tenant. Only
+   at this same transition does the projector's write path **stop**
+   dual-writing the attribute into `field_values` going forward — existing
+   blob keys for already-written rows are left in place, unread, and
+   harmless, because `Allowlist`'s already-documented shadowing rule ("a
+   typed column always wins over a same-named JSONB key," 0023's
+   Consequences section) makes the leftover key inert rather than a second
+   source of truth.
+
+There is no window in which a filter compiles against `:typed_column` for a
+row whose column value is not yet populated: the compiler cannot see
+`:typed_column` for this attribute in this tenant until `query_eligible`
+is `true`, which is only set after verified-complete backfill.
+
+**Cost accepted, not hidden.** Full-history replay is more expensive per
+promotion than a single `UPDATE`. That cost is accepted for the
+correctness property above; batching/chunking `rebuild_projection/2`'s
+per-instance loop for very large entity types is left to REQ-296's own
+implementation, not re-litigated here.
+
+### 4. Rollback: never a drop or narrow — exclusion from the allowlist,
+plus a corrective promotion for the data
+
+Demotion (dropping a promoted column, or narrowing its type) is **not
+proposed anywhere in this record**, under any name. If a promoted column is
+later found wrong — bad backfill data, or a type choice that should have
+been different — the corrective sequence is:
+
+1. **Immediate:** set `query_eligible: false` on that `(tenant_id,
+   entity_type, attribute)` row, without touching `status` and without any
+   DDL. This is the "excluded from the allowlist until fixed" option named
+   in REQ-295's own text, and it is deliberately **not** the same as
+   falling back to `:json_field` dispatch: once a column has reached
+   `active`, the write path has stopped dual-writing to `field_values`
+   (step 3 above), so the blob is stale for every row written after
+   cutover and is not a safe fallback. `Allowlist` must therefore simply
+   omit the attribute from the allowlist entirely while `query_eligible` is
+   `false` and `status` is past `active` — queries against it fail closed
+   (`{:error, :field_not_queryable}`, the shape `Allowlist` already uses
+   for an unrecognized field) rather than silently reading a stale value.
+2. **Corrective:** the actual data fix ships as a **new promotion pass**
+   against the *same* column — a second, explicit `backfilling` cycle
+   (state transitions `active → backfilling → backfilled → active` are
+   permitted to repeat) that re-derives values via a fresh
+   `rebuild_projection/2` replay with corrected logic. This is a row-value
+   correction, not a schema change — the column's name and type are
+   untouched throughout — so it does not conflict with 0023's additive-
+   only/demotion-forbidden rule, which governs DDL shape, not row content.
+   Only once the corrective backfill re-verifies does `query_eligible`
+   return to `true`.
+
+If the defect is in the column's *type* itself (not just its data), the
+column is never narrowed or retyped in place — a new, differently-named
+attribute/column is promoted instead (an ordinary new promotion under the
+existing rule), the old column is left physically in place forever
+(`query_eligible` permanently `false`), and the entity definition is
+updated to point at the new attribute. This is the "table/column count is
+output volume, not a complexity metric" argument 0023 reasoning §4 already
+accepts, applied to a mistaken column instead of a superseded one.
+
+### `entity_record_latest`: recommend retirement, not migration
+
+0023 leaves this explicitly open. This record's recommendation: **retire
+`entity_record_latest`, do not build a migration path for its rows.**
+Reasoning:
+
+- 0023's own "What this record does not decide" section states plainly:
+  "No deployment is known to hold entity records today." Building a
+  migration/backfill path for a table with zero known production rows is
+  speculative work — this project's "no speculation" rule (core-directives)
+  argues against designing a migration for data that, as far as any record
+  shows, does not exist.
+- 0023's decision is unconditional on entity type — *every* entity type
+  gets its own per-entity-type table under the new shape, promoted or not
+  (the "hybrid" half is orthogonal to and does not gate the "per-type"
+  half). There is therefore no entity type for which
+  `entity_record_latest` remains the storage target going forward; it has
+  no ongoing purpose the moment the first entity type is created under this
+  design.
+- The concrete retirement mechanism: a future, separately-filed migration
+  (not this requirement, not REQ-296 by default — its own requirement)
+  drops `entity_record_latest` from the tenant-scoped migration manifest's
+  effective schema, guarded the way this codebase already guards
+  irreversible migrations (this module's design doc §4's "required guard
+  pattern") — specifically, a guard that raises rather than drops if the
+  table is found non-empty at migration time, so the "no known rows" premise
+  is verified at the moment of deletion, not assumed from this record's
+  text.
+
+This is a decision-shaped recommendation with reasoning, per REQ-295's own
+instruction that "deciding to explicitly leave the question open a second
+time, with a named reason, is an acceptable outcome" — but the reasoning
+above does not favor leaving it open; it favors retirement, stated
+explicitly so a later reader is not left re-deriving it.
+
+## Reasoning
+
+Summarized above, inline with each sub-answer, because each answer's
+justification is specific to that sub-question rather than a shared
+argument repeated four times. The one cross-cutting principle: every
+correctness property in §3 and every safety property in §1 is enforced by
+a single flag or a single module boundary that is checked at the moment of
+use (`query_eligible` at allowlist-build time; `schema_name`'s validated
+shape at DDL-execution time) rather than by an invariant that must be
+independently remembered in two places — the failure shape
+`docs/anti-patterns.md` already has one entry about.
+
+## Consequences
+
+- **New table:** `entity_column_promotions` (global schema), per §2.
+- **New Ecto schema module:** `Letflow.TenantProvisioning.ColumnPromotion`,
+  mirroring `Registration`'s existing pattern.
+- **New functions on `Letflow.TenantProvisioning`** (see the companion
+  design doc, `lib/letflow/design/req295-entity-promotion-ddl-execution.md`,
+  for signatures) — implemented by REQ-296 onward, not this record.
+- **`Letflow.Entities.Record.Projector`'s write path gains a dual-write
+  branch** for any attribute whose promotion row is `ddl_applied` through
+  `backfilled` (inclusive) for the record's tenant — an amendment to
+  `upsert_record_latest/3`'s existing two clauses (0023's Consequences
+  section), not a new clause shape. Implemented by REQ-296 onward.
+- **`Letflow.Entities.Query.Allowlist`'s per-entity-type `typed_columns`
+  builder (REQ-299's scope) must additionally consult
+  `ColumnPromotion.query_eligible` per tenant** before reporting an
+  attribute as a `:typed_column` entry — an added precondition on top of
+  REQ-299's own per-entity-type work, not a redesign of it.
+- **`docs/agents/instructions/security-invariants.md` INV-1** gains a
+  concrete new checkable case once REQ-296 lands: a column-promotion DDL
+  run must be traceable to exactly the `tenant_id`/`schema_name` pair on
+  its `ColumnPromotion` row, with no code path that can target a
+  `schema_name` not derived from `schema_name_for_tenant/1`.
+- **A future, separate requirement** drops `entity_record_latest`, guarded
+  as described above — not filed here.
+
+## What this record does not decide
+
+- **The storage shape itself, the promotion rule, additive-only/demotion-
+  forbidden, and the entity-vs-blob test.** All of 0023 stands unchanged;
+  this record answers only the one open question 0023 named.
+- **REQ-302's two sub-questions** — `ON DELETE` behavior for promoted FK
+  columns, and localized-text plain-text-vs-`tsvector` column strategy.
+  Filed and scoped separately per REQ-VALIDATOR's sizing split; this record
+  takes no position on either.
+- **Implementation.** No `lib/letflow/entities/`, `lib/letflow/tenant_provisioning*`,
+  or migration file is touched by this record — REQ-296 onward builds
+  against the companion design doc.
+- **Batching/chunking strategy for large-entity-type replay**, and the
+  exact verification-step SQL for the `backfilled → active` transition
+  (row-count parity vs. a stronger check) — left to REQ-296's own design
+  detail, within the state-machine contract fixed here.
+
+## SECURITY-REVIEWER sign-off
+
+(Pending — filed after this record, per REQ-295's acceptance criteria.
+Scope: assess §1's chosen mechanism, and the `ColumnPromotion`/dual-write
+design in §2–3, against
+`docs/agents/instructions/security-invariants.md` INV-1 — specifically
+whether a column-promotion DDL run can be triggered against, or executed
+against, a tenant schema other than the one named on its
+`ColumnPromotion` row.)
+
+## REVIEWER sign-off
+
+(Pending — filed after this record, per REQ-295's acceptance criteria.
+Scope: whether extending `Letflow.TenantProvisioning` with the DDL-execution
+and dual-write functions in §1–3 fits that module's existing idiom, or
+needs the kind of dedicated supervision/idiom treatment REQ-045's
+process-vs-row decision required; whether the `ColumnPromotion` state
+machine is consistent with this project's other state-machine-shaped
+decision records.)

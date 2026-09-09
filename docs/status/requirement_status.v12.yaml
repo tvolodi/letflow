@@ -329,6 +329,28 @@ history:
       before pushing this time, having been caught by CI itself on the
       REQ-286 merge two turns ago. ORCH will merge and release queue
       task 560 status:done.
+
+  - req: REQ-277
+    event: started
+    agent: ORCH
+    at: "2026-09-09T03:00:25Z"
+    note: >
+      WF02-REQ277-20260909 started (queue task 551, GH#1124). Migrate
+      web/src/pages/definitions/ and web/src/pages/dlq/ onto the
+      design-system primitives (DataTable/Button/StatusBadge/PaginationControls)
+      and off colour literals, per decision 0020 D2b, 2 of 3. Second of three
+      sibling page-migration requirements. docs/requirements.yaml entry was
+      missing until this run's Step 00 -- same registration-gap class as
+      REQ-272/275/287. ORCH added the entry (status: in_progress) before
+      proceeding to Step 1 (CODE-DESIGNER). Recorded here (volume 12) rather
+      than volume 11 despite the original 03:00:25Z timestamp: this event's
+      home commit (a7c0396d) was authored on feature/WF02-REQ277-20260909
+      back when volume 11 was still current and open, but that branch stalled
+      before Step Final and volume 11 closed (frozen, DO NOT APPEND) under
+      REQ-282's merge in the interim. Rebasing this branch onto current main
+      at Step 00b (2026-09-09T12:00:54Z) surfaced the conflict; per the
+      closed volume's own header this append routes to whichever volume the
+      index names current at append time, which is this one.
   - req: REQ-291
     event: done
     agent: ORCH

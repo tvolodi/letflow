@@ -5876,5 +5876,27 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-284 (queue task 560, GH#1145) built a closed x-ui.widget vocabulary (5 widgets -- rich-text-lite, masked-input, searchable-select, rating, slider) documented in docs/frontend/x-ui-widget-vocabulary.md and registered into the previously-empty fieldRegistry. Each widget covers an interaction design-system.md 7.6's built-in type mapping structurally cannot express, needs zero backend dependency, and doesn't touch scripting/visibility logic (deferred, not rejected, to decision 0020 D1a). CODE-DESIGNER surfaced a real gap: DynamicFormRenderer.tsx doesn't call FieldFactory/fieldRegistry today (its own duplicate inline switch), so these widgets aren't yet reachable from the real task-completion UI -- CODE-DESIGN-VALIDATOR independently confirmed this via the actual call graph but judged it a clearly-flagged, scope-compliant limitation, not a FAIL, since no AC requires that wiring. Also required: a keying-mechanism fix (FieldFactory.tsx switched from type-keyed to a new additive xUiWidget field, matching decision 0020 D3's actual wording) -- confirmed additive/minimal by both gates. REVIEWER read all 5 widget implementations directly (not just the reported grep) to rule out injection risk in rich-text-lite specifically -- confirmed it's a plain textarea splicing literal markdown-lite tokens into a plain string, never parsing/rendering HTML; zero eval/new Function/dangerouslySetInnerHTML/innerHTML anywhere. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> FRONTEND-DEV -> REVIEWER (PASS) -> TEST-RUNNER (backend mix compile zero impact; frontend gates 320/320 unit tests, 48/48 guard tests). SECURITY-REVIEWER out of scope (pure frontend). Merge-time bookkeeping: flipping REQ-284 to done expired two sibling blocked-by deferrals (REQ-291, REQ-293). REQ-291 had no live blocker left at all (its other dep, REQ-288, was already done) -- registered it properly in the queue (task 561, GH#1147). REQ-293 re-scoped to REQ-290, verified no cycle. Also updated T-LIVE-DEFERRED-COUNT's hardcoded assertions (9 -> 8) to match the real post-merge state, caught locally before pushing this time."
     }
+,
+    {
+      "run_id": "WF02-REQ291-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-291",
+      "issue_id": null,
+      "queue_task_id": 561,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1147,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "lib/letflow/definitions",
+        "docs/frontend/x-ui-widget-vocabulary.md"
+      ],
+      "branch_name": "feature/WF02-REQ291-20260909",
+      "started_at": "2026-09-09T09:30:58Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step 1 PASS -- CODE-DESIGN-VALIDATOR PASS, no rework. Implementation (ELIXIR-DEV) dispatched next.",
+      "note": "REQ-291 (queue task 561, GH#1147) extends REQ-284's x-ui vocabulary doc with visible_when, computed and cross-field validation logic keys per 0020 D1a step 8 (part 2 of 2), validated at definition time only -- no evaluator (that's REQ-292/293/294). Design pins: no 'variables.' prefix, flat sibling-key scope only; absent/null computed input always evaluates to nil; both hidden-field and computed-field values ARE submitted (per D1a constraint 3); computed-field reference cycles rejected via DFS-with-on-stack-set (catches any length, not just self-reference); computed fields evaluate before visible_when/cross_field_validation. Hook point: new CHK-20 in Graph.validate_node_attributes/1 mirroring CHK-18's check_sub_process_interface/1 pattern, delegating to new leaf module Letflow.Definitions.FormSchemaExpressions -- zero changes to lib/letflow/definitions.ex or lib/letflow/engine/expr.ex. Violation shape follows REQ-288's convention: no new struct fields, 4 new Violation.code() atoms."
+    }
   ]
 }

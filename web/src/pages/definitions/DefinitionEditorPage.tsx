@@ -30,6 +30,9 @@ import { useDefinitionDraftStore } from '@/stores/definitionDraftStore'
 import { DraftBanner } from '@/components/definitions/DraftBanner'
 import type { ApiError } from '@/types/api'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { JsonEditor } from '@/components/ui/JsonEditor'
 
 import ProcessCanvas from '@/components/canvas/ProcessCanvas'
 import NodePalette from '@/components/canvas/NodePalette'
@@ -557,7 +560,7 @@ export default function DefinitionEditorPage() {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        background: 'var(--surface-page, #f8f9fa)',
+        background: 'var(--surface-page)',
       }}
     >
       <QueryStateBoundary
@@ -582,42 +585,40 @@ export default function DefinitionEditorPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 16px',
-          background: 'var(--surface-card, #fff)',
-          borderBottom: '1px solid var(--border-default, #e9ecef)',
+          background: 'var(--surface-card)',
+          borderBottom: '1px solid var(--border-default)',
           gap: 12,
           flexWrap: 'wrap',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 'var(--text-lg, 1.125rem)', fontWeight: 600, color: 'var(--text-primary, #212529)' }}>
+          <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, color: 'var(--text-primary)' }}>
             {isNew ? 'New Definition' : def?.name ?? 'Process Designer'}
           </h2>
-          {isNew && (
-            <span style={{ fontSize: 'var(--text-xs, 0.75rem)', color: 'var(--text-secondary, #6c757d)' }}>
-              DRAFT
-            </span>
-          )}
+          {isNew && <StatusBadge status="DRAFT" domain="definition" size="sm" />}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {hasDesignerRole && !isNew && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               data-testid="btn-export-definition"
               onClick={handleExport}
               disabled={exporting}
-              style={toolbarButtonStyle(undefined)}
             >
               {exporting ? 'Exporting…' : 'Export'}
-            </button>
+            </Button>
           )}
           {hasDesignerRole && !isNew && tenantType === 'test' && def?.status === 'ACTIVE' && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               data-testid="promote-to-production-btn"
               onClick={() => { setPromoteError(null); setShowPromoteModal(true) }}
-              style={toolbarButtonStyle(undefined)}
             >
               Promote to Production
-            </button>
+            </Button>
           )}
           {!isReadOnly && (
             <>
@@ -660,9 +661,9 @@ export default function DefinitionEditorPage() {
             <span
               data-testid="read-only-banner"
               style={{
-                fontSize: 'var(--text-sm, 0.875rem)',
-                color: 'var(--color-warning-dark, #e67700)',
-                background: 'var(--color-warning-light, #fff3bf)',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--color-warning-dark)',
+                background: 'var(--color-warning-light)',
                 padding: '4px 12px',
                 borderRadius: 4,
               }}
@@ -694,10 +695,10 @@ export default function DefinitionEditorPage() {
         <div
           style={{
             padding: '8px 16px',
-            background: 'var(--color-error-light, #ffe3e3)',
-            color: 'var(--color-error-dark, #c92a2a)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            borderBottom: '1px solid var(--color-error, #fa5252)',
+            background: 'var(--color-error-light)',
+            color: 'var(--color-error-dark)',
+            fontSize: 'var(--text-sm)',
+            borderBottom: '1px solid var(--color-error)',
           }}
         >
           {error}
@@ -708,10 +709,10 @@ export default function DefinitionEditorPage() {
         <div
           style={{
             padding: '8px 16px',
-            background: 'var(--color-error-light, #ffe3e3)',
-            color: 'var(--color-error-dark, #c92a2a)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            borderBottom: '1px solid var(--color-error, #fa5252)',
+            background: 'var(--color-error-light)',
+            color: 'var(--color-error-dark)',
+            fontSize: 'var(--text-sm)',
+            borderBottom: '1px solid var(--color-error)',
           }}
         >
           {exportError}
@@ -723,10 +724,10 @@ export default function DefinitionEditorPage() {
           data-testid="save-success-toast"
           style={{
             padding: '8px 16px',
-            background: 'var(--color-success-light, #d3f9d8)',
-            color: 'var(--color-success-dark, #2f9e44)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            borderBottom: '1px solid var(--color-success, #40c057)',
+            background: 'var(--color-success-light)',
+            color: 'var(--color-success-dark)',
+            fontSize: 'var(--text-sm)',
+            borderBottom: '1px solid var(--color-success)',
           }}
         >
           Definition saved.
@@ -738,10 +739,10 @@ export default function DefinitionEditorPage() {
           data-testid="promote-success-toast"
           style={{
             padding: '8px 16px',
-            background: 'var(--color-success-light, #d3f9d8)',
-            color: 'var(--color-success-dark, #2f9e44)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            borderBottom: '1px solid var(--color-success, #40c057)',
+            background: 'var(--color-success-light)',
+            color: 'var(--color-success-dark)',
+            fontSize: 'var(--text-sm)',
+            borderBottom: '1px solid var(--color-success)',
           }}
         >
           {promoteMessage}
@@ -753,10 +754,10 @@ export default function DefinitionEditorPage() {
           data-testid="promote-error-toast"
           style={{
             padding: '8px 16px',
-            background: 'var(--color-error-light, #ffe3e3)',
-            color: 'var(--color-error-dark, #c92a2a)',
-            fontSize: 'var(--text-sm, 0.875rem)',
-            borderBottom: '1px solid var(--color-error, #fa5252)',
+            background: 'var(--color-error-light)',
+            color: 'var(--color-error-dark)',
+            fontSize: 'var(--text-sm)',
+            borderBottom: '1px solid var(--color-error)',
           }}
         >
           {promoteError}
@@ -768,15 +769,15 @@ export default function DefinitionEditorPage() {
         <div
           style={{
             padding: '12px 16px',
-            background: 'var(--surface-card, #fff)',
-            borderBottom: '1px solid var(--border-default, #e9ecef)',
+            background: 'var(--surface-card)',
+            borderBottom: '1px solid var(--border-default)',
             display: 'flex',
             gap: 12,
             flexWrap: 'wrap',
           }}
         >
           <div style={{ flex: 2, minWidth: 200 }}>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs, 0.75rem)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary, #6c757d)' }}>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary)' }}>
               Name
             </label>
             <input
@@ -787,7 +788,7 @@ export default function DefinitionEditorPage() {
             />
           </div>
           <div style={{ flex: 1, minWidth: 100 }}>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs, 0.75rem)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary, #6c757d)' }}>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary)' }}>
               Version
             </label>
             <input
@@ -797,7 +798,7 @@ export default function DefinitionEditorPage() {
             />
           </div>
           <div style={{ flex: 3, minWidth: 200 }}>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs, 0.75rem)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary, #6c757d)' }}>
+            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, marginBottom: 2, color: 'var(--text-secondary)' }}>
               Description
             </label>
             <input
@@ -839,37 +840,17 @@ export default function DefinitionEditorPage() {
               <div
                 data-testid="raw-json-drawer"
                 style={{
-                  borderTop: '1px solid var(--border-default, #e9ecef)',
-                  background: 'var(--surface-card, #fff)',
+                  borderTop: '1px solid var(--border-default)',
+                  background: 'var(--surface-card)',
+                  padding: '6px 16px',
                 }}
               >
-                <div
-                  style={{
-                    padding: '6px 16px',
-                    fontSize: 'var(--text-xs, 0.75rem)',
-                    fontWeight: 500,
-                    color: 'var(--text-secondary, #6c757d)',
-                    borderBottom: '1px solid var(--border-default, #e9ecef)',
-                  }}
-                >
-                  Raw Graph JSON (debug)
-                </div>
-                <textarea
-                  data-testid="raw-json-textarea"
-                  readOnly
+                <JsonEditor
                   value={currentGraphJson}
-                  rows={8}
-                  style={{
-                    width: '100%',
-                    padding: '8px 16px',
-                    border: 'none',
-                    fontFamily: 'var(--font-mono, monospace)',
-                    fontSize: 'var(--text-xs, 0.75rem)',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    background: 'var(--color-neutral-50, #f8f9fa)',
-                    color: 'var(--text-primary, #212529)',
-                  }}
+                  onChange={() => {}}
+                  label="Raw Graph JSON (debug)"
+                  readOnly
+                  height={160}
                 />
               </div>
             )}
@@ -900,7 +881,7 @@ export default function DefinitionEditorPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'var(--surface-overlay)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -909,20 +890,20 @@ export default function DefinitionEditorPage() {
         >
           <div
             style={{
-              background: 'var(--color-neutral-0, #fff)',
+              background: 'var(--surface-card)',
               borderRadius: 8,
               padding: 24,
               minWidth: 360,
               maxWidth: 440,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+              boxShadow: 'var(--shadow-lg)',
             }}
           >
             <h3
               style={{
                 margin: '0 0 8px',
-                fontSize: 'var(--text-lg, 1.125rem)',
+                fontSize: 'var(--text-lg)',
                 fontWeight: 600,
-                color: 'var(--text-primary, #212529)',
+                color: 'var(--text-primary)',
               }}
             >
               Unsaved Changes
@@ -930,43 +911,19 @@ export default function DefinitionEditorPage() {
             <p
               style={{
                 margin: '0 0 20px',
-                fontSize: 'var(--text-sm, 0.875rem)',
-                color: 'var(--text-secondary, #6c757d)',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--text-secondary)',
               }}
             >
               You have unsaved changes. Do you want to discard them?
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button
-                onClick={handleCancelNavigation}
-                style={{
-                  padding: '6px 16px',
-                  border: '1px solid var(--border-default, #e9ecef)',
-                  borderRadius: 4,
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm, 0.875rem)',
-                  color: 'var(--text-primary, #212529)',
-                }}
-              >
+              <Button variant="secondary" size="sm" onClick={handleCancelNavigation}>
                 Stay
-              </button>
-              <button
-                data-testid="unsaved-discard"
-                onClick={handleDiscardAndProceed}
-                style={{
-                  padding: '6px 16px',
-                  border: 'none',
-                  borderRadius: 4,
-                  background: 'var(--interactive-danger, #fa5252)',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-sm, 0.875rem)',
-                  fontWeight: 500,
-                }}
-              >
+              </Button>
+              <Button variant="danger" size="sm" data-testid="unsaved-discard" onClick={handleDiscardAndProceed}>
                 Discard
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -988,24 +945,11 @@ export default function DefinitionEditorPage() {
 
 // ── Helper styles ─────────────────────────────────────────────────────────────
 
-function toolbarButtonStyle(bg?: string): React.CSSProperties {
-  return {
-    padding: '6px 14px',
-    border: `1px solid ${bg ? 'transparent' : 'var(--border-default, #e9ecef)'}`,
-    borderRadius: 4,
-    background: bg ?? 'transparent',
-    color: bg ? '#fff' : 'var(--text-primary, #212529)',
-    cursor: 'pointer',
-    fontSize: 'var(--text-sm, 0.875rem)',
-    fontWeight: 400,
-  }
-}
-
 const inlineInputStyle: React.CSSProperties = {
   width: '100%',
   padding: '6px 8px',
-  border: '1px solid var(--border-default, #e9ecef)',
+  border: '1px solid var(--border-default)',
   borderRadius: 4,
-  fontSize: 'var(--text-sm, 0.875rem)',
+  fontSize: 'var(--text-sm)',
   boxSizing: 'border-box',
 }

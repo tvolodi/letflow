@@ -407,3 +407,35 @@ escalations:
       up, that session should re-verify token availability itself (per
       TASK_QUEUE.md's "check both places" procedure) rather than trusting
       this record's own "unavailable" finding as still current.
+    resolved_at: 2026-09-09T15:13:54Z
+    resolved_by: ORCH
+    resolution: >
+      Same-session resolution (not a fresh resuming session): re-verified
+      token availability per this record's own instruction above and found
+      $QUEUE_AUTH_TOKEN genuinely present in .env this whole time -- the
+      three roles that reported it unavailable were wrong (root cause not
+      further diagnosed; the file was present and readable when checked
+      directly, just never exported to any of those roles' shells).
+      Followed the next_step plan: called register_task for REQ-279
+      (queue task 562, GH#1151, depends_on [550,551,552]), wrote the real
+      impl_order into docs/requirements.yaml on the feature branch,
+      confirmed mix letflow.check_deferral_staleness passed clean locally
+      (0 stale, deferral_count 8 -> 7), and updated the one test asserting
+      the old count/id-set. Discovered the Backend CI gate then failed for
+      a SECOND, unrelated reason on the same push: mix letflow.lint_handoffs
+      found 4 new violations in this run's own handoff files (H2 x2
+      timestamp-ordering, H3 x2 stray fields_written key) -- fixed all 4 as
+      mechanical bookkeeping corrections, documented inline in each file's
+      own issues/description per HANDOFF_PROTOCOL.md's never-fabricate-a-
+      past-time guidance. Pushed; both CI checks (Backend, Frontend) passed
+      clean on commit 2caaba4e; `gh pr merge --squash --delete-branch`
+      succeeded with NO --admin override needed (enforce_admins:true was
+      never actually invoked, since the underlying check now genuinely
+      passes rather than needing an override). Merged as 27b51cfc,
+      2026-09-09T15:12:13Z. Local cleanup done, queue task 551 released
+      status:done (force:true, since the original locking agent_id could
+      not be recovered via the API -- justified because the task's
+      completion was independently confirmed via the merged commit before
+      forcing, per TASK_QUEUE.md's force-release recovery guidance).
+      Neither branch-protection weakening nor a fabricated impl_order/
+      blocked-by target was used, per this record's own "Do NOT" list.

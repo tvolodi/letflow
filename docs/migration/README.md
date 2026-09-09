@@ -32,11 +32,20 @@ in the historical citation, not a typo to silently work around.
 | S7 | Simulation & UAT parity | S4, S5, S6 | [stage-7-simulation-uat-parity.md](stage-7-simulation-uat-parity.md) |
 | S8 | Frontend integration & cutover | S7 | [stage-8-frontend-cutover.md](stage-8-frontend-cutover.md) |
 | S9 | Mobile tier | S4 | [stage-9-mobile.md](stage-9-mobile.md) |
+| S10 | BilimBaga vertical | S4, S6, S8 | [stage-10-bilimbaga-vertical.md](stage-10-bilimbaga-vertical.md) |
 
 S5 branches off S3 in parallel with S4 (both only need the instance
 engine, not each other). S9 branches off S4 in parallel with S6-S8 (the
 mobile tier needs API endpoints, not the SPA's cutover) — everything
 else is a straight chain.
+
+S10 is the one stage that is not part of the R-Co migration at all: it
+builds a *vertical solution* on the finished platform (see
+[decisions/0022-bilimbaga-vertical.md](decisions/0022-bilimbaga-vertical.md)).
+It is listed here because the stage list, the `detail_file` convention,
+and the decision records live in this directory — not because it ports
+anything. This directory's framing as a historical build record does
+not extend to S10 or S9.
 
 ## The two clients
 
@@ -124,7 +133,21 @@ neither stage's requirements are guesses about Letflow's internals:
   verified against `lib/` rather than assumed — all three are gaps, which
   is precisely why S9 `depends_on: [S4]`.
 
-What both stages' requirements deliberately avoid is pre-deciding anything
+**S10 is not expanded and must not be expanded early (2026-09-09).** Its
+requirements would be guesses in exactly the way the rule anticipates:
+nine of the twelve platform gaps it depends on are still unowned (gap 8
+closed and gap 9 half-closed when REQ-281/282/285 landed), and the
+largest (an entity-records HTTP surface) has no route shape yet, so a
+bucket-A pack requirement written today would be authored against an
+interface nobody has designed. REVIEWER's 2026-09-09 sign-off on 0022
+sharpens this: the question bank is not expressible as an entity
+definition until the relations and localized-field gaps close, so P2 is
+blocked outright rather than merely premature. Expand P0 first — the `FR-BB` → `REQ-xxx`
+translation with a bucket declared on each — and expand P1's bucket-B
+gap-closing requirements before any bucket-A pack work. See
+[stage-10-bilimbaga-vertical.md](stage-10-bilimbaga-vertical.md).
+
+What S8's and S9's requirements deliberately avoid is pre-deciding anything
 S4-S7 will settle: no S8 requirement names a response shape, and no S9
 requirement specifies how the tenant-config route is implemented. Where a
 question genuinely needs a later stage's output — S8's cutover strategy

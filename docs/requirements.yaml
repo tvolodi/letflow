@@ -164,6 +164,38 @@ stages:
     depends_on: [S4]
     detail_file: docs/migration/stage-9-mobile.md
 
+  - id: S10
+    name: bilimbaga-vertical
+    description: >
+      Deliver BilimBaga (c:\Users\tvolo\dev\BilimBaga\) -- a corporate
+      exam platform: multilingual question banks, configurable timed
+      sessions, auto-grading, certificates with QR verification,
+      analytics -- as one Letflow tenant, one solution pack, and a
+      bounded lib/letflow/exam/ runtime, with its screens in web/. The
+      Go backend is discarded, not ported; BilimBaga's repository
+      becomes read-only provenance in the same sense R-Co is. Every
+      requirement in this stage declares a bucket: A (pure definitions
+      installed via SolutionPack.install/3), B (generic, tenant-agnostic
+      platform capability -- may not name exams), or C (exam-specific
+      runtime, requiring REVIEWER sign-off that A and B were tried
+      first). Twelve platform gaps close before any bucket-A work
+      starts; nine of them are unowned as of the 2026-09-09 rebase
+      (REQ-281, REQ-282 and REQ-285 have since landed on main, closing
+      gap 8 and half of gap 9). The largest is an
+      entity-records HTTP surface (Letflow.Routers.Entities, deferred
+      in lib/letflow/router.ex and owned by no requirement); gaps 10
+      and 11 -- relations between entity records, and queryable
+      localized fields -- were added by REVIEWER's 2026-09-09 sign-off
+      and block P2, because the question bank is not expressible as an
+      entity definition until they close.
+      The second stage that ports no R-Co source (S9 is the first) --
+      it lives in docs/migration/ by naming convention only. Depends on
+      S4 (API surface), S6 (service-task dispatch, scheduler,
+      attachments) and S8 (the SPA the client half is built in). See
+      docs/migration/decisions/0022-bilimbaga-vertical.md.
+    depends_on: [S4, S6, S8]
+    detail_file: docs/migration/stage-10-bilimbaga-vertical.md
+
 requirements:
   # ---------------------------------------------------------------
   # S0 — foundation-and-scaffolding

@@ -1,0 +1,97 @@
+run_id: WF02-REQ282-20260909
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T07:10:56Z"
+branch: feature/WF02-REQ282-20260909
+head_commit: 4d25da0b
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - 4d25da0b "chore(REQ-282): fix stale test describe text REVIEWER flagged"
+    - 71d2742f "feat(REQ-282): serve per-tenant branding/locales from GET /api/mobile/tenant-config"
+    - c0319e0c "design(REQ-282): design mobile tenant-config per-tenant branding/locales"
+    - 297660b6 "chore(ORCH): WF02-REQ282-20260909 git setup"
+
+diff_scope:
+  note: >
+    Converts three previously tenant-invariant response keys (branding,
+    locales-related fields) on pre-authentication GET /api/mobile/tenant-config
+    to tenant-varying. Changes resolve_tenant_config/1's internal return shape
+    in lib/letflow/routers/mobile_tenant_config.ex. Has already passed
+    CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER, and REVIEWER. Only a targeted
+    29-test subset had been run before this full-suite gate.
+
+static_checks:
+  - command: "mix format --check-formatted"
+    result: PASS
+    output: "(no output -- exit 0, all files formatted)"
+  - command: "mix compile --warnings-as-errors --force"
+    result: PASS
+    output: |
+      Compiling 212 files (.ex)
+      Generated letflow app
+      (exit 0, zero warnings, zero errors)
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 8
+  result: FAIL (2 known-unrelated failures)
+  output: |
+    partition 1: 584 tests, 0 properties, 2 failures, exit 2
+    partition 2: 364 tests, 2 properties, 0 failures, exit 0
+    partition 3: 382 tests, 0 properties, 0 failures, exit 0
+    partition 4: 415 tests, 1 property, 0 failures, exit 0
+    partition 5: 515 tests, 3 properties, 0 failures, exit 0
+    partition 6: 485 tests, 0 properties, 0 failures, exit 0
+    partition 7: 424 tests, 0 properties, 0 failures, exit 0
+    partition 8: 369 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3538 tests, 6 properties, 2 failures (3542/3544 passed)
+  failures:
+    - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: >
+        `which rustc` fails on this host -- no rustc binary present at all,
+        so System.cmd raises :enoent (a raise, not a non-zero exit), which
+        the test's own running_rust_raw/0 rescue path never catches. File is
+        untouched by this branch (last touched by REQ-165's own commit,
+        unrelated to mobile-tenant-config). Same failure class and same two
+        tests previously classified identically in
+        report-20260909-WF02-REQ281-20260909.yaml.
+    - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: "Same rustc-absent cause as above, same test file."
+  resolve_tenant_config_coverage: >
+    Re-ran directly (MIX_ENV=test mix test) the full set of files that call
+    resolve_tenant_config/1 or otherwise exercise GET /api/mobile/tenant-config
+    and GET /api/tenant-config, or share fixtures/plugs with those routers:
+    test/letflow/routers/mobile_tenant_config_test.exs,
+    test/letflow/routers/tenant_config_test.exs,
+    test/letflow/identity_test.exs,
+    test/letflow/plugs/cors_test.exs,
+    test/letflow/routers/metrics_exposition_test.exs,
+    test/letflow/routers/req078_supporting_routes_test.exs.
+    Result: 132 passed, 0 failures, exit 0. No test anywhere else in the
+    repository references resolve_tenant_config/1, MobileTenantConfig, or
+    "tenant-config" (confirmed via repo-wide grep).
+  cross_check_no_other_regressions: >
+    Only partition 1's log contains any numbered failure block across all 8
+    partition logs; both failures are the rustc-absent CheckToolchainTest
+    cases. No test anywhere else in the 3544-test suite failed.
+
+verdict: PASS -- 3542/3544 passed, 2 known-unrelated environmental failures
+verdict_reasoning: >
+  mix format --check-formatted and mix compile --warnings-as-errors are both
+  clean. The full parallel suite reports 3542/3544 passing; the only 2
+  failures are the known rustc-absent CheckToolchainTest cases (case b,
+  pre-existing/environmental -- this host has no rustc binary at all -- and
+  unrelated to REQ-282's mobile-tenant-config changes). All tests that touch
+  resolve_tenant_config/1 or GET /api/mobile/tenant-config, and neighboring
+  routers/plugs sharing its fixtures, pass cleanly (132/132) when re-run
+  directly. No regressions found. Safe to proceed to RELEASE-VALIDATOR.
+next_action: "Hand off to RELEASE-VALIDATOR for independent re-verification before ORCH merges to main."

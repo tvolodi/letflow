@@ -16215,3 +16215,63 @@ requirements:
     depends_on: []
     impl_order: 541  # letflow-queue task id
 
+  - id: REQ-287
+    title: "Build the PaginationControls design-system primitive against tokens.css (0020 D2a, group 4 of 4)"
+    owner: FRONTEND-DEV
+    status: done
+    stage: S8
+    description: >
+      Build web/src/components/ui/PaginationControls.tsx to the API recorded in
+      docs/frontend/design-system.md section 7.8, added 2026-09-08 alongside section
+      7.7 under decision 0020 D2.
+
+      Section 8's page template composes PageLayout > FilterBar > DataTable >
+      PaginationControls. REQ-272 builds PageLayout, REQ-274 builds DataTable and
+      FilterBar; without this requirement the fourth member of that composition is
+      specified and unbuilt, and the page migrations (REQ-276/277/278) would meet
+      paginated tables -- admin, definitions, instances and tasks all paginate --
+      with no primitive to migrate onto, silently leaving hand-rolled pagination in
+      place.
+
+      The recorded API is: page (1-indexed), pageSize, totalItems (null when
+      unknown), onPageChange, onPageSizeChange (optional; omit to hide the size
+      selector). Four stated behaviours: the "Showing X-Y of Z" summary; previous
+      disabled on the first page; next disabled on the last; and the
+      null-totalItems cursor-pagination variant, which shows "Showing X-Y" and
+      relies on an empty returned page to disable next. Page size options are 25,
+      50, 100.
+
+      Re-verify at start rather than trusting this description: that section 7.8
+      still reads as above, and that PaginationControls.tsx does not already exist.
+      Before building, read the pagination currently hand-rolled in web/src/pages/
+      (instances and admin are the richest examples) -- if the recorded API cannot
+      express what those pages already do, correct design-system.md section 7.8 in
+      the same change and say what was wrong, rather than building to a spec the
+      real pages cannot adopt.
+
+      Build against web/src/styles/tokens.css, same rules as REQ-272 and REQ-274:
+      no colour literals, and any missing token is a recorded design-system.md +
+      tokens.css addendum, not a silent literal.
+
+      SCOPE FENCE: builds the component and its tests only. Migrating pages onto it
+      belongs to REQ-276/277/278; this requirement modifies nothing under
+      web/src/pages/ and does not touch web/tests/guards/forbidlist.ts.
+
+      NOTE (added by ORCH 2026-09-09): registered in letflow-queue (task 542) and
+      filed on GitHub (#1098) by a prior discovery session, but this
+      docs/requirements.yaml entry itself was missing until ORCH added it at
+      WF02-REQ287-20260909's Step 00 -- same registration-gap class as REQ-272/275.
+      Content above is verbatim from the queue task's own description field.
+    acceptance_criteria:
+      - "web/src/components/ui/PaginationControls.tsx exists and its prop interface matches design-system.md section 7.8's declared API exactly (page, pageSize, totalItems, onPageChange, onPageSizeChange) -- quote the recorded spec block and the implemented interface side by side"
+      - "tests assert all four stated behaviours: the 'Showing X-Y of Z' summary string, previous disabled on page 1, next disabled on the last page, and the null-totalItems variant showing 'Showing X-Y' without a total"
+      - "page size options are 25/50/100, and a test asserts the size selector is absent when onPageSizeChange is not supplied"
+      - "keyboard operability and accessible names are covered by a test, per FNFR-03 (WCAG 2.1 AA) -- previous/next are reachable and their disabled state is exposed to assistive technology, not conveyed by styling alone"
+      - "a fresh grep for the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/components/ui/PaginationControls.tsx returns zero hits, quoted with the command"
+      - "if a needed token was missing from tokens.css it was added there and recorded in design-system.md in the same change; if none was needed, that nil result is stated explicitly rather than left as silence"
+      - "if design-system.md section 7.8 was corrected because the real pages' pagination could not be expressed by it, the correction is quoted with the page that motivated it; if no correction was needed, that is stated explicitly"
+      - "git diff shows no file under web/src/pages/ and not web/tests/guards/forbidlist.ts modified by this requirement"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: []
+    impl_order: 542  # letflow-queue task id
+

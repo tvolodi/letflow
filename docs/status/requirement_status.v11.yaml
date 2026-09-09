@@ -815,3 +815,45 @@ history:
       native <button> (default 'ds-button'). Retired FilterBar.tsx wrapper-span
       data-testid workaround; margin span kept for flex layout. ORCH will
       merge and release queue task 549 status:done.
+  - req: REQ-287
+    event: started
+    agent: ORCH
+    at: "2026-09-08T22:54:12Z"
+    note: >
+      WF02-REQ287-20260909 started (queue task 542, GH#1098). Build the
+      PaginationControls design-system primitive per decision 0020 D2a, group 4 of
+      4 -- the fourth primitive in the page-template composition (PageLayout >
+      FilterBar > DataTable > PaginationControls). docs/requirements.yaml entry was
+      missing until this run's Step 00 -- same registration-gap class as
+      REQ-272/275. ORCH added the entry (status: in_progress) before proceeding to
+      Step 1 (CODE-DESIGNER).
+  - req: REQ-287
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-08T23:21:38Z"
+    note: >
+      WF02-REQ287-20260909 done (queue task 542, GH#1098). Built the
+      PaginationControls design-system primitive in web/src/components/ui/,
+      group 4 of 4 in the 0020 D2a design-system-primitives batch (composes
+      as PageLayout > FilterBar > DataTable > PaginationControls per section
+      8's page template). CODE-DESIGNER also authored the previously-missing
+      design-system.md section 7.8 (page/pageSize/totalItems/onPageChange/
+      onPageSizeChange) during this run and added a justified `hasNextPage`
+      prop beyond the originally-recorded API; CODE-DESIGN-VALIDATOR PASSed
+      both. Zero call sites at end of this requirement, matching REQ-272's/
+      REQ-274's/REQ-275's own scope fence -- no file under web/src/pages/ or
+      web/tests/guards/forbidlist.ts touched. Pipeline: CODE-DESIGNER ->
+      CODE-DESIGN-VALIDATOR (PASS, +section 7.8, +hasNextPage justification)
+      -> FRONTEND-DEV -> SECURITY-REVIEWER (out of scope, no tenant-data
+      path) -> REVIEWER (PASS; flagged a Button data-testid follow-up, filed
+      ISS-0549/GH#1117) -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR (1 rework
+      round for a boundary-math test gap, independently re-validated on
+      re-check, PASS) -> TEST-RUNNER -> RELEASE-VALIDATOR (independently
+      re-ran everything, all 9 acceptance criteria re-confirmed against real
+      code/tests, PASS). docs/requirements.yaml flipped in_progress -> done.
+      README.md checked for PaginationControls references (none found) and
+      left unchanged -- new, unused primitive with no documented
+      current-behavior change, same as REQ-272/274/275. This closes the full
+      four-requirement design-system-primitives batch: REQ-272, REQ-274,
+      REQ-275 and REQ-287 are all now done. Next: route to FRONTEND-DEV for
+      Step Final (git merge).

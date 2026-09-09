@@ -2193,17 +2193,23 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 24
+    entries: 26
     note: >
-      Incremented to 24 by ORCH's own ISS-0549 SCOPE-CHANGE done-event append
-      (WF03-ISS0549-20260908) -- Button data-testid passthrough.
-      Previously incremented to 23 by ORCH's own REQ-280 done-event append
-      (WF02-REQ280-20260908) -- 807 lines at that point (49393 bytes), well
-      under the roll ceiling, composed after rebasing through two real
-      conflicts: one in docs/requirements.yaml against sibling REQ-275, and
-      one here and in requirement_status.v11.yaml against sibling
-      WF03-ISS0548-20260908's own append (composed in chronological `at:`
-      order, ISS-0548 before REQ-280, neither discarded).
+      Incremented to 26 by this run's (WF02-REQ287-20260909) second Step Final
+      rebase onto origin/main (main advanced again between the first rebase
+      and merge attempt), composing this branch's own two REQ-287 appends
+      (started-event Step 00 and DOC-UPDATER's done-event Step 6) with main's
+      own concurrently-landed appends from sibling runs -- ORCH's own REQ-280
+      done-event append (WF02-REQ280-20260908), the WF03-ISS0548-20260908
+      SCOPE-CHANGE done-event append (--z-* CSS token scale), and the
+      WF03-ISS0549-20260908 SCOPE-CHANGE done-event append (Button
+      data-testid passthrough) -- through two real rebase conflicts (once in
+      requirement_status.v11.yaml, once here), all five appends composed,
+      none discarded. 26 `- req:` entries confirmed by
+      `grep -c '^  - req:' docs/status/requirement_status.v11.yaml`, 859 lines
+      / 53232 bytes, well under the 1200-line/120000-byte roll ceiling, so no
+      roll triggered. This closes the design-system-primitives batch:
+      REQ-272, REQ-274, REQ-275 and REQ-287 are all now done.
       Previously incremented to 22 by ORCH's own ISS-0548 SCOPE-CHANGE done-event append
       (WF03-ISS0548-20260908) -- --z-* CSS token scale.
       Previously incremented to 21 by this run's (WF02-REQ275-20260909) rebase composing

@@ -16,6 +16,16 @@ export interface ButtonProps {
   onClick?: () => void
   children: React.ReactNode
   'data-testid'?: string
+  /** Native tooltip text, forwarded to the underlying <button title="...">. */
+  title?: string
+  /**
+   * Marks the button as a toggle in its "on" state: sets aria-pressed and
+   * applies a persistent, darker background so an on/off control (e.g. a
+   * "Show/Hide X" button) reads as active without leaving the design-system
+   * primitive. See ISS-0559 -- toggle-state buttons stay on Button rather
+   * than reverting to hand-rolled markup.
+   */
+  pressed?: boolean
 }
 
 interface VariantStyle {
@@ -23,6 +33,8 @@ interface VariantStyle {
   border: string
   color: string
   hoverBackground: string
+  /** Background while `pressed` is true. Falls back to hoverBackground when unset. */
+  activeBackground?: string
 }
 
 const VARIANT_STYLES: Record<ButtonProps['variant'], VariantStyle> = {
@@ -37,6 +49,7 @@ const VARIANT_STYLES: Record<ButtonProps['variant'], VariantStyle> = {
     border: '1px solid var(--interactive-primary)',
     color: 'var(--interactive-primary)',
     hoverBackground: 'var(--color-neutral-100)',
+    activeBackground: 'var(--color-neutral-200)',
   },
   danger: {
     background: 'var(--interactive-danger)',
@@ -64,7 +77,7 @@ const SIZE_STYLES: Record<ButtonProps['size'], SizeStyle> = {
 }
 
 export function Button(props: ButtonProps): React.ReactElement {
-  const { variant, size, loading = false, disabled = false, onClick, children } = props
+  const { variant, size, loading = false, disabled = false, onClick, children, title, pressed } = props
   const testId = props['data-testid'] ?? 'ds-button'
 
   const [hovered, setHovered] = useState(false)
@@ -73,16 +86,27 @@ export function Button(props: ButtonProps): React.ReactElement {
   const sizeStyle = SIZE_STYLES[size]
   const isDisabled = disabled || loading
 
+  const activeBackground = variantStyle.activeBackground ?? variantStyle.hoverBackground
+  const background = isDisabled
+    ? variantStyle.background
+    : hovered
+      ? variantStyle.hoverBackground
+      : pressed
+        ? activeBackground
+        : variantStyle.background
+
   return (
     <button
       type="button"
       data-testid={testId}
       onClick={onClick}
       disabled={isDisabled}
+      title={title}
+      aria-pressed={pressed}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: hovered && !isDisabled ? variantStyle.hoverBackground : variantStyle.background,
+        background,
         border: variantStyle.border,
         color: variantStyle.color,
         padding: sizeStyle.padding,

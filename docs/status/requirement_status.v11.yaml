@@ -965,3 +965,42 @@ history:
       remaining 14 sibling requirements in that same batch (REQ-277
       through REQ-29X) were kept entirely, untouched. ORCH will merge and
       release queue task 550 status:done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-09T03:54:53Z"
+    note: >
+      ISS-0559 (queue task 559, GH#1135) closed via WF03-ISS0559-20260909,
+      a MINOR UX-fidelity regression REVIEWER discovered during
+      WF02-REQ277-20260909's own page migration: web/src/components/ui/Button.tsx
+      had no title/tooltip prop or pressed/active-state prop, so
+      migrating hand-rolled toolbar buttons onto it silently dropped
+      both -- a validation-hint tooltip on Save, a "auto-arrange" tooltip
+      on Re-layout, and the toggled visual state on Show/Hide Raw JSON.
+      No CODE-DESIGNER pass -- purely additive, well-specified optional
+      props with no interface conflict. Fixed: added title?: string
+      (plain passthrough to the native button's title attribute) and
+      pressed?: boolean (sets aria-pressed, swaps to a per-variant
+      activeBackground when true and not disabled, with disabled
+      correctly still taking precedence). Deliberate decision, not left
+      ambiguous: toggle buttons stay on the Button primitive via pressed
+      rather than reverting to hand-rolled markup, since a hand-rolled
+      fallback would reintroduce the exact literal-colour/missing-aria
+      drift the Button migration exists to eliminate. Migrated the 3
+      affected DefinitionEditorPage.tsx toolbar buttons (Show/Hide Raw
+      JSON, Re-layout, Save) to actually manifest and fix the regression
+      now, since REQ-277's own full page migration branch
+      (origin/feature/WF02-REQ277-20260909) is still unmerged -- Export
+      and Promote-to-Production deliberately left on the old
+      toolbarButtonStyle() helper, out of this fix's scope. Pipeline:
+      FRONTEND-DEV -> REVIEWER (PASS -- independently confirmed the
+      pressed/disabled precedence logic, the title passthrough has no
+      side effects, all 6 new tests assert genuine rendered output, and
+      the Export/Promote scope boundary is real; flagged non-blocking
+      that REQ-277's own pending branch will likely touch these same 3
+      lines again on rebase and should not re-add or silently drop
+      title/pressed a second time) -> TEST-RUNNER (backend mix compile
+      confirmed zero impact; frontend gates independently re-run:
+      287/287 unit tests, 48/48 guard tests). ORCH will merge and
+      release queue task 559 status:done.

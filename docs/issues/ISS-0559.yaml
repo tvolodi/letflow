@@ -1,0 +1,79 @@
+id: ISS-0559
+title: >
+  Button primitive migration silently dropped title tooltips and
+  toggle-state visuals on DefinitionEditorPage's toolbar buttons
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ277-20260909
+discovered_at: "2026-09-09T00:00:00Z"
+severity: MINOR
+tags: [frontend, design-system, button, accessibility, s8]
+description: >
+  Migrating web/src/pages/definitions/DefinitionEditorPage.tsx's toolbar
+  buttons from hand-rolled <button> (styled via a toolbarButtonStyle()
+  helper) to the Button primitive (web/src/components/ui/Button.tsx,
+  REQ-272) silently dropped two things ButtonProps did not support:
+
+  1. The `title` tooltip attribute on Save (a validation-error hint --
+     "Fix validation errors before saving.") and on Re-layout
+     ("Auto-arrange nodes using Dagre layout"). Button had no `title`
+     prop, so passing one was a silent no-op (TypeScript allowed it
+     since object literals for React props are not excess-property
+     checked through a spread, but the DOM attribute never made it to
+     the rendered element).
+  2. The active/toggled visual state on the Show/Hide Raw JSON button --
+     previously `background: showRawJson ? var(--color-neutral-200) :
+     undefined` on the hand-rolled element -- became a flat
+     `variant="secondary"` regardless of toggle state once migrated,
+     losing the visual (and, since there was no aria-pressed either,
+     the accessible) indication of whether raw JSON was showing.
+
+  FIX (WF03-ISS0559-20260909): added two optional props to ButtonProps
+  in web/src/components/ui/Button.tsx:
+    - `title?: string` -- forwarded directly to the native
+      <button title="...">, exactly mirroring how every other native
+      button attribute already passes through.
+    - `pressed?: boolean` -- sets `aria-pressed` on the native element
+      and, when true and the button is not disabled, swaps the
+      variant's background for a new per-variant `activeBackground`
+      token (`--color-neutral-200` for `secondary`, falling back to
+      the variant's existing `hoverBackground` for variants that don't
+      define one) so a toggled-on control reads as visually distinct
+      from both its resting and hover states.
+
+  Decision: toggle-state buttons stay on the Button primitive rather
+  than reverting to hand-rolled markup for this case. A dedicated
+  `pressed` prop keeps the design-system primitive as the single
+  source of button styling/behaviour (hover, disabled, loading,
+  tokens) instead of forking a parallel hand-rolled implementation
+  every time a caller needs on/off state; the alternative (documenting
+  toggle buttons as hand-rolled going forward) would have reintroduced
+  exactly the drift (literal colours, missing aria attributes) the
+  Button migration exists to eliminate.
+
+  DefinitionEditorPage.tsx: migrated the Show/Hide Raw JSON, Re-layout,
+  and Save toolbar buttons onto Button with the new props (`pressed`
+  on Show/Hide Raw JSON restoring the toggle visual and adding
+  aria-pressed it never had before; `title` restored verbatim on
+  Re-layout and Save). Export and Promote-to-Production, which were
+  not part of the reported regression, are left on
+  toolbarButtonStyle() -- their full migration is REQ-277's own scope,
+  not this fix's.
+
+  Tests: added TC-ISS0559-01..06 to
+  web/src/components/ui/__tests__/Button.test.tsx covering `title`
+  forwarding (present/absent) and `pressed` (aria-pressed true/false/
+  absent, the toggled background, and disabled taking precedence over
+  pressed for background).
+
+affected_files:
+  - web/src/components/ui/Button.tsx
+  - web/src/components/ui/__tests__/Button.test.tsx
+  - web/src/pages/definitions/DefinitionEditorPage.tsx
+related:
+  - REQ-272
+  - REQ-277
+queue_ref: Q-559
+github_ref: GH-1135
+resolving_run: WF03-ISS0559-20260909
+resolved_at: "2026-09-09T04:00:00Z"
+status: resolved

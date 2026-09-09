@@ -5965,5 +5965,31 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-283 (queue task 563, GH#1154) applies tenant branding as CSS custom-property overrides on tokens.css (0020 D1c, theming half). New BrandingProvider mounted at app root, closed one-key allowlist (brand_colors.primary -> --color-brand-600) matching the server-side @brand_colors_allowed_keys ~w(primary) closure, plain <img src> logo rendering with alt sourced only from appName. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> FRONTEND-DEV -> SECURITY-REVIEWER (PASS -- allowlist iteration direction and alt-attribute sourcing both independently confirmed safe, zero eval/dangerouslySetInnerHTML/innerHTML, CSS values set via safe setProperty API) -> REVIEWER (1 rework cycle: AC1's computed-CSS-value test initially only exercised applyBrandingColors() directly, not the real BrandingProvider wiring; FRONTEND-DEV added a render-level test with a genuine fail-first proof, REVIEWER independently reproduced the fail-first break itself, re-check PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (337 tests across 53 files already map every AC, independently re-run by both SECURITY-REVIEWER and REVIEWER). No dependents deferred against REQ-283 -- no cascade this time."
     }
+,
+    {
+      "run_id": "WF02-REQ289-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-289",
+      "issue_id": null,
+      "queue_task_id": 544,
+      "queue_agent_id": "orch-req289",
+      "github_issue_number": 1100,
+      "status": "IN_PROGRESS",
+      "owned_modules": [
+        "priv/expr_conformance/corpus.json",
+        "lib/letflow/design/req289-expr-conformance-corpus.md",
+        "test/letflow/engine/expr_conformance_corpus_test.exs",
+        "docs/migration/decisions/0020-frontend-architecture.md"
+      ],
+      "branch_name": "feature/WF02-REQ289-20260909",
+      "started_at": "2026-09-09T16:33:54Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "recovered": true,
+      "recovery_note": "handoffs/WF02-REQ289-20260909/step-00-git-setup.json -- broader than (a-1): a genuinely prior, real WF-02 run for REQ-289 left one real commit (dc031e61, design doc + decision addendum + 39-entry corpus + test file) on origin/feature/WF02-REQ289-20260909 but died with zero handoffs/ files ever committed and no PR ever opened -- queue task 544 was left locked by an unrecoverable agent_id (~16h stale, force-released per TASK_QUEUE.md's dead-host path). ORCH investigated, confirmed the implementation substantially real and in-scope, rebased it onto current main (one composed conflict in decision 0020), and resumed rather than restarted -- but found and is now addressing one genuine acceptance-criteria gap (AC3 null-literal coverage) via the full remaining pipeline rather than trusting the prior run's own uncommitted/self-contradicting REVIEWER claim.",
+      "last_known_step": "Step 00 investigation COMPLETED (PARTIAL) -- rebase clean, scope confirmed, one MAJOR gap found. Next: CODE-DESIGNER addendum.",
+      "note": "REQ-289 (queue task 544, GH#1100) exports a language-neutral conformance corpus from Letflow.Engine.Expr's own tests per decision 0020 D1a step 9 (1 of 2) -- required to land before REQ-293 (TypeScript) or REQ-294 (Dart) can begin their own evaluators. Recovered a genuinely prior, real implementation (see recovery_note) rather than restarting from scratch. Full diagnosis in handoffs/WF02-REQ289-20260909/step-00-git-setup.json."
+    }
   ]
 }

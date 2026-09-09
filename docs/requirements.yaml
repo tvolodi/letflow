@@ -17007,7 +17007,7 @@ requirements:
     title: "Export a language-neutral conformance corpus from Letflow.Engine.Expr's own tests (0020 D1a step 9, part 1 of 2)"
     owner: ELIXIR-DEV
     impl_order: 544  # letflow-queue task id
-    status: pending
+    status: in_progress
     stage: S8
     description: >
       Implements the first half of step 9 of

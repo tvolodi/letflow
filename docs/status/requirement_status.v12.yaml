@@ -528,3 +528,21 @@ history:
       assertions, independently confirmed by both SECURITY-REVIEWER and
       REVIEWER re-running the full suite themselves. No dependents
       deferred against REQ-283 -- no cascade to fix this time.
+  - req: REQ-289
+    event: started
+    agent: ORCH
+    at: "2026-09-09T16:33:54Z"
+    note: >
+      User directly named GH#1100 (REQ-289) for implementation. Queue
+      task 544 found locked by a dead prior run (branch
+      feature/WF02-REQ289-20260909, last commit ~16h old, zero
+      handoffs/ files, no PR ever opened) -- force-released and
+      re-locked as orch-req289 per TASK_QUEUE.md's dead-host recovery
+      path. That prior run's own commit (dc031e61) contains substantial
+      real implementation (39-entry corpus, 174-line test file, design
+      doc, decision-record addendum) -- rebased cleanly onto current
+      main (one conflict in decision 0020, composed not discarded) and
+      resumed rather than restarted, per HANDOFF_PROTOCOL.md 4.1's
+      broader recovery shape. Full investigation and one genuine
+      acceptance-criteria gap found (AC3's null literal kind untracked)
+      in handoffs/WF02-REQ289-20260909/step-00-git-setup.json.

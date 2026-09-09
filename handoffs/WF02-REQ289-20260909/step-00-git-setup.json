@@ -1,0 +1,65 @@
+{
+  "handoff_id": "9a2f3c1e-0000-4000-8000-000000000001",
+  "run_id": "WF02-REQ289-20260909",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "ORCH",
+  "file": "handoffs/WF02-REQ289-20260909/step-00-git-setup.json",
+  "created_at": "2026-09-09T16:33:54Z",
+  "started_at": "2026-09-09T16:33:54Z",
+  "completed_at": "2026-09-09T16:39:06Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-289"],
+    "requirement_text": {
+      "REQ-289": "Export a language-neutral conformance corpus from Letflow.Engine.Expr's own tests (0020 D1a step 9, part 1 of 2). GH#1100, queue task 544."
+    },
+    "source_text": {},
+    "related_handoff_ids": [],
+    "artifacts_in": [],
+    "owned_modules": [
+      "priv/expr_conformance/corpus.json",
+      "lib/letflow/design/req289-expr-conformance-corpus.md",
+      "test/letflow/engine/expr_conformance_corpus_test.exs",
+      "docs/migration/decisions/0020-frontend-architecture.md"
+    ]
+  },
+  "task": {
+    "description": "User asked ORCH to implement GH#1100 (REQ-289) directly. Investigated before dispatching: locked queue task 544 (409 -- locked by a different, unrecoverable agent_id; the branch's own last commit is ~16h old with zero handoffs/ files and no PR ever opened, matching the same 'died without ISS-0196 bookkeeping' shape as WF02-REQ277-20260909's first recovery -- force-released and re-locked as orch-req289 per TASK_QUEUE.md's dead-host recovery path). Checked out origin/feature/WF02-REQ289-20260909: one real commit (dc031e61) containing a design doc, a decision-record addendum, a 39-entry corpus, and a 174-line test file -- substantial genuine implementation, not a stub. Rebased onto current main (19 commits behind; one conflict in docs/migration/decisions/0020-frontend-architecture.md, a non-overlapping append composed correctly -- main's new 'Permitted: declarative field logic' paragraph plus this branch's own 'Implementation record' section, both kept). Post-rebase: mix format/compile --warnings-as-errors clean; the new test file's own 10 tests pass (mix test test/letflow/engine/expr_conformance_corpus_test.exs); git diff main scoped to REQ-289's 4 owned files only, expr.ex and the REQ-209 fixture/test both confirmed byte-identical to main.\n\nHOWEVER, independent verification found ONE genuine, concrete gap against this requirement's own acceptance criteria, not caught by the run's own (self-declared, uncommitted) REVIEWER note: AC3 requires the corpus prove coverage of 'all 4 literal kinds (number, string, boolean, null)', explicitly naming null as one of the four. The actual coverage-enumeration test (test/letflow/engine/expr_conformance_corpus_test.exs:112-114) only enumerates lit:boolean/lit:integer/lit:float/lit:string -- it silently substitutes splitting 'number' into integer+float for 'null', and null is never tracked as its own construct. This is not cosmetic: expr_test.exs's own suite documents a real, deliberate 'null asymmetry' (null in a comparison yields null, not an error; null in arithmetic errors -- REQ-197 AC5, expr_test.exs:302-317), which is exactly the class of divergence-prone semantic this requirement's own description calls the corpus's highest-value content (alongside ASCII lower/upper and the infinity markers, both of which ARE correctly covered). The corpus currently exercises only the arithmetic half of that asymmetry (expr-039: `amount + 1` with amount=null -> eval_failure) and has zero entries or tags for the comparison half, and no mechanical enumeration test would ever catch a future regression there. The design doc (lib/letflow/design/req289-expr-conformance-corpus.md:276) documents the 4-kind test's actual member set but never discusses or justifies dropping null -- this reads as an oversight, not a documented substitution. The design doc's REVIEWER line (§ Implementation record, item 5) also read 'REVIEWER: [to be confirmed at Step 2d]' immediately after a contradictory 'REVIEWER NOTE: confirmed at Step 2d' sentence two lines above it -- internally inconsistent, and no handoff file for any REVIEWER step was ever committed on this branch, confirming no real review happened. Both placeholder/contradictory REVIEWER sentences were removed during the rebase's conflict resolution (composed cleanly, no content lost) rather than left in a self-contradicting state.\n\nDECISION: resume this branch (HANDOFF_PROTOCOL.md 4.1 recovery shape, broader than a-1: real work exists but the run died before any bookkeeping or review) rather than discard/restart -- the corpus, test file and design doc are ~95% correct and it would be wasteful to redo them from scratch. Route through CODE-DESIGNER for a targeted addendum closing the null-literal gap (one new grammar_constructs tag, at least one new corpus entry covering the comparison-side null asymmetry, one extended assertion in the coverage-enumeration test, and a short design-doc update explaining the decision), then the full remaining WF-02 chain (CODE-DESIGN-VALIDATOR, ELIXIR-DEV for the addendum's implementation, SECURITY-REVIEWER, REVIEWER, TEST-DESIGNER/TEST-DESIGN-VALIDATOR for the addendum's test coverage, TEST-RUNNER, RELEASE-VALIDATOR, DOC-UPDATER, Step Final) with none of this run's own prior (uncommitted, self-contradicting) claims trusted as a genuine prior verdict.",
+    "acceptance_criteria": [
+      "queue task 544 locked under agent_id orch-req289 before any work proceeds",
+      "branch feature/WF02-REQ289-20260909 rebased cleanly onto current main, conflict composed not discarded",
+      "git diff main scoped to REQ-289's 4 owned files only -- expr.ex and REQ-209's fixture/test confirmed untouched",
+      "the null-literal coverage gap stated explicitly with file:line evidence, not silently worked around or silently accepted as sufficient"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "Investigation complete. Real, substantial, mostly-correct implementation recovered and rebased clean. One genuine acceptance-criteria gap found (AC3's null literal kind, see task.description) requiring a design addendum before this run can proceed to Step 2 (implementation gates) with confidence. Not a PASS because the gap is real and unresolved as of this handoff; not a FAIL because the recovery/rebase/scope-check acceptance criteria above all hold and most of the requirement's substance is already correct.",
+    "artifacts_out": [
+      "handoffs/WF02-REQ289-20260909/step-00-git-setup.json",
+      "docs/migration/decisions/0020-frontend-architecture.md (rebase conflict resolved)"
+    ],
+    "issues": [
+      {
+        "severity": "MAJOR",
+        "description": "AC3's 'all 4 literal kinds (number, string, boolean, null)' is not met: the coverage-enumeration test (expr_conformance_corpus_test.exs:112-114) only asserts lit:boolean/lit:integer/lit:float/lit:string, never lit:null. The corpus contains only the arithmetic half of null's documented 'null asymmetry' semantic (REQ-197 AC5); the comparison half (null in an ordering comparison yields null, not an error) has zero corpus coverage and no enumeration test would catch a future regression there.",
+        "affected_requirement": "REQ-289"
+      }
+    ],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ289-20260909",
+      "commit_sha_list": ["dc031e61 feat(req289): language-neutral expression conformance corpus (rebased)"],
+      "remote_branch": "origin/feature/WF02-REQ289-20260909",
+      "push_status": "pending",
+      "pr_url": null,
+      "pr_create_error": null
+    },
+    "next_action": "ORCH dispatches CODE-DESIGNER for a targeted addendum to lib/letflow/design/req289-expr-conformance-corpus.md closing the null-literal gap, then proceeds through the remaining WF-02 chain."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

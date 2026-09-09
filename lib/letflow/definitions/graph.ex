@@ -60,7 +60,62 @@ defmodule Letflow.Definitions.Graph do
   `Letflow.Definitions.SubProcessInterface` for the SUB_PROCESS node type's
   optional `interface` attribute — see that module's moduledoc for the full
   SPC-02 contract and the explicit SPC-01-out-of-scope statement.
+
+  ## CHK-17 grammar tightening (REQ-288)
+
+  `check_cel_syntax/1` routes each edge's non-blank `condition` through
+  `Letflow.Engine.Expr.translate_cel_to_expr/1` -> `parse_strict/1` as of
+  REQ-288, **not** `valid_cel_syntax?/1`. `valid_cel_syntax?/1` remains
+  public (it still carries its own REQ-029 AC4 test obligations, and no
+  requirement asks for its removal) but is no longer wired into CHK-17's
+  outcome — see `lib/letflow/design/req288-expr-definition-validator.md` §2.
+
+  This is a strictly *tighter* check: `translate_cel_to_expr/1`'s
+  `{:error, :unsupported_cel_feature}` / `{:error, :translate_error}` and
+  `parse_strict/1`'s `{:error, parse_failure}` all produce an
+  `:invalid_cel_syntax` violation (same code as before — no new
+  `Violation.code()` variant), with `parse_failure`'s `line`/`column`/
+  `token_text`/`message` folded into the existing `Violation.message`
+  string rather than added as new struct fields, so `violation_map/1` and
+  the HTTP response shape are unchanged by construction.
+
+  **Call-site disposition (REQ-288 §3 — the central decision, stated
+  individually per requirement AC6; all three reach this function
+  exclusively via `validate_edge_conditions/1`, so a single change here
+  applies uniformly and automatically to all three):**
+
+  - `Letflow.Definitions.create/2` (`lib/letflow/definitions.ex:547`) —
+    **strict grammar check applies.** A new definition with a
+    grammar-invalid (but old-check-valid) condition is rejected at
+    creation with `{:error, {:graph_validation_failed, violations}}`.
+    Only ever sees new content, so no stored-data reclassification here.
+  - `validate_update_graph/1` under `update/2`
+    (`lib/letflow/definitions.ex:1631`) — **strict grammar check applies,
+    unconditionally, whenever `attrs` carries `:graph`.** This
+    RE-CLASSIFIES STORED definitions: a definition whose condition passed
+    the old structural check when created but fails the grammar becomes
+    un-updatable via any request that includes `:graph`, even one that
+    only edits an unrelated node — there is no diff-against-stored-graph
+    carve-out and no partial-apply. This is a deliberate consequence,
+    not an incidental one (REQ-288 §3, point 4): authoring includes
+    editing, and decision record 0020 step 8's goal is that a bad
+    expression fails at authoring time, not only at evaluation time.
+  - `validate_definition_graph/2` (`lib/letflow/definitions.ex:1238`, the
+    read-only `POST /api/v1/definitions/:id/validate` endpoint) —
+    **strict grammar check applies.** This also RE-CLASSIFIES STORED
+    definitions, immediately on the next validate call. This endpoint's
+    own contract requires it to agree with what `create/2`/`update/2`
+    would decide on the same graph, which holds automatically here since
+    all three share this one function.
+
+  A split disposition (strict at `create/2`/the validate endpoint, lenient
+  at `update/2`) was considered and rejected — see design doc §3 point 2
+  for why. The diff-based "only re-check edges whose condition text
+  changed" alternative was also considered and deliberately deferred as
+  out of scope (design doc §3 point 3, §6 OQ-1).
   """
+
+  alias Letflow.Engine.Expr
 
   @type node_type ::
           :START
@@ -1100,19 +1155,50 @@ defmodule Letflow.Definitions.Graph do
   # CHK-17: every edge with a present (non-nil, non-blank) condition must be
   # syntactically valid CEL, checked unconditionally regardless of whether
   # the edge was "allowed" to have a condition at all (design doc §5.1).
+  #
+  # REQ-288: routes through Letflow.Engine.Expr.translate_cel_to_expr/1 ->
+  # parse_strict/1 (the real grammar) instead of valid_cel_syntax?/1 (a
+  # structural-only check) -- see the moduledoc's "CHK-17 grammar
+  # tightening" section for the full disposition and rationale.
+  # valid_cel_syntax?/1 is intentionally not called from this path anymore.
   @spec check_cel_syntax(t()) :: [Violation.t()]
   defp check_cel_syntax(%__MODULE__{edges: edges}) do
     edges
-    |> Enum.filter(fn edge ->
-      not blank_condition?(edge.condition) and not valid_cel_syntax?(edge.condition)
+    |> Enum.reject(fn edge -> blank_condition?(edge.condition) end)
+    |> Enum.flat_map(fn edge ->
+      case cel_grammar_error(edge.condition) do
+        nil ->
+          []
+
+        message ->
+          [%Violation{code: :invalid_cel_syntax, message: "Edge '#{edge.id}' #{message}"}]
+      end
     end)
-    |> Enum.map(fn edge ->
-      %Violation{
-        code: :invalid_cel_syntax,
-        message:
-          "Edge '#{edge.id}' has a condition that is not syntactically valid CEL: #{inspect(edge.condition)}"
-      }
-    end)
+  end
+
+  # Runs one edge condition through the real grammar (REQ-288 §2) and
+  # returns nil on success, or the tail of the violation message
+  # (everything after "Edge '<id>' ") describing why it failed.
+  @spec cel_grammar_error(String.t()) :: String.t() | nil
+  defp cel_grammar_error(condition) do
+    case Expr.translate_cel_to_expr(condition) do
+      {:error, :unsupported_cel_feature} ->
+        "condition uses a CEL construct this grammar does not support " <>
+          "(unsupported call, `in`, or `?`)"
+
+      {:error, :translate_error} ->
+        "condition could not be translated to a well-formed expression"
+
+      {:ok, expr_source} ->
+        case Expr.parse_strict(expr_source) do
+          {:ok, _ast} ->
+            nil
+
+          {:error, %{line: line, column: column, token_text: token_text, message: message}} ->
+            "condition failed validation at line #{line}, column #{column} " <>
+              "(near '#{token_text}'): #{message}"
+        end
+    end
   end
 
   # CHK-19: a HUMAN_TASK node with at least one "really conditioned" outgoing

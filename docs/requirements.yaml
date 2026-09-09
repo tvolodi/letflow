@@ -16275,3 +16275,92 @@ requirements:
     depends_on: []
     impl_order: 542  # letflow-queue task id
 
+  - id: REQ-288
+    title: "Make Letflow.Engine.Expr the definition-time validator for authored expressions, replacing Graph.valid_cel_syntax?/1's structural check (0020 D1a step 8, part 1 of 2)"
+    owner: ELIXIR-DEV
+    status: done
+    stage: S8
+    description: >
+      Record docs/migration/decisions/0020-frontend-architecture.md Sequencing
+      step 8 requires that D1a expressions be validated "at definition time so a
+      bad one fails at authoring, not at render." That is impossible to build on
+      what exists today, so this requirement fixes the foundation before REQ-291
+      extends the x-ui vocabulary onto it.
+
+      THE GAP, verified 2026-09-08: Letflow.Engine.Expr has a full parser
+      (parse/1, and parse_strict/1 returning a structured parse_failure carrying
+      reason, line, column and token_text), and NOTHING in the authoring path
+      calls it. A grep of lib/ for "Engine.Expr" returns exactly
+      lib/letflow/engine/transition.ex (runtime gateway evaluation) plus one
+      doc-comment mention in lib/letflow/entities/query/types.ex. The
+      definition-validation path -- POST /api/v1/definitions/:id/validate to
+      Definitions.validate_definition_graph/2 to Graph.validate_edge_conditions/1
+      to check_cel_syntax/1 to Graph.valid_cel_syntax?/1 -- uses a check whose own
+      docstring states it "Performs no evaluation: it never resolves variable
+      names or determines what the expression would evaluate to, only whether it
+      is lexically well-formed." It checks balanced brackets, balanced string
+      literals, and no bare leading or trailing operator. So an expression using
+      a construct the grammar rejects -- a CEL macro, the bare `in` operator, the
+      ternary `?`, an unknown function name -- passes definition validation today
+      and only fails at evaluation time, where Expr.evaluate_condition/2's own
+      @spec collapses every failure to a bare `false`. A wrong route is taken
+      silently.
+
+      THIS REQUIREMENT: make definition-time validation run the authored string
+      through the real grammar. Route Graph's condition check through
+      Letflow.Engine.Expr -- translate_cel_to_expr/1 then parse_strict/1, which
+      is the pair that yields a diagnosable failure rather than a boolean -- and
+      surface parse_strict/1's reason, line, column and token_text in the
+      Violation the validate endpoint already returns, so an author sees WHERE
+      the expression is wrong rather than only THAT it is.
+
+      DO NOT EXTEND OR "COMPLETE" THE GRAMMAR. Read
+      lib/letflow/engine/expr.ex's moduledoc in full before starting. It is a
+      CEL SUBSET by decision, not by omission: now(), date_add() and date_diff()
+      are excluded as impure because they would break the determinism guarantee
+      event-sourced replay of a past gateway routing decision depends on, and
+      @unsupported_call_markers rejects CEL vocabulary neither R-Co nor Letflow
+      ever implemented. The moduledoc names this exact temptation: "A future
+      contributor tempted to 'complete' CEL support against
+      @unsupported_call_markers would be acting against a closed EXP-102
+      decision, not filling a real gap." This requirement makes the existing
+      grammar reachable; it adds no token, no operator and no builtin. If a real
+      definition in the repo's own fixtures fails under the stricter check, that
+      is a finding to report, not a reason to widen the grammar.
+
+      BEHAVIOUR CHANGE ON EXISTING DATA IS THE RISK HERE, so decide it
+      deliberately rather than discovering it: a stored definition that passed
+      the structural check may fail the grammar check. State explicitly whether
+      the stricter check applies to newly-submitted definitions only or also
+      re-classifies stored ones as invalid on the next validate call, and record
+      the reason in the moduledoc. Do not leave it implicit.
+
+      CALL-SITE SCOPE (REQ-VALIDATOR blocker 3, 2026-09-08). An earlier draft
+      traced only POST /api/v1/definitions/:id/validate. That is one of THREE
+      callers of Graph.validate_edge_conditions/1 in lib/letflow/definitions.ex
+      -- create/2 (547) and validate_update_graph/1 under update/2 (1631) are
+      both WRITE paths, and tightening the check changes their behaviour on
+      existing tenant data. Read all three before designing the change.
+
+      Re-verify at start rather than trusting this description: that
+      valid_cel_syntax?/1 is still the check in use, that no lib/ caller of Expr
+      has appeared beyond transition.ex, and the current violation shape
+      Definitions.validate_definition_graph/2 returns.
+
+      SCOPE FENCE: backend only. This requirement does not touch web/, does not
+      add x-ui vocabulary (REQ-291), does not export a conformance corpus
+      (REQ-289), and does not change Transition's runtime evaluation path.
+    acceptance_criteria:
+      - "a grep for \"Engine.Expr\" over lib/letflow/definitions/ returns at least one hit after the change and returned zero before it -- quote both commands and both outputs, so the reachability change is shown rather than asserted"
+      - "an expression the grammar rejects but valid_cel_syntax?/1 accepts is proven to now fail validation: a test supplies at least three such expressions (one using a CEL construct @unsupported_call_markers rejects, one using an unknown function name, one that is lexically balanced but not parseable) and asserts each produces a violation, with the same three shown passing under valid_cel_syntax?/1 to prove the check actually tightened"
+      - "the violation returned for a bad expression carries parse_strict/1's reason, line, column and token_text -- a test asserts the specific line and column for an expression with a known error position, not merely that a violation exists"
+      - "every condition_text in test/fixtures/simulation/differential_corpus.json's 15 entries still validates successfully under the new check, proven by a test that iterates the fixture -- so the tightening cannot have rejected the grammar's own known-good corpus"
+      - "the grammar is unchanged: git diff shows lib/letflow/engine/expr.ex either unmodified, or modified only in ways that add no token, operator, builtin or accepted construct -- state which, and if it was modified quote the diff and the reason"
+      - "the disposition is stated in the moduledoc for EACH of Graph.validate_edge_conditions/1's THREE call sites in lib/letflow/definitions.ex, named individually: create/2 (line 547, write path), validate_update_graph/1 under update/2 (line 1631, write path), and validate_definition_graph/2 (line 1238, the read-only validate endpoint). A single blanket answer such as 'newly-submitted only' does not satisfy this criterion -- it is ambiguous between the two write paths. Re-derive the three line numbers at start; they are from 2026-09-08"
+      - "the update/2 case is covered by a test, because it is the sharpest one: update/2 re-validates the WHOLE graph whenever attrs carries :graph, so a stored definition whose edge condition passes valid_cel_syntax?/1 but fails the grammar becomes UN-UPDATABLE -- an author editing an unrelated node gets a hard {:error, {:graph_validation_failed, _}} on a condition they never touched. The test stores such a definition, attempts an unrelated graph update, and asserts the chosen behaviour. Applying the stricter check everywhere is a defensible answer, but it must be a decision with a test behind it, not a discovery made in production"
+      - "the fixture evidence is reported with its limits stated: all 15 condition_text values in test/fixtures/simulation/differential_corpus.json use only supported constructs, so that fixture passing is NOT evidence about stored tenant rows. Per core-directives.md, a green check run under conditions where the property could not have failed is not evidence -- say so explicitly rather than citing the fixture as if it settled the question"
+      - "POST /api/v1/definitions/:id/validate still returns 200 for valid and 422 for findings, unchanged in shape, proven by an HTTP-level test -- the endpoint's contract is not part of this change"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: []
+    impl_order: 543  # letflow-queue task id
+

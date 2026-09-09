@@ -17787,7 +17787,7 @@ requirements:
     title: DDL generator -- per-entity-type table DDL as a pure function of Definition.t()
     owner: ELIXIR-DEV
     impl_order: 566  # letflow-queue task id; depends_on translated to queue task ids [564]
-    status: in_progress
+    status: done
     stage: S10
     description: >
       Implements the DDL-generation half of decision 0023

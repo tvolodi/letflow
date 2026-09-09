@@ -734,6 +734,66 @@ history:
       564 (REQ-295) was claimed by letflow-orch within a minute of
       registration and is left locked -- that is the queue working as
       designed for multi-host coordination, not a stale lock.
+  - req: REQ-302
+    event: done
+    agent: ORCH
+    at: "2026-09-09T19:55:43Z"
+    note: >
+      REQ-302 (queue task 565, GH#1159) implemented via
+      WF02-REQ302-20260909: answers two independent column-semantics
+      questions for entity storage, split out from REQ-295 after
+      REQ-VALIDATOR's second sizing gate -- new decision record
+      docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md,
+      deliberately its own file (not shared with REQ-295's 0024) since
+      the two run as parallel CODE-DESIGNER sessions with no ordering
+      dependency. Design-only, no lib/ code; docs/migration/decisions/0023-entity-storage-hybrid.md
+      and 0024 both confirmed untouched (0023's "Open question" amendment
+      is REQ-295's alone).
+      Sub-question 1 (ON DELETE for promoted FK columns): ON DELETE
+      RESTRICT (Ecto on_delete: :restrict). Reconciled against
+      Letflow.Entities.Records.delete_record/2's actual soft-delete
+      semantics (records.ex:199-219, upsert_record_latest/3's
+      :update/:delete clause at :289-298 -- UPDATE ... SET deleted =
+      true, never a SQL DELETE) -- RESTRICT is inert on the normal
+      application path and only fires against a genuine out-of-band
+      hard DELETE, where it fails loudly (a Postgres constraint
+      violation) rather than silently losing tenant data. CASCADE
+      rejected (irreversible cross-table data loss), SET NULL rejected
+      (forces nullable FK columns, silent detachment), NO ACTION
+      rejected (strictly weaker than RESTRICT, no cyclic-FK scenario
+      needing deferrability). Matches existing on_delete: :restrict
+      precedent (req043/req054/req211), though REVIEWER flagged one
+      counter-example (a migration's own on_delete: :nothing on an
+      identical-shape FK, already tracked as an open inconsistency
+      under ISS-0225) as a non-blocking citation-completeness nit --
+      doesn't affect RESTRICT's correctness on its own merits.
+      Sub-question 2 (localized-text strategy): per-field,
+      definition-level choice via a new search_strategy attribute
+      (:plain default, :fulltext opt-in) -- not a single global
+      mechanism. Plain generated columns are the default since that
+      matches the only existing full-text precedent
+      (Letflow.Definitions.search/2, definitions.ex:79-88, explicitly
+      ILIKE-only, zero new indexes); confirmed via grep that no
+      tsvector/GIN usage exists anywhere else in lib/. tsvector kept as
+      an explicit per-field opt-in for BilimBaga's localized
+      question-bank search, the exact case 0023 itself names as
+      justifying it.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework cycle:
+      a records.ex citation overshot its actual clause by 5 lines
+      (289-303 claimed vs. 289-298 real), into an unrelated function --
+      fixed, re-check PASS) -> SECURITY-REVIEWER (PASS -- independently
+      confirmed the soft-delete-only application path from source,
+      traced RESTRICT's actual Postgres failure mode (a loud,
+      auditable constraint violation), confirmed no cross-tenant FK
+      risk) -> REVIEWER (PASS -- confirmed the on_delete: :restrict
+      precedent is real though not perfectly uniform (the ISS-0225 nit
+      above), confirmed no accidental coupling between the two
+      independent sub-questions, confirmed 0023/0024 both genuinely
+      untouched). Both gates named by the requirement's own initiative
+      (0023's own gate sentence doesn't literally cover column
+      semantics) recorded in 0025's own distinct sign-off sections. No
+      dependents' deferral hatches reference REQ-302 -- REQ-298/REQ-301
+      remain unstartable regardless, pending REQ-296/297/299.
   - req: REQ-303
     event: started
     agent: ORCH

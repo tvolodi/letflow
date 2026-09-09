@@ -17614,6 +17614,7 @@ requirements:
   - id: REQ-295
     title: Answer decision 0023's DDL-execution open question -- new decision record plus design, gating every entity-storage implementation requirement
     owner: CODE-DESIGNER
+    impl_order: 564  # letflow-queue task id
     status: pending
     stage: S10
     description: >
@@ -17785,6 +17786,7 @@ requirements:
   - id: REQ-296
     title: DDL generator -- per-entity-type table DDL as a pure function of Definition.t()
     owner: ELIXIR-DEV
+    impl_order: 566  # letflow-queue task id; depends_on translated to queue task ids [564]
     status: pending
     stage: S10
     description: >
@@ -17892,6 +17894,7 @@ requirements:
   - id: REQ-297
     title: Promotion executor -- runs REQ-296's DDL per tenant via REQ-295's chosen mechanism, additive-only, with the named partial-failure and backfill semantics
     owner: ELIXIR-DEV
+    impl_order: 567  # letflow-queue task id; depends_on translated to queue task ids [564, 566]
     status: pending
     stage: S10
     description: >
@@ -17969,6 +17972,7 @@ requirements:
   - id: REQ-298
     title: Activate constraint_def as a real Postgres unique index, and fk_def.references_entity as real referential integrity
     owner: ELIXIR-DEV
+    impl_order: 569  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 565]
     status: pending
     stage: S10
     description: >
@@ -18074,6 +18078,7 @@ requirements:
   - id: REQ-299
     title: Letflow.Entities.Query.Allowlist.typed_columns/0 becomes per-entity-type, shadowing precedence rule unchanged
     owner: ELIXIR-DEV
+    impl_order: 568  # letflow-queue task id; depends_on translated to queue task ids [566]
     status: pending
     stage: S10
     description: >
@@ -18166,6 +18171,7 @@ requirements:
   - id: REQ-300
     title: Joins in Letflow.Entities.Query.Compiler over promoted FK columns (S10 gap 10)
     owner: ELIXIR-DEV
+    impl_order: 571  # letflow-queue task id; depends_on translated to queue task ids [569, 568]
     status: pending
     stage: S10
     description: >
@@ -18263,6 +18269,7 @@ requirements:
   - id: REQ-301
     title: Localized-text field type -- blob-stored, generated column per locale when queried:true (S10 gap 11, re-scoped by 0023)
     owner: ELIXIR-DEV
+    impl_order: 570  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 568, 565]
     status: pending
     stage: S10
     description: >
@@ -18379,6 +18386,7 @@ requirements:
   - id: REQ-302
     title: Answer two independent column-semantics questions for entity storage -- ON DELETE policy for promoted FK columns, and localized-text plain-text-vs-tsvector strategy -- new decision record, no ordering dependency on REQ-295
     owner: CODE-DESIGNER
+    impl_order: 565  # letflow-queue task id
     status: pending
     stage: S10
     description: >

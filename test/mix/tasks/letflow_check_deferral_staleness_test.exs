@@ -1044,7 +1044,25 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # target (REQ-292 -> REQ-289) internally -- the id SET itself
       # (which entries are deferred) is unchanged, only their scope
       # targets moved. The detector is unchanged.
-      assert result.deferral_count == 8
+      #
+      # UPDATE (WF02-REQ277-20260909): the count dropped from 8 to 7. REQ-279
+      # carried its own `# impl_order: UNREGISTERED -- no live blocker
+      # remains ...` comment with no `blocked-by:` clause, so it parsed as
+      # scope: :stage_scoped (parse_scope/1's default for an UNREGISTERED
+      # entry with no anchored blocked-by text) and counted as one of the 8 --
+      # not because anything pointed AT it, but because IT was itself
+      # deferred, unregistered. Once REQ-277 (the last of its three
+      # dependencies REQ-276/277/278) landed, REQ-279 had no live blocker
+      # left, and ORCH called register_task once $QUEUE_AUTH_TOKEN became
+      # available this session, replacing the UNREGISTERED comment with a
+      # real impl_order (562, GH#1151). That removes REQ-279 from the
+      # deferred set entirely -- REQ-283's own `blocked-by: REQ-279`
+      # deferral is untouched (REQ-279 is still `pending`, so REQ-283's
+      # scope has not expired). Net: 8 - 1 = 7. Re-derived, not guessed:
+      # confirmed live via `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 7, stale_count == 0. The detector is unchanged.
+      assert result.deferral_count == 7
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -1056,7 +1074,6 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
                "REQ-223",
                "REQ-224",
-               "REQ-279",
                "REQ-283",
                "REQ-290",
                "REQ-292",

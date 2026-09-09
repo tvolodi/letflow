@@ -5922,5 +5922,26 @@
       "last_known_step": "Step Final COMPLETED PASS -- merged to main as 27b51cfc (PR #1137, squash). ESCALATED state (see handoffs/escalations.yaml) resolved in the same ORCH session: (1) $QUEUE_AUTH_TOKEN was in fact available in this checkout's .env all along (prior sessions' repeated checks were wrong -- root cause not further diagnosed), so ORCH called register_task for REQ-279 (queue task 562, GH#1151, depends_on resolved to [550,551,552]) and wrote its impl_order into docs/requirements.yaml, clearing the deferral-staleness violation at its root rather than needing the enforce_admins-blocked --admin override at all; (2) discovered and fixed 4 further mix letflow.lint_handoffs violations (H2 x2 timestamp-ordering, H3 x2 stray fields_written key) in this run's own handoff files that were also failing the Backend CI gate, unrelated to the REQ-279 finding; (3) both CI checks (Backend, Frontend) passed clean on the final commit (2caaba4e), gh pr merge --squash --delete-branch succeeded with no override; (4) local cleanup done (main pulled, feature branch deleted locally and on remote); (5) queue task 551 force-released status:done (original locking agent_id unrecoverable via the API, task confirmed genuinely complete via the merged commit before forcing).",
       "note": "REQ-277 (queue task 551, GH#1124) migrates web/src/pages/definitions/ and web/src/pages/dlq/ onto design-system primitives per decision 0020 D2b (2 of 3), eliminating all 201 measured colour-literal occurrences. This run is a HANDOFF_PROTOCOL.md 4.1 recovery of a genuinely prior, real WF-02 run whose own handoffs/ files were never committed (see recovery_note). Every gate in THIS run's own pipeline independently PASSED with real re-derivation, not trust: CODE-DESIGN-VALIDATOR (pre-existing, verified), SECURITY-REVIEWER (out of scope, pure frontend), REVIEWER (spot-checked 4/4 page files including the rebase-composed conflict resolution against ISS-0559's Button props and REQ-285's react-intl formatting), TEST-DESIGNER (independently re-verified pre-existing DlqPage pagination coverage, correctly avoided inventing busywork tests for pure primitive swaps), TEST-DESIGN-VALIDATOR (independently re-ran the spec's own mutation test), TEST-RUNNER and RELEASE-VALIDATOR (both ran the full backend suite to completion synchronously, RELEASE-VALIDATOR from a genuinely cold environment after finding letflow-postgres-1 wasn't even running), DOC-UPDATER (confirmed prior bookkeeping already correct, no duplicate writes). Frontend gates fully green throughout: 323/323 unit tests, 48/48 guard tests. Merged 2026-09-09T15:12:13Z as commit 27b51cfc. Full diagnosis, evidence, and resolution path in handoffs/escalations.yaml (entry amended, not superseded, per HANDOFF_PROTOCOL.md 7.2's same-session-recovery rule)."
     }
+,
+    {
+      "run_id": "WF02-REQ279-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-279",
+      "issue_id": null,
+      "queue_task_id": 562,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1151,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/tests/guards/forbidlist.ts"
+      ],
+      "branch_name": "feature/WF02-REQ279-20260909",
+      "started_at": "2026-09-09T15:31:12Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-279 (queue task 562, GH#1151) deletes the literal-colour guard's web/src/pages/ exemption -- the completion test for decision 0020 D2, now that REQ-276/277/278 have all migrated their pages off literal colours. Exactly one allowedPaths entry and its two-line comment removed from web/tests/guards/forbidlist.ts. REVIEWER independently re-ran npm run guards/type-check/lint/test in the foreground (not trusting FRONTEND-DEV's self-report or any background/async report) -- all clean, no literal-colour violation was masked by the migrations. Pipeline: FRONTEND-DEV -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR and SECURITY-REVIEWER skipped (existing guard tests already exercise this; no tenant-data path). Merge-time bookkeeping: flipping REQ-279 to done expired REQ-283's blocked-by: REQ-279 deferral; REQ-283's other dependency (REQ-281) was already done, so registered REQ-283 properly (queue task 563, GH#1154) rather than a fake re-scope. Updated T-LIVE-DEFERRED-COUNT (7 -> 6)."
+    }
   ]
 }

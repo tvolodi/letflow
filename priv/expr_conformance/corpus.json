@@ -306,9 +306,17 @@
   {
     "id": "expr-039",
     "description": "Adding null (via a null-valued variable) to an integer is an eval-time error; null propagates as an error in arithmetic.",
-    "grammar_constructs": ["arith:add", "lit:integer", "var:simple"],
+    "grammar_constructs": ["arith:add", "lit:integer", "lit:null", "var:simple"],
     "expression": "amount + 1",
     "variables": {"amount": null},
     "outcome": {"status": "error", "error_kind": "eval_failure"}
+  },
+  {
+    "id": "expr-040",
+    "description": "Null asymmetry: null (via a null-valued variable) in an ordering comparison yields null, not an error.",
+    "grammar_constructs": ["cmp:lt", "lit:null", "var:simple"],
+    "expression": "amount < 100",
+    "variables": {"amount": null},
+    "outcome": {"status": "ok", "value": null}
   }
 ]

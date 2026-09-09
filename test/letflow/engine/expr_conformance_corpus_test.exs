@@ -109,8 +109,8 @@ defmodule Letflow.Engine.ExprConformanceCorpusTest do
       end
     end
 
-    test "covers all 4 literal kinds" do
-      for tag <- ~w(lit:boolean lit:integer lit:float lit:string) do
+    test "covers all 5 literal kinds" do
+      for tag <- ~w(lit:boolean lit:integer lit:float lit:string lit:null) do
         assert MapSet.member?(@all_tags, tag), "missing grammar_constructs tag: #{tag}"
       end
     end

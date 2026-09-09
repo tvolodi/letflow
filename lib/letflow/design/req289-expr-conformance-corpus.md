@@ -74,8 +74,9 @@ The coverage-enumeration test (§6) asserts that every tag in the required set i
 **Boolean operators (3):**
 - `"bool:and"`, `"bool:or"`, `"bool:not"`
 
-**Literal kinds (4):**
-- `"lit:boolean"`, `"lit:integer"`, `"lit:float"`, `"lit:string"`
+**Literal kinds (5):**
+- `"lit:boolean"`, `"lit:integer"`, `"lit:float"`, `"lit:string"`, `"lit:null"` (see §12.1
+  for the reasoning behind this 5th tag and why it is additive, not a rename of "number").
 
 **Arithmetic operators (5):**
 - `"arith:add"`, `"arith:sub"`, `"arith:mul"`, `"arith:div"`, `"arith:mod"`
@@ -273,7 +274,7 @@ One test per required tag class:
 
 - `"covers all 6 comparison operators"` — asserts `"cmp:eq"`, `"cmp:neq"`, `"cmp:lt"`, `"cmp:lte"`, `"cmp:gt"`, `"cmp:gte"` are all present in the union of `grammar_constructs`.
 - `"covers and, or, not"` — asserts `"bool:and"`, `"bool:or"`, `"bool:not"` are present.
-- `"covers all 4 literal kinds"` — asserts `"lit:boolean"`, `"lit:integer"`, `"lit:float"`, `"lit:string"` are present.
+- `"covers all 5 literal kinds"` — asserts `"lit:boolean"`, `"lit:integer"`, `"lit:float"`, `"lit:string"`, `"lit:null"` are present (see §12 addendum: `lit:null` closes AC3's original "null" gap).
 - `"covers all 5 arithmetic operators"` — asserts `"arith:add"`, `"arith:sub"`, `"arith:mul"`, `"arith:div"`, `"arith:mod"` are present.
 - `"covers unary negation"` — asserts `"arith:neg"` is present.
 - `"covers dotted variable paths"` — asserts `"var:dotted"` is present.
@@ -466,3 +467,131 @@ The JSON encoding of the expression string must use `\t`, `\r`, `\n` as JSON esc
 ## 11. Open questions
 
 None. All acceptance criteria map to concrete design elements. No deferred decisions.
+
+---
+
+## 12. Addendum: closing the null-literal coverage gap (AC3)
+
+**Trigger:** ORCH's Step 00 investigation (`handoffs/WF02-REQ289-20260909/step-00-git-setup.json`)
+found that AC3's "all 4 literal kinds (number, string, boolean, null)" was not met — the
+coverage-enumeration test only tracked `lit:boolean`/`lit:integer`/`lit:float`/`lit:string`,
+never `lit:null`, and the corpus had zero coverage of the comparison-yields-null half of
+the deliberate "null asymmetry" semantic documented in `expr_test.exs:302-317` (REQ-197
+AC5): null in a comparison yields `nil` (a real, non-error value); null in arithmetic is
+an eval error. Only the arithmetic-error half was covered (`expr-039`).
+
+### 12.1 New tag: `lit:null`
+
+Add `"lit:null"` to the closed `grammar_constructs` vocabulary (§2.3), under "Literal
+kinds." The literal-kinds group becomes 5 members: `lit:boolean`, `lit:integer`,
+`lit:float`, `lit:string`, `lit:null`.
+
+**Reasoning for 5 members, not a rename/reframe of the existing 4-member test:** the
+requirement text names exactly 4 kinds by name — number, string, boolean, null — and the
+existing implementation already made an undocumented, unjustified substitution (splitting
+"number" into `integer`+`float`, silently dropping `null`). The correct fix is not to
+choose between "number" and "null" but to stop conflating them: `integer`/`float` are a
+real, independent design split (Letflow's expr grammar distinguishes int and float
+literals at the AST level — see `expr.ex`'s `{:lit, integer}` vs `{:lit, float}` — so
+collapsing them back to one "number" tag would lose real coverage), and `null` is a
+distinct grammar production (`null` keyword literal) that was never tracked at all. Both
+splits are independently justifiable; neither should have been made at the other's
+expense. The corpus's literal-kind coverage is therefore 5 mechanically-tracked tags
+(`boolean`, `integer`, `float`, `string`, `null`), which is a strict superset of, and
+satisfies, the requirement's 4 named kinds.
+
+### 12.2 New corpus entries
+
+Two new entries, appended after `expr-039` (next available ids: `expr-040`, `expr-041`).
+Exact `id` values are ELIXIR-DEV's choice per §8's convention (design specifies semantics,
+not final numbering), but the expression/variables/outcome/tag content below is
+non-negotiable — it is the missing half of a permanent cross-language contract, the same
+status §8's entries hold.
+
+**New entry A — comparison-yields-null (the gap itself):**
+
+| Field | Value |
+|---|---|
+| `id` | `expr-040` (or ELIXIR-DEV's next available id) |
+| `description` | Must name "null asymmetry" and state that null in an ordering comparison yields null, not an error — mirroring `expr_test.exs:308-311`. |
+| `grammar_constructs` | `["cmp:lt", "lit:null", "var:simple"]` |
+| `expression` | `amount < 100` |
+| `variables` | `{"amount": null}` |
+| `outcome` | `{"status": "ok", "value": null}` |
+
+This is the direct corpus transcription of `expr_test.exs`'s AC5 comparison test
+(`{:cmp, :lt, {:var, ["amount"]}, {:lit, 100}}` with `amount => nil` → `{:ok, nil}`). It is
+a **success** entry (Shape A, §2.4) whose value is JSON `null` — not a failure entry —
+because this is the crux of the asymmetry: comparison with null does not error.
+
+**New entry B — retag the existing arithmetic-error entry:**
+
+`expr-039` (existing, unmodified expression/variables/outcome) gains the `lit:null` tag
+alongside its current tags, becoming:
+
+```
+"grammar_constructs": ["arith:add", "lit:integer", "lit:null", "var:simple"]
+```
+
+No other field of `expr-039` changes. This is a pure tag addition to an existing entry,
+not a new entry. With this change, `lit:null` is covered by two entries spanning both
+sides of the asymmetry (comparison via the new entry A, arithmetic-error via retagged
+`expr-039`) — the coverage-enumeration test's presence check (§6) cannot pass on the
+arithmetic-only half alone once `lit:null` is added to the required-tag list (§12.3),
+but ELIXIR-DEV should add both changes together since leaving only entry A would still
+under-document the asymmetry as corpus content (AC4's own bar for "divergence-prone
+semantics") even though it would satisfy the presence assertion by itself.
+
+### 12.3 Exact test change
+
+In `test/letflow/engine/expr_conformance_corpus_test.exs`, the existing test at lines
+112–116:
+
+```elixir
+test "covers all 4 literal kinds" do
+  for tag <- ~w(lit:boolean lit:integer lit:float lit:string) do
+    assert MapSet.member?(@all_tags, tag), "missing grammar_constructs tag: #{tag}"
+  end
+end
+```
+
+changes to:
+
+```elixir
+test "covers all 5 literal kinds" do
+  for tag <- ~w(lit:boolean lit:integer lit:float lit:string lit:null) do
+    assert MapSet.member?(@all_tags, tag), "missing grammar_constructs tag: #{tag}"
+  end
+end
+```
+
+Only the test name (`"covers all 4 literal kinds"` → `"covers all 5 literal kinds"`) and
+the word list gain `lit:null`. No other line in the describe block changes. §2.3's table
+in this document (the closed-vocabulary listing under "Literal kinds (4):") must also be
+updated to read "Literal kinds (5):" with `lit:null` appended to the list — ELIXIR-DEV
+should treat that as part of this addendum's scope since it edits the same design doc
+ORCH already flagged, not a separate follow-up.
+
+### 12.4 Scope check against this addendum's own boundaries
+
+- `lib/letflow/engine/expr.ex` remains UNMODIFIED — both new/changed entries exercise
+  existing grammar (`cmp:lt` against a null-valued variable; `arith:add` against a
+  null-valued variable) and existing tags already in the closed vocabulary except the one
+  new `lit:null` tag string itself, which is corpus/test metadata, not grammar.
+- `test/letflow/engine/expr_test.exs` remains UNMODIFIED — entry A is a corpus
+  transcription of an existing, already-passing test case, not a new semantic.
+- `test/fixtures/simulation/differential_corpus.json` and
+  `test/letflow/engine/expr_differential_corpus_test.exs` remain UNMODIFIED (unaffected
+  by this addendum; restated per §9's scope constraints).
+
+### 12.5 Updated AC3 traceability
+
+§10's traceability row for AC3 ("coverage-enumeration test, `builtin_function_names/0`
+coupling") is unchanged in substance; this addendum's §12 is additional detail under the
+same row, specifically closing the "all 4 literal kinds" sub-clause of AC3 that §6.1's
+original 4-tag list did not fully satisfy.
+
+### 12.6 Open questions (addendum)
+
+None. The new tag, the two entry changes (one new, one retagged), and the test wording
+change are fully specified above with no deferred decisions.

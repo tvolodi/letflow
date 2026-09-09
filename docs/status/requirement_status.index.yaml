@@ -2209,6 +2209,17 @@ volumes:
       v9->v10 and v10->v11 precedents), a closure footer was appended, and
       v12 was created with this volume's header text carried forward
       verbatim (volume number, opening date, predecessor path updated).
+      NOTE (added at WF02-REQ277-20260909 Step 00b rebase, 2026-09-09):
+      this branch's own DOC-UPDATER commit (7f459464) originally recorded
+      REQ-277's done-event as an append to THIS volume (v11) plus a
+      composed entries:30 count reflecting a since-superseded pre-rebase
+      state. Volume 11 had already closed (frozen at entries:34, the count
+      recorded above) by the time this branch was rebased onto current
+      main, so per this volume's own "DO NOT APPEND" rule that stale
+      append was redirected to volume 12 (the current volume) instead of
+      composed here -- see volume 12's own entries:5 note for the
+      redirected REQ-277 done-event. This volume's own entries/lines/bytes/
+      frozen_prefix fields above are main's, unmodified by this rebase.
       Incremented to 34 by ORCH's own REQ-282 done-event append
       (WF02-REQ282-20260909) -- 1168 lines at that point BEFORE this
       append (71349 bytes), crossing to 1212 lines (74041 bytes) after,
@@ -2248,7 +2259,13 @@ volumes:
       under the roll ceiling, composed after rebasing through a large
       structural conflict in docs/requirements.yaml against a concurrent
       15-requirement DOC-UPDATER filing batch (PR #1130).
-      Previously incremented to 27 by ORCH's own REQ-288 done-event append
+      Incremented to 29 by WF02-REQ277-20260909 (DOC-UPDATER)'s own REQ-277
+      done-event append (Step 6) -- `grep -c '^  - req:'
+      docs/status/requirement_status.v11.yaml` = 29 on-disk entries, no rebase
+      conflict on this file at the time it was written. 954 lines (59141
+      bytes) at that point, well under the roll ceiling, so no roll
+      triggered.
+      Previously incremented to 28 by ORCH's own REQ-288 done-event append
       (WF02-REQ288-20260908) -- 914 lines at that point (55812 bytes), well
       under the roll ceiling, composed after rebasing through two real
       conflicts in docs/requirements.yaml against siblings this run.
@@ -2351,9 +2368,14 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 4
+    entries: 5
     note: >
-      Incremented to 4 by ORCH's own REQ-277 started-event append
+      Incremented to 5 by ORCH's own REQ-277 done-event append
+      (WF02-REQ277-20260909 Step 00b, rebase resumption) -- 389 lines at
+      that point (24182 bytes), well under the roll ceiling. Same
+      redirection reason as the started-event increment below (volume 11
+      closed before this branch reached Step Final).
+      Previously incremented to 4 by ORCH's own REQ-277 started-event append
       (WF02-REQ277-20260909 Step 00b, rebase resumption) -- 353 lines at
       that point (21795 bytes), well under the roll ceiling. This event's
       commit was originally authored against volume 11 while it was still

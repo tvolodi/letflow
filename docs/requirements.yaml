@@ -16471,7 +16471,7 @@ requirements:
     title: Migrate web/src/pages/definitions/ and web/src/pages/dlq/ onto the design-system primitives and off colour literals (0020 D2b, 2 of 3)
     owner: FRONTEND-DEV
     impl_order: 551
-    status: pending
+    status: done
     stage: S8
     description: >
       Second of three sibling page-migration requirements implementing

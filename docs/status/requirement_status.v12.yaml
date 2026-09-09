@@ -351,3 +351,39 @@ history:
       at Step 00b (2026-09-09T12:00:54Z) surfaced the conflict; per the
       closed volume's own header this append routes to whichever volume the
       index names current at append time, which is this one.
+
+  - req: REQ-277
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-09T03:52:24Z"
+    note: >
+      WF02-REQ277-20260909 done (queue task 551, GH#1124). Migrated
+      web/src/pages/definitions/ and web/src/pages/dlq/ onto the design-system
+      primitives (DataTable/Button/StatusBadge/PaginationControls), eliminating
+      201 literal-colour occurrences across 4 files in favor of var(--token-name)
+      from web/src/styles/tokens.css, per decision 0020 D2b, 2 of 3. Hand-rolled
+      tables, buttons, status pills, and pagination controls in both directories
+      replaced by the matching REQ-272/274/275/287 primitives; JSON displays each
+      resolved to a named disposition (JsonDiffView/JsonEditor/hand-rolled with
+      reason). DlqPage's pagination was adapted from its prior cursor-based
+      scheme to PaginationControls' page-based API. Pipeline: CODE-DESIGNER
+      (2 rework rounds) -> CODE-DESIGN-VALIDATOR -> FRONTEND-DEV ->
+      SECURITY-REVIEWER -> REVIEWER -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR ->
+      TEST-RUNNER -> RELEASE-VALIDATOR (independently re-confirmed all 7
+      acceptance criteria, including re-reading the DlqPage pagination
+      adaptation code directly, PASS). One incidental issue filed, not fixed
+      here: ISS-0559 (GH#1135, Button title/pressed-state gap).
+      web/tests/guards/forbidlist.ts confirmed unmodified. docs/requirements.yaml
+      flipped in_progress -> done. README.md checked for definitions/dlq page
+      or design-system-primitive references (none found at this level of
+      detail) and left unchanged. This is the second of three sibling
+      page-migration requirements (0020 D2b) -- REQ-276 and REQ-278 remain
+      (both since landed on main: see this same volume's REQ-284/285/286
+      entries and volume 11's REQ-278/281/282 entries -- REQ-277 is now the
+      last of the three to land). Recorded here (volume 12) for the same
+      reason the started-event above was: this event's home commit
+      (7f459464) was authored while volume 11 was still current, but volume
+      11 closed before this branch reached Step Final; redirected to the
+      current volume at rebase time (WF02-REQ277-20260909 Step 00b,
+      2026-09-09T12:03:52Z). Next: route to FRONTEND-DEV for Step Final
+      (git merge) -- this rebase/re-verify (Step 00b) is that continuation.

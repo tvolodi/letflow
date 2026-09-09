@@ -5967,6 +5967,32 @@
     }
 ,
     {
+      "run_id": "WF02-REQ289-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-289",
+      "issue_id": null,
+      "queue_task_id": 544,
+      "queue_agent_id": "orch-req289",
+      "github_issue_number": 1100,
+      "status": "DONE",
+      "owned_modules": [
+        "priv/expr_conformance/corpus.json",
+        "lib/letflow/design/req289-expr-conformance-corpus.md",
+        "test/letflow/engine/expr_conformance_corpus_test.exs",
+        "docs/migration/decisions/0020-frontend-architecture.md"
+      ],
+      "branch_name": "feature/WF02-REQ289-20260909",
+      "started_at": "2026-09-09T16:33:54Z",
+      "lock_released_at": "2026-09-09T17:46:12Z",
+      "released_lock": true,
+      "backfilled": false,
+      "recovered": true,
+      "recovery_note": "handoffs/WF02-REQ289-20260909/step-00-git-setup.json -- broader than (a-1): a genuinely prior, real WF-02 run for REQ-289 left one real commit (dc031e61, design doc + decision addendum + 39-entry corpus + test file) on origin/feature/WF02-REQ289-20260909 but died with zero handoffs/ files ever committed and no PR ever opened -- queue task 544 was left locked by an unrecoverable agent_id (~16h stale, force-released per TASK_QUEUE.md's dead-host path). ORCH investigated, confirmed the implementation substantially real and in-scope, rebased it onto current main (one composed conflict in decision 0020), and resumed rather than restarted -- but found and is now addressing one genuine acceptance-criteria gap (AC3 null-literal coverage) via the full remaining pipeline rather than trusting the prior run's own uncommitted/self-contradicting REVIEWER claim.",
+      "last_known_step": "Step Final COMPLETED PASS -- merged to main as 81f005d8 (PR #1157, squash, no override needed). Full chain run fresh after Step 00's recovery: CODE-DESIGNER addendum (closed the null-literal gap: new tag lit:null, new entry expr-040, retagged expr-039) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV -> SECURITY-REVIEWER PASS (out of scope) -> REVIEWER PASS (independently re-derived the null-asymmetry semantic against expr_test.exs, real sign-off replacing the open placeholder in decision 0020) -> TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (existing test iterates the corpus generically, no new hardcoded logic needed) -> TEST-RUNNER PASS (3591/3591) -> RELEASE-VALIDATOR PASS (independently re-verified all 10 ACs from a cold read) -> DOC-UPDATER (status pending -> done).",
+      "note": "REQ-289 (queue task 544, GH#1100) exports a language-neutral conformance corpus (40 entries) from Letflow.Engine.Expr's own tests per decision 0020 D1a step 9 (1 of 2) -- required to land before REQ-293 (TypeScript) or REQ-294 (Dart) can begin their own evaluators. Recovered a genuinely prior, real implementation (see recovery_note) rather than restarting from scratch, and closed one real acceptance-criteria gap found during recovery (AC3's null literal kind -- the coverage-enumeration test never tracked lit:null, and the corpus only covered the arithmetic-error half of Expr's documented null-asymmetry semantic). Merged 2026-09-09T17:45:54Z as commit 81f005d8. Merge-time bookkeeping: flipping REQ-289 to done expired REQ-290's blocked-by: REQ-289 deferral (its sole dependency) -- registered it properly in the queue (task 572, GH#1168) rather than inventing a re-scope target. Full diagnosis in handoffs/WF02-REQ289-20260909/step-00-git-setup.json."
+
+    },
+    {
       "run_id": "WF02-REQ295-20260909",
       "workflow_id": "WF-02",
       "requirement_id": "REQ-295",

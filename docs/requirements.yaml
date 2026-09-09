@@ -17007,7 +17007,7 @@ requirements:
     title: "Export a language-neutral conformance corpus from Letflow.Engine.Expr's own tests (0020 D1a step 9, part 1 of 2)"
     owner: ELIXIR-DEV
     impl_order: 544  # letflow-queue task id
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements the first half of step 9 of
@@ -17105,7 +17105,8 @@ requirements:
   - id: REQ-290
     title: Guard the conformance corpus against drift from Letflow.Engine.Expr in CI, and pin the corpus version marker (0020 D1a step 9, part 2 of 2)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-289 -- REQ-290 guards the corpus REQ-289 produces (depends_on: [REQ-289]); REQ-289 is now registered (queue task 544) as status: pending, so this scope names its real, live blocker directly rather than the REQ-292 workaround previously needed while REQ-289 was absent from this file.
+    impl_order: 572  # letflow-queue task id, GH#1168. Registered 2026-09-09 by ORCH
+      # once REQ-289 (its sole dependency) landed done -- no live blocker left.
     status: pending
     stage: S8
     description: >
@@ -17551,38 +17552,95 @@ requirements:
       - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement. A client evaluator that finds the grammar lacking must report that as a finding, never close the gap by extending expr.ex or by adding the missing capability on the client side only -- the second is worse, because it passes the corpus while silently making this client incompatible with the other two"
     depends_on: [REQ-290, REQ-292, REQ-293]
 
+  # REQ-295..REQ-302 -- decision 0023's own open question, and the
+  # implementation work it gates. 0023 (docs/migration/decisions/0023-entity-
+  # storage-hybrid.md) states verbatim: "This needs its own design and its
+  # own SECURITY-REVIEWER and REVIEWER gates. No implementation requirement
+  # may be filed against this record until it is answered." REQ-295 is that
+  # design, answering 0023's four named DDL-execution sub-questions (they
+  # compose with each other -- question 1's chosen mechanism conditions
+  # questions 2 and 3's answers) plus the entity_record_latest migration
+  # recommendation.
+  #
+  # TWO ROOTS, NOT ONE (corrected 2026-09-09, second REQ-VALIDATOR rework
+  # round -- this comment previously said REQ-295 was the sole root, which
+  # stopped being true once REQ-302 was filed). REQ-295 and REQ-302 are BOTH
+  # entries with owner: CODE-DESIGNER, both touch no lib/ implementation
+  # code, and depends_on: [] on both -- they answer independent questions
+  # (REQ-295: DDL-execution mechanism; REQ-302: ON DELETE policy and
+  # localized-text column strategy, two unrelated column-semantics decisions
+  # that do not compose with REQ-295's four or with each other) and are
+  # designed to run as two parallel CODE-DESIGNER sessions with no ordering
+  # dependency between them. The invariant this batch preserves is: nothing
+  # implementable is startable before BOTH gating design requirements that
+  # it actually needs have landed. Concretely -- REQ-296/297 depend on
+  # REQ-295 only (they don't touch ON DELETE or tsvector); REQ-298 depends
+  # on REQ-296, REQ-297 AND REQ-302 (needs REQ-295's lineage for DDL
+  # execution and REQ-302 directly for ON DELETE); REQ-299 depends on
+  # REQ-296 only (tightened, see below); REQ-300 depends on REQ-298 and
+  # REQ-299 (reaches both REQ-295 and REQ-302 transitively through REQ-298);
+  # REQ-301 depends on REQ-296, REQ-297, REQ-299 AND REQ-302 (needs
+  # REQ-295's lineage plus REQ-302 directly for the column-strategy
+  # question). So nothing implementable in this block is startable before
+  # every gating question it actually needs is answered and gated -- via
+  # REQ-295, REQ-302, or both, never fewer than the ones it actually needs.
+  # This is deliberate, not an oversight to be "optimized away" by
+  # flattening the depends_on lists later.
+  #
+  # REWORK HISTORY, so a later reader does not re-litigate this: a first
+  # rework round moved REQ-298's ON DELETE question and REQ-301's
+  # tsvector-strategy question into REQ-295 (as sub-questions 5 and 6),
+  # because both were originally bundled inline in REQ-298/301 themselves --
+  # an unresolved consequential decision left for ELIXIR-DEV mid-
+  # implementation. REQ-VALIDATOR's second gate found that fix incomplete:
+  # it moved the sizing problem up one layer rather than resolving it, since
+  # ON DELETE and tsvector-strategy have no compositional relationship to
+  # REQ-295's four DDL-execution sub-questions or to each other. They are
+  # now split into REQ-302, their own requirement with its own decision
+  # record (docs/migration/decisions/0025-*.md, deliberately NOT shared with
+  # REQ-295's 0024 -- two requirements running as parallel sessions writing
+  # the same file is exactly the collision independence is supposed to
+  # avoid). REQ-299's depends_on was tightened to [REQ-296] only in the
+  # first rework round and stays that way (REQ-297's promotion executor is
+  # not functionally needed by anything REQ-299 builds or tests) -- REQ-300
+  # still reaches REQ-297 transitively via REQ-298, so the executor's output
+  # stays available where a requirement actually needs it.
+  #
+  # S10 gap 13 (SolutionPack's pack_document missing an entity_definitions/
+  # form-schema section) is explicitly NOT filed here -- 0022's REVIEWER
+  # sign-off amendment names it as a separate gap from 10/11, found by the
+  # same architecture review that produced 0023 but not a consequence of
+  # 0023's storage decision. It belongs in its own S10 batch.
   - id: REQ-295
-    title: "Answer decision 0023's DDL-execution open question -- new decision record plus design, gating every entity-storage implementation requirement"
+    title: Answer decision 0023's DDL-execution open question -- new decision record plus design, gating every entity-storage implementation requirement
     owner: CODE-DESIGNER
-    impl_order: 564  # letflow-queue task id, GH#1158. Registered 2026-09-09 by ORCH
-      # once $QUEUE_AUTH_TOKEN was available -- same registration-gap class as
-      # REQ-272/275/287/289.
+    impl_order: 564  # letflow-queue task id
     status: done
     stage: S10
     description: >
-      docs/migration/decisions/0023-entity-storage-hybrid.md ("Entity storage:
-      per-entity-type tables with a hybrid promoted-column/blob shape") decides
-      the entity-storage shape itself -- per-entity-type Postgres tables,
-      promoted columns for FK/queried:true attributes, field_values jsonb for
-      everything else, additive-only promotion, demotion forbidden -- but
-      names one open question that blocks every implementation requirement
-      against it, verbatim: "How a promotion's DDL is executed, per tenant, in
-      a humanless pipeline." That record's own closing sentence is the hard
-      constraint this requirement exists to satisfy: "This needs its own
-      design and its own SECURITY-REVIEWER and REVIEWER gates. No
-      implementation requirement may be filed against this record until it is
-      answered."
+      docs/migration/decisions/0023-entity-storage-hybrid.md ("Entity
+      storage: per-entity-type tables with a hybrid promoted-column/blob
+      shape") decides the entity-storage shape itself -- per-entity-type
+      Postgres tables, promoted columns for FK/queried:true attributes,
+      field_values jsonb for everything else, additive-only promotion,
+      demotion forbidden -- but names one open question that blocks every
+      implementation requirement against it, verbatim: "How a promotion's
+      DDL is executed, per tenant, in a humanless pipeline." That record's
+      own closing sentence is the hard constraint this requirement exists to
+      satisfy: "This needs its own design and its own SECURITY-REVIEWER and
+      REVIEWER gates. No implementation requirement may be filed against
+      this record until it is answered."
 
       THIS REQUIREMENT IS THAT DESIGN. It produces a new decision record,
-      docs/migration/decisions/0024-<slug>.md (CODE-DESIGNER chooses the slug;
-      it must name what the record decides, not restate "0024"), plus a
-      design artefact under lib/letflow/design/ giving ELIXIR-DEV enough to
-      build against without re-deriving the mechanism. It implements NO lib/
-      code -- see the scope fence below. bucket: B (0022's bucket rule does
-      not strictly apply here since this is infrastructure work, not an S10
-      pack deliverable, but 0023's own reasoning makes this tenant-agnostic
-      platform capability, never exam-specific, so it would be B if the rule
-      were asked).
+      docs/migration/decisions/0024-<slug>.md (CODE-DESIGNER chooses the
+      slug; it must name what the record decides, not restate "0024"), plus
+      a design artefact under lib/letflow/design/ giving ELIXIR-DEV enough
+      to build against without re-deriving the mechanism. It implements NO
+      lib/ code -- see the scope fence below. bucket: B (0022's bucket rule
+      does not strictly apply here since this is infrastructure work, not an
+      S10 pack deliverable, but 0023's own reasoning makes this
+      tenant-agnostic platform capability, never exam-specific, so it would
+      be B if the rule were asked).
 
       THE FOUR QUESTIONS 0023 NAMES, ALL FOUR MUST BE ANSWERED WITH A
       CONCRETE MECHANISM, not a restatement of the question:
@@ -17606,23 +17664,24 @@ requirements:
       per-tenant, what state does a tenant whose DDL failed midway sit in
       (does it read/write through the old blob-only path, the new
       column-plus-blob path, or is it unavailable), and what marks that
-      tenant for repair -- a field on Letflow.TenantProvisioning.Registration's
-      tenant_schemas row (see lib/letflow/tenant_provisioning/registration.ex),
-      a separate table, or something else. State the mechanism, not just
-      "there is a repair path."
+      tenant for repair -- a field on
+      Letflow.TenantProvisioning.Registration's tenant_schemas row (see
+      lib/letflow/tenant_provisioning/registration.ex), a separate table, or
+      something else. State the mechanism, not just "there is a repair
+      path."
 
       3. BACKFILL INLINE VS. REPLAY THROUGH rebuild_projection/2, AND WHAT
       SERVES READS MEANWHILE. Letflow.Entities.Record.Projector.rebuild_projection/2
       (lib/letflow/entities/record/projector.ex) already re-derives every
-      current-state row from the event log -- 0023's reasoning section 2
-      calls this "the single most important safety property of this design."
-      Decide whether a promotion's backfill (populating the new column from
+      current-state row from the event log -- 0023's reasoning §2 calls this
+      "the single most important safety property of this design." Decide
+      whether a promotion's backfill (populating the new column from
       existing field_values / event history for records that predate the
       promotion) runs as one inline UPDATE...SET against the new column, or
       as a replay through rebuild_projection/2, and if the latter, what a
-      concurrent read sees for a record not yet replayed -- does it fall back
-      to the JSONB value, does the read block, or is there a version marker
-      the query layer checks. This interacts directly with
+      concurrent read sees for a record not yet replayed -- does it fall
+      back to the JSONB value, does the read block, or is there a version
+      marker the query layer checks. This interacts directly with
       Letflow.Entities.Query.Allowlist.typed_columns/0 (see REQ-299) and
       Letflow.Entities.Query.Compiler's :typed_column vs :json_field dispatch
       (lib/letflow/entities/query/compiler.ex) -- a filter compiled against a
@@ -17631,46 +17690,47 @@ requirements:
       avoided.
 
       4. ROLLBACK GIVEN DEMOTION IS FORBIDDEN. 0023 forbids ever dropping a
-      promoted column or narrowing its type. State what "rollback" means when
-      the failure mode is discovered after some tenants have already promoted
-      successfully -- is a bad promotion corrected by shipping a NEW
-      promotion (e.g. a corrective backfill under the same additive-only
+      promoted column or narrowing its type. State what "rollback" means
+      when the failure mode is discovered after some tenants have already
+      promoted successfully -- is a bad promotion corrected by shipping a
+      NEW promotion (e.g. a corrective backfill under the same additive-only
       rule), is the column left in place but excluded from the allowlist
-      until fixed, or something else. A design that quietly proposes dropping
-      the column is a demotion and fails CODE-DESIGN-VALIDATOR outright --
-      0023's additive-only rule is a decided constraint, not this
-      requirement's to reopen (per CLAUDE.md's "Don't silently re-decide what
-      a decision record already settled").
+      until fixed, or something else. A design that quietly proposes
+      dropping the column is a demotion and fails CODE-DESIGN-VALIDATOR
+      outright -- 0023's additive-only rule is a decided constraint, not
+      this requirement's to reopen (per CLAUDE.md's "Don't silently
+      re-decide what a decision record already settled").
 
       NOT IN SCOPE HERE, FILED SEPARATELY AS REQ-302 (second rework round,
       REQ-VALIDATOR sizing blocker, 2026-09-09). An earlier rework round
       folded two more sub-questions into this requirement -- ON DELETE
-      behavior for promoted FK columns, and localized-text
-      plain-text-vs-tsvector column strategy. REQ-VALIDATOR correctly
-      identified that as the same multiple-unrelated-deliverables sizing
-      problem one layer up: those two are independent column-semantics
-      decisions with no compositional relationship to each other or to
-      questions 1-4 above (which DO compose -- question 1's chosen mechanism
-      conditions questions 2 and 3's answers), and 0023's "needs its own
-      design and its own SECURITY-REVIEWER/REVIEWER gates" sentence is scoped
-      to the DDL-execution question this requirement answers, not to column
+      behavior for promoted FK columns, and localized-text plain-text-vs-
+      tsvector column strategy. REQ-VALIDATOR correctly identified that as
+      the same multiple-unrelated-deliverables sizing problem one layer up:
+      those two are independent column-semantics decisions with no
+      compositional relationship to each other or to questions 1-4 above
+      (which DO compose -- question 1's chosen mechanism conditions
+      questions 2 and 3's answers), and 0023's "needs its own design and its
+      own SECURITY-REVIEWER/REVIEWER gates" sentence is scoped to the
+      DDL-execution question this requirement answers, not to column
       semantics. They are now REQ-302's sub-questions 1 and 2, filed as an
       independent CODE-DESIGNER requirement with no ordering dependency
       against this one. REQ-298 and REQ-301 depend_on both this requirement
       and REQ-302 for the pieces each actually needs.
 
-      THE ENTITY_RECORD_LATEST MIGRATION PATH is explicitly listed by 0023 as
-      NOT decided by that record ("Whether entity_record_latest is migrated
-      or retired... is the migration path's own design question"). Because
-      any answer here is itself a decision, not implementation code, it is
-      folded into this requirement's decision record rather than filed as a
-      separate implementation requirement (per this batch's own constraint:
-      an implementation requirement may not be filed on this topic before the
-      open question is settled, and a decision about whether to
-      migrate/retire a table is not implementation). State at least a
-      recommendation and its reasoning in the new record; deciding to
-      explicitly leave the question open a second time, with a named reason,
-      is an acceptable outcome as long as it is not silently dropped.
+      THE ENTITY_RECORD_LATEST MIGRATION PATH is explicitly listed by 0023
+      as NOT decided by that record ("Whether entity_record_latest is
+      migrated or retired... is the migration path's own design question").
+      Because any answer here is itself a decision, not implementation code,
+      it is folded into this requirement's decision record rather than
+      filed as a separate implementation requirement (per this batch's own
+      constraint: an implementation requirement may not be filed on this
+      topic before the open question is settled, and a decision about
+      whether to migrate/retire a table is not implementation). State at
+      least a recommendation and its reasoning in the new record; deciding
+      to explicitly leave the question open a second time, with a named
+      reason, is an acceptable outcome as long as it is not silently
+      dropped.
 
       GATES NAMED BY 0023, restated here so they are not lost: this new
       record needs "its own SECURITY-REVIEWER and REVIEWER gates" beyond the
@@ -17700,13 +17760,13 @@ requirements:
       and 0022 still read as quoted above (both are live decision records
       that could have been amended since this requirement was drafted), that
       lib/letflow/tenant_provisioning.ex's manifest mechanism still works the
-      way described, and that no REQ-295-adjacent design already exists under
-      lib/letflow/design/ from a prior attempt at this same question.
+      way described, and that no REQ-295-adjacent design already exists
+      under lib/letflow/design/ from a prior attempt at this same question.
 
       SCOPE FENCE: this requirement writes docs/migration/decisions/0024-*.md,
       one design artefact under lib/letflow/design/, and the amendment to
-      0023's "Open question" section. It implements no lib/ code outside that
-      one edit to 0023.md, creates no migration, and does not touch
+      0023's "Open question" section. It implements no lib/ code outside
+      that one edit to 0023.md, creates no migration, and does not touch
       lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, or any other
       implementation file. REQ-296 onward is where the design gets built.
     acceptance_criteria:
@@ -17719,6 +17779,742 @@ requirements:
       - "a design artefact exists under lib/letflow/design/ giving ELIXIR-DEV a concrete interface to build REQ-296 onward against -- module names, function signatures or @specs for the DDL-execution mechanism chosen, sufficient for CODE-DESIGN-VALIDATOR to confirm no implementation code is present but the design is unambiguous"
       - "docs/migration/decisions/0023-entity-storage-hybrid.md's 'Open question' section is edited to state the question is answered and to name docs/migration/decisions/0024-*.md's actual filename by path -- verified by reading the amended section's actual text, not by trusting the completion report -- and no other section of 0023 differs from its pre-requirement content, verified by a diff limited to that one section"
       - "SECURITY-REVIEWER has reviewed the new record against docs/agents/instructions/security-invariants.md INV-1 specifically for cross-tenant DDL-execution risk, and its verdict is recorded in the new record's own REVIEWER-sign-off-shaped section or a clearly linked companion section"
+      - "REVIEWER has reviewed the new record for idiom/decision-record consistency and its verdict is recorded the same way, distinct from SECURITY-REVIEWER's verdict -- two named gates, not one combined paragraph standing in for both"
+      - "git diff shows no file under lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, lib/letflow/tenant_provisioning/, or priv/repo/migrations/ touched by this requirement -- quoted with the command"
+    depends_on: []
+
+  - id: REQ-296
+    title: DDL generator -- per-entity-type table DDL as a pure function of Definition.t()
+    owner: ELIXIR-DEV
+    impl_order: 566  # letflow-queue task id; depends_on translated to queue task ids [564]
+    status: pending
+    stage: S10
+    description: >
+      Implements the DDL-generation half of decision 0023
+      (docs/migration/decisions/0023-entity-storage-hybrid.md): "the DDL is
+      a pure function of Definition.t(), generated and maintained by
+      agents." This requirement builds that function. It does NOT execute
+      DDL against any tenant schema, run a migration, or wire promotion into
+      any write path -- that is REQ-297, and it is deliberately a separate
+      requirement because REQ-297 depends on REQ-295's answer to "what runs
+      the DDL, per tenant, and what are its partial-failure semantics,"
+      while the DDL text itself does not.
+
+      bucket: B. This generates DDL from Definition.t() for ANY entity type
+      any tenant declares -- nothing here names or assumes an exam, a
+      question, or any BilimBaga concept. It is 0022's rule 1 applied
+      directly: a bucket-B requirement may not name exams, and this one
+      doesn't. It closes S10 gap 10/11's storage precondition generically.
+
+      WHY THIS REQUIREMENT DEPENDS ON REQ-295 ANYWAY, even though it only
+      generates SQL/migration text and executes nothing: 0023's own
+      constraint is unconditional -- "No implementation requirement may be
+      filed against this record until [the open question] is answered." A
+      DDL generator is implementation work against this record's storage
+      shape, full stop, regardless of whether it also executes anything.
+      Filing it as independent of REQ-295 would violate the letter of that
+      constraint even if the spirit (this piece doesn't touch a live tenant)
+      seems satisfied. depends_on: [REQ-295] is therefore direct, not
+      merely transitive housekeeping.
+
+      WHAT TO BUILD: a function (module name and location are this
+      requirement's own design decision, informed by REQ-295's design
+      artefact for where DDL-related code should live) that takes one
+      Letflow.Entities.Definition.t() (lib/letflow/entities/definition.ex --
+      read this module in full; it is 73 lines and its @type t() is the
+      exact input shape) and produces the DDL text for that entity type's
+      table: the structural columns every entity record has today
+      (record_id, deleted, entity_def_version, last_event_global_seq,
+      timestamps -- see lib/letflow/entities/record/latest.ex's existing
+      entity_record_latest schema and
+      priv/repo/migrations/20260906010001_create_entity_record_latest.exs
+      for the exact structural column set already shipped, since the new
+      per-entity-type table carries the same structural columns, just
+      per-type instead of shared), one real typed column per PROMOTED
+      attribute (promotion rule below), and a field_values :: jsonb column
+      for everything not promoted.
+
+      THE PROMOTION RULE, quoted from 0023 exactly: an attribute becomes a
+      real column when EITHER trigger fires -- (1) it is a foreign key (the
+      attribute appears as some fk_def's field, see Definition.t()'s
+      foreign_keys :: [fk_def()]), or (2) it is declared queried: true (see
+      field_def()'s optional(:queried) => boolean()). Both triggers read
+      data the definition already declares -- Letflow.Entities.Definition.Validator's
+      fk_field_coverage_violations/1 (lib/letflow/entities/definition/validator.ex,
+      already enforces every fk_def.field names a real field) is the
+      existing validation this generator can lean on; it does not need to
+      re-validate fk coverage, only read the already-validated definition.
+
+      TYPE MAPPING: Definition.field_type()'s closed set is :string,
+      :integer, :decimal, :boolean, :date, :datetime, :enum, :json (read
+      lib/letflow/entities/definition.ex's @type field_type exactly -- do
+      not invent a ninth type). Map each to its Postgres column type;
+      :json-typed fields are never promoted (Definition.Validator's Rule 3
+      already forbids queried: true on a :json field, and 0023 does not
+      change that -- read validator.ex's queried_json_violations/1 to
+      confirm this still holds before assuming it).
+
+      GENERATED-COLUMN CASE IS OUT OF SCOPE HERE. 0023's localized-text
+      generated-column-per-locale mechanism (S10 gap 11) is its own
+      requirement (REQ-301) because it needs its own field-type addition
+      first. This requirement's generator must be structured so REQ-301 can
+      extend it (one more case in whatever dispatch this uses) without
+      rewriting the structural/promoted/blob split -- state that extension
+      point in the moduledoc, but do not implement it here.
+
+      Re-verify at start rather than trusting this description: REQ-295's
+      actual chosen DDL-execution mechanism and where it expects generated
+      DDL to be handed to it (this shapes what this function should return
+      -- raw SQL text, an Ecto.Migration-compatible AST, or something else),
+      Definition.t()'s current field list (it may have gained fields since
+      this requirement was drafted), and entity_record_latest's exact
+      current structural-column set.
+
+      SCOPE FENCE: this requirement is the pure DDL-generation function and
+      its tests only. It does not execute the generated DDL against any
+      schema (test or tenant), does not create a migration file, does not
+      touch lib/letflow/tenant_provisioning.ex, and does not modify
+      Letflow.Entities.Records/Record.Latest/Record.Projector's own write
+      paths (REQ-297/298 are where promoted columns actually get written
+      to). A test that runs the generated DDL against a real Postgres
+      connection to confirm it's syntactically valid is in scope (that's
+      testing this function's own output); wiring it into the live
+      promotion/provisioning flow is not.
+    acceptance_criteria:
+      - "a function exists that takes a Letflow.Entities.Definition.t() and returns DDL (in whatever form REQ-295's design specifies) for that entity type's table: structural columns, one typed column per promoted attribute, and a field_values jsonb column -- proven by a test asserting the exact output shape for a definition fixture with at least one FK-promoted field and one queried:true-promoted field"
+      - "every field_type() value (:string, :integer, :decimal, :boolean, :date, :datetime, :enum, :json) maps to a stated Postgres column type when promoted, proven by one test per type except :json, and a separate test asserts a :json field is NEVER promoted to a column even if a definition somehow marks it queried: true (defence in depth against Validator's Rule 3 being bypassed or changed later)"
+      - "an attribute that is neither an fk_def field nor queried: true is NOT promoted and appears only inside the generated field_values jsonb column's implied shape, proven by a test"
+      - "an attribute appearing as an fk_def field IS promoted even when queried: false or absent, proven by a test, since trigger 1 (foreign key) is independent of trigger 2 (queried: true)"
+      - "the generated DDL, run against a real ephemeral Postgres schema in a test, creates a table without error and the resulting columns match the definition's promoted-field set exactly -- quote the real test output"
+      - "the moduledoc states the extension point REQ-301's generated-column-per-locale case will use, without implementing it"
+      - "git diff shows no file under lib/letflow/tenant_provisioning.ex, lib/letflow/tenant_provisioning/, lib/letflow/entities/records.ex, lib/letflow/entities/record/, or priv/repo/migrations/ touched by this requirement -- quoted with the command"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-295]
+
+  - id: REQ-297
+    title: Promotion executor -- runs REQ-296's DDL per tenant via REQ-295's chosen mechanism, additive-only, with the named partial-failure and backfill semantics
+    owner: ELIXIR-DEV
+    impl_order: 567  # letflow-queue task id; depends_on translated to queue task ids [564, 566]
+    status: pending
+    stage: S10
+    description: >
+      Wires REQ-296's pure DDL-generation function into an actual
+      per-tenant execution path, built exactly to the mechanism REQ-295's
+      design artefact names -- not a re-derivation of "what runs the DDL,"
+      which is a decided question by the time this requirement starts.
+
+      bucket: B. The executor runs promotion DDL for any tenant's any
+      entity type through Letflow.TenantProvisioning's existing
+      per-tenant mechanism; it is exam-agnostic platform infrastructure
+      exactly as REQ-296 is, per 0022's rule 1.
+
+      WHY THIS DEPENDS ON REQ-295 DIRECTLY, not merely via REQ-296: this is
+      the requirement that actually executes DDL against live tenant
+      schemas, which is precisely the action REQ-295's four sub-questions
+      exist to govern (what runs it, partial-failure semantics, backfill
+      inline vs. replay, rollback story). Building this without REQ-295's
+      answer would mean inventing the mechanism inline, which is exactly
+      what the batch-level constraint forbids.
+
+      WHAT TO BUILD, per REQ-295's design (re-read it at start -- do not
+      rely on this description's paraphrase of a design that may have
+      chosen differently than expected): the executor that, given a
+      promotion (an entity type plus the newly-promoted attribute(s)),
+      applies REQ-296's generated DDL against every provisioned tenant
+      schema, following the atomicity/per-tenant-repair model REQ-295
+      decided, and performs the backfill for existing records using the
+      inline-vs-replay-through-rebuild_projection/2 mechanism REQ-295
+      decided. If REQ-295 chose replay, this requirement is what actually
+      calls Letflow.Entities.Record.Projector.rebuild_projection/2
+      (lib/letflow/entities/record/projector.ex) as part of the backfill,
+      and must implement whatever REQ-295 specified serves reads for a
+      not-yet-backfilled record.
+
+      ADDITIVE-ONLY IS NOT THIS REQUIREMENT'S TO RELAX. 0023: "Adding a
+      column is the only migration shape... Demotion is forbidden." This
+      executor must have no code path that drops or narrows a column, and
+      must reject (not silently ignore) a promotion request that would
+      require one -- e.g. a caller trying to "promote" an attribute whose
+      declared type conflicts with an already-promoted column of the same
+      name for that entity type.
+
+      TENANT ENUMERATION comes from Letflow.TenantProvisioning's existing
+      registration mechanism (lib/letflow/tenant_provisioning/registration.ex,
+      Letflow.TenantProvisioning.list_registrations/0 in
+      lib/letflow/tenant_provisioning.ex) -- reuse it rather than inventing
+      a second way to enumerate provisioned tenants.
+
+      Re-verify at start rather than trusting this description: REQ-295's
+      actual decision record and design artefact (its exact chosen
+      mechanism, atomicity model, and backfill strategy), REQ-296's actual
+      function signature, and TenantProvisioning.list_registrations/0's
+      current return shape.
+
+      SCOPE FENCE: this requirement is the promotion executor and its
+      tests. It does not change Letflow.Entities.Query.Allowlist,
+      Letflow.Entities.Query.Compiler, or activate constraint_def as a
+      unique index (REQ-298/299 own those). It does not add joins or the
+      localized-text field type (REQ-300/301). It runs against tenant
+      schemas provisioned in the test environment; it does not touch
+      production or staging tenant data, since none is known to exist
+      (0023's own "What this record does not decide" section: "No
+      deployment is known to hold entity records today").
+    acceptance_criteria:
+      - "the executor applies REQ-296's generated DDL to every tenant schema returned by Letflow.TenantProvisioning.list_registrations/0, proven by a test provisioning at least two tenant schemas and asserting the promoted column exists in both afterward, queried directly against Postgres (not inferred from the executor's own return value)"
+      - "the executor follows REQ-295's stated atomicity model exactly -- if REQ-295 chose per-tenant-with-repair, a test simulates one tenant's DDL failing (e.g. a pre-existing column name collision) and asserts the other tenants still succeed and the failed tenant is marked in the mechanism REQ-295 named; if REQ-295 chose cross-tenant atomicity, a test asserts a mid-run failure leaves NO tenant promoted"
+      - "the backfill follows REQ-295's stated inline-vs-replay mechanism, proven by a test: if replay, the test asserts rebuild_projection/2 is actually invoked (not merely that the column ends up correct, which could pass under either mechanism) and that the read behavior for a not-yet-backfilled record matches what REQ-295 specified"
+      - "a promotion request whose target column would conflict with an already-promoted column's type is rejected, not silently coerced or ignored, proven by a test"
+      - "no code path in the executor drops or narrows a Postgres column -- grep the diff for DROP COLUMN, ALTER COLUMN ... TYPE narrowing, and confirm zero hits, quoted with the command"
+      - "the executor's moduledoc states, in its own words, which of REQ-295's four sub-answers it implements and cites the design artefact's file path -- so a later reader does not have to cross-reference to confirm the code matches the design"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-295, REQ-296]
+
+  - id: REQ-298
+    title: Activate constraint_def as a real Postgres unique index, and fk_def.references_entity as real referential integrity
+    owner: ELIXIR-DEV
+    impl_order: 569  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 565]
+    status: pending
+    stage: S10
+    description: >
+      0023 states this is part of the storage work, not a later nicety:
+      "constraint_def is activated -- a Postgres unique index is created
+      from it," and separately, reasoning §3's entire argument for
+      per-entity-type tables over the shared table is that per-entity-type
+      tables "get real REFERENCES, real cascades, NOT NULL, and CHECK" --
+      an argument that only holds once this requirement actually builds
+      those constraints; until then the decision's stated justification is
+      unrealized in code.
+
+      bucket: B. Constraint and referential-integrity activation applies to
+      any tenant's any entity type's foreign keys and uniqueness rules --
+      nothing here is exam-specific, per 0022's rule 1.
+
+      ON DELETE IS DECIDED BY REQ-302, NOT HERE (second rework round,
+      REQ-VALIDATOR sizing blocker). This requirement originally bundled the
+      ON DELETE-vs-soft-delete reconciliation as its own open design
+      question, alongside index/FK activation and the many-to-many worked
+      example -- an unresolved consequential decision left for ELIXIR-DEV
+      mid-implementation. A first rework round moved it into REQ-295; a
+      second rework round moved it again, into REQ-302, because
+      REQ-VALIDATOR correctly found it has no compositional relationship to
+      REQ-295's four DDL-execution sub-questions (which condition each
+      other) or to REQ-302's other sub-question (localized-text column
+      strategy) -- it is decided independently, in its own decision record
+      (see REQ-302), gated by SECURITY-REVIEWER and REVIEWER, before this
+      requirement starts. This requirement IMPLEMENTS that answer; it does
+      not choose it. If REQ-302's record has not answered it when this
+      requirement is picked up, report blocked rather than picking a
+      Postgres default.
+
+      WHY THIS DEPENDS ON REQ-297 (not just REQ-296): activating a
+      constraint means generating index/FK DDL and getting it executed
+      against every tenant schema through the same promotion-executor path
+      REQ-297 built -- constraint_def's unique index and fk_def's REFERENCES
+      are both promoted-column-level DDL, following the exact same
+      additive-only, per-tenant-execution rules REQ-297 already implements.
+      This requirement extends REQ-296's DDL generator (constraint_def and
+      fk_def become more DDL clauses in the same per-entity-type CREATE
+      TABLE) and relies on REQ-297's executor to apply them; it does not
+      reimplement per-tenant execution.
+
+      WHAT TO BUILD: extend REQ-296's DDL generator so that (1) each entry
+      in Definition.t()'s constraints :: [constraint_def()] (currently
+      always type: :unique per lib/letflow/entities/definition.ex's
+      @type constraint_def) produces a real Postgres UNIQUE INDEX over its
+      fields list, scoped to the entity type's own table; and (2) each
+      entry in foreign_keys :: [fk_def()] produces a real
+      REFERENCES <target-entity-type-table> (record_id) [ON DELETE ...]
+      clause on the promoted FK column, where <target-entity-type-table> is
+      the physical table REQ-296's generator would produce for
+      fk_def.references_entity. Apply the ON DELETE behavior REQ-302's
+      decision record names (re-read it at start -- do not re-derive it
+      here); that record reconciles the choice against how
+      Letflow.Entities.Records.delete_record/2 (lib/letflow/entities/records.ex)
+      already handles soft-deletion (deleted: true) rather than row removal,
+      since a hard CASCADE DELETE may be wrong if this codebase's delete
+      semantics are soft-delete. This requirement implements the named
+      mechanism and cites the record section it came from; it does not
+      choose between options itself.
+
+      THE MANY-TO-MANY CASE, per 0023's "Many-to-many is not a special
+      case": a join entity type (two fk_def entries, both promoted by
+      trigger 1, plus a constraint_def of type: :unique over both fields
+      for pair uniqueness) must work through this same mechanism with no
+      special-cased join-table code path. Test it explicitly as the
+      worked example 0023 itself uses (question_tags-shaped: two FKs, one
+      unique-pair constraint).
+
+      WHY 0023 REJECTS THE ARRAY-OF-REFERENCES ALTERNATIVE, and why this
+      requirement must not reach for it even as an implementation
+      convenience: docs/anti-patterns.md's "Modelling many-to-many as an
+      array of references on the parent record" entry (added by the commit
+      this requirement's batch is scoped against) states it is unindexed by
+      default, has nowhere for join attributes, and is invisible to
+      Letflow.Entities.Query.FieldGrants (lib/letflow/entities/query/field_grants.ex).
+      Read that entry before implementing.
+
+      Re-verify at start rather than trusting this description:
+      REQ-296's actual generator interface (this requirement extends it, so
+      its current shape governs how the extension is written),
+      REQ-297's actual executor interface, and
+      Letflow.Entities.Records.delete_record/2's current soft-delete
+      behavior.
+
+      SCOPE FENCE: constraint_def unique-index activation and fk_def
+      referential-integrity activation, plus their tests. It does not touch
+      Letflow.Entities.Query.Allowlist/Compiler (REQ-299/300 own the query
+      side of relations) and does not add the localized-text field type
+      (REQ-301).
+    acceptance_criteria:
+      - "a definition with a constraint_def of type: :unique over N fields produces a real Postgres unique index over exactly those N columns on that entity type's table, proven by a test that attempts a duplicate insert and asserts Postgres rejects it with a unique-violation error, not merely that an index exists in the schema catalog"
+      - "a definition with an fk_def produces a real Postgres REFERENCES constraint pointing at the target entity type's table's record_id, proven by a test that attempts to insert a row referencing a non-existent record_id and asserts Postgres rejects it with a foreign-key-violation error"
+      - "the generator's moduledoc states the ON DELETE behavior it implements, cites the specific decision record and section (REQ-302's output) it came from, and does not re-derive or second-guess the reconciliation against Letflow.Entities.Records.delete_record/2's soft-delete semantics -- that reconciliation is REQ-302's, not this requirement's -- proven by a test exercising that exact ON DELETE behavior"
+      - "a many-to-many join entity type (two fk_def entries, one constraint_def of type: :unique over both fields) works with no join-table-specific code path in the generator or executor, proven by a test that (a) rejects a duplicate pair, (b) rejects a pair referencing a non-existent record on either side, and (c) accepts the join entity's own field_values attributes (e.g. sort_order) alongside the two FK columns"
+      - "no array-of-references / GIN-indexed-array shape is used for many-to-many anywhere in the diff -- grep for array( and {:array, over the requirement's changed files and confirm zero hits used for a relationship, quoted with the command"
+      - "this requirement's changes are additions to REQ-296's DDL generator and invoke REQ-297's executor for per-tenant application -- no new per-tenant-DDL-execution code path is introduced, confirmed by the completion report naming the specific REQ-296/REQ-297 functions extended or called"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-296, REQ-297, REQ-302]
+
+  - id: REQ-299
+    title: Letflow.Entities.Query.Allowlist.typed_columns/0 becomes per-entity-type, shadowing precedence rule unchanged
+    owner: ELIXIR-DEV
+    impl_order: 568  # letflow-queue task id; depends_on translated to queue task ids [566]
+    status: pending
+    stage: S10
+    description: >
+      0023's consequences section, quoted exactly: "Letflow.Entities.Query.Allowlist.typed_columns/0
+      becomes per-entity-type. Today it is a fixed 7-entry table of
+      structural columns. Its documented shadowing precedence rule -- a
+      typed column always wins over a same-named JSONB key -- was written
+      for exactly this promotion case and needs no change."
+
+      bucket: B. The allowlist is generic query-layer machinery keyed off
+      Definition.t(), for any tenant's any entity type; nothing here names
+      an exam, per 0022's rule 1.
+
+      DEPENDS_ON TIGHTENED DURING REWORK (REQ-VALIDATOR non-blocking
+      suggestion, 2026-09-09): this requirement depends on REQ-296 only, not
+      REQ-297. Everything this requirement reads or tests against --
+      Definition.t(), REQ-296's promoted-column enumeration, and
+      Allowlist.load/2's own fixture-driven tests -- is available once
+      REQ-296 exists. It needs no live promoted Postgres column in any
+      tenant schema (that is what REQ-297's executor produces), and none of
+      this requirement's acceptance criteria queries a real tenant schema
+      for a promoted column REQ-297 created. The REQ-296 -> REQ-297 ->
+      REQ-299 chain in the file's ordering comment above is a batch-sizing
+      convenience, not a functional requirement of this entry; tightening
+      depends_on to [REQ-296] makes that explicit rather than leaving a
+      dependency edge that overstates what this requirement actually needs.
+
+      VERIFIED AGAINST lib/letflow/entities/query/allowlist.ex BEFORE THIS
+      REQUIREMENT WAS DRAFTED: typed_columns/0 today returns exactly the
+      7-entry map {"entity_type", "record_id", "deleted",
+      "entity_def_version", "last_event_global_seq", "inserted_at",
+      "updated_at"}, all structural columns of the single shared
+      entity_record_latest table. Allowlist.load/2 merges this fixed table
+      with the definition's queried: true fields (JSON-field entries) and
+      the moduledoc's own "Shadowing precedence rule" section states typed
+      columns always win. Re-verify this is still accurate at start --
+      REQ-296/297/298 land before this requirement in the dependency chain
+      and could plausibly touch adjacent code, though none of their scope
+      fences name this file.
+
+      WHAT TO BUILD: typed_columns/0 (or its replacement -- keep the
+      function name if at all reasonably possible, since
+      Letflow.Entities.Query.Compiler.build_filter_dynamic/2
+      (lib/letflow/entities/query/compiler.ex) and other callers reference
+      it, and a silent rename is an unnecessary blast radius) must become
+      per-entity-type: for a given entity_type/prefix, it returns the
+      structural 7 PLUS every column REQ-296's DDL generator promoted for
+      that entity type -- reading the same Definition.t() REQ-296 already
+      reads (foreign_keys and queried: true fields), not a second,
+      independent notion of "what's promoted." The two must never disagree,
+      so this requirement should call into or share logic with REQ-296's
+      promoted-column enumeration rather than re-deriving it.
+
+      THE SHADOWING RULE IS UNCHANGED, 0023 says so explicitly -- do not
+      "improve" it or add a second precedence rule for promoted-vs-blob
+      columns. A promoted column and a same-named field_values key can no
+      longer both exist for the same field once promotion has happened
+      (the field simply isn't in field_values under this design, per 0023's
+      "Adding a column is the only migration shape" note that a promoted
+      attribute moves out of the blob) -- but if any transitional window
+      exists during REQ-297's backfill where both a stale field_values
+      key and the new column exist for the same field, the existing typed
+      column wins, exactly as the current rule already states for the
+      structural 7.
+
+      Re-verify at start rather than trusting this description: allowlist.ex's
+      current load/2 implementation in full, every caller of typed_columns/0
+      (grep the whole lib/ tree, not just compiler.ex), and REQ-296's
+      actual promoted-column enumeration interface.
+
+      SCOPE FENCE: Allowlist.typed_columns/0 and load/2's per-entity-type
+      behavior, plus tests. It does not change Compiler's filter
+      compilation logic itself (0023: "Letflow.Entities.Query.Compiler
+      needs no change to its filter compilation. It already emits indexed
+      field(r, ^col) comparisons for :typed_column and JSONB casts for
+      :json_field") -- if this requirement finds itself editing
+      build_filter_dynamic/2's dispatch logic rather than just the allowlist
+      it consumes, that is a sign the change belongs in REQ-300 instead, or
+      that 0023's claim needs to be flagged as wrong rather than quietly
+      worked around.
+    acceptance_criteria:
+      - "typed_columns/0 (or its replacement, if renamed, with the rename justified in the completion report) returns entity-type-specific promoted columns in addition to the existing structural 7, proven by a test comparing two different entity-type fixtures with different promoted columns and asserting their typed-column sets differ accordingly"
+      - "the promoted-column set returned here matches REQ-296's DDL-generator's own promoted-column enumeration for the same definition, proven by a test that constructs one definition fixture and asserts both functions agree on which fields are promoted -- not two independently-hand-maintained lists that could drift"
+      - "the shadowing precedence rule is unchanged and still covers the original structural-7 case, proven by re-running (or confirming still-passing) the existing test(s) that assert a typed column wins over a same-named JSONB key, quoted"
+      - "a field that is queried: true and therefore promoted is resolved by Allowlist.load/2 as source: :typed_column, not source: :json_field, for that entity type, proven by a test -- this is the property that makes REQ-300's joins and REQ-298's indexes actually reachable through the query DSL rather than merely existing in Postgres unused"
+      - "git diff shows lib/letflow/entities/query/compiler.ex's build_filter_dynamic/2 and build_order_by/2 dispatch logic unmodified by this requirement -- quoted with the command, per 0023's own claim that the compiler needs no change here"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-296]
+
+  - id: REQ-300
+    title: Joins in Letflow.Entities.Query.Compiler over promoted FK columns (S10 gap 10)
+    owner: ELIXIR-DEV
+    impl_order: 571  # letflow-queue task id; depends_on translated to queue task ids [569, 568]
+    status: pending
+    stage: S10
+    description: >
+      S10 gap 10 (docs/migration/stage-10-bilimbaga-vertical.md's gap
+      table): "Relations between entity records. Letflow.Entities.Query.Compiler
+      has no join/preload; fk_def's references_entity is validated for
+      shape and self-reference only, with no referential enforcement. Now a
+      consequence of decision 0023, not separate work -- per-entity-type
+      tables with promoted FK columns make joins expressible for the first
+      time." 0023's own consequences section: "S10's gap 10 and its storage
+      decision collapse into one piece of work. Relations are a consequence
+      of this record, not a separate gap."
+
+      bucket: B. Joins over promoted FK columns are generic query-DSL
+      capability for any tenant's any entity relationship; nothing here
+      names an exam, per 0022's rule 1.
+
+      WHY JOIN DEPTH AND QUERY-REQUEST SHAPE ARE LEFT TO THIS REQUIREMENT'S
+      OWN IMPLEMENTER, NOT PUSHED INTO REQ-295 (rework round, addressing
+      REQ-VALIDATOR's non-blocking note on consistency with REQ-298/301):
+      those two decisions are qualitatively different from the ones pushed
+      into REQ-295 (0023's own DDL-execution open question) and REQ-301's
+      column-strategy choice. Both of THOSE are decisions 0023 or its
+      REVIEWER sign-off explicitly named as open and load-bearing across
+      multiple requirements -- getting the DDL-execution mechanism or the
+      generated-column strategy wrong corrupts data or requires a schema
+      rewrite under the additive-only/no-demotion rule. Join depth and
+      request shape are ordinary API design internal to one requirement's
+      own module (Letflow.Entities.Query.Types/Compiler): reversible by a
+      later requirement without touching stored data or another
+      requirement's contract, bounded by this requirement's own acceptance
+      criteria ("a stated maximum join depth is enforced," proven by test),
+      and not referenced by 0023, its REVIEWER sign-off, or any other
+      requirement in this batch as a cross-cutting concern. This is
+      CODE-DESIGNER/ELIXIR-DEV's normal remit, not a decision-record-shaped
+      question -- treating every implementation choice as one would make
+      REQ-295 unboundedly large.
+
+      VERIFIED AGAINST lib/letflow/entities/query/compiler.ex BEFORE THIS
+      REQUIREMENT WAS DRAFTED: compile/2, build_filter_dynamic/2 and
+      build_order_by/2 exist; there is no join or left_join in this module
+      (the only left_join under lib/letflow/entities/ is
+      Letflow.Entities.Query.FieldGrants' own internal anti-join, a
+      different mechanism for a different purpose -- do not reuse or
+      extend that one for this requirement). Re-verify this is still
+      accurate at start.
+
+      WHY THIS DEPENDS ON REQ-298 AND REQ-299 SPECIFICALLY: a join is only
+      expressible once (a) the FK column being joined on is a real, typed,
+      indexed, REFERENCES-constrained Postgres column (REQ-298) and (b) the
+      query allowlist actually resolves that column as source: :typed_column
+      for the entity type declaring the fk_def (REQ-299) -- joining against
+      a JSONB-extracted value would be exactly the unindexed-scan problem
+      0023 exists to fix, so this requirement structurally cannot come
+      before either.
+
+      WHAT TO BUILD: extend the query DSL (Letflow.Entities.Query.Types --
+      lib/letflow/entities/query/types.ex -- and Compiler) so a caller can
+      request a joined read across an fk_def relationship -- e.g. reading a
+      question together with its answer_options via the FK question_id ->
+      question.record_id, or its tags via the question_tags join entity.
+      Decide and document the query-request shape (a new field on the
+      existing request map, not a parallel API), the maximum join depth (0023
+      doesn't bound it -- state and enforce a bound so a caller cannot
+      request an unbounded join chain), and how FieldGrants' field-level
+      redaction (lib/letflow/entities/query/field_grants.ex) composes with a
+      joined read -- a redacted field on a JOINED entity must stay redacted,
+      not merely a field on the primary entity, since 0023's own
+      entity-vs-blob test cites is_correct redaction as the reason
+      answer_options is its own entity type in the first place.
+
+      Re-verify at start rather than trusting this description:
+      Compiler's and Types' current module contents in full, and
+      FieldGrants' current redaction mechanism (both files are under 400
+      lines, read them rather than assuming this description's summary is
+      complete).
+
+      SCOPE FENCE: the join mechanism in the query DSL/compiler and its
+      tests. It does not add the localized-text field type (REQ-301), does
+      not add an HTTP route surface for entity records (S10 gap 1, a
+      separate unfiled requirement per the stage file), and does not touch
+      the DDL generator or promotion executor themselves (REQ-296/297) --
+      it consumes the columns and constraints those already produce.
+    acceptance_criteria:
+      - "a query request can express a join across an fk_def relationship and Compiler.compile/2 produces an Ecto.Query.t() containing a real join/2 or left_join/2, proven by a test asserting the compiled query's structure (not just its execution result) contains the join"
+      - "executing the joined query against real fixture data (a parent entity plus related entities via a real fk_def, seeded through Letflow.Entities.Records.create_record/2) returns the correct joined rows, proven by a test with at least one matching and one non-matching related row"
+      - "the many-to-many case (a join entity type with two fk_def entries) is queryable as a relation, not just as its own directly-queryable entity type, proven by a test reading a parent entity together with its many-to-many-related entities through the join entity"
+      - "a stated maximum join depth is enforced -- a request exceeding it is rejected with a named error, proven by a test"
+      - "a field redacted by FieldGrants on a joined (non-primary) entity remains redacted in the joined read's result for a viewer without grant, proven by a test comparing the same query's result for a grant-holding and a non-grant-holding viewer"
+      - "requesting a join on a field that is not an fk_def relationship is rejected the same way an unallowlisted filter field is today (field_not_allowed-shaped error), proven by a test -- joins do not open a new unvalidated-field surface"
+      - "git diff shows no file under lib/letflow/entities/query/field_grants.ex modified beyond what's needed to compose with a join, and the completion report states explicitly what, if anything, changed there and why"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-298, REQ-299]
+
+  - id: REQ-301
+    title: Localized-text field type -- blob-stored, generated column per locale when queried:true (S10 gap 11, re-scoped by 0023)
+    owner: ELIXIR-DEV
+    impl_order: 570  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 568, 565]
+    status: pending
+    stage: S10
+    description: >
+      S10 gap 11, re-scoped by 0023's consequences section: "S10's gap 11
+      shrinks and is re-scoped to a localized-text field type, blob-stored
+      and generated-column-indexed when queried: true. It is not a
+      relations problem and not an i18n-layer problem." 0023's own body:
+      "Entity-content localization ... is data following the entity's
+      lifecycle ... a different thing from UI localization ... which is
+      REQ-285/react-intl, client-side, and never touches entities." This
+      requirement does not touch REQ-285's work or anything under web/ --
+      confirm at start that no drift has blurred that boundary since 0023
+      was written.
+
+      bucket: B. A localized-text field type and its generated-column
+      promotion are generic Definition/DDL/query-layer capability available
+      to any tenant's any entity type; nothing here names an exam, per
+      0022's rule 1. (BilimBaga's own use of it -- question stems -- is the
+      bucket-A pack work that consumes this, not this requirement.)
+
+      PLAIN-TEXT-VS-TSVECTOR IS DECIDED BY REQ-302, NOT HERE (second rework
+      round, REQ-VALIDATOR sizing blocker). This requirement originally left
+      the column-strategy choice (plain generated columns, tsvector
+      full-text columns, or a per-field definition-level choice between the
+      two) as its own open decision alongside six other deliverables -- the
+      same shape of problem as REQ-298's ON DELETE bundling. A first rework
+      round moved it into REQ-295; a second rework round moved it again,
+      into REQ-302, because REQ-VALIDATOR correctly found it has no
+      compositional relationship to REQ-295's four DDL-execution
+      sub-questions or to REQ-302's other sub-question (ON DELETE) -- it is
+      decided independently, in its own decision record (see REQ-302),
+      gated by SECURITY-REVIEWER and REVIEWER, before this requirement
+      starts. This requirement IMPLEMENTS that answer; it does not choose
+      it. If REQ-302's record has not answered it when this requirement is
+      picked up, report blocked rather than silently picking one.
+
+      THE SHAPE, quoted from 0023: localized content is blob, keyed by
+      locale -- {"stem": {"kk": "...", "ru": "...", "en": "..."},
+      "explanation": {"kk": "...", "ru": "..."}}. One row per record, one
+      write per lifecycle event, no join on the hot read path. "Searching
+      localized content does not require an entity. A queried: true
+      localized field promotes under trigger 2 to one generated column per
+      supported locale (stem_kk, stem_ru, stem_en), extracted from the blob
+      and indexed -- tsvector where real full-text search is wanted. Same
+      promotion machinery, different trigger" -- read that last sentence
+      carefully: it is the SAME trigger 2 (queried: true) REQ-296 already
+      implements, applied to a new field type, not a third promotion
+      trigger.
+
+      WHY THIS DEPENDS ON REQ-296/297 DIRECTLY (not only via REQ-299): this
+      requirement adds a new Definition.field_type() value (or an
+      equivalent typed shape -- see below) and a new case to REQ-296's DDL
+      generator (a generated column per supported locale, per the extension
+      point REQ-296's moduledoc is required to state) plus a corresponding
+      execution path through REQ-297's promotion executor. It also depends
+      on REQ-299 because Allowlist.typed_columns/0 must expose the
+      generated per-locale columns (stem_kk, stem_ru, ...) as typed,
+      queryable fields once promoted, using the same per-entity-type
+      mechanism REQ-299 built.
+
+      WHAT TO BUILD: (1) extend Letflow.Entities.Definition.t()'s
+      field_type() closed set with a localized-text type (name it something
+      that reads clearly, e.g. :localized_text -- do not reuse :json, since
+      :json is structurally excluded from promotion by Validator's Rule 3
+      and a localized-text field must be promotable); (2) a definition
+      declaring which locales are supported for that field (a fixed set the
+      definition names, not open-ended -- 0023's example shows kk/ru/en; the
+      set is per-definition, not project-wide, and this requirement decides
+      and documents where that set is declared -- e.g. an enum_values-like
+      key on the field_def, or a separate top-level definition key); (3)
+      extend Definition.Validator so a :localized_text field CAN be
+      queried: true (unlike :json, which Rule 3 forbids) -- this is a
+      genuine, deliberate carve-out from Rule 3's existing prohibition, and
+      the validator change must not weaken Rule 3 for actual :json fields;
+      (4) extend REQ-296's DDL generator with the generated-column-per-locale
+      case at its stated extension point; (5) wire REQ-297's executor to
+      apply it; (6) extend REQ-299's per-entity-type typed_columns/0 to
+      expose the resulting generated columns.
+
+      TSVECTOR IS NAMED BY 0023 AS AN OPTION ("where real full-text search
+      is wanted"), not a requirement for every localized field. Implement
+      whichever of plain-text generated columns, tsvector-based full-text
+      columns, or a per-field definition-level choice REQ-302's decision
+      record names (re-read it at start -- do not re-derive the choice
+      here); that record states the reasoning for why the simpler option
+      does or does not suffice. This requirement builds the named mechanism
+      and cites the record section it came from.
+
+      Re-verify at start rather than trusting this description:
+      Definition.t()'s and Validator's current content in full (both files
+      are read in full by this requirement regardless, since it edits both),
+      REQ-296's actual extension point as documented in its moduledoc, and
+      REQ-299's actual per-entity-type interface.
+
+      SCOPE FENCE: the :localized_text field type, its validator carve-out,
+      its DDL-generator case, its promotion-executor wiring, and its
+      allowlist exposure, plus tests. It does not touch web/ or REQ-285's
+      react-intl work under any circumstance -- this is entity-content
+      localization, not UI localization, and 0023 is explicit that
+      conflating the two was gap 11's original mistake. It does not add
+      joins (REQ-300 is separate and unrelated to this field type).
+    acceptance_criteria:
+      - "Definition.field_type() gains a :localized_text value (or the requirement's chosen name, stated and justified), proven by a test defining an entity with such a field and confirming it validates"
+      - "a :localized_text field's supported-locale set is declared per-definition (not project-wide-hardcoded), proven by two test fixtures declaring different locale sets for two different entity types and asserting both validate independently"
+      - "a :localized_text field CAN be queried: true (unlike :json), proven by a test -- and a plain :json field is STILL rejected when queried: true, proven by a test re-running (or confirming still-passing) Validator's existing queried_json_violations/1 coverage, so the carve-out is additive and does not weaken Rule 3 for :json"
+      - "a :localized_text field marked queried: true produces one generated column per declared locale via REQ-296's DDL generator, proven by a test asserting the generated table has a column per locale named per this requirement's own stated convention (e.g. stem_kk, stem_ru)"
+      - "filtering or sorting on a specific locale's generated column works end-to-end through Allowlist + Compiler, proven by a test that creates records with different per-locale content and asserts a filter on one locale's generated column returns only the matching records"
+      - "the moduledoc states the plain-text-vs-tsvector mechanism it implements and cites the specific decision record and section (REQ-302's output) it came from, without re-deciding the choice, and the mechanism is proven by a test appropriate to it (an exact/LIKE-style match test for plain text, or a full-text query test for tsvector)"
+      - "a :localized_text field NOT marked queried: true stays entirely inside field_values with no generated column created, proven by a test"
+      - "git diff shows no file under web/ or docs/frontend/ touched by this requirement -- quoted with the command"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-296, REQ-297, REQ-299, REQ-302]
+
+  - id: REQ-302
+    title: Answer two independent column-semantics questions for entity storage -- ON DELETE policy for promoted FK columns, and localized-text plain-text-vs-tsvector strategy -- new decision record, no ordering dependency on REQ-295
+    owner: CODE-DESIGNER
+    impl_order: 565  # letflow-queue task id
+    status: pending
+    stage: S10
+    description: >
+      SECOND REWORK ROUND, FILED BY REQ-VALIDATOR'S SIZING BLOCKER
+      (2026-09-09). A first rework round folded two sub-questions into
+      REQ-295 -- ON DELETE behavior for promoted FK columns (raised by
+      REQ-298's original bundling) and localized-text plain-text-vs-tsvector
+      column strategy (raised by REQ-301's original bundling) -- because
+      both are consequential decisions that must not be left to ELIXIR-DEV
+      mid-implementation. REQ-VALIDATOR correctly found that bundling wrong
+      one layer up: REQ-295's four DDL-execution sub-questions (what runs
+      the DDL, partial-failure semantics, backfill inline-vs-replay,
+      rollback story) are facets of ONE coherent design question that
+      compose with each other -- question 1's chosen mechanism conditions
+      questions 2 and 3's answers. ON DELETE and tsvector-vs-plaintext are
+      two INDEPENDENT column-semantics decisions with no compositional
+      relationship to REQ-295's four questions, or to each other. Bundling
+      them into REQ-295 reproduced the same multiple-unrelated-deliverables
+      sizing problem the first rework round was supposed to fix, one layer
+      up: a CODE-DESIGN-VALIDATOR pass over REQ-295 would have had to verify
+      six unrelated mechanisms against four-plus different modules in one
+      pass. This requirement is where those two questions actually get
+      answered, split out from REQ-295 entirely.
+
+      bucket: B. Both sub-questions govern generic entity-storage
+      column-semantics for any tenant's any entity type; neither names an
+      exam, per 0022's rule 1.
+
+      NO ORDERING DEPENDENCY ON REQ-295, AND THIS IS DELIBERATE, STATE IT IN
+      THE COMPLETION REPORT. REQ-295 answers "what runs the DDL, per
+      tenant" and related execution-mechanism questions; this requirement
+      answers two column-semantics questions that do not depend on which
+      DDL-execution mechanism REQ-295 chooses, and that REQ-295's chosen
+      mechanism does not depend on either. An ON DELETE clause and a
+      generated-column-vs-tsvector choice are properties of the DDL TEXT
+      REQ-296's generator emits (consumed by REQ-298 and REQ-301
+      respectively), not of how that DDL gets executed per-tenant, which is
+      REQ-295's and REQ-297's concern -- REQ-298 and REQ-301 each depend on
+      BOTH REQ-295's lineage (via REQ-296/297) and this requirement directly
+      (see their own depends_on), but nothing in this requirement's two
+      sub-questions references REQ-295's design artefact or vice versa.
+      Concretely: this requirement and REQ-295 can run as two parallel
+      CODE-DESIGNER sessions, in either order or concurrently, and the
+      answer to one is not re-derived or invalidated by the answer to the
+      other. depends_on: [] reflects this, not an oversight.
+
+      SUB-QUESTION 1 -- ON DELETE BEHAVIOR FOR PROMOTED FK COLUMNS. 0023
+      does not pick an ON DELETE policy for the REFERENCES constraints
+      reasoning §3 says per-entity-type tables buy.
+      Letflow.Entities.Records.delete_record/2 (lib/letflow/entities/records.ex)
+      already handles deletion as soft-deletion (deleted: true), not row
+      removal -- read this module in full before designing. State and
+      justify the ON DELETE behavior (RESTRICT, SET NULL, CASCADE, or NO
+      ACTION) for a promoted FK column's REFERENCES constraint, reconciled
+      explicitly against that soft-delete semantics: a hard CASCADE DELETE
+      that physically removes referencing rows the moment a referenced
+      record is soft-deleted (deleted: true, still present as a row) would
+      contradict soft-delete's whole premise, since the referenced row
+      itself never leaves the table. State the chosen behavior as a
+      concrete, named Postgres clause, not "reconcile this later" --
+      REQ-298 implements exactly what this record names and does not choose
+      between options itself.
+
+      SUB-QUESTION 2 -- LOCALIZED-TEXT COLUMN STRATEGY. 0023 names tsvector
+      as an option "where real full-text search is wanted" for the
+      generated-column-per-locale mechanism a queried: true localized-text
+      field promotes to, without requiring it for every such field. Decide
+      and document whether REQ-301 implements plain-text generated columns
+      only, tsvector-based full-text columns only, or lets the definition
+      choose per field, and state the reasoning -- do not leave this as a
+      restatement of 0023's option, and do not let REQ-301 pick the more
+      complex (tsvector) option without this record stating why the simpler
+      (plain-text) one doesn't suffice, or vice versa.
+
+      WHERE THE ANSWERS ARE RECORDED: this requirement writes its own new
+      decision record, docs/migration/decisions/0025-<slug>.md (CODE-DESIGNER
+      chooses the slug; it must name what the record decides, not restate
+      "0025"), separate from REQ-295's 0024 record. A separate record is the
+      cleaner choice and this requirement does NOT share 0024: REQ-295 and
+      this requirement are explicitly designed to run as parallel
+      CODE-DESIGNER sessions with no ordering dependency between them (see
+      above), and two requirements editing the same decision-record file
+      concurrently is exactly the collision that independence is supposed
+      to avoid -- whichever session finishes first would either overwrite
+      the other's section or force a manual merge neither requirement's
+      acceptance criteria account for. A separate file has no such race:
+      each requirement owns one file, full stop. The two records are
+      cross-linked (this record's own "Consequences" section names 0024 by
+      path and states it answers a different, independent question; 0024's
+      "Consequences" section is not amended by this requirement, since 0024
+      never claimed these two questions as its own scope in the first
+      place).
+
+      GATES: this new record needs the same "own SECURITY-REVIEWER and
+      REVIEWER gates" treatment 0023 demanded for the DDL-execution
+      question, applied here on this requirement's own initiative rather
+      than because 0023's sentence literally covers column semantics (it
+      doesn't -- that sentence is scoped to the DDL-execution question
+      immediately preceding it in 0023's text). The reason to gate this one
+      the same way anyway: SECURITY-REVIEWER's interest in ON DELETE is
+      concrete -- a wrong choice either orphans referencing rows (NO ACTION
+      against a hard-deleted parent, which shouldn't happen under soft
+      delete but the design must say so explicitly) or cascades data loss
+      across a tenant-isolated table in a way that is hard to audit after
+      the fact. REVIEWER's interest is idiom consistency: does the chosen
+      ON DELETE behavior and column strategy fit the soft-delete and
+      full-text-search idioms already established elsewhere in the
+      codebase.
+
+      Re-verify at start rather than trusting this description: that 0023
+      still reads as quoted above, that Letflow.Entities.Records.delete_record/2's
+      soft-delete behavior is unchanged, and that no REQ-302-adjacent design
+      already exists under lib/letflow/design/ from a prior attempt at
+      either question.
+
+      SCOPE FENCE: this requirement writes docs/migration/decisions/0025-*.md
+      and, if needed, a small design-artefact addendum under
+      lib/letflow/design/ for either sub-answer's interface shape. It
+      implements no lib/ code, creates no migration, and does not touch
+      lib/letflow/entities/ or any other implementation file. REQ-298 and
+      REQ-301 are where these two answers get built.
+    acceptance_criteria:
+      - "docs/migration/decisions/0025-*.md exists, is a real decision record following this project's existing decision-record format (Question/Decision/Reasoning/Consequences/What this record does not decide/REVIEWER sign-off sections, matching 0022's/0023's/0024's own shape), and answers both sub-questions with a concrete, named mechanism for each -- not a restatement of the question or a list of options left open"
+      - "the record states a concrete, named ON DELETE behavior (RESTRICT, SET NULL, CASCADE, or NO ACTION) for promoted-FK-column REFERENCES constraints, explicitly reconciled against Letflow.Entities.Records.delete_record/2's actual soft-delete semantics (read and cited by file:line, not assumed), so REQ-298 implements the answer rather than choosing between options itself"
+      - "the record states whether REQ-301's localized-text generated-column mechanism implements plain-text columns only, tsvector full-text columns only, or a per-field definition-level choice, with reasoning for why the simpler option does or does not suffice, so REQ-301 implements the answer rather than choosing between options itself"
+      - "the record's own 'Consequences' section names docs/migration/decisions/0024-*.md by path (once REQ-295 has landed and 0024's actual filename is known -- if REQ-295 has not yet landed when this requirement runs, state that 0024's filename is not yet known and that this record's independence from it is by design, not a missing cross-reference) and states explicitly that the two records answer independent questions with no ordering dependency"
+      - "docs/migration/decisions/0023-entity-storage-hybrid.md is NOT modified by this requirement -- its 'Open question' section is REQ-295's amendment to make, not this requirement's; grep confirms no diff under that file, quoted with the command"
+      - "SECURITY-REVIEWER has reviewed the new record for the ON DELETE choice's cross-tenant/data-loss implications specifically, and its verdict is recorded in the new record's own REVIEWER-sign-off-shaped section or a clearly linked companion section"
       - "REVIEWER has reviewed the new record for idiom/decision-record consistency and its verdict is recorded the same way, distinct from SECURITY-REVIEWER's verdict -- two named gates, not one combined paragraph standing in for both"
       - "git diff shows no file under lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, lib/letflow/tenant_provisioning/, or priv/repo/migrations/ touched by this requirement -- quoted with the command"
     depends_on: []

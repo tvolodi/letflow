@@ -112,6 +112,41 @@ visibility (`visible_when`), computed fields and cross-field validation are
 "Client-side logic and the offline constraint" below for why this is not a
 contradiction of the next paragraph, and for the rules that keep it safe.
 
+#### Implementation record: REQ-289 corpus location and schema
+
+1. **Canonical path:** `priv/expr_conformance/corpus.json` — placed in `priv/` so it is
+   a first-class OTP artifact accessible via `:code.priv_dir(:letflow)` from Elixir and
+   via a deterministic relative filesystem path from TypeScript and Dart consumers.
+2. **Companion schema document:** `lib/letflow/design/req289-expr-conformance-corpus.md`
+   — the authoritative source for the JSON schema, `$marker` sentinel encoding, the
+   closed `grammar_constructs` tag vocabulary, and the failure-kind enum. Implementations
+   must read this document for schema semantics; the corpus file contains only data.
+3. **REQ-293 and REQ-294 dependency:** both MUST consume `priv/expr_conformance/corpus.json`
+   directly and are forbidden from building their own corpus or diverging from it. They
+   must not begin implementation before this path exists on `main` (enforced by the
+   sequencing in Sequencing step 9 above).
+4. **Builtin gate:** `priv/expr_conformance/corpus.json` must cover every name returned
+   by `Letflow.Engine.Expr.builtin_function_names/0`. Adding a new builtin to that
+   function without a corresponding corpus entry with the matching `builtin:<name>` tag
+   will fail `test/letflow/engine/expr_conformance_corpus_test.exs`'s coverage-enumeration
+   test, which is the intended gate.
+5. **REVIEWER sign-off:** REVIEWER, 2026-09-09 (WF02-REQ289-20260909, Step 2d) —
+   verified `priv/expr_conformance/corpus.json`'s 40 entries against this document's
+   schema (all required fields present, no unknown fields, `outcome` shapes closed to
+   the `ok`/`parse_failure`/`eval_failure` enum, no duplicate `id`s); independently
+   re-derived the `lit:null` addendum's null-asymmetry semantic against
+   `test/letflow/engine/expr_test.exs:308-317` and confirmed `expr-040`
+   (`amount < 100`, `amount => null` → `{:ok, nil}`) and the retagged `expr-039`
+   (`amount + 1`, `amount => null` → `eval_failure`) reproduce it exactly; confirmed
+   `test/letflow/engine/expr_conformance_corpus_test.exs` matches this document's
+   design word-for-word (test names, tag lists); confirmed `lib/letflow/engine/expr.ex`,
+   `test/letflow/engine/expr_test.exs`, `test/fixtures/simulation/differential_corpus.json`
+   and `test/letflow/engine/expr_differential_corpus_test.exs` are byte-identical to
+   `main`; `mix format --check-formatted`, `mix compile --warnings-as-errors`, and
+   `mix test test/letflow/engine/expr_conformance_corpus_test.exs` (10/10) all pass. PASS.
+
+### D2 / D2a — Frontend: design-system primitives, no component library
+
 **Rejected: a general scripting runtime in the client.** Arbitrary tenant script
 — Lua, JS, WASM, anything Turing-complete — stays out. That needs a sandbox,
 resource limits and an injection-review gate, i.e. it is `0014`'s problem, not a

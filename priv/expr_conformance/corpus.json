@@ -1,0 +1,322 @@
+[
+  {
+    "id": "expr-001",
+    "description": "Equality comparison of a simple variable against an integer literal.",
+    "grammar_constructs": ["cmp:eq", "lit:integer", "var:simple"],
+    "expression": "amount == 100",
+    "variables": {"amount": 100},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-002",
+    "description": "Inequality comparison of a simple variable against a string literal.",
+    "grammar_constructs": ["cmp:neq", "lit:string", "var:simple"],
+    "expression": "status != \"active\"",
+    "variables": {"status": "pending"},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-003",
+    "description": "Less-than comparison of a simple variable against an integer literal.",
+    "grammar_constructs": ["cmp:lt", "lit:integer", "var:simple"],
+    "expression": "amount < 100",
+    "variables": {"amount": 50},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-004",
+    "description": "Less-than-or-equal comparison of a simple variable against an integer literal.",
+    "grammar_constructs": ["cmp:lte", "lit:integer", "var:simple"],
+    "expression": "amount <= 100",
+    "variables": {"amount": 100},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-005",
+    "description": "Greater-than comparison of a simple variable against an integer literal.",
+    "grammar_constructs": ["cmp:gt", "lit:integer", "var:simple"],
+    "expression": "amount > 100",
+    "variables": {"amount": 200},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-006",
+    "description": "Greater-than-or-equal comparison of a simple variable against an integer literal.",
+    "grammar_constructs": ["cmp:gte", "lit:integer", "var:simple"],
+    "expression": "amount >= 100",
+    "variables": {"amount": 100},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-007",
+    "description": "Logical AND of two boolean variables, both true.",
+    "grammar_constructs": ["bool:and", "var:simple"],
+    "expression": "approved and active",
+    "variables": {"approved": true, "active": true},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-008",
+    "description": "Logical OR where the first operand is false and the second is true.",
+    "grammar_constructs": ["bool:or", "var:simple"],
+    "expression": "approved or active",
+    "variables": {"approved": false, "active": true},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-009",
+    "description": "Logical NOT of a boolean literal false yields true.",
+    "grammar_constructs": ["bool:not", "lit:boolean"],
+    "expression": "not false",
+    "variables": {},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-010",
+    "description": "Greater-than comparison of a simple variable against a float literal.",
+    "grammar_constructs": ["cmp:gt", "lit:float", "var:simple"],
+    "expression": "amount > 3.14",
+    "variables": {"amount": 4.0},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-011",
+    "description": "Binary addition of two integer literals.",
+    "grammar_constructs": ["arith:add", "lit:integer"],
+    "expression": "2 + 3",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 5}
+  },
+  {
+    "id": "expr-012",
+    "description": "Binary subtraction of two integer literals.",
+    "grammar_constructs": ["arith:sub", "lit:integer"],
+    "expression": "5 - 3",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 2}
+  },
+  {
+    "id": "expr-013",
+    "description": "Binary multiplication of two integer literals.",
+    "grammar_constructs": ["arith:mul", "lit:integer"],
+    "expression": "4 * 3",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 12}
+  },
+  {
+    "id": "expr-014",
+    "description": "Integer division of two integer literals; result is truncated.",
+    "grammar_constructs": ["arith:div", "lit:integer"],
+    "expression": "7 / 2",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 3}
+  },
+  {
+    "id": "expr-015",
+    "description": "Modulo of two integer literals.",
+    "grammar_constructs": ["arith:mod", "lit:integer"],
+    "expression": "7 % 2",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 1}
+  },
+  {
+    "id": "expr-016",
+    "description": "Unary negation of an integer literal.",
+    "grammar_constructs": ["arith:neg", "lit:integer"],
+    "expression": "- 5",
+    "variables": {},
+    "outcome": {"status": "ok", "value": -5}
+  },
+  {
+    "id": "expr-017",
+    "description": "Equality comparison of a dotted variable path against a string literal.",
+    "grammar_constructs": ["var:dotted", "cmp:eq", "lit:string"],
+    "expression": "order.status == \"approved\"",
+    "variables": {"order": {"status": "approved"}},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-018",
+    "description": "length/1 returns the byte length of a string literal.",
+    "grammar_constructs": ["builtin:length", "lit:string", "lit:integer"],
+    "expression": "length(\"hello\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 5}
+  },
+  {
+    "id": "expr-019",
+    "description": "lower/1 converts ASCII letters to lowercase.",
+    "grammar_constructs": ["builtin:lower", "lit:string"],
+    "expression": "lower(\"HELLO\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "hello"}
+  },
+  {
+    "id": "expr-020",
+    "description": "upper/1 converts ASCII letters to uppercase.",
+    "grammar_constructs": ["builtin:upper", "lit:string"],
+    "expression": "upper(\"hello\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "HELLO"}
+  },
+  {
+    "id": "expr-021",
+    "description": "trim/1 strips leading and trailing ASCII whitespace (spaces only).",
+    "grammar_constructs": ["builtin:trim", "lit:string"],
+    "expression": "trim(\"  hello  \")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "hello"}
+  },
+  {
+    "id": "expr-022",
+    "description": "contains/2 returns true when the needle is a substring of the haystack.",
+    "grammar_constructs": ["builtin:contains", "lit:string", "lit:boolean"],
+    "expression": "contains(\"hello world\", \"wor\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-023",
+    "description": "startsWith/2 returns true when the haystack starts with the given prefix.",
+    "grammar_constructs": ["builtin:startsWith", "lit:string"],
+    "expression": "startsWith(\"hello world\", \"hello\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-024",
+    "description": "endsWith/2 returns true when the haystack ends with the given suffix.",
+    "grammar_constructs": ["builtin:endsWith", "lit:string"],
+    "expression": "endsWith(\"hello world\", \"world\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-025",
+    "description": "coalesce/N returns the first non-null argument.",
+    "grammar_constructs": ["builtin:coalesce", "lit:integer"],
+    "expression": "coalesce(null, 42)",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 42}
+  },
+  {
+    "id": "expr-026",
+    "description": "lower/1 is ASCII-only: the non-ASCII É in \"CAFÉ\" is left unchanged, yielding \"cafÉ\" not \"café\".",
+    "grammar_constructs": ["builtin:lower", "lit:string"],
+    "expression": "lower(\"CAFÉ\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "cafÉ"}
+  },
+  {
+    "id": "expr-027",
+    "description": "upper/1 is ASCII-only: the non-ASCII é in \"café\" is left unchanged, yielding \"CAFé\" not \"CAFÉ\".",
+    "grammar_constructs": ["builtin:upper", "lit:string"],
+    "expression": "upper(\"café\")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "CAFé"}
+  },
+  {
+    "id": "expr-028",
+    "description": "trim/1 strips all four ASCII whitespace kinds (space, tab, CR, LF) from both ends.",
+    "grammar_constructs": ["builtin:trim", "lit:string"],
+    "expression": "trim(\" \thi there\r\n \")",
+    "variables": {},
+    "outcome": {"status": "ok", "value": "hi there"}
+  },
+  {
+    "id": "expr-029",
+    "description": "Positive float divided by 0.0 produces positive infinity.",
+    "grammar_constructs": ["arith:div", "lit:float"],
+    "expression": "1.0 / 0.0",
+    "variables": {},
+    "outcome": {"status": "ok", "value": {"$marker": "infinity"}}
+  },
+  {
+    "id": "expr-030",
+    "description": "Negative float divided by 0.0 produces negative infinity.",
+    "grammar_constructs": ["arith:div", "arith:neg", "lit:float"],
+    "expression": "- 1.0 / 0.0",
+    "variables": {},
+    "outcome": {"status": "ok", "value": {"$marker": "neg_infinity"}}
+  },
+  {
+    "id": "expr-031",
+    "description": "Zero float divided by 0.0 produces NaN.",
+    "grammar_constructs": ["arith:div", "lit:float"],
+    "expression": "0.0 / 0.0",
+    "variables": {},
+    "outcome": {"status": "ok", "value": {"$marker": "nan"}}
+  },
+  {
+    "id": "expr-032",
+    "description": "Multiplication has higher precedence than addition: 2 + 3 * 4 groups as 2 + (3 * 4) = 14.",
+    "grammar_constructs": ["arith:add", "arith:mul", "cmp:eq", "lit:integer"],
+    "expression": "2 + 3 * 4 == 14",
+    "variables": {},
+    "outcome": {"status": "ok", "value": true}
+  },
+  {
+    "id": "expr-033",
+    "description": "Integer operand divided by a float literal promotes to float: 7 / 2.0 = 3.5, not 3.",
+    "grammar_constructs": ["arith:div", "lit:integer", "lit:float"],
+    "expression": "7 / 2.0",
+    "variables": {},
+    "outcome": {"status": "ok", "value": 3.5}
+  },
+  {
+    "id": "expr-034",
+    "description": "An expression consisting only of 'and' keywords fails to parse.",
+    "grammar_constructs": [],
+    "expression": "and and and",
+    "variables": {},
+    "outcome": {"status": "error", "error_kind": "parse_failure"}
+  },
+  {
+    "id": "expr-035",
+    "description": "A binary operator with no right operand fails to parse.",
+    "grammar_constructs": [],
+    "expression": "amount +",
+    "variables": {},
+    "outcome": {"status": "error", "error_kind": "parse_failure"}
+  },
+  {
+    "id": "expr-036",
+    "description": "Integer division by zero is an eval-time error; the expression parses successfully.",
+    "grammar_constructs": ["arith:div", "lit:integer"],
+    "expression": "5 / 0",
+    "variables": {},
+    "outcome": {"status": "error", "error_kind": "eval_failure"}
+  },
+  {
+    "id": "expr-037",
+    "description": "Referencing a variable absent from the variables map is an eval-time error.",
+    "grammar_constructs": ["cmp:gt", "lit:integer", "var:simple"],
+    "expression": "missing > 1",
+    "variables": {},
+    "outcome": {"status": "error", "error_kind": "eval_failure"}
+  },
+  {
+    "id": "expr-038",
+    "description": "An ordering comparison between a string variable and an integer literal is a type-mismatch eval error.",
+    "grammar_constructs": ["cmp:gt", "lit:integer", "var:simple"],
+    "expression": "name > 5",
+    "variables": {"name": "bob"},
+    "outcome": {"status": "error", "error_kind": "eval_failure"}
+  },
+  {
+    "id": "expr-039",
+    "description": "Adding null (via a null-valued variable) to an integer is an eval-time error; null propagates as an error in arithmetic.",
+    "grammar_constructs": ["arith:add", "lit:integer", "lit:null", "var:simple"],
+    "expression": "amount + 1",
+    "variables": {"amount": null},
+    "outcome": {"status": "error", "error_kind": "eval_failure"}
+  },
+  {
+    "id": "expr-040",
+    "description": "Null asymmetry: null (via a null-valued variable) in an ordering comparison yields null, not an error.",
+    "grammar_constructs": ["cmp:lt", "lit:null", "var:simple"],
+    "expression": "amount < 100",
+    "variables": {"amount": null},
+    "outcome": {"status": "ok", "value": null}
+  }
+]

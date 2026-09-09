@@ -528,6 +528,25 @@ history:
       assertions, independently confirmed by both SECURITY-REVIEWER and
       REVIEWER re-running the full suite themselves. No dependents
       deferred against REQ-283 -- no cascade to fix this time.
+  - req: REQ-289
+    event: started
+    agent: ORCH
+    at: "2026-09-09T16:33:54Z"
+    note: >
+      User directly named GH#1100 (REQ-289) for implementation. Queue
+      task 544 found locked by a dead prior run (branch
+      feature/WF02-REQ289-20260909, last commit ~16h old, zero
+      handoffs/ files, no PR ever opened) -- force-released and
+      re-locked as orch-req289 per TASK_QUEUE.md's dead-host recovery
+      path. That prior run's own commit (dc031e61) contains substantial
+      real implementation (39-entry corpus, 174-line test file, design
+      doc, decision-record addendum) -- rebased cleanly onto current
+      main (one conflict in decision 0020, composed not discarded) and
+      resumed rather than restarted, per HANDOFF_PROTOCOL.md 4.1's
+      broader recovery shape. Full investigation and one genuine
+      acceptance-criteria gap found (AC3's null literal kind untracked)
+      in handoffs/WF02-REQ289-20260909/step-00-git-setup.json.
+
   - req: REQ-295
     event: done
     agent: ORCH
@@ -594,3 +613,124 @@ history:
       SECURITY-REVIEWER and REVIEWER gates") are recorded in 0024's own
       distinct sign-off sections. No dependents deferred against
       REQ-295 -- no cascade to fix.
+  - req: REQ-289
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-09T17:33:49Z"
+    note: >
+      REQ-289 (queue task 544, GH#1100) implemented via
+      WF02-REQ289-20260909: exports a 40-entry language-neutral
+      conformance corpus (priv/expr_conformance/corpus.json) derived
+      from test/letflow/engine/expr_test.exs, covering all 6 comparison
+      operators, and/or/not, all 5 literal kinds (number, string,
+      boolean, null, and the null-asymmetry case added to close AC3's
+      gap), all 5 arithmetic operators, unary negation, dotted variable
+      paths, and all 8 builtins named by
+      Letflow.Engine.Expr.builtin_function_names/0 -- the coverage test
+      is driven by that function's return value, not a hand-copied
+      list. Includes the three divergence-prone semantics record 0020
+      D1a calls out by name: ASCII-only lower/upper, trim's 4-character
+      ASCII whitespace set, and all 3 infinity markers (:infinity,
+      :neg_infinity, :nan) from float division. Distinguishes parse
+      failures from eval failures with dedicated entries of each, and a
+      test asserting they are not interchangeable. Companion schema doc
+      at lib/letflow/design/req289-expr-conformance-corpus.md documents
+      both the JSON encodings chosen for the infinity markers and for
+      failure outcomes, and the corpus location's rationale, recorded
+      in docs/migration/decisions/0020-frontend-architecture.md's
+      amended D1a Implementation record (REVIEWER-signed). Recovery of
+      a genuinely prior, real implementation
+      (origin/feature/WF02-REQ289-20260909, commit dc031e61 / 0fbfb9e9
+      after rebase) that had died before any bookkeeping landed --
+      ORCH's Step 00 force-released the dead queue lock, rebased
+      cleanly onto current main, and found one real acceptance-criteria
+      gap (AC3's null literal kind untracked): closed by commit
+      c7b00ce7, adding corpus entry expr-040 (transcribing
+      expr_test.exs's null-asymmetry comparison case) and retagging
+      expr-039 with lit:null, per a CODE-DESIGN-VALIDATOR-approved
+      design addendum. test/fixtures/simulation/differential_corpus.json,
+      its REQ-209 test, and lib/letflow/engine/expr.ex confirmed
+      unmodified by git diff, per the requirement's own hard scope
+      fence (EXP-102). RELEASE-VALIDATOR independently re-derived and
+      PASSED all 10 acceptance criteria (not trusted from the recovered
+      branch's own prior reports). REQ-290 (CI drift guard + version
+      marker) and REQ-292 (Elixir evaluator wiring) both depend on this
+      corpus and were previously scoped around its absence from
+      docs/requirements.yaml -- see REQ-290's own `depends_on:
+      [REQ-289]` and its blocked-by deferral comment, both of which now
+      have a real, done blocker rather than a placeholder; re-scoping
+      either deferral, or registering REQ-290 in the queue, is left to
+      ORCH's own routing decision, not resolved here. docs/requirements.yaml
+      flipped in_progress -> done.
+  - req: REQ-295
+    event: started
+    agent: ORCH
+    at: "2026-09-09T18:03:52Z"
+    note: >
+      REQ-295..REQ-302 filed and registered as one batch (WF-01) for
+      docs/migration/decisions/0023-entity-storage-hybrid.md, the entity
+      storage decision from commit dceaa87a: per-entity-type tables with
+      a hybrid promoted-column/blob shape, replacing the single shared
+      entity_record_latest JSONB table REQ-225..231 shipped. Merged as
+      afe964bf (PR #1166). Queue task ids 564-571, GH#1158-#1165;
+      docs/requirements.yaml impl_order carries the mapping. This event
+      is filed against REQ-295 as the batch's lead entry; all eight
+      entries are `pending` and none has been worked.
+      SHAPE, and the reason it is not a flat list: 0023 names one open
+      question -- how a promotion's DDL executes per tenant in a
+      humanless pipeline -- and declares it blocking ("No implementation
+      requirement may be filed against this record until it is
+      answered"). The batch is therefore gated. REQ-295 (0024, the
+      DDL-execution answer) and REQ-302 (0025, ON DELETE policy and
+      localized-text plain-text-vs-tsvector) are design roots with no
+      dependencies; REQ-296..301 sit behind the roots each actually
+      needs. Verified by transitive closure rather than asserted:
+      REQ-298 reaches {295,296,297,302}, REQ-301 reaches
+      {295,296,297,299,302}. The queue enforces it independently --
+      every implementation task returned eligible:false with blocked_by
+      naming exactly its blockers.
+      REQ-VALIDATOR gated the batch FAIL twice before passing, both
+      substantive. Round 1: six entries missing decision 0022's
+      mandatory bucket declaration, and REQ-298/REQ-301 each left a
+      consequential design decision (FK ON DELETE semantics; tsvector
+      vs. plain-text columns) to be made by an implementing agent
+      mid-run; it also repaired a YAML corruption where the first
+      append had been spliced into the middle of REQ-294, truncating
+      it. Round 2: the fix had relocated those two decisions into
+      REQ-295 rather than resolving them, making REQ-295 itself
+      oversized -- sub-questions 1-4 compose with each other, ON DELETE
+      and tsvector are independent of them and of each other. Resolved
+      by splitting them into REQ-302 as a parallel root. Supporting
+      textual point, accepted: 0023's "its own SECURITY-REVIEWER and
+      REVIEWER gates" sentence is scoped to the DDL-execution question
+      alone, so it never required those two answers to share one record
+      or one review pass. REQ-295 and REQ-302 write separate records so
+      two parallel CODE-DESIGNER sessions never write the same file;
+      editing 0023's own "Open question" section is REQ-295's alone.
+      TWO CI GUARDS TRIPPED, both corpus-coupled, both test-data-only
+      fixes with detector logic unchanged. (1) T-LIVE-ACTIVITY: filing
+      the first-ever S10 entries made S10 present-but-inactive, the
+      same transition S5/S6/S7 each made on expansion, since `pending`
+      does not confer activity. Re-derived with
+      CheckDeferralStaleness.audit/1 as that test's own comment
+      instructs rather than guessed: active unchanged, inactive [] ->
+      ["S10"], 0 violations. (2) Req207VortexTest AC4 Signal 2: five of
+      the new titles match its word-bounded entity/entities pattern.
+      Signal 3 -- the real gate -- was re-verified live before
+      extending the allowlist: no lib/letflow/entities.ex, no
+      entity_query.ex, no entity router module, and both
+      Letflow.Routers.{Entities,EntityQuery} still in router.ex's
+      reserved/unbuilt table, so BLOCKED_ON_DEPENDENCY genuinely still
+      holds. Every other test reading the live corpus was swept in the
+      same pass rather than discovered serially in CI (240 passed).
+      SCOPE NOTE: S10 gap 13 (SolutionPack's pack_document carries no
+      entity_definitions or form-schema section) is deliberately NOT
+      filed here. It was found by the same architecture review but is
+      not a consequence of 0023, and it blocks bucket A more
+      fundamentally than gaps 10-11 do -- it remains unowned.
+      CONCURRENCY: a sibling session merged REQ-289 (#1157) mid-run,
+      requiring a rebase; the guards were re-derived and re-run against
+      the merged corpus rather than assumed to survive it. Queue task
+      564 (REQ-295) was claimed by letflow-orch within a minute of
+      registration and is left locked -- that is the queue working as
+      designed for multi-host coordination, not a stale lock.

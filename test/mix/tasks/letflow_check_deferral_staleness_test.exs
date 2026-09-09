@@ -935,14 +935,32 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
       # inactive == [], violations == 0. Test-data-only update; the detector
       # is unchanged and correct.
+      # UPDATE (S10 expansion, 2026-09-09): OQ-5's predicted event happened a
+      # fifth time -- S10 (bilimbaga-vertical) was expanded via WF-01 into
+      # REQ-295..REQ-302 (8 requirements, all `pending`), the entity-storage
+      # batch for docs/migration/decisions/0023-entity-storage-hybrid.md.
+      # Same rule as the S5/S6/S7 expansions: `pending` does not confer
+      # activity (F-PENDING-NOT-ACTIVE), so S10 is present but :inactive --
+      # the same state S5, S6 and S7 each passed through before their first
+      # requirement landed. `active` is unchanged; `inactive` moves from []
+      # to ["S10"]. Re-derived, not guessed: `MIX_ENV=test mix run -e`
+      # calling Mix.Tasks.Letflow.CheckDeferralStaleness.audit/1 (passed
+      # File.read!("docs/requirements.yaml") -- audit/1 takes file content,
+      # not a path) against the live corpus returned
+      # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
+      # inactive == ["S10"], violations == 0. Test-data-only update; the
+      # detector in lib/mix/tasks/letflow.check_deferral_staleness.ex is
+      # unchanged and correct -- it caught this drift exactly as designed.
+      # S10 joins `active` the moment any of REQ-295..302 goes
+      # in_progress/done/blocked, which for this batch means the moment
+      # REQ-295 or REQ-302 (its two design roots) is picked up.
       #
-      # UPDATE (WF02-REQ295-20260909): S10 (bilimbaga-vertical, added by
-      # decision 0022) joins `active` for the first time. REQ-295 (stage
-      # S10, status done) is the first S10 requirement to reach
-      # in_progress/done/blocked -- per the detector rule, that alone
-      # activates S10, same transition every other stage made on its own
-      # first non-pending requirement. `active` gains "S10"; `inactive` is
-      # unchanged (still []). Re-derived, not guessed: confirmed live via
+      # UPDATE (WF02-REQ295-20260909): S10 moved from inactive to active
+      # within the same merge window -- REQ-295 (stage S10, status done) is
+      # the first S10 requirement to reach in_progress/done/blocked, same
+      # transition every other stage made on its own first non-pending
+      # requirement. `active` gains "S10"; `inactive` returns to [].
+      # Re-derived, not guessed: confirmed live via
       # `MIX_ENV=test mix run --no-start -e` calling
       # File.read!("docs/requirements.yaml") |> Mix.Tasks.Letflow.CheckDeferralStaleness.audit()
       # against the live corpus, returning
@@ -950,8 +968,7 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # (String.< ordering puts "S10" before "S2"), inactive == [],
       # violations == 0. Test-data-only update; the detector in
       # lib/mix/tasks/letflow.check_deferral_staleness.ex is unchanged and
-      # correct -- it caught this drift exactly as designed, same as every
-      # prior stage-activation update above.
+      # correct -- it caught this drift exactly as designed.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
@@ -1093,7 +1110,28 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # confirmed live via `MIX_ENV=test mix run --no-start -e` calling
       # File.read!("docs/requirements.yaml") |> audit(), returning
       # deferral_count == 6, stale_count == 0. The detector is unchanged.
-      assert result.deferral_count == 6
+      #
+      # UPDATE (WF02-REQ289-20260909): the count dropped from 6 to 5.
+      # REQ-290's own `# impl_order: UNREGISTERED -- blocked-by: REQ-289 --
+      # ...` comment carried a real, live `blocked-by:` scope, so it counted
+      # among the 6 as a `{:blocked_by, "REQ-289"}`-scoped deferral, not a
+      # bare-UNREGISTERED one. Flipping REQ-289 to done (recovered a
+      # genuinely prior, real implementation that had died before any
+      # bookkeeping -- a 40-entry language-neutral conformance corpus for
+      # Letflow.Engine.Expr, closing one found gap in null-literal coverage
+      # via the full CODE-DESIGNER->...->RELEASE-VALIDATOR chain) expired
+      # REQ-290's deferral. REQ-289 was REQ-290's only dependency -- no live
+      # blocker left at all, so ORCH registered it properly (queue task
+      # 572, GH#1168) rather than inventing a re-scope target, the same
+      # pattern used repeatedly this session (REQ-279, REQ-283, REQ-284,
+      # REQ-291). That removes REQ-290 from the deferred set entirely --
+      # REQ-292/293/294's own `blocked-by: REQ-290` deferrals are untouched
+      # (REQ-290 is still `pending`, so their scopes have not expired). Net:
+      # 6 - 1 = 5. Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 5, stale_count == 0. The detector is unchanged.
+      assert result.deferral_count == 5
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -1105,7 +1143,6 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
                "REQ-223",
                "REQ-224",
-               "REQ-290",
                "REQ-292",
                "REQ-293",
                "REQ-294"

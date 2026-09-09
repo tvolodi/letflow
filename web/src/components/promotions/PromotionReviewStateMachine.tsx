@@ -7,6 +7,7 @@
 
 import React from 'react'
 import type { PromotionReview, ReviewStatus } from '@/api/promotions'
+import { formatDateTime as formatLocaleDateTime } from '@/i18n/format'
 
 export interface PromotionReviewStateMachineProps {
   review: PromotionReview
@@ -59,7 +60,7 @@ const STATUS_META: Record<ReviewStatus, { bg: string; text: string; border: stri
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleString()
+    return formatLocaleDateTime(iso)
   } catch {
     return iso
   }

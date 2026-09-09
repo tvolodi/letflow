@@ -6,6 +6,7 @@
  */
 
 import type { DefinitionDraft } from '@/stores/definitionDraftStore'
+import { formatTime } from '@/i18n/format'
 
 export interface DraftBannerProps {
   draft: DefinitionDraft
@@ -43,7 +44,7 @@ export function DraftBanner(props: DraftBannerProps): React.ReactElement {
           {dirtyCount === 0
             ? '1 field changed'
             : `${dirtyCount} fields changed`}
-          {draft.savedAt ? ` · last saved ${new Date(draft.savedAt).toLocaleTimeString()}` : ''}
+          {draft.savedAt ? ` · last saved ${formatTime(draft.savedAt)}` : ''}
         </p>
       </div>
       <div style={{ display: 'flex', gap: '.5rem' }}>

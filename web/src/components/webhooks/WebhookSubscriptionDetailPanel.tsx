@@ -4,6 +4,7 @@ import { webhooksApi } from '@/api/dlq'
 import { queryKeys } from '@/api/queryKeys'
 import { WebhookDeliveryAttemptsTable } from '@/components/webhooks/WebhookDeliveryAttemptsTable'
 import type { WebhookSubscription } from '@/types/api'
+import { formatDateTime } from '@/i18n/format'
 
 interface WebhookSubscriptionDetailPanelProps {
   subscription: WebhookSubscription
@@ -28,7 +29,7 @@ function formatTimestamp(value?: string | null): string {
   if (!value) return '—'
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString()
+  return formatDateTime(parsed)
 }
 
 export function WebhookSubscriptionDetailPanel({

@@ -9,6 +9,7 @@ import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { useToast } from '@/hooks/useToast'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDate as formatLocaleDate } from '@/i18n/format'
 
 // NOTE: the pre-existing hand-rolled table rendered 5 <th> over 7 <td>
 // per row (Name/Created/Expires/Status/Actions headers, but
@@ -46,7 +47,7 @@ function tokenRoleLabel(token: TokenRow): string {
 function formatDate(value?: string | null): string {
   if (!value) return 'Never'
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString()
+  return Number.isNaN(parsed.getTime()) ? value : formatLocaleDate(parsed)
 }
 
 export default function TokensPage() {

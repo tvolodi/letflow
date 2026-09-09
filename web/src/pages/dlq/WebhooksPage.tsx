@@ -7,6 +7,7 @@ import { WebhookSubscriptionDetailPanel } from '@/components/webhooks/WebhookSub
 import type { WebhookSubscription } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { formatDateTime } from '@/i18n/format'
 
 type CreateFormState = {
   targetUrl: string
@@ -282,7 +283,7 @@ export default function WebhooksPage() {
                 <span style={{ color: isPaused ? '#c2410c' : '#166534', fontWeight: 600, fontSize: '.8rem' }}>{status}</span>
               </td>
               <td style={{ padding: '.6rem .8rem', fontSize: '.8rem', color: '#64748b' }}>
-                {new Date(w.created_at).toLocaleString()}
+                {formatDateTime(w.created_at)}
               </td>
               <td style={{ padding: '.6rem .8rem' }}>
                 <button

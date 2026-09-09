@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDateTime } from '@/i18n/format'
 
 // NOTE: this table keeps native <table> markup rather than DataTable
 // (REQ-274) because each row supports an inline expand-to-diff affordance
@@ -183,7 +184,7 @@ export default function AuditLogPage() {
                   </Button>
                 </td>
                 <td style={{ padding: '.5rem .8rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap' }}>
-                  {new Date(e.occurred_at).toLocaleString()}
+                  {formatDateTime(e.occurred_at)}
                 </td>
                 <td style={{ padding: '.5rem .8rem', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)' }}>{e.actor_display_name ?? e.actor_id}</td>
                 <td style={{ padding: '.5rem .8rem', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{e.action}</td>

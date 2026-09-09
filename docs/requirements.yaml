@@ -18387,7 +18387,7 @@ requirements:
     title: Answer two independent column-semantics questions for entity storage -- ON DELETE policy for promoted FK columns, and localized-text plain-text-vs-tsvector strategy -- new decision record, no ordering dependency on REQ-295
     owner: CODE-DESIGNER
     impl_order: 565  # letflow-queue task id
-    status: pending
+    status: in_progress
     stage: S10
     description: >
       SECOND REWORK ROUND, FILED BY REQ-VALIDATOR'S SIZING BLOCKER

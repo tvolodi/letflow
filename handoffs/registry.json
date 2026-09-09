@@ -5855,6 +5855,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-286 (queue task 556, GH#1129) exposes REQ-273's write-once tasks.form_schema column as a 14th key in task_detail_map/3 -- response-shaping on a tenant data path, security-gated against INV-1/INV-2/INV-5. A single Map.put reading task.form_schema off the already-fetched, already-scoped struct -- no new query. Scoped to task_detail_map/3 only, not task_list_item_map/2. Version-pinning (AC3) proven automatic: only insert_changeset/2 ever casts :form_schema, nothing else ever updates it, so reading the column back IS reading the pinned value. CODE-DESIGNER found and fixed a second stale moduledoc reference beyond what the requirement's own AC5 named. SECURITY-REVIEWER named all three invariants explicitly: INV-1 traced end-to-end (server-derived prefix, no tenant_id column on tasks, schema-per-tenant) ruling out cross-tenant leakage; INV-2 confirmed via the same already-scoped struct; INV-5 confirmed the not-found branch untouched. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS) -> REVIEWER (PASS, 56/56 reproduced) -> TEST-RUNNER (full suite 3544/3546 passed, 2 pre-existing rustc-absent failures unrelated). Merge-time bookkeeping: flipping REQ-286 to done expired two sibling blocked-by deferrals (REQ-284, REQ-292). REQ-284 had no live blocker left at all -- registered it properly in the queue (task 560, GH#1145) rather than a fake re-scope. REQ-292 re-scoped to REQ-291 (not REQ-290, to avoid a blocked-by cycle with REQ-290's own pre-existing deferral) -- caught by mix letflow.check_deferral_staleness's cycle detector before pushing."
+    },
+    {
+      "run_id": "WF02-REQ284-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-284",
+      "issue_id": null,
+      "queue_task_id": 560,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1145,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "web/src/components/forms"
+      ],
+      "branch_name": "feature/WF02-REQ284-20260909",
+      "started_at": "2026-09-09T08:27:09Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-284 (queue task 560, GH#1145) built a closed x-ui.widget vocabulary (5 widgets -- rich-text-lite, masked-input, searchable-select, rating, slider) documented in docs/frontend/x-ui-widget-vocabulary.md and registered into the previously-empty fieldRegistry. Each widget covers an interaction design-system.md 7.6's built-in type mapping structurally cannot express, needs zero backend dependency, and doesn't touch scripting/visibility logic (deferred, not rejected, to decision 0020 D1a). CODE-DESIGNER surfaced a real gap: DynamicFormRenderer.tsx doesn't call FieldFactory/fieldRegistry today (its own duplicate inline switch), so these widgets aren't yet reachable from the real task-completion UI -- CODE-DESIGN-VALIDATOR independently confirmed this via the actual call graph but judged it a clearly-flagged, scope-compliant limitation, not a FAIL, since no AC requires that wiring. Also required: a keying-mechanism fix (FieldFactory.tsx switched from type-keyed to a new additive xUiWidget field, matching decision 0020 D3's actual wording) -- confirmed additive/minimal by both gates. REVIEWER read all 5 widget implementations directly (not just the reported grep) to rule out injection risk in rich-text-lite specifically -- confirmed it's a plain textarea splicing literal markdown-lite tokens into a plain string, never parsing/rendering HTML; zero eval/new Function/dangerouslySetInnerHTML/innerHTML anywhere. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> FRONTEND-DEV -> REVIEWER (PASS) -> TEST-RUNNER (backend mix compile zero impact; frontend gates 320/320 unit tests, 48/48 guard tests). SECURITY-REVIEWER out of scope (pure frontend). Merge-time bookkeeping: flipping REQ-284 to done expired two sibling blocked-by deferrals (REQ-291, REQ-293). REQ-291 had no live blocker left at all (its other dep, REQ-288, was already done) -- registered it properly in the queue (task 561, GH#1147). REQ-293 re-scoped to REQ-290, verified no cycle. Also updated T-LIVE-DEFERRED-COUNT's hardcoded assertions (9 -> 8) to match the real post-merge state, caught locally before pushing this time."
     }
   ]
 }

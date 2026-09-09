@@ -72,8 +72,8 @@ affected_files:
 related:
   - REQ-272
   - REQ-277
-queue_task_id: 559
-github_issue_number: 1135
+queue_ref: Q-559
+github_ref: GH-1135
 resolving_run: WF03-ISS0559-20260909
 resolved_at: "2026-09-09T04:00:00Z"
 status: resolved

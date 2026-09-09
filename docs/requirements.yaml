@@ -17007,7 +17007,7 @@ requirements:
     title: "Export a language-neutral conformance corpus from Letflow.Engine.Expr's own tests (0020 D1a step 9, part 1 of 2)"
     owner: ELIXIR-DEV
     impl_order: 544  # letflow-queue task id
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements the first half of step 9 of
@@ -17105,7 +17105,8 @@ requirements:
   - id: REQ-290
     title: Guard the conformance corpus against drift from Letflow.Engine.Expr in CI, and pin the corpus version marker (0020 D1a step 9, part 2 of 2)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-289 -- REQ-290 guards the corpus REQ-289 produces (depends_on: [REQ-289]); REQ-289 is now registered (queue task 544) as status: pending, so this scope names its real, live blocker directly rather than the REQ-292 workaround previously needed while REQ-289 was absent from this file.
+    impl_order: 572  # letflow-queue task id, GH#1168. Registered 2026-09-09 by ORCH
+      # once REQ-289 (its sole dependency) landed done -- no live blocker left.
     status: pending
     stage: S8
     description: >

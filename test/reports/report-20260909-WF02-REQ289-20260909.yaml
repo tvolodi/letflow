@@ -1,0 +1,108 @@
+run_id: WF02-REQ289-20260909
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T21:57:52Z"
+branch: feature/WF02-REQ289-20260909
+head_commit: c7b00ce7
+
+git_state:
+  clean_tree: false
+  note: >
+    One uncommitted change at run time: docs/migration/decisions/0020-frontend-architecture.md
+    (14 insertions/4 deletions, the decision-record addendum). Not staged/committed
+    as of this run -- flagged for ORCH/DOC-UPDATER, not a test-runner concern.
+  recent_commits:
+    - c7b00ce7 "feat(REQ-289): close lit:null gap in expr conformance corpus [WF02-REQ289-20260909]"
+    - 243a85b0 "chore(WF02-REQ289-20260909): ORCH Step 00 -- recover prior real implementation, flag AC3 gap"
+    - 0fbfb9e9 "feat(req289): language-neutral expression conformance corpus"
+
+diff_scope:
+  command: "git diff --stat origin/main...HEAD"
+  files:
+    - priv/expr_conformance/corpus.json (322 lines, 40 entries)
+    - lib/letflow/design/req289-expr-conformance-corpus.md (597 lines, design doc)
+    - test/letflow/engine/expr_conformance_corpus_test.exs (174 lines)
+    - docs/migration/decisions/0020-frontend-architecture.md (addendum)
+    - docs/requirements.yaml, docs/status/*, handoffs/* (pipeline bookkeeping only)
+  note: >
+    Matches the stated REQ-289 scope exactly. No lib/letflow application code was
+    touched -- this is a pure test-fixture/data addition (a JSON conformance corpus)
+    plus its generic, corpus-driven test file.
+
+static_checks:
+  command: "mix letflow.check"
+  alias_order: "letflow.check_toolchain -> check_requirements_registration -> check_deferral_staleness -> lint_handoffs -> check_async_sandbox_reachability -> check_issue_refs -> format --check-formatted -> compile --warnings-as-errors -> letflow.check.test"
+  toolchain_warning: "Rust: expected 1.97.1, running rustc 1.93.1 -- WARNING only per letflow.check_toolchain's own contract, does not gate, does not affect exit code."
+  format_check: PASS (silent -- alias proceeded past it to compile, no diff reported)
+  compile_warnings_as_errors: PASS (silent -- alias proceeded past it to letflow.check.test, no warnings/errors reported)
+
+backend_suite:
+  command: "scripts/test_parallel.sh (invoked internally as letflow.check.test's main phase)"
+  partitions: 16 (source: nproc)
+  result: PASS
+  output: |
+    partition 1: 293 tests, 0 properties, 0 failures, exit 0
+    partition 2: 186 tests, 0 properties, 0 failures, exit 0
+    partition 3: 218 tests, 0 properties, 0 failures, exit 0
+    partition 4: 244 tests, 0 properties, 0 failures, exit 0
+    partition 5: 211 tests, 0 properties, 0 failures, exit 0
+    partition 6: 172 tests, 1 property, 0 failures, exit 0
+    partition 7: 280 tests, 0 properties, 0 failures, exit 0
+    partition 8: 266 tests, 0 properties, 0 failures, exit 0
+    partition 9: 139 tests, 0 properties, 0 failures, exit 0
+    partition 10: 173 tests, 0 properties, 0 failures, exit 0
+    partition 11: 408 tests, 0 properties, 0 failures, exit 0
+    partition 12: 142 tests, 2 properties, 0 failures, exit 0
+    partition 13: 250 tests, 0 properties, 0 failures, exit 0
+    partition 14: 171 tests, 0 properties, 0 failures, exit 0
+    partition 15: 207 tests, 3 properties, 0 failures, exit 0
+    partition 16: 225 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3585 tests, 6 properties, 0 failures (3591/3591 passed)
+  isolated_tag_runs:
+    - tag: ":wasm_hang"
+      result: "5/5 isolated wasm_hang tests passed, each in its own subprocess"
+    - tag: ":lua_wallclock_race"
+      result: "11 passed, 3602 excluded -- isolated run passed clean"
+  failures: []
+  cross_check: >
+    Grepped the full mix letflow.check combined output for any non-"0 failures"
+    Result/Failed marker: none found anywhere in the run (main 16-partition suite,
+    the 5 isolated wasm_hang subprocess runs, or the isolated lua_wallclock_race
+    run). This is a zero-failure run -- no structural attribution is needed because
+    there is nothing to attribute.
+
+req289_specific_checks:
+  - check: "priv/expr_conformance/corpus.json entry count"
+    result: "40 entries (verified via `node -e \"require('./priv/expr_conformance/corpus.json').length\"`)"
+    matches_ac: true
+  - check: "test/letflow/engine/expr_conformance_corpus_test.exs full run"
+    command: "MIX_TEST_PARTITION=98 mix test test/letflow/engine/expr_conformance_corpus_test.exs"
+    result: "Result: 10 passed, 0 failures"
+    structure: >
+      4 describe blocks (success entries, parse-failure entries, eval-failure
+      entries, grammar coverage completeness), each iterating @corpus generically
+      (Enum.filter over priv/expr_conformance/corpus.json) rather than hardcoding
+      per-entry assertions -- confirms TEST-DESIGNER/TEST-DESIGN-VALIDATOR's skip
+      justification (no new hardcoded test logic needed for the addendum) was
+      structurally accurate.
+  - check: "test/letflow/engine/expr_differential_corpus_test.exs (REQ-209's separate regression fixture) unchanged and still passing"
+    command: "MIX_TEST_PARTITION=97 mix test test/letflow/engine/expr_differential_corpus_test.exs"
+    result: "Result: 1 passed, 0 failures"
+    diff_check: "Not present in `git diff --stat origin/main...HEAD` file list above -- confirmed untouched by this branch."
+
+verdict: PASS
+verdict_reasoning: >
+  mix letflow.check ran clean end-to-end: format --check-formatted and
+  compile --warnings-as-errors both passed silently, and the full backend suite
+  (3585 tests + 6 properties across 16 partitions, plus 5 isolated :wasm_hang
+  subprocess runs and 1 isolated :lua_wallclock_race run) reported 0 failures
+  everywhere -- 3591/3591 passed. There are no failures of any kind to attribute
+  to this branch's diff, so the "structural, not count-matching" attribution rule
+  has nothing to apply to. REQ-289's own test file
+  (expr_conformance_corpus_test.exs) passes in full (10/10), its corpus has the
+  expected 40 entries, and REQ-209's separate expr_differential_corpus_test.exs
+  fixture is both untouched by this diff and still green (1/1). One uncommitted
+  change (0020-frontend-architecture.md) remains in the working tree at report
+  time -- not a test concern, flagged for the pipeline's next commit step.
+next_action: "Route to RELEASE-VALIDATOR"

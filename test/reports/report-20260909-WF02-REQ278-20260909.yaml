@@ -1,0 +1,64 @@
+run_id: WF02-REQ278-20260909
+agent: TEST-RUNNER
+requirement: REQ-278
+timestamp: 2026-09-09T05:31:37Z
+scope: >
+  Frontend-only change (web/src/pages/instances/, tasks/, dashboard/ migrated onto
+  design-system primitives, off colour literals). No lib/letflow/ or
+  priv/repo/migrations/ files touched.
+
+backend_check:
+  command: 'export PATH="$HOME/.asdf/shims:$PATH" && mix compile --warnings-as-errors'
+  cwd: /home/tvolodi/workspace/letflow-1
+  exit_code: 0
+  output: "(no output — nothing to recompile, zero warnings)"
+  conclusion: Confirmed zero backend impact.
+
+frontend_checks:
+  type_check:
+    command: npm run type-check
+    cwd: web/
+    exit_code: 0
+    output: |
+      > letflow-web@0.1.0 type-check
+      > tsc -b tsconfig.json
+    result: PASS
+
+  lint:
+    command: npm run lint
+    cwd: web/
+    exit_code: 0
+    output: |
+      > letflow-web@0.1.0 lint
+      > eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+    result: PASS (zero warnings/errors)
+
+  test:
+    command: npm test
+    cwd: web/
+    exit_code: 0
+    result: PASS
+    totals: "Test Files: 45 passed (45); Tests: 287 passed (287)"
+    duration: 12.67s
+    notes: >
+      Two expected stderr lines from StatusBadge.test.tsx (TC-REQ272-10, TC-REQ272-11)
+      are intentional fallback-path assertions, not failures — the tests pass.
+
+  guards:
+    command: npm run guards
+    cwd: web/
+    exit_code: 0
+    result: PASS
+    totals: "Test Files: 4 passed (4); Tests: 48 passed (48)"
+    duration: 22.07s
+    includes: >
+      meta-control, source-scan (web/src/**/*.{ts,tsx,css} has no guard violations —
+      i.e. no literal-colour/raw-fetch/msw-import/etc. violations in the migrated
+      instances/tasks/dashboard code), bundle-scan (production build + built-bundle
+      scan, including GRD-UI-03 AC4 literal-colour synthetic-fixture detection), and
+      role-set. Production build succeeded (vite build, 9.30s) with only a
+      pre-existing chunk-size advisory warning (>500kB vendor chunk), unrelated to
+      this change.
+
+overall_result: ALL GREEN
+combined_totals: "335 tests passed (287 unit/component + 48 guard), 0 failed; backend compile clean with --warnings-as-errors"

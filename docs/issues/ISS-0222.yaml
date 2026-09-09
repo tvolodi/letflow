@@ -30,8 +30,8 @@ related:
   - ISS-0219  # auto-derived N too high, crashes before any Result: line
   - ISS-0220  # steady-state SandboxPool claim-timeout contention
 
-queue_task_id: 222
-github_issue: 454
+queue_ref: Q-222
+github_ref: GH-454
 github_issue_note: >
   register_task created both the queue task (222) and its mirrored GitHub issue
   (454) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

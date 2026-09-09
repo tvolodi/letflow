@@ -30,8 +30,8 @@ related:
 source: >
   lib/letflow/design/iss0398-walk-to-gateway-fix.md (sections 2.3, 4),
   handoffs/WF03-ISS0398-20260901/step-06-issue-fixer-close.json.
-queue_task_id: 400
-github_issue: 784
+queue_ref: Q-400
+github_ref: GH-784
 status: resolved
 resolved_in_run: WF03-ISS0400-20260901
 resolved_at: "2026-09-01T18:01:54Z"

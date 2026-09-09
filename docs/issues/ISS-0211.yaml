@@ -34,8 +34,8 @@ affected_files:
 related:
   - ISS-0210  # the run whose re-gate raised it
 
-queue_task_id: 211
-github_issue: https://github.com/tvolodi/letflow/issues/410
+queue_ref: Q-211
+github_ref: GH-410
 github_issue_note: >
   `register_task` created both the queue task (211) and its mirrored GitHub issue (#410)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

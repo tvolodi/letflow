@@ -29,7 +29,7 @@ affected_files:
   - test/letflow/engine/service_task_routing_test.exs
   - test/letflow/engine_plugin_error_routing_test.exs
   - test/letflow/engine_cancel_instance_test.exs
-github_issue: 231
+github_ref: GH-231
 status: resolved
 resolved_in_run: WF03-ISS0069-20260819
 resolved_at: 2026-08-19T07:14:50Z

@@ -23,8 +23,8 @@ affected_files:
 related:
   - ISS-0194  # the fix that already closes this -- filed and merged independently, same day
 
-queue_task_id: 212
-github_issue: https://github.com/tvolodi/letflow/issues/417
+queue_ref: Q-212
+github_ref: GH-417
 github_issue_note: >
   register_task created both the queue task (212) and its mirrored GitHub issue (417) in
   one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

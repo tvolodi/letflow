@@ -43,8 +43,8 @@ related:
   - ISS-0217
   - ISS-0110
   - ISS-0113
-queue_task_id: 458
-github_issue: 882
+queue_ref: Q-458
+github_ref: GH-882
 status: instrumented
 superseded_by: ISS-0219
 resolved_in_run: WF03-ISS0458-20260904

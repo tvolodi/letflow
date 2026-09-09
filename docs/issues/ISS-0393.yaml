@@ -48,8 +48,8 @@ source: >
   handoffs/WF02-REQ207-20260901/step-02a-elixir-dev.json (result.issues[1]),
   handoffs/WF02-REQ207-20260901/step-05-release-validator.json
   (follow-up finding #2).
-queue_task_id: 393
-github_issue: 773
+queue_ref: Q-393
+github_ref: GH-773
 status: closed_not_applicable
 resolution: >
   Closed 2026-09-07 (not applicable as scoped) via WF03-ISS0393-20260907.

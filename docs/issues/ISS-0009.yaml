@@ -40,7 +40,7 @@ description: >
 affected_files:
   - docs/migration/stage-0-foundation.md
   - docs/migration/decisions/0001-web-framework.md
-github_issue: https://github.com/tvolodi/letflow/issues/15
+github_ref: GH-15
 status: resolved
 resolved_at: 2026-08-15T19:03:12Z
 resolution: >

@@ -93,8 +93,8 @@ source: >
   against a real 52-migration, 38-table tenant schema in letflow_test9;
   the probe database was dropped afterward. The 755-provisioning count
   comes from the serial full-suite run log of the same commit.
-queue_task_id: 427
-github_issue: 831
+queue_ref: Q-427
+github_ref: GH-831
 
 status: resolved
 

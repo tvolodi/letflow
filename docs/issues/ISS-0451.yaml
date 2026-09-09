@@ -54,8 +54,8 @@ source: >
   analysis while gating REQ-219's AC4 test, distinguishing the test's
   single-event isolation proof from a persistent-fault scenario the test
   cannot and does not claim to cover).
-queue_task_id: 451
-github_issue: 865
+queue_ref: Q-451
+github_ref: GH-865
 status: resolved
 resolved_in_run: WF03-ISS0451-20260904
 resolved_at: "2026-09-04T04:32:00Z"

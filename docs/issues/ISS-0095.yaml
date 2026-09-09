@@ -20,8 +20,8 @@ description: >
   itself read R-Co to answer this).
 affected_files:
   - lib/letflow/design/req041-pack-update-diff-schema.md
-queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
-github_issue: https://github.com/tvolodi/letflow/issues/323
+queue_ref: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_ref: GH-323
 status: resolved
 resolution:
   resolved_at: "2026-08-20T00:00:00Z"

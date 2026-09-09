@@ -38,8 +38,8 @@ related:
   - ISS-0198  # the amendment ISS-0201 refined
   - ISS-0191  # the linter finding 2 concerns
 
-queue_task_id: 203
-github_issue: https://github.com/tvolodi/letflow/issues/394
+queue_ref: Q-203
+github_ref: GH-394
 github_issue_note: >
   `register_task` created both the queue task (203) and its mirrored GitHub issue (#394)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

@@ -79,8 +79,8 @@ source: >
   prose and filed nothing; tracing it properly then revealed the far more
   serious Alerts instance on the live Poller path. Call chain and retry
   constants read directly from alerts.ex and poller.ex at filing time.
-queue_task_id: 429
-github_issue: 833
+queue_ref: Q-429
+github_ref: GH-833
 
 status: resolved
 resolved_in_run: WF03-ISS0429-20260902

@@ -37,8 +37,8 @@ related:
 source: >
   handoffs/WF03-ISS0400-20260901/step-final (Step Final full-suite
   triage), direct reproduction against a throwaway git worktree at main.
-queue_task_id: 401
-github_issue: 785
+queue_ref: Q-401
+github_ref: GH-785
 status: resolved
 resolved_in_run: WF03-ISS0401-20260902
 resolved_at: "2026-09-01T19:58:39Z"

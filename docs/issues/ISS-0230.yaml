@@ -123,8 +123,8 @@ related:
   - REQ-022  # the design whose section 3.2 invariant defers the orchestration
   - ISS-0225 # precedent: resolve by removing the discoverability root cause
 
-queue_task_id: 230
-github_issue: 468
+queue_ref: Q-230
+github_ref: GH-468
 github_issue_note: >
   register_task created both the queue task (230) and its mirrored GitHub issue
   (468) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

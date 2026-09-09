@@ -29,8 +29,8 @@ affected_files:
   - test/support/tenant_schema_reaper_test.exs
   - test/letflow/engine_concurrency_test.exs
   - scripts/test_parallel.sh
-queue_task_id: 287
-github_issue: 569
+queue_ref: Q-287
+github_ref: GH-569
 status: reopened
 resolved_in_run: WF03-ISS0287-20260823
 resolved_at: "2026-08-22T23:18:01Z"

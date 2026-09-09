@@ -79,8 +79,8 @@ related:
   - ISS-0258   # the detector this test exercises; detector logic unchanged
   - ISS-0263   # the run that discovered and filed this issue
 
-queue_task_id: 264
-github_issue: 520
+queue_ref: Q-264
+github_ref: GH-520
 
 status: resolved
 resolved_in_run: WF03-ISS0264-20260822

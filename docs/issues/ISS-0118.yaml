@@ -118,8 +118,8 @@ affected_files:
   - docs/agents/protocols/GIT_MERGE.md
   - docs/agents/workflows/WF-02_requirement_implementation.md
   - docs/agents/workflows/WF-03_issue_resolving.md
-queue_task_id: 177
-github_issue: https://github.com/tvolodi/letflow/issues/363
+queue_ref: Q-177
+github_ref: GH-363
 status: resolved
 
 resolution: >

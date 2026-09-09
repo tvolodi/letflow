@@ -19,8 +19,8 @@ related:
 source: >
   handoffs/WF03-ISS0396-20260902/step-03d-reviewer.json,
   step-06-issue-fixer-close.json.
-queue_task_id: 407
-github_issue: 799
+queue_ref: Q-407
+github_ref: GH-799
 status: resolved
 resolved_in_run: WF03-ISS0407-20260902
 resolved_at: "2026-09-02T07:30:30Z"

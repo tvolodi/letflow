@@ -10,8 +10,8 @@ status: resolved
 resolved_in_run: ORCH-direct-20260826
 resolved_at: "2026-08-26T10:35:00Z"
 resolved_at: null
-queue_task_id: 338
-github_issue_number: 651
+queue_ref: Q-338
+github_ref: GH-651
 description: >
   lib/letflow/engine/lua_script_audit.ex's moduledoc/typedoc (lines ~16-21,
   ~91-97) still states the Lua build-vs-bind decision has not been made.

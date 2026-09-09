@@ -33,6 +33,6 @@ resolution: >
   review, idiom review, mutation-tested test coverage, release validation)
   with zero unresolved findings. Queue task 390 released status: done at
   2026-09-01T19:55:15Z (ORCH, Step Final for REQ-212).
-queue_task_id: 390
-github_issue: 769
+queue_ref: Q-390
+github_ref: GH-769
 status: resolved

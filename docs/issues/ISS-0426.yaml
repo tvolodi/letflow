@@ -65,8 +65,8 @@ related:
 source: >
   Live 6-partition scripts/test_parallel.sh benchmark run on this host,
   2026-09-02, while evaluating parallel execution as a speedup for ISS-0423.
-queue_task_id: 426
-github_issue: 830
+queue_ref: Q-426
+github_ref: GH-830
 status: resolved
 resolved_in_run: WF03-ISS0426-20260902
 resolved_at: "2026-09-03T06:22:12Z"

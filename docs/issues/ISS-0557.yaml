@@ -1,4 +1,4 @@
-id: PENDING
+id: ISS-0557
 title: "REQ-201 alerts.ex: deliver_with_retry calls Process.sleep on Scheduler.Poller's process, blocking message queue during HTTP retries"
 discovered_by: REVIEWER
 discovered_in_run: WF02-REQ201-20260830
@@ -31,3 +31,5 @@ description: >
 affected_files:
   - lib/letflow/obs/alerts.ex
   - lib/letflow/scheduler/poller.ex
+queue_ref: Q-557
+github_ref: GH-1131

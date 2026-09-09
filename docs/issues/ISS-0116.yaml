@@ -72,8 +72,8 @@ affected_files:
   - test/support/tenant_fixture.ex
   - lib/letflow/tenant_provisioning.ex
 
-queue_task_id: 184
-github_issue: https://github.com/tvolodi/letflow/issues/370
+queue_ref: Q-184
+github_ref: GH-370
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (184) and its mirrored GitHub issue (#370) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 status: instrumented

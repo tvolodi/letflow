@@ -33,8 +33,8 @@ affected_files:
 related:
   - ISS-0201  # the run whose REVIEWER raised it, against its own dispatch
 
-queue_task_id: 204
-github_issue: https://github.com/tvolodi/letflow/issues/395
+queue_ref: Q-204
+github_ref: GH-395
 github_issue_note: >
   `register_task` created both the queue task (204) and its mirrored GitHub issue (#395)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

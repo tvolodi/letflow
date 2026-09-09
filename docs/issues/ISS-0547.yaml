@@ -36,8 +36,8 @@ affected_files:
   - docs/frontend/design-system.md
 related:
   - REQ-275
-queue_task_id: 547
-github_issue_number: 1111
+queue_ref: Q-547
+github_ref: GH-1111
 resolving_run: WF03-ISS0547-20260908
 resolved_at: "2026-09-08T22:25:00Z"
 status: resolved

@@ -63,8 +63,8 @@ source: >
   application), and step-08-reviewer.json (full independent re-gate PASS,
   re-confirming the 8-volume revert's zero-diff state file by file and the
   amendment's soundness against prior amendments).
-queue_task_id: 514
-github_issue: 1025
+queue_ref: Q-514
+github_ref: GH-1025
 status: resolved
 resolved_in_run: WF02-REQ263-20260906
 resolved_at: "2026-09-06T07:01:16Z"

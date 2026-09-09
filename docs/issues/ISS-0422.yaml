@@ -57,8 +57,8 @@ source: >
   Letflow.Engine's moduledoc directly, and by grepping lib/ for
   `use GenServer|use DynamicSupervisor|use Supervisor` (6 matches, one of
   them the empty InstanceSupervisor) and for lock/transaction sites.
-queue_task_id: 422
-github_issue: 826
+queue_ref: Q-422
+github_ref: GH-826
 
 status: resolved
 resolved_in_run: ORCH-direct-20260905-ISS0422

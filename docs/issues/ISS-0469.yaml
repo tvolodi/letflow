@@ -27,8 +27,8 @@ affected_files:
 related:
   - ISS-0426
   - ISS-0446
-queue_task_id: 469
-github_issue: 904
+queue_ref: Q-469
+github_ref: GH-904
 status: resolved
 resolved_in_run: WF03-ISS0469-20260904
 resolved_at: "2026-09-04T22:20:00Z"

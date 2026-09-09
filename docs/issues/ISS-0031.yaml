@@ -77,7 +77,7 @@ resolution: >
   neither carries an agent/run id, only title/description/acceptance_criteria.
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/90
+github_ref: GH-90
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0031-20260817

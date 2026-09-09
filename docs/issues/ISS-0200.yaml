@@ -45,8 +45,8 @@ related:
   - ISS-0198  # fixed the dispatch side; this is the deferred other half
   - ISS-0191  # the linter that would host any mechanical check
 
-queue_task_id: 200
-github_issue: https://github.com/tvolodi/letflow/issues/391
+queue_ref: Q-200
+github_ref: GH-391
 github_issue_note: >
   register_task created both the queue task (200) and its mirrored GitHub issue (#391)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

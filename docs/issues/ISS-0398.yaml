@@ -43,8 +43,8 @@ source: >
   handoffs/WF02-REQ208-20260901/step-02a-elixir-dev.json (result.issues),
   handoffs/WF02-REQ208-20260901/step-05-release-validator.json
   (recommendation_to_orch).
-queue_task_id: 398
-github_issue: 779
+queue_ref: Q-398
+github_ref: GH-779
 status: resolved
 resolved_in_run: WF03-ISS0398-20260901
 resolved_at: "2026-09-01T16:20:00Z"

@@ -139,7 +139,7 @@ resolution: >
   and unrelated (plugin_interface_test.exs, engine_concurrency_test.exs,
   engine_plugin_error_routing_test.exs, event_store/migrations_test.exs,
   identity_migration_test.exs). GH#299 closed.
-github_issue: https://github.com/tvolodi/letflow/issues/299
+github_ref: GH-299
 related:
   - ISS-0076
   - ISS-0079

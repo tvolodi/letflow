@@ -83,8 +83,8 @@ source: >
   with the single failure being an on_exit teardown exit at
   test/letflow/engine/service_task_dispatcher_test.exs:1113, while the same
   tree passed 3192/3192 locally and 42/42 for that file in isolation.
-github_issue: 868
-queue_task_id: 453
+github_ref: GH-868
+queue_ref: Q-453
 status: resolved
 later_evidence: >
   ORCH (2026-09-04), PR #869 (REQ-219): GitHub Actions run 33821803493

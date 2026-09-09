@@ -17,7 +17,7 @@ description: >
   REQ-136's own diff.
 affected_files:
   - handoffs/WF03-ISS0289-20260823/step-final-git-merge.json
-github_issue: 581
+github_ref: GH-581
 status: resolved
 resolved_in_run: session queue-loop, ORCH direct (docs-only)
 resolved_at: 2026-08-23T07:00:00Z

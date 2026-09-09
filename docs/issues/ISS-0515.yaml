@@ -91,8 +91,9 @@ related:
   - REQ-226
   - REQ-227
   - ISS-0224
-queue_task_id: null
-github_issue: 1031
+queue_ref: null   # filed directly via gh without an ORCH intermediary, so no
+                  # register_task call allocated a queue task for it
+github_ref: GH-1031
 status: resolved
 resolved_in_run: WF03-ISS0515-20260906
 resolved_at: "2026-09-06T17:00:00Z"

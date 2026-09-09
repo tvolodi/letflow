@@ -53,7 +53,7 @@ description: >
   docs alone — see that file's Decision B and Reasoning sections.
 affected_files:
   - docs/migration/decisions/0003-ecto-schema-strategy.md
-github_issue: https://github.com/tvolodi/letflow/issues/8
+github_ref: GH-8
 status: resolved
 resolved_at: 2026-08-15T19:34:30Z
 resolution: >

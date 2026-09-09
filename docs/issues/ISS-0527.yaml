@@ -48,8 +48,8 @@ source: >
   §4) recommended this follow-up rather than silently expanding its own
   scope; filed by ORCH at WF03-ISS0526-20260907's Step Final per that
   recommendation.
-queue_task_id: 527
-github_issue: 1064
+queue_ref: Q-527
+github_ref: GH-1064
 status: resolved
 resolution: >
   Resolved 2026-09-07 via WF03-ISS0527-20260907. All 18 platform-operator

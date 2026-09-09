@@ -50,7 +50,7 @@ description: >
   recurrences after the pattern was first identified.
 affected_files:
   - test/letflow/engine_test.exs
-github_issue: null   # gh available and authenticated; not filed to GitHub per ISS-0049's own precedent for a same-session self-resolved blocker fix -- open to filing on request
+github_ref: null   # gh available and authenticated; not filed to GitHub per ISS-0049's own precedent for a same-session self-resolved blocker fix -- open to filing on request
 status: resolved
 resolved_in_run: WF03-ISS0050-20260818
 resolved_at: "2026-08-18T21:37:12Z"

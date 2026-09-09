@@ -67,7 +67,8 @@ affected_files:
 status: resolved
 resolved_in_run: WF03-ISS0060-20260819
 resolved_at: "2026-08-19T02:35:00Z"
-github_issue: null
+github_ref: null   # duplicate of ISS-0060, found independently by another host; the
+                   # GitHub mirror lives on ISS-0060 -- see this file's `note` below
 note: >
   Duplicate of ISS-0060, discovered independently by a different host shortly
   after ISS-0060 was filed (same underlying race). ISS-0060 fixed the actual

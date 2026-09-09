@@ -29,8 +29,8 @@ affected_files:
   - docs/requirements.yaml
 related:
   - ISS-0258
-queue_task_id: 266
-github_issue: 524
+queue_ref: Q-266
+github_ref: GH-524
 status: no_defect
 superseded_by: ISS-0264
 verdict_in_run: WF03-ISS0262-20260822

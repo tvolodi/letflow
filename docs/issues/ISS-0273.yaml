@@ -30,8 +30,8 @@ affected_files:
   - test/mix/tasks/letflow.lint_handoffs_test.exs
 related:
   - ISS-0262
-queue_task_id: 273
-github_issue: 537
+queue_ref: Q-273
+github_ref: GH-537
 status: resolved
 resolved_in_run: WF03-ISS0273-20260822
 resolved_at: "2026-08-22T13:00:40Z"

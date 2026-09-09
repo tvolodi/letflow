@@ -81,8 +81,8 @@ source: >
   (result.ac1_decision -- reachability_reverified_independently,
   consequence_for_req206_207_208, recommendation_to_orch),
   handoffs/WF02-REQ205-20260831/release-validation-report-20260831.md.
-queue_task_id: 388
-github_issue: 764
+queue_ref: Q-388
+github_ref: GH-764
 status: resolved
 resolved_in_run: fix/ISS-0388-real-rco-fixtures-20260901
 resolved_at: "2026-09-01T02:08:10Z"

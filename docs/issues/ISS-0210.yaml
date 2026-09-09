@@ -56,8 +56,8 @@ related:
   - ISS-0205  # the other git-mechanics gap this run filed
   - ISS-0191  # the linter that could check handoff byte-identity claims mechanically
 
-queue_task_id: 210
-github_issue: https://github.com/tvolodi/letflow/issues/402
+queue_ref: Q-210
+github_ref: GH-402
 github_issue_note: >
   register_task created both the queue task (210) and its mirrored GitHub issue (#402) in one call,
   per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called separately. The id comes

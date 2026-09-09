@@ -6,8 +6,8 @@ discovered_by: TEST-DESIGNER
 discovered_in_run: WF02-REQ166-20260828
 discovered_at: "2026-08-28T04:42:27Z"
 severity: MINOR
-queue_task_id: 380   # registered 2026-08-31 (reconciliation); originally filed as ISS-0351 before an id existed
-github_issue: 752
+queue_ref: Q-380   # registered 2026-08-31 (reconciliation); originally filed as ISS-0351 before an id existed
+github_ref: GH-752
 former_local_id: ISS-0351   # historical alias -- see note below
 note_on_id: >
   Filed during WF02-REQ166-20260828 as ISS-0351, a filename-derived id assigned

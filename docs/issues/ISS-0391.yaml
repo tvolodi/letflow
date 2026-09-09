@@ -47,8 +47,8 @@ source: >
   non-blocking caveat -- this recommendation reached only the design doc
   and step-01/step-01b handoffs, never a later handoff, until re-elevated
   here for ORCH to act on at Step Final).
-queue_task_id: 391
-github_issue: 770
+queue_ref: Q-391
+github_ref: GH-770
 status: resolved_via_duplicate
 resolution: >
   Resolved 2026-09-07. ISS-0393 (the superset duplicate this issue's own

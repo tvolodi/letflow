@@ -21,8 +21,8 @@ description: >
 affected_files:
   - docs/status/requirement_status.v3.yaml
   - test/docs/requirement_status_invariants_test.exs
-queue_task_id: 281
-github_issue: 554
+queue_ref: Q-281
+github_ref: GH-554
 status: resolved
 resolution:
   resolved_by: ORCH (WF03-ISS0281-20260822)

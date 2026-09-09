@@ -42,8 +42,8 @@ resolution: >
   drift stale again.
 affected_files:
   - docs/migration/stage-2-event-store-definitions.md
-github_issue: https://github.com/tvolodi/letflow/issues/93
-queue_task_id: 78 # backfilled by ORCH after the fact -- see process note below
+github_ref: GH-93
+queue_ref: Q-78 # backfilled by ORCH after the fact -- see process note below
 process_note: >
   DOC-UPDATER filed this issue and created/closed GitHub issue #93 directly
   via `gh` during WF02-REQ035-20260817's Step 6, rather than reporting the

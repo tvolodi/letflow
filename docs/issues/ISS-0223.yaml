@@ -47,8 +47,8 @@ affected_files:
 related:
   - ISS-0213  # the original finding that added the rule this issue says isn't sticking
 
-queue_task_id: 223
-github_issue: 455
+queue_ref: Q-223
+github_ref: GH-455
 github_issue_note: >
   register_task created both the queue task (223) and its mirrored GitHub issue
   (455) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

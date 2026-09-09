@@ -2728,3 +2728,46 @@ the stale databases, re-run). Confirms this is a real recurring hazard on any ho
 keeps one `docker compose` Postgres volume alive across multiple migration-adding
 merges, not a one-off — expect it again after the next tenant-scoped migration lands
 unless the volume is periodically reset.
+
+---
+
+## A bare number is not an identifier when three registries all number from 1
+
+**Established 2026-09-09**, on user report of "constant confusion" between the three
+issue registries.
+
+Letflow tracks an issue in three places at once — `docs/issues/ISS-NNNN.yaml` (local),
+a `letflow-queue` task, and a GitHub issue. All three number from 1, all three are
+live, and none of them agrees with the others. So `"issue 89"`, `"#89"`, or a bare
+`89` in a yaml field is genuinely unreadable: it names one of three different things
+and nothing in the text says which.
+
+**The fix is prefixes, everywhere, in prose and in yaml:** `ISS-0030` (local), `Q-76`
+(queue), `GH-89` (GitHub). Enforced by `mix letflow.check_issue_refs`.
+
+### The deeper trap: a documented equality that silently stopped being true
+
+Both `ISSUE_QUEUE.md` and `TASK_QUEUE.md` stated that the local id **is** the queue
+task id — *"`ISS-0187` is queue task `187`"* — and explicitly invited deriving a
+`set_lock` target from a filename without opening the file.
+
+Measured against the corpus: **172 of 305**. Twenty-seven records contradict it
+outright (`ISS-0030` is `Q-76`, `ISS-0109` is `Q-172`), and 104 predate the queue and
+have no queue id at all. The rule was true for the window in which queue-allocated ids
+were the only source of new issue numbers, and it stopped being true the moment
+anything else allocated one — silently, because nothing re-checked it.
+
+Deriving a lock target from a filename under that rule locks **the wrong task**, and
+the symptom is a duplicated or lost run, not an error.
+
+**Symptom to recognize:** a rule of the form "X and Y are the same number", documented
+once, relied on thereafter. That is a coincidence of one moment in a system's history
+being written down as an invariant. Ask what enforces it; if the answer is "the
+documentation", it is already drifting.
+
+**Lesson:** an identifier's registry is part of the identifier, not context the reader
+is expected to supply. And a convention with no validating step decays exactly the way
+`decisions/0004-humanless-pipeline.md` says code without a validator does — the
+producer/validator principle applies to the project's own conventions, not only to its
+requirements. That is why the schema landed with a gate wired into `mix letflow.check`
+rather than a paragraph in a protocol file, which is what the superseded rule had.

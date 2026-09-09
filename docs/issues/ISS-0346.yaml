@@ -9,9 +9,9 @@ severity: MINOR
 status: resolved
 resolved_at: 2026-08-26T19:05:00Z
 resolving_run: orch-loop-iss0346
-queue_task_id: 346
-github_issue_number: 665
-github_issue: https://github.com/tvolodi/letflow/issues/665
+queue_ref: Q-346
+github_ref: GH-665
+github_ref: GH-665
 description: >
   Found incidentally while verifying ISS-0297's fix (GH#596) via
   TEST_PARALLEL_N=16 scripts/test_parallel.sh -- unrelated to that issue's

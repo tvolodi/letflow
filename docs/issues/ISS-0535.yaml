@@ -81,8 +81,8 @@ affected_files:
 related:
   - ISS-0399
   - ISS-0534
-queue_task_id: 535
-github_issue_number: 1078
+queue_ref: Q-535
+github_ref: GH-1078
 resolving_run: WF03-ISS0535-20260908
 resolved_at: "2026-09-08T08:40:30Z"
 status: resolved

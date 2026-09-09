@@ -45,8 +45,8 @@ source: >
   Confirmed via reading .github/workflows/ci.yml and
   deps/rustler/lib/rustler/compiler.ex directly (compile_crate/3's
   `cd: config.path` call site).
-queue_task_id: 419
-github_issue: 817
+queue_ref: Q-419
+github_ref: GH-817
 status: no_defect
 verdict_in_run: WF03-ISS0419-20260902
 verdict_at: "2026-09-02T13:55:48Z"

@@ -36,8 +36,8 @@ related:
   - REQ-226
   - REQ-231
   - ISS-0438
-queue_task_id: 522
-github_issue: 1049
+queue_ref: Q-522
+github_ref: GH-1049
 status: resolved
 resolved_in_run: WF03-ISS0522-20260907
 resolved_at: "2026-09-07T09:00:00Z"

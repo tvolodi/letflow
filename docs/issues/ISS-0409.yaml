@@ -42,8 +42,8 @@ duplicate_note: >
   contributing factor" -- was the correct read, not ISS-0410's more
   specific but wrong causal claim (a missing tenant/scope filter on
   list_all/1). Both records close together as no_defect.
-queue_task_id: 409
-github_issue: 805
+queue_ref: Q-409
+github_ref: GH-805
 status: no_defect
 verdict_in_run: WF03-ISS0410-20260902
 verdict_at: "2026-09-02T12:22:40Z"

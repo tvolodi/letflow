@@ -77,8 +77,8 @@ source: >
   figures measured via :timer.tc in MIX_ENV=test mix run against the real
   modules, and via psql timing inside the Postgres container for the
   in-container comparison.
-queue_task_id: 432
-github_issue: 836
+queue_ref: Q-432
+github_ref: GH-836
 
 status: no_defect
 verdict_in_run: ORCH-adhoc-20260902-arch-review

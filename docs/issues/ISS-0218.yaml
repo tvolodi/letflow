@@ -43,8 +43,8 @@ affected_files:
 related:
   - REQ-067  # the run whose Step Final merge introduced the stray marker
 
-queue_task_id: 218
-github_issue: 447
+queue_ref: Q-218
+github_ref: GH-447
 github_issue_note: >
   register_task created both the queue task (218) and its mirrored GitHub issue
   (447) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

@@ -27,7 +27,7 @@ description: >
   yet" framing.
 affected_files:
   - docs/guides/backend_developer_guide.md
-github_issue: https://github.com/tvolodi/letflow/issues/9
+github_ref: GH-9
 status: resolved
 resolved_at: 2026-08-15T19:29:00Z
 resolution: >

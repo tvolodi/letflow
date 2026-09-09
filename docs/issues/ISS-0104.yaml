@@ -44,8 +44,8 @@ affected_files:
   - test/letflow/definitions/graph_test.exs
   - test/specs/REQ-029.md
   - lib/letflow/design/req031-service-scope-validator.md
-queue_task_id: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
-github_issue: https://github.com/tvolodi/letflow/issues/334
+queue_ref: null   # filed directly via gh (no ORCH intermediary in this session); registration pending reconciliation per ISSUE_QUEUE.md 2b
+github_ref: GH-334
 status: resolved
 resolution: >
   PROVENANCE (historical, not current decision authority):

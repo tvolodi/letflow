@@ -43,8 +43,8 @@ source: >
   handoffs/WF03-ISS0392-20260901/step-03b-security-reviewer.json
   (result.issues[0]), handoffs/WF03-ISS0392-20260901/step-03c-reviewer.json
   (independent confirmation of out-of-scope characterization).
-queue_task_id: 396
-github_issue: 776
+queue_ref: Q-396
+github_ref: GH-776
 status: resolved
 resolved_in_run: WF03-ISS0396-20260902
 resolved_at: "2026-09-02T06:05:00Z"

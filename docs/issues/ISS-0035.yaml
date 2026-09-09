@@ -28,7 +28,7 @@ description: >
 affected_files:
   - test/letflow/definitions/promotion_digest_test.exs
   - test/letflow/definitions/store_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/108
+github_ref: GH-108
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0035-20260817

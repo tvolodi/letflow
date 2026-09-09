@@ -129,7 +129,7 @@ resolution: >
   The suggested cheap follow-up (a sweep for other Ecto fields typed nullable
   over NOT NULL columns) was deliberately not run -- the yaml's own scoping_note
   says not to schedule it on the evidence of one instance.
-github_issue: https://github.com/tvolodi/letflow/issues/310
+github_ref: GH-310
 related:
   - ISS-0088
   - ISS-0089

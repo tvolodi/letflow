@@ -67,8 +67,8 @@ source: >
   seven sweep call sites and the absence of any max_restarts/max_seconds
   override were confirmed by grep across lib/ (only two strategy: sites
   exist, neither sets intensity).
-queue_task_id: 421
-github_issue: 825
+queue_ref: Q-421
+github_ref: GH-825
 
 status: resolved
 resolved_in_run: WF03-ISS0421-20260904

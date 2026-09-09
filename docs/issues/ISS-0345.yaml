@@ -9,8 +9,8 @@ severity: MINOR
 status: resolved
 resolved_in_run: WF03-ISS0296-20260826
 resolved_at: "2026-08-26T17:20:00Z"
-queue_task_id: 345
-github_issue_number: 664
+queue_ref: Q-345
+github_ref: GH-664
 description: >
   mix letflow.lint_handoffs currently fails to parse
   handoffs/WF03-ISS0296-20260826/step-01-frontend-dev-login-proof.json due

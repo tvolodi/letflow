@@ -12,9 +12,9 @@ resolved_at: "2026-08-26T17:45:00Z"
 reopened_at: "2026-08-27T12:16:00Z"
 reopened_by: TEST-RUNNER
 reopened_in_run: WF02-REQ155-20260827
-queue_task_id: 340
-github_issue_number: 654
-github_issue: https://github.com/tvolodi/letflow/issues/654
+queue_ref: Q-340
+github_ref: GH-654
+github_ref: GH-654
 description: >
   test/letflow/api/context_test.exs's "scoped_repo_opts/1 is 1-arity" test
   fails intermittently under scripts/test_parallel.sh -- failed 1 of 9

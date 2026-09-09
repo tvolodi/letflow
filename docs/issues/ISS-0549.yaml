@@ -30,8 +30,8 @@ related:
   - REQ-272
   - REQ-287
   - ISS-0548
-queue_task_id: 549
-github_issue_number: 1117
+queue_ref: Q-549
+github_ref: GH-1117
 resolving_run: WF03-ISS0549-20260908
 resolved_at: "2026-09-08T23:20:06Z"
 status: resolved

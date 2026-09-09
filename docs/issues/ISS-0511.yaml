@@ -30,8 +30,8 @@ description: >
 affected_files:
   - test/letflow/simulation/req207_vortex_test.exs
   - docs/requirements.yaml
-queue_task_id: 511
-github_issue: 998
+queue_ref: Q-511
+github_ref: GH-998
 status: resolved
 resolved_in_run: WF03-ISS0511-20260905
 resolved_at: "2026-09-05T20:58:00Z"

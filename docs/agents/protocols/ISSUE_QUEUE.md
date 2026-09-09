@@ -15,6 +15,61 @@ This is distinct from `core-directives.md`'s Unblock-Everything directive: that 
 defects that block *this run's own* acceptance criteria (fix them now, in this run).
 This protocol covers defects that are merely adjacent — noticed, not blocking.
 
+## Numbering schema — three registries, three prefixes (2026-09-09)
+
+**A bare number is never an identifier.** Writing "issue 89" is ambiguous across three
+registries that all number from 1 and are all live at once. Every reference carries its
+registry's prefix, in prose and in yaml alike:
+
+| Prefix | Registry | Authoritative for | Where it lives |
+|---|---|---|---|
+| `ISS-NNNN` | **local** | the full record — diagnosis, evidence, resolution | `docs/issues/ISS-NNNN.yaml` |
+| `Q-N` | **letflow-queue** | *claiming* — who is working on it right now | the queue service |
+| `GH-N` | **GitHub** | human-visible mirror, cross-machine discussion | github.com issues |
+
+Read `GH-89` as "GitHub issue 89", `Q-76` as "queue task 76". Never `#89` and never a
+bare `89`.
+
+### The three numbers are independent. Do not compute one from another.
+
+This section exists because the opposite was once true and is no longer. An earlier
+version of this protocol stated that `ISS-NNNN` **is** the queue task id — "ISS-0187 is
+queue task 187" — and invited deriving a `set_lock` target straight from a filename.
+
+Measured against the corpus on 2026-09-09, that equality holds for **172 of 305** local
+issue files. **27 contradict it outright** (`ISS-0030` is queue task `Q-76`;
+`ISS-0109` is `Q-172`), and **104 predate the queue entirely** and have no queue id at
+all. The rule was true for the window in which queue-allocated ids were the only source
+of new issue numbers, and it silently stopped being true afterwards.
+
+**So: never derive. Always read the explicit field.** A number's registry is part of the
+number; the mapping between registries is data, not arithmetic.
+
+### Field names
+
+Exactly two cross-reference fields, both carrying a prefixed value:
+
+```yaml
+id: ISS-0030          # this record's own id, matching the filename
+queue_ref: Q-76       # or null, with a comment saying why
+github_ref: GH-89     # or null, with a comment saying why
+```
+
+`null` is a legitimate value and means "this issue is not in that registry" — a
+local-only finding, or one filed before the queue existed. It must carry a comment
+saying which. The superseded field names `github_issue`, `github_issue_number` and
+`queue_task_id` were normalised to the two above across all 305 files in one pass;
+do not reintroduce them. Prose fields such as `github_issue_note` are unaffected —
+they are commentary, not identity.
+
+### Enforced, not merely documented
+
+`mix letflow.check_issue_refs` fails on a bare-number cross-reference, an unprefixed
+field name, or a malformed ref, and is wired into `mix letflow.check`. The equality
+rule this section replaces was *also* documented, and documentation alone did not keep
+it true — which is this project's own producer/validator principle applied to its
+own conventions.
+
 ## Procedure
 
 **Updated 2026-08-20 (ISS-0086/GH#303's own resolution run).** Steps 2-3 previously
@@ -69,9 +124,11 @@ increment, do not guess.
       This best-effort creates the mirrored GitHub Issue itself (per TASK_QUEUE.md's
       "GitHub Issues visibility" section's `register_task` bullet) — do NOT also call
       `gh issue create` separately, that would double-post. **That instruction still
-      stands unchanged.** Record the response's `id` (queue task id) and
-      `github_issue_number` into the yaml's `queue_task_id` and `github_issue` fields
-      respectively; `id` and the number in `issue_ref` are the same integer.
+      stands unchanged.** Record the response's `id` and `github_issue_number` into the
+      yaml's `queue_ref` and `github_ref` fields, **prefixed** — id `76` is written
+      `queue_ref: Q-76`, GitHub issue `89` is written `github_ref: GH-89`. Write the
+      numbers the response actually returned; do not assume any of the three ids
+      match each other (see "Numbering schema" above).
 
       **Adoption path — an issue that genuinely was filed on GitHub first** (e.g. by a
       human, or by an agent under the pre-2026-08-21 order): pass the existing issue's
@@ -108,9 +165,11 @@ increment, do not guess.
      <what's wrong, where, and why it matters>
    affected_files:
      - <path>
-   queue_task_id: <id>   # from register_task's response per step 2a — the same integer
-                         # as issue_ref's number (ISS-0187 <-> 187)
-   github_issue: <n>     # from the same response's github_issue_number
+   queue_ref: Q-<id>     # from register_task's response per step 2a, PREFIXED.
+                         # Not derivable from this file's own id -- read the response.
+                         # `null` (with a comment saying why) if never registered.
+   github_ref: GH-<n>    # from the same response's github_issue_number, PREFIXED.
+                         # `null` (with a comment saying why) if it has no GH mirror.
    status: open
 
 4. Commit docs/issues/<issue_ref>.yaml as part of the current step's normal commit.
@@ -160,12 +219,21 @@ The historical entries in `docs/anti-patterns.md` stay as written — they are t
 how this was learned. Only the *forward instruction* in them is superseded, and that is
 recorded in the update appended to the second entry.
 
-**2. `queue_task_id` and the issue id are the same integer.** `ISS-0187` is queue task
+**2. ~~`queue_task_id` and the issue id are the same integer.~~ SUPERSEDED 2026-09-09 —
+see "Numbering schema" above.** This clause used to read: *"`ISS-0187` is queue task
 `187`. A later WF-03 run can therefore derive the `set_lock` target straight from the
-filename, without needing the yaml open and without the `get_next_task`-and-hope fallback
-in "Picking up a queued issue later" below. Keep recording `queue_task_id` in the file
-anyway — it stays the explicit, machine-readable link, and it is what pre-2026-08-21
-records rely on.
+filename."*
+
+That derivation is **now forbidden**, because the equality is false for 133 of 305 local
+issue files: 27 contradict it outright and 104 predate the queue. It was true only for
+the window in which queue-allocated ids were the sole source of new issue numbers, and
+nothing re-checked it once that stopped being so.
+
+What survives, and is now the only supported access path: **read `queue_ref` from the
+yaml.** It is the explicit, machine-readable link, it is what pre-2026-08-21 records
+always relied on, and it is correct for every record rather than for a majority of them.
+A `null` there means the issue was never registered — handle that case rather than
+computing a number that will lock the wrong task.
 
 ### Issue numbers are non-contiguous from here on — this is expected
 

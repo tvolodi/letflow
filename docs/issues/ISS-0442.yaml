@@ -59,8 +59,8 @@ source: >
   handoffs/WF03-ISS0440-20260903/step-03c-reviewer.json (REVIEWER's own
   reproduction), independently re-measured by ORCH on a real handoff
   file.
-queue_task_id: 442
-github_issue: 852
+queue_ref: Q-442
+github_ref: GH-852
 status: resolved
 resolved_in_run: WF03-ISS0442-20260904
 resolved_at: "2026-09-04T06:35:44Z"

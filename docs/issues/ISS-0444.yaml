@@ -30,8 +30,8 @@ source: >
   handoffs/WF02-REQ218-20260903/step-03-reviewer.json (REVIEWER's own
   independent confirmation and recommendation to file this as a tracked
   follow-up, per the ISS-0437 pattern from REQ-216's own run).
-queue_task_id: 444
-github_issue: 855
+queue_ref: Q-444
+github_ref: GH-855
 status: resolved
 resolved_in_run: WF03-ISS0444-20260903
 resolved_at: "2026-09-03T16:35:00Z"

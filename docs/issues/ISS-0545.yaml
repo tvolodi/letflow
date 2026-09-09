@@ -39,8 +39,8 @@ affected_files:
   - docs/frontend/design-system.md
 related:
   - REQ-272
-queue_task_id: 545
-github_issue_number: 1102
+queue_ref: Q-545
+github_ref: GH-1102
 resolving_run: WF03-ISS0545-20260908
 resolved_at: "2026-09-08T20:05:00Z"
 status: resolved

@@ -23,8 +23,8 @@ description: >
 affected_files:
   - test/letflow/engine/wasm/plugin_handler_test.exs
   - scripts/test_parallel.sh
-queue_task_id: 377
-github_issue: 730
+queue_ref: Q-377
+github_ref: GH-730
 status: resolved
 resolved_in_run: WF03-ISS0377-20260830
 resolved_at: 2026-08-30T02:04:45Z

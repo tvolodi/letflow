@@ -50,7 +50,7 @@ description: >
   during conflict resolution rather than by TEST-RUNNER itself.
 affected_files:
   - test/support/tenant_slug_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/221
+github_ref: GH-221
 status: resolved
 resolved_in_run: WF03-ISS0065-20260819
 resolved_at: 2026-08-19T00:00:00Z

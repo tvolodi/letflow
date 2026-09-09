@@ -68,7 +68,7 @@ description: >
   options above mid-run.
 affected_files:
   - docs/requirements.yaml
-github_issue: https://github.com/tvolodi/letflow/issues/82
+github_ref: GH-82
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0024-20260817

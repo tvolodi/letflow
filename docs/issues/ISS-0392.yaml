@@ -59,8 +59,8 @@ source: >
   OUTSTANDING ITEM FOR ORCH note),
   handoffs/WF02-REQ207-20260901/step-05-release-validator.json
   (follow-up finding #1).
-queue_task_id: 392
-github_issue: 772
+queue_ref: Q-392
+github_ref: GH-772
 status: resolved
 resolved_in_run: WF03-ISS0392-20260901
 resolved_at: "2026-09-01T11:59:04Z"

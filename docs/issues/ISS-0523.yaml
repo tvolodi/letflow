@@ -69,8 +69,8 @@ source: >
   3191/3192 passed, the single failure being this test at
   test/mix/tasks/letflow.lint_handoffs_test.exs:686, cleared by fixing another
   session's handoff rather than by touching any test or lib code.
-queue_task_id: 523
-github_issue: 1053
+queue_ref: Q-523
+github_ref: GH-1053
 status: resolved
 resolved_in_run: WF03-ISS0523-20260907
 resolved_at: "2026-09-07T12:30:00Z"

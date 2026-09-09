@@ -54,8 +54,8 @@ affected_files:
 related:
   - ISS-0224  # the run whose reshape introduced both fields
 
-queue_task_id: 227
-github_issue: 465
+queue_ref: Q-227
+github_ref: GH-465
 
 status: resolved
 resolved_in_run: WF03-ISS0227-20260822

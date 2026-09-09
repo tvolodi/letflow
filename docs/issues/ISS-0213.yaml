@@ -41,8 +41,8 @@ related:
   - ISS-0193  # the run whose reconstructed Step Final raised it
   - ISS-0107  # the recursion bug whose orphaned processes were the visible side effect
 
-queue_task_id: 213
-github_issue: https://github.com/tvolodi/letflow/issues/421
+queue_ref: Q-213
+github_ref: GH-421
 github_issue_note: >
   `register_task` created both the queue task (213) and its mirrored GitHub issue (#421)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

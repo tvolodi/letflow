@@ -42,8 +42,8 @@ related:
   - ISS-0119   # original roll-rule design and the A3 test this issue's fix satisfies
   - ISS-0199   # prior volume-2 entries: count drift, same class of "nobody checked" gap
 
-queue_task_id: 263
-github_issue: 518
+queue_ref: Q-263
+github_ref: GH-518
 
 status: resolved
 resolved_in_run: WF03-ISS0263-20260822

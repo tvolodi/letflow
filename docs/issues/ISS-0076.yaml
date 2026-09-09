@@ -206,7 +206,7 @@ resolution: >
   record -- they are separate WF-03-routed findings this audit surfaced,
   not part of what ISS-0076 itself was scoped to fix. ISS-0076's own scope
   (identify the systemic pattern, sequence the follow-on work) is complete.
-github_issue: https://github.com/tvolodi/letflow/issues/297
+github_ref: GH-297
 related:
   - ISS-0075
 scoping_note: >

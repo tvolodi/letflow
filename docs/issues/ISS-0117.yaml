@@ -60,8 +60,8 @@ affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - docs/agents/ORCHESTRATOR.md
 
-queue_task_id: 185
-github_issue: https://github.com/tvolodi/letflow/issues/372
+queue_ref: Q-185
+github_ref: GH-372
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (185) and its mirrored GitHub issue (#372) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 resolution: >

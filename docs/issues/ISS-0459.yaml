@@ -43,8 +43,8 @@ affected_files:
   - docs/agents/protocols/ISSUE_QUEUE.md
 related:
   - ISS-0458
-queue_task_id: 459
-github_issue: 884
+queue_ref: Q-459
+github_ref: GH-884
 status: resolved
 resolved_in_run: WF03-ISS0459-20260904
 resolved_at: "2026-09-04T13:57:42Z"

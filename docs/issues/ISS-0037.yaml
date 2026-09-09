@@ -53,7 +53,7 @@ description: >
   be dropped, not merged, when that run reaches its own Step Final.
 affected_files:
   - lib/letflow/definitions/service_scope_validator.ex
-github_issue: https://github.com/tvolodi/letflow/issues/112
+github_ref: GH-112
 status: resolved
 resolved_at: "2026-08-20T15:00:00Z"
 resolution: >

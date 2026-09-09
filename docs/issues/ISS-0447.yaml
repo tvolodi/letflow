@@ -79,8 +79,8 @@ source: >
   Discovered by TEST-DESIGNER during WF03-ISS0446-20260904 Step 4 and
   independently re-verified by ORCH (grep confirmed 8 files). Mechanism and
   reproduction numbers measured during that run's Step 4/4b.
-queue_task_id: 454
-github_issue: 870
+queue_ref: Q-454
+github_ref: GH-870
 queue_ref_note: >
   The queue rewrote this task's title to "ISS-0454..." and set
   issue_ref: ISS-0454, deriving both from its own task id (454) rather than

@@ -53,8 +53,8 @@ related:
   - ISS-0207  # the third MINOR from the same gate; has since edited the same section
   - ISS-0208  # a further MINOR against the same section, from ISS-0207's own gate
 
-queue_task_id: 206
-github_issue: https://github.com/tvolodi/letflow/issues/397
+queue_ref: Q-206
+github_ref: GH-397
 github_issue_note: >
   `register_task` created both the queue task (206) and its mirrored GitHub issue (#397)
   in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was deliberately not called

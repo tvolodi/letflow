@@ -85,7 +85,7 @@ resolution: >
   5 properties, 1190 tests, 0 failures (was 1188 before the two new tests).
 
   Closing GH#305.
-github_issue: https://github.com/tvolodi/letflow/issues/305
+github_ref: GH-305
 related:
   - ISS-0077
 scoping_note: >

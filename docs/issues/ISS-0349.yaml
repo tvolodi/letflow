@@ -9,8 +9,8 @@ severity: MAJOR
 status: resolved
 resolved_in_run: WF03-ISS0348-20260826
 resolved_at: "2026-08-27T04:52:00Z"
-queue_task_id: 349
-github_issue: 672
+queue_ref: Q-349
+github_ref: GH-672
 description: >
   Discovered incidentally by ORCH during WF03-ISS0348-20260826's Step Final
   (git-merge), while rebasing feature/WF03-ISS0348-20260826 onto main. After

@@ -70,7 +70,7 @@ affected_files:
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - docs/agents/ORCHESTRATOR.md
   - docs/agents/AGENT_SYSTEM.md
-github_issue: https://github.com/tvolodi/letflow/issues/78
+github_ref: GH-78
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0021-20260817

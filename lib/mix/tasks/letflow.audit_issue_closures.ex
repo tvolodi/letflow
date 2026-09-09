@@ -79,20 +79,25 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosures do
   file with `File.read!/1` and extract `id:`/`github_issue:` with anchored regexes
   rather than a YAML library.
 
-  The real corpus was found (2026-08-22, this task's first implementation/run) to write
-  `github_issue:` in two live surface forms, not just the bare integer the design
-  sketch's example regex covers:
+  **Field renamed to `github_ref`, values prefixed (2026-09-09).** The corpus used to
+  write this field in three surface forms -- `github_issue: 205`, and the same number as
+  a bare or quoted `https://github.com/<owner>/<repo>/issues/206` URL -- and this regex
+  accommodated all three so an audit run would not silently skip the majority of tracked
+  issues, which used the URL form.
 
-      github_issue: 205
-      github_issue: "https://github.com/tvolodi/letflow/issues/206"
-      github_issue: https://github.com/tvolodi/letflow/issues/1
+  `ISSUE_QUEUE.md`'s "Numbering schema" replaced that with one shape across all 305
+  files:
 
-  `@github_issue_re` below matches all three (an optional leading quote, an optional
-  `https://github.com/<owner>/<repo>/issues/` prefix, then the digits) so that a real
-  audit run does not silently skip the majority of tracked issues, which use the URL
-  form -- skipping them would contradict this task's own purpose of auditing the real
-  corpus. This is a data-shape accommodation, not a change to the design's read
-  mechanism (still `File.read!/1` + line-oriented `Regex`, no YAML dependency).
+      github_ref: GH-205
+
+  The regex now reads `github_ref:` and requires the `GH-` prefix, because
+  `mix letflow.check_issue_refs` rejects every other shape -- so accepting them here
+  would be dead code that quietly tolerates data the gate forbids. The legacy
+  alternatives are deliberately NOT kept as a fallback: a reader able to parse both
+  makes the normalisation unenforceable by making violations invisible to this task.
+
+  The read mechanism is unchanged (`File.read!/1` + line-oriented `Regex`, no YAML
+  dependency).
   """
 
   use Mix.Task
@@ -101,7 +106,7 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosures do
   @rule String.duplicate("=", 72)
 
   @id_re ~r/^id:\s*(\S+)/m
-  @github_issue_re ~r{^github_issue:\s*"?(?:https://github\.com/[^/\s]+/[^/\s]+/issues/)?(\d+)}m
+  @github_issue_re ~r{^github_ref:\s*"?GH-(\d+)}m
 
   # -- Individually-named pre-existing ZERO_EVIDENCE closures. Populated by
   # ELIXIR-DEV from this task's own first real run against the corpus (see

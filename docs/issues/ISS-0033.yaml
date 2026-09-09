@@ -20,8 +20,8 @@ description: >
   check.
 affected_files:
   - handoffs/registry.json
-github_issue: 98 # manually filed by ORCH; letflow-queue register_task also auto-created GH#99 as its mirror (task_type issue) -- both point at this same finding
-queue_task_id: 79
+github_ref: GH-98 # manually filed by ORCH; letflow-queue register_task also auto-created GH#99 as its mirror (task_type issue) -- both point at this same finding
+queue_ref: Q-79
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF02-REQ029-20260817 (self-correction, immediately after the WF-02 run closed out)

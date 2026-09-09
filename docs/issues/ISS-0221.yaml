@@ -43,8 +43,8 @@ related:
   - REQ-128  # ..REQ-135: drafted 2026-08-22, deliberately left UNREGISTERED
              # pending validation -- the case that surfaced this gap
 
-queue_task_id: 221
-github_issue: 452
+queue_ref: Q-221
+github_ref: GH-452
 github_issue_note: >
   `register_task` created both the queue task (221) and its mirrored GitHub
   issue (452) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

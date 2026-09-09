@@ -53,8 +53,8 @@ related:
 source: >
   handoffs/WF03-ISS0396-20260902/step-04-test-designer.json,
   step-04b-test-design-validator.json, step-06-issue-fixer-close.json.
-queue_task_id: 408
-github_issue: 800
+queue_ref: Q-408
+github_ref: GH-800
 status: resolved
 resolved_in_run: WF03-ISS0408-20260902
 resolved_at: "2026-09-02T09:22:17Z"

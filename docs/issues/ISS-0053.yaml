@@ -46,7 +46,7 @@ affected_files:
 status: resolved
 resolved_in_run: ORCH-direct-20260818 (sizing-rule direct action, queue task 114)
 resolved_at: "2026-08-18T22:08:34Z"
-github_issue: https://github.com/tvolodi/letflow/issues/194
+github_ref: GH-194
 renumbering_note: >
   Filed on the still-unmerged origin/feature/WF02-REQ047-20260818 branch as
   ISS-0052 (GH#194). Renumbered to ISS-0053 by ORCH on pickup (before that

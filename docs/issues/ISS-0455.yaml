@@ -19,8 +19,8 @@ description: >
 affected_files:
   - docker-compose.yml
 related: []
-queue_task_id: 455
-github_issue: 872
+queue_ref: Q-455
+github_ref: GH-872
 status: resolved
 resolved_in_run: ORCH-direct-20260904
 resolved_at: "2026-09-04T04:15:00Z"

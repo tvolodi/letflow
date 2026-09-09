@@ -26,8 +26,8 @@ description: >
 affected_files:
   - test/docs/requirement_status_invariants_test.exs
   - docs/status/requirement_status.v4.yaml
-queue_task_id: 293
-github_issue: 586
+queue_ref: Q-293
+github_ref: GH-586
 status: resolved
 resolved_in_run: "session queue-loop, ORCH direct (docs-only verification, no new fix needed)"
 resolved_at: 2026-08-23T07:41:00Z

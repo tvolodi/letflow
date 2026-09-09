@@ -26,8 +26,8 @@ description: >
   same judgement call independently.
 affected_files:
   - lib/letflow/design/req237-zig-provenance-marking-convention.md
-queue_task_id: 510
-github_issue: 991
+queue_ref: Q-510
+github_ref: GH-991
 status: resolved
 resolved_at: "2026-09-05T17:34:00Z"
 resolution: >

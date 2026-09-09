@@ -65,7 +65,7 @@ affected_files:
   - handoffs/orchestrator.log
   - handoffs/registry.json
   - docs/status/requirement_status.yaml
-github_issue: https://github.com/tvolodi/letflow/issues/121
+github_ref: GH-121
 status: resolved
 resolved_in_run: WF02-REQ042-20260817
 resolved_at: "2026-08-17T22:00:00Z"

@@ -21,7 +21,7 @@ description: >
   noise tail.
 affected_files:
   - test/letflow/engine_concurrency_test.exs
-github_issue: 584
+github_ref: GH-584
 status: resolved
 resolved_in_run: WF03-ISS0291-20260823
 resolved_at: 2026-08-23T09:05:00Z

@@ -95,7 +95,7 @@ resolution: >
   rather than trusted from a single run. Fail-first proof: the same compile command,
   run against the pre-fix file state (via git stash), reproduced the original 3
   warnings and exit 1, confirming the regression the fix actually closes.
-github_issue: null # gh authenticated and reachable, but this issue was filed directly
+github_ref: null # gh authenticated and reachable, but this issue was filed directly
   # as docs/issues/ISS-0046.yaml with no github_issue field set at filing time (unlike
   # its sibling ISS-0045) -- no GitHub issue exists to close for this one.
 version_attribution_addendum: >

@@ -39,9 +39,9 @@ affected_files:
   - lib/letflow/obs/
 related:
   - ISS-0534
-github_issue_number: 1076
-github_issue: "https://github.com/tvolodi/letflow/issues/1076"
-queue_task_id: 533
+github_ref: GH-1076
+github_ref: GH-1076
+queue_ref: Q-533
 scoping_note: >
   Local docs/issues/ISS-0533.yaml record was missing at filing time -- only the
   letflow-queue task and GitHub issue existed. Created by ISSUE-FIXER at

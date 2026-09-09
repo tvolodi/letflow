@@ -19,8 +19,8 @@ affected_files:
   - test/support/data_case.ex
   - test/letflow/definitions/promotion_test.exs
 
-queue_task_id: 181
-github_issue: https://github.com/tvolodi/letflow/issues/367
+queue_ref: Q-181
+github_ref: GH-367
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (181) and its mirrored GitHub issue (#367) in one call, so `gh issue create` was deliberately NOT called separately -- doing so would double-post, which is what produced the #358/#359 duplicate pair recorded in ISS-0109.
 

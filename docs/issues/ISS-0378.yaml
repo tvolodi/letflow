@@ -20,8 +20,8 @@ description: >
   repo-wide diff invariant.
 affected_files:
   - test/letflow/scheduler/poller_test.exs
-queue_task_id: 378
-github_issue: 734
+queue_ref: Q-378
+github_ref: GH-734
 status: resolved
 resolved_in_run: WF03-ISS0378-20260830
 resolved_at: "2026-08-30T07:18:42Z"

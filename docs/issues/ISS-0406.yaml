@@ -40,8 +40,8 @@ source: >
   PR #795 CI runs 33587840358 (3 failed reruns) and 33592693185 (1 more
   failed run post-rebase), all showing the main suite passing (3053-3054/
   3054) with only the isolated wasm_hang subset failing (6/7).
-queue_task_id: 406
-github_issue: 797
+queue_ref: Q-406
+github_ref: GH-797
 status: resolved
 resolution: >
   Root-caused by ISSUE-FIXER (WF03-ISS0406-20260902): the CPU-scheduling

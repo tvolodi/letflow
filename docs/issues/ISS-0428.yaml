@@ -98,8 +98,8 @@ source: >
   lib/mix/tasks/, mix.exs or ci.yml reference. ISS-0352 named the
   check-adoption as option (b) but resolved via option (a). Timings
   measured in this same session on the same commit.
-queue_task_id: 428
-github_issue: 832
+queue_ref: Q-428
+github_ref: GH-832
 
 status: resolved
 

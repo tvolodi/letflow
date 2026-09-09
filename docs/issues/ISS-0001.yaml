@@ -39,7 +39,7 @@ description: >
 affected_files:
   - docs/requirements.yaml
   - docs/migration/decisions/0001-web-framework.md
-github_issue: https://github.com/tvolodi/letflow/issues/1
+github_ref: GH-1
 status: resolved
 resolved_at: 2026-08-15T19:03:12Z
 resolution: >

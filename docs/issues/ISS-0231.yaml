@@ -65,8 +65,8 @@ related:
   - ISS-0076  # precedent for correcting a closed issue in place via a `correction:` field
   - ISS-0092  # the guessed-impl_order incident TASK_QUEUE.md's "never a guessed one" rule came from
 
-queue_task_id: 231
-github_issue: 469
+queue_ref: Q-231
+github_ref: GH-469
 github_issue_note: >
   `register_task` created both the queue task (231) and its mirrored GitHub
   issue (469) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

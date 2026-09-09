@@ -83,35 +83,43 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
       %{dir: dir}
     end
 
-    test "F-BARE-INT -- github_issue as a bare integer is parsed", %{dir: dir} do
-      write_issue(dir, "ISS-9001.yaml", "id: ISS-9001\ngithub_issue: 205\n")
+    test "F-PREFIXED -- github_ref: GH-<n> is parsed", %{dir: dir} do
+      write_issue(dir, "ISS-9001.yaml", "id: ISS-9001\ngithub_ref: GH-205\n")
 
       assert [%{ref: "ISS-9001", number: 205, path: path}] = Audit.tracked_issues(dir)
       assert path == Path.join(dir, "ISS-9001.yaml")
     end
 
-    test "F-BARE-URL -- github_issue as an unquoted full GitHub URL is parsed", %{dir: dir} do
-      write_issue(
-        dir,
-        "ISS-9002.yaml",
-        "id: ISS-9002\ngithub_issue: https://github.com/tvolodi/letflow/issues/1\n"
-      )
+    # UPDATED 2026-09-09 (ISSUE_QUEUE.md "Numbering schema"). F-BARE-INT,
+    # F-BARE-URL and F-QUOTED-URL used to assert that `github_issue:` parsed as a
+    # bare integer, an unquoted URL and a quoted URL -- the three shapes the real
+    # corpus carried. All 305 files were normalised to a single
+    # `github_ref: GH-<n>`, and `mix letflow.check_issue_refs` rejects every
+    # other shape.
+    #
+    # Inverted rather than deleted: the legacy shapes must NOT be parsed. A
+    # reader that still accepted them would make the normalisation
+    # unenforceable -- a file violating the schema would stay invisible to this
+    # audit instead of surfacing, which is the failure the gate exists to stop.
+    test "F-LEGACY-FIELD-IGNORED -- the superseded `github_issue:` field is not parsed",
+         %{dir: dir} do
+      write_issue(dir, "ISS-9002.yaml", "id: ISS-9002\ngithub_issue: 205\n")
 
-      assert [%{ref: "ISS-9002", number: 1}] = Audit.tracked_issues(dir)
+      assert Audit.tracked_issues(dir) == []
     end
 
-    test "F-QUOTED-URL -- github_issue as a quoted full GitHub URL is parsed", %{dir: dir} do
+    test "F-LEGACY-URL-IGNORED -- a full GitHub URL is not a ref", %{dir: dir} do
       write_issue(
         dir,
         "ISS-9003.yaml",
-        "id: ISS-9003\ngithub_issue: \"https://github.com/tvolodi/letflow/issues/206\"\n"
+        "id: ISS-9003\ngithub_ref: https://github.com/tvolodi/letflow/issues/206\n"
       )
 
-      assert [%{ref: "ISS-9003", number: 206}] = Audit.tracked_issues(dir)
+      assert Audit.tracked_issues(dir) == []
     end
 
-    test "F-NULL-ABSENT -- github_issue: null is skipped entirely (not tracked)", %{dir: dir} do
-      write_issue(dir, "ISS-9004.yaml", "id: ISS-9004\ngithub_issue: null\n")
+    test "F-NULL-ABSENT -- github_ref: null is skipped entirely (not tracked)", %{dir: dir} do
+      write_issue(dir, "ISS-9004.yaml", "id: ISS-9004\ngithub_ref: null\n")
 
       assert Audit.tracked_issues(dir) == []
     end
@@ -125,14 +133,14 @@ defmodule Mix.Tasks.Letflow.AuditIssueClosuresTest do
     test "F-ID-FALLBACK -- when id: is missing, ref falls back to the filename stem", %{
       dir: dir
     } do
-      write_issue(dir, "ISS-9006.yaml", "github_issue: 42\n")
+      write_issue(dir, "ISS-9006.yaml", "github_ref: GH-42\n")
 
       assert [%{ref: "ISS-9006", number: 42}] = Audit.tracked_issues(dir)
     end
 
     test "F-MULTIPLE-SORTED -- multiple tracked files are returned sorted by path", %{dir: dir} do
-      write_issue(dir, "ISS-9020.yaml", "id: ISS-9020\ngithub_issue: 20\n")
-      write_issue(dir, "ISS-9010.yaml", "id: ISS-9010\ngithub_issue: 10\n")
+      write_issue(dir, "ISS-9020.yaml", "id: ISS-9020\ngithub_ref: GH-20\n")
+      write_issue(dir, "ISS-9010.yaml", "id: ISS-9010\ngithub_ref: GH-10\n")
 
       assert [%{ref: "ISS-9010"}, %{ref: "ISS-9020"}] = Audit.tracked_issues(dir)
     end

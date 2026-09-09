@@ -10,9 +10,9 @@ severity: MINOR
 status: resolved
 resolved_at: 2026-08-26T18:50:00Z
 resolving_run: WF03-ISS0297-20260826
-queue_task_id: 297
-github_issue_number: 596
-github_issue: https://github.com/tvolodi/letflow/issues/596
+queue_ref: Q-297
+github_ref: GH-596
+github_ref: GH-596
 description: >
   REQ-140's TEST-RUNNER ran the full suite via scripts/test_parallel.sh
   (16 partitions) as a broader sanity check and found 3/1996 failures:

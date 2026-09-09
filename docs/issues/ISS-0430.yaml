@@ -119,8 +119,8 @@ acceptance_criteria:
   - "The design states its relationship to the two ALREADY-SHIPPED pollers (Letflow.Scheduler.Poller, Letflow.Engine.ServiceTaskDispatcher.Poller) explicitly: either a future retrofit is recommended (with the reason and rough scope), or it is not (with the reason) -- REQ-214 having already shipped as a polling loop, this is a retrofit question, not a greenfield sequencing question"
   - "Any performance claim is justified by ELIMINATED ROUND TRIPS, not this dev host's inflated 1.3ms figure -- must note ~92% is Docker Desktop network overhead and co-located deployment measures ~0.11ms"
   - "No implementation of a specific consumer is included"
-queue_task_id: 430
-github_issue: 834
+queue_ref: Q-430
+github_ref: GH-834
 related:
   - ISS-0425
   - ISS-0421

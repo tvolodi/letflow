@@ -33,8 +33,8 @@ source: >
   CI run https://github.com/tvolodi/letflow/actions/runs/33556183399
   (test/letflow/secrets_test.exs:85, property "round trip" failure),
   handoffs/WF03-ISS0401-20260902/ Step Final triage.
-queue_task_id: 403
-github_issue: 791
+queue_ref: Q-403
+github_ref: GH-791
 status: resolved
 resolved_in_run: WF03-ISS0403-20260901
 resolved_at: "2026-09-01T23:32:00Z"

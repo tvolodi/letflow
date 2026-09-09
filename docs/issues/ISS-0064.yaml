@@ -30,8 +30,8 @@ affected_files:
 status: resolved
 resolved_in_run: WF03-ISS0064-20260819
 resolved_at: "2026-08-19T02:56:56Z"
-github_issue: 207
-queue_task_id: 117
+github_ref: GH-207
+queue_ref: Q-117
 related_issues:
   - ISS-0048
   - ISS-0050

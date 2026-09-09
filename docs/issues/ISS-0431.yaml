@@ -80,8 +80,8 @@ source: >
   config/; the prior-art Zig finding is quoted from the project's own
   ZIG_VS_ELIXIR_FINDINGS.md Race 3 scorecard. Round-trip figures
   profiled in the same session (full table in ISS-0432).
-queue_task_id: 431
-github_issue: 835
+queue_ref: Q-431
+github_ref: GH-835
 
 status: resolved
 resolved_in_run: WF02-REQ218-20260903

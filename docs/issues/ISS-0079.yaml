@@ -241,7 +241,7 @@ resolution: >
   issues by this fix, a judgment call beyond what resolving #298 itself calls for.
 
   Closing GH#298.
-github_issue: https://github.com/tvolodi/letflow/issues/298
+github_ref: GH-298
 related:
   - ISS-0076
   - ISS-0078

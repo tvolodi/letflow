@@ -65,8 +65,8 @@ source: >
   PR #848's first CI run (WF03-ISS0426-20260902's own Step Final), where
   letflow.lint_handoffs failed with "1 new (un-grandfathered) violation" on
   [H1] for step-03-elixir-dev.json.
-queue_task_id: 440
-github_issue: 849
+queue_ref: Q-440
+github_ref: GH-849
 status: instrumented
 superseded_by: ISS-0441
 resolved_in_run: WF03-ISS0440-20260903

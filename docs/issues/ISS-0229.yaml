@@ -42,8 +42,8 @@ related:
   - ISS-0111  # added the advisory lock and the self-heal that now raises
   - ISS-0107  # established that a nested `mix test` shares the same database
 
-queue_task_id: 229
-github_issue: 467
+queue_ref: Q-229
+github_ref: GH-467
 
 status: resolved
 resolved_in_run: WF03-ISS0229-20260822

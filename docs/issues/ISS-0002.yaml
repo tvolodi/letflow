@@ -60,7 +60,7 @@ description: >
 affected_files:
   - docs/migration/decisions/0002-oidc-integration.md
   - docs/requirements.yaml
-github_issue: https://github.com/tvolodi/letflow/issues/4
+github_ref: GH-4
 status: resolved
 resolved_at: 2026-08-15T19:08:00Z
 resolution: >

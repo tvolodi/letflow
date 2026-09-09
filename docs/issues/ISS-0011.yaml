@@ -208,7 +208,7 @@ description: >
 
 affected_files:
   - test/letflow/plugs/tenant_status_test.exs
-github_issue: https://github.com/tvolodi/letflow/issues/65
+github_ref: GH-65
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0011-20260817

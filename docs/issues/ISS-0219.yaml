@@ -26,8 +26,8 @@ affected_files:
 related:
   - ISS-0217  # different mechanism (TenantSchemaReaper deferral), same script
 
-queue_task_id: 219
-github_issue: 449
+queue_ref: Q-219
+github_ref: GH-449
 github_issue_note: >
   register_task created both the queue task (219) and its mirrored GitHub issue
   (449) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

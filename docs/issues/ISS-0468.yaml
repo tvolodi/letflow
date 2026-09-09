@@ -25,8 +25,8 @@ affected_files:
   - test/support/tenant_template_test.exs
 related:
   - ISS-0427
-queue_task_id: 468
-github_issue: 898
+queue_ref: Q-468
+github_ref: GH-898
 status: resolved
 resolved_in_run: ORCH-direct-20260904-ISS0468
 resolved_at: "2026-09-04T19:00:00Z"

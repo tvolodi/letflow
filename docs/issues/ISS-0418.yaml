@@ -171,8 +171,8 @@ recurrence_2026_09_04_b: >
   is purely a CI-wait observation on that run's own PR, filed per this
   issue's now-established direct-append convention rather than a fresh
   register_task call.
-queue_task_id: 418
-github_issue: 816
+queue_ref: Q-418
+github_ref: GH-816
 status: resolved
 resolved_in_run: WF03-ISS0418-20260907
 resolved_at: "2026-09-07T10:55:00Z"

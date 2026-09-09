@@ -58,8 +58,8 @@ related:
   - ISS-0231  # the run that built the detector and recorded this gap in its follow_ups
   - ISS-0221  # the original idle-pipeline failure, one layer down
 
-queue_task_id: 258
-github_issue: 500
+queue_ref: Q-258
+github_ref: GH-500
 github_issue_note: >
   `register_task` created both the queue task (258) and its mirrored GitHub
   issue (500) in one call, per ISSUE_QUEUE.md step 2a; `gh issue create` was

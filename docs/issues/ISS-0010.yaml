@@ -43,7 +43,7 @@ affected_files:
   - handoffs/registry.json
   - docs/agents/shared/HANDOFF_PROTOCOL.md
   - docs/agents/AGENT_SYSTEM.md
-github_issue: https://github.com/tvolodi/letflow/issues/42
+github_ref: GH-42
 status: resolved
 resolution:
   resolved_at: 2026-08-16T07:09:47Z

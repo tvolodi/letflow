@@ -43,7 +43,7 @@ description: >
   task's status.
 affected_files:
   - lib/letflow/engine/sub_process.ex   # exists only on feature/WF02-REQ062-20260819
-github_issue: 255
+github_ref: GH-255
 status: resolved
 resolved_in_run: WF03-ISS0071
 resolved_at: 2026-08-19T16:11:25Z

@@ -12,9 +12,9 @@ resolved_in_run: WF03-ISS0296-20260826
 resolved_at: "2026-08-26T21:00:00Z"
 reverified_in_run: WF03-ISS0296-20260908
 reverified_at: "2026-09-08T18:55:00Z"
-queue_task_id: 296
-github_issue_number: 594
-github_issue: https://github.com/tvolodi/letflow/issues/594
+queue_ref: Q-296
+github_ref: GH-594
+github_ref: GH-594
 description: >
   REQ-133 (End-to-end login -- SPA through Keycloak to an authorized API
   call) had its config-fix scope landed and merged (PR #593): web/src/auth/

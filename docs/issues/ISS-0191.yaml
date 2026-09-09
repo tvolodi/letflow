@@ -122,8 +122,8 @@ related:
   - ISS-0192  # the two stale PENDING handoffs
   - ISS-0117  # defines the recovery marker whose well-formedness the linter can check
 
-queue_task_id: 191
-github_issue: https://github.com/tvolodi/letflow/issues/379
+queue_ref: Q-191
+github_ref: GH-379
 github_issue_note: >
   Filed by ORCH on ISSUE-FIXER's behalf per ISSUE_QUEUE.md step 2a: register_task created both the queue task (191) and its mirrored GitHub issue (#379) in one call, so `gh issue create` was deliberately NOT called separately. The id comes from register_task's `issue_ref`, not from a directory scan.
 status: resolved

@@ -8,8 +8,8 @@ tags: [documentation, provenance, decision-record, frontend, requirements]
 status: resolved
 resolved_in_run: WF03-ISS0546-20260909
 resolved_at: "2026-09-08T21:49:12Z"
-queue_task_id: 546
-github_issue: 1105
+queue_ref: Q-546
+github_ref: GH-1105
 affected_files:
   - docs/migration/decisions/0020-frontend-architecture.md
   - docs/requirements.yaml

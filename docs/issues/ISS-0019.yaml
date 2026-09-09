@@ -72,7 +72,7 @@ description: >
   fixed inside this run.
 affected_files:
   - lib/letflow/tenant_provisioning.ex
-github_issue: https://github.com/tvolodi/letflow/issues/75
+github_ref: GH-75
 status: resolved
 resolved_by: ORCH
 resolved_in_run: WF03-ISS0019-20260817

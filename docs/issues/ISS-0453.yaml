@@ -97,7 +97,7 @@ related:
 source: >
   PR #864 (ADHOC-ADR0017-20260903), CI run 33819989575 job on commit
   92b5ce92, observed live during this run's merge-gate check.
-queue_task_id: 453
+queue_ref: Q-453
 status: open
 data_point_20260907: >
   Another occurrence, different specific assertion in the same file/

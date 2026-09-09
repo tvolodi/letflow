@@ -84,8 +84,8 @@ source: >
   independent life". Scope option ("cut framing, keep citations") chosen
   by the user over total removal when the tradeoff was presented. All
   counts in this record measured by grep at filing time and re-derivable.
-queue_task_id: 424
-github_issue: 828
+queue_ref: Q-424
+github_ref: GH-828
 
 orch_routing_note: >
   ORCH (2026-09-05): ISSUE-FIXER's sizing pass

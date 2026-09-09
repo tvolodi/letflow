@@ -22,8 +22,8 @@ affected_files:
   - priv/keycloak/realms/bpm-default.json
   - lib/letflow/oidc/token_verifier/oidcc.ex
   - lib/letflow/plugs/auth_pipeline.ex
-queue_task_id: 275
-github_issue: 545
+queue_ref: Q-275
+github_ref: GH-545
 
 status: resolved
 resolved_in_run: WF03-ISS0275-20260822

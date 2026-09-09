@@ -47,8 +47,8 @@ description: >
   the same misread.
 affected_files:
   - test/letflow/plugs/auth_pipeline_configurable_verifier_test.exs
-queue_task_id: 329
-github_issue: 630
+queue_ref: Q-329
+github_ref: GH-630
 status: resolved
 resolved_in_run: WF03-ISS0329-20260823
 resolved_at: 2026-08-23T19:55:46Z

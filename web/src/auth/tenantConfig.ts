@@ -7,9 +7,21 @@ const DEFAULT_CLIENT_ID = (import.meta.env.VITE_OIDC_CLIENT_ID as string) ?? 'le
 
 const REALM_STORAGE_KEY = 'bpm_realm_slug'
 
+/**
+ * Closed branding shape returned by GET /api/tenant-config (REQ-281). Always
+ * present with all three sub-keys when `branding` itself is present — see
+ * lib/letflow/design/req283-branding-css-theming.md section 5.
+ */
+export interface Branding {
+  app_name: string
+  logo_url: string | null
+  brand_colors: Record<string, string>
+}
+
 export interface TenantConfig {
   oidc_authority: string
   client_id: string
+  branding?: Branding
 }
 
 let _cachedConfig: TenantConfig | null = null

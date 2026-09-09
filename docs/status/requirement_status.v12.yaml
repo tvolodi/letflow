@@ -482,3 +482,49 @@ history:
       T-LIVE-DEFERRED-COUNT assertions (7 -> 6, and the exact id list)
       before pushing. ORCH will merge and release queue task 562
       status:done.
+  - req: REQ-283
+    event: done
+    agent: ORCH
+    at: "2026-09-09T16:19:09Z"
+    note: >
+      REQ-283 (queue task 563, GH#1154) implemented via
+      WF02-REQ283-20260909: applies tenant branding as CSS
+      custom-property overrides on tokens.css in the SPA (0020 D1c,
+      theming half). New BrandingProvider mounted once at app root in
+      main.tsx, reading REQ-281's branding block through the existing
+      fetchTenantConfig cache. Closed one-key allowlist
+      (brand_colors.primary -> --color-brand-600), matching
+      Letflow.Identity.Tenant's own @brand_colors_allowed_keys ~w(primary)
+      server-side closure -- applyBranding.ts iterates the allowlist's
+      own keys, never the tenant-supplied object's keys, so no
+      tenant-controlled property name can ever reach the DOM. Logo
+      rendered via a plain <img src>, alt sourced only from appName,
+      never a markup-interpreting sink. All three fallback cases
+      (branding absent, a key missing, endpoint failure outright)
+      collapse to tokens.css's existing platform defaults via
+      ?./?? chains, matching tenantConfig.ts's established
+      catch-all-never-rejects pattern. Hard-coded "Letflow" product
+      name in AppShell.tsx's sidebar replaced with branding's appName.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no
+      rework, independently verified the allowlist-closure and
+      logo-safety claims against actual server-side source) ->
+      FRONTEND-DEV -> SECURITY-REVIEWER (PASS -- independently
+      confirmed allowlist iterates its own keys not the tenant
+      object's, alt sourced only from appName, CSS values set via
+      element.style.setProperty (never string-concatenated into raw
+      CSS/style text), zero eval/dangerouslySetInnerHTML/innerHTML,
+      all fallback branches terminate safely) -> REVIEWER (1 rework
+      cycle: AC1's computed-CSS-value test initially only exercised
+      applyBrandingColors() directly, never rendered the real
+      BrandingProvider tree, so a real bug in the provider's field-path
+      wiring would have gone undetected by any existing test.
+      FRONTEND-DEV added one render-level test through the real
+      component tree with a genuine fail-first proof -- REVIEWER
+      independently reproduced that fail-first break itself rather
+      than trusting the report, confirmed the test fails on the broken
+      path and passes once reverted -- re-check PASS). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR skipped: 337 tests (53 files) already map
+      every acceptance criterion with distinct, non-tautological
+      assertions, independently confirmed by both SECURITY-REVIEWER and
+      REVIEWER re-running the full suite themselves. No dependents
+      deferred against REQ-283 -- no cascade to fix this time.

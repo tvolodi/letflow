@@ -202,8 +202,11 @@ defmodule Letflow.Routers.MobileTenantConfigTest do
   # locales/default_locale/branding/environment_kind are global, not per-tenant
   # ═══════════════════════════════════════════════════════════════════════════
 
-  describe "the four non-realm_url fields never vary by slug (design §4/§5 OQ-1 -- global, not per-tenant)" do
-    test "a resolvable known-slug response and the default-fallback response agree on every field except realm_url" do
+  # Post-REQ-282: this equivalence holds only when no settings are stored --
+  # see the AC3/OQ-A describes above for the now-tenant-varying case.
+  # environment_kind remains the sole field still globally invariant.
+  describe "no-stored-settings tenant matches the default-fallback response" do
+    test "a resolvable known-slug response with no stored settings agrees with the default response" do
       tenant =
         insert_tenant!(%{
           slug: unique_slug("req124-global-fields"),

@@ -5835,6 +5835,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-285 (queue task 555, GH#1128) adopts react-intl as web/'s i18n layer, per new decision record docs/migration/decisions/0021-web-i18n-library.md (chosen over i18next -- most .toLocale*() call sites are module-scope helper functions, not JSX-inline, so react-intl's imperative createIntl()/IntlShape API reaches them without restructuring call signatures; i18next has no native date-formatter, leaving it with zero load-bearing usage until a future translation requirement). Re-verified REQ-127's 2026-08-22 survey rather than inheriting it: counts drifted from 25/27/20 to 25 grep-matched lines / 26 actual invocations / 19 files. All 26 converted, 0 left bare. The hardcoded 'en-US' site (UsersPage.tsx:91) fixed. New fallback chain (web/src/i18n/sessionLocale.ts): tenant default_locale > browser preference > hardcoded 'en', 10 curated PLATFORM_SUPPORTED_LOCALES, 5 testable cases. A genuine, honestly-flagged gap: no current requirement wires a tenant's default_locale to the web SPA (REQ-281 excludes locale data by design, REQ-282's mobile endpoint doesn't reach the SPA, REQ-283 is CSS/branding only) -- shipped with tenantDefaultLocale defaulting to null in production but the mechanism is fully testable today, documented as an open dependency rather than a silent workaround. Design needed 1 rework cycle: CODE-DESIGN-VALIDATOR caught a real self-contradicting factual error (a claim that the frontend TenantConfig interface already gained a branding key 'since REQ-281,' when REQ-281 only changed the backend response shape). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework, re-check PASS) -> FRONTEND-DEV -> REVIEWER (PASS -- independently re-ran the completeness grep across web/src/ and confirmed zero remaining .toLocale*() hits, not just trusting the reported 26=26 claim; confirmed react-intl's imperative API is genuinely used at module scope as the decision record's own reasoning requires) -> TEST-RUNNER (backend mix compile confirmed zero impact; frontend gates independently re-run: 310/310 unit tests, 48/48 guard tests). SECURITY-REVIEWER out of scope (pure frontend, no tenant-data path)."
+    },
+    {
+      "run_id": "WF02-REQ286-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-286",
+      "issue_id": null,
+      "queue_task_id": 556,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1129,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/routers/tasks.ex"
+      ],
+      "branch_name": "feature/WF02-REQ286-20260909",
+      "started_at": "2026-09-09T08:03:36Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-286 (queue task 556, GH#1129) exposes REQ-273's write-once tasks.form_schema column as a 14th key in task_detail_map/3 -- response-shaping on a tenant data path, security-gated against INV-1/INV-2/INV-5. A single Map.put reading task.form_schema off the already-fetched, already-scoped struct -- no new query. Scoped to task_detail_map/3 only, not task_list_item_map/2. Version-pinning (AC3) proven automatic: only insert_changeset/2 ever casts :form_schema, nothing else ever updates it, so reading the column back IS reading the pinned value. CODE-DESIGNER found and fixed a second stale moduledoc reference beyond what the requirement's own AC5 named. SECURITY-REVIEWER named all three invariants explicitly: INV-1 traced end-to-end (server-derived prefix, no tenant_id column on tasks, schema-per-tenant) ruling out cross-tenant leakage; INV-2 confirmed via the same already-scoped struct; INV-5 confirmed the not-found branch untouched. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS) -> REVIEWER (PASS, 56/56 reproduced) -> TEST-RUNNER (full suite 3544/3546 passed, 2 pre-existing rustc-absent failures unrelated). Merge-time bookkeeping: flipping REQ-286 to done expired two sibling blocked-by deferrals (REQ-284, REQ-292). REQ-284 had no live blocker left at all -- registered it properly in the queue (task 560, GH#1145) rather than a fake re-scope. REQ-292 re-scoped to REQ-291 (not REQ-290, to avoid a blocked-by cycle with REQ-290's own pre-existing deferral) -- caught by mix letflow.check_deferral_staleness's cycle detector before pushing."
     }
   ]
 }

@@ -985,7 +985,24 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # This count drops as each blocker merges and the blocked entry is
       # registered; it rises again with any new deferral. `stale_count`,
       # however, must stay 0 -- that one IS the invariant.
-      assert result.deferral_count == 10
+      #
+      # UPDATE (WF02-REQ286-20260909): the count dropped from 10 to 9,
+      # exactly the mechanism this test's own comment above predicts.
+      # Flipping REQ-286 to done expired both REQ-284's and REQ-292's
+      # `blocked-by: REQ-286` deferrals. REQ-284 turned out to have no
+      # live blocker left at all (its other dependency, REQ-273, was
+      # already done) -- registered it properly in the queue (task 560,
+      # GH#1145) rather than inventing a re-scope target, which is what
+      # removed it from the deferred set entirely. REQ-292 still has two
+      # live dependencies (REQ-290, REQ-291) and was re-scoped to
+      # blocked-by: REQ-291 (not REQ-290, to avoid a blocked-by cycle
+      # with REQ-290's own pre-existing REQ-292-scoped deferral) -- it
+      # remains in the deferred set, still legitimate. Net: 10 - 1 = 9.
+      # Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> audit(), returning
+      # deferral_count == 9, stale_count == 0. The detector is unchanged.
+      assert result.deferral_count == 9
       assert result.stale_count == 0
 
       # The substance, not just the count: every deferral present is
@@ -999,7 +1016,6 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
                "REQ-224",
                "REQ-279",
                "REQ-283",
-               "REQ-284",
                "REQ-290",
                "REQ-291",
                "REQ-292",

@@ -274,11 +274,111 @@ shape of mechanism applied to a narrower question, not a new pattern.
 
 ## SECURITY-REVIEWER sign-off
 
-(Pending. Stated interest per REQ-302: the `ON DELETE` choice's
-cross-tenant/data-loss implications specifically — whether the chosen
-clause either orphans referencing rows or risks cascading data loss across
-a tenant-isolated table in a way that would be hard to audit after the
-fact.)
+**Status: PASS** (2026-09-09, `SECURITY-REVIEWER`, REQ-302).
+
+**Scope note.** This is a design-time review — no `lib/` code or
+`priv/repo/migrations/*.exs` exists yet implementing this record (REQ-298
+builds it later). The diff under review (`git diff main...HEAD`) touches
+only this decision record and a `docs/requirements.yaml` status line, no
+migration or schema module. By the literal scope test, INV-1 is therefore
+NOT-APPLICABLE to *this diff*. This review nonetheless assesses the
+record's proposed `ON DELETE` semantics on their merits, per REQ-302's own
+initiative-invocation of this gate, because REQ-298 is stated to implement
+this record's DDL choice verbatim — the correctness of the choice matters
+now, even though no code exists yet to run INV-1's mechanical checks
+against.
+
+**INV-1 (tenant data isolation) — assessed on the design's merits, not
+mechanically checkable (no code yet).** No cross-tenant FK reference is
+proposed anywhere in this record. Every promoted-FK-column table is a
+per-entity-type table living inside its own tenant's schema (per `0023`);
+the record's own CASCADE-rejection reasoning explicitly frames the blast
+radius as "every other entity-type table across the tenant schema" —
+singular, intra-tenant. Nothing in either sub-question's decision or
+reasoning proposes, or leaves open, a `REFERENCES` constraint that crosses
+a tenant schema boundary. No INV-1 violation exists in this design.
+
+**Checklist verification:**
+
+1. **Central claim confirmed by direct read.** `Letflow.Entities.Records.delete_record/2`
+   (`records.ex:199-219`) never issues a SQL `DELETE`. It resolves the
+   existing row via `fetch_existing_record/3`, and — when not already
+   `deleted` — runs the shared `run_command/2` pipeline
+   (`records.ex:225-242`), which appends an `ENTITY_RECORD_DELETED` event
+   and calls `upsert_record_latest/3`. That function's `:update`/`:delete`
+   clause (`records.ex:289-298`) does
+   `ctx.existing_record |> Latest.update_changeset(%{..., deleted: kind == :delete, ...}) |> repo.update(prefix: ctx.prefix)`
+   — a genuine `UPDATE ... SET deleted = true, ...`, never a `DELETE FROM`.
+   The referenced row stays physically present. The record's claim that
+   `ON DELETE` is inert on the application's own delete path is accurate,
+   read from source, not asserted.
+
+2. **RESTRICT's failure mode is genuine Postgres behavior and is stated
+   explicitly, not just asserted.** For a `REFERENCES ... ON DELETE
+   RESTRICT` constraint, Postgres refuses the referencing-row-holding
+   hard `DELETE` outright, raising `foreign_key_violation` (SQLSTATE
+   23503) synchronously at the statement that attempted it — this is
+   standard, well-defined Postgres FK-action semantics, correctly
+   characterized. The record states this consequence explicitly rather
+   than only asserting safety: "makes the database refuse a hard `DELETE`
+   against any referenced row for as long as a referencing row exists,"
+   and cites the established in-codebase idiom framing this exact
+   behavior as "fails loudly rather than [failing] unreachable in
+   practice" / "fails loudly instead of silently losing tenant data." An
+   out-of-band hard `DELETE` against a referenced row produces a loud,
+   auditable database error (an exception the caller must handle), not
+   silent data loss — this is the correct, safer failure mode for the
+   stated threat model.
+
+3. **NO ACTION's rejection is explicit, not hand-waved, and correctly
+   reasoned.** The record names NO ACTION as "close but not chosen,"
+   correctly identifies its only semantic difference from RESTRICT
+   (deferrability to end-of-statement/end-of-transaction, relevant only
+   for cyclic or intra-statement FK graphs), and states plainly that
+   "nothing in `0023`'s promoted-column shape creates such a cycle" (a
+   join entity has two FKs to two *different* tables, not a self-cycle) —
+   so deferred checking buys nothing here, and RESTRICT's immediate
+   failure is preferred as "the stronger and simpler guarantee." This
+   directly satisfies REQ-302's stated concern: the record does not
+   silently let NO ACTION's semantics apply by omission (Ecto/Postgres
+   default), it explicitly names and rejects that option with reasoning
+   tied to this schema's actual FK topology.
+
+4. **CASCADE is excluded outright, permanently, not just "not chosen" by
+   default.** The record's own language: "`CASCADE` is excluded
+   outright," with an explicit failure-mode trace — a hard `DELETE`
+   against a referenced row would "silently remove every referencing row
+   in every other entity-type table across the tenant schema," calling
+   this "real, irreversible tenant data loss triggered by a single
+   out-of-band statement, with no soft-delete recourse ... and no
+   `entity_events` replay path." No residual CASCADE-like path (nor
+   `SET NULL`'s silent-detach path, also explicitly rejected on
+   audit-trail grounds) is left open anywhere in the Decision or
+   Consequences sections. REQ-298 is instructed to implement `on_delete:
+   :restrict` "verbatim" with no runtime choice point that could resolve
+   to CASCADE.
+
+5. **No cross-tenant FK proposed** — see INV-1 assessment above.
+
+6. **Design-time scope, stated explicitly.** This review is against a
+   decision record only; no code exists to compile, migrate, or run.
+   Verification here is a source-level trace of the *current*
+   `delete_record/2` implementation (checklist item 1) plus a reasoning
+   audit of the record's own text (items 2-5) — not an executed test.
+   REQ-298's actual migration and DDL generator will need their own
+   SECURITY-REVIEWER pass when they land, to confirm the implementation
+   matches this record's decision (in particular, that `on_delete:
+   :restrict` is what the DDL generator actually emits, and that no
+   promoted-FK migration is left with Ecto's implicit NO-ACTION default
+   by omission).
+
+**Verdict: PASS.** The `ON DELETE RESTRICT` choice is sound, its
+failure-mode consequence (a loud, auditable Postgres constraint violation
+on out-of-band hard `DELETE`, never silent) is stated explicitly rather
+than merely asserted, the NO-ACTION alternative is explicitly considered
+and correctly rejected for this schema's non-cyclic FK topology, CASCADE
+is permanently and explicitly foreclosed, and no cross-tenant FK or other
+INV-1 risk is introduced by this design.
 
 ## REVIEWER sign-off
 

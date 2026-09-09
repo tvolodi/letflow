@@ -8,13 +8,13 @@ import type { DlqEntry } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { formatDateTime } from '@/i18n/format'
-
-const STATUS_COLOR: Record<string, string> = {
-  pending:   '#f59e0b',
-  retrying:  '#3b82f6',
-  resolved:  '#16a34a',
-  discarded: '#9ca3af',
-}
+import { PageLayout } from '@/components/ui/PageLayout'
+import { FilterBar } from '@/components/ui/FilterBar'
+import { Button } from '@/components/ui/Button'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { PaginationControls } from '@/components/ui/PaginationControls'
+import { JsonEditor } from '@/components/ui/JsonEditor'
 
 const OPERATE_ROLES = ['PROCESS_OPERATOR', 'PLATFORM_ADMIN']
 
@@ -116,6 +116,13 @@ function toRowTestId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, '-')
 }
 
+interface RetryAttempt {
+  attemptNo: number
+  attemptedAt: string
+  outcome: string
+  errorMessage?: string
+}
+
 export default function DlqPage() {
   const qc = useQueryClient()
   const { session } = useAuth()
@@ -207,323 +214,307 @@ export default function DlqPage() {
     setDiscardConfirmItem(null)
   }
 
-  const renderStatus = (entry: DlqEntry) => {
-    const normalized = normalizeStatus(entry, transientStatusById[entry.id])
-    return (
-      <span style={{ color: STATUS_COLOR[normalized] ?? '#374151', fontWeight: 600, fontSize: '.8rem' }}>
-        {normalized}
-      </span>
-    )
-  }
+  const page = cursorStack.length + 1
+  const pageSize = 25
+  const hasNextPage = data?.next_cursor != null
 
-  return (
-    <div style={{ padding: '1.5rem' }} data-testid="dlq-page">
-      <h2 style={{ marginBottom: '1.25rem' }}>Dead-Letter Queue</h2>
-
-      <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', marginBottom: '.8rem' }}>
-        <input
-          data-testid="dlq-filter-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="id, reason, or instance"
-          style={{ minWidth: '240px', padding: '.35rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-        />
-        <select
-          data-testid="dlq-filter-status"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: '.35rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-        >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="retrying">Retrying</option>
-          <option value="resolved">Resolved</option>
-          <option value="discarded">Discarded</option>
-        </select>
-        <select
-          data-testid="dlq-filter-source"
-          value={sourceTypeFilter}
-          onChange={(e) => setSourceTypeFilter(e.target.value)}
-          style={{ padding: '.35rem .6rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-        >
-          <option value="">All sources</option>
-          <option value="event">Event</option>
-          <option value="timer">Timer</option>
-          <option value="webhook">Webhook</option>
-        </select>
-        <button
-          data-testid="dlq-filter-apply"
-          type="button"
-          onClick={applyFilters}
-          style={{ padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}
-        >
-          Apply
-        </button>
-      </div>
-
-      <QueryStateBoundary
-        state={(isLoading ? 'loading' : isError ? classifyError(error) : 'success') as RendererState}
-        onRetry={() => { void refetch() }}
-        columns={[{ widthPercent: 20 }, { widthPercent: 40 }, { widthPercent: 10 }, { widthPercent: 15 }, { widthPercent: 15 }]}
-      >
-      {actionError && <p style={{ color: '#dc2626' }}>{actionError}</p>}
-
-      {rows.length === 0 && (
-        <p style={{ color: '#64748b' }}>Queue is empty.</p>
-      )}
-
-      <table data-testid="dlq-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.875rem' }}>
-        <thead>
-          <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-            <th style={{ padding: '.6rem .8rem' }}>Source</th>
-            <th style={{ padding: '.6rem .8rem' }}>Instance</th>
-            <th style={{ padding: '.6rem .8rem' }}>Reason</th>
-            <th style={{ padding: '.6rem .8rem' }}>Retry count</th>
-            <th style={{ padding: '.6rem .8rem' }}>Created</th>
-            <th style={{ padding: '.6rem .8rem' }}>Status</th>
-            <th style={{ padding: '.6rem .8rem' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((e) => {
-            const displayReason = extractFailureReason(e)
-            const status = normalizeStatus(e, transientStatusById[e.id])
-            const source = e.entry_type ?? e.item_type ?? 'unknown'
-
-            return (
-              <tr
-                key={e.id}
-                data-testid={`dlq-row-${toRowTestId(e.id)}`}
-                onClick={() => setSelectedId(e.id)}
-                style={{
-                  borderBottom: '1px solid #e2e8f0',
-                  background: selectedId === e.id ? '#f8fafc' : '#fff',
-                  cursor: 'pointer',
-                }}
-              >
-                <td style={{ padding: '.5rem .8rem' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    borderRadius: '999px',
-                    padding: '.2rem .55rem',
-                    fontSize: '.75rem',
-                    fontWeight: 600,
-                    background: '#e2e8f0',
-                    color: '#334155',
-                    textTransform: 'uppercase',
-                  }}>
-                    {source}
-                  </span>
-                </td>
-                <td style={{ padding: '.5rem .8rem', fontFamily: 'monospace', fontSize: '.75rem' }}>
-                  {e.instance_id ? (
-                    <Link to={`/instances/${e.instance_id}`} onClick={(event) => event.stopPropagation()}>
-                      {e.instance_id.slice(0, 8)}...
-                    </Link>
-                  ) : '—'}
-                </td>
-                <td style={{ padding: '.5rem .8rem', fontSize: '.8rem', color: '#64748b', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {displayReason}
-                </td>
-                <td style={{ padding: '.5rem .8rem', textAlign: 'center' }}>{e.retry_count}</td>
-                <td style={{ padding: '.5rem .8rem', color: '#64748b', fontSize: '.8rem' }}>{toShortDate(e.created_at)}</td>
-                <td style={{ padding: '.5rem .8rem' }}>{renderStatus(e)}</td>
-                <td style={{ padding: '.5rem .8rem', display: 'flex', gap: '.4rem' }}>
-                  <button
-                    data-testid={`dlq-details-${toRowTestId(e.id)}`}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setSelectedId(e.id)
-                    }}
-                    style={{ padding: '.25rem .5rem', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem' }}
-                  >
-                    Details
-                  </button>
-
-                  {canOperate && status !== 'resolved' && status !== 'discarded' && (
-                    <>
-                      <button
-                        data-testid={`dlq-retry-${toRowTestId(e.id)}`}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          retry.mutate(e.id)
-                        }}
-                        disabled={retry.isPending}
-                        style={{ padding: '.25rem .5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem' }}
-                      >
-                        Retry
-                      </button>
-                      <button
-                        data-testid={`dlq-discard-${toRowTestId(e.id)}`}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setDiscardConfirmItem(e)
-                        }}
-                        disabled={discard.isPending}
-                        style={{ padding: '.25rem .5rem', background: '#6b7280', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.75rem' }}
-                      >
-                        Discard
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-
-      <div style={{ marginTop: '.85rem', display: 'flex', gap: '.5rem' }}>
-        <button
-          data-testid="dlq-prev-page"
-          type="button"
-          disabled={cursorStack.length === 0}
-          onClick={goPrev}
-          style={{ padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '.85rem' }}
-        >
-          Previous
-        </button>
-        <button
-          data-testid="dlq-next-page"
-          type="button"
-          disabled={!data?.next_cursor}
-          onClick={goNext}
-          style={{ padding: '.35rem .8rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '.85rem' }}
-        >
-          Next
-        </button>
-      </div>
-      </QueryStateBoundary>
-
-      {selected && (
-        <section data-testid="dlq-detail-panel" style={{ marginTop: '1rem', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', background: '#fff' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-            <h3 style={{ margin: 0 }}>DLQ Item Detail</h3>
-            <button
-              type="button"
-              onClick={clearSelection}
-              style={{ padding: '.2rem .5rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}
-            >
-              Close
-            </button>
-          </div>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem', marginBottom: '.8rem' }}>
-            <tbody>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ width: '180px', color: '#64748b', padding: '.45rem .55rem' }}>Item ID</td>
-                <td style={{ padding: '.45rem .55rem', fontFamily: 'monospace' }}>{selected.id}</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ color: '#64748b', padding: '.45rem .55rem' }}>Source</td>
-                <td style={{ padding: '.45rem .55rem' }}>{selected.entry_type ?? selected.item_type ?? 'unknown'}</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ color: '#64748b', padding: '.45rem .55rem' }}>Instance</td>
-                <td style={{ padding: '.45rem .55rem' }}>{selected.instance_id ?? '—'}</td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <td style={{ color: '#64748b', padding: '.45rem .55rem' }}>Status</td>
-                <td style={{ padding: '.45rem .55rem' }}>{renderStatus(selected)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h4 style={{ margin: '.4rem 0' }}>Full failure reason</h4>
-          <pre style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '.65rem', overflow: 'auto', fontSize: '.8rem' }}>
-            {extractFailureReason(selected)}
-          </pre>
-
-          <h4 style={{ margin: '.8rem 0 .4rem' }}>Retry history</h4>
-          {extractRetryHistory(selected).length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.82rem' }}>
-              <thead>
-                <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                  <th style={{ padding: '.4rem .5rem' }}>Attempt</th>
-                  <th style={{ padding: '.4rem .5rem' }}>Time</th>
-                  <th style={{ padding: '.4rem .5rem' }}>Outcome</th>
-                  <th style={{ padding: '.4rem .5rem' }}>Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {extractRetryHistory(selected).map((attempt) => (
-                  <tr key={`${attempt.attemptNo}-${attempt.attemptedAt}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                    <td style={{ padding: '.4rem .5rem' }}>{attempt.attemptNo}</td>
-                    <td style={{ padding: '.4rem .5rem' }}>{toShortDate(attempt.attemptedAt)}</td>
-                    <td style={{ padding: '.4rem .5rem' }}>{attempt.outcome}</td>
-                    <td style={{ padding: '.4rem .5rem' }}>{attempt.errorMessage ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p style={{ margin: 0, color: '#64748b' }}>No retry history available.</p>
-          )}
-
-          <h4 style={{ margin: '.8rem 0 .4rem' }}>Context JSON</h4>
-          <pre style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '.65rem', overflow: 'auto', fontSize: '.8rem' }}>
-            {toPrettyJson(selected.context_json ?? selected.processor_metadata)}
-          </pre>
-
-          <h4 style={{ margin: '.8rem 0 .4rem' }}>Source payload</h4>
-          <pre style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px', padding: '.65rem', overflow: 'auto', fontSize: '.8rem' }}>
-            {toPrettyJson(selected.source_payload ?? selected.original_payload)}
-          </pre>
-        </section>
-      )}
-
-      {discardConfirmItem && (
-        <div
-          data-testid="dlq-discard-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Discard DLQ item"
+  const columns: DataTableColumn<DlqEntry>[] = [
+    {
+      id: 'source',
+      header: 'Source',
+      accessor: (e) => (
+        <span
           style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.45)',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1rem',
-            zIndex: 40,
+            borderRadius: '999px',
+            padding: '.2rem .55rem',
+            fontSize: '.75rem',
+            fontWeight: 600,
+            background: 'var(--color-neutral-200)',
+            color: 'var(--text-primary)',
+            textTransform: 'uppercase',
           }}
         >
-          <div style={{ background: '#fff', borderRadius: '6px', width: '100%', maxWidth: '520px', padding: '1rem', border: '1px solid #e2e8f0' }}>
-            <h3 style={{ marginTop: 0 }}>Discard this DLQ item?</h3>
-            <p style={{ marginTop: 0, color: '#475569' }}>
-              This action cannot be undone.
-            </p>
-            {discardConfirmItem.instance_id && (
-              <p style={{ marginTop: 0, color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '4px', padding: '.5rem .65rem' }}>
-                This item is tied to instance {discardConfirmItem.instance_id}. Discarding may cancel the associated instance.
-              </p>
+          {e.entry_type ?? e.item_type ?? 'unknown'}
+        </span>
+      ),
+    },
+    {
+      id: 'instance',
+      header: 'Instance',
+      accessor: (e) =>
+        e.instance_id ? (
+          <Link to={`/instances/${e.instance_id}`} onClick={(event) => event.stopPropagation()}>
+            {e.instance_id.slice(0, 8)}...
+          </Link>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      id: 'reason',
+      header: 'Reason',
+      accessor: (e) => (
+        <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+          {extractFailureReason(e)}
+        </span>
+      ),
+    },
+    {
+      id: 'retry_count',
+      header: 'Retry count',
+      sortable: true,
+      sortValue: (e) => e.retry_count,
+      accessor: (e) => e.retry_count,
+    },
+    {
+      id: 'created',
+      header: 'Created',
+      sortable: true,
+      sortValue: (e) => e.created_at,
+      accessor: (e) => toShortDate(e.created_at),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessor: (e) => <StatusBadge status={normalizeStatus(e, transientStatusById[e.id])} domain="dlq" />,
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      accessor: (e) => {
+        const status = normalizeStatus(e, transientStatusById[e.id])
+        return (
+          <div style={{ display: 'flex', gap: '.4rem' }} onClick={(event) => event.stopPropagation()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-testid={`dlq-details-${toRowTestId(e.id)}`}
+              onClick={() => setSelectedId(e.id)}
+            >
+              Details
+            </Button>
+            {canOperate && status !== 'resolved' && status !== 'discarded' && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid={`dlq-retry-${toRowTestId(e.id)}`}
+                  onClick={() => retry.mutate(e.id)}
+                  loading={retry.isPending}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  data-testid={`dlq-discard-${toRowTestId(e.id)}`}
+                  onClick={() => setDiscardConfirmItem(e)}
+                  loading={discard.isPending}
+                >
+                  Discard
+                </Button>
+              </>
+            )}
+          </div>
+        )
+      },
+    },
+  ]
+
+  const retryHistoryColumns: DataTableColumn<RetryAttempt>[] = [
+    { id: 'attempt', header: 'Attempt', accessor: (a) => a.attemptNo },
+    { id: 'time', header: 'Time', accessor: (a) => toShortDate(a.attemptedAt) },
+    { id: 'outcome', header: 'Outcome', accessor: (a) => a.outcome },
+    { id: 'error', header: 'Error', accessor: (a) => a.errorMessage ?? '—' },
+  ]
+
+  return (
+    <div data-testid="dlq-page">
+      <PageLayout title="Dead-Letter Queue">
+        <FilterBar
+          activeCount={[search, statusFilter, sourceTypeFilter].filter(Boolean).length}
+          onClear={() => { setSearch(''); setStatusFilter(''); setSourceTypeFilter(''); applyFilters() }}
+        >
+          <input
+            data-testid="dlq-filter-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="id, reason, or instance"
+            style={{ minWidth: '240px', padding: '.35rem .6rem', border: '1px solid var(--border-default)', borderRadius: '4px' }}
+          />
+          <select
+            data-testid="dlq-filter-status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: '.35rem .6rem', border: '1px solid var(--border-default)', borderRadius: '4px' }}
+          >
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="retrying">Retrying</option>
+            <option value="resolved">Resolved</option>
+            <option value="discarded">Discarded</option>
+          </select>
+          <select
+            data-testid="dlq-filter-source"
+            value={sourceTypeFilter}
+            onChange={(e) => setSourceTypeFilter(e.target.value)}
+            style={{ padding: '.35rem .6rem', border: '1px solid var(--border-default)', borderRadius: '4px' }}
+          >
+            <option value="">All sources</option>
+            <option value="event">Event</option>
+            <option value="timer">Timer</option>
+            <option value="webhook">Webhook</option>
+          </select>
+          <Button variant="secondary" size="sm" data-testid="dlq-filter-apply" onClick={applyFilters}>
+            Apply
+          </Button>
+        </FilterBar>
+
+        <QueryStateBoundary
+          state={(isLoading ? 'loading' : isError ? classifyError(error) : 'success') as RendererState}
+          onRetry={() => { void refetch() }}
+          columns={[{ widthPercent: 20 }, { widthPercent: 40 }, { widthPercent: 10 }, { widthPercent: 15 }, { widthPercent: 15 }]}
+        >
+        {actionError && <p style={{ color: 'var(--color-error-dark)' }}>{actionError}</p>}
+
+        <DataTable<DlqEntry>
+          columns={columns}
+          data={rows}
+          emptyMessage="Queue is empty."
+          onRowClick={(e) => setSelectedId(e.id)}
+        />
+
+        <div style={{ marginTop: '.85rem' }}>
+          <PaginationControls
+            page={page}
+            pageSize={pageSize}
+            totalItems={null}
+            hasNextPage={hasNextPage}
+            onPageChange={(nextPage) => (nextPage > page ? goNext() : goPrev())}
+          />
+        </div>
+        </QueryStateBoundary>
+
+        {selected && (
+          <section data-testid="dlq-detail-panel" style={{ marginTop: '1rem', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '1rem', background: 'var(--surface-card)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
+              <h3 style={{ margin: 0 }}>DLQ Item Detail</h3>
+              <Button variant="secondary" size="sm" onClick={clearSelection}>
+                Close
+              </Button>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem', marginBottom: '.8rem' }}>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  <td style={{ width: '180px', color: 'var(--text-secondary)', padding: '.45rem .55rem' }}>Item ID</td>
+                  <td style={{ padding: '.45rem .55rem', fontFamily: 'monospace' }}>{selected.id}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  <td style={{ color: 'var(--text-secondary)', padding: '.45rem .55rem' }}>Source</td>
+                  <td style={{ padding: '.45rem .55rem' }}>{selected.entry_type ?? selected.item_type ?? 'unknown'}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  <td style={{ color: 'var(--text-secondary)', padding: '.45rem .55rem' }}>Instance</td>
+                  <td style={{ padding: '.45rem .55rem' }}>{selected.instance_id ?? '—'}</td>
+                </tr>
+                <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  <td style={{ color: 'var(--text-secondary)', padding: '.45rem .55rem' }}>Status</td>
+                  <td style={{ padding: '.45rem .55rem' }}>
+                    <StatusBadge status={normalizeStatus(selected, transientStatusById[selected.id])} domain="dlq" />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h4 style={{ margin: '.4rem 0' }}>Full failure reason</h4>
+            <pre style={{ background: 'var(--surface-page)', border: '1px solid var(--border-default)', borderRadius: '4px', padding: '.65rem', overflow: 'auto', fontSize: '.8rem' }}>
+              {extractFailureReason(selected)}
+            </pre>
+
+            <h4 style={{ margin: '.8rem 0 .4rem' }}>Retry history</h4>
+            {extractRetryHistory(selected).length > 0 ? (
+              <DataTable<RetryAttempt>
+                columns={retryHistoryColumns}
+                data={extractRetryHistory(selected)}
+                emptyMessage="No retry history available."
+              />
+            ) : (
+              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>No retry history available.</p>
             )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setDiscardConfirmItem(null)}
-                style={{ padding: '.38rem .82rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                data-testid="dlq-discard-confirm"
-                type="button"
-                onClick={confirmDiscard}
-                style={{ padding: '.38rem .82rem', border: 'none', borderRadius: '4px', background: '#dc2626', color: '#fff', cursor: 'pointer' }}
-              >
-                Discard
-              </button>
+            <h4 style={{ margin: '.8rem 0 .4rem' }}>Context JSON</h4>
+            <JsonEditor
+              value={toPrettyJson(selected.context_json ?? selected.processor_metadata)}
+              onChange={() => {}}
+              label="Context JSON"
+              readOnly
+              height={160}
+            />
+
+            <div style={{ marginTop: '.8rem' }}>
+              <JsonEditor
+                value={toPrettyJson(selected.source_payload ?? selected.original_payload)}
+                onChange={() => {}}
+                label="Source payload"
+                readOnly
+                height={160}
+              />
+            </div>
+          </section>
+        )}
+
+        {discardConfirmItem && (
+          <div
+            data-testid="dlq-discard-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Discard DLQ item"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'var(--surface-overlay-slate)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              zIndex: 40,
+            }}
+          >
+            <div style={{ background: 'var(--surface-card)', borderRadius: '6px', width: '100%', maxWidth: '520px', padding: '1rem', border: '1px solid var(--border-default)' }}>
+              <h3 style={{ marginTop: 0 }}>Discard this DLQ item?</h3>
+              <p style={{ marginTop: 0, color: 'var(--text-secondary)' }}>
+                This action cannot be undone.
+              </p>
+              {discardConfirmItem.instance_id && (
+                <p style={{ marginTop: 0, color: 'var(--color-warning-text)', background: 'var(--color-warning-tint)', border: '1px solid var(--color-warning-border)', borderRadius: '4px', padding: '.5rem .65rem' }}>
+                  This item is tied to instance {discardConfirmItem.instance_id}. Discarding may cancel the associated instance.
+                </p>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setDiscardConfirmItem(null)}
+                  style={{ padding: '.38rem .82rem', border: '1px solid var(--border-default)', borderRadius: '4px', background: 'var(--surface-card)', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  data-testid="dlq-discard-confirm"
+                  type="button"
+                  onClick={confirmDiscard}
+                  style={{ padding: '.38rem .82rem', border: 'none', borderRadius: '4px', background: 'var(--interactive-danger)', color: 'var(--text-inverse)', cursor: 'pointer' }}
+                >
+                  Discard
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </PageLayout>
     </div>
   )
 }

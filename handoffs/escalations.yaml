@@ -407,3 +407,59 @@ escalations:
       up, that session should re-verify token availability itself (per
       TASK_QUEUE.md's "check both places" procedure) rather than trusting
       this record's own "unavailable" finding as still current.
+
+    # RESOLUTION NOTE (2026-09-09T15:12:46Z, ORCH): this escalation is
+    # RESOLVED -- but NOT by the override path the user authorized.
+    #
+    # The user was informed of the exact blocker and explicitly authorized
+    # a temporary `enforce_admins` override to force the merge past the
+    # attributed Backend-gate failure via `--admin`, stating: "I cannot
+    # provide the token for queue, it is on my other PC, so make merge
+    # without it. After will put it through reconciliation process."
+    #
+    # Before applying that override, ORCH re-verified the PR's live CI
+    # state (per this pipeline's own "Never Call a Red Pipeline OK Without
+    # a Source" rule) and found that a PARALLEL SESSION -- the same user,
+    # evidently from the other PC where $QUEUE_AUTH_TOKEN lives -- had
+    # already pushed the legitimate fix directly onto this branch, three
+    # commits, while this session was mid-escalation:
+    #   b6dee82e chore(REQ-279): register in letflow-queue now that
+    #            $QUEUE_AUTH_TOKEN is available (impl_order: 562,
+    #            queue task id 562, GH#1151)
+    #   46fc5e9a test(REQ-279): update T-LIVE-DEFERRED-COUNT for the
+    #            queue registration
+    #   2caaba4e chore(WF02-REQ277-20260909): fix 4
+    #            mix letflow.lint_handoffs violations blocking PR #1137
+    # This is the exact reconciliation action this escalation's own
+    # next_step recommended -- it simply happened before ORCH's session
+    # got to apply the authorized workaround, not after.
+    #
+    # ORCH re-ran both required CI checks to completion (watched GitHub
+    # Actions runs 34367102188 and 34367096623 to their real, non-cached
+    # conclusions) and confirmed BOTH passed genuinely: Backend gate
+    # (mix letflow.check, including check_deferral_staleness) PASS,
+    # Frontend gate (npm run check) PASS, `gh pr view 1137` reporting
+    # `mergeStateStatus: CLEAN`. Since the check now passes on its own
+    # merits, applying the authorized `enforce_admins` override would have
+    # been an unnecessary security-relevant repo-configuration change to
+    # solve a problem that no longer existed -- so it was NOT applied.
+    # `gh api repos/tvolodi/letflow/branches/main/protection` was
+    # re-queried before and after the merge and confirms
+    # `enforce_admins.enabled: true` was never touched.
+    #
+    # Merged via the normal path: `gh pr merge 1137 --squash --delete-branch`
+    # (no --admin flag used, none needed). Merge commit:
+    # 27b51cfcab3305f83aa30a10e77a9840645c50d0, merged 2026-09-09T15:12:13Z.
+    # docs/requirements.yaml on main confirms REQ-277: status: done
+    # (line ~16474) and REQ-279: impl_order: 562 (line ~16573, no longer
+    # UNREGISTERED). Remote branch feature/WF02-REQ277-20260909 deleted by
+    # the merge; local stale ref pruned.
+    #
+    # No further reconciliation item is open for REQ-279 -- it is now
+    # genuinely registered, not merely flagged for later registration, so
+    # nothing further needs filing to docs/issues/ for it. queue task 551
+    # (REQ-277) and queue task 562 (REQ-279) both remain to be released
+    # `done`/left `open` respectively via the queue's own release_lock once
+    # reachable from a session that holds the token -- this is ordinary
+    # queue-lock bookkeeping, not a defect, and does not block anything
+    # already merged.

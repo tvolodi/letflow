@@ -16580,7 +16580,7 @@ requirements:
     title: Serve tenant branding from GET /api/tenant-config -- a third response key, under SECURITY-REVIEWER gate (0020 D1b, web endpoint)
     owner: ELIXIR-DEV
     impl_order: 553
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements the web half of step 5 of

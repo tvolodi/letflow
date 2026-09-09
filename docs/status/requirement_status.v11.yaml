@@ -1125,3 +1125,44 @@ history:
       pure markup substitution, zero new test surface, existing tests
       pass unmodified. ORCH will merge and release queue task 552
       status:done.
+
+  - req: REQ-281
+    event: done
+    agent: ORCH
+    at: "2026-09-09T06:18:56Z"
+    note: >
+      REQ-281 (queue task 553, GH#1126) implemented via
+      WF02-REQ281-20260909: adds tenant branding as a third response
+      key to the pre-authentication GET /api/tenant-config endpoint --
+      an explicit SECURITY CHANGE per the endpoint's own moduledoc, with
+      SECURITY-REVIEWER as a required (not optional) gate. Design
+      decisions, independently re-verified by CODE-DESIGN-VALIDATOR:
+      branding discloses only app_name/logo_url/brand_colors (a proper
+      subset of REQ-280's 5-key settings vocabulary -- locales/
+      default_locale excluded, since the requirement's own "acceptable
+      for an app name, a logo URL and a brand colour" text is a closed
+      enumeration, not illustrative examples); per-sub-key fallback to
+      new, independent platform-default constants (deliberately NOT
+      reusing mobile_tenant_config.ex's stale @default_branding, whose
+      reconciliation is REQ-282's job); resolve_realm/2 threads the
+      already-fetched %Tenant{} through to avoid a second DB lookup
+      (OQ-1). SECURITY-REVIEWER independently traced all four never-error
+      paths (resolvable-no-branding, unknown slug, malformed slug,
+      simulated DB failure via a null-byte slug hitting Postgrex's
+      encode failure) and confirmed byte-identical output -- no
+      tenant-existence oracle; confirmed the response stays hand-built
+      via named Map.get/3 calls, never a wholesale merge; flagged one
+      non-blocking defense-in-depth note (read-side trusts stored
+      brand_colors verbatim rather than re-validating inner keys,
+      acceptable given solid write-time enforcement in a single-writer
+      architecture). REVIEWER independently reproduced 96/96 targeted
+      tests, confirmed mobile_tenant_config.ex byte-identical to main,
+      confirmed the moduledoc's security-change paragraph now names the
+      third key and extends the gate to a fourth. TEST-RUNNER's full
+      suite run (3533/3535, 2 pre-existing rustc-absent failures
+      unrelated) caught a real mix format gap on the exact function this
+      requirement changed -- fixed directly by ORCH and re-verified
+      clean. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no
+      rework) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, required gate) ->
+      REVIEWER (PASS) -> TEST-RUNNER (format fix required, then clean).
+      ORCH will merge and release queue task 553 status:done.

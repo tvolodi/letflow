@@ -16364,12 +16364,11 @@ requirements:
     depends_on: []
     impl_order: 543  # letflow-queue task id
 
-
   - id: REQ-276
     title: Migrate web/src/pages/admin/ onto the design-system primitives and off colour literals (0020 D2b, 1 of 3)
     owner: FRONTEND-DEV
     impl_order: 550
-    status: pending
+    status: done
     stage: S8
     description: >
       First of three sibling page-migration requirements implementing
@@ -16389,6 +16388,16 @@ requirements:
       one turn at that point, split it further and record the split as a
       follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
       sweep.
+
+      NOTE (added by ORCH 2026-09-09): this requirement was independently
+      registered twice -- once by ORCH at WF02-REQ276-20260909's Step 00
+      (queue task 550, mirroring the queue's own description before this
+      DOC-UPDATER batch landed), and once by this DOC-UPDATER batch's filing
+      of 15 missing requirements. Both registrations described the same
+      queue task; this rebase composed them into the single entry below
+      rather than keeping a duplicate REQ-276 block, and updated status from
+      the DOC-UPDATER batch's original `pending` to `done` to reflect the
+      work ORCH's own run actually completed on this branch.
       TWO THINGS AT ONCE, deliberately, because doing them separately means
       touching every file twice: replace each hand-rolled table, button,
       badge, layout wrapper and toast with the corresponding primitive from

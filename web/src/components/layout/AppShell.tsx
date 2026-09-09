@@ -6,6 +6,7 @@ import { TestEnvironmentBanner } from './TestEnvironmentBanner'
 import { TenantHeader } from './TenantHeader'
 import { dlqApi } from '@/api/dlq'
 import { queryKeys } from '@/api/queryKeys'
+import { useBranding } from '@/theming/BrandingContext'
 
 type Role = 'PLATFORM_ADMIN' | 'PROCESS_DESIGNER' | 'PROCESS_OPERATOR' | 'TASK_WORKER'
 
@@ -34,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppShell() {
   const { session, logout } = useAuth()
+  const { appName, logoUrl } = useBranding()
 
   const dlqThreshold = Number(import.meta.env.VITE_DLQ_ALERT_THRESHOLD ?? '10')
   const { data: dlqSummary } = useQuery({
@@ -63,8 +65,11 @@ export function AppShell() {
           flexShrink: 0,
         }}
       >
-        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', fontWeight: 700, fontSize: '1.1rem', color: 'var(--color-neutral-100)' }}>
-          Letflow
+        <div style={{ padding: '0 1.25rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '.5rem', fontWeight: 700, fontSize: '1.1rem', color: 'var(--color-neutral-100)' }}>
+          {logoUrl != null && (
+            <img src={logoUrl} alt={appName} style={{ height: '1.5rem', width: 'auto' }} />
+          )}
+          {appName}
         </div>
 
         <TenantHeader />

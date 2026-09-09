@@ -30,7 +30,6 @@ import { useDefinitionDraftStore } from '@/stores/definitionDraftStore'
 import { DraftBanner } from '@/components/definitions/DraftBanner'
 import type { ApiError } from '@/types/api'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
-import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { JsonEditor } from '@/components/ui/JsonEditor'
 

@@ -209,9 +209,15 @@ sites are not inside a component body):
 
 - `GET /api/tenant-config` (`lib/letflow/routers/tenant_config.ex`, REQ-281, `done`) is
   the only pre-authentication config endpoint the web SPA calls
-  (`web/src/auth/tenantConfig.ts:43`, `TenantConfig` interface at line 9 declares
-  exactly `{ oidc_authority: string; client_id: string }` plus, since REQ-281, a
-  `branding` key — no `locale` field of any kind). Its own moduledoc states explicitly,
+  (`web/src/auth/tenantConfig.ts:43`). REQ-281 added a `branding` key to that
+  **backend** response shape (`lib/letflow/routers/tenant_config.ex`) only — the
+  **frontend** `TenantConfig` interface at `web/src/auth/tenantConfig.ts:10` still
+  declares exactly `{ oidc_authority: string; client_id: string }`, confirmed by
+  `grep -n "branding" web/src/auth/tenantConfig.ts` returning zero hits. Consuming the
+  new backend key on the frontend (extending this interface, reading the field) is
+  REQ-283's still-pending scope, not something REQ-281 did — and no `locale` field of
+  any kind exists in either the backend response or this frontend interface today. Its
+  own moduledoc states explicitly,
   as a security constraint, that it "must **never** return a tenant id, slug, display
   name, status, user count, **locale/language configuration**, or any other tenant
   attribute" beyond its closed three-key allowlist (`oidc_authority`, `client_id`,

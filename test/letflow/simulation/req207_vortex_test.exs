@@ -897,6 +897,21 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # lib/letflow/design/iss0438-entity-subsystem-scoping.md). REQ-225..231 *plan*
       # the subsystem; none of them *build* it -- that's still gated on Signal 3 below,
       # so their presence here doesn't change the BLOCKED_ON_DEPENDENCY disposition.
+      #
+      # UPDATE (S10 expansion, 2026-09-09): REQ-295, REQ-296, REQ-299, REQ-300 and
+      # REQ-302 were filed against
+      # docs/migration/decisions/0023-entity-storage-hybrid.md (entity storage as
+      # per-entity-type tables with a hybrid promoted-column/blob shape) and match
+      # this same word-bounded pattern, so they join the allowlist. They do NOT
+      # change the disposition, for the same reason REQ-225..231 do not: they
+      # re-shape how entity records are STORED (and REQ-295/REQ-302 only answer
+      # design questions -- 0023 forbids filing any implementation requirement
+      # against it until its DDL-execution open question is answered and gated).
+      # None of them mounts Letflow.Routers.Entities or Letflow.Routers.EntityQuery
+      # -- that HTTP surface is S10's own gap 1, which is still unowned and unfiled.
+      # Signal 3 below remains the real gate, and it was re-verified live rather
+      # than assumed when this allowlist was extended: neither context module
+      # exists, and both router rows are still in the reserved/unbuilt table.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -918,7 +933,12 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-228",
           "REQ-229",
           "REQ-230",
-          "REQ-231"
+          "REQ-231",
+          "REQ-295",
+          "REQ-296",
+          "REQ-299",
+          "REQ-300",
+          "REQ-302"
         ])
 
       refute Enum.empty?(entity_title_matches),
@@ -961,7 +981,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
         evidence: [
           "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title or the REQ-225..231 scoping requirements (ISS-0438) -- none of which build the subsystem",
+          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), or the REQ-295..302 entity-storage batch (decision 0023) -- none of which build the subsystem",
           "no lib/letflow/entities.ex or entity_query.ex context module exists"
         ],
         steps_executed: 0

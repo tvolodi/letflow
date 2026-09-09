@@ -3,8 +3,21 @@ import { useSearchParams } from 'react-router-dom'
 import { useTaskInbox, useCompleteTask, useTask, useClaimTask } from '@/hooks/useTasks'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+
+// NOTE: the task list below keeps its hand-rolled card-row markup rather than
+// DataTable (REQ-274) -- it was never a <table> to begin with (no header
+// row/columns, no sorting), and each row's data-testid contract
+// (`task-row`, `task-name`, `task-instance-id`, `task-status`,
+// `task-assignee`) is asserted extensively by web/tests/e2e/f4-task-inbox.e2e.spec.ts
+// and web/tests/e2e/a11y-gate.e2e.spec.ts. DataTable's column/accessor model
+// has no way to attach those per-row testids, so swapping it in here would
+// need a DataTable change out of this file's scope and would break those
+// e2e suites. Colours are still fully tokenized and the status pill and all
+// buttons now use the shared primitives.
 
 type FilterType = 'me' | 'group' | 'all'
 type SortOrder = 'created' | '-created'
@@ -102,28 +115,21 @@ export default function TaskInboxPage() {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 60px)' }}>
       {/* Left panel: task list */}
-      <div style={{ flex: 1, borderRight: '1px solid #e2e8f0', overflowY: 'auto' }}>
+      <div style={{ flex: 1, borderRight: '1px solid var(--border-default)', overflowY: 'auto' }}>
         <div style={{ padding: '1.5rem' }}>
           {/* Filter bar */}
           <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '.5rem' }}>
               {(['me', 'group', isOperator && 'all'].filter(Boolean) as FilterType[]).map(f => (
-                <button
+                <Button
                   key={f}
-                  data-testid={f === 'all' ? 'task-filter-all-tasks' : undefined}
+                  variant={filter === f ? 'primary' : 'secondary'}
+                  size="sm"
+                  data-testid={f === 'all' ? 'task-filter-all-tasks' : `task-filter-${f}`}
                   onClick={() => handleFilterChange(f)}
-                  style={{
-                    padding: '.5rem 1rem',
-                    background: filter === f ? '#2563eb' : '#f1f5f9',
-                    color: filter === f ? '#fff' : '#1e293b',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '.9rem',
-                  }}
                 >
                   {f === 'me' ? 'My Tasks' : f === 'group' ? 'Group Tasks' : 'All Tasks'}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -133,10 +139,12 @@ export default function TaskInboxPage() {
               onChange={e => handleSortChange(e.target.value as SortOrder)}
               style={{
                 padding: '.5rem .75rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
                 cursor: 'pointer',
                 fontSize: '.9rem',
+                color: 'var(--text-primary)',
+                background: 'var(--surface-card)',
               }}
             >
               <option value="-created">Newest first</option>
@@ -151,11 +159,13 @@ export default function TaskInboxPage() {
               onChange={e => handleSearchChange(e.target.value)}
               style={{
                 padding: '.5rem .75rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
                 fontSize: '.9rem',
                 flex: 1,
                 minWidth: '200px',
+                color: 'var(--text-primary)',
+                background: 'var(--surface-card)',
               }}
             />
           </div>
@@ -174,7 +184,7 @@ export default function TaskInboxPage() {
             columns={[{ widthPercent: 40 }, { widthPercent: 30 }, { widthPercent: 30 }]}
           >
           {!inboxLoading && filteredTasks.length === 0 && (
-            <p style={{ color: '#64748b' }}>No tasks found.</p>
+            <p style={{ color: 'var(--text-secondary)' }}>No tasks found.</p>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }} data-testid="task-inbox-list">
@@ -193,8 +203,8 @@ export default function TaskInboxPage() {
                   }
                 }}
                 style={{
-                  background: selectedTaskId === task.id ? '#eff6ff' : '#fff',
-                  border: selectedTaskId === task.id ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                  background: selectedTaskId === task.id ? 'var(--color-info-tint)' : 'var(--surface-card)',
+                  border: selectedTaskId === task.id ? '2px solid var(--interactive-primary)' : '1px solid var(--border-default)',
                   borderRadius: '6px',
                   padding: '1rem 1.25rem',
                   cursor: 'pointer',
@@ -205,26 +215,16 @@ export default function TaskInboxPage() {
               >
                 <div style={{ flex: 1 }}>
                   <div data-testid="task-name" style={{ fontWeight: 600, marginBottom: '.25rem' }}>{task.node_name}</div>
-                  <div style={{ fontSize: '.85rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '.85rem', color: 'var(--text-secondary)' }}>
                     Instance: <code data-testid="task-instance-id" style={{ fontSize: '.8rem' }}>{task.instance_id.slice(0, 8)}…</code>
                     {task.assignee_ref && <> · Assigned to: <span data-testid="task-assignee">{task.assignee_ref}</span></>}
                   </div>
-                  <div style={{ fontSize: '.8rem', color: '#94a3b8', marginTop: '.25rem' }}>
+                  <div style={{ fontSize: '.8rem', color: 'var(--text-disabled)', marginTop: '.25rem' }}>
                     {new Date(task.created_at).toLocaleDateString()} {new Date(task.created_at).toLocaleTimeString()}
                   </div>
                 </div>
-                <div
-                  data-testid="task-status"
-                  style={{
-                    padding: '.25rem .75rem',
-                    background: task.status === 'PENDING' ? '#dbeafe' : '#e5e7eb',
-                    color: task.status === 'PENDING' ? '#0369a1' : '#374151',
-                    borderRadius: '4px',
-                    fontSize: '.85rem',
-                    fontWeight: 500,
-                  }}
-                >
-                  {task.status}
+                <div data-testid="task-status">
+                  <StatusBadge status={task.status} domain="task" />
                 </div>
               </div>
             ))}
@@ -259,7 +259,7 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
 
   if (isLoading) {
     return (
-      <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid #e2e8f0', padding: '1.5rem' }}>
+      <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid var(--border-default)', padding: '1.5rem' }}>
         <p>Loading task details…</p>
       </div>
     )
@@ -267,9 +267,9 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
 
   if (!task) {
     return (
-      <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid #e2e8f0', padding: '1.5rem' }}>
-        <p style={{ color: '#ef4444' }}>Task not found</p>
-        <button onClick={onClose}>Back</button>
+      <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid var(--border-default)', padding: '1.5rem' }}>
+        <p style={{ color: 'var(--color-error-dark)' }}>Task not found</p>
+        <Button variant="secondary" size="sm" onClick={onClose}>Back</Button>
       </div>
     )
   }
@@ -278,51 +278,31 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
   const isClaimable = task.assignee_type && ['GROUP', 'ROLE'].includes(task.assignee_type) && !isAssignedToMe
 
   return (
-    <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid #e2e8f0', padding: '1.5rem', overflowY: 'auto' }}>
+    <div data-testid="task-detail-panel" style={{ width: '40%', borderLeft: '1px solid var(--border-default)', padding: '1.5rem', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 data-testid="task-detail-title" style={{ margin: 0 }}>{task.node_name}</h2>
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '1.5rem',
-            cursor: 'pointer',
-            color: '#64748b',
-          }}
-        >
+        <Button variant="ghost" size="sm" onClick={onClose} title="Close">
           ×
-        </button>
+        </Button>
       </div>
 
       {/* Status badge */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <div
-          style={{
-            display: 'inline-block',
-            padding: '.5rem 1rem',
-            background: task.status === 'PENDING' ? '#dbeafe' : '#e5e7eb',
-            color: task.status === 'PENDING' ? '#0369a1' : '#374151',
-            borderRadius: '4px',
-            fontWeight: 500,
-          }}
-        >
-          {task.status}
-        </div>
+        <StatusBadge status={task.status} domain="task" />
       </div>
 
       {/* Instance context */}
       <div
         style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
+          background: 'var(--surface-page)',
+          border: '1px solid var(--border-default)',
           borderRadius: '6px',
           padding: '1rem',
           marginBottom: '1.5rem',
         }}
       >
         <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '.95rem', fontWeight: 600 }}>Instance Context</h3>
-        <div style={{ fontSize: '.85rem', color: '#475569' }}>
+        <div style={{ fontSize: '.85rem', color: 'var(--text-secondary)' }}>
           <p style={{ margin: '.25rem 0' }}>
             <strong>Definition:</strong> <span data-testid="instance-definition-name">{task.definition_name ?? 'N/A'}</span>
           </p>
@@ -343,9 +323,9 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
       {/* Instance variables (TK-UI-02) */}
       <div data-testid="instance-variables" style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ fontSize: '.95rem', fontWeight: 600, marginBottom: '.75rem' }}>Instance Variables</h3>
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '1rem', fontSize: '.85rem', color: '#475569' }}>
+        <div style={{ background: 'var(--surface-page)', border: '1px solid var(--border-default)', borderRadius: '6px', padding: '1rem', fontSize: '.85rem', color: 'var(--text-secondary)' }}>
           {/* Variables will be populated from instance context - TK-UI-02 implementation pending */}
-          <p style={{ margin: 0, color: '#94a3b8' }}>Variables display pending implementation</p>
+          <p style={{ margin: 0, color: 'var(--text-disabled)' }}>Variables display pending implementation</p>
         </div>
       </div>
 
@@ -365,7 +345,7 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
                 <div key={fieldName} style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
                   <label style={{ fontSize: '.9rem', fontWeight: 500 }}>
                     {fieldTitle}
-                    {isRequired && <span data-testid={`form-field-required-${fieldName}`} style={{ color: '#ef4444', marginLeft: '.25rem' }}>*</span>}
+                    {isRequired && <span data-testid={`form-field-required-${fieldName}`} style={{ color: 'var(--color-error)', marginLeft: '.25rem' }}>*</span>}
                   </label>
                   <input
                     data-testid={`form-field-${fieldName}`}
@@ -373,9 +353,11 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
                     placeholder={fieldTitle}
                     style={{
                       padding: '.5rem .75rem',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '4px',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: 'var(--radius-sm)',
                       fontSize: '.9rem',
+                      color: 'var(--text-primary)',
+                      background: 'var(--surface-card)',
                     }}
                   />
                 </div>
@@ -388,64 +370,38 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '.75rem', marginTop: '2rem' }}>
         {isClaimable && (
-          <button
-            data-testid="task-claim-button"
-            onClick={() => claim.mutate(taskId)}
-            disabled={claim.isPending || !isClaimable}
-            style={{
-              flex: 1,
-              padding: '.75rem 1rem',
-              background: '#10b981',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: claim.isPending ? 'not-allowed' : 'pointer',
-              opacity: claim.isPending ? 0.7 : 1,
-              fontSize: '.9rem',
-            }}
-          >
-            {claim.isPending ? 'Claiming…' : 'Claim Task'}
-          </button>
+          <div style={{ flex: 1 }}>
+            <Button
+              variant="primary"
+              size="md"
+              data-testid="task-claim-button"
+              onClick={() => claim.mutate(taskId)}
+              loading={claim.isPending}
+            >
+              {claim.isPending ? 'Claiming…' : 'Claim Task'}
+            </Button>
+          </div>
         )}
 
         {isAssignedToMe && task.status === 'PENDING' && (
-          <button
-            data-testid="task-complete-button"
-            onClick={() => complete.mutate({ id: taskId, body: { output_variables: {} } })}
-            disabled={complete.isPending}
-            style={{
-              flex: 1,
-              padding: '.75rem 1rem',
-              background: '#2563eb',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: complete.isPending ? 'not-allowed' : 'pointer',
-              opacity: complete.isPending ? 0.7 : 1,
-              fontSize: '.9rem',
-            }}
-          >
-            {complete.isPending ? 'Completing…' : 'Complete Task'}
-          </button>
+          <div style={{ flex: 1 }}>
+            <Button
+              variant="primary"
+              size="md"
+              data-testid="task-complete-button"
+              onClick={() => complete.mutate({ id: taskId, body: { output_variables: {} } })}
+              loading={complete.isPending}
+            >
+              {complete.isPending ? 'Completing…' : 'Complete Task'}
+            </Button>
+          </div>
         )}
       </div>
 
       <div style={{ marginTop: '1rem' }}>
-        <button
-          onClick={onClose}
-          style={{
-            width: '100%',
-            padding: '.5rem 1rem',
-            background: '#f1f5f9',
-            color: '#1e293b',
-            border: '1px solid #cbd5e1',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '.9rem',
-          }}
-        >
+        <Button variant="secondary" size="sm" onClick={onClose}>
           Back to inbox
-        </button>
+        </Button>
       </div>
     </div>
   )

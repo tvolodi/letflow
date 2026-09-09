@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { ReactFlow, Background, Controls, MiniMap, type Node, type Edge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -18,17 +18,28 @@ import { HistoryScrubber } from '@/components/instances/HistoryScrubber'
 import { ProcessGraphWithTokens } from '@/components/instances/ProcessGraphWithTokens'
 import { CancelInstanceDialog } from '@/components/instances/CancelInstanceDialog'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { useToast } from '@/hooks/useToast'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
 
-const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: '#2563eb',
-  COMPLETED: '#16a34a',
-  CANCELLED: '#6b7280',
-  ERROR: '#dc2626',
+const CANCEL_ROLES = ['PROCESS_OPERATOR', 'PROCESS_ADMIN', 'PLATFORM_ADMIN']
+
+interface DetailRow {
+  key: string
+  value: ReactNode
 }
 
-const CANCEL_ROLES = ['PROCESS_OPERATOR', 'PROCESS_ADMIN', 'PLATFORM_ADMIN']
+interface PendingTaskRow {
+  key: string
+  taskId: string
+  nodeId: string
+  nodeName: string
+  assignee: string
+  createdAt: string | undefined
+}
 
 function formatDateTime(value: string | undefined): string {
   if (!value) return '—'
@@ -65,8 +76,8 @@ function useReadonlyGraph(
             ...node,
             style: {
               ...(node.style ?? {}),
-              border: isActive ? '2px solid #2563eb' : '1px solid #cbd5e1',
-              boxShadow: isActive ? '0 0 0 4px rgba(37, 99, 235, 0.18)' : undefined,
+              border: isActive ? '2px solid var(--interactive-primary)' : '1px solid var(--border-default)',
+              boxShadow: isActive ? 'var(--shadow-focus-blue)' : undefined,
             },
           }
         }),
@@ -96,8 +107,8 @@ export default function InstanceDetailPage() {
   const [timelineRequested, setTimelineRequested] = useState(false)
   const [lastAppliedCursor, setLastAppliedCursor] = useState<string | null>(null)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
-  const [cancelError, setCancelError] = useState<string | null>(null)
   const [scrubbedSeqNum, setScrubbedSeqNum] = useState<number | undefined>(undefined)
+  const toast = useToast()
 
   const scrubber = useHistoryScrubber(id!, scrubbedSeqNum)
 
@@ -141,12 +152,11 @@ export default function InstanceDetailPage() {
 
   const onCancelConfirm = (reason?: string) => {
     if (!instance) return
-    setCancelError(null)
     cancel.mutate(
       { id: instance.instance_id, reason },
       {
         onError: () => {
-          setCancelError('Failed to cancel instance. The status has been restored.')
+          toast.error('Failed to cancel instance. The status has been restored.')
         },
       },
     )
@@ -154,6 +164,54 @@ export default function InstanceDetailPage() {
   }
 
   const rendererState: RendererState = isLoading ? 'loading' : isError ? classifyError(error) : 'success'
+
+  const detailColumns: DataTableColumn<DetailRow>[] = [
+    { id: 'field', header: 'Field', accessor: (row) => row.key },
+    { id: 'value', header: 'Value', accessor: (row) => row.value },
+  ]
+
+  const detailRows: DetailRow[] = instance
+    ? [
+        { key: 'Definition', value: `${instance.definition_name} v${instance.definition_version}` },
+        {
+          key: 'Status',
+          value: <StatusBadge status={instance.status} domain="instance" size="sm" />,
+        },
+        { key: 'Active nodes', value: currentNodes.join(', ') || '—' },
+        { key: 'Correlation key', value: instance.correlation_key ?? '—' },
+        { key: 'Started at', value: formatDateTime(instance.started_at) },
+        { key: 'Last updated', value: formatDateTime(instance.updated_at ?? instance.started_at) },
+        { key: 'Completed at', value: formatDateTime(instance.completed_at) },
+      ]
+    : []
+
+  const pendingTaskColumns: DataTableColumn<PendingTaskRow>[] = [
+    { id: 'taskId', header: 'Task ID', accessor: (row) => (row.taskId ? `${row.taskId.slice(0, 8)}...` : '—') },
+    { id: 'nodeId', header: 'Node', accessor: (row) => row.nodeId },
+    { id: 'nodeName', header: 'Name', accessor: (row) => row.nodeName },
+    { id: 'assignee', header: 'Assignee', accessor: (row) => row.assignee },
+    {
+      id: 'createdAt',
+      header: 'Created',
+      accessor: (row) => <span style={{ color: 'var(--text-secondary)' }}>{formatDateTime(row.createdAt)}</span>,
+    },
+  ]
+
+  const pendingTaskRows: PendingTaskRow[] = (pendingTasks?.items ?? []).map((task, index) => {
+    const taskId = typeof task.id === 'string'
+      ? task.id
+      : (typeof (task as unknown as { task_id?: unknown }).task_id === 'string'
+        ? (task as unknown as { task_id: string }).task_id
+        : '')
+    return {
+      key: taskId || `task-${index}`,
+      taskId,
+      nodeId: typeof task.node_id === 'string' ? task.node_id : '—',
+      nodeName: typeof task.node_name === 'string' ? task.node_name : '—',
+      assignee: typeof task.assignee_ref === 'string' ? task.assignee_ref : '—',
+      createdAt: task.created_at,
+    }
+  })
 
   return (
     <div style={{ padding: '1.5rem', maxWidth: '900px' }}>
@@ -168,78 +226,48 @@ export default function InstanceDetailPage() {
       {instance && (<>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Instance</h2>
-        <code style={{ fontSize: '.8rem', color: '#64748b' }}>{instance.instance_id}</code>
+        <code style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{instance.instance_id}</code>
         {instance.status === 'ACTIVE' && canCancel && (
-          <button
-            onClick={() => setShowCancelDialog(true)}
-            disabled={cancel.isPending}
-            style={{ marginLeft: 'auto', padding: '.35rem .8rem', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '.85rem' }}
-          >
-            Cancel
-          </button>
+          <span style={{ marginLeft: 'auto' }}>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowCancelDialog(true)}
+              disabled={cancel.isPending}
+            >
+              Cancel
+            </Button>
+          </span>
         )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.6rem', marginBottom: '.8rem' }}>
-        <span style={{ color: '#64748b', fontSize: '.8rem' }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
           Last refreshed: {toRefreshLabel(polling.lastRefreshedAt)}
         </span>
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => void polling.refreshNow()}
           disabled={timelineQuery.isRefetching || cancel.isPending}
-          style={{
-            padding: '.35rem .8rem',
-            border: '1px solid #cbd5e1',
-            borderRadius: '4px',
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: '.8rem',
-          }}
         >
           {timelineQuery.isRefetching ? 'Refreshing...' : 'Refresh'}
-        </button>
+        </Button>
       </div>
 
-      {cancelError && (
-        <div role="alert" aria-live="polite" style={{ padding: '.55rem .7rem', marginBottom: '.8rem', background: '#ffe3e3', color: '#c92a2a', border: '1px solid #fa5252', borderRadius: '4px', fontSize: '.85rem' }}>
-          {cancelError}
-        </div>
-      )}
+      <DataTable columns={detailColumns} data={detailRows} emptyMessage="No instance details available." />
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.9rem', marginBottom: '1rem' }}>
-        <tbody>
-          {[
-            ['Definition', `${instance.definition_name} v${instance.definition_version}`],
-            ['Status', instance.status],
-            ['Active nodes', currentNodes.join(', ') || '—'],
-            ['Correlation key', instance.correlation_key ?? '—'],
-            ['Started at', formatDateTime(instance.started_at)],
-            ['Last updated', formatDateTime(instance.updated_at ?? instance.started_at)],
-            ['Completed at', formatDateTime(instance.completed_at)],
-          ].map(([k, v]) => (
-            <tr key={k as string} style={{ borderBottom: '1px solid #e2e8f0' }}>
-              <td style={{ padding: '.5rem .75rem', color: '#64748b', width: '180px', fontWeight: 500 }}>{k}</td>
-              <td style={{ padding: '.5rem .75rem' }}>
-                {k === 'Status' ? (
-                  <span style={{ color: STATUS_COLORS[String(v)] ?? '#334155', fontWeight: 700 }}>{v}</span>
-                ) : v}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <section style={{ marginBottom: '1rem' }}>
+      <section style={{ marginTop: '1rem', marginBottom: '1rem' }}>
         <h3 style={{ marginBottom: '.5rem' }}>Definition Snapshot</h3>
-        <div style={{ display: 'grid', gap: '.35rem', color: '#475569', fontSize: '.85rem' }}>
+        <div style={{ display: 'grid', gap: '.35rem', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
           <div>Definition ID: <code>{instance.definition_id}</code></div>
           <div>Source: {instance.definition_snapshot ? 'Stored snapshot' : 'Current definition version'}</div>
           <div>Active tokens: {currentNodes.join(', ') || '—'}</div>
         </div>
 
-        <div style={{ marginTop: '.75rem', height: '320px', border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+        <div style={{ marginTop: '.75rem', height: '320px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
           {readonlyGraph.nodes.length === 0 ? (
-            <div style={{ padding: '1rem', color: '#64748b', fontSize: '.85rem' }}>
+            <div style={{ padding: '1rem', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
               No graph snapshot is available for this instance.
             </div>
           ) : (
@@ -253,7 +281,7 @@ export default function InstanceDetailPage() {
               fitView
               proOptions={{ hideAttribution: true }}
             >
-              <Background color="#e2e8f0" gap={20} />
+              <Background color="var(--border-default)" gap={20} />
               <MiniMap />
               <Controls />
             </ReactFlow>
@@ -262,92 +290,25 @@ export default function InstanceDetailPage() {
       </section>
 
       <h3 style={{ marginBottom: '.75rem' }}>Variables</h3>
-      <pre style={{ background: '#f1f5f9', padding: '1rem', borderRadius: '4px', fontSize: '.8rem', overflow: 'auto', marginBottom: '1.5rem' }}>
+      <pre style={{ background: 'var(--color-neutral-100)', padding: '1rem', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)', overflow: 'auto', marginBottom: '1.5rem' }}>
         {JSON.stringify(instanceVariables, null, 2)}
       </pre>
 
       <section style={{ marginBottom: '1.25rem' }}>
         <h3 style={{ marginBottom: '.5rem' }}>Active Tasks</h3>
-        {pendingTasks?.items && pendingTasks.items.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                <th style={{ padding: '.5rem .75rem' }}>Task ID</th>
-                <th style={{ padding: '.5rem .75rem' }}>Node</th>
-                <th style={{ padding: '.5rem .75rem' }}>Name</th>
-                <th style={{ padding: '.5rem .75rem' }}>Assignee</th>
-                <th style={{ padding: '.5rem .75rem' }}>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingTasks.items.map((task, index) => {
-                const taskId = typeof task.id === 'string'
-                  ? task.id
-                  : (typeof (task as unknown as { task_id?: unknown }).task_id === 'string'
-                    ? (task as unknown as { task_id: string }).task_id
-                    : '')
-                const taskNodeId = typeof task.node_id === 'string' ? task.node_id : '—'
-                const taskNodeName = typeof task.node_name === 'string' ? task.node_name : '—'
-                const taskAssignee = typeof task.assignee_ref === 'string' ? task.assignee_ref : '—'
-                return (
-                <tr key={taskId || `task-${index}`} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '.5rem .75rem', fontFamily: 'monospace' }}>{taskId ? `${taskId.slice(0, 8)}...` : '—'}</td>
-                  <td style={{ padding: '.5rem .75rem' }}>{taskNodeId}</td>
-                  <td style={{ padding: '.5rem .75rem' }}>{taskNodeName}</td>
-                  <td style={{ padding: '.5rem .75rem' }}>{taskAssignee}</td>
-                  <td style={{ padding: '.5rem .75rem', color: '#64748b' }}>{formatDateTime(task.created_at)}</td>
-                </tr>
-              )})}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ margin: 0, color: '#64748b', fontSize: '.85rem' }}>No active tasks.</p>
-        )}
+        <DataTable columns={pendingTaskColumns} data={pendingTaskRows} emptyMessage="No active tasks." />
       </section>
 
-      <div style={{ display: 'flex', gap: '.5rem', borderBottom: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-        <button
-          onClick={() => setActiveTab('graph')}
-          style={{
-            border: 'none',
-            borderBottom: activeTab === 'graph' ? '2px solid #2563eb' : '2px solid transparent',
-            background: 'transparent',
-            color: activeTab === 'graph' ? '#1e40af' : '#475569',
-            fontWeight: 600,
-            padding: '.5rem .25rem',
-            cursor: 'pointer',
-          }}
-        >
+      <div style={{ display: 'flex', gap: '.5rem', borderBottom: '1px solid var(--border-default)', marginBottom: '1rem' }}>
+        <Button variant="ghost" size="sm" pressed={activeTab === 'graph'} onClick={() => setActiveTab('graph')}>
           Graph
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          style={{
-            border: 'none',
-            borderBottom: activeTab === 'history' ? '2px solid #2563eb' : '2px solid transparent',
-            background: 'transparent',
-            color: activeTab === 'history' ? '#1e40af' : '#475569',
-            fontWeight: 600,
-            padding: '.5rem .25rem',
-            cursor: 'pointer',
-          }}
-        >
+        </Button>
+        <Button variant="ghost" size="sm" pressed={activeTab === 'history'} onClick={() => setActiveTab('history')}>
           History
-        </button>
-        <button
-          onClick={() => setActiveTab('timeline')}
-          style={{
-            border: 'none',
-            borderBottom: activeTab === 'timeline' ? '2px solid #2563eb' : '2px solid transparent',
-            background: 'transparent',
-            color: activeTab === 'timeline' ? '#1e40af' : '#475569',
-            fontWeight: 600,
-            padding: '.5rem .25rem',
-            cursor: 'pointer',
-          }}
-        >
+        </Button>
+        <Button variant="ghost" size="sm" pressed={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')}>
           Timeline
-        </button>
+        </Button>
       </div>
 
       {activeTab === 'graph' && (
@@ -368,7 +329,7 @@ export default function InstanceDetailPage() {
         <>
           <h3 style={{ marginBottom: '.75rem' }}>Timeline</h3>
           {scrubber.error && (
-            <p style={{ color: '#dc2626', marginBottom: '.75rem' }}>Failed to load timeline scrubber.</p>
+            <p style={{ color: 'var(--color-error)', marginBottom: '.75rem' }}>Failed to load timeline scrubber.</p>
           )}
           <HistoryScrubber
             instanceId={id!}
@@ -380,7 +341,7 @@ export default function InstanceDetailPage() {
             onResumeLive={scrubber.resumeLive}
           />
           {timelineQuery.error && timelineItems.length === 0 && (
-            <p style={{ color: '#dc2626' }}>Failed to load timeline.</p>
+            <p style={{ color: 'var(--color-error)' }}>Failed to load timeline.</p>
           )}
           <TimelineFeed
             items={timelineItems}

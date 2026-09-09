@@ -12,7 +12,7 @@ function SkeletonBox(): JSX.Element {
     <div
       style={{
         height: '4rem',
-        background: '#e2e8f0',
+        background: 'var(--color-neutral-200)',
         borderRadius: '6px',
         animation: 'pulse 1.5s ease-in-out infinite',
       }}
@@ -44,12 +44,12 @@ export default function TenantDashboardPage(): JSX.Element {
     <div style={{ padding: '2rem', maxWidth: '900px' }}>
       <h1
         data-testid="tenant-dashboard-heading"
-        style={{ fontSize: '1.75rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.5rem' }}
+        style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}
       >
         {tenantDisplayName}
       </h1>
 
-      <p style={{ color: '#64748b', marginBottom: '2rem' }}>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
         Welcome to your BPM workspace. Here is a summary of your current activity.
       </p>
 
@@ -59,10 +59,10 @@ export default function TenantDashboardPage(): JSX.Element {
           style={{
             marginBottom: '1.5rem',
             padding: '.75rem 1rem',
-            background: '#fef3c7',
-            border: '1px solid #f59e0b',
+            background: 'var(--color-warning-light)',
+            border: '1px solid var(--color-warning-border)',
             borderRadius: '6px',
-            color: '#92400e',
+            color: 'var(--color-warning-text)',
             fontSize: '.875rem',
           }}
         >
@@ -80,14 +80,14 @@ export default function TenantDashboardPage(): JSX.Element {
         <div
           data-testid="tile-definitions"
           style={{
-            background: '#fff',
-            border: '1px solid #e2e8f0',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-default)',
             borderRadius: '8px',
             padding: '1.25rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '.75rem' }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '.75rem' }}>
             Recent Definitions
           </div>
           {loadingDefs ? (
@@ -97,13 +97,13 @@ export default function TenantDashboardPage(): JSX.Element {
               {(definitions?.items ?? []).slice(0, 5).map((d) => (
                 <div
                   key={d.id}
-                  style={{ fontSize: '.875rem', color: '#334155', padding: '.25rem 0', borderBottom: '1px solid #f1f5f9' }}
+                  style={{ fontSize: '.875rem', color: 'var(--text-primary)', padding: '.25rem 0', borderBottom: '1px solid var(--color-neutral-100)' }}
                 >
                   {d.name}
                 </div>
               ))}
               {(!definitions?.items || definitions.items.length === 0) && (
-                <div style={{ color: '#94a3b8', fontSize: '.875rem' }}>No definitions yet.</div>
+                <div style={{ color: 'var(--text-disabled)', fontSize: '.875rem' }}>No definitions yet.</div>
               )}
             </div>
           )}
@@ -113,14 +113,14 @@ export default function TenantDashboardPage(): JSX.Element {
         <div
           data-testid="tile-instances"
           style={{
-            background: '#fff',
-            border: '1px solid #e2e8f0',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-default)',
             borderRadius: '8px',
             padding: '1.25rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '.75rem' }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '.75rem' }}>
             Active Instances
           </div>
           {loadingInstances ? (
@@ -128,7 +128,7 @@ export default function TenantDashboardPage(): JSX.Element {
           ) : (
             <div
               data-testid="tile-instances-count"
-              style={{ fontSize: '2.25rem', fontWeight: 700, color: '#3b82f6' }}
+              style={{ fontSize: '2.25rem', fontWeight: 700, color: 'var(--color-info)' }}
             >
               {instances?.items?.length ?? 0}
             </div>
@@ -139,14 +139,14 @@ export default function TenantDashboardPage(): JSX.Element {
         <div
           data-testid="tile-tasks"
           style={{
-            background: '#fff',
-            border: '1px solid #e2e8f0',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-default)',
             borderRadius: '8px',
             padding: '1.25rem',
-            boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+            boxShadow: 'var(--shadow-card)',
           }}
         >
-          <div style={{ fontSize: '.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', marginBottom: '.75rem' }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '.75rem' }}>
             Pending Tasks
           </div>
           {loadingTasks ? (
@@ -154,7 +154,7 @@ export default function TenantDashboardPage(): JSX.Element {
           ) : (
             <div
               data-testid="tile-tasks-count"
-              style={{ fontSize: '2.25rem', fontWeight: 700, color: '#f59e0b' }}
+              style={{ fontSize: '2.25rem', fontWeight: 700, color: 'var(--color-warning-dark)' }}
             >
               {tasks?.items?.length ?? 0}
             </div>

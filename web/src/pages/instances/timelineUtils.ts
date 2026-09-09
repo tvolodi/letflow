@@ -28,11 +28,11 @@ export function mergeTimelineItems(
 }
 
 export function getTimelineDotColour(eventType: string): string {
-  if (eventType.startsWith('INSTANCE_')) return '#2563eb'
-  if (eventType.startsWith('TASK_') || eventType.startsWith('HUMAN_TASK_')) return '#16a34a'
-  if (eventType.startsWith('ERROR_')) return '#dc2626'
-  if (eventType.startsWith('TIMER_')) return '#d97706'
-  return '#64748b'
+  if (eventType.startsWith('INSTANCE_')) return 'var(--color-info)'
+  if (eventType.startsWith('TASK_') || eventType.startsWith('HUMAN_TASK_')) return 'var(--color-success)'
+  if (eventType.startsWith('ERROR_')) return 'var(--color-error)'
+  if (eventType.startsWith('TIMER_')) return 'var(--color-warning)'
+  return 'var(--text-secondary)'
 }
 
 export function getRelativeTime(isoTimestamp: string): string {

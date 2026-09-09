@@ -329,3 +329,63 @@ history:
       before pushing this time, having been caught by CI itself on the
       REQ-286 merge two turns ago. ORCH will merge and release queue
       task 560 status:done.
+  - req: REQ-291
+    event: done
+    agent: ORCH
+    at: "2026-09-09T12:53:41Z"
+    note: >
+      REQ-291 (queue task 561, GH#1147) implemented via
+      WF02-REQ291-20260909: extends REQ-284's x-ui vocabulary doc with
+      visible_when, computed and cross-field validation logic keys
+      (0020 D1a step 8, part 2 of 2), validated entirely at definition
+      time -- no evaluator (that is REQ-292 Elixir/REQ-293 TypeScript/
+      REQ-294 Dart, all explicitly out of scope here). New leaf module
+      Letflow.Definitions.FormSchemaExpressions and a new CHK-20 in
+      Graph.validate_node_attributes/1, mirroring CHK-18's
+      check_sub_process_interface/1 pattern exactly; 4 new additive
+      Violation.code() atoms. Semantics pinned so REQ-292/293/294 cannot
+      silently diverge: no "variables." prefix (bare sibling top-level
+      property names only, any dotted path out of scope); a computed
+      field's absent/null input always evaluates to nil (a single stated
+      value, not a range); both a hidden field's value and a computed
+      field's value ARE submitted on submit (per 0020 D1a constraint 3 --
+      the server re-validates/recomputes, never stores on trust);
+      computed-field reference cycles of any length rejected at
+      definition time via DFS with an on-stack set (self-reference,
+      2-node and 3-node cycles all covered by separate tests, plus a
+      diamond-DAG negative test proving no false positive). Security
+      boundary stated in the vocabulary doc's own words, citing 0020
+      D1a: client-side hiding is a UX affordance only, never access
+      control; a field whose visibility is security-relevant must be
+      omitted from the schema server-side. Pipeline: CODE-DESIGNER ->
+      CODE-DESIGN-VALIDATOR (PASS, no rework) -> ELIXIR-DEV ->
+      REVIEWER (PASS -- independently hand-traced the DFS cycle
+      detector for the on-stack-vs-visited bug class, confirmed absent;
+      independently re-ran mix format/compile/test). SECURITY-REVIEWER
+      out of scope (definition-time validation only, no tenant-data
+      response-shaping, no API route, no migration). Both hard scope
+      fences confirmed via git diff: lib/letflow/engine/expr.ex
+      untouched, no file under web/ touched. Full suite (re-run
+      independently by ORCH in a clean, uncontended state after
+      REVIEWER's own run hit database contention from a concurrent
+      test process): 3582/3584 passed, 2 pre-existing rustc-absent
+      CheckToolchainTest failures unrelated to this branch. Merge-time
+      bookkeeping: flipping REQ-291 to done expired REQ-292's
+      blocked-by: REQ-291 deferral. REQ-292's only remaining live
+      dependency is REQ-290, but REQ-290's own deferral was scoped to
+      REQ-292 as a workaround for its true dependency, REQ-289, being
+      entirely absent from docs/requirements.yaml (a genuine
+      registration gap, same class as REQ-272/275/287 -- REQ-289 is
+      queue task 544/GH#1100 with real implementation work sitting
+      unmerged on origin/feature/WF02-REQ289-20260909, which predates
+      several requirements merged to main since and needs a rebase).
+      Registered REQ-289 as a `pending` entry (matching reality --
+      unmerged, not done) so REQ-290 could point directly at its real
+      blocker, freeing REQ-292 to point at REQ-290 without forming a
+      cycle: new chain REQ-292 -> REQ-290 -> REQ-289 (linear, acyclic).
+      Updated test/mix/tasks/letflow_check_deferral_staleness_test.exs's
+      T-LIVE-DEFERRED-COUNT comment to document the re-derivation (count
+      and id set both happened to stay unchanged at 8 -- only internal
+      scope targets moved), confirmed live via the standard
+      MIX_ENV=test mix run --no-start -e audit call before pushing.
+      ORCH will merge and release queue task 561 status:done.

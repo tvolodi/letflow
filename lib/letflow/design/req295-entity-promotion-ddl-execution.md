@@ -94,28 +94,44 @@ new module — per 0024 §1's reasoning. All return the module's established
   nullability — always nullable per 0023's additive-only rule, default
   value if any). Does not run any DDL itself.
 
-- `run_column_promotion(tenant_id :: Ecto.UUID.t(), promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :tenant_not_provisioned | :promotion_not_found | {:ddl_failed, Exception.t()}}`
-  Single-tenant, single-promotion. Resolves `schema_name` the same way
-  `replay_migrations/2` does (`Repo.get_by(Registration, tenant_id: ...)`),
-  takes the same per-schema advisory lock `provision_tenant_schema/1`
-  already takes, executes one `ALTER TABLE ... ADD COLUMN` against that
-  schema, and transitions the `ColumnPromotion` row `pending -> ddl_applied`
-  or `pending -> ddl_failed` (recording `last_error`). This is the one
-  function that actually issues DDL.
+- `run_column_promotion(promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | :tenant_not_provisioned | {:ddl_failed, Exception.t()}}`
+  Single-tenant, single-promotion. **Takes only `promotion_id` —
+  `tenant_id` is not a separate parameter.** Loads the `ColumnPromotion`
+  row by `promotion_id` first (`{:error, :promotion_not_found}` if it does
+  not exist), then reads `tenant_id` off that same row and resolves
+  `schema_name` from it the same way `replay_migrations/2` does
+  (`Repo.get_by(Registration, tenant_id: promotion.tenant_id)`). Because
+  the DDL target schema and the column spec (`entity_type`, `attribute`,
+  `column_name`) are both derived from the single loaded row, there is no
+  second, independently-supplied `tenant_id` that could disagree with it —
+  this closes the cross-tenant DDL risk SECURITY-REVIEWER's sign-off above
+  identifies (a caller cannot pass a `tenant_id`/`promotion_id` pair drawn
+  from two different tenants, because there is only one identifier to
+  supply). Takes the same per-schema advisory lock
+  `provision_tenant_schema/1` already takes, executes one `ALTER TABLE ...
+  ADD COLUMN` against that schema, and transitions the `ColumnPromotion`
+  row `pending -> ddl_applied` or `pending -> ddl_failed` (recording
+  `last_error`). This is the one function that actually issues DDL.
 
 - `run_column_promotion_for_all_tenants(promotion_ref :: {entity_type :: String.t(), attribute :: String.t()}) :: %{ok: [ColumnPromotion.t()], failed: [ColumnPromotion.t()]}`
   Fan-out wrapper: loads every `pending` `ColumnPromotion` row for
-  `promotion_ref`, calls `run_column_promotion/2` for each, and does **not**
+  `promotion_ref`, calls `run_column_promotion/1` for each, and does **not**
   abort on the first failure (0024 §2 — per-tenant, not atomic). Returns
   both lists so a caller can act on partial success without re-querying.
 
-- `retry_failed_column_promotion(tenant_id :: Ecto.UUID.t(), promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, term()}`
-  Re-attempts `run_column_promotion/2` for a row currently `ddl_failed`,
-  clearing `last_error` on success. No new promotion row is created.
+- `retry_failed_column_promotion(promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | term()}`
+  **Takes only `promotion_id`**, same reasoning as `run_column_promotion/1`
+  above. Loads the row by `promotion_id`, requires `status == "ddl_failed"`,
+  and re-attempts `run_column_promotion/1` (itself now single-argument) for
+  that row, clearing `last_error` on success. No new promotion row is
+  created.
 
-- `backfill_column_promotion(tenant_id :: Ecto.UUID.t(), promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, term()}`
-  Requires the row to be `ddl_applied` or `backfilling`. Transitions to
-  `backfilling`, calls
+- `backfill_column_promotion(promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | term()}`
+  **Takes only `promotion_id`.** Loads the row by `promotion_id` first and
+  reads `tenant_id`, `entity_type` off that same row — the tenant/entity
+  scope passed to `rebuild_projection/2` below is never a second,
+  independently-supplied argument. Requires the row to be `ddl_applied` or
+  `backfilling`. Transitions to `backfilling`, calls
   `Letflow.Entities.Record.Projector.rebuild_projection/2` scoped to this
   tenant's `prefix` and this `entity_type`, then runs the verification
   check (row-count parity between non-null values in the new column and
@@ -125,16 +141,20 @@ new module — per 0024 §1's reasoning. All return the module's established
   advancing — a caller may call this function again to retry, since replay
   is idempotent.
 
-- `activate_column_promotion(tenant_id :: Ecto.UUID.t(), promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :not_backfilled | term()}`
-  Requires `status == "backfilled"`. Sets `status: "active"`,
+- `activate_column_promotion(promotion_id :: Ecto.UUID.t()) :: {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | :not_backfilled | term()}`
+  **Takes only `promotion_id`.** Loads the row by `promotion_id` first;
+  requires `status == "backfilled"`. Sets `status: "active"`,
   `query_eligible: true`, `activated_at: now`. This is the single write
   `Allowlist` (REQ-299) depends on to start reporting the attribute as a
   `:typed_column` entry for this tenant.
 
-- `suspend_column_promotion(tenant_id :: Ecto.UUID.t(), promotion_id :: Ecto.UUID.t(), reason :: String.t()) :: {:ok, ColumnPromotion.t()} | {:error, term()}`
-  Requires `status == "active"`. Sets `query_eligible: false` only —
-  `status` is left `"active"` (0024 §4's rollback path). Never issues DDL,
-  never touches the column, never touches `field_values`.
+- `suspend_column_promotion(promotion_id :: Ecto.UUID.t(), reason :: String.t()) :: {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | term()}`
+  **Takes only `promotion_id`** (plus `reason`, which is not a
+  tenant/promotion identifier and carries no cross-tenant risk). Loads the
+  row by `promotion_id` first; requires `status == "active"`. Sets
+  `query_eligible: false` only — `status` is left `"active"` (0024 §4's
+  rollback path). Never issues DDL, never touches the column, never
+  touches `field_values`.
 
 - `column_promotion_query_eligible?(tenant_id :: Ecto.UUID.t(), entity_type :: String.t(), attribute :: String.t()) :: boolean()`
   The read-side accessor `Letflow.Entities.Query.Allowlist`'s per-tenant,

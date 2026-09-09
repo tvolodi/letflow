@@ -6013,5 +6013,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-295 (queue task 564, GH#1158) answers decision 0023's DDL-execution open question -- new decision record docs/migration/decisions/0024-entity-promotion-ddl-execution.md plus a companion design doc for REQ-296 onward. Design-only, no lib/ code. Extends Letflow.TenantProvisioning (new ColumnPromotion functions) rather than a manifest reuse, dedicated migrator, or inline promotion-path execution. Per-tenant partial-failure state machine via a new entity_column_promotions table. Backfill via rebuild_projection/2 replay with dual-write + query_eligible gating typed_column dispatch. Rollback via allowlist-exclusion + corrective re-promotion, never a drop/narrow (0023's additive-only rule respected). entity_record_latest recommended for retirement. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: missing file:line citation, fixed) -> SECURITY-REVIEWER (1 rework: cross-tenant DDL risk from independently-sourced tenant_id/promotion_id parameters, fixed by deriving tenant_id from the loaded promotion row; re-check PASS) -> REVIEWER (PASS -- confirmed extending TenantProvisioning inherits REQ-045's already-settled process-vs-row precedent, no new supervision review needed). Both gates named by 0023's own closing sentence recorded in 0024's own sign-off sections. No dependents deferred against REQ-295."
     }
+,
+    {
+      "run_id": "WF02-REQ302-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-302",
+      "issue_id": null,
+      "queue_task_id": 565,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1159,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions"
+      ],
+      "branch_name": "feature/WF02-REQ302-20260909",
+      "started_at": "2026-09-09T19:42:48Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-302 (queue task 565, GH#1159) answers two independent column-semantics questions for entity storage (split from REQ-295 after REQ-VALIDATOR's second sizing gate) -- new decision record docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md, deliberately its own file (parallel session to REQ-295's 0024, no ordering dependency). Sub-question 1: ON DELETE RESTRICT for promoted FK columns, reconciled against Records.delete_record/2's soft-delete-only application path (records.ex:199-219, :289-298) -- RESTRICT fails loudly against an out-of-band hard DELETE rather than silently losing data; CASCADE/SET NULL/NO ACTION each explicitly rejected. Sub-question 2: per-field search_strategy (:plain default, :fulltext opt-in) for localized text, matching the only existing full-text precedent (Definitions.search/2, ILIKE-only). Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: a records.ex citation overshot by 5 lines into an unrelated function, fixed) -> SECURITY-REVIEWER (PASS -- confirmed RESTRICT's actual Postgres failure mode is a loud auditable error, no cross-tenant FK risk) -> REVIEWER (PASS -- confirmed the on_delete: :restrict precedent real though not perfectly uniform, flagged as a non-blocking nit already tracked under ISS-0225; confirmed no accidental coupling between the two sub-questions; confirmed 0023/0024 both untouched). Both gates recorded in 0025's own distinct sign-off sections. No dependents' deferral hatches reference REQ-302."
+    }
   ]
 }

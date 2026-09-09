@@ -72,7 +72,7 @@ onto them).
 - `DataTable<TRow>({ columns: {id, header, accessor, sortable?, sortValue?}[], data: TRow[], isLoading?, emptyMessage, onRowClick? })` — **no per-row style/className hook, no external-selection-highlight prop.** Two features in scope cannot be expressed: DlqPage's "selected row gets a tinted background" and WebhooksPage's "paused row gets a tinted background." Both are **decorative losses only** — `onRowClick` still drives the underlying behavior (row click still opens the detail panel; status is still visible via the StatusBadge cell). Documented per-file, not silently dropped.
 - `StatusBadge({ status: string, domain: 'definition'|'instance'|'task'|'timer'|'dlq', size?: 'sm'|'md' })` — `dlq` domain exists in the type but has **no status table** (falls to a neutral `FALLBACK` for every status, per the component's own moduledoc, tracked as its pre-existing OQ-3 spec gap). **There is no `webhook` domain at all.** See §3, open question 1.
 - `PaginationControls({ page: number (1-indexed), pageSize, totalItems: number|null, onPageChange, onPageSizeChange?, hasNextPage? })` — designed for exactly DlqPage's shape (cursor-based, `totalItems` unknown, `hasNextPage` derived from `next_cursor`). Requires wrapping DlqPage's `cursorStack`/`goNext`/`goPrev` state as a synthesized 1-indexed `page` — see §5.3.
-- `useToast() -> { success(msg, opts?), error(msg, opts?), warning(msg, opts?) }`, rendered by a single `<ToastContainer/>` (module-level store via `useSyncExternalStore`, no provider needed). **`<ToastContainer/>` is not mounted anywhere in the app** (`grep` of `web/src` found zero call sites outside `Toast.tsx` itself and its own test). See §3, open question 2.
+- `useToast() -> { success(msg, opts?), error(msg, opts?), warning(msg, opts?) }`, rendered by a single `<ToastContainer/>` (module-level store via `useSyncExternalStore`, no provider needed). **`<ToastContainer/>` is not mounted anywhere in the app** (`grep` of `web/src` found zero call sites outside `Toast.tsx` itself and its own test) — mounting it requires editing `AppShell.tsx`/`main.tsx`, both outside this requirement's file-scope allowance, so **this design does not introduce any `useToast()` call site**. See §3, open question 2, for the resolution: every inline banner/error/success element in scope stays hand-rolled, tokenized, rather than migrated to a toast that would be a silent no-op today.
 - `PageLayout({ title, actions?, children })` — pure title+actions+content wrapper, fits both list pages and both DLQ pages directly.
 - `FilterBar({ children, onClear?, activeCount? })` — pure chrome; each filter control is the page's own responsibility, still needs `<input>`/`<select>` markup inside it (see §6 for their border/text token normalization).
 - `JsonDiffView({ before: Record<string, unknown>|null|undefined, after: ... })` — renders a **before/after diff table**; every row is highlighted `--color-warning-light` whenever `before[k] !== after[k]`. Wrong shape for a single-object read-only dump (would highlight every field as "changed" against an empty `before`, which is misleading, not neutral). Not used anywhere in this scope — see §4.
@@ -118,21 +118,36 @@ file scope to fix it in place. This is the finding CODE-DESIGNER reports per
 Confirmed by `grep -rn "ToastContainer" web/src`: the only matches are `Toast.tsx`'s own
 definition and `Toast.test.tsx`. `useToast().success(...)` updates the module-level store, but
 with no `<ToastContainer/>` rendered anywhere, nothing subscribes to it — the call is a silent
-no-op. This blocks every acceptance criterion in REQ-276/277/278 that says "toast with
-useToast/Toast," not just this one.
+no-op.
 
-**Why this isn't resolved here:** the natural mount point is the app shell
+**Why this isn't resolved by mounting it here:** the natural mount point is the app shell
 (`web/src/components/layout/AppShell.tsx`) or `web/src/main.tsx`, both outside this
-requirement's file-scope allowance.
+requirement's file-scope allowance (`no file outside web/src/pages/definitions/ and
+web/src/pages/dlq/ is modified except web/src/styles/tokens.css and docs/frontend/design-system.md`
+— a literal, enumerated two-file exception list; no design step has standing to invent a third
+exception mid-design).
 
-**Recommendation:** mount `<ToastContainer/>` once, in `AppShell.tsx`, as shared infrastructure
-— not duplicated per page, and not something any one of REQ-276/277/278 should each try to add
-independently (whichever lands first should add it once; the other two then find it already
-mounted). This is a one-line, additive, no-risk change with an obvious single correct location,
-so recommend treating it as an explicit, named exception to the "no file outside definitions/,
-dlq/" criterion rather than blocking all toast functionality on a separate requirement. Flagged
-here for CODE-DESIGN-VALIDATOR/ORCH sign-off rather than decided unilaterally, per
-`core-directives.md`: "Don't silently resolve an open question by guessing."
+**Resolution (revised): this design does not migrate any inline banner/error/success element to
+`useToast()`.** Every element in scope that was previously going to become a toast call
+(`importError`/`createError` in `DefinitionListPage.tsx`; `saved`/`exportError`/`promoteMessage`/
+`promoteError` in `DefinitionEditorPage.tsx`; `actionError` in `DlqPage.tsx`; `formError` in
+`WebhooksPage.tsx`) **stays exactly where it is today, as a hand-rolled inline element** — only
+its literal colors are normalized onto existing tokens (the same literal→token mapping every
+other in-scope literal gets, per §6), with no primitive swap and no behavior change. This is
+option (a) of the two choices ORCH offered on rework: not migrating these call sites to
+`useToast()` at all, versus deferring them to a future requirement. Option (a) is chosen because
+(1) it fully satisfies this requirement's own AC2 (`DataTable`/`Button`/`StatusBadge`/
+`PaginationControls` counts) and AC1 (zero literal-colour hits) without needing `ToastContainer`
+mounted anywhere — AC2's enumerated construct list does not include toast at all, only table/
+button/badge/pagination; (2) it ships zero regression risk (nothing currently visible moves or
+disappears); (3) it avoids the inline-vs-toast UX tradeoff this design's earlier draft was
+already flagging as a caution for `createError`/`formError` (see §5.1/§5.4) — keeping them inline
+sidesteps that tradeoff entirely rather than resolving it under time pressure. **Filed as a
+follow-up issue** for ORCH: mount `<ToastContainer/>` once in `AppShell.tsx` (shared
+infrastructure, not duplicated per requirement) as its own small, separately-reviewable change,
+after which a later requirement can migrate these call sites to `useToast()` if desired — not
+this one's job, and not decided unilaterally here, per `core-directives.md`'s "No Issue Left
+Local-Only."
 
 ### OQ-3 — WebhooksPage's cyan "one-time secret" panel: normalize hue, or add new tokens?
 
@@ -203,28 +218,30 @@ FRONTEND-DEV rather than silently working around.
 | Archive button | `<button onClick={() => archive.mutate(def.id)} ...>` | 1 | `<Button variant="secondary" size="sm" onClick={...} loading={archive.isPending}>Archive</Button>` |
 | Status pill (`STATUS_BADGE[def.status]` colored `<span>`, both in the main row and the version-history expansion) | hand-rolled `<span>` | 2 (main row + version row) | `<StatusBadge status={def.status} domain="definition"/>` (main), `<StatusBadge status={v.status} domain="definition" size="sm"/>` (version history) |
 | Create Definition modal | hand-rolled fixed-position `<div>` overlay + form | 1 | **Stays hand-rolled** (tokenized) — not a confirm dialog (`ConfirmDialog`'s `body` is a plain string; this modal has 3 labeled text inputs plus per-field validation errors, a shape `ConfirmDialog` cannot express). No primitive in the current design-system covers an arbitrary multi-field form modal. Cancel/Create buttons inside it become `Button variant="secondary"`/`Button variant="primary"` respectively. |
-| Import-error banner, create-error text | hand-rolled colored `<div>`/`<p>` | 2 | **Replaced by `useToast().error(...)`** — see toast row below |
+| Import-error banner, create-error text | hand-rolled colored `<div>`/`<p>` | 2 | **Stays hand-rolled, tokenized — not migrated to `useToast()`** — see §3 OQ-2 (resolved: `<ToastContainer/>` is mounted nowhere in the app, so no `useToast()` call site is introduced by this design; these two elements keep their current inline placement, only their literal colors move onto tokens per §6) |
 | Pagination | **none exists** | 0 | **N/A** — `useDefinitions`/`useDefinitionSearch` return the full unpaginated `items` array (no `next_cursor`/`page`/`total` field anywhere in this file). No `PaginationControls` migration applies here; nothing to migrate. |
 
-**Before/after table-construct counts:** 1 hand-rolled `<table>` → 1 `DataTable`. 1 hand-rolled
-status pill pattern (2 call sites: row + version-history) → 2 `StatusBadge` call sites. 4
-hand-rolled `<button>`s (Import, New Definition, Activate, Archive) → 4 `Button` call sites (2
-more, Cancel/Create, live inside the still-hand-rolled create modal).
+**Before/after table-construct counts, re-verified by direct grep against the real file**
+(`grep -n "<button"`/`"<table"`/`"STATUS_BADGE\["` `DefinitionListPage.tsx`): **6** `<button>`
+elements total (lines 173 Import, 190 New Definition, 280 Activate, 288 Archive, 401 Cancel, 408
+Create — the last two inside the still-hand-rolled create modal), **1** `<table>` (line 231),
+**2** `STATUS_BADGE[...]` status-pill spans (lines 271 main row, 312 version-history row). 1
+hand-rolled `<table>` → 1 `DataTable`. 2 hand-rolled status-pill spans → 2 `StatusBadge` call
+sites. 4 of the 6 `<button>`s (Import, New Definition, Activate, Archive) → 4 `Button` call sites;
+the remaining 2 (Cancel/Create) also → `Button`, inside the still-hand-rolled create modal — all
+6 migrate, matching the grepped total exactly.
 
-**Toast migration:** `importError` (currently a red banner, `data-testid="import-error-dialog"`)
-and `createError` (currently red text inside the modal) become `useToast().error(message)` calls
-at the point they are currently `setImportError(...)`/`setCreateError(...)`. **Caution:**
-`createError` is currently displayed *inside* the modal, next to the field it blocks — moving it
-to a toast changes where the user sees it (top-right, transient) versus inline (persistent while
-the modal is open). This is a real UX behavior change from "inline blocking error" to "transient
-toast," not just a token swap — call out for FRONTEND-DEV to keep `data-testid="create-*"`-scoped
-error text as inline as it needs to be for accessibility (a toast alone may not satisfy a
-screen-reader user editing the form), or keep both an inline text mirror driven by the same
-`createError` state **and** fire the toast, rather than removing the inline text entirely. This
-requirement's own list of things a toast replaces ("toast with useToast/Toast") does not
-distinguish "banner-style page error" from "field-adjacent validation error" — treat the latter
-conservatively (keep inline, tokenized, in addition to any toast) rather than deleting user-facing
-error visibility to satisfy the literal-colour guard.
+**Toast migration: none, by design.** `importError` (currently a red banner,
+`data-testid="import-error-dialog"`) and `createError` (currently red text inside the modal) are
+**not** migrated to `useToast().error(...)` — per §3 OQ-2, `<ToastContainer/>` is mounted nowhere
+in the app, so any `useToast()` call this design introduced would be a silent no-op today. Both
+elements stay exactly where they are (`importError` as the banner, `createError` inline next to
+the field it blocks), with only their literal colors normalized onto tokens per §6 (no primitive
+swap, no placement change, no behavior change). This sidesteps what would otherwise have been a
+real UX tradeoff (inline blocking error vs. transient top-right toast, and the accessibility
+concern of a toast alone not reaching a screen-reader user mid-form) rather than resolving it
+under this rework's constraints — a future requirement that mounts `ToastContainer` can revisit
+whether either becomes a toast.
 
 **Remaining non-primitive literal colors** (create-modal chrome, since it stays hand-rolled): see
 §6's mapping table — all resolve to existing tokens, no new hex needed.
@@ -265,8 +282,8 @@ skipped silently):
 | Table | No | N/A |
 | Status pill | The read-only banner (`data-testid="read-only-banner"`, "Read-only — {status}") is informational text, not a status-domain badge tied to `def.status`'s DRAFT/ACTIVE/etc. vocabulary — it's a fixed warning string. **Not migrated to `StatusBadge`** (wrong semantics: `StatusBadge` renders `{status}` as its own label; this banner's text is "Read-only — DRAFT status", a full sentence, not a bare status word) — stays hand-rolled, tokenized per the table above. The small "DRAFT" tag next to "New Definition" (line ~594-598, `isNew` case) **is** a bare status word and **does** migrate: `<StatusBadge status="DRAFT" domain="definition" size="sm"/>`. |
 | Pagination | No | N/A |
-| Buttons (Export, Promote to Production, Show/Hide Raw JSON, Re-layout, Save, toolbar "Stay"/"Discard" in the unsaved-changes dialog) | Yes, 7 buttons via the shared `toolbarButtonStyle()` helper plus 2 more in the unsaved-changes dialog | All 9 → `Button`: Export/Show-Raw-JSON/Re-layout/Stay → `variant="secondary"`; Promote to Production → `variant="secondary"` (not primary — it's a secondary action relative to Save); Save → `variant="primary"`, `loading={create.isPending}`; Discard → `variant="danger"`. `toolbarButtonStyle()` helper function is deleted once all its call sites migrate to `Button`. **Preserve every existing `data-testid`** (`btn-export-definition`, `promote-to-production-btn`, `btn-show-raw-json`, `btn-auto-layout`, `btn-save-definition`, `unsaved-discard`) via `Button`'s `data-testid` prop — the promote test (§8) depends on `promote-to-production-btn` staying exactly that string. |
-| Toast (saved/exportError/promoteMessage/promoteError banners) | Yes, 4 inline colored banners (`save-success-toast`, `promote-success-toast`, `promote-error-toast` testids, plus untested `error`/`exportError`) | All 4 → `useToast()` calls at the point each is currently `setSaved(true)`/`setExportError(...)`/`setPromoteMessage(...)`/`setPromoteError(...)`. **The existing `setTimeout(() => setSaved(false), 2000)`/`setTimeout(() => setPromoteMessage(null), 4000)` auto-dismiss logic is superseded by `useToast`'s own built-in duration table** (4s non-error / 8s error, per `useToast.ts`) — delete the manual timers, they become redundant once the toast owns its own dismissal. |
+| Buttons (Export, Promote to Production, Show/Hide Raw JSON, Re-layout, Save, toolbar "Stay"/"Discard" in the unsaved-changes dialog) | Re-grepped directly (`grep -n "<button" DefinitionEditorPage.tsx`): **7 total** `<button>` elements in this file — 5 via the shared `toolbarButtonStyle()` helper (lines 607 Export, 616 Promote to Production, 626 Show/Hide Raw JSON, 633 Re-layout, 648 Save) plus 2 styled inline, not via the helper (line 938 Stay, line 952 Discard, in the unsaved-changes dialog) | All 7 → `Button`: Export/Show-Raw-JSON/Re-layout/Stay → `variant="secondary"`; Promote to Production → `variant="secondary"` (not primary — it's a secondary action relative to Save); Save → `variant="primary"`, `loading={create.isPending}`; Discard → `variant="danger"`. `toolbarButtonStyle()` helper function is deleted once all its call sites migrate to `Button`. **Preserve every existing `data-testid`** (`btn-export-definition`, `promote-to-production-btn`, `btn-show-raw-json`, `btn-auto-layout`, `btn-save-definition`, `unsaved-discard`) via `Button`'s `data-testid` prop — the promote test (§8) depends on `promote-to-production-btn` staying exactly that string. |
+| Toast (saved/exportError/promoteMessage/promoteError banners) | Yes, 4 inline colored banners (`save-success-toast`, `promote-success-toast`, `promote-error-toast` testids, plus untested `error`/`exportError`) | **Stays hand-rolled, tokenized — not migrated to `useToast()`** (per §3 OQ-2: `<ToastContainer/>` is mounted nowhere in the app, so a `useToast()` call here would be a silent no-op). All 4 banners keep their current markup, placement, and the existing `setTimeout(() => setSaved(false), 2000)`/`setTimeout(() => setPromoteMessage(null), 4000)` auto-dismiss logic unchanged — only their literal colors move onto tokens per §6. |
 | JSON display | Yes, 1 (raw JSON drawer) | See §4, disposition #1 |
 | Unsaved-changes dialog (Stay/Discard) | Yes, hand-rolled fixed-overlay dialog | **Candidate for `ConfirmDialog`** (`title="Unsaved Changes"`, `body="You have unsaved changes. Do you want to discard them?"`, `confirmText="Discard"`, `cancelText="Stay"`, `confirmVariant="danger"`, `onConfirm={handleDiscardAndProceed}`, `onCancel={handleCancelNavigation}`). Straightforward fit — single string body, two buttons, danger confirm. **Preserve `data-testid="unsaved-changes-dialog"` and `data-testid="unsaved-discard"`** — `ConfirmDialog` renders its own fixed `data-testid="confirm-dialog"`/`data-testid="confirm-dialog-confirm"`/`data-testid="confirm-dialog-cancel"` internally and does **not** accept a `data-testid` override prop (checked its prop list in §2 — no such prop exists). This is a real prop gap: nothing in `ConfirmDialogProps` lets a caller rename its internal testids. Two options for FRONTEND-DEV: (a) use `ConfirmDialog` as-is and accept the testid rename (then update this page's own component — no external test currently asserts on `unsaved-changes-dialog`/`unsaved-discard`, confirmed by the `grep` in §8, so this is safe), or (b) keep this one dialog hand-rolled specifically to preserve the existing testids for the e2e specs that do reference similar names elsewhere. **Recommend (a)** — no in-scope or e2e test asserts these exact strings (verified), and using the primitive is the point of the migration; note it here rather than silently picking without stating the tradeoff. |
 
@@ -276,6 +293,16 @@ four files listed in this requirement, and REQ-277's scope is `definitions/`+`dl
 not `components/ui/`.
 
 ### 5.3 `dlq/DlqPage.tsx` (528 lines, 62 literal-colour hits)
+
+**Re-verified by direct grep against the real file:** `grep -n "<button"` finds **9** total
+`<button>` elements (lines 253 Apply, 332 Details, 346 Retry, 358 Discard, 380 Previous, 389 Next,
+405 Close, 507 discard-dialog Cancel, 514 discard-dialog Discard-confirm); `grep -n "<table"`
+finds **3** (line 274 main DLQ table, line 414 detail-panel key/value table, line 442 retry-history
+table). Of the 9 buttons, **7 migrate to `Button`** (Apply, Details, Retry, Discard, Previous,
+Next, Close — table below); the remaining **2 (lines 507/514, the discard-confirmation dialog's
+own Cancel/Discard buttons) stay hand-rolled, tokenized**, consistent with that dialog itself
+staying hand-rolled (see the "Discard-confirmation dialog" row below) — 7 + 2 = 9, matching the
+grepped total exactly, no undercount.
 
 **Hand-rolled → primitive, before/after counts:**
 
@@ -293,7 +320,7 @@ not `components/ui/`.
 | Detail-panel "table" (Item ID/Source/Instance/Status key-value rows) | hand-rolled `<table>` | 1 | **Stays hand-rolled, tokenized** — this is a 2-column key/value definition list, not tabular data with sortable columns/rows; `DataTable`'s column model (`{id, header, accessor}[]` rendered as `<th>`/`<td>` per row of `data: TRow[]`) doesn't fit a fixed 4-row key/value layout without inventing a fake single-row dataset, which is a worse fit than leaving it as a semantic `<table>`. Named explicitly rather than silently forced. |
 | Retry-history table | hand-rolled `<table>` | 1 | `DataTable<RetryAttempt>` — 4 columns: `attempt` (`attemptNo`), `time` (`attemptedAt`, `toShortDate`), `outcome`, `error` (`errorMessage ?? '—'`) |
 | Discard-confirmation dialog | hand-rolled fixed-overlay `<div role="dialog">` | 1 | **Stays hand-rolled, tokenized** — see §2's `ConfirmDialog` note: this dialog has a conditional second paragraph (the amber "tied to instance X" warning box, rendered only `if (discardConfirmItem.instance_id)`) with distinct visual treatment (background/border/color) from the primary body text. `ConfirmDialog`'s `body` prop is a single plain string with no slot for a second, differently-styled block — using it would either silently drop the instance-tied warning or flatten it into the same plain-text paragraph as the primary body, losing its visual emphasis. Since that warning exists specifically to flag a higher-stakes consequence (discarding may cancel a running instance), silently downgrading its visibility is a real UX regression, not a cosmetic one — flagged and left hand-rolled (tokenized per §6) rather than forced through a mismatched prop shape. |
-| "Queue is empty" / action-error text | hand-rolled `<p>` | 2 | `actionError` → `useToast().error(actionError)` at the point it's currently `setActionError(...)`. "Queue is empty" **stays as `DataTable`'s own `emptyMessage` prop** (`emptyMessage="Queue is empty."`) — not a toast, since `DataTable` already has a dedicated, better-fitting empty-state slot (§2: `Inbox` icon + message) than firing a transient toast for a steady-state (non-error, non-transient) condition. |
+| "Queue is empty" / action-error text | hand-rolled `<p>` | 2 | `actionError` **stays hand-rolled, tokenized — not migrated to `useToast()`** (per §3 OQ-2: `<ToastContainer/>` is mounted nowhere in the app; a `useToast()` call here would be a silent no-op), keeping its current inline placement and only normalizing its literal color per §6. "Queue is empty" **stays as `DataTable`'s own `emptyMessage` prop** (`emptyMessage="Queue is empty."`) — not a toast either way, since `DataTable` already has a dedicated, better-fitting empty-state slot (§2: `Inbox` icon + message) than firing a toast for a steady-state (non-error, non-transient) condition. |
 
 **`PaginationControls` wrapper design (Open question resolved, not left as TBD):** DlqPage's
 pagination is cursor-stack-based (`cursorStack: string[]`, `goNext`/`goPrev` push/pop),
@@ -315,13 +342,20 @@ behavior change beyond "replace the pagination control," not proposed here).
 
 ### 5.4 `dlq/WebhooksPage.tsx` (323 lines, 34 literal-colour hits)
 
+**Re-verified by direct grep against the real file:** `grep -n "<button"` finds **8** total
+`<button>` elements (line 158 + New Subscription, lines 185/191 secret-panel Copy-and-dismiss/
+Dismiss, lines 248/249 create-form Save/Cancel, lines 288/294/300 row-action View-details/
+Pause-Resume/Delete); `grep -n "<table"` finds **1** (line 259). All 8 buttons and the 1 table are
+accounted for in the table below — 1 (New Subscription) + 2 (secret panel) + 2 (create form) + 3
+(row actions) = 8, matching the grepped total exactly.
+
 **Hand-rolled → primitive, before/after counts:**
 
 | Construct | Current | Count | Becomes |
 |---|---|---|---|
 | Page wrapper + heading + New-Subscription button | `<div style={{padding:'1.5rem'}}><h2>Webhook Subscriptions</h2><button ...>+ New Subscription</button>` | 1 wrapper + 1 button | `<PageLayout title="Webhook Subscriptions" actions={<Button variant="primary" size="sm" onClick={() => setCreating(true)}>+ New Subscription</Button>}>` |
 | One-time HMAC secret panel | hand-rolled cyan `<div>` | 1 | **Stays hand-rolled** (no primitive for an arbitrary informational callout panel exists in this design system — `PageLayout`/`FilterBar` are pure chrome, not content panels), tokenized per §6/OQ-3. "Copy and dismiss" / "Dismiss" buttons inside it → `Button variant="primary"` / `Button variant="ghost"` respectively. |
-| Create-subscription form panel | hand-rolled `<div>` with Target URL/Secret inputs, event-type checkboxes | 1 | **Stays hand-rolled** (arbitrary multi-field form, same reasoning as DefinitionListPage's create modal — no form-panel primitive exists), tokenized. Save/Cancel buttons → `Button variant="primary" loading={createWebhook.isPending}"` / `Button variant="secondary"`. `formError` text → `useToast().error(formError)` at the point it's currently `setFormError(...)` (see the same inline-vs-toast caution as §5.1's `createError` — this form error currently appears inline, right above the Save/Cancel buttons; consider keeping an inline mirror for the same accessibility reason). |
+| Create-subscription form panel | hand-rolled `<div>` with Target URL/Secret inputs, event-type checkboxes | 1 | **Stays hand-rolled** (arbitrary multi-field form, same reasoning as DefinitionListPage's create modal — no form-panel primitive exists), tokenized. Save/Cancel buttons → `Button variant="primary" loading={createWebhook.isPending}"` / `Button variant="secondary"`. `formError` text **stays hand-rolled, tokenized — not migrated to `useToast()`** (per §3 OQ-2: `<ToastContainer/>` is mounted nowhere in the app; a `useToast()` call here would be a silent no-op) — keeps its current inline placement right above the Save/Cancel buttons, same reasoning as §5.1's `createError`, only its literal color normalized per §6. |
 | Subscriptions table | `<table>` | 1 | `DataTable<WebhookSubscription>` — 5 columns: `target_url` (monospace accessor, `resolveTargetUrl`), `event_types` (`w.event_types?.join(', ') ?? '—'`), `status` (accessor `<StatusBadge status={resolveStatus(w)} domain="dlq"/>` — see OQ-1, no `webhook` domain exists), `created_at` (sortable, `toLocaleString`), `actions` (View details/Pause-Resume/Delete buttons) |
 | **Paused-row background tint** (`background: isPaused ? '#fff7ed' : '#ffffff'` on the `<tr>`) | row-level conditional style | 1 | **Dropped — `DataTable` has no per-row style hook** (checked its prop list, §2: no `rowStyle`/`rowClassName`/similar). This is a decorative-only loss: pause/resume status is still fully conveyed by the status `StatusBadge` cell in the same row; only the whole-row tint disappears. Named explicitly rather than silently vanishing. |
 | View details / Pause-Resume / Delete row buttons | 3 hand-rolled `<button>`s | 3 | `Button` — View details → `variant="secondary" size="sm"`, Pause/Resume → `variant="secondary" size="sm"` (was solid teal `#0f766e`; no teal variant exists — see §2), Delete → `variant="danger" size="sm" loading={deleteWebhook.isPending}` |
@@ -452,10 +486,13 @@ not expect test code to already exist as part of this design artefact.
    proceeding with `domain='dlq'` for both DlqPage and WebhooksPage (uniform, spec-honest,
    degraded color-coding) and filing a follow-up issue to extend `StatusBadge.tsx`, rather than
    touching it in this requirement's scope.
-2. **OQ-2** — `<ToastContainer/>` is mounted nowhere in the app; recommend mounting it once in
-   `AppShell.tsx` as an explicit, named exception to the file-scope acceptance criterion (shared
-   infrastructure all three sibling requirements need), flagged for ORCH sign-off rather than
-   decided unilaterally.
+2. **OQ-2** — `<ToastContainer/>` is mounted nowhere in the app; **resolved (revised on rework):**
+   this design introduces **no** `useToast()` call sites at all — every banner/error/success
+   element in scope (`importError`/`createError`, `saved`/`exportError`/`promoteMessage`/
+   `promoteError`, `actionError`, `formError`) stays hand-rolled and inline, only its literal
+   colors normalized onto tokens per §6. Mounting `<ToastContainer/>` in `AppShell.tsx` is filed
+   as a separate follow-up issue for ORCH, not done as part of this design or requirement — AC5's
+   file-scope fence is a literal two-file exception list, not something a design step can expand.
 3. **OQ-3** — WebhooksPage's cyan one-time-secret panel has no matching existing token family;
    recommend Option A (normalize onto `--color-info-*`, zero new tokens, hue shifts cyan→blue)
    over Option B (add 4 new cyan-specific tokens, preserves current hue exactly).

@@ -178,10 +178,16 @@ stages:
       installed via SolutionPack.install/3), B (generic, tenant-agnostic
       platform capability -- may not name exams), or C (exam-specific
       runtime, requiring REVIEWER sign-off that A and B were tried
-      first). Twelve platform gaps close before any bucket-A work
-      starts; nine of them are unowned as of the 2026-09-09 rebase
-      (REQ-281, REQ-282 and REQ-285 have since landed on main, closing
-      gap 8 and half of gap 9). The largest is an
+      first). Thirteen platform gaps close before any bucket-A work
+      starts; ten of them are unowned as of 2026-09-09 (REQ-281,
+      REQ-282, REQ-284, REQ-285 and REQ-286 have landed on main,
+      closing gap 8, most of gap 9 and part of gap 7). Gaps 10 and 11
+      are consequences of decision 0023
+      (entity storage: per-entity-type tables with a hybrid
+      column/blob shape) and are blocked on its open question; gap 13
+      is that SolutionPack's document format cannot carry entity
+      definitions or form schemas at all, which blocks bucket A more
+      fundamentally than either. Also large is an
       entity-records HTTP surface (Letflow.Routers.Entities, deferred
       in lib/letflow/router.ex and owned by no requirement); gaps 10
       and 11 -- relations between entity records, and queryable

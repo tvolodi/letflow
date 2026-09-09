@@ -1,0 +1,55 @@
+{
+  "handoff_id": "8f1e2a3c-1b4d-4e5a-9c2f-000000000006",
+  "run_id": "WF02-REQ277-20260909",
+  "workflow_id": "WF-02",
+  "step": "03b",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGN-VALIDATOR",
+  "file": "handoffs/WF02-REQ277-20260909/step-3b-test-design-validator.json",
+  "created_at": "2026-09-09T12:20:57Z",
+  "started_at": "2026-09-09T12:20:57Z",
+  "completed_at": null,
+  "status": "PENDING",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-277"],
+    "requirement_text": {
+      "REQ-277": "Second of three sibling page-migration requirements implementing docs/migration/decisions/0020-frontend-architecture.md D2b. This requirement covers web/src/pages/definitions/ and web/src/pages/dlq/. Replace hand-rolled tables/buttons/badges/layout wrappers/toasts with DataTable/Button/StatusBadge/PaginationControls primitives, and replace every colour literal with the matching var(--token-name) from web/src/styles/tokens.css. Both directories render JSON payloads -- disposition per-file to JsonDiffView, JsonEditor, or a named hand-rolled exception."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["8f1e2a3c-1b4d-4e5a-9c2f-000000000005"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ277-20260909/step-3-test-designer.json",
+      "web/tests/specs/REQ-277.md",
+      "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx"
+    ],
+    "owned_modules": ["web/src/pages/definitions/", "web/src/pages/dlq/"]
+  },
+  "task": {
+    "description": "Run Step 3b (test design gate, hard gate) for WF-02/REQ-277 on branch feature/WF02-REQ277-20260909 (already checked out). TEST-DESIGNER passed Step 3, independently re-verifying pre-existing coverage from the recovered prior run rather than trusting it blindly. Read web/tests/specs/REQ-277.md and web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx independently -- do not read TEST-DESIGNER's result.summary as a substitute. Follow WF-02_requirement_implementation.md Step 3b's procedure: for each of REQ-277's 7 acceptance criteria, verify at least one runnable test/verification targets it, no TODO/skip left, fixtures are self-sufficient, no hardcoded secrets. Also independently confirm the anti-busywork judgement was correct: spot-check that DefinitionListPage.tsx/DefinitionEditorPage.tsx/WebhooksPage.tsx genuinely have no new derived-logic paths that would warrant a dedicated test (i.e. confirm TEST-DESIGNER didn't skip real coverage under cover of the anti-busywork exemption).",
+    "acceptance_criteria": [
+      "every one of REQ-277's 7 acceptance criteria has at least one runnable test or explicit verification procedure targeting it",
+      "no TODO/skip left uncovered",
+      "test fixtures self-sufficient, no cross-test pollution, no hardcoded secrets",
+      "the anti-busywork exemption for the 3 non-DlqPage files independently re-derived as correct, not merely accepted"
+    ]
+  },
+  "result": {
+    "status": "PARTIAL",
+    "summary": "PENDING dispatch — not yet actioned by the receiving agent.",
+    "artifacts_out": [],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ277-20260909",
+      "commit_sha_list": [],
+      "remote_branch": "origin/feature/WF02-REQ277-20260909",
+      "push_status": "skipped",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1137",
+      "pr_create_error": null
+    },
+    "next_action": ""
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

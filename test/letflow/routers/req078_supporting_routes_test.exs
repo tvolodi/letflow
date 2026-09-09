@@ -267,9 +267,14 @@ defmodule Letflow.Routers.Req078SupportingRoutesTest do
 
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
-      assert Map.keys(body) |> Enum.sort() == ["client_id", "oidc_authority"]
+
+      # REQ-281 added a third top-level key, `branding` -- see
+      # test/letflow/routers/tenant_config_test.exs for its own dedicated
+      # coverage of the branding block's shape/fallback/allowlist behavior.
+      assert Map.keys(body) |> Enum.sort() == ["branding", "client_id", "oidc_authority"]
       assert is_binary(body["oidc_authority"])
       assert is_binary(body["client_id"])
+      assert is_map(body["branding"])
     end
 
     test "GET /audit -- 200, {items, next_cursor, count} shape" do

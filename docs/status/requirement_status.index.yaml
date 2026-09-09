@@ -2193,9 +2193,19 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 32
+    entries: 33
     note: >
-      Incremented to 32 by ORCH's own REQ-278 done-event append
+      Incremented to 33 by ORCH's own REQ-281 done-event append
+      (WF02-REQ281-20260909) -- 1168 lines at that point (71349 bytes).
+      ONLY ~32 LINES OF MARGIN LEFT before the 1200-line ceiling. The
+      VERY NEXT append to this volume MUST roll to volume 12 first --
+      check line count BEFORE writing your entry (a typical entry is
+      25-50 lines), and if writing it would cross 1200, close this
+      volume (append the closure footer, set status: closed here) and
+      create docs/status/requirement_status.v12.yaml per the "WHEN THIS
+      VOLUME IS FULL" procedure in this volume's own header, THEN write
+      your entry into volume 12 instead. Do not write past the ceiling.
+      Previously incremented to 32 by ORCH's own REQ-278 done-event append
       (WF02-REQ278-20260909) -- 1127 lines at that point (68845 bytes).
       STILL UNDER the 1200-line ceiling but only ~73 lines of margin left --
       the NEXT append to this volume will very likely need to roll to

@@ -7,7 +7,7 @@ defmodule Letflow.Routers.TenantConfig do
 
   | Handler | Method/path            | Delegate                                | Auth     | Response |
   |---------|------------------------|-----------------------------------------|----------|----------|
-  | config  | `GET /api/tenant-config` | `Letflow.Identity.get_tenant_by_slug/1` | **none** | always 200, `{oidc_authority, client_id}` |
+  | config  | `GET /api/tenant-config` | `Letflow.Identity.get_tenant_by_slug/1` | **none** | always 200, `{oidc_authority, client_id, branding}` |
 
   ## Why this is mounted on `Letflow.Router`, NOT in `Letflow.Plugs.ApiPipeline`
 
@@ -57,13 +57,26 @@ defmodule Letflow.Routers.TenantConfig do
 
   ## What this endpoint discloses, and what it must never disclose
 
-  It returns exactly two values: an OIDC authority URL (which embeds a realm
-  id) and a public client id. Both are values the browser must learn *before*
-  authenticating, and both are visible to any user of that tenant. It must
-  **never** return a tenant id, slug, display name, status, user count, or any
-  other tenant attribute — the response map is hand-built with exactly the two
-  keys and is **never** derived from `%Letflow.Identity.Tenant{}` (INV-2).
-  **Adding a third key to this response is a security change, not a feature.**
+  It returns exactly three values: an OIDC authority URL (which embeds a realm
+  id), a public client id, and a `branding` block. Both of the first two are
+  values the browser must learn *before* authenticating; the third is display
+  information the login page renders before authentication as well. All three
+  are visible to any user of that tenant. The `branding` block is itself a
+  closed, explicit allowlist of exactly three sub-keys — `app_name`,
+  `logo_url`, `brand_colors` — sourced from the tenant's own stored settings
+  (`Letflow.Identity.Tenant`'s `:settings` column, REQ-280) where set, and from
+  a platform-default value per sub-key where not. It must **never** return a
+  tenant id, slug, display name, status, user count, locale/language
+  configuration, or any other tenant attribute — the response map is
+  hand-built with exactly these three top-level keys, and the `branding` block
+  is hand-built with exactly its three sub-keys, both **never** derived from
+  `%Letflow.Identity.Tenant{}` (INV-2) or from that struct's `:settings` field
+  by anything other than an explicit, named-key read. A non-default `branding`
+  block is itself a signal that a slug is real — the same bounded inference
+  this endpoint already makes via a non-default realm id in `oidc_authority`;
+  it is exactly what any user of that tenant already sees on their own login
+  page. **Adding a fourth top-level key to this response, or a fourth sub-key
+  to `branding`, is a security change, not a feature.**
 
   ## Precedence
 
@@ -155,6 +168,18 @@ defmodule Letflow.Routers.TenantConfig do
   @default_client_id "letflow-web"
   @default_realm "bpm-default"
 
+  # ── Branding platform defaults (REQ-281) ──────────────────────────────────
+  #
+  # Endpoint-local, independent from Letflow.Routers.MobileTenantConfig's own
+  # @default_branding -- deliberately NOT shared/reused (design §5). Mobile's
+  # #0B5FFF brand color is already flagged as stale (REQ-280 design §6); this
+  # endpoint reaches its own default for the first time and uses REQ-280's
+  # re-verified canonical value (web/src/styles/tokens.css:18, --color-brand-600)
+  # from day one, with no stale value to preserve.
+  @default_app_name "Letflow"
+  @default_logo_url nil
+  @default_brand_colors %{"primary" => "#228be6"}
+
   plug(:match)
   plug(:dispatch)
 
@@ -175,18 +200,23 @@ defmodule Letflow.Routers.TenantConfig do
     conn = fetch_query_params(conn)
     query = conn.query_params
 
-    realm_id =
+    {realm_id, tenant} =
       resolve_realm(non_empty(Map.get(query, "realm")), non_empty(Map.get(query, "host")))
 
-    Response.ok(conn, config_map(realm_id))
+    Response.ok(conn, config_map(realm_id, tenant))
   end
 
   # Step 1: ?realm=<slug>. A hit with a non-nil idp_realm_id wins outright and
-  # the host branch is skipped.
+  # the host branch is skipped. Returns {realm_id, tenant_or_nil} -- OQ-1
+  # (design §4): the matched %Tenant{} (and therefore its already-loaded
+  # :settings field) is threaded straight through to config_map/2 so the
+  # branding helper never performs a second, independent DB lookup for the
+  # same slug in the same request.
   defp resolve_realm(slug, host) when is_binary(slug) do
     case Identity.safe_get_tenant_by_slug(slug, "tenant-config") do
-      {:ok, %Tenant{idp_realm_id: realm_id}} when is_binary(realm_id) and realm_id != "" ->
-        realm_id
+      {:ok, %Tenant{idp_realm_id: realm_id} = tenant}
+      when is_binary(realm_id) and realm_id != "" ->
+        {realm_id, tenant}
 
       _miss_or_nil_realm_or_error ->
         resolve_realm(nil, host)
@@ -196,10 +226,12 @@ defmodule Letflow.Routers.TenantConfig do
   # Step 2: ?host=<hostname>. Letflow has no host->tenant binding, so this
   # always falls through to the default -- which is exactly what R-Co returns
   # for an unbound hostname. See the moduledoc; do NOT add a table here.
-  defp resolve_realm(nil, host) when is_binary(host), do: @default_realm
+  # `tenant` is nil here, same as step 3 -- both routes must produce a
+  # provably identical "no tenant" branding input (design §4, cases 3/4).
+  defp resolve_realm(nil, host) when is_binary(host), do: {@default_realm, nil}
 
   # Step 3: neither parameter.
-  defp resolve_realm(nil, _absent_host), do: @default_realm
+  defp resolve_realm(nil, _absent_host), do: {@default_realm, nil}
 
   # The never-raise, INV-4-compliant lookup wrapper itself is shared with
   # Letflow.Routers.MobileTenantConfig via Letflow.Identity.safe_get_tenant_by_slug/2
@@ -212,12 +244,46 @@ defmodule Letflow.Routers.TenantConfig do
 
   # ── Response allowlist (INV-2) ────────────────────────────────────────────
 
-  # EXACTLY two keys, hand-built, never derived from %Tenant{}. Adding a third
-  # key here is a security change -- see the moduledoc.
-  defp config_map(realm_id) do
+  # EXACTLY three keys, hand-built, never derived from %Tenant{} as a whole.
+  # `tenant` is passed through only to read its :settings field via the
+  # explicit-key branding helper below -- it is never `Map.from_struct/1`'d or
+  # otherwise merged wholesale into the response. Adding a fourth top-level
+  # key here (or a fourth branding sub-key) is a security change -- see the
+  # moduledoc.
+  defp config_map(realm_id, tenant) do
     %{
       "oidc_authority" => idp_base_url() <> "/realms/" <> realm_id,
-      "client_id" => client_id()
+      "client_id" => client_id(),
+      "branding" => branding_map(tenant)
+    }
+  end
+
+  # ── branding (REQ-281, design §4/§6) ──────────────────────────────────────
+  #
+  # `tenant` is either the %Tenant{} matched by resolve_realm/2's slug lookup,
+  # or nil (unknown slug, malformed/absent slug, or a lookup failure -- all of
+  # resolve_realm/2's "no tenant" branches converge on the same nil input
+  # here, design §4 cases 3/4). Reads exactly the three named sub-keys off
+  # tenant.settings by explicit Map.get/3 -- never iterates or merges
+  # tenant.settings wholesale, so an out-of-allowlist key could not surface
+  # here even if TenantSettings' write-time enforcement were somehow bypassed
+  # (design §6, AC4).
+  defp branding_map(%Tenant{settings: settings}), do: branding_from_settings(settings)
+  defp branding_map(nil), do: branding_from_settings(nil)
+
+  defp branding_from_settings(settings) when is_map(settings) do
+    %{
+      "app_name" => Map.get(settings, "app_name", @default_app_name),
+      "logo_url" => Map.get(settings, "logo_url", @default_logo_url),
+      "brand_colors" => Map.get(settings, "brand_colors", @default_brand_colors)
+    }
+  end
+
+  defp branding_from_settings(_nil_or_other) do
+    %{
+      "app_name" => @default_app_name,
+      "logo_url" => @default_logo_url,
+      "brand_colors" => @default_brand_colors
     }
   end
 

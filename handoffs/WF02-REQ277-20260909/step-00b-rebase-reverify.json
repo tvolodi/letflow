@@ -8,7 +8,7 @@
   "file": "handoffs/WF02-REQ277-20260909/step-00b-rebase-reverify.json",
   "created_at": "2026-09-09T12:10:00Z",
   "started_at": "2026-09-09T12:10:00Z",
-  "completed_at": "2026-09-09T12:09:28Z",
+  "completed_at": "2026-09-09T12:10:00Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
   "context": {
@@ -53,6 +53,10 @@
         "severity": "BLOCKER",
         "description": "mix letflow.check_deferral_staleness fails on the rebased tree: REQ-279's unregistered blocked-by:REQ-277 deferral comment (docs/requirements.yaml line 16570-16573) is genuinely stale now that REQ-277 is done, and REQ-279 has no live blocker left at all (its full depends_on: [REQ-276, REQ-277, REQ-278] are all done on this branch). Registration (register_task) is the only honest resolution and is an ORCH-exclusive queue action this handoff cannot perform ($QUEUE_AUTH_TOKEN unavailable in this environment, and register_task is documented as never called by an individual agent). ORCH must either register REQ-279 as a real queued task (matching the REQ-284/REQ-286 merge-time-bookkeeping precedent already in docs/status/requirement_status.v12.yaml for the identical 'no live blocker left' situation) or otherwise re-scope docs/requirements.yaml line 16573 before mix letflow.check (and therefore Step Final's build-verification gate) can pass.",
         "affected_requirement": "REQ-279"
+      },
+      {
+        "severity": "MINOR",
+        "description": "ORCH TIMESTAMP CORRECTION (2026-09-09, WF02-REQ277-20260909 Step Final recovery): completed_at originally read 2026-09-09T12:09:28Z, 32s before this handoff's own started_at (2026-09-09T12:10:00Z) -- an H2 lint violation (letflow.lint_handoffs) discovered while re-verifying the branch before merge. No reliable original completion time is recoverable (the same dispatch-time clock-skew class already diagnosed and flagged in handoffs/WF02-REQ277-20260909/step-2c-security-reviewer.json's own MINOR issue). Per HANDOFF_PROTOCOL.md's guidance to never fabricate an estimated past time, completed_at is corrected to equal started_at (zero-duration, not a guessed real duration) rather than invented. This does not reopen or reduce confidence in Step 00b's own substantive result -- only the timestamp pair is touched."
       }
     ],
     "git_evidence": {

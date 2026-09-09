@@ -54,7 +54,6 @@
     },
     "next_action": "Route to DOC-UPDATER (Step 6) -- REQ-277's docs/requirements.yaml status and status-history entries are already correctly in place from this branch's earlier Step 6 pass (see docs/status/requirement_status.v12.yaml's REQ-277 started/done entries), confirmed not stale by this validation pass. ORCH: accept the 2 backend CheckDeferralStalenessTest failures as a known, structurally-attributed, non-code gate failure at Step Final per GIT_MERGE.md step 8's --admin override path -- call register_task for REQ-279 first if the queue becomes reachable this session, else proceed with the override citing this handoff's result.summary."
   },
-  "fields_written": ["status", "completed_at", "result"],
   "rework_count": 0,
   "max_rework": 3
 }

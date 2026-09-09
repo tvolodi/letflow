@@ -6,8 +6,8 @@
   "from_agent": "ORCH",
   "to_agent": "SECURITY-REVIEWER",
   "file": "handoffs/WF02-REQ277-20260909/step-2c-security-reviewer.json",
-  "created_at": "2026-09-09T12:35:00Z",
-  "started_at": "2026-09-09T12:35:00Z",
+  "created_at": "2026-09-09T12:14:13Z",
+  "started_at": "2026-09-09T12:14:13Z",
   "completed_at": "2026-09-09T12:14:13Z",
   "status": "COMPLETED",
   "priority": "NORMAL",
@@ -40,7 +40,7 @@
     "issues": [
       {
         "severity": "MINOR",
-        "description": "Timestamp ordering anomaly: this handoff's started_at (2026-09-09T12:35:00Z, ORCH-stamped, not altered by this agent) is ahead of the actual system clock reading at the time this handoff was completed (2026-09-09T12:14:13Z, read three times across the review, monotonically increasing each time, confirming it is a live clock and not a stale read). completed_at is recorded as the genuine clock reading per core-directives.md's 'timestamps come from the clock, never from memory' rule rather than fabricated to postdate started_at, which would violate 'No Speculation'. Flagging per Instruction Precedence's 'never resolve a conflict silently' rather than silently picking a direction. Root cause is outside this agent's scope (ORCH's dispatch-time stamping, or a sandbox clock/date skew) and should be checked by ORCH."
+        "description": "Timestamp ordering anomaly: this handoff's started_at (originally 2026-09-09T12:35:00Z, ORCH-stamped, not altered by this agent) was ahead of the actual system clock reading at the time this handoff was completed (2026-09-09T12:14:13Z, read three times across the review, monotonically increasing each time, confirming it is a live clock and not a stale read). completed_at is recorded as the genuine clock reading per core-directives.md's 'timestamps come from the clock, never from memory' rule rather than fabricated to postdate started_at, which would violate 'No Speculation'. Flagging per Instruction Precedence's 'never resolve a conflict silently' rather than silently picking a direction. Root cause is outside this agent's scope (ORCH's dispatch-time stamping, or a sandbox clock/date skew) and should be checked by ORCH.\n\nORCH TIMESTAMP CORRECTION (2026-09-09, WF02-REQ277-20260909 Step Final recovery): confirmed as ORCH's own dispatch-stamping bug (created_at/started_at were stamped 12:35:00Z, matching neither this run's own real timeline nor any plausible dispatch order -- step-2d's real dispatch immediately follows at 12:15:13Z, consistent with 2c's own completed_at of 12:14:13Z, not with a 12:35:00Z start). Per HANDOFF_PROTOCOL.md's guidance to never fabricate an estimated past time, created_at and started_at are corrected to equal the trusted completed_at (2026-09-09T12:14:13Z) rather than an invented earlier value. This does not reopen or reduce confidence in Step 2c's own substantive PASS verdict -- only the timestamp fields are touched."
       }
     ],
     "git_evidence": {

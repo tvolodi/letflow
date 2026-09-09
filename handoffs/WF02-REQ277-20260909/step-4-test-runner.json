@@ -51,7 +51,6 @@
     },
     "next_action": "Route to ORCH: register_task for REQ-279 if queue reachable (then re-run scripts/test_parallel.sh), else accept as attributed gate failure at Step Final per GIT_MERGE.md step 8. Do not route to TEST-DESIGNER/ELIXIR-DEV/FRONTEND-DEV -- frontend gates are fully green and the backend failure is not application-code or test-code defect."
   },
-  "fields_written": ["status", "completed_at", "result"],
   "rework_count": 0,
   "max_rework": 3
 }

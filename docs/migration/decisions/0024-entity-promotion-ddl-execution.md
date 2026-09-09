@@ -203,8 +203,9 @@ machine's ordering:
    replays existing (pre-promotion) records into the new column. Reads
    during this window are unaffected — `query_eligible` is still `false`,
    so `Letflow.Entities.Query.Allowlist`'s per-tenant, per-entity-type
-   builder (0023's Consequences section: "`typed_columns/0` becomes
-   per-entity-type") continues to report this attribute as a `:json_field`
+   builder — `typed_columns/0` (`lib/letflow/entities/query/allowlist.ex:62-63`;
+   0023's Consequences section: "`typed_columns/0` becomes
+   per-entity-type") — continues to report this attribute as a `:json_field`
    entry for this tenant, and `Letflow.Entities.Query.Compiler`'s
    `build_filter_dynamic/2` (`lib/letflow/entities/query/compiler.ex:172`)
    dispatches it through the `:json_field` clause — reading `field_values`,
@@ -336,8 +337,9 @@ independently remembered in two places — the failure shape
   `backfilled` (inclusive) for the record's tenant — an amendment to
   `upsert_record_latest/3`'s existing two clauses (0023's Consequences
   section), not a new clause shape. Implemented by REQ-296 onward.
-- **`Letflow.Entities.Query.Allowlist`'s per-entity-type `typed_columns`
-  builder (REQ-299's scope) must additionally consult
+- **`Letflow.Entities.Query.Allowlist`'s per-entity-type `typed_columns/0`
+  builder (`lib/letflow/entities/query/allowlist.ex:62-63`; REQ-299's scope)
+  must additionally consult
   `ColumnPromotion.query_eligible` per tenant** before reporting an
   attribute as a `:typed_column` entry — an added precondition on top of
   REQ-299's own per-entity-type work, not a redesign of it.

@@ -1,0 +1,94 @@
+run_id: WF02-REQ288-20260908
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T00:13:56Z"
+branch: feature/WF02-REQ288-20260908
+head_commit: 6e3e3acc
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - 6e3e3acc "feat(REQ-288): route CHK-17 CEL validation through Engine.Expr's real grammar"
+    - e5ee6dd9 "feat(REQ-288): design Expr definition-time validator"
+    - 6203645b "chore(ORCH): WF02-REQ288-20260908 register REQ-288 + git setup"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - handoffs/WF02-REQ288-20260908/step-00-git-setup.json
+    - lib/letflow/definitions/graph.ex
+    - lib/letflow/design/req288-expr-definition-validator.md
+    - test/letflow/definitions/graph_test.exs
+    - test/letflow/routers/definitions_write_test.exs
+    - test/letflow/routers/req078_supporting_routes_test.exs
+  note: >
+    Tightens CEL/expression validation in Graph.validate_edge_conditions/1, used by
+    all 3 call sites (create/2, update/2, and the router's validation path); a
+    deliberate un-updatable-definition risk on update/2 per REQ-288's own scope.
+
+static_checks:
+  - command: "mix format --check-formatted"
+    result: PASS
+    output: "exit 0, no output"
+  - command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+    result: PASS
+    output: |
+      Compiling 230 files (.ex)
+      Generated letflow app
+    notes: "Full recompile from scratch, zero warnings, zero errors."
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 8
+  result: FAIL (2 known-unrelated failures)
+  output: |
+    partition 1: 561 tests, 0 properties, 0 failures, exit 0
+    partition 2: 292 tests, 2 properties, 0 failures, exit 0
+    partition 3: 400 tests, 2 properties, 0 failures, exit 0
+    partition 4: 470 tests, 2 properties, 0 failures, exit 0
+    partition 5: 530 tests, 0 properties, 0 failures, exit 0
+    partition 6: 422 tests, 0 properties, 0 failures, exit 0
+    partition 7: 440 tests, 0 properties, 2 failures, exit 2
+    partition 8: 384 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3499 tests, 6 properties, 2 failures (3503/3505 passed)
+  failures:
+    - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: "which rustc -> exit 1 (not found) in this environment; failure is a rustc-absent toolchain check, unrelated to graph.ex/CEL validation."
+    - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...)"
+      classification: "(b) pre-existing/environmental"
+      evidence: "Same rustc-absent cause as above."
+  cross_check_no_other_regressions: >
+    Grepped all 8 partition logs for any test-failure marker
+    ("Failed:" / numbered failure blocks): only partition-7.log contains any
+    (exactly the 2 rustc failures above). No other partition, and no test anywhere
+    in the suite that creates/updates a process definition with a CEL condition
+    (fixtures across graph_test.exs, definitions_write_test.exs,
+    req078_supporting_routes_test.exs, and elsewhere), failed under the tightened
+    validation. No previously-valid-but-grammar-invalid CEL condition used
+    incidentally elsewhere in the suite was caught by this branch's change --
+    finding (a) does NOT apply; this run is entirely case (b).
+  prior_corroboration: >
+    ELIXIR-DEV reported the same 2 rustc-absent failures (partition 7) after
+    `mix letflow.check`; REVIEWER independently reproduced them. This full
+    scripts/test_parallel.sh run confirms the same 2 failures, same test IDs,
+    same root cause, and confirms no additional failures anywhere else in the
+    3505-test suite.
+
+verdict: PASS (with 2 known pre-existing/environmental failures, unrelated to this branch)
+verdict_reasoning: >
+  3503/3505 tests pass. The only 2 failures are Mix.Tasks.Letflow.CheckToolchainTest's
+  rustc-pin checks, which fail with :enoent because this environment has no rustc
+  binary installed at all -- a known, documented, pre-existing environmental gap
+  (see README.md Notes), not a regression from REQ-288's tightened
+  Graph.validate_edge_conditions/1. mix format and mix compile
+  --warnings-as-errors are both fully clean. No test anywhere in the suite that
+  incidentally exercises a CEL condition on a process-definition create/update path
+  broke under the new, stricter validation.
+next_action: "Route to RELEASE-VALIDATOR"

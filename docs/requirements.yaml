@@ -18522,6 +18522,7 @@ requirements:
   - id: REQ-303
     title: Design decision record for a SolutionPack entity_definitions section -- schema versioning, install semantics, and confirming the form-schema gap is already closed
     owner: CODE-DESIGNER
+    impl_order: 574  # letflow-queue task id
     status: pending
     stage: S10
     description: >
@@ -18703,6 +18704,7 @@ requirements:
   - id: REQ-304
     title: Add the entity_definitions section to SolutionPack export -- emit packed entity definitions alongside process definitions
     owner: ELIXIR-DEV
+    impl_order: 575  # letflow-queue task id; depends_on translated to queue task ids [574]
     status: pending
     stage: S10
     description: >
@@ -18779,6 +18781,7 @@ requirements:
   - id: REQ-305
     title: Add entity_definitions install to SolutionPack.install/3 -- parse, validate, create, and error taxonomy per REQ-303's design
     owner: ELIXIR-DEV
+    impl_order: 576  # letflow-queue task id; depends_on translated to queue task ids [574, 575]
     status: pending
     stage: S10
     description: >
@@ -18872,6 +18875,7 @@ requirements:
   - id: REQ-306
     title: Test coverage for entity_definitions pack export/install -- round-trip, name-collision rollback, old-pack compatibility, malformed-entry rejection
     owner: TEST-DESIGNER
+    impl_order: 577  # letflow-queue task id; depends_on translated to queue task ids [575, 576]
     status: pending
     stage: S10
     description: >

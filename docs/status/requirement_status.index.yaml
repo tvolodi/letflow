@@ -2368,9 +2368,13 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 12
+    entries: 13
     note: >
-      Recounted to 12 by WF02-REQ295-20260909's own merge of origin/main
+      Incremented to 13 by ORCH's own REQ-303 started-event append for the
+      REQ-303..306 S10-gap-13 batch (pack format carrying entity definitions,
+      PR #1176 merged as 9b443129) -- 822 lines at that point (51232 bytes),
+      well under the roll ceiling.
+      Previously recounted to 12 by WF02-REQ295-20260909's own merge of origin/main
       (docs/status/requirement_status.v12.yaml conflicted: this run's own
       REQ-295 done-event append collided with a concurrently-merged
       REQ-289 started/done pair and the REQ-295..302 batch's own started

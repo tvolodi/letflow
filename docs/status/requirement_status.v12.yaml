@@ -734,3 +734,89 @@ history:
       564 (REQ-295) was claimed by letflow-orch within a minute of
       registration and is left locked -- that is the queue working as
       designed for multi-host coordination, not a stale lock.
+  - req: REQ-303
+    event: started
+    agent: ORCH
+    at: "2026-09-09T20:03:55Z"
+    note: >
+      REQ-303..REQ-306 filed and registered as one batch (WF-01) for
+      S10 gap 13 -- "a pack format that can carry entity definitions."
+      Merged as 9b443129 (PR #1176). Queue task ids 574-577,
+      GH#1172-#1175; docs/requirements.yaml impl_order carries the
+      mapping. Filed against REQ-303 as the batch's lead entry; all four
+      entries are `pending` and none has been worked.
+      THE GAP: Letflow.Definitions.SolutionPack's pack_document
+      (lib/letflow/definitions/solution_pack.ex:186-195) has four
+      content sections -- definitions, service_catalog_entries (always
+      [], rejected on install), variable_schemas, manifest.required_roles
+      (read-only) -- and none can carry an entity definition. Decision
+      0022 defines bucket A as capability delivered as definitions
+      installed via SolutionPack.install/3, so bucket A's own delivery
+      vehicle cannot carry part of what bucket A consists of. Chain is
+      REQ-303 (decision record 0026: schema versioning, install
+      semantics, name collisions, the interim-rejection stance, INV-1
+      scoping) -> REQ-304 (export side) -> REQ-305 (install side) ->
+      REQ-306 (tests).
+      THE GAP ROW OVERSTATES THE DEFECT, recorded here because the stage
+      file still carries the original framing. Gap 13 asserts the pack
+      format has "no form-schema section" and treats that as half the
+      problem. It does not survive contact with the code: form_schema is
+      not a standalone artefact but an optional attribute on a HUMAN_TASK
+      node inside a process definition's graph
+      (definitions/graph.ex:852-870,
+      definitions/form_schema_expressions.ex:34-40, resolved at
+      activation in routers/tasks.ex:87-107). pack_definition/1 embeds
+      definition.graph verbatim (solution_pack.ex:377-385) and
+      parse_definition/1 round-trips an arbitrary graph map
+      (solution_pack.ex:454-470), so form schemas ALREADY travel through
+      the existing definitions section with zero code change. The real
+      gap is entity definitions only -- roughly half what the stage file
+      asserts. Found by REQ-ANALYST, confirmed independently by
+      REQ-VALIDATOR reading all four modules, and spot-checked by ORCH.
+      REQ-303 AC5 requires the decision record to state this with
+      file:line citations rather than silently narrowing scope. The
+      stage-10 gap-13 row itself is NOT corrected here -- that is
+      DOC-UPDATER's territory and REQ-303 will produce the authoritative
+      correction.
+      INDEPENDENT OF THE REQ-295..302 TRACK. Gap 13 was found by the
+      same architecture review that produced decision 0023 but is not a
+      consequence of it: 0023 is entity STORAGE shape, gap 13 is pack
+      DELIVERY sections -- different module, different subsystem.
+      Verified rather than asserted: 0023's text never mentions
+      entity_definitions, and no depends_on edge crosses between the two
+      batches, so they can run in parallel rather than being wrongly
+      serialized.
+      REQ-VALIDATOR PASS on the first gate round (unlike the REQ-295..302
+      batch, which took two). It confirmed the form-schema finding
+      independently, checked that all five of REQ-303's design questions
+      are genuinely open rather than already settled by existing code (a
+      padded design requirement being a real defect), and confirmed
+      REQ-303's questions are compositional facets of one artefact rather
+      than the independent-questions bundling that forced REQ-302 to be
+      split out of REQ-295. One grounding defect it found was fixed
+      before merge: an acceptance criterion cited decision records 0024
+      and 0025, which did not exist at drafting time -- they are
+      REQ-295's and REQ-302's own deliverables on the track this batch is
+      deliberately independent of, so depending on them would have
+      reintroduced the coupling the batch exists without.
+      CI: passed all four checks on the first attempt. The
+      req207_vortex_test allowlist was extended for REQ-304's title
+      PROACTIVELY rather than after CI caught it -- the REQ-295..302
+      batch tripped that same guard, so it was checked before pushing.
+      Signal 3, the real gate, was re-verified live again: still no
+      lib/letflow/entities.ex, no lib/letflow/entity_query.ex, no entity
+      router module, and Letflow.Routers.Entities present only as a
+      reserved/unbuilt row in router.ex.
+      HISTORY-ORDERING ARTIFACT, noted rather than corrected: this
+      volume's "REQ-295 done" (17:26:12Z, appended by the concurrent
+      session that completed REQ-295 and produced decision record 0024)
+      precedes this volume's "REQ-295 started" (18:03:52Z, appended by
+      this session, describing the FILING of the REQ-295..302 batch).
+      Both are accurate about what their own session did; the inversion
+      is a real consequence of two sessions working the same requirement
+      id concurrently, one filing it and one executing it. The
+      append-only rule forbids reordering or editing either, and
+      test/docs/requirement_status_invariants_test.exs does not assert
+      chronological ordering (20 passed with the inversion present), so
+      nothing is corrected -- it is recorded here so a later reader does
+      not mistake it for a clock error or a corrupted append.

@@ -41,7 +41,7 @@ else is a straight chain.
 
 S10 is the one stage that is not part of the R-Co migration at all: it
 builds a *vertical solution* on the finished platform (see
-[decisions/0021-bilimbaga-vertical.md](decisions/0021-bilimbaga-vertical.md)).
+[decisions/0022-bilimbaga-vertical.md](decisions/0022-bilimbaga-vertical.md)).
 It is listed here because the stage list, the `detail_file` convention,
 and the decision records live in this directory — not because it ports
 anything. This directory's framing as a historical build record does
@@ -135,10 +135,11 @@ neither stage's requirements are guesses about Letflow's internals:
 
 **S10 is not expanded and must not be expanded early (2026-09-09).** Its
 requirements would be guesses in exactly the way the rule anticipates:
-nine of the twelve platform gaps it depends on are unowned, and the
+nine of the twelve platform gaps it depends on are still unowned (gap 8
+closed and gap 9 half-closed when REQ-281/282/285 landed), and the
 largest (an entity-records HTTP surface) has no route shape yet, so a
 bucket-A pack requirement written today would be authored against an
-interface nobody has designed. REVIEWER's 2026-09-09 sign-off on 0021
+interface nobody has designed. REVIEWER's 2026-09-09 sign-off on 0022
 sharpens this: the question bank is not expressible as an entity
 definition until the relations and localized-field gaps close, so P2 is
 blocked outright rather than merely premature. Expand P0 first — the `FR-BB` → `REQ-xxx`

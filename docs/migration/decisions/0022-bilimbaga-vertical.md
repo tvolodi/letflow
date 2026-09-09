@@ -1,4 +1,4 @@
-# 0021 — BilimBaga is Letflow's first vertical: a solution pack plus a bounded runtime, not a fork
+# 0022 — BilimBaga is Letflow's first vertical: a solution pack plus a bounded runtime, not a fork
 
 Status: decided (2026-09-09, user-directed). Owner: `ORCH` (stage S10).
 
@@ -257,8 +257,9 @@ complete without them:
   match the `fk_def` a definition already declares.
 - **Gap 11 — queryable localized fields.** A localized-text field type that is
   filterable and sortable per locale, rather than `:json` under Rule 3. This is
-  the platform-level counterpart of gap 8 (`REQ-285`, i18n in `web/`), which
-  covers the client only.
+  the platform-level counterpart of gap 8 (`REQ-285`, i18n in `web/`, which
+  landed 2026-09-09) — that covers the client only, and closing it does not
+  touch this.
 - **Gap 12 — bulk import/export of entity records.** BilimBaga has `pg_trgm`-backed
   import/export (`011_pg_trgm_import_export`); `Letflow.Definitions.ExportImport`
   moves *definitions*, not records.

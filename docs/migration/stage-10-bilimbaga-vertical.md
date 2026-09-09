@@ -3,7 +3,7 @@
 Status: not started. Depends on: S4, S6, S8. Requirements: none expanded yet.
 
 Created 2026-09-09. See
-[`decisions/0021-bilimbaga-vertical.md`](decisions/0021-bilimbaga-vertical.md)
+[`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)
 for why this stage exists, why BilimBaga is a solution pack plus a bounded
 runtime rather than a fork or a federated Go service, and for the **bucket rule**
 (A = definitions, B = generic platform capability, C = exam-specific runtime)
@@ -52,8 +52,9 @@ does not.
 
 ## The twelve platform gaps
 
-Verified against `lib/` and `web/` on 2026-09-09. Gaps 10–12 were added by
-`REVIEWER`'s sign-off on 0021 (see that record's amendment to reasoning §1).
+Verified against `lib/` and `web/` on 2026-09-09, and re-checked against `main`
+when this branch rebased. Gaps 10–12 were added by
+`REVIEWER`'s sign-off on 0022 (see that record's amendment to reasoning §1).
 **Every one of these is bucket B, and all of them close before any bucket-A pack
 work begins** — a pack cannot be authored against a platform whose data-model
 surface has no HTTP route, and no question bank can be authored against one with
@@ -64,12 +65,12 @@ no relations and no queryable localized fields.
 | 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Unowned.** The stage's single largest blocker | to file |
 | 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Unowned** | to file |
 | 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Unowned** | to file |
-| 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0021) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
+| 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
 | 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
 | 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | to file |
 | 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | `REQ-284`, `REQ-291`, `REQ-292`, `REQ-293` — all `pending` | filed |
-| 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | `REQ-285` — `pending` | filed |
-| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | `REQ-281`, `REQ-282`, `REQ-283`, `REQ-286` — all `pending` | filed |
+| 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | **Closed 2026-09-09** — `REQ-285` `done` (react-intl, decision 0021) | closed |
+| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | Partly closed 2026-09-09 — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding); `REQ-283` (SPA theming), `REQ-286` (`form_schema`) still `pending` | filed |
 | 10 | **Relations between entity records.** `Letflow.Entities.Query.Compiler` has no `join`/`preload`; `fk_def`'s `references_entity` is validated for shape and self-reference only, with no write-time referential enforcement. BilimBaga's question model is five related tables. | **Unowned.** Blocks P2 | to file |
 | 11 | **Queryable localized fields.** Per-locale content as `:json` cannot be `queried: true` (Validator Rule 3, `:queried_json_conflict`), so a trilingual question bank cannot be searched or filtered. Platform counterpart of gap 8, which covers `web/` only. | **Unowned.** Blocks P2 | to file |
 | 12 | **Bulk import/export of entity *records*.** `Letflow.Definitions.ExportImport` moves definitions, not records. BilimBaga has `pg_trgm`-backed import/export (`011_pg_trgm_import_export`). | **Unowned** | to file |
@@ -86,7 +87,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
-| **P0** | This stage file, decision 0021, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
+| **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
 | **P1** | Close gaps 1–6 and 10–12; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all twelve closed |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Unreachable until gaps 10 and 11 close — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
@@ -95,14 +96,14 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
 
 P2 is the stage's real test. If the question bank, exam configuration and
-assignment lifecycle cannot be expressed as definitions, the premise of 0021
+assignment lifecycle cannot be expressed as definitions, the premise of 0022
 reasoning §1 is wrong, and that is a finding worth stopping on rather than
 routing around by moving the work into bucket C.
 
-**Part of that finding is already in.** `REVIEWER`'s 2026-09-09 sign-off on 0021
+**Part of that finding is already in.** `REVIEWER`'s 2026-09-09 sign-off on 0022
 established from the code — not from a P2 attempt — that the question bank is not
 expressible as an entity definition today: no relations (gap 10) and no queryable
-localized fields (gap 11). Those two rows are re-marked **B, then A** in 0021's
+localized fields (gap 11). Those two rows are re-marked **B, then A** in 0022's
 §1 table. The response is to close the platform gaps, not to move the question
 bank into bucket C; **expanding P2 into bucket-A requirements before gaps 10 and
 11 close is blocked.** If closing them turns out to be disproportionate, *that*
@@ -116,7 +117,7 @@ as a static process definition; both should be assumed bucket C.
 
 ## Bucket-C inventory
 
-The measured half of 0021's rule 3. Every module added under `lib/letflow/exam/`
+The measured half of 0022's rule 3. Every module added under `lib/letflow/exam/`
 or `web/src/pages/exam/` is listed here with its one-line justification and its
 `REVIEWER` sign-off reference. Growth in this table is the stage's primary health
 metric.
@@ -154,19 +155,19 @@ metric.
 
 ## Decisions
 
-- [`decisions/0021-bilimbaga-vertical.md`](decisions/0021-bilimbaga-vertical.md) —
+- [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md) —
   the vertical shape, the bucket rule, what is discarded, and what this stage
   explicitly does not re-decide.
 - **Not re-decided here:** the running-instance shape. `REQ-045` and
-  `Letflow.Engine`'s "Process-vs-row decision" already settled it, and 0021 states
+  `Letflow.Engine`'s "Process-vs-row decision" already settled it, and 0022 states
   why a timed exam session strengthens rather than reopens that conclusion.
 
 ## REVIEWER sign-off
 
-**2026-09-09 — `REVIEWER`, on decision 0021 and this stage file's first
-revision.** PASS on the vertical decision; recorded disagreement on 0021
+**2026-09-09 — `REVIEWER`, on decision 0022 and this stage file's first
+revision.** PASS on the vertical decision; recorded disagreement on 0022
 reasoning §1's cost model. The full sign-off is in
-[`decisions/0021-bilimbaga-vertical.md`](decisions/0021-bilimbaga-vertical.md);
+[`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md);
 its consequences for this file are gaps 10–12, P1's and P2's revised exit
 conditions, and the block on expanding P2 before gaps 10 and 11 close.
 

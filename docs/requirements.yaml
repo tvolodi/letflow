@@ -179,7 +179,9 @@ stages:
       platform capability -- may not name exams), or C (exam-specific
       runtime, requiring REVIEWER sign-off that A and B were tried
       first). Twelve platform gaps close before any bucket-A work
-      starts; nine of them are unowned today. The largest is an
+      starts; nine of them are unowned as of the 2026-09-09 rebase
+      (REQ-281, REQ-282 and REQ-285 have since landed on main, closing
+      gap 8 and half of gap 9). The largest is an
       entity-records HTTP surface (Letflow.Routers.Entities, deferred
       in lib/letflow/router.ex and owned by no requirement); gaps 10
       and 11 -- relations between entity records, and queryable
@@ -190,7 +192,7 @@ stages:
       it lives in docs/migration/ by naming convention only. Depends on
       S4 (API surface), S6 (service-task dispatch, scheduler,
       attachments) and S8 (the SPA the client half is built in). See
-      docs/migration/decisions/0021-bilimbaga-vertical.md.
+      docs/migration/decisions/0022-bilimbaga-vertical.md.
     depends_on: [S4, S6, S8]
     detail_file: docs/migration/stage-10-bilimbaga-vertical.md
 

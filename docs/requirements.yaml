@@ -16364,3 +16364,1045 @@ requirements:
     depends_on: []
     impl_order: 543  # letflow-queue task id
 
+
+  - id: REQ-276
+    title: Migrate web/src/pages/admin/ onto the design-system primitives and off colour literals (0020 D2b, 1 of 3)
+    owner: FRONTEND-DEV
+    impl_order: 550
+    status: pending
+    stage: S8
+    description: >
+      First of three sibling page-migration requirements implementing
+      docs/migration/decisions/0020-frontend-architecture.md D2b ("migrate
+      pages onto the primitives; narrow, then delete, the literal-colour
+      guard's pages/ exemption"). Split by page directory on the same basis
+      REQ-142..145 split REQ-141's component migration -- REQ-VALIDATOR
+      FAILed that combined draft for sizing, and web/src/pages/ is larger
+      than web/src/components/ was.
+      This requirement covers web/src/pages/admin/ only. MEASURED SCOPE
+      2026-09-08: 14 of 15 files carry colour literals, 397 occurrences
+      total, counted by running the literal-colour guard's own regex
+      (web/tests/guards/forbidlist.ts's hex/rgb/hsl alternation) over
+      web/src/pages/admin --include='*.tsx' --include='*.ts'.
+      Re-verify at this requirement's own start since counts drift. This is
+      the largest of the three page groups; if it still proves too wide for
+      one turn at that point, split it further and record the split as a
+      follow-on REQ-ANALYST pass rather than doing a partial, unrecorded
+      sweep.
+      TWO THINGS AT ONCE, deliberately, because doing them separately means
+      touching every file twice: replace each hand-rolled table, button,
+      badge, layout wrapper and toast with the corresponding primitive from
+      REQ-272/274/275, and replace every remaining colour literal with the
+      matching var(--token-name) from web/src/styles/tokens.css. Record 0020
+      is explicit about why the second half matters beyond tidiness: "A
+      tenant's brand colour cannot reach a hard-coded literal", so this
+      migration is a precondition for D1's theming (REQ-283), not a
+      parallel nicety.
+      If a page needs a colour design-system.md's palette does not cover,
+      that is a design-step addendum (name the new token and why, get it
+      added to design-system.md and tokens.css), not a silent invention --
+      same rule REQ-142..145 carried.
+      DO NOT weaken, broaden or edit web/tests/guards/forbidlist.ts under
+      this requirement. The 'web/src/pages/' exemption stays exactly as it
+      is until REQ-279 deletes it; adding a narrower path exemption to make
+      a leftover literal pass is the "satisfy a gate by editing what it
+      measures" anti-pattern.
+      This requirement is independent of REQ-277 and REQ-278 -- it touches
+      only web/src/pages/admin/ and does not need either of them landed
+      first or after.
+    acceptance_criteria:
+      - "a fresh run of the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/pages/admin/ (*.tsx, *.ts) returns zero hits outside comments, or every remaining hit is justified and listed explicitly with its file:line and the concrete reason a token cannot serve it"
+      - "every hand-rolled table in web/src/pages/admin/ is replaced by DataTable, every button by Button, every status pill by StatusBadge, and every hand-rolled pagination control by PaginationControls -- evidenced by a per-file before/after count of the replaced constructs, not by a single global 'migrated' claim"
+      - "web/tests/guards/forbidlist.ts is unmodified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits -- the pages/ exemption is neither narrowed nor broadened here"
+      - "no file outside web/src/pages/admin/ is modified by this requirement except web/src/styles/tokens.css and docs/frontend/design-system.md in the recorded-addendum case, confirmed by `git diff --stat`"
+      - "the existing test suite covering web/src/pages/admin/ passes with no assertion altered to accommodate a colour-value or markup change; if a test genuinely must change because a primitive renders different DOM, that change is listed file by file with the reason"
+      - "if no new token was needed, that nil result is stated explicitly rather than left as silence"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-272, REQ-274, REQ-275, REQ-287]
+
+  - id: REQ-277
+    title: Migrate web/src/pages/definitions/ and web/src/pages/dlq/ onto the design-system primitives and off colour literals (0020 D2b, 2 of 3)
+    owner: FRONTEND-DEV
+    impl_order: 551
+    status: pending
+    stage: S8
+    description: >
+      Second of three sibling page-migration requirements implementing
+      docs/migration/decisions/0020-frontend-architecture.md D2b. Split by
+      page directory on the same basis REQ-142..145 split REQ-141.
+      This requirement covers web/src/pages/definitions/ and
+      web/src/pages/dlq/. MEASURED SCOPE 2026-09-08:
+      definitions/ 2 of 3 files, 105 occurrences; dlq/ 2 of 3 files, 96
+      occurrences -- 201 occurrences combined, counted by running the
+      literal-colour guard's own regex (web/tests/guards/forbidlist.ts's
+      hex/rgb/hsl alternation) over web/src/pages/definitions and
+      web/src/pages/dlq --include='*.tsx' --include='*.ts'.
+      Re-verify at this requirement's own start since counts drift.
+      Both halves of the migration, in one pass per file: replace each
+      hand-rolled table, button, badge, layout wrapper and toast with the
+      corresponding primitive from REQ-272/274/275, and replace every
+      remaining colour literal with the matching var(--token-name) from
+      web/src/styles/tokens.css. Record 0020: "A tenant's brand colour
+      cannot reach a hard-coded literal" -- this is a precondition for
+      REQ-283's theming, not a cleanup.
+      Note that dlq/ and definitions/ both render JSON payloads;
+      web/src/components/ui/JsonDiffView.tsx already exists and REQ-275
+      adds JsonEditor. Establish which of the two (if either) each existing
+      JSON display should become, and state the answer -- do not leave a
+      third hand-rolled JSON renderer in place unexamined.
+      If a page needs a colour design-system.md's palette does not cover,
+      that is a design-step addendum, not a silent invention.
+      DO NOT weaken, broaden or edit web/tests/guards/forbidlist.ts under
+      this requirement -- the pages/ exemption stays exactly as it is until
+      REQ-279 deletes it.
+      This requirement is independent of REQ-276 and REQ-278 -- it touches
+      only definitions/ and dlq/ and does not need either landed first or
+      after.
+    acceptance_criteria:
+      - "a fresh run of the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/pages/definitions/ and web/src/pages/dlq/ (*.tsx, *.ts) returns zero hits outside comments, or every remaining hit is justified and listed explicitly with its file:line and the concrete reason a token cannot serve it"
+      - "every hand-rolled table in these two directories is replaced by DataTable, every button by Button, every status pill by StatusBadge, and every hand-rolled pagination control by PaginationControls -- evidenced by a per-file before/after count of the replaced constructs, not by a single global claim"
+      - "each existing JSON display in these two directories is resolved to exactly one disposition -- reuses JsonDiffView, reuses JsonEditor, or stays hand-rolled with a named reason -- with the file:line of each, and the counts summing to the number of JSON displays found"
+      - "web/tests/guards/forbidlist.ts is unmodified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "no file outside web/src/pages/definitions/ and web/src/pages/dlq/ is modified except web/src/styles/tokens.css and docs/frontend/design-system.md in the recorded-addendum case, confirmed by `git diff --stat`"
+      - "the existing test suite covering these two directories passes with no assertion altered to accommodate a colour-value or markup change; any test that genuinely must change because a primitive renders different DOM is listed file by file with the reason"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-272, REQ-274, REQ-275, REQ-287]
+
+  - id: REQ-278
+    title: Migrate web/src/pages/instances/, tasks/ and dashboard/ onto the design-system primitives and off colour literals (0020 D2b, 3 of 3)
+    owner: FRONTEND-DEV
+    impl_order: 552
+    status: pending
+    stage: S8
+    description: >
+      Third of three sibling page-migration requirements implementing
+      docs/migration/decisions/0020-frontend-architecture.md D2b. Split by
+      page directory on the same basis REQ-142..145 split REQ-141.
+      This requirement covers web/src/pages/instances/,
+      web/src/pages/tasks/ and web/src/pages/dashboard/. MEASURED SCOPE
+      2026-09-08: instances/ 3 of 5 files, 87 occurrences; tasks/ 1 of 1
+      file, 43 occurrences; dashboard/ 1 of 1 file, 23 occurrences -- 153
+      occurrences combined, counted by running the literal-colour guard's
+      own regex (web/tests/guards/forbidlist.ts's hex/rgb/hsl alternation)
+      over web/src/pages/instances, web/src/pages/tasks and
+      web/src/pages/dashboard --include='*.tsx' --include='*.ts'.
+      Re-verify at this requirement's own start since counts drift.
+      These are the three directories record 0020 D2 names by size:
+      InstanceBoardPage.tsx at 527 lines, TaskInboxPage.tsx at 452 (with
+      50 inline style={{...}} objects) and InstanceDetailPage.tsx at 407,
+      each hand-rolling its own table, buttons and layout. They are the
+      clearest demonstration of what the primitives are for, so the
+      per-file line-count reduction is worth recording as evidence the
+      migration actually replaced structure rather than merely swapping
+      colour values.
+      Both halves in one pass per file: replace each hand-rolled table,
+      button, badge, layout wrapper and toast with the corresponding
+      primitive from REQ-272/274/275, and replace every remaining colour
+      literal with the matching var(--token-name) from
+      web/src/styles/tokens.css.
+      If a page needs a colour design-system.md's palette does not cover,
+      that is a design-step addendum, not a silent invention.
+      DO NOT weaken, broaden or edit web/tests/guards/forbidlist.ts under
+      this requirement -- the pages/ exemption stays exactly as it is until
+      REQ-279 deletes it.
+      This requirement is independent of REQ-276 and REQ-277 -- it touches
+      only instances/, tasks/, dashboard/ and any file directly in
+      web/src/pages/, and does not need either
+      landed first or after.
+    acceptance_criteria:
+      - "a fresh run of the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/pages/instances/, web/src/pages/tasks/ and web/src/pages/dashboard/ (*.tsx, *.ts) returns zero hits outside comments, or every remaining hit is justified and listed explicitly with its file:line and the concrete reason a token cannot serve it"
+      - "every hand-rolled table in these three directories is replaced by DataTable, every button by Button, every status pill by StatusBadge, and every hand-rolled pagination control by PaginationControls -- evidenced by a per-file before/after count of the replaced constructs, not by a single global claim"
+      - "the before/after line count of InstanceBoardPage.tsx, TaskInboxPage.tsx and InstanceDetailPage.tsx is quoted, and a fresh count of `style={{` occurrences in each of the three is quoted before and after, so a swap of colour values without structural replacement is visible as an unchanged count rather than hidden by prose"
+      - "web/tests/guards/forbidlist.ts is unmodified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "no file outside web/src/pages/instances/, web/src/pages/tasks/, web/src/pages/dashboard/ and any file sitting directly in web/src/pages/ is modified except web/src/styles/tokens.css and docs/frontend/design-system.md in the recorded-addendum case, confirmed by `git diff --stat`"
+      - "files sitting directly in web/src/pages/ rather than in a subdirectory (OidcCallbackPage.tsx at the time of writing -- re-derive the list with `ls web/src/pages/*.tsx` at start) are covered: each is either migrated onto the primitives, or reported as needing no change with the guard regex run against it to prove it carries no colour literal. This closes the partition gap -- REQ-276/277/278 split pages/ by subdirectory, so a file directly in pages/ would otherwise belong to no requirement while still being measured by REQ-279's guard deletion"
+      - "the existing test suite covering these three directories passes with no assertion altered to accommodate a colour-value or markup change; any test that genuinely must change because a primitive renders different DOM is listed file by file with the reason"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-272, REQ-274, REQ-275, REQ-287]
+
+  - id: REQ-279
+    title: Delete the literal-colour guard's web/src/pages/ exemption -- D2's completion test (0020 D2b)
+    owner: FRONTEND-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-276 -- REQ-276 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      The completion test for
+      docs/migration/decisions/0020-frontend-architecture.md D2, stated in
+      that record's own words: "As pages migrate onto primitives, the
+      pages/ exemption should narrow and finally be deleted. Removing it is
+      the completion test for D2."
+      VERIFIED 2026-09-08: web/tests/guards/forbidlist.ts:53-66 lists
+      'web/src/pages/' in the literal-colour rule's allowedPaths, with the
+      inline comment "web/src/pages/ contains hex literals not covered by
+      REQ-142..145 (component scope). Follow-on requirements will migrate
+      them; exempted here to unblock the guard tightening." REQ-276, 277
+      and 278 are those follow-on requirements. This one removes the
+      exemption and the now-stale comment.
+      This is deliberately its own requirement and not folded into
+      REQ-278, for two reasons. First, the exemption can only be removed
+      once ALL THREE page migrations have landed -- folding it into any one
+      of them would make that one depend on the other two and destroy their
+      independence. Second, and more important: a requirement that both
+      migrates code and edits the guard measuring it creates exactly the
+      pressure the "Never Satisfy a Gate by Editing What It Measures"
+      directive exists to prevent. Separating them means this requirement
+      can ONLY pass by the guard genuinely passing on unmodified page code.
+      SCOPE FENCE: this requirement deletes two things -- the
+      'web/src/pages/' entry from the literal-colour rule's allowedPaths
+      and its two-line explanatory comment -- and changes nothing else.
+      If the guard fails after removal, the correct response is to report
+      which files still carry literals and route those back to
+      REQ-276/277/278 as rework, NOT to restore the exemption, add a
+      narrower one, or relax the regex. Note the two remaining dist
+      allowedPaths entries ('web/dist/assets/index-' and
+      'web/dist/assets/vendor-') and 'web/src/styles/tokens.css' are
+      legitimate and stay -- their reasons are documented in the same
+      comment block and are unaffected.
+    acceptance_criteria:
+      - "web/tests/guards/forbidlist.ts's literal-colour rule no longer lists 'web/src/pages/' in allowedPaths, and the two-line comment explaining that exemption is removed with it -- quoted before and after"
+      - "the remaining allowedPaths entries for the literal-colour rule are exactly 'web/src/styles/tokens.css', 'web/dist/assets/index-' and 'web/dist/assets/vendor-', with their existing justification comments intact -- quoted after the change"
+      - "npm run guards passes from web/ with the exemption removed, with real output quoted; a pass achieved by any change to the literal-colour regex itself, by a new or broadened allowedPaths entry, or by any edit to a file under web/src/pages/ in this requirement's commits does NOT satisfy this criterion"
+      - "no file under web/src/pages/ and no file under web/src/components/ is modified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "npm run type-check && npm run lint && npm test all pass from web/, with real output quoted"
+    depends_on: [REQ-276, REQ-277, REQ-278]
+
+  - id: REQ-281
+    title: Serve tenant branding from GET /api/tenant-config -- a third response key, under SECURITY-REVIEWER gate (0020 D1b, web endpoint)
+    owner: ELIXIR-DEV
+    impl_order: 553
+    status: pending
+    stage: S8
+    description: >
+      Implements the web half of step 5 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing.
+      THIS IS A SECURITY CHANGE, NOT A FEATURE, AND THE ENDPOINT SAYS SO
+      ITSELF. lib/letflow/routers/tenant_config.ex's moduledoc, section
+      "What this endpoint discloses, and what it must never disclose":
+      "Adding a third key to this response is a security change, not a
+      feature." Record 0020 restates it. SECURITY-REVIEWER is a required
+      gate on this requirement, not an optional reviewer.
+      CURRENT STATE, verified 2026-09-08: GET /api/tenant-config returns
+      exactly two keys, oidc_authority and client_id, from a hand-built map
+      that is never derived from %Letflow.Identity.Tenant{} (INV-2). It is
+      mounted on Letflow.Router rather than inside
+      Letflow.Plugs.ApiPipeline precisely because it is pre-authentication
+      -- Letflow.Plugs.AuthPipeline has no public-path allowlist and no
+      bypass. Its sole caller is web/src/auth/tenantConfig.ts:46.
+      THREE CONSTRAINTS THAT SURVIVE THIS CHANGE UNCHANGED. Read the
+      module's moduledoc in full before writing any code; these are
+      summarised, not restated in full:
+      1. THE NEVER-ERROR RULE HOLDS. The endpoint always returns 200. A
+      miss, an unprovisioned host, a malformed slug and a database outage
+      must remain indistinguishable in status code, body shape and every
+      field's presence -- otherwise the endpoint becomes a tenant-existence
+      oracle (INV-5). Adding a branding key must not introduce a branch
+      that errors, omits the key, or returns a differently-shaped body on
+      any of those paths.
+      2. PUBLIC MEANS PUBLIC. This is pre-authentication. Whatever branding
+      is disclosed is disclosed to anyone who can reach the login page.
+      That is acceptable for an app name, a logo URL and a brand colour and
+      unacceptable for anything else; the allowlist stays closed and
+      explicit, and the response map stays hand-built rather than derived
+      from the Tenant struct.
+      3. A NON-DEFAULT BRANDING BLOCK IS ITSELF A SIGNAL that a slug is
+      real. Record 0020 accepts this as the same bounded inference the
+      endpoint already makes with its realm id -- it is what any user of
+      that tenant sees on their own login page. State this in the
+      moduledoc rather than leaving the next reader to rediscover it.
+      SCOPE FENCE: the web endpoint only. The mobile endpoint is REQ-282;
+      the SPA consuming the new key is REQ-283. Splitting web from mobile
+      matches how the two modules are already split -- REQ-124's design
+      chose two independent modules over one branching handler precisely
+      so each response allowlist is auditable in isolation.
+    acceptance_criteria:
+      - "GET /api/tenant-config returns exactly three keys -- oidc_authority, client_id and the branding key -- with the response map still hand-built and never derived from %Letflow.Identity.Tenant{}, confirmed by quoting the constructing function"
+      - "a test asserts the response is identical in shape (same key set, same key count, HTTP 200) across all four never-error paths: a resolvable slug with no branding stored, an unknown slug, a malformed slug, and a simulated database failure -- no path omits the key, returns a different status, or produces a differently-shaped body"
+      - "a test asserts a tenant with stored branding gets its own values and a tenant without gets the platform default, proving the store is actually read rather than a constant being emitted"
+      - "the branding block's key set is a closed, explicit allowlist -- a test stores an out-of-allowlist value through whatever path can reach the settings store and asserts it does NOT appear in the response"
+      - "the moduledoc's 'Adding a third key to this response is a security change' paragraph is updated rather than deleted -- it now names the third key, states what it discloses, and states that adding a FOURTH remains a security change; quote the before and after"
+      - "SECURITY-REVIEWER has signed off on this change against INV-2 and INV-5 specifically, with the sign-off recorded; a REVIEWER-only pass does not satisfy this criterion"
+      - "lib/letflow/routers/mobile_tenant_config.ex is unmodified by this requirement, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-280]
+
+  - id: REQ-282
+    title: Serve per-tenant branding from GET /api/mobile/tenant-config and reconcile @default_branding to tokens.css, under SECURITY-REVIEWER gate (0020 D1b, mobile endpoint)
+    owner: ELIXIR-DEV
+    impl_order: 554
+    status: pending
+    stage: S8
+    description: >
+      Implements the mobile half of step 5 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing.
+      THIS IS A SECURITY CHANGE, NOT A FEATURE.
+      lib/letflow/routers/mobile_tenant_config.ex's moduledoc: "Adding a
+      sixth key to this response is a security change, not a feature."
+      SECURITY-REVIEWER is a required gate here, not an optional reviewer.
+      Note the shape of the change differs from REQ-281's, and this matters
+      for what the security review is actually about. The mobile endpoint
+      ALREADY returns branding, locales and default_locale -- but they are
+      global constants, not tenant-derived. Verified 2026-09-08:
+      @default_branding (lib/letflow/routers/mobile_tenant_config.ex:130-134)
+      is a three-key map of app_name "Letflow", logo_url nil and
+      primary_color "#0B5FFF", and the moduledoc states these four fields
+      "are never tenant-derived ... so only one of the five fields varies
+      by slug at all -- the other four are byte-identical across every
+      branch by construction." So this requirement adds no sixth key; it
+      makes three existing keys VARY BY TENANT for the first time. That is
+      the security change: it converts fields the moduledoc currently
+      relies on being invariant into fields that carry per-tenant signal.
+      THREE CONSTRAINTS. Read the moduledoc in full before writing code:
+      1. THE NEVER-ERROR RULE HOLDS. Every path -- resolvable slug, unknown
+      slug, missing ?slug= param, DB error or exception -- returns 200 with
+      the full five-field body. No 404, no partial body, no absent field. A
+      caller with a wordlist must not be able to distinguish a nonexistent
+      slug from an existing one with no branding from a failed lookup.
+      2. THE ANTI-ENUMERATION ARGUMENT MUST BE RE-STATED, NOT INHERITED.
+      The moduledoc's current argument is that only realm_url varies by
+      slug and the other four are byte-identical by construction. This
+      requirement invalidates the second half of that sentence. Rewrite the
+      argument to cover the new reality -- record 0020's bounded version is
+      that a non-default branding block is the same unavoidable inference
+      the endpoint already makes with realm_url, being what any user of
+      that tenant sees at their own login screen. Leaving the old sentence
+      standing while the behaviour changes underneath it is the specific
+      defect this criterion exists to prevent.
+      3. THE ALLOWLIST STAYS CLOSED. Five keys, hand-built, never derived
+      from %Letflow.Identity.Tenant{} (INV-2).
+      ALSO IN SCOPE, because it is a change to this exact constant:
+      reconciling @default_branding's primary_color to the canonical
+      platform default REQ-280 named. Record 0020: --color-brand-600 =
+      #228be6 (tokens.css), primary = #2563EB
+      (design-tokens/letflow.tokens.json, superseded by REQ-120), and
+      primary_color = "#0B5FFF" (mobile_tenant_config.ex's
+      @default_branding) "are three different blues for the same role. The
+      platform default must be ONE value, from tokens.css." This is a
+      change to a live public endpoint's response body, so it belongs here
+      under the same security gate rather than in REQ-280.
+      SCOPE FENCE: the mobile endpoint only. The web endpoint is REQ-281.
+      Do not activate MOBILE-DEV or touch apps/mobile/ -- that tier does
+      not exist and this requirement does not change that.
+    acceptance_criteria:
+      - "GET /api/mobile/tenant-config still returns exactly five keys -- realm_url, locales, default_locale, branding, environment_kind -- with the response map still hand-built and never derived from %Letflow.Identity.Tenant{}, confirmed by quoting the constructing function; a sixth key does NOT satisfy this requirement"
+      - "a test asserts the response is HTTP 200 with the full five-field body and the same key set across all four never-error paths: resolvable slug, unknown slug, missing ?slug= param, and a simulated lookup failure"
+      - "a test asserts a tenant with stored branding/locales gets its own values and a tenant without gets the platform defaults, proving the settings store is read rather than a constant emitted"
+      - "the moduledoc's 'locales / default_locale / branding / environment_kind are global, not per-tenant' section and its 'the other four are byte-identical across every branch by construction' claim are both rewritten to match the new behaviour -- quote the before and after; leaving either standing unchanged fails this criterion"
+      - "@default_branding's primary_color equals the canonical platform default REQ-280 named, sourced from web/src/styles/tokens.css, quoted with both the old and new literal; a test asserts the served default matches it"
+      - "SECURITY-REVIEWER has signed off against INV-2 and INV-5 specifically, addressing the fact that three previously-invariant fields now carry per-tenant signal; a REVIEWER-only pass does not satisfy this criterion"
+      - "lib/letflow/routers/tenant_config.ex is unmodified by this requirement and no file under apps/mobile/ is created, confirmed by `git diff --stat` scoped to this requirement's commits"
+      - "mix compile --warnings-as-errors and mix test both pass, with real output quoted"
+    depends_on: [REQ-280]
+
+  - id: REQ-283
+    title: Apply tenant branding as CSS custom-property overrides on tokens.css in the SPA (0020 D1c, theming half)
+    owner: FRONTEND-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-279 -- REQ-279 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      Implements the theming half of step 6 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing:
+      D1's mechanism for tenant branding is "CSS custom-property overrides
+      on tokens.css", supplying app name, logo URL and a small fixed set of
+      brand colours.
+      WHY THIS DEPENDS ON THE PAGE MIGRATION AND THE GUARD REMOVAL. Record
+      0020, "Theming works only once pages stop hard-coding colour": the
+      literal-colour guard exempts web/src/pages/, and that exemption is
+      why hundreds of inline hex literals survive there. "A tenant's brand
+      colour cannot reach a hard-coded literal", so D2's page migration is
+      a precondition for D1's theming, not a parallel nicety. REQ-279's
+      deletion of the exemption is the proof that precondition is met --
+      hence depends_on includes it rather than only the endpoint work.
+      Applying a theme before that lands produces a UI that is partly
+      themed and partly not, with no way to tell which.
+      MECHANISM CONSTRAINT, not negotiable: overrides are CSS custom
+      properties set on the document root from the branding block
+      REQ-281's endpoint returns. NO TENANT-AUTHORED JAVASCRIPT is
+      loaded, evaluated or executed, ever -- record 0020 D1 rejects
+      tenant-shipped React components outright (not deferred: a tenant
+      bundle shares an origin with platform code and could read the
+      session token, irreconcilable with INV-1) and rejects a
+      browser-side expression evaluator (that is 0014's problem, and 0014
+      decided the scripting runtime is server-side only). A logo URL is
+      rendered as an image source and never as markup.
+      TIMING: the branding arrives from GET /api/tenant-config, which
+      web/src/auth/tenantConfig.ts already calls before authentication --
+      note its existing in-memory cache (_cachedConfig) and its catch-all
+      fallback to VITE_OIDC_AUTHORITY/VITE_OIDC_CLIENT_ID defaults. The
+      branding path must degrade the same way: if the endpoint is
+      unreachable or returns no branding, the SPA renders with the
+      platform default palette from tokens.css, never unstyled and never
+      blocked.
+      Record 0020's Sequencing note applies directly here: "Steps 4-6 are
+      worth building against a real second tenant with visibly different
+      branding from the start; identical-looking tenants are how a theming
+      bug survives to production."
+      SCOPE FENCE: theming only. The x-ui widget vocabulary and
+      fieldRegistry population -- the other half of step 6 -- is REQ-284.
+    acceptance_criteria:
+      - "a test renders the app with a branding block whose brand colour differs from tokens.css's default and asserts the resolved computed value of the relevant CSS custom property on the document root equals the tenant's value, not the default -- a test asserting only that a variable was set, without checking which value won, does not satisfy this"
+      - "a second test renders with NO branding returned and asserts the same custom properties resolve to tokens.css's platform defaults, and a third asserts the same when the endpoint call fails outright -- matching web/src/auth/tenantConfig.ts's existing catch-all fallback behaviour"
+      - "the settable custom-property set is a closed allowlist matching what REQ-281's endpoint returns; a test supplies a property name outside that set and asserts it is NOT written to the document root"
+      - "the tenant logo is rendered via an image source attribute and never as markup -- a test supplies a logo_url containing markup and asserts it is not interpreted as HTML"
+      - "a grep for eval(, new Function, dangerouslySetInnerHTML and innerHTML over the files this requirement adds or changes returns zero hits, or every hit is justified explicitly with its file:line; no tenant-supplied value reaches any of them"
+      - "the app name from branding replaces any hard-coded product name in the login/bootstrap surface, asserted by a test rendering with a non-default app name"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted -- including npm run guards with REQ-279's exemption already removed"
+    depends_on: [REQ-279, REQ-281]
+
+  - id: REQ-284
+    title: Define the closed x-ui widget vocabulary and populate fieldRegistry with its platform widgets (0020 D1c, forms half)
+    owner: FRONTEND-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-286 -- REQ-286 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      Implements the forms half of step 6 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing,
+      and is the frontend end of D1's central claim: a tenant customises
+      screen forms by supplying JSON Schema plus x-ui render hints, from a
+      vocabulary the platform closed.
+      VERIFIED 2026-09-08: the extension point exists and is empty.
+      web/src/components/forms/fieldRegistry.ts declares fieldRegistry as
+      an empty Map of string to FieldTypeRenderer, with the comment "Empty
+      registry -- populated by app code", and
+      web/src/components/forms/FieldFactory.tsx looks up
+      fieldRegistry.get(type) and falls through to the built-in switch on a
+      miss. So the mechanism is built and nothing is registered.
+      TWO DELIVERABLES, both required:
+      1. A RECORDED, CLOSED VOCABULARY. Record 0020 D1: "The tenant-facing
+      vocabulary is closed: a tenant selects from widget types, validators
+      and layouts that the platform has implemented, reviewed and tested. A
+      tenant cannot introduce a new one. Extending the vocabulary is a
+      platform change that goes through the normal gate chain." Write that
+      vocabulary down in docs/frontend/ -- every x-ui.widget name a
+      tenant's schema may reference, what each renders, and the explicit
+      statement that the set is closed. design-system.md section 7.6
+      already gives the built-in JSON-Schema-type-to-input mapping (string,
+      date, date-time, enum, number/integer, boolean, maxLength>200); the
+      x-ui vocabulary sits on top of that as named widget overrides, so
+      state the relationship between the two rather than duplicating the
+      table.
+      2. THE REGISTRY POPULATED WITH PLATFORM CODE. Record 0020 D3:
+      "Custom widgets register in fieldRegistry as platform code, keyed by
+      an x-ui.widget name a tenant's schema may reference. The tenant names
+      a widget; the platform decides what that widget is."
+      HARD CONSTRAINTS, none of which this requirement may re-decide:
+      - NO TENANT-AUTHORED JAVASCRIPT and NO GENERAL SCRIPTING RUNTIME,
+      ever. Record 0020 D1 rejects arbitrary tenant script (Lua, JS, WASM,
+      anything Turing-complete) in a client: it needs a sandbox, resource
+      limits and an injection-review gate -- that is 0014's problem, and
+      0014 decided the scripting runtime is server-side only, with a host
+      API of read_variable, write_variable, call_service, platform.now,
+      platform.fail and no UI hook of any kind.
+      - FIELD LOGIC IS OUT OF SCOPE HERE, BUT IS NOT FORBIDDEN -- THE
+      REASON CHANGED 2026-09-08. Record 0020 gained clause D1a on user
+      direction (the mobile tier must support offline business-form
+      population), which PERMITS visible_when, computed fields and
+      cross-field validation, expressed in the existing
+      Letflow.Engine.Expr grammar and evaluated client-side for
+      interactivity with mandatory server-side re-evaluation on submit.
+      An earlier draft of this requirement cited D1's first-draft
+      rejection of all browser-side expression evaluation; that reasoning
+      is superseded and must not be quoted forward. Field logic is
+      excluded from THIS requirement only because record 0020's sequencing
+      makes it a separate track (steps 8-12) whose FIRST deliverable is
+      the language-neutral conformance corpus, not a widget. Do not add a
+      conditional or computed-field widget under this requirement -- and
+      do not record it as rejected on principle either. State it as
+      deferred to that track, citing D1a.
+      - AN UNKNOWN WIDGET NAME MUST DEGRADE, NOT EXECUTE ANYTHING.
+      FieldFactory's existing fall-through to the built-in switch is the
+      designed behaviour for a miss; preserve it.
+      - CLIENT-SIDE VALIDATION FROM form_schema IS A UX AFFORDANCE ONLY.
+      Server-side authority stays with variable_schemas (REQ-109). Nothing
+      here may present client-side acceptance as sufficient.
+      SCOPE FENCE: the vocabulary document and the registry entries. It
+      does not change DynamicFormRenderer's compilation pipeline
+      (parseFormSchema / compileFormSchemaToZod) beyond what registering a
+      widget requires, and it does not touch the backend -- REQ-273 is what
+      makes real schemas arrive.
+    acceptance_criteria:
+      - "docs/frontend/ gains a document listing every x-ui.widget name the platform supports, what each renders, and an explicit statement that the set is closed and that extending it is a platform change going through the normal gate chain -- with the relationship to design-system.md section 7.6's built-in type mapping stated rather than the table duplicated"
+      - "every widget name in that document has a corresponding fieldRegistry entry, and every fieldRegistry entry has a corresponding documented name -- proven by a test that enumerates the registry's keys and asserts the two sets are equal, so neither an undocumented widget nor a documented-but-unimplemented one can pass"
+      - "each registered widget has a rendering test asserting its output AND its requiredAriaAttributes are actually applied, per fieldRegistry.ts's FieldTypeRenderer contract"
+      - "a test supplies a schema with an unknown x-ui.widget name and asserts FieldFactory falls through to the built-in renderer for that field's JSON Schema type -- rendering the field, not erroring and not skipping it"
+      - "no registered widget evaluates a tenant-supplied string as code or as an expression: a grep for eval(, new Function, dangerouslySetInnerHTML and innerHTML over the files this requirement adds or changes returns zero hits, quoted with the command"
+      - "no conditional-visibility or computed-field widget is added, confirmed by the vocabulary document's own list; the vocabulary document records field logic as DEFERRED to record 0020 D1a's own track (sequencing steps 8-12, conformance corpus first) and explicitly NOT as rejected on principle, so a later reader does not treat this requirement as closing a question D1a reopened"
+      - "the vocabulary document states that client-side validation derived from form_schema is a UX affordance and that server-side authority stays with variable_schemas (REQ-109), so a later reader cannot mistake the renderer for a validation boundary"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-273, REQ-286]
+
+  - id: REQ-285
+    title: Adopt an i18n layer in web/ -- library, supported locale set, fallback chain, and the bare .toLocale*() call sites (0020 step 7)
+    owner: FRONTEND-DEV
+    impl_order: 555
+    status: pending
+    stage: S8
+    description: >
+      Implements step 7 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing.
+      Record 0020, "i18n is now on the critical path": "A per-tenant
+      default_locale that nothing reads is not a feature. Serving locale
+      per tenant requires an actual i18n layer, and that needs its own
+      requirement."
+      REQ-127 (done) already did the finding half of this work and its
+      answer was that nothing exists. docs/frontend/frontend-requirements.md's
+      "Locale policy (REQ-127, 2026-08-22)" section records, verified
+      against web/src/ rather than inferred: no i18n library in
+      web/package.json (a grep of web/src/ for react-intl, i18next and
+      formatjs returned nothing); no supported locale set and no fallback
+      chain; 25 date/time formatting call sites, all bare .toLocale*()
+      calls, of which 24 pass no locale argument and 1 hardcodes 'en-US'
+      making that one row format US-style regardless of the viewer's
+      locale; and no tenant-authored locale-keyed content map anywhere in
+      web/src/types/. That section also lists, concretely, the five things
+      adopting a policy would require -- read it in full and implement
+      against it rather than re-deriving the survey.
+      THIS REQUIREMENT ADOPTS WHAT REQ-127 SCOPED. Re-run REQ-127's own
+      greps first, because the counts are from 2026-08-22 and will have
+      drifted; do not inherit the number 25 as fact.
+      OPEN QUESTION for the design step, flagged rather than silently
+      resolved: REQ-127's record names react-intl and i18next (with
+      react-i18next) as the candidates but does not choose. A library
+      choice is a docs/migration/decisions/ matter under CLAUDE.md's
+      "Don't silently re-decide what a decision record already settled"
+      rule -- record 0020 does not settle it, so either it is settled in a
+      new decision record before implementation, or the implementing turn
+      records the choice and its rationale in one and gets REVIEWER
+      sign-off. Do not pick one silently in package.json.
+      SCOPE FENCE, so this stays one turn: adopt the library, define the
+      supported locale set and fallback chain, wire a session-locale
+      concept, and convert the .toLocale*() call sites to locale-aware
+      formatting. Translating the app's UI strings into a second language
+      is NOT in scope -- an English-only app with a real i18n layer and a
+      real fallback chain is the deliverable, and shipping actual
+      translations is a separate, later requirement. Say so explicitly in
+      whatever policy document this updates, so a reader does not mistake
+      an English-only catalogue for an unfinished implementation.
+      RELATIONSHIP TO TENANT SETTINGS: REQ-280 stores locales and
+      default_locale per tenant and REQ-282 serves them. This requirement
+      is what makes a served default_locale actually do something. It
+      depends on REQ-280 for the store's shape but does NOT depend on
+      REQ-282 -- the session locale must resolve sensibly (browser
+      preference against the supported set) even when no tenant default is
+      available, which is also what makes the fallback chain testable.
+    acceptance_criteria:
+      - "REQ-127's greps are re-run at this requirement's start and the current counts quoted -- the 25 .toLocale*() call sites and the 1 hardcoded 'en-US' are re-derived, not inherited from the 2026-08-22 record"
+      - "an i18n library is added to web/package.json and the choice between react-intl and i18next is recorded with its rationale in a docs/migration/decisions/ record, not made silently in package.json; the record is cited by id in this requirement's completion report"
+      - "docs/frontend/ states the supported locale set and the fallback chain explicitly, and a test asserts the chain's behaviour for at least three cases: a supported locale, an unsupported locale falling back, and no locale preference at all"
+      - "every .toLocale*() call site found by the re-run grep is either converted to locale-aware formatting driven by the session locale or listed explicitly with the reason it must stay bare -- the counts must sum to the re-derived total, so a partial sweep shows up as arithmetic rather than prose"
+      - "the one call site hardcoding 'en-US' no longer does so, quoted before and after with its file:line"
+      - "a session-locale concept exists with a stated source of truth, and a test asserts that a tenant default_locale (when one is supplied) wins over the browser preference, and that the browser preference is used when none is"
+      - "the policy document states explicitly that the app ships English-only strings by design at this point and that translating UI strings is a separate later requirement, so an English-only catalogue is not mistaken for an incomplete implementation"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    depends_on: [REQ-127, REQ-280]
+
+
+  # REQ-286 closes a gap REQ-ANALYST flagged when expanding decision 0020: the
+  # batch REQ-272..285 populates tasks.form_schema (REQ-273) and builds the
+  # widget vocabulary that consumes it (REQ-284), but nothing exposes the column
+  # over HTTP -- so DynamicFormRenderer would still receive nothing. Record 0020
+  # ("Populating the column and exposing it over HTTP are two separate changes")
+  # requires the exposure be its own SECURITY-REVIEWER-gated requirement rather
+  # than folded into REQ-273's engine work. This is that requirement.
+  - id: REQ-286
+    title: Expose form_schema in the task-detail response, under a security gate (0020 D3, exposure half)
+    owner: ELIXIR-DEV
+    impl_order: 556
+    status: pending
+    stage: S8
+    description: >
+      REQ-273 populates tasks.form_schema at activation but is explicitly
+      fenced out of lib/letflow/routers/tasks.ex -- it asserts that file is
+      unmodified. So the column is written and never served, and
+      web/src/components/forms/DynamicFormRenderer.tsx still receives nothing.
+      This requirement adds form_schema to the task-detail response and nothing
+      else.
+
+      This is response-shaping on a tenant data path, which is why decision 0020
+      separates it from REQ-273: INV-2 (server-side field authorisation) governs
+      what a response body discloses, and a requirement that both persisted a
+      value and disclosed it would pass one gate for two changes reviewed by
+      different criteria.
+
+      task_detail_map/3 in lib/letflow/routers/tasks.ex returns 13 keys today and
+      excludes form_schema deliberately -- that module's own moduledoc (lines
+      91-93) records the exclusion and the reason (no REQ-083 acceptance
+      criterion named it, and the column was always nil). Both halves of that
+      reason expire when REQ-273 lands; this requirement records that they have.
+
+      Re-verify at start rather than trusting these counts: the key count of
+      task_detail_map/3, and that REQ-273 has actually landed (a schema served
+      from an unpopulated column is indistinguishable from a broken one).
+
+      SCOPE FENCE: this requirement does not change what is written to the
+      column, does not add validation of submitted output against the schema
+      (variable_schemas / REQ-109 remains the sole validation authority per
+      decision 0020 D3), and does not touch web/.
+    acceptance_criteria:
+      - "form_schema appears in the task-detail response for a task whose definition node carries one, proven by an HTTP-level test that asserts the served value equals the value REQ-273 persisted -- not by a unit test over task_detail_map/3 alone"
+      - "a task whose node carries no form_schema serves the key as null (or omits it) without erroring, and a test covers that path -- the nil case is the common case until definitions start carrying schemas"
+      - "the served schema is the version pinned to the task (form_version, REQ-126), not the definition's current one, proven by a test that advances the definition after activation and asserts the served schema is unchanged"
+      - "SECURITY-REVIEWER has assessed this change against INV-1, INV-2 and INV-5 and its result names each, with particular attention to whether a form_schema authored in one tenant can ever be served to another"
+      - "lib/letflow/routers/tasks.ex's moduledoc lines 91-93 are updated: the sentence stating form_schema is excluded and always nil is rewritten to describe what is now true, rather than left standing as a false statement about live behaviour"
+      - "no validation of submitted task output against form_schema is introduced, confirmed by grep over the diff, and the result states that variable_schemas (REQ-109) remains the sole validation authority"
+      - "git diff shows no file under web/ modified by this requirement"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-273]
+
+
+  # NOTE (2026-09-09): REQ-290 depends on REQ-289, which is NOT in this file yet --
+  # it is in flight on origin/feature/WF02-REQ289-20260909 (corpus at
+  # priv/expr_conformance/corpus.json) and lands with that branch's own yaml entry.
+  # The depends_on below is correct and deliberately left pointing at it; if a
+  # dependency check flags it as orphaned, the fix is to merge REQ-289's branch,
+  # not to weaken this edge.
+  - id: REQ-290
+    title: Guard the conformance corpus against drift from Letflow.Engine.Expr in CI, and pin the corpus version marker (0020 D1a step 9, part 2 of 2)
+    owner: ELIXIR-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-292 -- REQ-290 guards the corpus REQ-289 produces; REQ-289's own entry lands with origin/feature/WF02-REQ289-20260909 (that branch predates REQ-287/288 and needs a rebase first). Scoped to REQ-292 -- the nearest live in-corpus successor that cannot proceed without this guard -- because a blocked-by naming an id absent from this file is an unfalsifiable suppression and is correctly rejected. RE-SCOPE TO REQ-289 once its branch merges.
+    status: pending
+    stage: S8
+    description: >
+      Second half of step 9 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing. Split
+      from REQ-289 because the two are separately sized and separately risky:
+      REQ-289 writes a corpus, this requirement makes the corpus stay true. A
+      corpus that is correct on the day it is written and then silently diverges
+      from Letflow.Engine.Expr is worse than no corpus at all, because two
+      client evaluators would then be certified against a stale contract and the
+      drift would surface, in record 0020's own words, "as a wrong number on a
+      customer's form."
+
+      THE FAILURE THIS PREVENTS is concrete and near. Expr's history is one of
+      incremental extension: REQ-050 established the subset, REQ-197 added
+      arithmetic and structured parse errors, REQ-198 added the 8 pure builtins
+      and call syntax, and REQ-288 is about to route it into definition
+      validation. Another extension is entirely plausible. When one lands, the
+      corpus must fail loudly rather than remain silently incomplete, because
+      "the corpus passes" is the ONLY evidence a TypeScript or Dart evaluator
+      ever produces that it implements the same language.
+
+      THIS REQUIREMENT: a CI-enforced check that fails when Expr's accepted
+      surface changes without the corpus changing with it. Drive it from
+      machine-readable facts the module already exposes rather than from a
+      hand-maintained list that itself drifts -- Expr.builtin_function_names/0
+      returns the closed builtin whitelist, and the module's @type cmp_op,
+      arith_op and ast are closed unions. A guard keyed to those fails
+      automatically when one grows. A guard that greps for a hardcoded count of
+      8 does not, and is not acceptable here.
+
+      ALSO REQUIRED, AND THIS IS WHY IT IS THE LAST REQUIREMENT BEFORE A CLIENT
+      EVALUATOR EXISTS: a corpus version or capability marker, so a client can
+      detect that it is looking at a contract it does not implement. D1a
+      constraint 1 says a client meeting an expression it cannot evaluate fails
+      loudly (MOB-4's stale-version state) and never silently skips or guesses.
+      Without a marker decided here, REQ-293 and REQ-294 will each invent their
+      own convention and the two will disagree -- which is the same drift this
+      requirement exists to prevent, arriving by a different route.
+
+      Re-verify at start rather than trusting this description: what
+      Expr.builtin_function_names/0 currently returns, and whether REQ-288 or
+      any later change has already altered the accepted surface since REQ-289
+      wrote the corpus.
+
+      SCOPE FENCE: the guard, the version/capability marker, and their tests. It
+      does not add corpus entries beyond any the guard proves are missing, does
+      not modify lib/letflow/engine/expr.ex, and writes no TypeScript or Dart.
+    acceptance_criteria:
+      - "a check runs in CI that fails when Letflow.Engine.Expr's accepted surface changes without a corresponding corpus change -- and it is demonstrated to actually fail rather than asserted to: add a ninth entry to the builtin whitelist in a scratch commit or fixture, show the check failing with real output, then show it passing again once reverted"
+      - "the check is driven by Expr.builtin_function_names/0 and the module's closed type unions, not by a hardcoded list or count -- quote the check's source showing where each value comes from, so a reviewer can confirm no literal 8 and no hand-copied name list is load-bearing"
+      - "the corpus carries a version or capability marker, its meaning is documented, and a test asserts the documented client behaviour on an unrecognised marker: fail loudly, not skip and not guess -- the test must distinguish those three outcomes, not merely assert that something failed"
+      - "the marker's semantics are stated in the same companion document REQ-289 produced, so a client author reads one document and not two"
+      - "the check runs as part of the standard CI command rather than as a manually-invoked task, proven by quoting the CI config or mix alias that includes it plus the real output of running that command"
+      - "lib/letflow/engine/expr.ex is unmodified, proven by git diff"
+      - "mix letflow.check passes, with real output quoted"
+      - "the CI command that runs the surface guard ALSO runs the corpus's own ExUnit runner (REQ-289), and this is stated explicitly rather than left to inference. The surface guard covers WHICH names and operators exist; it is blind to SEMANTICS -- if lower/1 changed from ASCII-only to Unicode-aware, no name and no type union would change, the guard would stay green, and the corpus would silently become wrong. That is the highest-value divergence class REQ-289 identifies, so the corpus run is the half of the detector that catches it"
+    depends_on: [REQ-289]
+
+  - id: REQ-291
+    title: Extend the x-ui vocabulary with visible_when, computed and cross-field validation in Expr's grammar, validated at definition time (0020 D1a step 8, part 2 of 2)
+    owner: ELIXIR-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-284 -- REQ-284 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      Implements the second half of step 8 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing:
+      "extend the x-ui vocabulary with visible_when, computed and cross-field
+      validation, expressed in Letflow.Engine.Expr's grammar; validate
+      expressions at definition time so a bad one fails at authoring, not at
+      render." REQ-288 makes the grammar reachable from definition validation at
+      all; this requirement puts form-field expressions through it.
+
+      REQ-284 establishes the x-ui widget vocabulary document under
+      docs/frontend/ and its fieldRegistry entries, and explicitly records field
+      logic as DEFERRED to this track rather than rejected on principle. This
+      requirement is that deferral being taken up. It extends that document's
+      vocabulary with three logic keys and defines their semantics precisely
+      enough that a TypeScript author (REQ-293) and a Dart author (REQ-294)
+      implement the same behaviour without conferring:
+      visible_when -- an expression evaluating to a boolean, where false hides
+      the field; computed -- an expression whose value populates the field,
+      which is then not user-editable; and a cross-field validation form -- an
+      expression plus the message shown when it does not hold.
+
+      THE SEMANTICS THAT MUST BE PINNED DOWN, because leaving any of them to
+      implementer judgement guarantees the two clients diverge: what variables
+      are in scope for a field expression and how they are named (the grammar
+      supports dotted paths, and Expr.translate_cel_to_expr/1 strips a
+      "variables." prefix -- decide whether form-field expressions carry that
+      prefix); what a computed field evaluates to when an input is absent or
+      null; whether a hidden field's value is submitted, retained or dropped;
+      whether a computed field's value is submitted at all, given that the
+      server recomputes it under REQ-292; and the evaluation order when a
+      computed field references another computed field, including whether a
+      reference cycle is rejected at definition time.
+
+      SECURITY BOUNDARY, stated by record 0020 D1a and not re-openable here: "A
+      field whose visibility is security-relevant must not be sent to the client
+      at all; the server omits it from the schema." Client-side hiding is a UX
+      affordance and never an access control. The vocabulary document must say
+      this in its own words, because it is the single most likely thing for a
+      later reader to get wrong. Relatedly, D1a requires that an expression may
+      not reference anything the client was not already given -- which is a
+      constraint this requirement can actually check, since it holds the schema
+      and the expression together at definition time.
+
+      DO NOT EXTEND THE GRAMMAR. Read lib/letflow/engine/expr.ex's moduledoc
+      first. It is a CEL subset by decision: now(), date_add() and date_diff()
+      are excluded as impure, and @unsupported_call_markers rejects CEL
+      vocabulary neither R-Co nor Letflow implements. If a form-logic use case
+      appears to need a construct the grammar lacks, that is a
+      docs/migration/decisions/ matter under CLAUDE.md's "Don't silently
+      re-decide what a decision record already settled" rule, not an addition
+      made inside this requirement.
+
+      Re-verify at start rather than trusting this description: that REQ-284's
+      vocabulary document exists and where it lives, whether REQ-273's shape
+      validator (lib/letflow/definitions/json_schema_shape.ex is the module
+      record 0020 names for this class of problem) is the right place to hook
+      the expression check, and REQ-288's actual violation shape.
+
+      SCOPE FENCE: the vocabulary definition, the definition-time validation of
+      these three keys, and their tests. It implements no evaluator -- not the
+      submit-time Elixir one (REQ-292), not the TypeScript one (REQ-293), not
+      the Dart one (REQ-294) -- and modifies nothing under web/.
+    acceptance_criteria:
+      - "the x-ui vocabulary document REQ-284 produced gains visible_when, computed and a cross-field validation key, each with its expression semantics stated -- and that document's existing 'field logic is DEFERRED to D1a' text is updated to point at this requirement rather than left standing as an open deferral"
+      - "a definition carrying a syntactically invalid expression in any of the three keys is rejected at definition time with a violation naming the field and the parse position, proven by one test per key -- three tests, not one covering all three"
+      - "the variable scope and naming convention for field expressions is stated explicitly, including whether a 'variables.' prefix applies, and a test asserts an expression referencing a name outside that scope is rejected at definition time rather than failing at render"
+      - "the absent-input and null-input behaviour of a computed field is stated and tested, and the document states a single value rather than a range of acceptable behaviours -- the document is what makes REQ-293's and REQ-292's implementations agree, so an ambiguous statement fails this criterion"
+      - "a computed-field reference cycle is rejected at definition time, proven by a test supplying a two-field cycle and a test supplying a three-field cycle -- a check that catches only self-reference is insufficient"
+      - "the disposition of a hidden field's value and of a computed field's value on submit is stated explicitly in the document, and each is covered by a test"
+      - "the document states that client-side hiding is a UX affordance and never access control, and that a field whose visibility is security-relevant must be omitted from the served schema server-side -- quoting or citing record 0020 D1a"
+      - "an expression referencing a name not present in the schema it accompanies is rejected at definition time, proven by a test -- this is the checkable half of D1a's rule that an expression may not reference anything the client was not given"
+      - "lib/letflow/engine/expr.ex is unmodified, proven by git diff -- no token, operator or builtin was added to serve form logic"
+      - "git diff shows no file under web/ modified by this requirement"
+      - "mix letflow.check passes, with real output quoted"
+    depends_on: [REQ-284, REQ-288]
+
+  - id: REQ-292
+    title: Server-side re-evaluation of visible_when, computed and cross-field validation on task completion (0020 D1a step 11, the authority half)
+    owner: ELIXIR-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-286 -- REQ-286 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      Implements step 11 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing.
+      Record 0020 D1a: "This is the authority half and is not optional; without
+      it the client's evaluation is load-bearing, which D1a forbids."
+
+      ORDERING IS DELIBERATE AND IS NOT A DRAFTING ACCIDENT. Record 0020 states:
+      "Step 11 must not lag step 10. A client evaluator shipped without its
+      server-side counterpart is a validation boundary that exists only in the
+      client -- exactly the INV-2 failure D1a's rule is written to prevent. If
+      they cannot ship together, ship 11 first: a server that checks expressions
+      no client sends yet is harmless, while the reverse is not." REQ-293 (the
+      TypeScript evaluator, the record's step 10) therefore depends_on THIS
+      requirement. That inverts the record's own list numbering on purpose, and
+      a later reader should not "fix" it: the record's prose overrides its list
+      order, and this is the only dependency arrangement in which the two cannot
+      ship in the unsafe sequence.
+
+      THE RULE, from D1a: "Evaluate on the client; validate on the server.
+      Always both, never either alone." The server re-evaluates every
+      visible_when, computed and cross-field validation on submit, from the
+      PINNED schema and the authoritative variables, and its answer wins. A
+      computed value arriving from a client is never trusted. A client-passed
+      validation is not a validation. A hidden field is not a secret.
+
+      WHERE THIS LANDS: task completion runs through
+      Letflow.Engine.complete_task/3 (lib/letflow/engine.ex, around line 1819,
+      via run_complete_task), which already validates submitted variables
+      against the resolved variable_schema through
+      Letflow.Engine.VariableSchema.variable_validations/5 and already has a
+      variable_schema_violation error path. Re-evaluation belongs on that
+      transactional path, alongside the validation authority that already
+      exists, not in a router.
+
+      WHAT MUST NOT CHANGE: variable_schemas (REQ-109) remains the SOLE
+      authority for validating submitted variable values -- record 0020 D3
+      constraint 1, restated in that record's "What this record does not change"
+      section: "form_schema never becomes one." This requirement adds
+      re-evaluation of EXPRESSIONS, which is a different thing from validating
+      values against a rendering payload. If the implementation finds itself
+      validating a submitted value against form_schema's type or constraint
+      keywords, it has crossed into an INV-2 violation and the design is wrong.
+
+      DECIDE AND DOCUMENT, rather than leaving to the reader: what happens when
+      the server's recomputation of a computed field disagrees with the value
+      the client submitted (the server's value wins, but is the disagreement an
+      error, a silent overwrite, or a logged event?); what happens when a
+      submitted field's visible_when evaluates false server-side, meaning the
+      client submitted a field it should not have shown; and what happens when a
+      server-side expression evaluation itself FAILS. That third case is the one
+      most likely to be got wrong: Expr.evaluate_condition/2's @spec collapses
+      every failure to a bare false, so a silently-false visibility check would
+      hide a field rather than surface a bug. USE the diagnosable path
+      (translate_cel_to_expr/1 plus parse_strict/1 plus eval/2) over
+      evaluate_condition/2 wherever a failure must be distinguishable from a
+      false result.
+
+      Re-verify at start rather than trusting this description:
+      complete_task/3's current signature and line number, the exact error tuple
+      shape used for variable_schema_violation, and that REQ-291's vocabulary
+      has actually landed.
+
+      SCOPE FENCE: backend only. Modifies nothing under web/, does not change
+      what REQ-273 persists into tasks.form_schema, and does not change
+      variable_schemas' validation authority.
+    acceptance_criteria:
+      - "every visible_when, computed and cross-field validation expression on the task's pinned schema is re-evaluated on task completion, proven by three tests -- one per key -- that submit a payload a client would have produced and assert the server's own evaluation ran, not merely that completion succeeded"
+      - "a submitted computed value that disagrees with the server's recomputation does not win: a test submits a falsified computed value and asserts the persisted variable holds the server's value, with the chosen disposition (error, silent overwrite, or logged event) implemented and stated in the moduledoc"
+      - "a submitted field whose visible_when evaluates false server-side is handled by the documented rule, proven by a test -- and the rule is stated in the moduledoc rather than only implied by the code"
+      - "a server-side expression that FAILS to evaluate is distinguishable from one that evaluates to false, proven by a test asserting the two produce different outcomes -- a failing visible_when must not silently read as 'hide the field'"
+      - "the schema used for re-evaluation is the version pinned to the task (form_version, REQ-126), not the definition's current one, proven by a test that advances the definition after activation and asserts re-evaluation used the pinned version"
+      - "variable_schemas remains the sole authority for validating submitted values: a grep over the diff shows no validation of a submitted value against form_schema's own type or constraint keywords, quoted with the command, and the moduledoc states the boundary"
+      - "SECURITY-REVIEWER has assessed this change against INV-2 and its result addresses specifically whether any client-supplied value can reach a persisted variable without server-side re-derivation"
+      - "git diff shows no file under web/ modified by this requirement"
+      - "mix letflow.check passes, with real output quoted"
+      - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement -- the grammar is defined there and is not extended, narrowed, or `completed` toward CEL; expr.ex's own moduledoc warns that completing CEL support against @unsupported_call_markers acts against the closed EXP-102 decision"
+    depends_on: [REQ-286, REQ-290, REQ-291]
+
+  - id: REQ-293
+    title: TypeScript evaluator for the Expr grammar, passing the conformance corpus, wired into DynamicFormRenderer (0020 D1a step 10)
+    owner: FRONTEND-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-284 -- REQ-284 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S8
+    description: >
+      Implements step 10 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing: "a
+      TypeScript evaluator for the grammar, passing the corpus, wired into
+      DynamicFormRenderer."
+
+      IT DEPENDS ON REQ-292 (the server-side half) DELIBERATELY, inverting the
+      record's list order on the record's own instruction: "Step 11 must not lag
+      step 10 ... If they cannot ship together, ship 11 first: a server that
+      checks expressions no client sends yet is harmless, while the reverse is
+      not." A later reader should not reorder this to match the numbering. It
+      also depends on REQ-290 because D1a requires the corpus to precede any
+      client evaluator -- building a second implementation first "is how the two
+      drift apart before anyone can measure it."
+
+      WHAT EXISTS, verified 2026-09-08: web/ has NO parser and NO evaluator for
+      this grammar. web/src/components/canvas/CelExpressionEditor.tsx (120
+      lines) is a CodeMirror 6 wrapper providing syntax highlighting via
+      web/src/utils/cel/celLanguage.ts, bracket matching and line numbers; it
+      performs no validation and displays a serverError prop passed down from
+      ConditionDialog.tsx and ProcessCanvas.tsx. So the SPA today can colour an
+      expression and can show the server's opinion of it, and can compute
+      nothing. web/src/components/forms/DynamicFormRenderer.tsx compiles a
+      formSchema through parseFormSchema (web/src/utils/formSchemaParser.ts) and
+      compileFormSchemaToZod (web/src/utils/jsonSchemaToZod.ts) into a Zod
+      resolver for react-hook-form and renders via FieldFactory.
+
+      THE EVALUATOR IS A PORT, NOT A DESIGN. Letflow.Engine.Expr is the
+      definition and this implementation may not extend it locally -- D1a
+      constraint 1. Read lib/letflow/engine/expr.ex before writing any
+      TypeScript: it is a CEL SUBSET by decision, so implementing "CEL for
+      TypeScript" or pulling in a CEL npm package is the wrong deliverable and
+      would accept expressions the server rejects. The excluded impure builtins
+      (now, date_add, date_diff) must NOT be implemented. The divergence-prone
+      semantics REQ-289's corpus pins are where a natural JavaScript
+      implementation will silently differ, since JS toLowerCase() is
+      Unicode-aware where the grammar's lower/upper are ASCII-only, JS
+      String.trim() strips Unicode whitespace where the grammar's trim strips
+      exactly 4 ASCII characters, and JS division yields native Infinity and NaN
+      with its own coercion rules.
+
+      FAIL LOUDLY, NEVER GUESS. D1a constraint 1: a client meeting an expression
+      it cannot evaluate fails loudly -- MOB-4's stale-version state -- and
+      "never silently skips the field or guesses." A field whose visible_when
+      cannot be evaluated must not default to visible and must not default to
+      hidden; a computed field whose expression fails must not render blank as
+      though the value were empty. Use REQ-290's version/capability marker to
+      detect this case rather than inventing a second convention.
+
+      NO AUTHORITY. This evaluator is a UX affordance. Its output is never
+      presented as validated, and REQ-292's server-side re-evaluation is what
+      decides. Nothing here may bypass or short-circuit a server response.
+
+      Re-verify at start rather than trusting this description: the corpus's
+      actual location and schema (REQ-289 chose it under REVIEWER sign-off),
+      DynamicFormRenderer's current compilation pipeline, and whether
+      celLanguage.ts's token set can be shared with the evaluator or is
+      highlight-only.
+
+      SCOPE FENCE, so this stays one turn: the evaluator, its corpus test, and
+      the wiring of visible_when, computed and cross-field validation into
+      DynamicFormRenderer. It does not add client-side validation of an
+      expression to CelExpressionEditor -- that would be a genuine improvement
+      and is a separate requirement, so say so rather than doing it here -- does
+      not touch the backend, and does not implement offline caching or offline
+      submission.
+    acceptance_criteria:
+      - "a TypeScript evaluator exists under web/src/ and passes every entry in REQ-289's conformance corpus, run as a real vitest suite that reads the corpus file itself rather than a hand-copied subset -- quote the real npm test output including the entry count, and assert the count matches the corpus's own length so a truncated read cannot pass"
+      - "the excluded impure builtins are absent: a grep of the evaluator's source for now, date_add and date_diff returns zero hits as implemented functions, quoted with the command; and a test asserts an expression using one of them is REJECTED, not evaluated"
+      - "no CEL library is added to web/package.json -- git diff on web/package.json shows either no new dependency or only ones justified in the completion report as not being expression evaluators"
+      - "the three divergence-prone semantics are each covered by an explicit test beyond the corpus run: lower and upper are ASCII-only (a non-ASCII input asserts the ASCII-only result, NOT JavaScript's toLowerCase output), trim strips only the 4 ASCII whitespace characters, and division by zero produces the corpus's encoding of the infinity markers rather than JavaScript's native Infinity and NaN"
+      - "an expression the evaluator cannot handle produces the stale-version failure state, proven by three separate assertions that distinguish the outcomes: the field is NOT rendered visible by default, NOT rendered hidden by default, and a computed field is NOT rendered blank -- the failure is surfaced"
+      - "REQ-290's version or capability marker is what triggers that detection, not a locally-invented convention, shown by quoting where the marker is read"
+      - "visible_when, computed and cross-field validation each work end-to-end in DynamicFormRenderer, proven by one rendering test per key: a field hidden by visible_when, a computed field whose value updates when its input changes, and a cross-field validation error surfaced with its message"
+      - "the evaluator's output is never presented as authoritative: a test asserts that a client-side cross-field validation pass does not bypass submission to the server, and the completion report states where server authority is retained"
+      - "no general scripting capability is introduced: a grep for eval(, new Function, Function( and dynamic import( over the files this requirement adds or changes returns zero hits, quoted with the command"
+      - "git diff shows nothing under lib/ modified, and CelExpressionEditor.tsx either unmodified or changed only for reasons stated in the completion report -- client-side validation of gateway conditions is explicitly noted as a separate future requirement, not silently added here"
+      - "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+      - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement. A client evaluator that finds the grammar lacking must report that as a finding, never close the gap by extending expr.ex or by adding the missing capability on the client side only -- the second is worse, because it passes the corpus while silently making this client incompatible with the other two"
+    depends_on: [REQ-284, REQ-290, REQ-292]
+
+
+  # REQ-294 is the only S9 entry in this block. Record 0020 Sequencing step 12
+  # marks D1a-dart "S9, dormant until the mobile tier activates."
+  #
+  # OWNER: ELIXIR-DEV is wrong for Dart and MOBILE-DEV is DORMANT, so neither is
+  # straightforwardly right. Resolved by looking at what the file already does
+  # rather than inventing a convention: no requirement in docs/requirements.yaml
+  # has ever carried `owner: MOBILE-DEV` (a grep returns zero), and the four
+  # existing S9 requirements -- REQ-124..127 -- are all owned by ELIXIR-DEV or
+  # FRONTEND-DEV because they are BACKEND gaps the mobile tier needs. This
+  # requirement is not a backend gap; it is Flutter code in apps/mobile/, a
+  # directory that does not exist. It is therefore filed as owner: MOBILE-DEV,
+  # the first such entry.
+  #
+  # CORRECTED 2026-09-08 (REQ-VALIDATOR, blocker 2). An earlier draft of this
+  # comment claimed owner: MOBILE-DEV makes the entry UNCLAIMABLE. That is
+  # FALSE and must not be trusted forward: TASK_QUEUE.md's register_task payload
+  # has no owner field at all, and get_next_task filters on status + lock +
+  # depends_on only. The owner is invisible to the queue, so it gates nothing.
+  # Nor can this entry sit UNREGISTERED: mix letflow.check_deferral_staleness
+  # treats a stage as active once any sibling is done/in_progress/blocked, and
+  # all four of S9's REQ-124..127 are done, so a bare stage-scoped deferral here
+  # is stale on arrival and fails the run.
+  #
+  # The mechanism that actually holds is TASK_QUEUE.md's documented `blocked-by:`
+  # deferral scoping, applied below. It is anchored at the start of the
+  # rationale, names an id that exists and is not this entry's own, and -- the
+  # property that makes it correct rather than merely quiet -- IT EXPIRES ON ITS
+  # OWN once REQ-293 is done or cancelled, at which point this entry becomes
+  # visible debt again rather than staying deferred forever. depends_on already
+  # encodes the real ordering; this scoping is what keeps the entry out of the
+  # claimable set without relying on a field nothing reads.
+  # (The attributed impl_order marker for this entry sits at field level inside
+  # it, below owner: -- a 2-space comment is convention prose and is NOT
+  # attributed to any entry by mix letflow.check_requirements_registration.)
+  - id: REQ-294
+    title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
+    owner: MOBILE-DEV
+    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-290 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    status: pending
+    stage: S9
+    description: >
+      Implements step 12 of
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing: "the
+      Flutter evaluator, passing the same corpus. S9, dormant until the mobile
+      tier activates."
+
+      DORMANT ON PURPOSE. MOBILE-DEV is dormant per CLAUDE.md's roster and
+      nothing routes to it until S9's backend gaps close and apps/mobile/
+      exists. This requirement is filed now rather than later because record
+      0020 D1a's whole argument for the conformance corpus is that all THREE
+      implementations are certified against it -- an unrecorded third
+      implementation is how the corpus quietly becomes a two-client contract and
+      the Dart evaluator later gets written from scratch against the Elixir
+      source instead. It must not be STARTED before apps/mobile/ exists.
+
+      ROLE-FILE CONFLICT, MUST BE RESOLVED BY THIS REQUIREMENT (REQ-VALIDATOR
+      blocker 1, 2026-09-08). .claude/agents/mobile-dev.md's constraint 2 says
+      "If you find yourself writing an expression evaluator, stop." Both
+      docs/mobile/requirements.md (MOB-4), docs/mobile/architecture.md AND the
+      role file were all reconciled with D1a on 2026-09-08 -- the role file
+      last, after REQ-VALIDATOR caught that it had been missed. Under
+      core-directives.md's Instruction Precedence a role file is rank 2 --
+      above workflows, protocols and CLAUDE.md -- so an activated MOBILE-DEV
+      reading its own instructions will hit that stop and correctly report
+      blocked -- which is why the role file was amended rather than reasoned
+      around: record 0020 D1a wins on the merits (only a decisions/ record
+      overrides the chain), but a stale stop instruction left standing would
+      have blocked the work anyway. Re-verify the file's current wording at
+      start; this requirement now VERIFIES that carve-out rather than
+      performing it.
+
+      WHY THIS IS THE POINT OF D1a AT ALL: record 0020 D1a exists because "the
+      mobile tier must work offline for at least some business form
+      population." MOB-3 (MUST) requires airplane-mode launch to render
+      previously cached definitions; MOB-4 (MUST) requires the form renderer to
+      support a computed field type. A computed field is client-evaluated logic
+      by definition, and an offline device has no server to ask. This evaluator
+      is what makes a cached form fillable with no server reachable. Every other
+      requirement in this block is, in that sense, groundwork for this one.
+
+      IT DOES NOT MAKE FORMS SUBMITTABLE OFFLINE. MOB-8 is untouched: offline
+      writes stay out of v1, because a write queue needs a conflict model D1a
+      does not supply. Record 0020 and docs/mobile/requirements.md both state
+      this explicitly. Do not add a submission queue under this requirement.
+
+      SAME GRAMMAR, SAME CORPUS, NO LOCAL EXTENSION. D1a constraint 1:
+      Letflow.Engine.Expr is the definition and no client may extend it locally.
+      Read lib/letflow/engine/expr.ex before writing Dart. It is a CEL SUBSET by
+      decision -- do not implement "CEL for Dart" and do not adopt a CEL pub
+      package, either of which would accept expressions the server rejects. The
+      impure builtins now, date_add and date_diff must not be implemented. The
+      divergence-prone semantics REQ-289's corpus pins are where Dart will
+      differ naturally: Dart's String.toLowerCase() is Unicode-aware where the
+      grammar's lower and upper are ASCII-only, Dart's trim() strips Unicode
+      whitespace where the grammar's trim strips exactly 4 ASCII characters, and
+      Dart's numeric division has its own infinity, NaN and int-versus-double
+      behaviour.
+
+      FAIL LOUDLY. An expression this client cannot evaluate is MOB-4's
+      stale-version state -- one of the six mandatory renderer states. It never
+      silently skips the field and never guesses a value. This matters more here
+      than in the SPA, because an offline device cannot ask the server what an
+      unrecognised expression means. Use REQ-290's version or capability marker.
+
+      NO AUTHORITY, EVEN OFFLINE. The client's evaluation is a UX affordance.
+      REQ-292's server-side re-evaluation decides on submit, and submission
+      requires connectivity per MOB-8.
+
+      REFERENCE THE SPA IMPLEMENTATION, DO NOT PORT IT BLIND: REQ-293 produced a
+      TypeScript evaluator against the same corpus. Read it for the decisions it
+      had to make, but the corpus is the contract -- where the two disagree, the
+      corpus and the Elixir implementation are right.
+
+      Re-verify at start rather than trusting this description: that apps/mobile/
+      exists and MOBILE-DEV has been activated, the corpus's current location
+      and version marker, and whether REQ-290's guard has caused the corpus to
+      change since REQ-293 passed it.
+    acceptance_criteria:
+      - "apps/mobile/ exists and MOBILE-DEV has been activated before this requirement is started -- if either is false the requirement is reported blocked with the blocking condition named, rather than partially implemented"
+      - ".claude/agents/mobile-dev.md constraint 2 is re-read at start and confirmed to permit this work. It was amended 2026-09-08 (same session as this requirement) to carve out record 0020 D1a's bounded-grammar exception while preserving its rejection of a general scripting runtime on-device; before that amendment it read 'If you find yourself writing an expression evaluator, stop.' and would have blocked this requirement outright, since a role file outranks a requirement in core-directives.md's Instruction Precedence. Quote the constraint as it actually reads when this requirement runs. If it has drifted back, or if its carve-out no longer matches D1a, stop and report that as a finding rather than proceeding against your own role file"
+      - "a Dart evaluator exists under apps/mobile/ and passes every entry in REQ-289's conformance corpus, run as a real Dart test suite that reads the corpus file itself rather than a hand-copied subset -- quote the real test output including the entry count, and assert the count matches the corpus's own length"
+      - "the corpus entry count and version marker the Dart suite ran against are quoted and match what REQ-293's TypeScript suite ran against -- if they differ, the difference is explained rather than passed over, since a shared corpus the two clients read at different versions is exactly the drift D1a's mechanism exists to prevent"
+      - "the excluded impure builtins are absent: a grep of the evaluator's source for now, date_add and date_diff returns zero hits as implemented functions, quoted with the command; and a test asserts an expression using one of them is REJECTED, not evaluated"
+      - "no CEL package is added to apps/mobile/pubspec.yaml -- quote the dependency diff"
+      - "the three divergence-prone semantics are each covered by an explicit test beyond the corpus run: lower and upper are ASCII-only (a non-ASCII input asserts the ASCII-only result, NOT Dart's toLowerCase output), trim strips only the 4 ASCII whitespace characters, and division by zero produces the corpus's encoding of the infinity markers rather than Dart's native behaviour"
+      - "an expression the evaluator cannot handle produces MOB-4's stale-version state, proven by assertions that distinguish it from the alternatives: the field is NOT defaulted to visible, NOT defaulted to hidden, and a computed field is NOT rendered blank"
+      - "a cached form is demonstrated fillable with no server reachable -- a test evaluates visible_when and computed against cached data with no network, which is the offline-population requirement that motivated D1a"
+      - "no offline submission queue is introduced, confirmed by grep over the diff, and the completion report states that MOB-8's exclusion of offline writes is unchanged"
+      - "git diff shows nothing under lib/ or web/ modified by this requirement"
+      - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement. A client evaluator that finds the grammar lacking must report that as a finding, never close the gap by extending expr.ex or by adding the missing capability on the client side only -- the second is worse, because it passes the corpus while silently making this client incompatible with the other two"
+    depends_on: [REQ-290, REQ-292, REQ-293]

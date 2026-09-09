@@ -58,8 +58,30 @@ Violating any of these produces a different product, not a shortcut:
 
 1. **One tenant-agnostic build.** No per-tenant code, no per-tenant assets, no tenant
    identifier compiled in.
-2. **No tenant logic on-device in v1.** Every formula and script evaluates server-side.
-   If you find yourself writing an expression evaluator, stop.
+2. **No tenant *script* on-device — but declarative field logic is in scope.**
+   **Amended 2026-09-08** by `docs/migration/decisions/0020-frontend-architecture.md`
+   clause **D1a**. This constraint previously read *"No tenant logic on-device in v1.
+   Every formula and script evaluates server-side. If you find yourself writing an
+   expression evaluator, stop."* That was written before D1a and contradicted `MOB-4`,
+   a MUST in `docs/mobile/requirements.md` requiring the form renderer to support a
+   `computed` field type — which is client-evaluated logic by definition, and which an
+   offline device has no server to ask. What the constraint now says:
+
+   - **In scope:** `visible_when`, `computed` fields and cross-field validation,
+     expressed in the **`Letflow.Engine.Expr` grammar** — a pure, total, effect-free
+     CEL-subset evaluator that already exists for gateway conditions. This is what
+     makes a cached form fillable with no server reachable, which is D1a's whole
+     purpose. Implementing a Dart evaluator for *that grammar* is `REQ-294`, and is
+     expected work, not a violation.
+   - **Still forbidden, unchanged:** any *general scripting runtime* on-device — Lua,
+     JS, WASM, anything Turing-complete or needing a sandbox. If you find yourself
+     writing **that**, stop. `0014` keeps the scripting runtime server-side.
+   - **The client has no authority.** Evaluate for interactivity; the server
+     re-evaluates on submit and wins. A `computed` value you send is an input to be
+     checked, never a value to be trusted.
+   - **One grammar, never extended locally.** Your evaluator must pass the shared
+     conformance corpus. An expression you cannot evaluate is a `stale-version` case
+     (one of `MOB-4`'s six states) — fail loudly, never skip the field or guess.
 3. **Online-first, read-through cache.** `MOB-8` explicitly defers offline *writes*,
    push invalidation, and an on-device form builder out of v1. An offline cache grows an
    offline write queue one reasonable commit at a time — that is what `MOB-8` exists to

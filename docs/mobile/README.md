@@ -50,9 +50,13 @@ itself; that expansion happens when S4 lands.
 The mobile app is **a generic interpreter of server-delivered definitions**, on
 exactly the same principle as the React SPA in `web/`. One tenant-agnostic build
 serves every tenant. It ships renderers that operate over JSON definitions
-fetched at runtime, and it bundles no per-tenant code or assets. In v1 it
-executes **no tenant logic on-device** — every formula and script evaluates
-server-side, identically to the SPA.
+fetched at runtime, and it bundles no per-tenant code or assets. It executes
+**no tenant script on-device** — no Lua, JS or WASM runtime. Declarative field
+logic in the platform's own `Letflow.Engine.Expr` grammar does evaluate
+on-device, identically to the SPA, with the server re-evaluating on submit and
+winning (see `../migration/decisions/0020-frontend-architecture.md` clause D1a,
+2026-09-09; this paragraph previously said all evaluation was server-side, which
+`MOB-3`'s airplane-mode requirement makes impossible).
 
 That single constraint is what makes the tier affordable: it consumes the same
 server contracts the SPA already needs, so it adds one client, not one platform.

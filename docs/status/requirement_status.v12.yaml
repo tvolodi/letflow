@@ -596,3 +596,75 @@ history:
       either deferral, or registering REQ-290 in the queue, is left to
       ORCH's own routing decision, not resolved here. docs/requirements.yaml
       flipped in_progress -> done.
+  - req: REQ-295
+    event: started
+    agent: ORCH
+    at: "2026-09-09T18:03:52Z"
+    note: >
+      REQ-295..REQ-302 filed and registered as one batch (WF-01) for
+      docs/migration/decisions/0023-entity-storage-hybrid.md, the entity
+      storage decision from commit dceaa87a: per-entity-type tables with
+      a hybrid promoted-column/blob shape, replacing the single shared
+      entity_record_latest JSONB table REQ-225..231 shipped. Merged as
+      afe964bf (PR #1166). Queue task ids 564-571, GH#1158-#1165;
+      docs/requirements.yaml impl_order carries the mapping. This event
+      is filed against REQ-295 as the batch's lead entry; all eight
+      entries are `pending` and none has been worked.
+      SHAPE, and the reason it is not a flat list: 0023 names one open
+      question -- how a promotion's DDL executes per tenant in a
+      humanless pipeline -- and declares it blocking ("No implementation
+      requirement may be filed against this record until it is
+      answered"). The batch is therefore gated. REQ-295 (0024, the
+      DDL-execution answer) and REQ-302 (0025, ON DELETE policy and
+      localized-text plain-text-vs-tsvector) are design roots with no
+      dependencies; REQ-296..301 sit behind the roots each actually
+      needs. Verified by transitive closure rather than asserted:
+      REQ-298 reaches {295,296,297,302}, REQ-301 reaches
+      {295,296,297,299,302}. The queue enforces it independently --
+      every implementation task returned eligible:false with blocked_by
+      naming exactly its blockers.
+      REQ-VALIDATOR gated the batch FAIL twice before passing, both
+      substantive. Round 1: six entries missing decision 0022's
+      mandatory bucket declaration, and REQ-298/REQ-301 each left a
+      consequential design decision (FK ON DELETE semantics; tsvector
+      vs. plain-text columns) to be made by an implementing agent
+      mid-run; it also repaired a YAML corruption where the first
+      append had been spliced into the middle of REQ-294, truncating
+      it. Round 2: the fix had relocated those two decisions into
+      REQ-295 rather than resolving them, making REQ-295 itself
+      oversized -- sub-questions 1-4 compose with each other, ON DELETE
+      and tsvector are independent of them and of each other. Resolved
+      by splitting them into REQ-302 as a parallel root. Supporting
+      textual point, accepted: 0023's "its own SECURITY-REVIEWER and
+      REVIEWER gates" sentence is scoped to the DDL-execution question
+      alone, so it never required those two answers to share one record
+      or one review pass. REQ-295 and REQ-302 write separate records so
+      two parallel CODE-DESIGNER sessions never write the same file;
+      editing 0023's own "Open question" section is REQ-295's alone.
+      TWO CI GUARDS TRIPPED, both corpus-coupled, both test-data-only
+      fixes with detector logic unchanged. (1) T-LIVE-ACTIVITY: filing
+      the first-ever S10 entries made S10 present-but-inactive, the
+      same transition S5/S6/S7 each made on expansion, since `pending`
+      does not confer activity. Re-derived with
+      CheckDeferralStaleness.audit/1 as that test's own comment
+      instructs rather than guessed: active unchanged, inactive [] ->
+      ["S10"], 0 violations. (2) Req207VortexTest AC4 Signal 2: five of
+      the new titles match its word-bounded entity/entities pattern.
+      Signal 3 -- the real gate -- was re-verified live before
+      extending the allowlist: no lib/letflow/entities.ex, no
+      entity_query.ex, no entity router module, and both
+      Letflow.Routers.{Entities,EntityQuery} still in router.ex's
+      reserved/unbuilt table, so BLOCKED_ON_DEPENDENCY genuinely still
+      holds. Every other test reading the live corpus was swept in the
+      same pass rather than discovered serially in CI (240 passed).
+      SCOPE NOTE: S10 gap 13 (SolutionPack's pack_document carries no
+      entity_definitions or form-schema section) is deliberately NOT
+      filed here. It was found by the same architecture review but is
+      not a consequence of 0023, and it blocks bucket A more
+      fundamentally than gaps 10-11 do -- it remains unowned.
+      CONCURRENCY: a sibling session merged REQ-289 (#1157) mid-run,
+      requiring a rebase; the guards were re-derived and re-run against
+      the merged corpus rather than assumed to survive it. Queue task
+      564 (REQ-295) was claimed by letflow-orch within a minute of
+      registration and is left locked -- that is the queue working as
+      designed for multi-host coordination, not a stale lock.

@@ -22,17 +22,28 @@ the result of verifying against **Letflow's** backend on 2026-08-21 instead. See
 The platform MUST provide a mobile application (`apps/mobile/`) that is a
 generic interpreter of server-delivered definitions. It MUST ship a single
 tenant-agnostic build with no per-tenant code or assets, and MUST execute no
-tenant-authored formula or script logic on-device in v1 — all evaluation
-server-side, identical to the SPA.
+tenant-authored **script** on-device — no Lua, JS or WASM runtime.
+
+**Amended 2026-09-09** by `../migration/decisions/0020-frontend-architecture.md`
+clause **D1a**. This requirement previously said "no tenant-authored formula or
+script logic on-device in v1 — all evaluation server-side". Declarative field
+logic in the `Letflow.Engine.Expr` grammar (`visible_when`, `computed`,
+cross-field validation) is now **in scope on-device**, because `MOB-3` requires
+airplane-mode launch and an offline device has no server to evaluate against.
+A general scripting runtime remains out — see `MOB-4` for the full statement.
 
 **Acceptance criteria**
 
 - A single build artifact authenticates against and renders for at least two
   distinct tenants without a rebuild.
-- Static inspection of the bundle finds no tenant identifiers, no formula
-  evaluator, and no script runtime compiled in.
-- All computed-field and visibility evaluation traffic resolves to the server
-  formula endpoint — verifiable from a request log, not from code reading.
+- Static inspection of the bundle finds no tenant identifiers and **no script
+  runtime** (Lua/JS/WASM) compiled in. An evaluator for the platform's own
+  `Letflow.Engine.Expr` grammar IS expected in the bundle (`REQ-294`) and is not
+  a violation — it is a closed, total, effect-free grammar, not a script runtime.
+- Every `computed` and `visible_when` result the client produces is
+  **re-evaluated server-side on submit**, and the server's value wins —
+  verifiable from a request log. The client's evaluation carries no authority;
+  it exists so a cached form stays usable offline.
 
 ---
 
@@ -110,6 +121,36 @@ stale-version, validation-error, 429-backpressure.**
 The six states are not a UI-polish item. They are the mechanism by which a
 client that has drifted from the server's definition format fails **loudly**
 instead of mis-rendering — see [`architecture.md`](architecture.md) §5.
+
+**What evaluates `computed` (added 2026-09-08).** This requirement listed
+`computed` among the mandatory field types without saying what evaluates it, and
+that silence was load-bearing: the first draft of
+[`../migration/decisions/0020-frontend-architecture.md`](../migration/decisions/0020-frontend-architecture.md)
+rejected all client-side expression evaluation, which would have made this
+criterion unimplementable. That record's clause **D1a** resolves it in this
+requirement's favour and supplies the missing half:
+
+- `computed` fields, `visible_when` conditions and cross-field validation are
+  expressed in the **`Letflow.Engine.Expr` grammar** — the pure CEL-subset
+  evaluator already used for gateway conditions. Not a new language, and not a
+  general scripting runtime, which D1a still rejects for every client.
+- The client evaluates them for **interactivity only, with no authority**. The
+  server re-evaluates on submit and its answer wins. A computed value arriving
+  from a client is never trusted.
+- All implementations — Elixir, TypeScript, Dart — must pass one
+  **language-neutral conformance corpus** exported from `Letflow.Engine.Expr`'s
+  own tests. Three hand-written evaluators with no shared corpus drift, and the
+  drift surfaces as a wrong number on a customer's form.
+- An expression this client cannot evaluate is a **`stale-version`** case — one
+  of the six states above. It fails loudly; it never silently skips the field or
+  guesses a value.
+
+This is what makes offline form population work: a cached form stays fillable
+with no server reachable. It does **not** make it submittable offline — MOB-8's
+exclusion of offline writes is unchanged, because a write queue needs a conflict
+model that D1a does not supply.
+
+---
 
 ---
 

@@ -15,8 +15,13 @@ identical in principle to the React SPA in `web/`.
 - The app ships **renderers** that operate over JSON definitions fetched at
   runtime.
 - **No per-tenant code or assets are bundled.**
-- In v1 the app executes **no tenant logic on-device**. All formula and script
-  evaluation stays server-side, exactly as the SPA does.
+- The app executes **no tenant script on-device** — no Lua, JS or WASM runtime.
+  Declarative field logic (`visible_when`, `computed`, cross-field validation) in
+  the platform's own `Letflow.Engine.Expr` grammar IS evaluated on-device, exactly
+  as the SPA does, with the server re-evaluating on submit and winning. **Amended
+  2026-09-09** by [`../migration/decisions/0020-frontend-architecture.md`](../migration/decisions/0020-frontend-architecture.md)
+  clause **D1a**; this bullet previously read "no tenant logic on-device" with all
+  evaluation server-side, which `MOB-3`'s airplane-mode launch makes impossible.
 
 This reuse of principle is what makes the tier cheap: it consumes the *same*
 server contracts the SPA already exposes — definition fetch, form/list/process/
@@ -87,6 +92,21 @@ Explicitly **out** of v1, and recorded as deferred rather than forgotten:
 
 Keeping these out is what makes the tier *additive*. Each of them, added, would
 pull a new subsystem into the backend rather than a new screen into the app.
+
+**Offline *form population* is in; offline *submission* is out (2026-09-08).**
+The line above is easy to misread as "nothing works offline but reading," so
+state it precisely. Under
+[`../migration/decisions/0020-frontend-architecture.md`](../migration/decisions/0020-frontend-architecture.md)
+clause **D1a**, a cached form is **fillable** with no server reachable: its
+`computed` fields recompute, its `visible_when` conditions resolve, and its
+cross-field validation runs, all evaluated on-device in the
+`Letflow.Engine.Expr` grammar (MOB-4). What stays out of v1 is the **write
+queue** — the user still cannot submit until connectivity returns.
+
+The distinction is not arbitrary. Evaluating a pure expression against local
+data needs no conflict model; queueing a write does. D1a supplies the first and
+deliberately not the second, so this section's exclusion of offline writes
+stands unchanged.
 
 ## 5. Relationship to `web/`
 

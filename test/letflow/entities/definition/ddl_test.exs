@@ -137,6 +137,57 @@ defmodule Letflow.Entities.Definition.DDLTest do
       assert sql =~ ~s|CHECK ("status" IN ('active', 'inactive'))|
     end
 
+    test "an enum value containing a single quote is escaped by doubling it in the CHECK constraint" do
+      # Defence-in-depth check (flagged by SECURITY-REVIEWER): enum_values are
+      # free text from the definition document, not identifiers -- they are
+      # SQL *string literals*, escaped by doubling embedded `'` characters
+      # (`enum_literal/1`), not by the identifier allowlist regex. This
+      # confirms the escaping actually runs rather than only being correct
+      # by inspection.
+      definition = %{
+        name: "widget2",
+        display_name: "Widget2",
+        fields: [
+          %{
+            name: "status",
+            type: :enum,
+            enum_values: ["it's active", "inactive"],
+            queried: true
+          }
+        ]
+      }
+
+      assert {:ok, sql} = DDL.generate_table_ddl(definition, "widget2_table")
+      assert sql =~ ~s|CHECK ("status" IN ('it''s active', 'inactive'))|
+      refute sql =~ "it's active"
+    end
+
+    test "non-integer decimal_precision/decimal_scale falls back to bare numeric" do
+      # Defence-in-depth check (flagged by SECURITY-REVIEWER): decimal_pg_type/1
+      # guards with `is_integer/1` on both fields -- a non-integer value (e.g.
+      # a string, from a malformed-but-somehow-past-Validator document) must
+      # fall back to bare `numeric`, not be interpolated into the SQL text
+      # unchecked.
+      assert {:ok, "numeric"} =
+               DDL.field_type_to_pg_type(%{
+                 type: :decimal,
+                 decimal_precision: "10",
+                 decimal_scale: 2
+               })
+
+      assert {:ok, "numeric"} =
+               DDL.field_type_to_pg_type(%{
+                 type: :decimal,
+                 decimal_precision: 10,
+                 decimal_scale: "2"
+               })
+
+      assert_column_type_in_ddl(
+        %{name: "d2", type: :decimal, decimal_precision: "10", decimal_scale: 2, queried: true},
+        "numeric"
+      )
+    end
+
     defp assert_column_type_in_ddl(field, expected_pg_type) do
       definition = %{
         name: "typetest",

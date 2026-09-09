@@ -993,6 +993,7 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # non-vacuous, and would catch a deferral that merely stopped being
       # counted.
       assert Enum.all?(result.deferrals, &(&1.verdict == :legitimate))
+
       assert Enum.sort(Enum.map(result.deferrals, & &1.id)) == [
                "REQ-223",
                "REQ-224",

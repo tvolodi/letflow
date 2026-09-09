@@ -42,6 +42,14 @@ function parseField(name: string, schema: Record<string, unknown>): TaskFormFiel
     widget: schema.widget as 'textarea' | 'code-editor' | 'rich-text' | undefined,
   }
 
+  // REQ-284 — read the closed `x-ui` render-hint object off the raw schema.
+  // Additive: does not change parsing of any existing field/property.
+  const xUi = schema['x-ui'] as Record<string, unknown> | undefined
+  if (xUi) {
+    field.xUiWidget = xUi.widget as string | undefined
+    field.xUiMask = xUi.mask as string | undefined
+  }
+
   // Type-specific constraints
   if (type === 'string') {
     field.minLength = schema.minLength as number | undefined

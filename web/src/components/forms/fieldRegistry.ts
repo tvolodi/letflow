@@ -1,9 +1,11 @@
-/** fieldRegistry — GRD-UI-07 (CMP-UI-05 contract)
+/** fieldRegistry — GRD-UI-07 (CMP-UI-05 contract), keyed by x-ui.widget (REQ-284)
  *
- *  Maps a custom field type to a renderer that produces the input element
- *  WITH the ARIA attributes the FieldFactory will set. FieldFactory looks
- *  up `fieldRegistry.get(fieldDef.type)`; on miss it falls through to
- *  `defaultBuiltinRenderer` (the existing renderFormField switch).
+ *  Maps a closed `x-ui.widget` name (docs/frontend/x-ui-widget-vocabulary.md)
+ *  to a renderer that produces the input element WITH the ARIA attributes
+ *  the FieldFactory will set. FieldFactory looks up
+ *  `fieldRegistry.get(fieldDef.xUiWidget)`; on miss (absent or unrecognised
+ *  name) it falls through to `defaultBuiltinRenderer` (the existing
+ *  renderFormField switch, keyed by the field's own JSON-Schema type).
  */
 
 import type { ReactNode } from 'react'

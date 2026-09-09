@@ -116,4 +116,37 @@ describe('BrandingProvider', () => {
     })
     expect((window as unknown as { __pwned2?: boolean }).__pwned2).toBeUndefined()
   })
+
+  it('AC1 (through the real provider wiring): a tenant brand colour differing from the tokens.css default resolves as the computed value of --color-brand-600 on the document root', async () => {
+    // Named CSS colour, not a hex/rgb/hsl literal (the literal-colour guard
+    // bans those outside tokens.css) — clearly distinct from tokens.css's
+    // --color-brand-600 default.
+    const tenantBrandColor = 'mediumspringgreen'
+
+    await renderWithFreshProvider(() =>
+      Promise.resolve({
+        oidc_authority: 'http://example.invalid/realm',
+        client_id: 'letflow-web',
+        branding: {
+          app_name: 'Letflow',
+          logo_url: null,
+          brand_colors: { primary: tenantBrandColor },
+        },
+      }),
+    )
+
+    // Wait for the provider's context value to resolve, proving the effect ran.
+    await waitFor(() => {
+      expect(screen.getByTestId('probe-app-name')).toHaveTextContent('Letflow')
+    })
+
+    // The real assertion: the value that WON on the document root after going
+    // through BrandingProvider's real useEffect -> applyBrandingColors wiring
+    // (not a direct applyBrandingColors call) is the tenant's value, not the
+    // tokens.css default (which is not this named colour).
+    const resolved = getComputedStyle(document.documentElement)
+      .getPropertyValue('--color-brand-600')
+      .trim()
+    expect(resolved).toBe(tenantBrandColor)
+  })
 })

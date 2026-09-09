@@ -60,6 +60,11 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
   --color-success:       #40c057;
   --color-success-dark:  #2f9e44;
 
+  /* Success-state border addition (REQ-276 addendum, mirrors the
+     REQ-144 --color-error-border / --color-warning-border pattern —
+     no border accent existed yet for success banners) */
+  --color-success-border: #86efac;  /* green-300; border accent for success alert blocks */
+
   --color-warning-light: #fff3bf;
   --color-warning:       #fcc419;
   --color-warning-dark:  #e67700;

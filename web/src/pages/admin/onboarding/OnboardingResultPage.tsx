@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
+import { Button } from '@/components/ui/Button'
 import {
   getOnboardingByHostname,
   OnboardingApiError,
@@ -53,7 +54,7 @@ const tdLabelStyle: React.CSSProperties = {
   padding: '.45rem .75rem .45rem 0',
   fontWeight: 600,
   fontSize: '.87rem',
-  color: '#374151',
+  color: 'var(--text-primary)',
   verticalAlign: 'top',
   whiteSpace: 'nowrap',
   width: '160px',
@@ -62,19 +63,8 @@ const tdLabelStyle: React.CSSProperties = {
 const tdValueStyle: React.CSSProperties = {
   padding: '.45rem 0',
   fontSize: '.87rem',
-  color: '#1e293b',
+  color: 'var(--text-primary)',
   wordBreak: 'break-all',
-}
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: '.5rem 1.2rem',
-  background: '#1d4ed8',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '6px',
-  fontWeight: 600,
-  fontSize: '.9rem',
-  cursor: 'pointer',
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -142,7 +132,7 @@ export default function OnboardingResultPage() {
 
   if (view.phase === 'loading') {
     return (
-      <div style={{ padding: '2rem', color: '#475569' }}>
+      <div style={{ padding: '2rem', color: 'var(--text-secondary)' }}>
         Restoring onboarding state…
       </div>
     )
@@ -152,18 +142,21 @@ export default function OnboardingResultPage() {
     return (
       <div style={{ padding: '2rem', maxWidth: '520px' }}>
         <h2 style={{ margin: '0 0 1rem 0' }}>Could not restore onboarding state</h2>
-        <p style={{ color: '#64748b', marginBottom: '1.5rem' }}>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
           The onboarding record for this page could not be retrieved. The saga may have failed, or the URL may be invalid.
         </p>
+        {/* Navigational CTA styled as a button -- kept as Link (not Button, which
+            has no href/anchor semantics) so browser features (open-in-new-tab,
+            middle-click) keep working. */}
         <Link
           to="/admin/onboarding/new"
           style={{
             display: 'inline-block',
             padding: '.5rem 1.2rem',
-            background: '#1d4ed8',
-            color: '#fff',
+            background: 'var(--interactive-primary)',
+            color: 'var(--text-inverse)',
             textDecoration: 'none',
-            borderRadius: '6px',
+            borderRadius: 'var(--radius-sm)',
             fontWeight: 600,
             fontSize: '.9rem',
           }}
@@ -181,10 +174,10 @@ export default function OnboardingResultPage() {
           style={{
             marginBottom: '1.5rem',
             padding: '.75rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #86efac',
-            background: '#f0fdf4',
-            color: '#166534',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-success-border)',
+            background: 'var(--color-success-tint)',
+            color: 'var(--color-success-dark)',
             fontWeight: 600,
           }}
         >
@@ -202,7 +195,7 @@ export default function OnboardingResultPage() {
             <tr>
               <td style={tdLabelStyle}>OIDC Authority</td>
               <td style={tdValueStyle}>
-                <a href={view.result.oidc_authority} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>
+                <a href={view.result.oidc_authority} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--interactive-primary)' }}>
                   {view.result.oidc_authority}
                 </a>
               </td>
@@ -217,16 +210,22 @@ export default function OnboardingResultPage() {
         </table>
 
         {view.result.slug && (
+          // Navigational CTA to a per-tenant hostname outside the SPA's own
+          // router -- kept as a plain <a>, not Button, for the same reason
+          // as "Start over" above. Colour consolidated onto the same
+          // --interactive-primary token as the other CTAs on this page
+          // rather than reusing --color-avatar-teal, which tokens.css
+          // reserves explicitly for actor-avatar backgrounds only.
           <a
             href={`${window.location.origin}/?realm=${view.result.slug}`}
             style={{
               display: 'inline-block',
               marginBottom: '1rem',
               padding: '.5rem 1.2rem',
-              background: '#0f766e',
-              color: '#fff',
+              background: 'var(--interactive-primary)',
+              color: 'var(--text-inverse)',
               textDecoration: 'none',
-              borderRadius: '6px',
+              borderRadius: 'var(--radius-sm)',
               fontWeight: 600,
               fontSize: '.9rem',
             }}
@@ -235,12 +234,9 @@ export default function OnboardingResultPage() {
           </a>
         )}
 
-        <button
-          onClick={() => navigate('/admin/users')}
-          style={primaryButtonStyle}
-        >
+        <Button variant="primary" size="md" onClick={() => navigate('/admin/users')}>
           Back to Admin
-        </button>
+        </Button>
       </div>
     )
   }
@@ -255,26 +251,27 @@ export default function OnboardingResultPage() {
         style={{
           marginBottom: '1.5rem',
           padding: '.75rem 1rem',
-          borderRadius: '6px',
-          border: '1px solid #fca5a5',
-          background: '#fff1f2',
-          color: '#9f1239',
+          borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--color-error-border)',
+          background: 'var(--color-error-tint)',
+          color: 'var(--color-error-dark)',
         }}
       >
         <strong>Onboarding failed.</strong>
         <p style={{ margin: '.5rem 0 0 0', fontSize: '.88rem' }}>{failureReason}</p>
       </div>
 
-      <button
+      <Button
+        variant="primary"
+        size="md"
         onClick={() => {
           navigate('/admin/onboarding/new', {
             state: view.formValues ? { prefill: view.formValues } : undefined,
           })
         }}
-        style={primaryButtonStyle}
       >
         Try Again
-      </button>
+      </Button>
     </div>
   )
 }

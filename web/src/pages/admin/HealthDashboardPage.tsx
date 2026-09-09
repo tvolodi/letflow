@@ -4,6 +4,7 @@ import { healthReady } from '@/api/health'
 import { queryKeys } from '@/api/queryKeys'
 import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
 // NOTE (ISS-0532): this page used to render per-subsystem `database`/
@@ -34,37 +35,34 @@ export default function HealthDashboardPage() {
 
   const rendererState: RendererState = isLoading ? 'loading' : isError ? classifyError(error) : 'success'
   const livenessLabel = isLive ? 'LIVE' : 'UNREACHABLE'
-  const livenessColor = isLive ? '#16a34a' : '#dc2626'
+  const livenessColor = isLive ? 'var(--color-success-dark)' : 'var(--color-error-dark)'
 
   return (
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '1.25rem' }}>
         <h2 style={{ margin: 0 }}>Health</h2>
         {dataUpdatedAt > 0 && (
-          <span style={{ fontSize: '.8rem', color: '#94a3b8' }}>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
             Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
           </span>
         )}
-        {isFetching && <span style={{ fontSize: '.8rem', color: '#0369a1' }}>Refreshing…</span>}
-        <button
-          onClick={() => {
-            void refetch()
-          }}
-          style={{ marginLeft: 'auto', padding: '.35rem .7rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff', cursor: 'pointer', fontSize: '.82rem' }}
-        >
-          Refresh now
-        </button>
+        {isFetching && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-dark)' }}>Refreshing…</span>}
+        <span style={{ marginLeft: 'auto' }}>
+          <Button variant="secondary" size="sm" onClick={() => { void refetch() }}>
+            Refresh now
+          </Button>
+        </span>
       </div>
 
       <QueryStateBoundary state={rendererState} onRetry={() => { void refetch() }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1.25rem' }}>
           <span
             data-testid="liveness-badge"
-            style={{ fontWeight: 700, fontSize: '1.2rem', color: livenessColor }}
+            style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: livenessColor }}
           >
             {livenessLabel}
           </span>
-          <span style={{ color: '#64748b', fontSize: '.9rem' }}>Backend liveness (GET /health)</span>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>Backend liveness (GET /health)</span>
         </div>
 
         <div
@@ -72,11 +70,11 @@ export default function HealthDashboardPage() {
           role="status"
           style={{
             padding: '.9rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            background: '#f8fafc',
-            color: '#475569',
-            fontSize: '.9rem',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border-default)',
+            background: 'var(--surface-page)',
+            color: 'var(--text-secondary)',
+            fontSize: 'var(--text-sm)',
           }}
         >
           Per-subsystem readiness (database, scheduler) is not available yet —

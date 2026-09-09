@@ -8,13 +8,15 @@
  * 502 → warning banner (Keycloak sync failure)
  */
 
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/auth/AuthContext'
 import { tenantsApi } from '@/api/tenants'
 import { queryKeys } from '@/api/queryKeys'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/hooks/useToast'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
@@ -23,9 +25,9 @@ const inputStyle: React.CSSProperties = {
   display: 'block',
   width: '100%',
   padding: '.45rem .65rem',
-  border: '1px solid #cbd5e1',
-  borderRadius: '4px',
-  fontSize: '.9rem',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--text-base)',
   boxSizing: 'border-box',
 }
 
@@ -34,7 +36,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '.3rem',
   fontWeight: 600,
   fontSize: '.87rem',
-  color: '#374151',
+  color: 'var(--text-primary)',
 }
 
 const fieldGroupStyle: React.CSSProperties = {
@@ -44,12 +46,12 @@ const fieldGroupStyle: React.CSSProperties = {
 const readOnlyValueStyle: React.CSSProperties = {
   display: 'block',
   padding: '.45rem .65rem',
-  background: '#f8fafc',
-  border: '1px solid #e2e8f0',
-  borderRadius: '4px',
-  fontSize: '.9rem',
-  color: '#475569',
-  fontFamily: 'monospace',
+  background: 'var(--surface-page)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 'var(--text-base)',
+  color: 'var(--text-secondary)',
+  fontFamily: 'var(--font-mono)',
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -59,6 +61,8 @@ export default function EditTenantPage() {
   const navigate = useNavigate()
   const { slug } = useParams<{ slug: string }>()
   const qc = useQueryClient()
+  const toast = useToast()
+  const formRef = useRef<HTMLFormElement>(null)
 
   const [displayName, setDisplayName] = useState('')
   const [hostname, setHostname] = useState('')
@@ -66,7 +70,6 @@ export default function EditTenantPage() {
   const [initialized, setInitialized] = useState(false)
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [warningBanner, setWarningBanner] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState('')
 
   const tenantQuery = useQuery({
     queryKey: queryKeys.admin.tenantDetail(slug ?? ''),
@@ -94,7 +97,7 @@ export default function EditTenantPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.tenants() })
       qc.invalidateQueries({ queryKey: queryKeys.admin.tenantDetail(slug ?? '') })
-      setSuccessMessage('Saved')
+      toast.success('Saved')
       setTimeout(() => navigate('/admin/tenants'), 800)
     },
     onError: (err: unknown) => {
@@ -115,7 +118,7 @@ export default function EditTenantPage() {
   }
 
   if (!slug) {
-    return <p style={{ padding: '1.5rem', color: '#dc2626' }}>Invalid tenant slug.</p>
+    return <p style={{ padding: '1.5rem', color: 'var(--color-error)' }}>Invalid tenant slug.</p>
   }
 
   const rendererState: RendererState = tenantQuery.isLoading ? 'loading' : tenantQuery.isError ? classifyError(tenantQuery.error) : 'success'
@@ -141,7 +144,6 @@ export default function EditTenantPage() {
     if (!original) return
     setErrorBanner(null)
     setWarningBanner(null)
-    setSuccessMessage('')
 
     // Build diff — only changed fields
     const body: Partial<{ display_name: string; hostname: string; redirect_uris: string[] }> = {}
@@ -158,7 +160,7 @@ export default function EditTenantPage() {
     }
 
     if (Object.keys(body).length === 0) {
-      setSuccessMessage('No changes to save.')
+      toast.warning('No changes to save.')
       return
     }
 
@@ -167,20 +169,11 @@ export default function EditTenantPage() {
 
   return (
     <div data-testid="edit-tenant-page" style={{ padding: '1.5rem', maxWidth: '640px' }}>
-      <button
-        type="button"
-        onClick={() => navigate('/admin/tenants')}
-        style={{
-          marginBottom: '1rem',
-          padding: '.35rem .8rem',
-          border: '1px solid #cbd5e1',
-          borderRadius: '4px',
-          background: '#fff',
-          cursor: 'pointer',
-        }}
-      >
-        ← Back to tenants
-      </button>
+      <span style={{ display: 'inline-block', marginBottom: '1rem' }}>
+        <Button variant="secondary" size="sm" onClick={() => navigate('/admin/tenants')}>
+          ← Back to tenants
+        </Button>
+      </span>
 
       <h2 style={{ margin: '0 0 1.25rem' }}>Edit Tenant</h2>
 
@@ -198,10 +191,10 @@ export default function EditTenantPage() {
           style={{
             marginBottom: '1rem',
             padding: '.75rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #fca5a5',
-            background: '#fff1f2',
-            color: '#9f1239',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-error-border)',
+            background: 'var(--color-error-tint)',
+            color: 'var(--color-error-dark)',
             fontSize: '.88rem',
           }}
         >
@@ -216,10 +209,10 @@ export default function EditTenantPage() {
           style={{
             marginBottom: '1rem',
             padding: '.75rem 1rem',
-            borderRadius: '6px',
-            border: '1px solid #fcd34d',
-            background: '#fffbeb',
-            color: '#92400e',
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--color-warning-border)',
+            background: 'var(--color-warning-tint)',
+            color: 'var(--color-warning-text)',
             fontSize: '.88rem',
           }}
         >
@@ -238,7 +231,7 @@ export default function EditTenantPage() {
         <span data-testid="edit-tenant-realm" style={readOnlyValueStyle}>{original.idp_realm_id}</span>
       </div>
 
-      <form onSubmit={(e) => { void handleSave(e) }} noValidate>
+      <form ref={formRef} onSubmit={(e) => { void handleSave(e) }} noValidate>
         {/* display_name */}
         <div style={fieldGroupStyle}>
           <label style={labelStyle} htmlFor="display_name">Display name</label>
@@ -277,79 +270,33 @@ export default function EditTenantPage() {
                 placeholder="https://app.example.com/callback"
               />
               {redirectUris.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeRedirectUri(idx)}
-                  style={{
-                    padding: '.4rem .7rem',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '4px',
-                    background: '#fff',
-                    cursor: 'pointer',
-                    color: '#dc2626',
-                    fontSize: '.85rem',
-                  }}
-                >
-                  Remove
-                </button>
+                <span data-testid={`edit-tenant-remove-uri-${idx}`}>
+                  <Button variant="danger" size="sm" onClick={() => removeRedirectUri(idx)}>
+                    Remove
+                  </Button>
+                </span>
               )}
             </div>
           ))}
-          <button
-            type="button"
-            onClick={addRedirectUri}
-            style={{
-              marginTop: '.25rem',
-              padding: '.35rem .7rem',
-              border: '1px solid #cbd5e1',
-              borderRadius: '4px',
-              background: '#fff',
-              cursor: 'pointer',
-              fontSize: '.82rem',
-            }}
-          >
+          <Button variant="secondary" size="sm" onClick={addRedirectUri}>
             + Add URI
-          </button>
+          </Button>
         </div>
 
         <div style={{ display: 'flex', gap: '.5rem', marginTop: '1.25rem', alignItems: 'center' }}>
-          <button
-            type="submit"
-            data-testid="edit-tenant-save"
-            disabled={patchTenant.isPending}
-            style={{
-              padding: '.45rem 1rem',
-              background: '#16a34a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: patchTenant.isPending ? 'not-allowed' : 'pointer',
-              fontSize: '.9rem',
-              fontWeight: 600,
-              opacity: patchTenant.isPending ? 0.7 : 1,
-            }}
-          >
-            {patchTenant.isPending ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('/admin/tenants')}
-            style={{
-              padding: '.45rem 1rem',
-              border: '1px solid #cbd5e1',
-              borderRadius: '4px',
-              background: '#fff',
-              cursor: 'pointer',
-              fontSize: '.9rem',
-            }}
-          >
+          <span data-testid="edit-tenant-save">
+            <Button
+              variant="primary"
+              size="md"
+              loading={patchTenant.isPending}
+              onClick={() => formRef.current?.requestSubmit()}
+            >
+              {patchTenant.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </span>
+          <Button variant="secondary" size="md" onClick={() => navigate('/admin/tenants')}>
             Cancel
-          </button>
-          {successMessage && (
-            <span data-testid="edit-tenant-success" style={{ color: '#166534', fontSize: '.88rem' }}>
-              {successMessage}
-            </span>
-          )}
+          </Button>
         </div>
       </form>
       </>)}

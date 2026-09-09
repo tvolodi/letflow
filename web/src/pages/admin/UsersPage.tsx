@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDate } from '@/i18n/format'
 
 // NOTE: user active/inactive is rendered as a tokenized custom badge, not
 // StatusBadge (REQ-272) -- StatusBadgeDomain has no "user" member (only
@@ -88,7 +89,7 @@ export default function UsersPage() {
         </span>
       ),
     },
-    { id: 'created', header: 'Created', accessor: (u) => new Date(u.created_at).toLocaleDateString('en-US') },
+    { id: 'created', header: 'Created', accessor: (u) => formatDate(u.created_at) },
   ]
 
   return (

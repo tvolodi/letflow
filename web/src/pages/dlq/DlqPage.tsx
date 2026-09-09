@@ -7,6 +7,7 @@ import { useAuth } from '@/auth/AuthContext'
 import type { DlqEntry } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { formatDateTime } from '@/i18n/format'
 
 const STATUS_COLOR: Record<string, string> = {
   pending:   '#f59e0b',
@@ -108,7 +109,7 @@ function toPrettyJson(value: unknown): string {
 
 function toShortDate(value: string | undefined): string {
   if (!value) return '—'
-  return new Date(value).toLocaleString()
+  return formatDateTime(value)
 }
 
 function toRowTestId(id: string): string {

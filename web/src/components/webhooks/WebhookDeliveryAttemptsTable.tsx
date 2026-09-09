@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { WebhookDeliveryAttempt } from '@/types/api'
+import { formatDateTime } from '@/i18n/format'
 
 interface WebhookDeliveryAttemptsTableProps {
   attempts: WebhookDeliveryAttempt[]
@@ -8,7 +9,7 @@ interface WebhookDeliveryAttemptsTableProps {
 function formatTimestamp(value: string): string {
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString()
+  return formatDateTime(parsed)
 }
 
 function statusStyles(status: WebhookDeliveryAttempt['status']): { badge: CSSProperties; row: CSSProperties } {

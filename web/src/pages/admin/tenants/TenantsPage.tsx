@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { formatDate } from '@/i18n/format'
 import type { Tenant } from '@/api/tenants'
 
 // NOTE: the pre-existing full-row yellow tint for tenant_type === 'test'
@@ -140,7 +141,7 @@ export default function TenantsPage() {
         </span>
       ),
     },
-    { id: 'created', header: 'Created', accessor: (row) => new Date(row.created_at).toLocaleDateString() },
+    { id: 'created', header: 'Created', accessor: (row) => formatDate(row.created_at) },
     {
       id: 'actions',
       header: 'Actions',

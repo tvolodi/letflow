@@ -24,6 +24,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { useToast } from '@/hooks/useToast'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDateTime as formatLocaleDateTime, formatTime as formatLocaleTime } from '@/i18n/format'
 
 const CANCEL_ROLES = ['PROCESS_OPERATOR', 'PROCESS_ADMIN', 'PLATFORM_ADMIN']
 
@@ -43,12 +44,12 @@ interface PendingTaskRow {
 
 function formatDateTime(value: string | undefined): string {
   if (!value) return '—'
-  return new Date(value).toLocaleString()
+  return formatLocaleDateTime(value)
 }
 
 function toRefreshLabel(value: string | null): string {
   if (!value) return 'Not yet refreshed'
-  return new Date(value).toLocaleTimeString()
+  return formatLocaleTime(value)
 }
 
 function useReadonlyGraph(

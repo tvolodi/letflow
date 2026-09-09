@@ -6,6 +6,7 @@ import {
   getTimelineSecondaryContext,
 } from '@/pages/instances/timelineUtils'
 import type { TimelineEntry } from '@/types/api'
+import { formatDateTime } from '@/i18n/format'
 
 interface TimelineFeedItemProps {
   entry: TimelineEntry
@@ -15,7 +16,7 @@ export function TimelineFeedItem({ entry }: TimelineFeedItemProps) {
   const actorDisplay = getTimelineActorDisplayName(entry.actor_display_name)
   const secondaryContext = getTimelineSecondaryContext(entry)
   const dotColor = getTimelineDotColour(entry.event_type)
-  const absoluteTime = new Date(entry.timestamp).toLocaleString()
+  const absoluteTime = formatDateTime(entry.timestamp)
 
   return (
     <article style={{ position: 'relative', display: 'flex', gap: '.75rem' }}>

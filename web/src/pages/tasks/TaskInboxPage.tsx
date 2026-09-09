@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDate, formatDateTime, formatTime } from '@/i18n/format'
 
 // NOTE: the task list below keeps its hand-rolled card-row markup rather than
 // DataTable (REQ-274) -- it was never a <table> to begin with (no header
@@ -220,7 +221,7 @@ export default function TaskInboxPage() {
                     {task.assignee_ref && <> · Assigned to: <span data-testid="task-assignee">{task.assignee_ref}</span></>}
                   </div>
                   <div style={{ fontSize: '.8rem', color: 'var(--text-disabled)', marginTop: '.25rem' }}>
-                    {new Date(task.created_at).toLocaleDateString()} {new Date(task.created_at).toLocaleTimeString()}
+                    {formatDate(task.created_at)} {formatTime(task.created_at)}
                   </div>
                 </div>
                 <div data-testid="task-status">
@@ -315,7 +316,7 @@ function TaskDetailPanel({ taskId, onClose }: { taskId: string; onClose: () => v
             </p>
           )}
           <p style={{ margin: '.25rem 0' }}>
-            <strong>Created:</strong> {new Date(task.created_at).toLocaleString()}
+            <strong>Created:</strong> {formatDateTime(task.created_at)}
           </p>
         </div>
       </div>

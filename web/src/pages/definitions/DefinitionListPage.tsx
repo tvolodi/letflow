@@ -10,6 +10,7 @@ import type { DefinitionStatus, ProcessDefinition, DefinitionGraph } from '@/typ
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
+import { formatDate } from '@/i18n/format'
 
 const STATUS_BADGE: Record<string, string> = {
   DRAFT:      '#f59e0b',
@@ -273,7 +274,7 @@ export default function DefinitionListPage() {
                     </span>
                   </td>
                   <td style={{ padding: '.6rem .8rem', color: '#94a3b8', fontSize: '.8rem' }}>
-                    {new Date(def.updated_at).toLocaleDateString()}
+                    {formatDate(def.updated_at)}
                   </td>
                   <td style={{ padding: '.6rem .8rem', display: 'flex', gap: '.5rem' }}>
                     {def.status === 'DRAFT' && (
@@ -310,7 +311,7 @@ export default function DefinitionListPage() {
                               <div key={v.id} style={{ display: 'flex', gap: '1rem', padding: '.3rem 0', fontSize: '.85rem', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>
                                 <span style={{ fontWeight: 600 }}>{v.version}</span>
                                 <span style={{ color: STATUS_BADGE[v.status] ?? '#374151' }}>{v.status}</span>
-                                <span style={{ color: '#94a3b8' }}>{new Date(v.updated_at).toLocaleDateString()}</span>
+                                <span style={{ color: '#94a3b8' }}>{formatDate(v.updated_at)}</span>
                               </div>
                             ))}
                           </div>

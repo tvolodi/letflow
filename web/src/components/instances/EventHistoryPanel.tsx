@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useInstanceEvents, type EventFilters } from '@/hooks/useInstances'
 import { EventJsonExpandable } from './EventJsonExpandable'
+import { formatDateTime } from '@/i18n/format'
 
 interface EventHistoryPanelProps {
   instanceId: string
@@ -199,7 +200,7 @@ export function EventHistoryPanel({ instanceId }: EventHistoryPanelProps) {
                           : 'system'}
                       </td>
                       <td style={{ padding: '.5rem .75rem', color: 'var(--text-secondary)' }}>
-                        {new Date(event.created_at).toLocaleString()}
+                        {formatDateTime(event.created_at)}
                       </td>
                       <td style={{ padding: '.5rem .75rem', minWidth: '180px' }}>
                         <EventJsonExpandable payload={event.payload ?? {}} />

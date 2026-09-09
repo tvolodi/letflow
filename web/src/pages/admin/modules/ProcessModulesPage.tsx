@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { formatDate, formatDateTime } from '@/i18n/format'
 
 // NOTE: entry.status values (DRAFT/ACTIVE/DEPRECATED) are exactly
 // StatusBadge's "definition" domain table (design-system.md §5.1), so the
@@ -62,7 +63,7 @@ function DetailDrawer({ entry, onClose, onGrant, onRevoke }: DetailDrawerProps) 
       header: 'Receiving Tenant',
       accessor: (s) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{s.receiving_tenant_id}</span>,
     },
-    { id: 'granted_at', header: 'Granted At', accessor: (s) => new Date(s.granted_at).toLocaleDateString() },
+    { id: 'granted_at', header: 'Granted At', accessor: (s) => formatDate(s.granted_at) },
     {
       id: 'actions',
       header: '',
@@ -113,9 +114,9 @@ function DetailDrawer({ entry, onClose, onGrant, onRevoke }: DetailDrawerProps) 
             </pre>
           </dd>
           <dt style={{ color: 'var(--text-secondary)', fontSize: '.85rem' }}>Created</dt>
-          <dd style={{ margin: 0 }}>{new Date(entry.created_at).toLocaleString()}</dd>
+          <dd style={{ margin: 0 }}>{formatDateTime(entry.created_at)}</dd>
           <dt style={{ color: 'var(--text-secondary)', fontSize: '.85rem' }}>Updated</dt>
-          <dd style={{ margin: 0 }}>{new Date(entry.updated_at).toLocaleString()}</dd>
+          <dd style={{ margin: 0 }}>{formatDateTime(entry.updated_at)}</dd>
         </dl>
 
         {/* PLC-04: Cross-tenant visibility management */}

@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
 import { Button } from '@/components/ui/Button'
 import { classifyError, type RendererState } from '@/utils/classifyError'
+import { formatTime } from '@/i18n/format'
 
 // NOTE (ISS-0532): this page used to render per-subsystem `database`/
 // `scheduler` status sourced from `GET /health/ready`, a route the backend
@@ -43,7 +44,7 @@ export default function HealthDashboardPage() {
         <h2 style={{ margin: 0 }}>Health</h2>
         {dataUpdatedAt > 0 && (
           <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-            Updated {new Date(dataUpdatedAt).toLocaleTimeString()}
+            Updated {formatTime(dataUpdatedAt)}
           </span>
         )}
         {isFetching && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-info-dark)' }}>Refreshing…</span>}

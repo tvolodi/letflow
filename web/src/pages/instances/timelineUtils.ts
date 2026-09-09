@@ -1,4 +1,5 @@
 import type { TimelineEntry } from '@/types/api'
+import { formatDate } from '@/i18n/format'
 
 export function getTimelineActorDisplayName(actorDisplayName: string | null | undefined): string {
   const normalized = (actorDisplayName ?? '').trim()
@@ -52,5 +53,5 @@ export function getRelativeTime(isoTimestamp: string): string {
   const diffDays = Math.floor(diffHours / 24)
   if (diffDays < 7) return `${diffDays} days ago`
 
-  return ts.toLocaleDateString()
+  return formatDate(ts)
 }

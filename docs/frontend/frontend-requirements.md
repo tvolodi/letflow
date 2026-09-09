@@ -62,7 +62,9 @@ The frontend has no business logic of its own. All data mutations go through the
 
 ---
 
-## Locale policy (`REQ-127`, 2026-08-22)
+## Locale policy (`REQ-127`/`REQ-285`, 2026-08-22/2026-09-09)
+
+### REQ-127's original finding (2026-08-22, kept intact as a dated historical record)
 
 **Finding: there is no locale policy today.** `web/` is effectively English-only
 with unmediated browser-locale date formatting. This was verified by reading
@@ -153,9 +155,63 @@ was under-specified), and by `web/package.json` — the finding below, establish
    is introduced — no such shape exists in `web/src/types/` today, so this
    is new modeling work, not a resolution of an existing gap.
 
-None of the above has been started. This section records the finding, not a
-commitment to do the work — see `docs/requirements.yaml`'s `REQ-127` for the
-investigation that produced it.
+None of the above has been started as of 2026-08-22. This subsection records the
+finding, not a commitment to do the work — see `docs/requirements.yaml`'s `REQ-127`
+for the investigation that produced it. **REQ-285 (below) adopted the work this
+subsection scoped.**
+
+### What REQ-285 adopted (2026-09-09)
+
+**This adoption ships an English-only string catalogue by design. Locale-aware
+date/time formatting and a real fallback chain are live as of REQ-285; translating
+the application's UI strings into any language other than English is explicitly out
+of REQ-285's scope and is a separate, later requirement. An English-only catalogue
+at this point is the intended state, not an unfinished implementation.**
+
+REQ-285 re-ran REQ-127's greps at its own start (2026-09-09) rather than inheriting
+the 2026-08-22 counts, and found they had drifted: **25 grep-matched lines / 26
+actual `.toLocale*()` invocations across 19 files** (down from 25 call sites / 27
+grep-matched lines / 20 files — two `UsersPage.tsx` files from 2026-08-22 had since
+been consolidated into one). All 26 invocations were converted to locale-aware
+formatting; none remain bare. The one hardcoded-locale call,
+`src/pages/admin/UsersPage.tsx` (`.toLocaleDateString('en-US')`), no longer
+hardcodes a locale.
+
+- **Library: `react-intl`.** Chosen over `i18next`/`react-i18next` — see
+  `docs/migration/decisions/0021-web-i18n-library.md` for the full rationale.
+  Decisive factor: most of the 26 call sites are plain module-scope helper
+  functions, not JSX-inline expressions, and react-intl's imperative
+  `createIntl()`/`IntlShape` API reaches them without restructuring their call
+  signatures, unlike a hook-only API. Added to `web/package.json` as a runtime
+  dependency (not a devDependency).
+- **Supported locale set — `PLATFORM_SUPPORTED_LOCALES`** (`web/src/i18n/sessionLocale.ts`):
+  a finite, curated set of 10 BCP-47 tags governing date/time formatting locale only
+  (decoupled from UI string translation, which stays English-only per above):
+  `en`, `en-US`, `en-GB`, `es`, `es-ES`, `fr`, `fr-FR`, `de`, `de-DE`, `pt-BR`.
+- **Fallback chain — precedence order**, implemented by `resolveSessionLocale`:
+  1. **Tenant `default_locale`** (when supplied) — wins if it is a member of
+     `PLATFORM_SUPPORTED_LOCALES`. A tenant's own configured default is the most
+     specific signal available and should win over an individual visitor's browser
+     setting when both are known.
+  2. **Browser preference** (`navigator.languages`, or `navigator.language` if
+     unavailable) — the first entry, in the browser's own preference order, that is
+     a member of `PLATFORM_SUPPORTED_LOCALES`.
+  3. **`FALLBACK_LOCALE`** (`"en"`, deliberately not `"en-US"` — that literal was
+     the defect this adoption removed) — used when neither of the above yields a
+     member.
+- **The tenant-default-supply gap (open, stated explicitly, not silently
+  resolved).** There is currently no path by which the web SPA can learn a
+  tenant's `default_locale`: `GET /api/tenant-config` (REQ-281) deliberately
+  excludes locale data per its own moduledoc's security constraint; only
+  `GET /api/mobile/tenant-config` (REQ-282) serves it, to the mobile tier only,
+  which the web SPA never calls. `resolveSessionLocale`/`setTenantDefaultLocale`
+  are built and fully tested today using an injected test double for the tenant
+  default, but no production call site supplies a real value —
+  `useSessionLocaleStore` bootstraps with `tenantDefaultLocale: null`, so tier 1 of
+  the chain never fires in production today; the app runs on tiers 2–3 until a
+  future requirement extends `GET /api/tenant-config` with a locale field (a
+  security-relevant response-shaping change, same class as REQ-281 itself) and
+  wires the call.
 
 ---
 

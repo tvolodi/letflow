@@ -1,0 +1,54 @@
+# ISS-0558 -- Letflow.Obs.Alerts FIRED->ARMED re-arm branch now clears stale
+# alert_hook_emission_state dedup rows so repeated alerts aren't silently dropped.
+# Final full-suite verification gate before ORCH merge. All commands run for real,
+# foreground, blocking; output quoted below is real, not inferred.
+
+issue: ISS-0558
+branch: feature/WF03-ISS0558-20260909
+
+format_check:
+  command: "mix format --check-formatted"
+  exit_code: 0
+  output: "(no output -- fully formatted)"
+
+compile_check:
+  command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+  exit_code: 0
+  output: "Compiling 231 files (.ex) / Generated letflow app -- 0 warnings, 0 errors"
+
+full_suite:
+  command: "scripts/test_parallel.sh"
+  N: 8
+  combined_result: "3523/3525 passed (3519 tests, 6 properties, 2 failures)"
+  per_partition:
+    - {partition: 1, tests: 564, properties: 0, failures: 0, exit: 0}
+    - {partition: 2, tests: 288, properties: 2, failures: 0, exit: 0}
+    - {partition: 3, tests: 402, properties: 0, failures: 0, exit: 0}
+    - {partition: 4, tests: 467, properties: 4, failures: 0, exit: 0}
+    - {partition: 5, tests: 526, properties: 0, failures: 0, exit: 0}
+    - {partition: 6, tests: 439, properties: 0, failures: 0, exit: 0}
+    - {partition: 7, tests: 418, properties: 0, failures: 0, exit: 0}
+    - {partition: 8, tests: 415, properties: 0, failures: 2, exit: 2}
+
+failures:
+  - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])"
+  - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+    location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+    error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])"
+  classification: "pre-existing / environmental, NOT caused by this branch"
+  evidence:
+    - "`which rustc` in this workspace exits 1 -- no rustc binary present in this environment's toolchain."
+    - "Both failures are Erlang :enoent raised by System.cmd calling the absent 'rustc' binary, in Mix.Tasks.Letflow.CheckToolchainTest (REQ-165 rust-pin checks) -- unrelated to Letflow.Obs.Alerts, Letflow.Scheduler.Poller, or alert_hook_emission_state."
+    - "This is the documented rustc-absent class referenced in docs/anti-patterns.md and this agent's own instructions."
+  alert_adjacent_coverage_checked:
+    - "test/letflow/obs/alerts_test.exs"
+    - "test/letflow/scheduler/poller_test.exs"
+    - "test/letflow/supervisor/pollers_test.exs"
+    - "test/letflow/supervisor/infrastructure_test.exs"
+    - "test/letflow/support/tenant_fixture_test.exs"
+  alert_adjacent_result: "No failures in any of these files, in any partition. No alert/poller/emission-state test appears in any partition's failure list."
+
+overall: "PASS -- 3523/3525 (99.94%); the only 2 failures are the known pre-existing rustc-absent environmental class, unrelated to ISS-0558."
+next_action: "Route to RELEASE-VALIDATOR for independent re-verification per core-directives.md."

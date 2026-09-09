@@ -91,6 +91,7 @@ defmodule Letflow.Obs.Alerts do
 
   import Ecto.Query
 
+  alias Ecto.Multi
   alias Letflow.Dlq
   alias Letflow.Identity
   alias Letflow.Obs.AlertHookEmissionState
@@ -322,8 +323,13 @@ defmodule Letflow.Obs.Alerts do
       # ARMED + at/below threshold → no action
     else
       if sample <= threshold do
-        # FIRED + back below threshold → re-arm
-        upsert_trigger_state(
+        # FIRED + back below threshold → re-arm. ISS-0558: also clears every
+        # `alert_hook_emission_state` row for this trigger_key (across all
+        # hooks, past or present configuration -- see design §4) so a later
+        # firing cycle with a coincidentally-identical `emitted_key` is not
+        # silently swallowed by check_and_record_emission/4's dedup match.
+        # Both writes commit atomically via one Ecto.Multi/transaction.
+        rearm_and_clear_emissions(
           %{
             trigger_key: trigger_key,
             is_armed: true,
@@ -332,6 +338,7 @@ defmodule Letflow.Obs.Alerts do
             last_correlation_id: state.last_correlation_id,
             updated_at: now
           },
+          trigger_key,
           tenant_schema
         )
       else
@@ -415,6 +422,34 @@ defmodule Letflow.Obs.Alerts do
       conflict_target: [:trigger_key],
       prefix: tenant_schema
     )
+  end
+
+  # ISS-0558 fix: the FIRED->ARMED re-arm branch's write. Deletes every
+  # `alert_hook_emission_state` row for this trigger_key (no hook_id filter --
+  # design §4: a hook disabled during the firing cycle and later re-enabled
+  # must not inherit a stale dedup row) and upserts the trigger state, both in
+  # one Ecto.Multi/transaction so no observer can see one write without the
+  # other (design §2).
+  @spec rearm_and_clear_emissions(
+          attrs :: map(),
+          trigger_key :: String.t(),
+          tenant_schema :: String.t()
+        ) ::
+          {:ok, term()} | {:error, term(), term(), map()}
+  defp rearm_and_clear_emissions(attrs, trigger_key, tenant_schema) do
+    emission_query =
+      from(e in AlertHookEmissionState, where: e.trigger_key == ^trigger_key)
+
+    Multi.new()
+    |> Multi.delete_all(:clear_emissions, emission_query, prefix: tenant_schema)
+    |> Multi.insert(
+      :trigger_state,
+      struct(%AlertTriggerState{}, attrs),
+      on_conflict: :replace_all,
+      conflict_target: [:trigger_key],
+      prefix: tenant_schema
+    )
+    |> Repo.transaction()
   end
 
   # ---------------------------------------------------------------------------

@@ -34,8 +34,34 @@ description: >
   Fix: when `evaluate_trigger` executes the FIRED→ARMED re-arm transition, also
   delete (or reset) the `alert_hook_emission_state` rows for this trigger_key across
   all configured hooks, so the next firing cycle generates a fresh emission.
+
+  FIX (WF03-ISS0558-20260909): confirmed the bug is broader than originally
+  reported here -- it affects instance_error_stuck, dlq_depth_threshold, AND
+  scheduler_lag_threshold (all three have emitted_key derivations with no
+  structural guarantee of changing across a re-arm cycle); AC-2's DLQ-depth
+  re-arm test only happened to pass because its two sample crossings (6, 3, 8)
+  used different values, not because the trigger type is structurally immune.
+  A separate, unrelated, pre-existing bug was also found in
+  webhook_subscription_paused (sample=1/threshold=0 means it can never
+  actually reach the FIRED->ARMED re-arm branch at all) -- NOT fixed here,
+  flagged as a follow-up candidate.
+
+  Implemented as designed: evaluate_trigger/7's re-arm branch now calls a new
+  rearm_and_clear_emissions/3, an Ecto.Multi wrapping delete_all (filtered by
+  trigger_key only, no hook_id filter -- deliberately broader so a
+  since-disabled-then-re-enabled hook can't inherit a stale dedup row) plus
+  the existing trigger-state upsert, both prefix-scoped to the same tenant
+  schema, committed in one Repo.transaction/2. Two new regression tests
+  reproduce fire -> exhaust delivery -> recover/re-arm -> re-fire with an
+  IDENTICAL emitted_key -> assert the second delivery actually happens (would
+  silently skip before this fix) -- one for instance_error_stuck, one for
+  dlq_depth_threshold using the same depth value on both crossings (unlike
+  AC-2's original test).
 affected_files:
   - lib/letflow/obs/alerts.ex
   - lib/letflow/obs/alert_hook_emission_state.ex
 queue_ref: Q-558
 github_ref: GH-1132
+resolving_run: WF03-ISS0558-20260909
+resolved_at: "2026-09-09T04:35:00Z"
+status: resolved

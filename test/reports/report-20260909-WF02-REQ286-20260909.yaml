@@ -1,0 +1,96 @@
+run_id: WF02-REQ286-20260909
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-09T08:23:54Z"
+branch: feature/WF02-REQ286-20260909
+head_commit: f333836f
+
+git_state:
+  clean_tree: true
+  expected_commits:
+    - f333836f "feat(REQ-286): expose form_schema on the task-detail response"
+    - fea18d32 "feat(REQ-286): design form_schema task-detail exposure"
+    - 3d141b1d "chore(ORCH): WF02-REQ286-20260909 git setup"
+
+diff_scope:
+  command: "git diff --stat main...HEAD"
+  files:
+    - lib/letflow/design/req286-form-schema-exposure.md
+    - lib/letflow/routers/tasks.ex
+  note: >
+    Security-gated response-shaping change: exposes tasks.form_schema in the
+    task-detail API response. Has already passed CODE-DESIGN-VALIDATOR,
+    SECURITY-REVIEWER, and REVIEWER. This run is the final full-suite
+    verification gate before ORCH merges to main.
+
+static_checks:
+  - command: "mix format --check-formatted"
+    result: PASS
+    output: "exit 0, no output"
+  - command: "MIX_ENV=test mix compile --warnings-as-errors --force"
+    result: PASS
+    output: |
+      Compiling 231 files (.ex)
+      Generated letflow app
+    notes: >
+      Full recompile from scratch (deps + app). Zero errors. Only warnings
+      emitted were from the `jose` dependency (deprecated Erlang `catch ...`
+      syntax in src/jose_server.erl and src/jwa/jose_jwa.erl) and one mix.exs
+      xref deprecation notice -- neither originates from application code and
+      neither failed the --warnings-as-errors gate (that gate only applies to
+      Elixir compiler warnings in the current app, which were zero).
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 8
+  result: FAIL (2 known-unrelated failures)
+  output: |
+    partition 1: 584 tests, 0 properties, 2 failures, exit 2
+    partition 2: 364 tests, 2 properties, 0 failures, exit 0
+    partition 3: 382 tests, 0 properties, 0 failures, exit 0
+    partition 4: 415 tests, 1 property, 0 failures, exit 0
+    partition 5: 515 tests, 3 properties, 0 failures, exit 0
+    partition 6: 485 tests, 0 properties, 0 failures, exit 0
+    partition 7: 426 tests, 0 properties, 0 failures, exit 0
+    partition 8: 369 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3540 tests, 6 properties, 2 failures (3544/3546 passed)
+  failures:
+    - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])"
+      classification: "(b) pre-existing/environmental"
+      evidence: "`which rustc` returns nothing (exit 1, not found) in this environment. Stack trace shows the failure originates purely in running_rust_raw/0 -> System.cmd(\"rustc\", ...), before any test assertion runs."
+    - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+      location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+      error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], [stderr_to_stdout: true])"
+      classification: "(b) pre-existing/environmental"
+      evidence: "Same rustc-absent root cause as above; identical stack trace shape."
+  cross_check_no_other_regressions: >
+    Grepped partition-1.log (the only partition reporting failures) for
+    numbered failure blocks: exactly the 2 rustc-absent failures above, both
+    in Mix.Tasks.Letflow.CheckToolchainTest, both unrelated to
+    lib/letflow/routers/tasks.ex. Confirmed via `git diff --stat main...HEAD`
+    that this branch's changes are scoped to tasks.ex (task-detail response
+    shaping) and the design doc only -- nowhere near the rust-toolchain
+    check. No task-detail/tasks-router test failed; no test anywhere in the
+    3546-test suite failed for a reason connected to form_schema exposure.
+  prior_corroboration: >
+    This exact 2-failure signature (same test IDs, same :enoent root cause)
+    is already documented in an earlier REQ-288 test-runner report
+    (test/reports/report-20260909-WF02-REQ288-20260908.yaml), which itself
+    cites independent reproduction by ELIXIR-DEV and REVIEWER on unrelated
+    branches -- consistent with a standing environmental gap (no rustc binary
+    installed in this sandbox), not something newly introduced by REQ-286.
+
+verdict: PASS (with 2 known pre-existing/environmental failures, unrelated to this branch)
+verdict_reasoning: >
+  3544/3546 tests pass. The only 2 failures are
+  Mix.Tasks.Letflow.CheckToolchainTest's rustc-pin checks, which fail with
+  :enoent because this environment has no rustc binary installed at all -- a
+  known, documented, pre-existing environmental gap (see README.md Notes),
+  not a regression from REQ-286's task-detail form_schema exposure. mix
+  format and mix compile --warnings-as-errors are both fully clean (zero
+  application warnings). No test touching the tasks router, task-detail
+  response, or form_schema field failed.
+next_action: "Route to RELEASE-VALIDATOR"

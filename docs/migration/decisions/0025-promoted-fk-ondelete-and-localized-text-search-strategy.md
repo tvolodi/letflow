@@ -84,7 +84,7 @@ and if it is not already `deleted`, runs the same `run_command/2` pipeline
 `create_record/2`/`update_record/2` use (`records.ex:225-242`), which
 appends an `ENTITY_RECORD_DELETED` event and then calls
 `upsert_record_latest/3`. That function's `:delete` clause
-(`records.ex:289-303`) sets `deleted: kind == :delete` on an **update** to
+(`records.ex:289-298`) sets `deleted: kind == :delete` on an **update** to
 the existing row — it is an `UPDATE ... SET deleted = true`, not a `DELETE
 FROM`. The row referenced by any promoted FK stays physically present,
 indefinitely, exactly as before the soft delete. `ensure_not_deleted/2`

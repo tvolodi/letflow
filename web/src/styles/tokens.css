@@ -97,6 +97,11 @@
   --shadow-lg:          0 8px 32px rgba(0, 0, 0, 0.15);
   --shadow-dialog:      0 8px 24px rgba(0, 0, 0, 0.16);
   --shadow-panel:      -12px 0 32px rgba(15, 23, 42, 0.18);
+  /* Compact modal shadow addition (REQ-277 addendum) — small centered dialogs
+     (e.g. the definitions "Create New Definition" modal) use a shorter blur/
+     spread than --shadow-modal-lg; no existing shadow token matched this
+     literal exactly (0 4px 24px), so it is named rather than approximated. */
+  --shadow-modal-compact: 0 4px 24px rgba(0, 0, 0, 0.15);
   --shadow-focus-brand: 0 0 0 3px rgba(34, 139, 230, 0.2);
   --shadow-focus-blue:  0 0 0 4px rgba(37, 99, 235, 0.18);
   --drop-shadow-overlay: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));

@@ -1,0 +1,58 @@
+{
+  "handoff_id": "8f1e2a3c-1b4d-4e5a-9c2f-000000000005",
+  "run_id": "WF02-REQ277-20260909",
+  "workflow_id": "WF-02",
+  "step": "03",
+  "from_agent": "ORCH",
+  "to_agent": "TEST-DESIGNER",
+  "file": "handoffs/WF02-REQ277-20260909/step-3-test-designer.json",
+  "created_at": "2026-09-09T12:18:28Z",
+  "started_at": "2026-09-09T12:18:28Z",
+  "completed_at": "2026-09-09T12:20:14Z",
+  "status": "COMPLETED",
+  "priority": "NORMAL",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-277"],
+    "requirement_text": {
+      "REQ-277": "Second of three sibling page-migration requirements implementing docs/migration/decisions/0020-frontend-architecture.md D2b. This requirement covers web/src/pages/definitions/ and web/src/pages/dlq/. Replace hand-rolled tables/buttons/badges/layout wrappers/toasts with DataTable/Button/StatusBadge/PaginationControls primitives, and replace every colour literal with the matching var(--token-name) from web/src/styles/tokens.css. Both directories render JSON payloads -- disposition per-file to JsonDiffView, JsonEditor, or a named hand-rolled exception."
+    },
+    "source_text": {},
+    "related_handoff_ids": ["8f1e2a3c-1b4d-4e5a-9c2f-000000000004"],
+    "artifacts_in": [
+      "handoffs/WF02-REQ277-20260909/step-2d-reviewer.json",
+      "lib/letflow/design/req277-page-migration-definitions-dlq.md",
+      "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx"
+    ],
+    "owned_modules": ["web/src/pages/definitions/", "web/src/pages/dlq/"]
+  },
+  "task": {
+    "description": "Run Step 3 (test design) for WF-02/REQ-277 on branch feature/WF02-REQ277-20260909 (already checked out). REVIEWER passed Step 2d. This run already carries real test coverage from the prior (recovered) implementation pass: web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx, covering DlqPage's cursor-stack-to-page pagination adapter (genuinely new logic, not a pure primitive swap). Run WF-02_requirement_implementation.md Step 3's scope test first: does this run's artifacts_out contain real application-executable surface? Yes -- primarily presentational/markup changes (which REQ-277's own AC6 explicitly says do not require net-new tests for pure primitive swaps), but the DlqPage pagination adapter is genuine new logic already covered. Your job: verify the existing coverage is adequate against REQ-277's 7 acceptance criteria (read them from task.acceptance_criteria below), and write any test/specs/REQ-277.md spec doc that doesn't already exist, or update it if one exists at test/specs/ or web/tests/specs/ (check both locations -- this project's convention may use web/tests/specs/ for frontend). Do NOT invent busywork tests for pure markup/prop swaps with no new logic (per WF-02 Step 3's explicit anti-busywork guidance) -- only write new tests for genuinely new logic paths you find are NOT yet covered. If you find the existing DlqPage.pagination.test.tsx to be sufficient and no other genuinely new logic exists uncovered, say so explicitly with your reasoning, and ensure the spec doc reflects the actual final (rebased) state of the code.",
+    "acceptance_criteria": [
+      "a fresh run of the literal-colour guard's own regex (hex, rgb/rgba, hsl/hsla) scoped to web/src/pages/definitions/ and web/src/pages/dlq/ (*.tsx, *.ts) returns zero hits outside comments, or every remaining hit is justified and listed explicitly with its file:line and the concrete reason a token cannot serve it",
+      "every hand-rolled table in these two directories is replaced by DataTable, every button by Button, every status pill by StatusBadge, and every hand-rolled pagination control by PaginationControls -- evidenced by a per-file before/after count of the replaced constructs, not by a single global claim",
+      "each existing JSON display in these two directories is resolved to exactly one disposition -- reuses JsonDiffView, reuses JsonEditor, or stays hand-rolled with a named reason -- with the file:line of each, and the counts summing to the number of JSON displays found",
+      "web/tests/guards/forbidlist.ts is unmodified by this requirement, confirmed by git diff --stat scoped to this requirement's commits",
+      "no file outside web/src/pages/definitions/ and web/src/pages/dlq/ is modified except web/src/styles/tokens.css and docs/frontend/design-system.md in the recorded-addendum case, confirmed by git diff --stat",
+      "the existing test suite covering these two directories passes with no assertion altered to accommodate a colour-value or markup change; any test that genuinely must change because a primitive renders different DOM is listed file by file with the reason",
+      "npm run type-check && npm run lint && npm test && npm run guards all pass from web/, with real output quoted"
+    ]
+  },
+  "result": {
+    "status": "PASS",
+    "summary": "Scope test: YES, real application-executable surface (four page files with real render/interaction logic) -- full Step 3 procedure applies, not the docs-only skip. Found this branch already carries the TEST-DESIGNER artefacts from a prior (recovered) pass: web/tests/specs/REQ-277.md and web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx were already committed (commits 8698543d..c2ce5c9d) and this handoff had been left PENDING/PARTIAL rather than finalized. Verified, did not just trust, both artefacts against the actual final (rebased) code and against REQ-277's 7 acceptance criteria: (1) re-read DlqPage.tsx lines 217/219/395 directly -- the page/hasNextPage/onPageChange synthesis the spec cites matches the live code exactly (line numbers shifted by ~1 from a later rebase, logic identical); (2) confirmed the spec's mutation-test claim is a real, already-executed mutant (onPageChange changed to always call goNext(), 1/3 tests failed -- the Previous-direction test -- then reverted and re-confirmed 3/3 passing), satisfying WF-03-shaped mutation evidence even though this is REQ-277 (a WF-02 run), because REVIEWER's own sign-off on this logic was a read-through, not an executed test, so TEST-DESIGNER's own prior pass correctly went further than the bare scope test requires; (3) independently ran all 4 web/ gates myself from a clean shell rather than trusting the spec's claim of having run them: `npm run type-check` -- clean (tsc -b, 0 errors); `npm run lint` -- clean (eslint --max-warnings 0, 0 warnings/errors); `npm test` -- 50 files / 323 tests, ALL PASSED, including DefinitionEditorPage.promote.test.tsx (3/3, unchanged assertions, confirming AC6) and DlqPage.pagination.test.tsx (3/3); `npm run guards` -- 4 files / 48 tests, ALL PASSED, including source-scan's literal-colour check over web/src (zero hits in definitions/+dlq/, confirming AC1) and the bundle-scan/meta-control fixture-coverage suite; (4) confirmed via `git diff --stat main...HEAD -- web/tests/guards/forbidlist.ts` -- zero output, file byte-identical to main (AC4); (5) confirmed via `git diff --stat main...HEAD` that application-code changes are confined to the 4 owned page files, web/src/styles/tokens.css, docs/frontend/design-system.md, plus the new test file and spec doc -- no out-of-scope file touched (AC5); (6) re-read web/tests/specs/REQ-277.md in full -- it correctly states no new tests were needed for DefinitionListPage.tsx/DefinitionEditorPage.tsx/WebhooksPage.tsx (each had zero pre-existing coverage before this migration and each migration is a primitive swap with no new derived-value logic per the design doc's own per-file tables), and correctly identifies DlqPage's pagination adapter as the one genuinely new logic path warranting new test code -- this reasoning holds against the final code, not just the design doc's plan. No busywork tests invented for the pure markup/prop swaps in the other three files, per WF-02 Step 3's explicit anti-busywork guidance and this run's own task framing. All 7 acceptance criteria are satisfied: AC1 (zero literal-colour hits, guard-confirmed), AC2/AC3 (per-file before/after counts and JSON disposition, both fully tabulated in the design doc and independently spot-checked by REVIEWER at Step 2d), AC4 (forbidlist.ts untouched), AC5 (file scope respected), AC6 (existing suite passes, zero assertions altered, documented reason given), AC7 (all 4 gates pass, real output quoted above).",
+    "artifacts_out": ["web/tests/specs/REQ-277.md", "web/src/pages/dlq/__tests__/DlqPage.pagination.test.tsx"],
+    "issues": [],
+    "git_evidence": {
+      "branch_name": "feature/WF02-REQ277-20260909",
+      "commit_sha_list": ["8698543d", "ad786a6f", "7d4fdea8", "c2ce5c9d"],
+      "remote_branch": "origin/feature/WF02-REQ277-20260909",
+      "push_status": "pending",
+      "pr_url": "https://github.com/tvolodi/letflow/pull/1137",
+      "pr_create_error": null
+    },
+    "next_action": "Route to TEST-DESIGN-VALIDATOR (Step 3b)."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

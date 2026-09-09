@@ -286,3 +286,124 @@ escalations:
     # queue task 292 released done by ORCH per WF-03 Step 5. See
     # docs/issues/ISS-0292.yaml for full resolution detail; not repeated
     # here.
+
+  - run_id: WF02-REQ277-20260909
+    requirement_ids: [REQ-277]
+    handoff_file: handoffs/WF02-REQ277-20260909/step-final-git-merge.json
+    step: "Final (git merge, step 8 -- the merge call itself)"
+    escalated_at: 2026-09-09T14:38:47Z
+    escalated_by: ORCH
+    rework_count: 0
+    max_rework: 3
+    branch: feature/WF02-REQ277-20260909
+    status: PARTIAL
+    queue_task_id: 551
+    queue_agent_id: null
+    pr_url: https://github.com/tvolodi/letflow/pull/1137
+    summary: >
+      NOT a max_rework exhaustion -- every gate in this run's own pipeline
+      genuinely PASSED, several with unusually thorough independent
+      re-derivation (CODE-DESIGN-VALIDATOR, SECURITY-REVIEWER out-of-scope,
+      REVIEWER, TEST-DESIGN-VALIDATOR, TEST-RUNNER, RELEASE-VALIDATOR from a
+      cold environment, DOC-UPDATER). REQ-277's own implementation and test
+      coverage are correct and complete: frontend gates 323/323 unit tests,
+      48/48 guard tests, zero colour-literal hits, all clean. This
+      escalation is a genuine external/infrastructure blocker at the very
+      last step, not a defect anywhere in the requirement's own work.
+    diagnosis: >
+      This run is itself a recovery (HANDOFF_PROTOCOL.md §4.1) of an
+      earlier, genuinely real prior WF-02 run for REQ-277 that reached
+      DOC-UPDATER but died before Step Final -- see
+      handoffs/WF02-REQ277-20260909/step-00-git-setup.json's result.summary
+      for that investigation. The blocking chain, confirmed independently by
+      three separate roles (TEST-RUNNER, RELEASE-VALIDATOR, FRONTEND-DEV)
+      plus ORCH itself:
+        1. REQ-277 flipping to `done` on this branch mechanically satisfies
+           REQ-279's `depends_on: [REQ-276, REQ-277, REQ-278]` in full
+           (REQ-276/278 already `done` on main) -- REQ-279 genuinely has no
+           live blocker left.
+        2. `mix letflow.check_deferral_staleness` (part of the hard-gating
+           `mix letflow.check` alias, which CI's Backend gate runs) correctly
+           flags this: an unregistered deferral with no live `blocked-by:`
+           target is a violation by design, and per the tool's own source
+           (lib/mix/tasks/letflow.check_deferral_staleness.ex) there is no
+           third state -- only "registered" (a real `impl_order`, only
+           obtainable via `register_task`) or "live `blocked-by:`" satisfy
+           it. Confirmed this is the ONLY escape hatch by reading the tool
+           source directly, not by assumption.
+        3. `register_task` is ORCH-exclusive
+           (core-directives.md's "No Agent Discretion Over Task Selection or
+           Locking") and requires `letflow-queue`, reachable at `/health`
+           (200 OK) all session but requiring `$QUEUE_AUTH_TOKEN` for any
+           write call. That token is genuinely unavailable in this
+           environment: checked the shell environment and for a `.env` file
+           at the repo root repeatedly across the run (by ORCH at the very
+           start, by TEST-RUNNER, by RELEASE-VALIDATOR, and by FRONTEND-DEV
+           at Step Final) -- no source ever had it. FRONTEND-DEV additionally
+           caught and correctly refused a concurrent-redispatch note that
+           falsely asserted a `.env` token was available -- verified no such
+           file exists before proceeding, per HANDOFF_PROTOCOL.md §1.1
+           ("a handoff's factual premises are checkable, and may be wrong").
+        4. Every prior occurrence of this exact "no live blocker left"
+           pattern on record (handoffs/registry.json: REQ-284, REQ-291,
+           REQ-292's chain) was resolved by a working `register_task` call in
+           the same run -- there is no precedent for merging past this gate
+           without registration, and fabricating either an `impl_order` or a
+           `blocked-by:` target (there IS no live blocker to point at
+           honestly) would be exactly the "Never Satisfy a Gate by Editing
+           What It Measures" anti-pattern, and TASK_QUEUE.md/ISSUE_QUEUE.md
+           both explicitly forbid inventing an id/impl_order when the
+           allocator is genuinely unreachable.
+        5. FRONTEND-DEV attempted `gh pr merge --squash --delete-branch
+           --admin` per GIT_MERGE.md step 8b's documented override path (the
+           PR body already carries the full structural attribution). It was
+           REJECTED: `gh api repos/tvolodi/letflow/branches/main/protection`
+           shows `enforce_admins.enabled: true` on this repo -- which means
+           GitHub structurally refuses to let ANY identity bypass a required
+           status check via `--admin` or any other merge-time override. This
+           is not a permissions gap; it is what `enforce_admins: true` means
+           by definition. GIT_MERGE.md step 8b's text does not anticipate
+           this repo setting.
+      So every avenue this session actually has power over is exhausted
+      correctly: the work is done and verified, the only thing standing
+      between this PR and `main` is one CI check that is doing its job
+      correctly and can only be satisfied by a queue call this session
+      cannot make, and the one override path documented for exactly this
+      shape of "attributed FAILURE" is itself blocked by a stricter branch
+      protection setting than the protocol assumed.
+    current_state: >
+      Branch feature/WF02-REQ277-20260909 is fully rebased onto current
+      origin/main, pushed, clean. PR #1137 is open, up to date, carries the
+      real final counts and full attribution in its own body. Backend gate
+      CI fails for the one already-diagnosed, already-attributed reason;
+      Frontend gate CI passes. No further rework is needed on REQ-277's own
+      implementation, tests, or design -- this is purely the registration
+      gap for REQ-279 blocking the merge gate.
+    next_step: >
+      A resuming session (or this same session, if $QUEUE_AUTH_TOKEN becomes
+      available) should: (1) obtain $QUEUE_AUTH_TOKEN (env var or a
+      genuinely-present .env file -- do not fabricate one); (2) call
+      register_task for REQ-279 (title/description/acceptance_criteria
+      already fully specified in docs/requirements.yaml's REQ-279 entry;
+      depends_on should resolve to the queue task ids for REQ-276/277/278
+      per TASK_QUEUE.md's registration convention); (3) write the returned
+      impl_order into REQ-279's entry in docs/requirements.yaml on THIS
+      branch (feature/WF02-REQ277-20260909), replacing the current
+      `# impl_order: UNREGISTERED -- no live blocker remains...` comment;
+      (4) re-run `mix letflow.check_deferral_staleness` locally to confirm
+      it now passes cleanly; (5) push, wait for CI, then `gh pr merge
+      --squash --delete-branch` (plain, no --admin needed once the check
+      genuinely passes); (6) complete Step Final's remaining bookkeeping
+      (local cleanup back to main, DONE log line, release the REQ-277 queue
+      lock at queue_task_id 551 with status done, and separately register/
+      release whatever task register_task created for REQ-279).
+      Do NOT: disable or weaken branch protection / enforce_admins on this
+      repo to force the merge through -- that is a security-relevant
+      repo-configuration change outside any role's authority in this
+      pipeline and was correctly refused by FRONTEND-DEV. Do NOT invent an
+      impl_order or a false blocked-by: target for REQ-279 to quiet the
+      check locally -- the check is correctly detecting a real, honest gap.
+      If the queue is still unreachable when a resuming session picks this
+      up, that session should re-verify token availability itself (per
+      TASK_QUEUE.md's "check both places" procedure) rather than trusting
+      this record's own "unavailable" finding as still current.

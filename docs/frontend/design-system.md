@@ -130,6 +130,21 @@ All colors are defined as CSS custom properties in `web/src/styles/tokens.css`. 
 }
 ```
 
+**Elevation-shadow addition (REQ-277 addendum).** `web/src/styles/tokens.css` already carries a
+`REQ-146`-addendum shadow scale (`--shadow-card`, `--shadow-sm`, `--shadow-modal`,
+`--shadow-modal-lg`, `--shadow-lg`, `--shadow-dialog`, `--shadow-panel`,
+`--shadow-focus-brand`, `--shadow-focus-blue`) that was never mirrored into this document —
+pre-existing drift, out of REQ-277's scope to backfill in full. REQ-277 adds exactly one more
+member, needed because no existing shadow token's offset/blur matched the definitions
+"Create New Definition" modal's literal box-shadow:
+
+```css
+:root {
+  /* Compact modal shadow (REQ-277 addendum) */
+  --shadow-modal-compact: 0 4px 24px rgba(0, 0, 0, 0.15);  /* small centered dialogs, shorter blur/spread than --shadow-modal-lg */
+}
+```
+
 ### 2.3 Avatar accent palette (REQ-143 addendum)
 
 Reserved for actor avatar backgrounds in `ActorAvatar.tsx`. **Not for use in semantic UI elements.**

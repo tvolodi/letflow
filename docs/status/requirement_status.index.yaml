@@ -2193,9 +2193,17 @@ volumes:
     path: docs/status/requirement_status.v11.yaml
     status: current
     opened: 2026-09-07
-    entries: 31
+    entries: 32
     note: >
-      Incremented to 31 by ORCH's own ISS-0557 SCOPE-CHANGE cancelled-event
+      Incremented to 32 by ORCH's own REQ-278 done-event append
+      (WF02-REQ278-20260909) -- 1127 lines at that point (68845 bytes).
+      STILL UNDER the 1200-line ceiling but only ~73 lines of margin left --
+      the NEXT append to this volume will very likely need to roll to
+      volume 12 first. Whoever appends next: check line count BEFORE
+      writing, and if it would cross 1200, close this volume and open
+      volume 12 per the "WHEN THIS VOLUME IS FULL" procedure in this
+      file's own header, rather than writing past the ceiling.
+      Previously incremented to 31 by ORCH's own ISS-0557 SCOPE-CHANGE cancelled-event
       append (WF03-ISS0557-20260909) -- 1088 lines at that point (66559
       bytes), still under the roll ceiling (1200 lines/120000 bytes) but
       close -- a roll to volume 12 is likely within the next few appends.

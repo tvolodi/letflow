@@ -16481,7 +16481,7 @@ requirements:
     title: Migrate web/src/pages/instances/, tasks/ and dashboard/ onto the design-system primitives and off colour literals (0020 D2b, 3 of 3)
     owner: FRONTEND-DEV
     impl_order: 552
-    status: pending
+    status: done
     stage: S8
     description: >
       Third of three sibling page-migration requirements implementing

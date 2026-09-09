@@ -1,0 +1,41 @@
+{
+  "handoff_id": "WF02-REQ278-20260909-step-00",
+  "run_id": "WF02-REQ278-20260909",
+  "workflow_id": "WF-02",
+  "step": "00",
+  "from_agent": "ORCH",
+  "to_agent": "FRONTEND-DEV",
+  "file": "handoffs/WF02-REQ278-20260909/step-00-git-setup.json",
+  "status": "COMPLETED",
+  "priority": "HIGH",
+  "created_at": "2026-09-09T05:12:00Z",
+  "context": {
+    "stage": "S8",
+    "requirement_ids": ["REQ-278"],
+    "issue_ids": [],
+    "related_handoff_ids": [],
+    "artifacts_in": [
+      "web/src/pages/instances/",
+      "web/src/pages/tasks/",
+      "web/src/pages/dashboard/",
+      "web/src/pages/",
+      "web/src/components/ui/DataTable.tsx",
+      "web/src/components/ui/Button.tsx",
+      "web/src/components/ui/StatusBadge.tsx",
+      "web/src/components/ui/PaginationControls.tsx",
+      "web/src/styles/tokens.css",
+      "web/tests/guards/forbidlist.ts"
+    ],
+    "branch_name": "feature/WF02-REQ278-20260909",
+    "base_commit": "c1a17377"
+  },
+  "task": {
+    "description": "See docs/requirements.yaml REQ-278 in full before starting -- it is fully self-contained with 7 ACs. No CODE-DESIGNER pass -- mechanical migration with no architecture decision, same precedent as REQ-276 (existing primitives, existing tokens, no new interfaces). If a genuinely new design decision surfaces, stop and report back to ORCH rather than inventing one."
+  },
+  "result": {
+    "status": "PASS",
+    "note": "Branch feature/WF02-REQ278-20260909 created off main @ c1a17377. Queue task 552 claimed by letflow-orch. REQ-278 already registered in docs/requirements.yaml (status: pending) by the earlier DOC-UPDATER batch (PR #1130) -- no registration mirroring needed this time."
+  },
+  "rework_count": 0,
+  "max_rework": 3
+}

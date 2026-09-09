@@ -6,17 +6,14 @@ import { useDefinitions, useDefinition } from '@/hooks/useDefinitions'
 import { useAuth } from '@/auth/AuthContext'
 import { usePolling } from '@/hooks/usePolling'
 import { queryKeys } from '@/api/queryKeys'
-import type { InstanceStatus } from '@/types/api'
+import type { ProcessInstance, InstanceStatus } from '@/types/api'
 import { QueryStateBoundary } from '@/components/ui/QueryStateBoundary'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Button } from '@/components/ui/Button'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { PaginationControls } from '@/components/ui/PaginationControls'
 import { classifyError, type RendererState } from '@/utils/classifyError'
 import { getRetryAfterSeconds } from '@/utils/getRetryAfterSeconds'
-
-const STATUS_COLORS: Record<InstanceStatus, string> = {
-  ACTIVE: '#2563eb',
-  COMPLETED: '#16a34a',
-  CANCELLED: '#6b7280',
-  ERROR: '#dc2626',
-}
 
 const STATUS_OPTIONS: InstanceStatus[] = ['ACTIVE', 'COMPLETED', 'CANCELLED', 'ERROR']
 const START_ROLES = ['PLATFORM_ADMIN', 'PROCESS_OPERATOR', 'PROCESS_DESIGNER']
@@ -49,9 +46,15 @@ export default function InstanceBoardPage() {
   const statusFilters = useMemo(() => parseStatusFilter(searchParams), [searchParams])
   const definitionName = searchParams.get('definitionName') ?? ''
   const definitionId = searchParams.get('definitionId') ?? undefined
-  const cursor = searchParams.get('cursor') ?? undefined
   const pageSizeRaw = Number(searchParams.get('pageSize') ?? '25')
   const pageSize = Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 25
+
+  // Cursor-based pagination history: each entry is the cursor that produced
+  // the *next* page. page N (1-indexed) corresponds to cursorStack[N - 2].
+  // Mirrors the pattern already used by web/src/pages/admin/AuditLogPage.tsx
+  // for the same PaginationControls cursor-pagination case.
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+  const cursor = cursorStack[cursorStack.length - 1]
 
   const [showStart, setShowStart] = useState(false)
   const [startDefinitionName, setStartDefinitionName] = useState(definitionName)
@@ -99,8 +102,8 @@ export default function InstanceBoardPage() {
     const values = Array.from(next)
     if (values.length === 0) updated.delete('status')
     else updated.set('status', values.join(','))
-    updated.delete('cursor')
     setSearchParams(updated)
+    setCursorStack([])
   }
 
   const onDefinitionInputChange = (value: string) => {
@@ -112,34 +115,32 @@ export default function InstanceBoardPage() {
       updated.set('definitionName', value)
       updated.delete('definitionId')
     }
-    updated.delete('cursor')
     setSearchParams(updated)
+    setCursorStack([])
   }
 
   const onResolveDefinition = () => {
     const activeList = definitionTypeahead?.items ?? []
     const exact = activeList.find((item) => item.name === definitionName)
 
-    const updated = new URLSearchParams(searchParams)
     if (exact) {
+      const updated = new URLSearchParams(searchParams)
       updated.set('definitionName', exact.name)
       updated.set('definitionId', exact.id)
-      updated.delete('cursor')
       setSearchParams(updated)
+      setCursorStack([])
     }
   }
 
-  const goNextPage = () => {
-    if (!instancesQuery.data?.next_cursor) return
-    const updated = new URLSearchParams(searchParams)
-    updated.set('cursor', instancesQuery.data.next_cursor)
-    setSearchParams(updated)
-  }
+  const currentPage = cursorStack.length + 1
+  const nextCursor = instancesQuery.data?.next_cursor ?? null
 
-  const resetFirstPage = () => {
-    const updated = new URLSearchParams(searchParams)
-    updated.delete('cursor')
-    setSearchParams(updated)
+  const onPageChange = (newPage: number) => {
+    if (newPage < currentPage) {
+      setCursorStack((prev) => prev.slice(0, -1))
+    } else if (nextCursor) {
+      setCursorStack((prev) => [...prev, nextCursor])
+    }
   }
 
   const openStartDialog = () => {
@@ -209,47 +210,76 @@ export default function InstanceBoardPage() {
     }
   }
 
+  const columns: DataTableColumn<ProcessInstance>[] = [
+    {
+      id: 'instance_id',
+      header: 'Instance ID',
+      accessor: (inst) => (
+        <Link
+          data-testid={`instance-link-${inst.instance_id}`}
+          to={`/instances/${inst.instance_id}`}
+          style={{ color: 'var(--interactive-primary)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}
+        >
+          {inst.instance_id.slice(0, 8)}...
+        </Link>
+      ),
+    },
+    {
+      id: 'definition',
+      header: 'Definition',
+      accessor: (inst) => `${inst.definition_name} v${inst.definition_version}`,
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessor: (inst) => <StatusBadge status={inst.status} domain="instance" size="sm" />,
+    },
+    {
+      id: 'correlation_key',
+      header: 'Correlation Key',
+      accessor: (inst) => inst.correlation_key ?? '—',
+    },
+    {
+      id: 'started_at',
+      header: 'Started',
+      accessor: (inst) => toISODate(inst.started_at),
+    },
+    {
+      id: 'updated_at',
+      header: 'Last Updated',
+      accessor: (inst) => toISODate(inst.updated_at ?? inst.started_at),
+    },
+  ]
+
   return (
     <div style={{ padding: '1.5rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <h2 style={{ margin: 0 }}>Instances</h2>
         {canStartInstance && (
-          <button
+          <Button
             data-testid="start-instance-button"
+            variant="primary"
+            size="md"
             onClick={openStartDialog}
-            style={{
-              padding: '.45rem .9rem',
-              background: '#2563eb',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '.85rem',
-            }}
           >
             Start Instance
-          </button>
+          </Button>
         )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.6rem', marginBottom: '.8rem' }}>
-        <span style={{ color: '#64748b', fontSize: '.8rem' }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
           Last refreshed: {toRefreshLabel(polling.lastRefreshedAt)}
         </span>
-        <button
-          onClick={() => void polling.refreshNow()}
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={instancesQuery.isRefetching}
           disabled={instancesQuery.isRefetching}
-          style={{
-            padding: '.35rem .8rem',
-            border: '1px solid #cbd5e1',
-            borderRadius: '4px',
-            background: '#fff',
-            cursor: 'pointer',
-            fontSize: '.8rem',
-          }}
+          onClick={() => void polling.refreshNow()}
         >
           {instancesQuery.isRefetching ? 'Refreshing...' : 'Refresh'}
-        </button>
+        </Button>
       </div>
 
       <div data-testid="instance-filter-bar" style={{ display: 'grid', gap: '.75rem', marginBottom: '1rem' }}>
@@ -261,8 +291,8 @@ export default function InstanceBoardPage() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '.35rem',
-                fontSize: '.85rem',
-                color: '#334155',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--text-primary)',
               }}
             >
               <input
@@ -277,7 +307,7 @@ export default function InstanceBoardPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
-          <label htmlFor="instance-definition-filter" style={{ color: '#475569', fontSize: '.85rem' }}>
+          <label htmlFor="instance-definition-filter" style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
             Definition
           </label>
           <input
@@ -291,9 +321,9 @@ export default function InstanceBoardPage() {
             style={{
               minWidth: '260px',
               padding: '.35rem .6rem',
-              borderRadius: '4px',
-              border: '1px solid #cbd5e1',
-              fontSize: '.85rem',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-default)',
+              fontSize: 'var(--text-sm)',
             }}
           />
           <datalist id="instance-definition-filter-options">
@@ -302,7 +332,7 @@ export default function InstanceBoardPage() {
             ))}
           </datalist>
           {definitionId && (
-            <span style={{ color: '#64748b', fontSize: '.8rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
               using active version {activeDefinitionByName?.version ?? '...'}
             </span>
           )}
@@ -320,70 +350,23 @@ export default function InstanceBoardPage() {
         columns={[{ widthPercent: 15 }, { widthPercent: 20 }, { widthPercent: 10 }, { widthPercent: 20 }, { widthPercent: 17 }, { widthPercent: 18 }]}
       >
       {instancesQuery.data && (
-        <>
-          <table data-testid="instance-board-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.9rem' }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', textAlign: 'left' }}>
-                <th style={{ padding: '.6rem .8rem' }}>Instance ID</th>
-                <th style={{ padding: '.6rem .8rem' }}>Definition</th>
-                <th style={{ padding: '.6rem .8rem' }}>Status</th>
-                <th style={{ padding: '.6rem .8rem' }}>Correlation Key</th>
-                <th style={{ padding: '.6rem .8rem' }}>Started</th>
-                <th style={{ padding: '.6rem .8rem' }}>Last Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {instancesQuery.data.items.map((inst) => (
-                <tr key={inst.instance_id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '.6rem .8rem', fontFamily: 'monospace', fontSize: '.8rem' }}>
-                    <Link data-testid={`instance-link-${inst.instance_id}`} to={`/instances/${inst.instance_id}`} style={{ color: '#2563eb' }}>
-                      {inst.instance_id.slice(0, 8)}...
-                    </Link>
-                  </td>
-                  <td style={{ padding: '.6rem .8rem' }}>{inst.definition_name} v{inst.definition_version}</td>
-                  <td style={{ padding: '.6rem .8rem' }}>
-                    <span style={{ color: STATUS_COLORS[inst.status], fontWeight: 600, fontSize: '.8rem' }}>{inst.status}</span>
-                  </td>
-                  <td style={{ padding: '.6rem .8rem', color: '#475569' }}>{inst.correlation_key ?? '—'}</td>
-                  <td style={{ padding: '.6rem .8rem', color: '#64748b', fontSize: '.8rem' }}>{toISODate(inst.started_at)}</td>
-                  <td style={{ padding: '.6rem .8rem', color: '#64748b', fontSize: '.8rem' }}>{toISODate(inst.updated_at ?? inst.started_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div data-testid="instance-board-table">
+          <DataTable<ProcessInstance>
+            columns={columns}
+            data={instancesQuery.data.items}
+            emptyMessage="No instances found."
+          />
 
-          <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
-            <button
-              onClick={resetFirstPage}
-              disabled={!cursor}
-              style={{
-                padding: '.35rem .8rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                background: '#fff',
-                cursor: cursor ? 'pointer' : 'not-allowed',
-                fontSize: '.85rem',
-              }}
-            >
-              First page
-            </button>
-            <button
-              onClick={goNextPage}
-              disabled={!instancesQuery.data.next_cursor}
-              style={{
-                padding: '.35rem .8rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                background: '#fff',
-                cursor: instancesQuery.data.next_cursor ? 'pointer' : 'not-allowed',
-                fontSize: '.85rem',
-              }}
-            >
-              Next page
-            </button>
-            <span style={{ color: '#64748b', fontSize: '.8rem' }}>Page size: {pageSize}</span>
+          <div style={{ marginTop: '1rem' }}>
+            <PaginationControls
+              page={currentPage}
+              pageSize={pageSize}
+              totalItems={null}
+              hasNextPage={Boolean(nextCursor)}
+              onPageChange={onPageChange}
+            />
           </div>
-        </>
+        </div>
       )}
       </QueryStateBoundary>
 
@@ -393,7 +376,7 @@ export default function InstanceBoardPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
+            background: 'var(--surface-overlay)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -406,18 +389,18 @@ export default function InstanceBoardPage() {
             style={{
               width: '560px',
               maxWidth: '92vw',
-              background: '#fff',
-              borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.16)',
+              background: 'var(--surface-card)',
+              borderRadius: 'var(--radius-sm)',
+              boxShadow: 'var(--shadow-dialog)',
               padding: '1rem 1.2rem',
             }}
           >
             <h3 style={{ marginTop: 0, marginBottom: '.75rem' }}>Start Instance</h3>
 
-            {startError && <p style={{ marginTop: 0, color: '#dc2626' }}>{startError}</p>}
-            {startValidationError && <p style={{ marginTop: 0, color: '#dc2626' }}>{startValidationError}</p>}
+            {startError && <p style={{ marginTop: 0, color: 'var(--color-error-dark)' }}>{startError}</p>}
+            {startValidationError && <p style={{ marginTop: 0, color: 'var(--color-error-dark)' }}>{startValidationError}</p>}
 
-            <label htmlFor="start-definition-name" style={{ display: 'block', fontSize: '.85rem', color: '#334155', marginBottom: '.25rem' }}>
+            <label htmlFor="start-definition-name" style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginBottom: '.25rem' }}>
               Definition name
             </label>
             <input
@@ -430,12 +413,12 @@ export default function InstanceBoardPage() {
                 width: '100%',
                 marginBottom: '.6rem',
                 padding: '.4rem .6rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
               }}
             />
 
-            <label htmlFor="start-definition-version" style={{ display: 'block', fontSize: '.85rem', color: '#334155', marginBottom: '.25rem' }}>
+            <label htmlFor="start-definition-version" style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginBottom: '.25rem' }}>
               Active version (auto-selected)
             </label>
             <input
@@ -448,13 +431,13 @@ export default function InstanceBoardPage() {
                 width: '100%',
                 marginBottom: '.6rem',
                 padding: '.4rem .6rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                background: '#f8fafc',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'var(--color-neutral-50)',
               }}
             />
 
-            <label htmlFor="start-correlation-key" style={{ display: 'block', fontSize: '.85rem', color: '#334155', marginBottom: '.25rem' }}>
+            <label htmlFor="start-correlation-key" style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginBottom: '.25rem' }}>
               Correlation key (optional)
             </label>
             <input
@@ -466,12 +449,12 @@ export default function InstanceBoardPage() {
                 width: '100%',
                 marginBottom: '.6rem',
                 padding: '.4rem .6rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
               }}
             />
 
-            <label htmlFor="start-variables-json" style={{ display: 'block', fontSize: '.85rem', color: '#334155', marginBottom: '.25rem' }}>
+            <label htmlFor="start-variables-json" style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', marginBottom: '.25rem' }}>
               Initial variables (JSON object)
             </label>
             <textarea
@@ -484,40 +467,26 @@ export default function InstanceBoardPage() {
                 width: '100%',
                 marginBottom: '.75rem',
                 padding: '.5rem .6rem',
-                border: '1px solid #cbd5e1',
-                borderRadius: '4px',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
+                fontFamily: 'var(--font-mono)',
               }}
             />
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem' }}>
-              <button
-                onClick={closeStartDialog}
-                style={{
-                  padding: '.4rem .8rem',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '4px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                }}
-              >
+              <Button variant="secondary" size="md" onClick={closeStartDialog}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 data-testid="submit-start-instance"
-                onClick={() => void submitStartInstance()}
+                variant="primary"
+                size="md"
+                loading={startInstance.isPending}
                 disabled={startInstance.isPending}
-                style={{
-                  padding: '.4rem .8rem',
-                  border: 'none',
-                  borderRadius: '4px',
-                  background: '#2563eb',
-                  color: '#fff',
-                  cursor: startInstance.isPending ? 'not-allowed' : 'pointer',
-                }}
+                onClick={() => void submitStartInstance()}
               >
                 {startInstance.isPending ? 'Starting…' : 'Start'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

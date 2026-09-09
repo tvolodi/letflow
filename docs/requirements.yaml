@@ -17550,3 +17550,175 @@ requirements:
       - "git diff shows nothing under lib/ or web/ modified by this requirement"
       - "git diff shows lib/letflow/engine/expr.ex unmodified by this requirement. A client evaluator that finds the grammar lacking must report that as a finding, never close the gap by extending expr.ex or by adding the missing capability on the client side only -- the second is worse, because it passes the corpus while silently making this client incompatible with the other two"
     depends_on: [REQ-290, REQ-292, REQ-293]
+
+  - id: REQ-295
+    title: "Answer decision 0023's DDL-execution open question -- new decision record plus design, gating every entity-storage implementation requirement"
+    owner: CODE-DESIGNER
+    impl_order: 564  # letflow-queue task id, GH#1158. Registered 2026-09-09 by ORCH
+      # once $QUEUE_AUTH_TOKEN was available -- same registration-gap class as
+      # REQ-272/275/287/289.
+    status: in_progress
+    stage: S10
+    description: >
+      docs/migration/decisions/0023-entity-storage-hybrid.md ("Entity storage:
+      per-entity-type tables with a hybrid promoted-column/blob shape") decides
+      the entity-storage shape itself -- per-entity-type Postgres tables,
+      promoted columns for FK/queried:true attributes, field_values jsonb for
+      everything else, additive-only promotion, demotion forbidden -- but
+      names one open question that blocks every implementation requirement
+      against it, verbatim: "How a promotion's DDL is executed, per tenant, in
+      a humanless pipeline." That record's own closing sentence is the hard
+      constraint this requirement exists to satisfy: "This needs its own
+      design and its own SECURITY-REVIEWER and REVIEWER gates. No
+      implementation requirement may be filed against this record until it is
+      answered."
+
+      THIS REQUIREMENT IS THAT DESIGN. It produces a new decision record,
+      docs/migration/decisions/0024-<slug>.md (CODE-DESIGNER chooses the slug;
+      it must name what the record decides, not restate "0024"), plus a
+      design artefact under lib/letflow/design/ giving ELIXIR-DEV enough to
+      build against without re-deriving the mechanism. It implements NO lib/
+      code -- see the scope fence below. bucket: B (0022's bucket rule does
+      not strictly apply here since this is infrastructure work, not an S10
+      pack deliverable, but 0023's own reasoning makes this tenant-agnostic
+      platform capability, never exam-specific, so it would be B if the rule
+      were asked).
+
+      THE FOUR QUESTIONS 0023 NAMES, ALL FOUR MUST BE ANSWERED WITH A
+      CONCRETE MECHANISM, not a restatement of the question:
+
+      1. WHAT RUNS THE DDL, per tenant. 0023 names three candidates without
+      choosing: an extension of Letflow.TenantProvisioning's manifest (see
+      lib/letflow/tenant_provisioning.ex's tenant_scoped_migrations/0 and its
+      @tenant_scoped_migration_manifest, which already runs Ecto migrations
+      per-tenant via replay_migrations/2 -- read this module in full before
+      designing, it is 1008 lines and already solves "run DDL across every
+      tenant schema" for the provisioning case), a dedicated migrator, or the
+      promotion path itself. Pick one and state why the other two are wrong
+      for this case specifically -- not "extending an existing mechanism is
+      generally good practice," but why THIS mechanism's existing guarantees
+      (or lack of them) make it fit or unfit for a promotion that must run
+      against N already-live tenant schemas with real data in them, not N
+      freshly-provisioned empty ones.
+
+      2. PARTIAL-FAILURE SEMANTICS ACROSS TENANT SCHEMAS. Is a promotion
+      atomic across every tenant, or per-tenant with a repair path? If
+      per-tenant, what state does a tenant whose DDL failed midway sit in
+      (does it read/write through the old blob-only path, the new
+      column-plus-blob path, or is it unavailable), and what marks that
+      tenant for repair -- a field on Letflow.TenantProvisioning.Registration's
+      tenant_schemas row (see lib/letflow/tenant_provisioning/registration.ex),
+      a separate table, or something else. State the mechanism, not just
+      "there is a repair path."
+
+      3. BACKFILL INLINE VS. REPLAY THROUGH rebuild_projection/2, AND WHAT
+      SERVES READS MEANWHILE. Letflow.Entities.Record.Projector.rebuild_projection/2
+      (lib/letflow/entities/record/projector.ex) already re-derives every
+      current-state row from the event log -- 0023's reasoning section 2
+      calls this "the single most important safety property of this design."
+      Decide whether a promotion's backfill (populating the new column from
+      existing field_values / event history for records that predate the
+      promotion) runs as one inline UPDATE...SET against the new column, or
+      as a replay through rebuild_projection/2, and if the latter, what a
+      concurrent read sees for a record not yet replayed -- does it fall back
+      to the JSONB value, does the read block, or is there a version marker
+      the query layer checks. This interacts directly with
+      Letflow.Entities.Query.Allowlist.typed_columns/0 (see REQ-299) and
+      Letflow.Entities.Query.Compiler's :typed_column vs :json_field dispatch
+      (lib/letflow/entities/query/compiler.ex) -- a filter compiled against a
+      column that isn't backfilled yet for some rows is a correctness bug,
+      not just a performance one, and this design must say how that's
+      avoided.
+
+      4. ROLLBACK GIVEN DEMOTION IS FORBIDDEN. 0023 forbids ever dropping a
+      promoted column or narrowing its type. State what "rollback" means when
+      the failure mode is discovered after some tenants have already promoted
+      successfully -- is a bad promotion corrected by shipping a NEW
+      promotion (e.g. a corrective backfill under the same additive-only
+      rule), is the column left in place but excluded from the allowlist
+      until fixed, or something else. A design that quietly proposes dropping
+      the column is a demotion and fails CODE-DESIGN-VALIDATOR outright --
+      0023's additive-only rule is a decided constraint, not this
+      requirement's to reopen (per CLAUDE.md's "Don't silently re-decide what
+      a decision record already settled").
+
+      NOT IN SCOPE HERE, FILED SEPARATELY AS REQ-302 (second rework round,
+      REQ-VALIDATOR sizing blocker, 2026-09-09). An earlier rework round
+      folded two more sub-questions into this requirement -- ON DELETE
+      behavior for promoted FK columns, and localized-text
+      plain-text-vs-tsvector column strategy. REQ-VALIDATOR correctly
+      identified that as the same multiple-unrelated-deliverables sizing
+      problem one layer up: those two are independent column-semantics
+      decisions with no compositional relationship to each other or to
+      questions 1-4 above (which DO compose -- question 1's chosen mechanism
+      conditions questions 2 and 3's answers), and 0023's "needs its own
+      design and its own SECURITY-REVIEWER/REVIEWER gates" sentence is scoped
+      to the DDL-execution question this requirement answers, not to column
+      semantics. They are now REQ-302's sub-questions 1 and 2, filed as an
+      independent CODE-DESIGNER requirement with no ordering dependency
+      against this one. REQ-298 and REQ-301 depend_on both this requirement
+      and REQ-302 for the pieces each actually needs.
+
+      THE ENTITY_RECORD_LATEST MIGRATION PATH is explicitly listed by 0023 as
+      NOT decided by that record ("Whether entity_record_latest is migrated
+      or retired... is the migration path's own design question"). Because
+      any answer here is itself a decision, not implementation code, it is
+      folded into this requirement's decision record rather than filed as a
+      separate implementation requirement (per this batch's own constraint:
+      an implementation requirement may not be filed on this topic before the
+      open question is settled, and a decision about whether to
+      migrate/retire a table is not implementation). State at least a
+      recommendation and its reasoning in the new record; deciding to
+      explicitly leave the question open a second time, with a named reason,
+      is an acceptable outcome as long as it is not silently dropped.
+
+      GATES NAMED BY 0023, restated here so they are not lost: this new
+      record needs "its own SECURITY-REVIEWER and REVIEWER gates" beyond the
+      normal CODE-DESIGN-VALIDATOR pass this requirement already carries.
+      SECURITY-REVIEWER's interest is concrete: DDL executed per-tenant, in a
+      humanless pipeline, against schema-per-tenant isolation
+      (docs/agents/instructions/security-invariants.md INV-1) is exactly the
+      kind of tenant-data-path change that gate exists for -- a promotion
+      that runs against the wrong tenant's schema, or that can be triggered
+      cross-tenant, is a tenant-isolation breach, not a data-quality bug.
+      REVIEWER's interest is idiom and decision-record consistency: does the
+      chosen mechanism fit Letflow.TenantProvisioning's existing shape or
+      does it need its own supervision/idiom review the way REQ-045's
+      process-vs-row decision needed one.
+
+      AMEND 0023 ITSELF. 0023's "Open question" section must be edited to
+      state that it is answered, and to point at the new record by path
+      (docs/migration/decisions/0024-<slug>.md) -- do not leave 0023 reading
+      as still-open once this requirement lands; a reader who opens 0023
+      first must be able to follow the pointer forward. Do not touch any
+      other section of 0023 -- the decision itself, the promotion rule, the
+      entity-vs-blob test, and everything else in that record stands as
+      written; this requirement amends only the "Open question" section's
+      status and forward pointer.
+
+      Re-verify at start rather than trusting this description: that 0023
+      and 0022 still read as quoted above (both are live decision records
+      that could have been amended since this requirement was drafted), that
+      lib/letflow/tenant_provisioning.ex's manifest mechanism still works the
+      way described, and that no REQ-295-adjacent design already exists under
+      lib/letflow/design/ from a prior attempt at this same question.
+
+      SCOPE FENCE: this requirement writes docs/migration/decisions/0024-*.md,
+      one design artefact under lib/letflow/design/, and the amendment to
+      0023's "Open question" section. It implements no lib/ code outside that
+      one edit to 0023.md, creates no migration, and does not touch
+      lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, or any other
+      implementation file. REQ-296 onward is where the design gets built.
+    acceptance_criteria:
+      - "docs/migration/decisions/0024-*.md exists, is a real decision record following this project's existing decision-record format (Question/Decision/Reasoning/Consequences/What this record does not decide/REVIEWER sign-off sections, matching 0022's and 0023's own shape), and answers all four of 0023's named sub-questions with a concrete, named mechanism for each -- not a restatement of the question or a list of options left open"
+      - "the record states explicitly what runs the DDL across tenant schemas (naming a specific module/function it extends or introduces), quoting the actual chosen mechanism rather than describing it abstractly"
+      - "the record states the partial-failure semantics: whether a promotion is atomic across tenants or per-tenant with a repair path, and if per-tenant, the concrete field/table/marker that records a tenant's promotion state"
+      - "the record states whether backfill runs inline or as a replay through rebuild_projection/2, and states explicitly what a read sees for a record not yet backfilled -- this sub-answer is checked against lib/letflow/entities/record/projector.ex's actual rebuild_projection/2 signature and lib/letflow/entities/query/allowlist.ex's actual typed_columns/0 shape, both read and cited by file:line, not assumed from the requirement text"
+      - "the record states the rollback story given demotion is forbidden, and does not propose dropping or narrowing a promoted column under any name (rollback, revert, undo, correction) -- grep the record's own text for drop/DROP and narrow and confirm every hit is either absent or explicitly rejected in the record's own reasoning"
+      - "the record states a recommendation (or an explicitly-reasoned continued-deferral) on whether entity_record_latest is migrated or retired, since 0023 leaves that open and this requirement is the only place in this batch a decision-shaped answer to it may be filed"
+      - "a design artefact exists under lib/letflow/design/ giving ELIXIR-DEV a concrete interface to build REQ-296 onward against -- module names, function signatures or @specs for the DDL-execution mechanism chosen, sufficient for CODE-DESIGN-VALIDATOR to confirm no implementation code is present but the design is unambiguous"
+      - "docs/migration/decisions/0023-entity-storage-hybrid.md's 'Open question' section is edited to state the question is answered and to name docs/migration/decisions/0024-*.md's actual filename by path -- verified by reading the amended section's actual text, not by trusting the completion report -- and no other section of 0023 differs from its pre-requirement content, verified by a diff limited to that one section"
+      - "SECURITY-REVIEWER has reviewed the new record against docs/agents/instructions/security-invariants.md INV-1 specifically for cross-tenant DDL-execution risk, and its verdict is recorded in the new record's own REVIEWER-sign-off-shaped section or a clearly linked companion section"
+      - "REVIEWER has reviewed the new record for idiom/decision-record consistency and its verdict is recorded the same way, distinct from SECURITY-REVIEWER's verdict -- two named gates, not one combined paragraph standing in for both"
+      - "git diff shows no file under lib/letflow/entities/, lib/letflow/tenant_provisioning.ex, lib/letflow/tenant_provisioning/, or priv/repo/migrations/ touched by this requirement -- quoted with the command"
+    depends_on: []

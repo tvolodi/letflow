@@ -935,10 +935,27 @@ defmodule Mix.Tasks.Letflow.CheckDeferralStalenessTest do
       # active == ["S0","S1","S2","S3","S4","S5","S6","S7","S8","S9"],
       # inactive == [], violations == 0. Test-data-only update; the detector
       # is unchanged and correct.
+      #
+      # UPDATE (WF02-REQ295-20260909): S10 (bilimbaga-vertical, added by
+      # decision 0022) joins `active` for the first time. REQ-295 (stage
+      # S10, status done) is the first S10 requirement to reach
+      # in_progress/done/blocked -- per the detector rule, that alone
+      # activates S10, same transition every other stage made on its own
+      # first non-pending requirement. `active` gains "S10"; `inactive` is
+      # unchanged (still []). Re-derived, not guessed: confirmed live via
+      # `MIX_ENV=test mix run --no-start -e` calling
+      # File.read!("docs/requirements.yaml") |> Mix.Tasks.Letflow.CheckDeferralStaleness.audit()
+      # against the live corpus, returning
+      # active == ["S0","S1","S10","S2","S3","S4","S5","S6","S7","S8","S9"]
+      # (String.< ordering puts "S10" before "S2"), inactive == [],
+      # violations == 0. Test-data-only update; the detector in
+      # lib/mix/tasks/letflow.check_deferral_staleness.ex is unchanged and
+      # correct -- it caught this drift exactly as designed, same as every
+      # prior stage-activation update above.
       active = for s <- result.stages, s.activity == :active, do: s.stage
       inactive = for s <- result.stages, s.activity == :inactive, do: s.stage
 
-      assert active == ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
+      assert active == ["S0", "S1", "S10", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]
       assert inactive == []
     end
 

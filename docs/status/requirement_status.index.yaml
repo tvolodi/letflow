@@ -2380,7 +2380,13 @@ volumes:
       docs/status/requirement_status.v12.yaml` = 6 on-disk entries) rather
       than carrying forward either side's number, per this index's own
       recount-every-time rule. 448 lines / 28068 bytes, well under the roll
-      ceiling.
+      ceiling. This supersedes a duplicate independently-computed "5" note
+      from a concurrent redispatch commit (origin/feature/WF02-REQ277-20260909,
+      bookkeeping-only, made no content change to v12.yaml itself) merged
+      into this branch afterward -- that note's own "5" was already stale
+      against this recount at merge time; superseded rather than composed,
+      since it describes the same underlying append this note already
+      accounts for, not a distinct one.
       Previously recounted to 5 by this run's own earlier rebase conflict,
       which composed REQ-277's started-event append with REQ-291's
       done-event append (`grep -c "^  - req:"

@@ -17973,7 +17973,7 @@ requirements:
     title: Activate constraint_def as a real Postgres unique index, and fk_def.references_entity as real referential integrity
     owner: ELIXIR-DEV
     impl_order: 569  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 565]
-    status: pending
+    status: in_progress
     stage: S10
     description: >
       0023 states this is part of the storage work, not a later nicety:

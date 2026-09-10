@@ -1,0 +1,104 @@
+run_id: WF03-ISS0581-20260910
+agent: TEST-RUNNER
+workflow: WF-03 (Issue Fix), final independent test-verification step before merge
+timestamp_utc: "2026-09-10T16:55:00Z"
+branch: fix/WF03-ISS0581-20260910
+head_commit: 612a9ed4
+
+purpose: >
+  Independently verify ISS-0581's fix (docs/issues/ISS-0581.yaml): replaced the
+  fixed Process.sleep(300) + single assertion in
+  test/letflow/scheduler/poller_test.exs AC8 with a wait_until/2 poll loop
+  (20ms interval, 2000ms ceiling) to stop a timer-latency flake under parallel
+  suite load. lib/letflow/scheduler/poller.ex is untouched -- test-only change.
+
+diff_scope:
+  command: "git diff d2b61548 612a9ed4 -- test/letflow/scheduler/poller_test.exs"
+  files:
+    - test/letflow/scheduler/poller_test.exs
+  note: >
+    Only file changed by this fix commit. Adds a file-local wait_until/2 +
+    do_wait_until/2 helper pair and replaces AC8's Process.sleep(300) +
+    single `assert reloaded.status == "fired"` with a polled assertion
+    (deadline-based retry every 20ms up to 2000ms). No application code
+    (lib/letflow/scheduler/poller.ex) touched.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op); no .env LETFLOW_DB_PORT override present."
+
+backend_suite:
+  command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+  partitions: 8
+  result: PASS for ISS-0581 purposes (1 of 3717 tests failing, pre-existing/unrelated)
+  output: |
+    test_parallel: N=8 (source: env override)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    partition 1: 475 tests, 0 properties, 0 failures, exit 0
+    partition 2: 402 tests, 0 properties, 1 failures, exit 2
+    partition 3: 479 tests, 1 property, 0 failures, exit 0
+    partition 4: 473 tests, 0 properties, 0 failures, exit 0
+    partition 5: 667 tests, 0 properties, 0 failures, exit 0
+    partition 6: 380 tests, 2 properties, 0 failures, exit 0
+    partition 7: 468 tests, 0 properties, 0 failures, exit 0
+    partition 8: 367 tests, 3 properties, 0 failures, exit 0
+    ---
+    combined: 3711 tests, 6 properties, 1 failures (3716/3717 passed)
+  failures:
+    - test: "test AC1 -- DDL applied to every tenant, verified directly against Postgres register_column_promotion/4 with :all + run_column_promotion/1 lands the column in both tenant schemas"
+      module: "Letflow.TenantProvisioning.ColumnPromotionTest"
+      file: "test/letflow/tenant_provisioning/column_promotion_test.exs:154"
+      assertion_output: |
+        match (=) failed
+        code:  assert {:ok, rows} =
+                 TenantProvisioning.register_column_promotion(
+                   "invoice", "amount", %{pg_type: "text", nullable: true}, :all
+                 )
+        left:  {:ok, rows}
+        right: {:error,
+                #Ecto.Changeset<... errors: [tenant_id: {"has already been taken",
+                  [constraint: :unique,
+                   constraint_name: "entity_column_promotions_tenant_id_entity_type_attribute_idx"]}] ...>}
+      attribution: >
+        Matches the already-filed, pre-existing ISS-0580 (unique-constraint race)
+        exactly by module/AC/signature. Named explicitly in this task's briefing
+        as a known flake not to treat as a blocker. Not in this branch's diff
+        scope (only poller_test.exs changed). Confirmed no other failures present
+        anywhere in the full 8-partition run -- in particular, zero failures in
+        Letflow.Scheduler.PollerTest across all partitions.
+  poller_test_result: >
+    Letflow.Scheduler.PollerTest: 0 failures in any of the 8 partitions. AC8
+    (the fixed test) passed cleanly under full parallel-suite contention.
+
+isolated_poller_runs:
+  command: "mix test test/letflow/scheduler/poller_test.exs"
+  runs: 7
+  result: PASS (7/7 runs, 19/19 tests passing each run, exit 0 each time)
+  output: |
+    run 1: Result: 19 passed  (exit 0)
+    run 2: Result: 19 passed  (exit 0)
+    run 3: Result: 19 passed  (exit 0)
+    run 4: Result: 19 passed  (exit 0)
+    run 5: Result: 19 passed  (exit 0)
+    run 6: Result: 19 passed  (exit 0)
+    run 7: Result: 19 passed  (exit 0)
+  note: >
+    Includes AC8's fixed test each run; wait_until/2 returned true well inside
+    the 2000ms ceiling on every run (no assertion-failure output logged for
+    "expected timer ... to reach status \"fired\"" in any of the 7 logs).
+
+verdict: PASS
+verdict_reasoning: >
+  Full 8-way parallel suite: 3716/3717 passing, sole failure is
+  Letflow.TenantProvisioning.ColumnPromotionTest AC1, an exact match for the
+  already-filed, pre-existing ISS-0580 unique-constraint race -- explicitly
+  named in this task's briefing as a known, non-blocking flake for ISS-0581's
+  purposes. No Letflow.Api.ContextTest or Letflow.EngineTest flakes surfaced
+  this run either. Zero PollerTest failures in the full-suite run, and 7/7
+  additional isolated runs of test/letflow/scheduler/poller_test.exs passed
+  cleanly (19/19 tests each run). No new or PollerTest-related failures
+  observed anywhere. ISS-0581's AC8 timing-flake fix is verified solid.
+next_action: >
+  Report PASS to the dispatching session for WF-03 close-out (merge fix/WF03-ISS0581-20260910,
+  flip ISS-0581 status, close GH-1190). Per core-directives, RELEASE-VALIDATOR
+  (or equivalent gate) should still independently re-run the suite rather than
+  trust this report alone.

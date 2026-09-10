@@ -121,6 +121,32 @@ defmodule Letflow.Scheduler.PollerTest do
     result.instance_id
   end
 
+  # ISS-0581: local, file-scoped poll-until-condition helper, matching this
+  # codebase's established per-file-duplicate convention (see
+  # invocation_lease_test.exs's identical pair, sandbox_pool_test.exs's
+  # wait_until_pool_state/3 and wait_until_schema_dropped/2) rather than a
+  # new shared test/support/ helper.
+  @spec wait_until((-> boolean()), non_neg_integer()) :: boolean()
+  defp wait_until(fun, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_until(fun, deadline)
+  end
+
+  @spec do_wait_until((-> boolean()), integer()) :: boolean()
+  defp do_wait_until(fun, deadline) do
+    cond do
+      fun.() ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(20)
+        do_wait_until(fun, deadline)
+    end
+  end
+
   defp put_scheduler_config(overrides) do
     original = Application.get_env(:letflow, :scheduler)
     Application.put_env(:letflow, :scheduler, overrides)
@@ -174,10 +200,26 @@ defmodule Letflow.Scheduler.PollerTest do
       # mutation hardcoding the default, or caching poll_interval_ms/0's
       # value at init/1 time instead of reading it fresh every tick), this
       # timer would still be pending when we check.
-      Process.sleep(300)
+      #
+      # ISS-0581: a fixed Process.sleep(300) + single assertion was flaky
+      # under parallel-suite contention (tick wall-clock duration inflates
+      # under CPU/DB contention, so fewer ticks complete inside a fixed
+      # 300ms budget) -- polled with wait_until/2 instead, up to a 2000ms
+      # ceiling, so a healthy/unloaded run still completes in roughly the
+      # original ~300ms (returns as soon as the predicate is true) while a
+      # contended run gets real margin. See
+      # lib/letflow/design/iss0581-poller-ac8-timing-fix.md.
+      fired? =
+        wait_until(
+          fn -> Repo.get!(Timer, timer.id, prefix: schema_name).status == "fired" end,
+          2_000
+        )
 
-      reloaded = Repo.get!(Timer, timer.id, prefix: schema_name)
-      assert reloaded.status == "fired"
+      assert fired?,
+             "expected timer #{timer.id} to reach status \"fired\" within 2000ms " <>
+               "of arming (poll_interval_ms override was 30ms); got status " <>
+               "#{Repo.get!(Timer, timer.id, prefix: schema_name).status} instead -- " <>
+               "see ISS-0581 for the wall-clock-tick-cadence-under-contention rationale"
     end
   end
 

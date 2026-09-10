@@ -418,3 +418,43 @@ history:
       failures). Test-support-only change, not a tenant-data-path change --
       SECURITY-REVIEWER sign-off correctly skipped per design doc's own
       scope confirmation, confirmed independently by REVIEWER.
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-10T15:02:52Z"
+    note: >
+      WF03-ISS0581-20260910 started (queue task 581, GH#1190,
+      docs/issues/ISS-0581.yaml). Scheduler.PollerTest AC8 timer-latency
+      flake under 8-way parallel scripts/test_parallel.sh:
+      reloaded.status expected "fired", got "pending" -- self-filed by
+      this same session during WF02-REQ304-20260910's own Step 4. Kin to
+      the existing ISS-0453 poller-timing-flake family but a different
+      AC (AC3 there, AC8 here). Branch: fix/WF03-ISS0581-20260910.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-10T16:05:00Z"
+    note: >
+      WF03-ISS0581-20260910 done (queue task 581, GH#1190,
+      docs/issues/ISS-0581.yaml, resolved). Pipeline:
+      ISSUE-FIXER (root cause: fixed Process.sleep(300) + single assertion
+      in poller_test.exs's AC8 test, timing-margin defect under 8-way
+      parallel-suite tick-cadence contention, not a Poller logic bug) ->
+      CODE-DESIGNER (lib/letflow/design/iss0581-poller-ac8-timing-fix.md,
+      test-only scope, local file-scoped wait_until/2 poll loop matching
+      invocation_lease_test.exs/sandbox_pool_test.exs precedent) ->
+      CODE-DESIGN-VALIDATOR -> ELIXIR-DEV (commit 612a9ed4, replaced fixed
+      sleep with wait_until/2, 20ms poll / 2000ms deadline;
+      lib/letflow/scheduler/poller.ex untouched) -> SECURITY-REVIEWER
+      (PASS, out-of-scope) -> REVIEWER (PASS, idiom-consistent with
+      precedent; one non-blocking comment-naming nit, confirmed accurate
+      on inspection -- sandbox_pool_test.exs has both wait_until_schema_dropped/2
+      and poll_until_schema_dropped/2, so no change needed) -> TEST-RUNNER
+      (PASS: 7/7 isolated poller_test.exs runs, 19/19 tests each; full
+      parallel suite TEST_PARALLEL_N=8 scripts/test_parallel.sh
+      3716/3717 passed, sole failure the pre-existing unrelated ISS-0580
+      flake; report test/reports/report-20260910-WF03-ISS0581-20260910.yaml).
+      docs/issues/ISS-0581.yaml flipped in_progress -> resolved. GitHub
+      mirror issue #1190 closed with evidence comment.

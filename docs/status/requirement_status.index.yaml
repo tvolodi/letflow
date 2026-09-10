@@ -2389,6 +2389,19 @@ volumes:
       13 created with this volume's own header text verbatim (volume
       number/opening date/predecessor path updated) and an empty
       `history:` list.
+      NOTE (WF02-REQ290-20260910's own Step Final rebase): this branch's
+      Step 00 (commit afc61205) had appended a REQ-290 started-event to
+      v12.yaml against a stale pre-closure base, and a later branch commit
+      (dc1ea7db) bumped this index's declared count to 22 to match --
+      superseded here. v12 was independently closed on main first (via
+      WF02-REQ300-20260910, above) with its own frozen 22-entry content
+      that does NOT include REQ-290's started-event. Per this file's own
+      established pattern for a started-event that predates a roll it
+      wasn't present for ("one run's started/done land one in each volume
+      across a roll boundary"), REQ-290's started-event was NOT inserted
+      into this now-frozen volume; it is composed into volume 13 instead
+      as part of this same rebase. v12's on-disk content and this entry's
+      fields are therefore main's, unchanged.
       Recounted to 21 by WF02-REQ301-20260910's Step Final rebase, which
       conflicted at this file's tail a fourth time composing DOC-UPDATER's
       own REQ-301 done-event append (Step 6, against a stale base of 20)

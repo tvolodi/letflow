@@ -156,7 +156,9 @@ defmodule Letflow.Definitions.SolutionPackTest do
                EntityDefinitions.get_definition_by_name(created.name, tenant.schema_name)
 
       assert {:ok, doc} =
-               SolutionPack.export([], [entity_definition.name], "1.0.0", prefix: tenant.schema_name)
+               SolutionPack.export([], [entity_definition.name], "1.0.0",
+                 prefix: tenant.schema_name
+               )
 
       assert doc.definitions == []
       assert [packed] = doc.entity_definitions

@@ -67,9 +67,33 @@ defmodule Letflow.Entities.Records do
   `Letflow.Entities.Definition.Validator`/`Letflow.Entities.Record.Validator`
   themselves). Flagged for REVIEWER as a real design-doc gap, not a silent
   workaround.
+
+  ## REQ-297 dual-write: a NEW, separate `Multi.run/3` step, not an amendment
+  ## to `upsert_record_latest/3`'s existing two clauses
+
+  `docs/migration/decisions/0024-entity-promotion-ddl-execution.md`'s
+  Consequences section literally describes the promoted-column dual-write as
+  "an amendment to `upsert_record_latest/3`'s existing two clauses." This
+  module instead adds one new `:dual_write_promoted_columns` `Multi.run/3`
+  step, appended immediately after `:upsert_record_latest` in `run_command/2`'s
+  pipeline below — per
+  `lib/letflow/design/req297-entity-promotion-executor.md` §8 and
+  CODE-DESIGN-VALIDATOR's confirmed reading of that design. This is a
+  deliberately more conservative shape than 0024's literal wording (leaves
+  `upsert_record_latest/3`'s own two existing clauses completely untouched,
+  additive-only at the `Ecto.Multi` level too) and the functionally sounder
+  choice, flagged here for a future reader rather than left as an unexplained
+  divergence from the decision record's exact prose. Covers all three
+  callers (`create_record/2`, `update_record/2`, `delete_record/2`) since all
+  three funnel through this one shared pipeline — per
+  `docs/anti-patterns.md`'s "established template-substitution mechanism
+  applied to two of three sibling paths, not all three," a deleted record's
+  promoted-column row must still carry `deleted: true` in the per-entity-type
+  table too, not be skipped.
   """
 
   alias Ecto.Multi
+  alias Letflow.Entities.Definition.DDL
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
   alias Letflow.Entities.EntityTypeInstance
@@ -78,6 +102,8 @@ defmodule Letflow.Entities.Records do
   alias Letflow.EventStore
   alias Letflow.EventStore.Event
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.ColumnPromotion
 
   @type create_attrs :: %{
           required(:entity_type) => String.t(),
@@ -232,6 +258,9 @@ defmodule Letflow.Entities.Records do
           |> Multi.run(:upsert_record_latest, fn repo, changes ->
             upsert_record_latest(repo, changes, ctx)
           end)
+          |> Multi.run(:dual_write_promoted_columns, fn repo, changes ->
+            dual_write_promoted_columns(repo, changes, ctx)
+          end)
           |> Repo.transaction()
           |> interpret_result()
 
@@ -300,6 +329,122 @@ defmodule Letflow.Entities.Records do
   defp fetch_global_seq(changes) do
     %Event{global_seq: global_seq} = Map.fetch!(changes, :insert_event)
     global_seq
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-297 §8 -- the NEW, separate :dual_write_promoted_columns Multi step
+  # (see this module's moduledoc for why it is separate, not an amendment
+  # to upsert_record_latest/3's own two clauses).
+  # ---------------------------------------------------------------------
+
+  @spec dual_write_promoted_columns(repo :: Ecto.Repo.t(), changes :: map(), ctx :: map()) ::
+          {:ok, :skipped | :written} | {:error, term()}
+  defp dual_write_promoted_columns(_repo, changes, ctx) do
+    with {:ok, tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(ctx.prefix) do
+      case TenantProvisioning.column_promotions_in_flight(tenant_id, ctx.entity_type) do
+        [] -> {:ok, :skipped}
+        in_flight -> write_entity_table_row(in_flight, changes, ctx)
+      end
+    end
+  end
+
+  # The per-entity-type table is guaranteed to exist already (a
+  # ColumnPromotion row past "pending" implies ensure_entity_table/2 already
+  # ran for it) -- issues one INSERT ... ON CONFLICT (record_id) DO UPDATE,
+  # populating every column named by an in-flight ColumnPromotion row from
+  # ctx.field_values plus the same structural columns
+  # upsert_record_latest/3 itself already writes to entity_record_latest.
+  # `field_values` is written into the per-entity-type table's own jsonb
+  # column unconditionally (0024 §3 step 1) -- independent of any single
+  # attribute's own dual-write flag.
+  defp write_entity_table_row(in_flight, changes, ctx) do
+    with {:ok, table_name} <- TenantProvisioning.table_name_for_entity_type(ctx.entity_type) do
+      unless DDL.valid_identifier?(table_name) do
+        raise ArgumentError, "invalid per-entity-type table_name: #{inspect(table_name)}"
+      end
+
+      now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      global_seq = fetch_global_seq(changes)
+      deleted = ctx.kind == :delete
+
+      promoted_pairs = Enum.map(in_flight, &promoted_column_pair(&1, ctx.field_values))
+
+      structural_columns = [
+        "id",
+        "record_id",
+        "field_values",
+        "deleted",
+        "entity_def_version",
+        "last_event_global_seq",
+        "inserted_at",
+        "updated_at"
+      ]
+
+      structural_values = [
+        Ecto.UUID.generate(),
+        ctx.record_id,
+        Jason.encode!(ctx.field_values),
+        deleted,
+        ctx.definition.logical_shape_version,
+        global_seq,
+        now,
+        now
+      ]
+
+      all_columns = structural_columns ++ Enum.map(promoted_pairs, &elem(&1, 0))
+      all_values = structural_values ++ Enum.map(promoted_pairs, &elem(&1, 1))
+
+      sql = build_upsert_sql(ctx.prefix, table_name, all_columns)
+
+      case Repo.query(sql, all_values, prefix: ctx.prefix) do
+        {:ok, _result} -> {:ok, :written}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp promoted_column_pair(
+         %ColumnPromotion{column_name: column_name, attribute: attribute, pg_type: pg_type},
+         field_values
+       ) do
+    unless DDL.valid_identifier?(column_name) do
+      raise ArgumentError, "invalid promoted column_name: #{inspect(column_name)}"
+    end
+
+    raw_value = Map.get(field_values, attribute)
+    {column_name, TenantProvisioning.cast_promoted_value(raw_value, pg_type)}
+  end
+
+  defp build_upsert_sql(prefix, table_name, all_columns) do
+    placeholders = placeholder_list(all_columns)
+    column_list = Enum.map_join(all_columns, ", ", &~s("#{&1}"))
+    update_columns = all_columns -- ["id", "record_id", "inserted_at"]
+    update_clause = Enum.map_join(update_columns, ", ", fn c -> ~s("#{c}" = EXCLUDED."#{c}") end)
+
+    """
+    INSERT INTO "#{prefix}"."#{table_name}" (#{column_list})
+    VALUES (#{Enum.join(placeholders, ", ")})
+    ON CONFLICT (record_id) DO UPDATE SET #{update_clause}
+    """
+  end
+
+  # `($n::text)::uuid`/`($n::text)::jsonb`, not a bare `$n::uuid`/`$n::jsonb`
+  # -- the same double-cast idiom already established in
+  # lib/letflow/sandbox_pool/fixture_loader.ex's apply_fixtures/3 (verified
+  # there empirically): an immediately-annotated `::jsonb` cast makes
+  # Postgrex infer the parameter is a native Elixir term to be JSON-encoded
+  # client-side, double-encoding an already-encoded string; casting from
+  # `::text` first keeps the parameter bound as plain text, with the real
+  # cast happening server-side in Postgres.
+  defp placeholder_list(all_columns) do
+    all_columns
+    |> Enum.with_index(1)
+    |> Enum.map(fn
+      {"id", i} -> "($#{i}::text)::uuid"
+      {"record_id", i} -> "($#{i}::text)::uuid"
+      {"field_values", i} -> "($#{i}::text)::jsonb"
+      {_col, i} -> "$#{i}"
+    end)
   end
 
   defp interpret_result({:ok, %{upsert_record_latest: %Latest{} = record}}) do

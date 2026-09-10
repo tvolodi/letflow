@@ -925,3 +925,57 @@ history:
       REVIEWER. No blocked-by deferral hatches reference REQ-296 --
       REQ-297/298/301 (its real dependents) remain unstartable
       regardless via the queue's own depends_on tracking.
+  - req: REQ-297
+    event: done
+    agent: ORCH
+    at: "2026-09-10T01:36:48Z"
+    note: >
+      REQ-297 (queue task 567, GH#1161) implemented via
+      WF02-REQ297-20260909: the promotion executor -- the first code
+      to actually run entity-storage DDL against live tenant schemas,
+      implementing REQ-295's designed ColumnPromotion mechanism using
+      REQ-296's DDL generator. Nine functions on
+      Letflow.TenantProvisioning (register/run/run_for_all/retry/
+      backfill/activate/suspend, plus two query-eligibility checks),
+      tenant enumeration via list_registrations/0, a new global
+      entity_column_promotions table (per-tenant, not cross-tenant,
+      atomicity, per 0024's actual decision), backfill via a real
+      rebuild_projection/2 replay (dual-write during the window), and
+      table-creation-on-first-use -- a genuine, correctly-flagged gap
+      (0024/0025/REQ-296 all disclaimed owning entity-table lifecycle;
+      CODE-DESIGN-VALIDATOR independently confirmed this via REQ-296's
+      own moduledoc explicitly assigning the job to REQ-297/298) rather
+      than a silent architectural re-decision.
+      Additive-only enforced by a real information_schema.columns
+      check before every ALTER TABLE ADD COLUMN -- a type conflict is
+      rejected with a typed error and marks the row ddl_failed, never
+      coerced. Dual-write landed as a NEW, separate Multi.run step in
+      Letflow.Entities.Records (upsert_record_latest/3's own two
+      existing clauses left byte-for-byte untouched -- a deliberately
+      more conservative shape than 0024's literal "amendment" wording,
+      flagged as such in the code). Backfill invocation of
+      rebuild_projection/2 proven genuine via a real :telemetry
+      attachment on Ecto's own query event, not inferred from a
+      correct end value.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no
+      rework -- independently judged the table-lifecycle scoping call
+      a legitimate gap-fill, not scope overreach, since it's the
+      natural consequence of already-decided work rather than a new
+      cross-cutting architectural choice) -> ELIXIR-DEV -> 
+      SECURITY-REVIEWER (PASS -- the highest-stakes review in this
+      batch, exhaustively traced cross-tenant DDL-execution risk, SQL
+      injection, additive-only enforcement, entity_column_promotions
+      access scoping, and the entity_type_not_found edge case ELIXIR-DEV
+      itself flagged, confirming it's a narrow, correctly-distinguishable
+      condition rather than a masked failure) -> REVIEWER (PASS --
+      independently re-derived every check, found a THIRD full-suite
+      failure beyond the 2 known rustc-absent ones, a SandboxPoolTest
+      timing flake, and confirmed it pre-existing/unrelated via an
+      isolated 23/23 re-run rather than accepting the "2 pre-existing"
+      framing at face value). TEST-DESIGNER/TEST-DESIGN-VALIDATOR
+      skipped -- 17 tests already map every AC with real, non-inferred
+      assertions (direct Postgres queries, genuine telemetry-based
+      invocation proof, genuine type-conflict rejection), independently
+      confirmed by both SECURITY-REVIEWER and REVIEWER. No blocked-by
+      deferral hatches reference REQ-297 -- REQ-298/301 remain
+      unstartable regardless via the queue's own depends_on tracking.

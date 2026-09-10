@@ -17895,7 +17895,7 @@ requirements:
     title: Promotion executor -- runs REQ-296's DDL per tenant via REQ-295's chosen mechanism, additive-only, with the named partial-failure and backfill semantics
     owner: ELIXIR-DEV
     impl_order: 567  # letflow-queue task id; depends_on translated to queue task ids [564, 566]
-    status: in_progress
+    status: done
     stage: S10
     description: >
       Wires REQ-296's pure DDL-generation function into an actual

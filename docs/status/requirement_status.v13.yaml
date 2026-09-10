@@ -593,3 +593,19 @@ history:
       not a blocker for this fix. Test-support/test-file-only change, not a
       tenant-data-path change -- SECURITY-REVIEWER sign-off correctly
       skipped per design doc's own scope confirmation.
+
+  - req: REQ-306
+    event: started
+    agent: ORCH
+    at: "2026-09-10T18:53:41Z"
+    note: >
+      WF02-REQ306-20260910 started (queue task 577, GH#1175). S10 gap 13
+      test coverage: permanent ExUnit tests for REQ-304's export side and
+      REQ-305's install side of SolutionPack's entity_definitions pack
+      section (round-trip, name-collision rollback, malformed-entry
+      rejection, old-pack compatibility, INV-1 cross-tenant isolation).
+      Owner: TEST-DESIGNER directly (no CODE-DESIGNER/ELIXIR-DEV step --
+      this requirement writes test code only). Scope fence: test/ only --
+      no lib/letflow/definitions/solution_pack.ex or lib/letflow/entities/
+      edits; a real defect found while writing tests gets filed as an
+      incidental issue, not fixed here. Branch: feature/WF02-REQ306-20260910.

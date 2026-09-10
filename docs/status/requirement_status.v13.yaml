@@ -458,3 +458,101 @@ history:
       flake; report test/reports/report-20260910-WF03-ISS0581-20260910.yaml).
       docs/issues/ISS-0581.yaml flipped in_progress -> resolved. GitHub
       mirror issue #1190 closed with evidence comment.
+
+  - req: REQ-305
+    event: started
+    agent: ORCH
+    at: "2026-09-10T17:26:51Z"
+    note: >
+      WF02-REQ305-20260910 started (queue task 576, GH#1174). S10 gap 13,
+      install side: extends SolutionPack.install/3 to parse and install an
+      entity_definitions section per decision
+      0026-solution-pack-entity-definitions-section.md (REQ-303's output)
+      and REQ-304's export-side entity_definitions pack section. Each
+      parsed entry installs via
+      Letflow.Entities.Definitions.create_definition/2 (and
+      activate_definition/4 iff 0026 specifies auto-activation) under the
+      caller's own opts[:prefix] (INV-1); a name collision or malformed
+      entry aborts the whole install transaction, matching install/3's
+      existing all-or-nothing stance. Scope fence: install/3 and its
+      private parse/step helpers only -- no edits under lib/letflow/entities/,
+      no migration, no further export/3 changes. Branch:
+      feature/WF02-REQ305-20260910.
+
+  - req: REQ-305
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T18:38:37Z"
+    note: >
+      REQ-305 (queue task 576, GH#1174) implemented via
+      WF02-REQ305-20260910: S10 gap 13, install side. Extends
+      SolutionPack.install/3 (lib/letflow/definitions/solution_pack.ex) to
+      parse and install an entity_definitions pack section per decision
+      0026-solution-pack-entity-definitions-section.md (REQ-303's output)
+      and REQ-304's export-side section. Each parsed entry installs via
+      Letflow.Entities.Definitions.create_definition/2 under the caller's
+      own opts[:prefix] (INV-1) as :inactive only, matching
+      create_definition/2's own default -- no activate_definition/4 call,
+      per 0026's answer that no other pack-installed artefact type is
+      auto-activated today. A name collision or malformed entry aborts the
+      whole install transaction, matching install/3's existing
+      all-or-nothing stance. Pipeline: CODE-DESIGNER (design doc
+      lib/letflow/design/req305-solution-pack-entity-definitions-install.md)
+      -> CODE-DESIGN-VALIDATOR (FAIL once, presentation-only: literal
+      executable code instead of prose in Sections 3/2.1/4.3; reworked,
+      re-check PASS) -> ELIXIR-DEV (commit 02728b47; real quoted evidence
+      for AC1-AC6/AC8: install call output, collision-abort zero-new-rows
+      evidence, malformed-entry pre-write rejection, old-pack regression
+      via existing solution_pack_test.exs/entities tests/
+      service_catalog_test.exs -- 257 passed, mix compile
+      --warnings-as-errors clean, grep confirming only prefix(opts) reaches
+      create_definition/2, no activate_definition/4 call, git diff
+      --name-only confirming no lib/letflow/entities/ file touched). During
+      implementation ELIXIR-DEV found and fixed a real design-doc bug: the
+      design's original Section 3 would have made the whole feature dead
+      code via a joint two-key AND check blocking any non-empty
+      entity_definitions; implemented functionally instead (unchanged
+      check_unsupported_sections/1, gating only on
+      service_catalog_entries: []), a deviation REVIEWER later confirmed
+      was a genuine bug, not a misreading, and explicitly signed off on. ->
+      SECURITY-REVIEWER PASSED specifically against this requirement's
+      landed diff (git diff main...feature/WF02-REQ305-20260910),
+      satisfying AC7: verified INV-1 tenant isolation via prefix(opts)
+      only, verified the collision-abort rollback is mechanically real
+      (traced through run_install/5's shared with/else -> Repo.rollback/1),
+      verified no activate_definition/4 call, verified malformed entries
+      are rejected pre-write with no injection surface in
+      atomize_definition_json/1's static whitelist translation. This
+      SECURITY-REVIEWER sign-off, recorded here, is REQ-305's own
+      completion artefact satisfying AC7 -- RELEASE-VALIDATOR had flagged
+      that no completion artefact yet recorded it prior to this entry. ->
+      REVIEWER (PASS -- confirmed the design-doc deviation was a genuine
+      bug and the implemented fix correct, signed off on the deviation,
+      confirmed idiom/scope/decision-record consistency: mirrors
+      create_packed_definitions/3's Enum.reduce_while shape,
+      atomize_definition_json/1's static-whitelist approach is idiomatic,
+      no scope creep) -> TEST-RUNNER (3719/3720 passed, sole failure the
+      pre-existing unrelated ISS-0580 flake) -> RELEASE-VALIDATOR
+      (independently re-derived its own evidence for every AC -- own
+      scratch tests for AC1-AC4, own greps for AC6/AC8, own mix compile
+      --warnings-as-errors run, all PASS; independently re-ran the full
+      suite twice, hit 2 pre-existing unrelated flakes, ISS-0580's
+      ColumnPromotionTest and a Scheduler.PollerTest flake matching
+      ISS-0522/ISS-0453's already-documented timing-flake class, confirmed
+      zero scheduler files touched by this branch; held back a done
+      verdict only pending the design-doc Section 3 correction, already
+      committed as 472526c5, and AC7's completion-artefact recording, now
+      satisfied by this Step 6 entry). docs/requirements.yaml flipped
+      in_progress -> done. README.md checked (grepped for
+      SolutionPack/entity_definitions references) -- no hits, no
+      documented current-behavior change (internal install-path extension,
+      no route wired to it beyond what 0026 already deferred, no
+      user-facing effect) -- left unchanged, matching REQ-303's and
+      REQ-304's own done-event notes' identical finding. decision
+      0026-solution-pack-entity-definitions-section.md checked for a
+      per-step "implemented by REQ-305" marker convention -- none exists;
+      this repo's decision records carry no such convention anywhere
+      (REQ-303's and REQ-304's own done-event notes found the same absence
+      for their own records), and 0026's text already refers to REQ-305 in
+      future tense throughout with no stale claim to correct -- no edit
+      made.

@@ -2588,8 +2588,18 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 8
+    entries: 10
     note: >
+      Incremented to 10 by WF02-REQ305-20260910 (DOC-UPDATER)'s own REQ-305
+      done-event append (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 10 on-disk entries; 558
+      lines / 33202 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
+      Incremented to 9 by ORCH's own REQ-305 started-event append (Step 00,
+      WF02-REQ305-20260910) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 9 on-disk entries; 480
+      lines / 28150 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
       Recounted to 8 on WF03-ISS0581-20260910's own Step Final rebase onto
       main, composing this branch's own SCOPE-CHANGE started+done event
       pair for ISS-0581 with main's own ISS-0578 SCOPE-CHANGE done-event,

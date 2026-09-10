@@ -18798,7 +18798,7 @@ requirements:
     title: Add entity_definitions install to SolutionPack.install/3 -- parse, validate, create, and error taxonomy per REQ-303's design
     owner: ELIXIR-DEV
     impl_order: 576  # letflow-queue task id; depends_on translated to queue task ids [574, 575]
-    status: pending
+    status: done
     stage: S10
     description: >
       Re-verify at start rather than trusting this description: read

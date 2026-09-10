@@ -740,3 +740,21 @@ history:
       worked or silently dropped -- GH#1200 left open with a comment
       explaining the gap and naming REQ-292's merge as the actual
       precondition. No code changed; branch abandoned unpushed.
+  - req: REQ-293
+    event: blocked
+    agent: ORCH
+    at: "2026-09-10T22:50:22Z"
+    note: >
+      Queue task 584 (GH#1202) claimed via get_next_task, but
+      docs/requirements.yaml's own REQ-293 entry carries
+      impl_order: UNREGISTERED -- blocked-by: REQ-292, and REQ-292 (the
+      server-side half this client evaluator deliberately depends on per
+      decision 0020 D1a's sequencing rule) is still status: pending. The
+      queue task was registered with depends_on: [] rather than carrying
+      that dependency forward, making it prematurely eligible. Declined
+      to start (would invert D1a's own sequencing rule and risk
+      client/server grammar drift). Released the queue task as blocked
+      (not done, not worked); GH#1202 left open with a comment naming
+      REQ-292's merge as the real precondition.
+      docs/requirements.yaml's own status/blocked-by annotation was
+      already correct and is left unchanged.

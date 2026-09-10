@@ -2588,8 +2588,12 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 15
+    entries: 16
     note: >
+      Incremented to 16 by ORCH's own REQ-293 blocked-event append
+      (chore/req293-block-20260910) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 16 on-disk entries; 760
+      lines, well under the roll ceiling.
       Incremented to 15 by ORCH's own ISS-0583 SCOPE-CHANGE blocked-event
       append (chore/iss0583-block-20260910) -- `grep -c "^  - req:"
       docs/status/requirement_status.v13.yaml` = 15 on-disk entries; 742

@@ -394,3 +394,27 @@ history:
       "implemented by REQ-NNN" marker convention elsewhere (REQ-290's
       own done-event note above found the same absence for 0020's
       Sequencing section) -- confirmed no edit needed to 0026.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-10T14:29:44Z"
+    note: >
+      ISS-0578 (GH#1185, queue task 578) -- shifting
+      Postgrex.DBConnection.ConnectionError failures inside
+      clone_tenant_schema!/1 under N-way parallel test execution, caused
+      by a single unretried ~150-250-round-trip transaction being
+      disproportionately likely to catch a transient TCP hiccup, not a
+      code regression. ISSUE-FIXER diagnosed via code reading + live
+      reproduction attempts -> CODE-DESIGNER (design doc
+      lib/letflow/design/iss0578-tenant-clone-transient-connection-retry.md,
+      one rework cycle for a citation-range error) -> CODE-DESIGN-VALIDATOR
+      PASS -> ELIXIR-DEV implemented bounded retry (3 attempts, 200ms
+      backoff, struct-only match on Postgrex.Error/DBConnection.ConnectionError,
+      cleanup-before-retry via DROP SCHEMA IF EXISTS) entirely in
+      test/support/tenant_template.ex plus 3 new tests using real Postgres
+      error triggers -> REVIEWER PASS (confirmed design conformance, idiom,
+      test quality, independently re-ran full suite three times, zero new
+      failures). Test-support-only change, not a tenant-data-path change --
+      SECURITY-REVIEWER sign-off correctly skipped per design doc's own
+      scope confirmation, confirmed independently by REVIEWER.

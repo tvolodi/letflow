@@ -2588,8 +2588,19 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 5
+    entries: 6
     note: >
+      Recounted to 6 on ORCH's fix/ISS-0578-20260910 rebase onto main,
+      composing this branch's own ISS-0578 SCOPE-CHANGE done-event append
+      (independently computed as 4, against a stale base of 3) with main's
+      REQ-304 started+done event pair (independently computed as 5),
+      chronologically interleaved into docs/status/requirement_status.v13.yaml
+      (REQ-304 started 13:01:54Z, ISS-0578 done 14:29:44Z, REQ-304 done
+      14:49:53Z). Recounted directly from the composed file (`grep -c
+      "^  - req:" docs/status/requirement_status.v13.yaml` = 6 on-disk
+      entries) rather than carrying forward either side's
+      independently-computed 4/5, per this note's own recount-every-time
+      rule.
       Incremented to 5 by WF02-REQ304-20260910 (DOC-UPDATER)'s own REQ-304
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v13.yaml` = 5 on-disk entries, no
@@ -2602,8 +2613,10 @@ volumes:
       ELIXIR-DEV during this run's own Step 2a full-suite run (A9
       assertion). Fixed here rather than left for a later reconciliation,
       per this file's own recount-every-time rule.
-      Recounted to 3 by WF02-REQ290-20260910's Step Final rebase, which
-      conflicted at this file's tail composing this branch's own REQ-290
+      Recounted to 4 (was 3) after ISS-0578's SCOPE-CHANGE done event
+      (fix/ISS-0578-20260910). Recounted to 3 by WF02-REQ290-20260910's
+      Step Final rebase, which conflicted at this file's tail composing
+      this branch's own REQ-290
       started/done event pair (against a stale base of 2) with main's
       REQ-303 done-event append (independently computed as 1), both
       already composed into docs/status/requirement_status.v13.yaml in

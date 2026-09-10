@@ -6149,5 +6149,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-303 (queue task 574, GH#1172) answers S10 gap 13 (SolutionPack entity_definitions section) -- new decision record docs/migration/decisions/0026-solution-pack-entity-definitions-section.md, explicitly independent of the 0023 entity-storage batch. Schema version stays unchanged (envelope identifier, not section presence); old/new pack compatibility follows existing default-to-[] and service_catalog_entries's reject-unsupported precedent respectively. Install is :inactive-only, name collision aborts the whole transaction. Key finding: the form-schema gap is ALREADY CLOSED -- form_schema is a HUMAN_TASK node attribute inside a definition's graph, and packed definitions already embed their graph verbatim, so no new pack section is needed for it. INV-1: no new caller-supplied tenant identifier anywhere. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: citation pointed at wrong section for a quoted rationale, load-bearing form-schema claim itself was accurate on first pass; re-check PASS) -> SECURITY-REVIEWER (PASS, named INV-1 sign-off per this requirement's own AC) -> REVIEWER (PASS). Design-only, no lib/ code -- REQ-304/305 build the export/install sides."
     }
+,
+    {
+      "run_id": "WF03-ISS0578-20260910",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0578",
+      "queue_task_id": 578,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1185,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/support/tenant_template.ex"
+      ],
+      "branch_name": "fix/ISS-0578-20260910",
+      "started_at": "2026-09-10T12:15:53Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0578 (queue task 578, GH#1185) -- shifting Postgrex.DBConnection.ConnectionError failures inside clone_tenant_schema!/1 under N-way parallel test execution. ISSUE-FIXER diagnosed root cause via code reading + live reproduction: a single unretried ~150-250-round-trip transaction is disproportionately likely to catch a transient TCP hiccup under load, explaining the shifting set of unrelated failing files each run -- not a code regression, pool sizing not implicated. Fix: bounded retry (3 attempts, 200ms backoff) wrapping the existing clone, struct-only match on Postgrex.Error/DBConnection.ConnectionError (no message-substring matching), cleanup-before-retry via DROP SCHEMA IF EXISTS on a fresh connection. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework: citation-range error) -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV (3 new tests using real Postgres error triggers, no mocks in this codebase) -> REVIEWER (PASS, independently re-ran full suite three times, zero new failures; one redirect needed for an illegal cross-turn background-wait). Test-support-only change, not a tenant-data-path change -- SECURITY-REVIEWER correctly skipped per design's own scope confirmation, independently confirmed by REVIEWER. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this session's established precedent (implementing agent's own tests comprehensive, REVIEWER independently verified quality)."
+    }
   ]
 }

@@ -181,7 +181,8 @@ defmodule Letflow.Entities.Query.Allowlist do
        above).
 
   ## REQ-300 AC8 -- promoted columns resolve `source: :typed_column`, gated
-  ## on the per-entity-type table actually existing
+  ## on the SPECIFIC column actually existing (rework cycle 3: per-column,
+  ## not just per-table)
 
   `typed_columns/2`'s promoted set is purely definition-derived (decoded
   straight off the active `Definition.t()` document, same as
@@ -201,19 +202,46 @@ defmodule Letflow.Entities.Query.Allowlist do
   never-promoted-entity-type query this module's own AC3 tests (and
   `Letflow.Entities.QueryTest`'s whole "customer" fixture) already rely on.
 
+  Checking only whether `entity_type`'s per-entity-type table **exists**
+  (rework cycle 2's fix) is table-granularity and is not enough on its
+  own: 0023's additive-declare-then-promote rule allows a definition to
+  declare a *second* `queried: true` field (or `fk_def`) after the table
+  already exists from an earlier, unrelated field's promotion, with no
+  `ColumnPromotion` ever registered/run for that second attribute. Gating
+  on table existence alone would then classify that never-promoted field
+  `source: :typed_column` too, and
+  `Letflow.Entities.Query.Compiler.build_filter_dynamic/3`/`build_order_by/3`
+  would build a `fragment("?", literal(^field_name))` reference to a
+  column that does not physically exist, surfacing as an unhandled
+  `Postgrex.Error` (`undefined_column`) straight out of `Repo.all/2` for an
+  ordinary, non-join filter/sort request -- SECURITY-REVIEWER's reproduced
+  regression this rework cycle fixes, the exact table-vs-column gap
+  `Letflow.Entities.Query.Compiler.relation_column_exists?/3` already
+  closed for the join path's declaring side (design §4.0.2), now closed
+  here too so every consumer of this function's output (filter, sort, and
+  any future one) gets the fix in one place.
+
   So `load/2` includes a **non-structural** promoted name (anything
   `typed_columns/2` reports beyond the fixed 7) as `source: :typed_column`
-  only when `entity_type`'s per-entity-type table **physically exists**
-  right now (`TenantProvisioning.entity_table_exists?/2`, the same
-  existence check `Letflow.Entities.Query.Compiler.resolve_binding_source/2`
-  performs) -- otherwise that name is left to resolve via the ordinary
-  `:json_field` path below, exactly as it did before this requirement. This
-  keeps every existing, never-promoted-entity-type request byte-for-byte
-  unchanged (REQ-300's own hard non-regression requirement) while still
-  giving a genuinely-promoted attribute (this requirement's own AC8
-  scenario, and a join's declaring side) the real `:typed_column`
-  resolution `Letflow.Entities.Query.Compiler`'s two-path column-reference
-  split (design §3.4) needs.
+  only when BOTH `entity_type`'s per-entity-type table **and that specific
+  column** physically exist right now
+  (`TenantProvisioning.entity_table_exists?/2` then, per surviving
+  candidate name, `TenantProvisioning.entity_column_exists?/3` -- the same
+  shared primitive `Letflow.Entities.Query.Compiler.relation_column_exists?/3`
+  delegates to for the join path, so there is exactly one
+  `information_schema.columns` query implementation, not two) --
+  otherwise that name is left to resolve via the ordinary `:json_field`
+  path below, exactly as it did before this requirement and exactly as it
+  did before any column on this entity type was ever promoted. This keeps
+  every existing, never-promoted-entity-type request byte-for-byte
+  unchanged (REQ-300's own hard non-regression requirement), keeps a
+  declared-but-not-yet-promoted field on an *already-promoted* entity type
+  working via the always-safe JSONB path silently and correctly (no new
+  error needed for what used to just work), and still gives a
+  genuinely-promoted attribute (this requirement's own AC8 scenario, and a
+  join's declaring side) the real `:typed_column` resolution
+  `Letflow.Entities.Query.Compiler`'s two-path column-reference split
+  (design §3.4) needs.
   """
   @spec load(entity_type :: String.t(), prefix :: String.t()) ::
           {:ok, allowlist()}
@@ -225,13 +253,19 @@ defmodule Letflow.Entities.Query.Allowlist do
       structural_names = MapSet.new(Map.keys(typed_columns()))
 
       promoted_typed_column_names =
-        if entity_table_physically_exists?(entity_type, prefix) do
-          entity_definition
-          |> definition_document()
-          |> entity_type_typed_columns()
-          |> Map.drop(MapSet.to_list(structural_names))
-        else
-          %{}
+        case entity_table_name_if_exists(entity_type, prefix) do
+          {:ok, table_name} ->
+            entity_definition
+            |> definition_document()
+            |> entity_type_typed_columns()
+            |> Map.drop(MapSet.to_list(structural_names))
+            |> Enum.filter(fn {name, _type} ->
+              TenantProvisioning.entity_column_exists?(prefix, table_name, name)
+            end)
+            |> Map.new()
+
+          :error ->
+            %{}
         end
 
       typed_column_entries =
@@ -310,10 +344,22 @@ defmodule Letflow.Entities.Query.Allowlist do
     end
   end
 
-  defp entity_table_physically_exists?(entity_type, prefix) do
+  # `{:ok, table_name}` when entity_type's per-entity-type table physically
+  # exists (so its name is available for the per-column check above too);
+  # `:error` otherwise -- an invalid entity type name and "no table yet"
+  # both collapse to the same "nothing is promoted" outcome load/2 already
+  # treated identically before this rework cycle.
+  defp entity_table_name_if_exists(entity_type, prefix) do
     case TenantProvisioning.table_name_for_entity_type(entity_type) do
-      {:ok, table_name} -> TenantProvisioning.entity_table_exists?(prefix, table_name)
-      {:error, :invalid_entity_type} -> false
+      {:ok, table_name} ->
+        if TenantProvisioning.entity_table_exists?(prefix, table_name) do
+          {:ok, table_name}
+        else
+          :error
+        end
+
+      {:error, :invalid_entity_type} ->
+        :error
     end
   end
 

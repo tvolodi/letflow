@@ -40,14 +40,17 @@ defmodule Letflow.Entities.Query.Compiler do
   returns a **not-yet-executed** `Ecto.Query.t()`; the caller executes it
   (e.g. `Repo.all(query, prefix: prefix)`), matching every other
   tenant-scoped query in this subsystem. As of REQ-300, `compile/2`'s own
-  *compilation* step does perform two narrow, genuine `Repo.*` reads
-  (`resolve_binding_source/2`'s and `relation_column_exists?/3`'s
-  `information_schema` introspection, mirroring
-  `Letflow.TenantProvisioning.entity_table_exists?/2`'s own idiom exactly)
-  -- see the REQ-300 design doc §3.2/§4.0.2 for why this is a deliberate,
-  narrow exception to (not a violation of) the "never executes the query it
-  builds" invariant, which is about the *returned* query, not every step of
-  building it.
+  *compilation* step does perform two narrow, genuine `information_schema`
+  introspection reads (`resolve_binding_source/2`'s and
+  `relation_column_exists?/3`'s, both delegating to
+  `Letflow.TenantProvisioning`'s `entity_table_exists?/2` and
+  `entity_column_exists?/3` respectively, rather than touching `Repo`
+  directly in this module -- REQ-300 rework cycle 3 moved the column-level
+  query there so `Letflow.Entities.Query.Allowlist.load/2` could reuse the
+  exact same primitive) -- see the REQ-300 design doc §3.2/§4.0.2 for why
+  this is a deliberate, narrow exception to (not a violation of) the
+  "never executes the query it builds" invariant, which is about the
+  *returned* query, not every step of building it.
 
   ## REQ-300 -- joins over promoted FK columns
 
@@ -84,7 +87,6 @@ defmodule Letflow.Entities.Query.Compiler do
   alias Letflow.Entities.Query.Allowlist
   alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
-  alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
   @type compile_error ::
@@ -170,8 +172,9 @@ defmodule Letflow.Entities.Query.Compiler do
 
   # ---------------------------------------------------------------------------------
   # REQ-300 design §3.2 -- resolve_binding_source/2 and §4.0.2 --
-  # relation_column_exists?/3. The two genuine `Repo.*` reads this module
-  # performs during compilation.
+  # relation_column_exists?/3. The two genuine `information_schema` reads
+  # this module performs during compilation (both delegating to
+  # `TenantProvisioning`, rework cycle 3).
   # ---------------------------------------------------------------------------------
 
   @doc """
@@ -197,10 +200,17 @@ defmodule Letflow.Entities.Query.Compiler do
 
   @doc """
   Whether `column_name` physically exists on `table_name` in the tenant
-  schema named by `schema_name` (design §4.0.2) -- a real
-  `information_schema.columns` query, matching
-  `TenantProvisioning.entity_table_exists?/2`'s own idiom exactly
-  (parameterised SQL, `Repo.query!/2`, `rows == []` -> `false`).
+  schema named by `schema_name` (design §4.0.2). REQ-300 rework cycle 3:
+  this is now a thin delegate to
+  `TenantProvisioning.entity_column_exists?/3`, the single shared
+  implementation of this check -- `Letflow.Entities.Query.Allowlist.load/2`
+  needed the exact same column-granularity check (SECURITY-REVIEWER-found
+  regression: the ordinary, non-join filter/sort path had the same
+  table-vs-column existence gap this join-path check was already built
+  for), and duplicating the `information_schema.columns` query in two
+  places risked them drifting. Kept as a public function here (not
+  inlined at its one call site below) since it is still this module's own
+  named primitive per the design doc.
   """
   @spec relation_column_exists?(
           schema_name :: String.t(),
@@ -208,15 +218,7 @@ defmodule Letflow.Entities.Query.Compiler do
           column_name :: String.t()
         ) :: boolean()
   def relation_column_exists?(schema_name, table_name, column_name) do
-    query = """
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
-    """
-
-    case Repo.query!(query, [schema_name, table_name, column_name]) do
-      %Postgrex.Result{rows: []} -> false
-      %Postgrex.Result{rows: [_ | _]} -> true
-    end
+    TenantProvisioning.entity_column_exists?(schema_name, table_name, column_name)
   end
 
   # ---------------------------------------------------------------------------------

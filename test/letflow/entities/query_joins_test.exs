@@ -613,4 +613,101 @@ defmodule Letflow.Entities.QueryJoinsTest do
       assert {:ok, _query} = Compiler.compile(plain_request, schema)
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # Regression (rework cycle 3, SECURITY-REVIEWER-reported) -- the same
+  # table-vs-column existence gap rework cycle 2 closed for the join path
+  # was still open for the ordinary, non-join filter/sort path: a second,
+  # never-promoted field declared on an entity type that already has a
+  # per-type table (from a *different* field's promotion) used to be
+  # misclassified `source: :typed_column` and crash with an unhandled
+  # Postgrex.Error at execution time, instead of falling back to the
+  # always-safe `:json_field`/JSONB path it used before any promotion.
+  # ---------------------------------------------------------------------------------
+
+  describe "regression (rework cycle 3) -- declared-but-unpromoted field, ordinary non-join filter/sort" do
+    test "a plain filter on a not-yet-promoted field falls back to :json_field instead of raising; the promoted field still uses the typed-column path" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "widget_gap",
+        display_name: "Widget Gap",
+        fields: [%{name: "sku", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "widget_gap", "sku", "text")
+
+      # Additive update: "widget_gap" now also declares "batch_code" as
+      # queried: true -- but it has NOT been through
+      # register_column_promotion/run_column_promotion, so it never lands
+      # as a real column on the already-existing per-type table.
+      create_active_definition!(schema, %{
+        name: "widget_gap",
+        display_name: "Widget Gap",
+        fields: [
+          %{name: "sku", type: :string, queried: true},
+          %{name: "batch_code", type: :string, queried: true}
+        ]
+      })
+
+      create_record!(schema, "widget_gap", %{"sku" => "SKU-1", "batch_code" => "whatever"})
+
+      batch_code_request = %{
+        entity_type: "widget_gap",
+        filters: [%{field: "batch_code", op: :eq, value: "whatever"}]
+      }
+
+      assert {:ok, batch_code_query} = Compiler.compile(batch_code_request, schema)
+
+      # :json_field fallback -- the ordinary JSONB-extraction fragment
+      # ("?->>?"), never the promoted-column literal/1-fragment path, and
+      # never a table lacking this column.
+      assert inspect(batch_code_query.wheres) =~ "->>"
+
+      assert [%{field_values: %{"batch_code" => "whatever"}}] =
+               Repo.all(batch_code_query, prefix: schema)
+
+      sku_request = %{
+        entity_type: "widget_gap",
+        filters: [%{field: "sku", op: :eq, value: "SKU-1"}]
+      }
+
+      assert {:ok, sku_query} = Compiler.compile(sku_request, schema)
+      refute inspect(sku_query.wheres) =~ "->>"
+      assert inspect(sku_query.wheres) =~ "identifier"
+
+      assert [%{field_values: %{"sku" => "SKU-1"}}] = Repo.all(sku_query, prefix: schema)
+    end
+
+    test "a plain sort on a not-yet-promoted field falls back to :json_field instead of raising" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "widget_gap_sort",
+        display_name: "Widget Gap Sort",
+        fields: [%{name: "sku", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "widget_gap_sort", "sku", "text")
+
+      create_active_definition!(schema, %{
+        name: "widget_gap_sort",
+        display_name: "Widget Gap Sort",
+        fields: [
+          %{name: "sku", type: :string, queried: true},
+          %{name: "batch_code", type: :string, queried: true}
+        ]
+      })
+
+      create_record!(schema, "widget_gap_sort", %{"sku" => "SKU-1", "batch_code" => "b"})
+
+      sort_request = %{
+        entity_type: "widget_gap_sort",
+        sort: [%{field: "batch_code", dir: :asc}]
+      }
+
+      assert {:ok, query} = Compiler.compile(sort_request, schema)
+      assert [%{field_values: %{"batch_code" => "b"}}] = Repo.all(query, prefix: schema)
+    end
+  end
 end

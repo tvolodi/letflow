@@ -599,6 +599,79 @@ filter/sort, never-promoted entity type, asserting the byte-for-byte
 `Latest` query) continues to prove this without modification, since it
 carries no `join` key at all.
 
+**Superseded by rework cycle 3, below:** the "called from exactly one
+place" claim above described the state before §4.0.3's fix. As of rework
+cycle 3, the same column-granularity query (now the shared
+`TenantProvisioning.entity_column_exists?/3` primitive, with
+`relation_column_exists?/3` delegating to it) is also called from
+`Letflow.Entities.Query.Allowlist.load/2`, once per candidate promoted
+column name, for every request (join or not) — see §4.0.3.
+
+### 4.0.3 Closing the same gap for the ordinary, non-join filter/sort path (rework cycle 3's fix)
+
+**The gap SECURITY-REVIEWER found and reproduced:** §4.0.1/§4.0.2's
+table-then-column existence check was wired in only for the join path
+(inside §3.3 step 6). The ordinary, non-join filter/sort path never went
+through either check — it only had `Allowlist.load/2`'s rework-cycle-2
+table-level gate (§ AC8 note in `allowlist.ex`'s own moduledoc), which is
+insufficient for the identical reason §4.0.2 already documents for joins:
+0023's additive-declare-then-promote rule lets a definition declare a
+*second* `queried: true` field after the per-type table already exists
+from an earlier, unrelated field's promotion, with no `ColumnPromotion`
+ever run for that second field. Concretely reproduced: entity type
+`"widget_gap"` promotes field `"sku"` (its per-type table is created);
+its definition is then additively amended to also declare `"batch_code"`
+(`queried: true`), never promoted. A plain filter
+`%{entity_type: "widget_gap", filters: [%{field: "batch_code", op: :eq,
+value: "whatever"}]}` (no `join` key at all) reached
+`Allowlist.load/2`, which — checking only table existence — classified
+`"batch_code"` `source: :typed_column`; `Compiler.build_filter_dynamic/3`
+then built `fragment("?", literal(^"batch_code"))` against a table
+lacking that column, and `Repo.all/2` raised an unhandled
+`Postgrex.Error` (`undefined_column`) with no `{:error, _}` tuple
+anywhere in the path — a genuine regression versus pre-REQ-300 behavior,
+where this exact filter always resolved safely via `:json_field` (JSONB
+extraction) regardless of promotion state.
+
+**The fix:** move the per-column check from being join-path-only into
+`Allowlist.load/2` itself (Option A of the two SECURITY-REVIEWER offered,
+chosen because it fixes every consumer of `load/2`'s output — filter,
+sort, and any future one — in exactly one place, and because it restores
+the pre-existing, always-safe `:json_field` fallback for a
+declared-but-unpromoted field rather than introducing a new named-error
+failure mode for a case that used to just work silently). Concretely:
+`load/2` now filters its `promoted_typed_column_names` candidate set
+(§ "REQ-300 AC8" note, table existence, rework cycle 2) through a second,
+per-name check —
+`TenantProvisioning.entity_column_exists?(prefix, table_name, name)` —
+before including a name as `source: :typed_column`; a candidate that
+fails this check is simply dropped from `promoted_typed_column_names`,
+which (by `load/2`'s existing merge order) lets its `json_field_entries`
+entry (built unconditionally from every `queried: true` field, regardless
+of promotion state) surface instead — the same `:json_field` resolution
+that name would have gotten before any column on its entity type was ever
+promoted. No new error tag was needed for this path: unlike the join
+path's declaring-side check (§4.0.2), which has no safe fallback (a join
+cannot silently degrade to a JSONB comparison across a relation), a plain
+filter/sort's `:typed_column` classification always has the always-safe
+`:json_field` path available as a fallback.
+
+`Compiler.relation_column_exists?/3` (§4.0.2) is now a thin delegate to
+the same `TenantProvisioning.entity_column_exists?/3` primitive
+`Allowlist.load/2` calls, rather than each holding its own copy of the
+`information_schema.columns` query — one implementation, two callers.
+
+**Non-regression:** an entity type with no columns ever promoted is
+unaffected (`entity_table_name_if_exists/2` returns `:error`, same as
+before, and `promoted_typed_column_names` is `%{}`, same as before). An
+entity type where every promoted-and-declared name has actually been
+through `ColumnPromotion` is unaffected (every candidate name passes the
+new per-column check, so `promoted_typed_column_names` is unchanged from
+what rework cycle 2 already computed). Only the previously-broken case —
+a declared-but-not-yet-promoted name on an entity type that already has a
+table from a *different* field's promotion — changes behavior, and it
+changes from "unhandled crash" to "works exactly as it did pre-promotion."
+
 Either way, the **non-declaring** side of a relation may resolve to
 `:latest` — in that case its binding is `Latest` filtered by
 `entity_type == ^that_entity_type` in the join's own `on:` clause (Latest
@@ -911,4 +984,5 @@ non-promoted `field_values` keys).
 | AC8 (`load/2` repointed, real pipeline) | §8's end-to-end test: a `queried: true`, non-FK promoted field, filtered through the real `Compiler.compile/2`, asserting the compiled query's `wheres` reference the real column via the `literal/1`-fragment path, not a `?->>?` JSONB cast. |
 | **Regression (rework cycle 1's fix, §3.2/§3.3, not tied to a single AC)** | Seed an entity type that has **never** had a column promoted (no `ColumnPromotion` row ever run for it — the ordinary case, per `projector.ex:300-303`). Run a plain, non-join filter/sort request through `Compiler.compile/2`; assert `{:ok, query}` is returned (not `{:error, :entity_table_not_found}`) and the compiled query's `from` targets `Letflow.Entities.Record.Latest` with the `entity_type` where-clause present — i.e., the exact same query shape `compile/2` produces today, byte-for-byte, proving the defect CODE-DESIGN-VALIDATOR found in rework cycle 1 (an unconditional repoint that would have broken this exact case) is closed. |
 | **Regression (rework cycle 2's fix, §4.0.2, not tied to a single AC)** | Seed an entity type (e.g. `"answer_option"`) with one field (e.g. `"text"`) already promoted — its per-type table exists. Additively update its active definition to declare a **new** `fk_def` (e.g. `"question_fk"`, field `"question_id"`, `references_entity: "question"`) **without** registering/running a `ColumnPromotion` for `"question_id"`. Build a direct `join_clause` naming that relation (primary `"question"`, target `"answer_option"`, `fk: "question_fk"`); assert `Compiler.compile/2` returns `{:error, {:relation_column_not_found, "answer_option", "question_id"}}` — a named, testable error — rather than `{:ok, query}` with a query that would raise a raw Postgres "column does not exist" error only at execution time. A second assertion in the same test: a plain, non-join filter/sort request against the same entity type (querying only `"text"`, the column that *does* exist) still returns `{:ok, query}` unaffected — proving this fix's DB check is reached only on the join path, never on a plain request. |
+| **Regression (rework cycle 3's fix, §4.0.3, SECURITY-REVIEWER-reported, not tied to a single AC)** | Seed an entity type (e.g. `"widget_gap"`) with one field (e.g. `"sku"`) already promoted — its per-type table exists. Additively update its active definition to declare a **second**, unrelated `queried: true` field (e.g. `"batch_code"`) **without** registering/running a `ColumnPromotion` for it. Insert a record whose `field_values` carries `"batch_code"` only (never promoted/added as a real column). Compile and **execute** (`Repo.all/2`, not just `compile/2`) a **plain, non-join** filter (`%{entity_type: "widget_gap", filters: [%{field: "batch_code", op: :eq, value: "whatever"}]}`); assert it returns a real result (or empty list) rather than raising `Postgrex.Error`/`undefined_column` — proving `Allowlist.load/2` classified `"batch_code"` `source: :json_field` (JSONB fallback), not `:typed_column`, exactly as it would have before `"sku"` was ever promoted. A second assertion in the same test: a filter on `"sku"` (the column that *does* exist) still resolves via the real `:typed_column`/`literal/1`-fragment path, unaffected. |
 | (whole-suite gate) | `mix letflow.check` run in full, real output quoted in the completion report, per the requirement's own final acceptance criterion. |

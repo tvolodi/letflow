@@ -426,26 +426,100 @@ DDL identifier safety.
 
 ## SECURITY-REVIEWER sign-off
 
-**Verdict: (unfilled — SECURITY-REVIEWER to complete).**
+**Verdict: PASS.**
 
-Invariant to assess: **INV-1 (tenant data isolation)**, specifically the
-point named in this record's §5 by name: *does this design introduce any
-new caller-supplied tenant identifier anywhere in the `entity_definitions`
-export or install path?* This record's own claim is "no" — every read/write
-this design specifies goes through `Letflow.Entities.Definitions`' existing
-`prefix`-taking functions (`get_definition_by_name/2`, `create_definition/2`),
-which derive `tenant_id` from `prefix` via
-`TenantProvisioning.tenant_id_for_schema_name/1`, and `prefix` itself
-continues to come solely from `Letflow.Api.Context.scoped_repo_opts/1`
-(derived solely from the authenticated token's `tenant_id`, confirmed at
-`lib/letflow/api/context.ex:217-237` in this record's own re-verification).
-SECURITY-REVIEWER must independently re-derive this — re-read
-`lib/letflow/api/context.ex`'s `scoped_repo_opts/1`, the companion design
-doc's exact function signatures for the new `export/3`/`install/3` surface,
-and confirm no new function signature accepts a `tenant_id`/`schema_name`/
-`slug` parameter anywhere in the entity-definitions path, addressing this
-INV-1 point **by name** as REQ-303's acceptance criteria require — not as
-part of a general pass over the record.
+**Scope note (per this requirement's own framing): this is a DESIGN-TIME
+review.** No `lib/letflow/definitions/solution_pack.ex`,
+`lib/letflow/entities/`, or migration code implementing REQ-304/REQ-305
+exists yet — this sign-off assesses whether the mechanism this record and
+its companion design doc specify, **if built exactly as specified**, would
+satisfy INV-1. It is not, and cannot be, a review of running code.
+
+**The point named by REQ-303's own AC7, addressed by name: does this design
+introduce any new caller-supplied tenant identifier anywhere in the
+`entity_definitions` export or install path? No.** Independently
+re-verified against the current tree (not taken on the record's word),
+point by point:
+
+1. **`lib/letflow/api/context.ex`'s `scoped_repo_opts/1`** (doc comment at
+   line 189, `@spec` at line 217, `def` at line 219 — the record's cited
+   "217-237" range is a close paraphrase covering the spec/def/helper block,
+   not a materially wrong citation). Re-read in full: the function's only
+   input is `conn`; the only field it ever reads is
+   `conn.assigns[:auth_context][:tenant_id]` (via the private helper
+   `tenant_id_from_auth_context/1`, lines 229-233); that tenant_id is passed
+   to `TenantProvisioning.schema_name_for_tenant/1` to produce `prefix`.
+   There is no parameter, query-string, header, or body path into this
+   function — confirmed, matches the record's claim exactly.
+
+2. **The design's proposed new surface — `export/4` and the
+   install-side functions — introduces no new tenant-identifying
+   parameter.** Traced every new signature in the companion design doc:
+   `export/4(definition_ids, entity_definition_names, version, opts)` —
+   `entity_definition_names` is a list of entity-definition `name` strings
+   (a lookup key within the already-scoped `opts[:prefix]`), not a tenant
+   identifier; `pack_each_entity_definition/2`, `pack_entity_definition/1`,
+   `parse_entity_definitions/1`, `parse_entity_definition/1`, and
+   `create_packed_entity_definitions/3` all take `opts`/`prefix` exactly the
+   way every existing pack section's helpers already do — none of these
+   signatures adds a `tenant_id`, `schema_name`, `slug`, or any other
+   caller-suppliable tenant-scoping value. The tenant scope for every one of
+   these calls continues to flow from the single `opts[:prefix]` value
+   threaded in from `scoped_repo_opts/1` at the route boundary.
+
+3. **`lib/letflow/entities/definitions.ex`'s `create_definition/2`
+   (lines 104-141) and `activate_definition/4` (lines 405-422), re-verified
+   against the current file.** `create_definition/2` takes `prefix ::
+   String.t()` as an explicit second argument and is the SOLE source of
+   `tenant_id` for the insert: `TenantProvisioning.tenant_id_for_schema_name(prefix)`
+   (inside the `with`), then `insert_entity_definition/6` writes that
+   derived `tenant_id` into the row's `attrs` — there is no other path by
+   which `tenant_id` reaches this function; it is never read from
+   `definition`, from `created_by`, or from any other argument.
+   `activate_definition/4` likewise takes `prefix` explicitly, and every
+   call it makes (`get_definition_by_name/2`, `Activation.activate_group/5`,
+   and `promote_and_demote_siblings/2`'s own `Repo.update_all`/`Repo.update`
+   calls with `prefix: prefix`) is scoped by that same `prefix` value,
+   consistently, with no independent or alternate tenant-derivation path
+   anywhere in the function.
+
+4. **Collision handling cannot leak across tenants.** The unique index
+   backing the `unique_constraint(:name, name:
+   :entity_definitions_tenant_name_shape_idx)` clause in
+   `entity_definition.ex`'s `changeset/2` is confirmed, in the actual
+   migration (`priv/repo/migrations/20260906000001_create_entity_definitions.exs`,
+   lines ~58-68), to be on `(:tenant_id, :name, :logical_shape_version)` —
+   `tenant_id` is the leading column. Combined with the table itself being
+   schema-per-tenant (`prefix: schema`, tenant-scoped migration, per that
+   file's own header comment), a collision can only fire against rows in
+   the same tenant's own schema with the same `tenant_id` value — there is
+   no shared, cross-tenant table this constraint could match against, and
+   no code path in the design's proposed `create_packed_entity_definitions/3`
+   that could target a different tenant's schema than `opts[:prefix]`
+   resolves to. The design's "abort the whole install transaction on
+   collision" behavior (0026 §2) is therefore a same-tenant-only outcome —
+   it introduces no cross-tenant isolation gap.
+
+5. **The pack section itself carries no tenant field.** The design doc's
+   `packed_entity_definition()` type (§1) and its parse counterpart,
+   `parsed_packed_entity_definition()` (§3.1), list exactly five fields —
+   `entity_definition_id`, `name`, `display_name`, `definition_json`,
+   `logical_shape_version` — none of which is a tenant identifier of any
+   kind. Tenant scoping for both export (`get_definition_by_name/2` under
+   `opts[:prefix]`) and install (`create_definition/2` under `opts[:prefix]`)
+   happens entirely at the call boundary, never via pack content; a pack's
+   `entity_definitions` array is trusted only as entity-definition
+   documents, never as a source of tenant scope.
+
+**Conclusion: as specified, the design introduces no new caller-supplied
+tenant identifier anywhere in the `entity_definitions` export or install
+path — INV-1 is satisfied by the proposed mechanism.** This verdict is
+conditioned on REQ-304/REQ-305 implementing exactly the signatures this
+design doc specifies (no new `tenant_id`/`schema_name`/`slug` parameter
+added at implementation time that isn't in this doc); SECURITY-REVIEWER
+gates REQ-304 and REQ-305 independently when their actual diffs land,
+per this project's standard per-change gate, and this design-time PASS
+does not substitute for that later review.
 
 ## REVIEWER sign-off
 

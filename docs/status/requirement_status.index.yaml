@@ -2588,8 +2588,25 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 13
+    entries: 14
     note: >
+      Recounted to 14 on ORCH's fix/ISS-0582-20260910 Step Final rebase
+      onto main, composing this branch's own ISS-0582 SCOPE-CHANGE
+      done-event (independently computed as 12, against a stale base of
+      11) with main's own REQ-306 started+done event pair (independently
+      computed as 13), chronologically interleaved into
+      docs/status/requirement_status.v13.yaml (REQ-306 started 18:53:41Z,
+      REQ-306 done 19:50:47Z, ISS-0582 done 19:55:18Z). This rebase also
+      hit a real content conflict (not just the usual append-only
+      status-file kind) in test/letflow/definitions/solution_pack_test.exs
+      against REQ-306's own coverage, resolved by fixing a test fixture
+      (see the ISS-0582 done-event's own note above for detail); all 17
+      tests in the composed file pass. Recounted directly from the
+      composed file (`grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 14 on-disk entries; 718
+      lines / 42749 bytes, well under the roll ceiling) rather than
+      carrying forward either side's independently-computed 12/13, per
+      this note's own recount-every-time rule.
       Recounted to 13 on WF02-REQ306-20260910's own Step Final rebase onto
       main, composing this branch's own REQ-306 done-event append
       (Step 6, DOC-UPDATER, independently computed as 12 against a stale
@@ -2613,6 +2630,10 @@ volumes:
       lines / 36521 bytes, well under the roll ceiling) rather than
       carrying forward either side's independently-computed 11, per this
       note's own recount-every-time rule.
+      Incremented to 12 by ORCH's own ISS-0582 SCOPE-CHANGE done-event
+      append (fix/ISS-0582-20260910) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 12 on-disk entries; 633
+      lines, well under the roll ceiling.
       Recounted to 11 on ORCH's fix/ISS-0580-20260910 rebase onto main,
       composing this branch's own ISS-0580 SCOPE-CHANGE done-event
       (independently computed as 9, against a stale base of 8) with main's

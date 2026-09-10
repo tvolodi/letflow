@@ -43,12 +43,28 @@ defmodule Letflow.Definitions.SolutionPackTest do
   alias Letflow.Engine.VariableSchema
   alias Letflow.Entities.Definitions, as: EntityDefinitions
   alias Letflow.Entities.EntityDefinition
+  alias Letflow.Repo
   alias Letflow.TenantFixture
 
   # ── Shared helpers ─────────────────────────────────────────────────────────
 
   defp unique(prefix),
     do: prefix <> "_" <> to_string(System.unique_integer([:positive, :monotonic]))
+
+  # Mirrors req078_supporting_routes_test.exs's own cleanup_solution_pack_installs!/1
+  # exactly, for the same reason: solution_pack_installs is a REQ-041 GLOBAL
+  # table TenantFixture has no knowledge of, so any test that calls
+  # SolutionPack.install/3 leaves a row referencing tenant_id via
+  # solution_pack_installs_tenant_id_fkey. Registered AFTER the tenant
+  # fixture's own on_exit (in creation order inside the test body), so
+  # ExUnit's LIFO on_exit ordering runs this FIRST -- deleting the global row
+  # before TenantFixture's own teardown tries to delete the tenants row it
+  # references.
+  defp cleanup_solution_pack_installs!(tenant_id) do
+    on_exit(fn ->
+      Repo.delete_all(from(s in SolutionPackInstall, where: s.tenant_id == ^tenant_id))
+    end)
+  end
 
   # Process-definition fixture -- mirrors req078_supporting_routes_test.exs's own
   # graph_start_end/0 + create_definition_attrs/2 + active_definition!/2 pattern,
@@ -167,7 +183,12 @@ defmodule Letflow.Definitions.SolutionPackTest do
         "entity_definition_id" => Ecto.UUID.generate(),
         "name" => default_name,
         "display_name" => "REQ-306 Entity Fixture",
-        "logical_shape_version" => "req306-shape-" <> default_name,
+        # Must be valid hex -- decode_logical_shape_version/1 (ISS-0582)
+        # rejects non-hex strings with {:error, :invalid_pack_document}
+        # before this value ever reaches create_definition/2, which
+        # recomputes its own logical_shape_version fresh anyway.
+        "logical_shape_version" =>
+          Base.encode16(:crypto.hash(:sha256, default_name), case: :lower),
         "definition_json" => %{
           "name" => default_name,
           "display_name" => "REQ-306 Entity Fixture",
@@ -327,7 +348,9 @@ defmodule Letflow.Definitions.SolutionPackTest do
       assert packed.name == entity_definition.name
       assert packed.display_name == entity_definition.display_name
       assert packed.definition_json == entity_definition.definition_json
-      assert packed.logical_shape_version == entity_definition.logical_shape_version
+
+      assert packed.logical_shape_version ==
+               Base.encode16(entity_definition.logical_shape_version, case: :lower)
 
       # And the required-minimum (AC2) fields carry the real, human-authored
       # content -- not just structurally-present placeholders.
@@ -645,6 +668,82 @@ defmodule Letflow.Definitions.SolutionPackTest do
 
       assert process_definition_count(tenant.schema_name, process_key) == 1
       assert Repo.aggregate(VariableSchema, :count, :id, prefix: tenant.schema_name) == 1
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ISS-0582 regression -- pack_entity_definition/1's logical_shape_version
+  # must be JSON-safe, and must decode back to the original raw digest
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  describe "ISS-0582 regression: pack_document's logical_shape_version survives a real Jason encode/decode round trip" do
+    test "export/4's pack_document is real Jason.encode!/1-safe, and the round-tripped logical_shape_version decodes back to the original raw digest" do
+      # GH#1196 / ISS-0582: pack_entity_definition/1 used to embed
+      # EntityDefinition.logical_shape_version -- a raw SHA-256 :binary
+      # column, arbitrary non-UTF-8 bytes -- directly into the pack document,
+      # which is documented (this module's @type pack_document, the
+      # SolutionPacks router) to be a JSON-serializable structure. Calling
+      # Jason.encode!/1 on a real packed document raised Jason.EncodeError.
+      # The fix hex-encodes at pack time (encode_logical_shape_version/1) and
+      # hex-decodes at parse time (decode_logical_shape_version/1). This test
+      # exercises the REAL export/4 -> Jason.encode!/1 -> Jason.decode!/1
+      # round trip end to end, rather than re-implementing encode/decode by
+      # hand, so a regression that reintroduces a raw-binary field (or
+      # reverts the hex-encoding) fails here exactly the way it failed for
+      # real before the fix.
+      tenant_a = TenantFixture.provisioned_tenant!(slug_prefix: "iss0582-a")
+      tenant_b = TenantFixture.provisioned_tenant!(slug_prefix: "iss0582-b")
+      cleanup_solution_pack_installs!(tenant_b.tenant_id)
+
+      created = create_entity_definition!(tenant_a.schema_name)
+
+      assert {:ok, original} =
+               EntityDefinitions.get_definition_by_name(created.name, tenant_a.schema_name)
+
+      # The raw digest is genuinely non-UTF-8-safe binary -- a SHA-256 digest
+      # of a real column value -- so this isn't a coincidentally-printable
+      # fixture that would pass even without hex-encoding.
+      refute String.valid?(original.logical_shape_version)
+
+      assert {:ok, doc} =
+               SolutionPack.export([], [original.name], "1.0.0", prefix: tenant_a.schema_name)
+
+      # AC1: pack_document must be real-Jason.encode!/1-safe. This is the
+      # exact call that raised Jason.EncodeError before the fix.
+      json = Jason.encode!(doc)
+
+      # AC1 (continued): and the JSON is genuinely parseable back.
+      assert %{"entity_definitions" => [decoded_packed]} = Jason.decode!(json)
+
+      # AC2: the round-tripped logical_shape_version, hex-decoded, is
+      # byte-for-byte identical to the original raw digest -- not just
+      # "some string survived JSON", but the exact original bytes.
+      assert decoded_packed["logical_shape_version"] ==
+               Base.encode16(original.logical_shape_version, case: :lower)
+
+      assert Base.decode16!(decoded_packed["logical_shape_version"], case: :lower) ==
+               original.logical_shape_version
+
+      # AC2 (closing the loop): installing the real decoded JSON document
+      # into a DIFFERENT tenant via the real install/3 path succeeds, and the
+      # installed row's own logical_shape_version (recomputed by
+      # create_definition/2 from the same definition_json) matches the
+      # original tenant's value byte-for-byte -- proving the whole
+      # export -> JSON -> install pipeline is intact, not just the
+      # encode/decode helpers in isolation.
+      decoded_document = Jason.decode!(json)
+
+      assert {:ok, install_result} =
+               SolutionPack.install(decoded_document, Ecto.UUID.generate(),
+                 prefix: tenant_b.schema_name
+               )
+
+      assert [%{name: installed_name}] = install_result.installed_entity_definitions
+
+      assert {:ok, installed} =
+               EntityDefinitions.get_definition_by_name(installed_name, tenant_b.schema_name)
+
+      assert installed.logical_shape_version == original.logical_shape_version
     end
   end
 end

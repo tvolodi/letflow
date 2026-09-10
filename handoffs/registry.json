@@ -6191,5 +6191,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0580 (queue task 580, GH#1189) -- ColumnPromotionTest AC1 flaked with a unique-constraint violation under parallel suite load, independently observed 3 times this session (twice during ISS-0578's own verification). Root cause: Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto) set in provisioned_tenant/0-style helpers and never restored to :manual -- a global, pool-wide setting, so this leaked real writes from concurrently-running async tests into the shared test DB. Same defect found in 7 files. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (first attempt went off-script running live test-debugging spikes for 1.5h with no design-doc output, killed by ORCH, one stray uncommitted test edit reverted; relaunched with explicit read-only-investigation scope, completed cleanly) -> CODE-DESIGN-VALIDATOR (PASS first try) -> ELIXIR-DEV (new Letflow.Test.SandboxAutoMode helper, 7 call sites updated) -> REVIEWER (1 rework: caught that a necessary on_exit force-:auto reset was never paired with a restore, reopening the leak once per test instead of once per bug; fixed by calling exit_auto_mode!/1 as the last on_exit statement; re-check PASS, full suite confirmed ColumnPromotionTest flake no longer reproduces). REVIEWER flagged orphaned tenant/tenant_schemas row accumulation in the shared test DB (not caught by TenantSchemaReaper) as a follow-up candidate, not a blocker. Test-support-only change -- SECURITY-REVIEWER correctly skipped."
     }
+,
+    {
+      "run_id": "WF03-ISS0582-20260910",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0582",
+      "queue_task_id": 582,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1196,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/definitions/solution_pack.ex"
+      ],
+      "branch_name": "fix/ISS-0582-20260910",
+      "started_at": "2026-09-10T19:17:54Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0582 (queue task 582, GH#1196) -- pack_entity_definition/1 embedded a raw, non-UTF-8-safe SHA-256 digest (logical_shape_version) verbatim into the SolutionPack pack document, breaking Jason.encode!/1 for real. Discovered by TEST-DESIGNER writing REQ-306's round-trip coverage. Fix: hex-encode at pack time (encode_logical_shape_version/1, matching Records.hex_version/1's convention), hex-decode at parse time (decode_logical_shape_version/1, non-raising, reusing :invalid_pack_document). create_definition/2 recomputes logical_shape_version fresh and never reads the packed value, so this is round-trip-fidelity only, not load-bearing for install correctness. Pipeline: CODE-DESIGNER (PASS first try, explicitly called this in-scope for SECURITY-REVIEWER) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (real AC1/AC2 evidence via throwaway test) -> SECURITY-REVIEWER PASS -> REVIEWER PASS -> TEST-DESIGNER added one permanent regression test (real export/4 -> Jason encode/decode -> install/3 pipeline, fail-first-proven against the pre-fix code). TEST-DESIGN-VALIDATOR skipped per established precedent."
+    }
   ]
 }

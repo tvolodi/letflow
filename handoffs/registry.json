@@ -6128,5 +6128,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-300 (queue task 571, GH#1165) adds joins to Query.Compiler over promoted FK columns. Design went through 2 rework cycles catching real regressions (unconditional compile/2 repointing would break plain queries against unpromoted entity types; table-vs-column existence-check granularity gap for join columns). A THIRD instance of the same bug class surfaced at implementation in the ordinary filter/sort path, caught by SECURITY-REVIEWER via a real written-and-run reproduction, fixed by centralizing a per-column existence check in Allowlist.load/2 (shared with the join path via TenantProvisioning.entity_column_exists?/3). REVIEWER's final pass deliberately swept for a fourth instance and found none. Pipeline: CODE-DESIGNER (2 design rework cycles) -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (1 rework: third bug instance, re-check PASS) -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (12 tests, comprehensive, independently confirmed twice)."
     }
+,
+    {
+      "run_id": "WF02-REQ303-20260910",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-303",
+      "issue_id": null,
+      "queue_task_id": 574,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1172,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions"
+      ],
+      "branch_name": "feature/WF02-REQ303-20260910",
+      "started_at": "2026-09-10T11:40:58Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-303 (queue task 574, GH#1172) answers S10 gap 13 (SolutionPack entity_definitions section) -- new decision record docs/migration/decisions/0026-solution-pack-entity-definitions-section.md, explicitly independent of the 0023 entity-storage batch. Schema version stays unchanged (envelope identifier, not section presence); old/new pack compatibility follows existing default-to-[] and service_catalog_entries's reject-unsupported precedent respectively. Install is :inactive-only, name collision aborts the whole transaction. Key finding: the form-schema gap is ALREADY CLOSED -- form_schema is a HUMAN_TASK node attribute inside a definition's graph, and packed definitions already embed their graph verbatim, so no new pack section is needed for it. INV-1: no new caller-supplied tenant identifier anywhere. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework: citation pointed at wrong section for a quoted rationale, load-bearing form-schema claim itself was accurate on first pass; re-check PASS) -> SECURITY-REVIEWER (PASS, named INV-1 sign-off per this requirement's own AC) -> REVIEWER (PASS). Design-only, no lib/ code -- REQ-304/305 build the export/install sides."
+    }
   ]
 }

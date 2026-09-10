@@ -169,3 +169,66 @@
 
 
 history:
+  - req: REQ-303
+    event: done
+    agent: ORCH
+    at: "2026-09-10T11:56:54Z"
+    note: >
+      REQ-303 (queue task 574, GH#1172) implemented via
+      WF02-REQ303-20260910: a new decision record,
+      docs/migration/decisions/0026-solution-pack-entity-definitions-section.md,
+      answering S10 gap 13 (a SolutionPack entity_definitions section)
+      -- explicitly independent of the 0023 entity-storage batch
+      (REQ-295..302), found by the same architecture review but
+      addressing a different subsystem (pack delivery format, not
+      storage shape); stated as such in the record's own text.
+      Q1 (schema versioning): bpm_export_schema_version stays
+      "bpm/definition/v1" (identifies the envelope, not which optional
+      sections are present). An old pack against a new installer:
+      fetch_list/2's existing default-missing-to-[] behavior is
+      ratified, not overridden. A new pack against an old installer:
+      same reject-non-empty-unsupported-content stance as
+      service_catalog_entries, via check_unsupported_sections/1 -- not
+      a version-bump rejection point.
+      Q2 (install semantics): a packed entity definition installs as
+      :inactive only, mirroring create_definition/2's own default; no
+      call to activate_definition/4 is added (no other pack-installed
+      artefact type is auto-activated today). A name collision --
+      keyed by (tenant_id, name, logical_shape_version), the real
+      unique-constraint shape -- aborts the whole install transaction,
+      matching SolutionPack.install/3's documented all-or-nothing,
+      no-upsert stance verbatim.
+      Q3 (the form-schema question, re-verified rather than assumed):
+      the gap is ALREADY CLOSED. form_schema is not a standalone
+      artefact -- it's an attribute on a HUMAN_TASK node's attributes
+      map inside a process definition's graph (Graph's CHK-20 /
+      FormSchemaExpressions, REQ-291's merged work), and
+      pack_definition/1 already embeds a definition's graph verbatim,
+      so form schemas already travel through the EXISTING definitions
+      pack section with zero code change. No new section proposed for
+      this.
+      Q4: entity_definitions follows the same reject-until-supported
+      pattern as service_catalog_entries for any interim between the
+      export side (REQ-304) and install side (REQ-305) landing.
+      Q5 (INV-1): no new caller-supplied tenant identifier anywhere in
+      the entity_definitions path -- every read/write threads
+      opts[:prefix], derived solely from the authenticated request's
+      own tenant_id via Api.Context.scoped_repo_opts/1, the same
+      mechanism every other pack section already uses.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework
+      cycle: a citation pointed at the wrong section of
+      export_import.ex for the "one version constant, not two"
+      rationale -- the load-bearing form-schema claim itself checked
+      out clean on first pass; citation fixed, re-check PASS) ->
+      SECURITY-REVIEWER (PASS -- this requirement's own AC required
+      the "no new caller-supplied tenant identifier" point addressed
+      BY NAME, not a general pass; independently traced
+      scoped_repo_opts/1 and the design's proposed function signatures,
+      confirmed none introduce a new tenant parameter) -> REVIEWER
+      (PASS -- confirmed format consistency with 0022/0023/0024/0025,
+      confirmed 0024/0025 correctly treated as optional context never
+      cited as blocking prerequisites, confirmed the collision-handling
+      stance doesn't reopen any other decision record's transactional
+      policy). Design-only requirement -- no lib/ code, no migration,
+      REQ-304/305 build the export/install sides against this record's
+      answers. No blocked-by deferral hatches reference REQ-303.

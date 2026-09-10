@@ -28,4 +28,7 @@ affected_files:
   - lib/letflow/definitions/solution_pack.ex
 queue_ref: Q-582
 github_ref: GH-1196
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0582-20260910
+resolved_at: "2026-09-10T20:17:45Z"

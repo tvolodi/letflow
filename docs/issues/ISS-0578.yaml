@@ -46,4 +46,7 @@ affected_files:
   - test/support/tenant_fixture.ex (likely call site, re-verify at start)
 queue_ref: Q-578
 github_ref: GH-1185
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0578-20260910
+resolved_at: "2026-09-10T15:23:59Z"

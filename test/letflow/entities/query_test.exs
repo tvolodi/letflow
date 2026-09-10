@@ -764,4 +764,98 @@ defmodule Letflow.Entities.QueryTest do
                {:error, :invalid_schema_name}
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-301 AC5 (amended/narrowed) -- a :localized_text field's per-locale
+  # generated columns are exposed via typed_columns/2, never the base field
+  # name; and load/2 never allowlists the base name either, per §4.6's fix.
+  # See lib/letflow/design/req301-localized-text-field-type.md §4.6/§5.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-301 AC5 -- typed_columns/2 exposes per-locale generated columns, never the base name" do
+    test "typed_columns/2 for an entity type with a queried:true :localized_text field returns exactly the per-locale columns, typed :string, not the base field name" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "question",
+        fields: [
+          %{
+            name: "stem",
+            type: :localized_text,
+            locales: ["kk", "ru"],
+            queried: true
+          }
+        ]
+      })
+
+      assert {:ok, columns} = Allowlist.typed_columns("question", schema)
+
+      structural = Map.keys(Allowlist.typed_columns())
+      promoted_names = Map.keys(columns) -- structural
+
+      assert MapSet.new(promoted_names) == MapSet.new(["stem_kk", "stem_ru"])
+      assert columns["stem_kk"] == :string
+      assert columns["stem_ru"] == :string
+      refute Map.has_key?(columns, "stem")
+    end
+
+    test "typed_columns/2 exposes locale columns for :fulltext exactly the same way (still :string, not a tsvector-flavored type)" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "question",
+        fields: [
+          %{
+            name: "stem",
+            type: :localized_text,
+            locales: ["kk"],
+            queried: true,
+            search_strategy: :fulltext
+          }
+        ]
+      })
+
+      assert {:ok, columns} = Allowlist.typed_columns("question", schema)
+      assert columns["stem_kk"] == :string
+      refute Map.has_key?(columns, "stem")
+    end
+
+    test "load/2 does not crash and does not allowlist the base :localized_text field name under its own bare name" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "question",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk", "ru"], queried: true}
+        ]
+      })
+
+      # Before the §4.6 fix, this same fixture would allowlist "stem" as a
+      # :json_field entry that crashes Compiler.json_cast_dynamic/2's
+      # FunctionClauseError the moment it is resolved -- this asserts load/2
+      # itself never produces that entry in the first place.
+      assert {:ok, allowlist} = Allowlist.load("question", schema)
+      refute Map.has_key?(allowlist, "stem")
+
+      assert Allowlist.resolve_field(allowlist, "stem") ==
+               {:error, {:field_not_allowed, "stem"}}
+    end
+
+    test "a :localized_text field NOT queried: true is absent from both typed_columns/2 and load/2" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "question",
+        fields: [%{name: "stem", type: :localized_text, locales: ["kk", "ru"]}]
+      })
+
+      assert {:ok, columns} = Allowlist.typed_columns("question", schema)
+      structural = Map.keys(Allowlist.typed_columns())
+      assert MapSet.new(Map.keys(columns)) == MapSet.new(structural)
+
+      assert {:ok, allowlist} = Allowlist.load("question", schema)
+      refute Map.has_key?(allowlist, "stem")
+      refute Map.has_key?(allowlist, "stem_kk")
+    end
+  end
 end

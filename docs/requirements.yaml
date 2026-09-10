@@ -18079,7 +18079,7 @@ requirements:
     title: Letflow.Entities.Query.Allowlist.typed_columns/0 becomes per-entity-type, shadowing precedence rule unchanged
     owner: ELIXIR-DEV
     impl_order: 568  # letflow-queue task id; depends_on translated to queue task ids [566]
-    status: pending
+    status: in_progress
     stage: S10
     description: >
       0023's consequences section, quoted exactly: "Letflow.Entities.Query.Allowlist.typed_columns/0

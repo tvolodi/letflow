@@ -925,6 +925,20 @@ history:
       REVIEWER. No blocked-by deferral hatches reference REQ-296 --
       REQ-297/298/301 (its real dependents) remain unstartable
       regardless via the queue's own depends_on tracking.
+
+  - req: REQ-299
+    event: started
+    agent: ORCH
+    at: "2026-09-10T01:15:02Z"
+    note: >
+      WF02-REQ299-20260910 started (queue task 568, GH#1162). Makes
+      Letflow.Entities.Query.Allowlist.typed_columns/0 per-entity-type,
+      reading REQ-296's promoted-column enumeration off Definition.t()
+      rather than a second hand-maintained list, per decision 0023's
+      consequences section. Shadowing precedence rule (typed column
+      always wins over a same-named JSONB key) is unchanged. Branch:
+      feature/WF02-REQ299-20260910.
+
   - req: REQ-297
     event: done
     agent: ORCH

@@ -89,9 +89,12 @@ defmodule Letflow.Engine.ExecutionError do
   deliberate, not a typo) — kept open, as a mapping rather than a hardcoded
   case statement, so a future calling path can add its own error atom
   without needing every existing `case`/`cond` over `error_type()` updated
-  for exhaustiveness first. The five named atoms map 1:1 onto
-  this requirement's five calling paths (REQ-049, REQ-050, REQ-056, REQ-057,
-  REQ-062).
+  for exhaustiveness first. The first five named atoms map 1:1 onto
+  EE-10/REQ-061's five calling paths (REQ-049, REQ-050, REQ-056, REQ-057,
+  REQ-062). `:form_expression_evaluation_failed` and
+  `:form_cross_field_validation_failed` (REQ-292) are a later, sixth
+  calling path added the same way — an additive `@type` entry, no existing
+  `case`/`cond` touched.
   """
   @type error_type ::
           :variable_schema_rejected
@@ -99,6 +102,8 @@ defmodule Letflow.Engine.ExecutionError do
           | :service_task_retries_exhausted
           | :plugin_error_outcome
           | :subprocess_interface_violation
+          | :form_expression_evaluation_failed
+          | :form_cross_field_validation_failed
           | atom()
 
   @typedoc "AC1's 'affected node or field', a two-member tagged union."

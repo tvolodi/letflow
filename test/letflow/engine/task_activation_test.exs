@@ -268,21 +268,47 @@ defmodule Letflow.Engine.TaskActivationTest do
 
   # ---------------------------------------------------------------------------------
   # REQ-273's own INV-2 scope-fence assertion: form_schema is never wired into
-  # the completion/output-validation path. A negative, grep-based check
-  # mirroring the acceptance criterion's own wording exactly.
+  # the value-shape VALIDATION path. A negative, grep-based check mirroring the
+  # acceptance criterion's own wording exactly.
+  #
+  # NARROWED by REQ-292 (2026-09-11, gate-approved design
+  # lib/letflow/design/req292-server-side-form-expression-reevaluation.md §1
+  # point 5): `Letflow.Engine.complete_task/3` now DOES read `task.form_schema`
+  # on its own transactional completion path, in order to re-evaluate its
+  # `x-ui.visible_when`/`computed`/`cross_field_validation` EXPRESSIONS
+  # server-side (REQ-292's own AC1-AC5) -- a different concern from the one
+  # this test originally guarded. `variable_merge.ex` still never references
+  # form_schema at all (unchanged); `engine.ex`'s own new reference is
+  # confirmed confined to reading `task.form_schema` and feeding it into
+  # `Letflow.Engine.FormExpressionReevaluation.reevaluate/3` -- never to
+  # validating a submitted value's type/constraints against form_schema's own
+  # JSON-Schema keywords, which remains `variable_schemas`' sole authority
+  # (REQ-292 AC6).
   # ---------------------------------------------------------------------------------
 
-  describe "REQ-273 scope fence -- form_schema never reaches the completion path" do
-    test "variable_merge.ex and engine.ex contain zero references to form_schema" do
-      root = File.cwd!()
+  describe "REQ-273 scope fence -- form_schema is read-only at completion, never a validation authority" do
+    test "variable_merge.ex still contains zero references to form_schema" do
+      contents =
+        File.read!(Path.join(File.cwd!(), "lib/letflow/engine/variable_merge.ex"))
 
-      for path <- [
-            "lib/letflow/engine/variable_merge.ex",
-            "lib/letflow/engine.ex"
-          ] do
-        contents = File.read!(Path.join(root, path))
-        refute contents =~ "form_schema", "#{path} must never reference form_schema"
-      end
+      refute contents =~ "form_schema"
+    end
+
+    test "engine.ex reads task.form_schema only to feed FormExpressionReevaluation.reevaluate/3 -- never to validate a submitted value's type/constraints" do
+      contents = File.read!(Path.join(File.cwd!(), "lib/letflow/engine.ex"))
+
+      assert contents =~ "task.form_schema"
+      assert contents =~ "FormExpressionReevaluation.reevaluate("
+
+      # engine.ex's own code (not its moduledoc prose about the UNRELATED
+      # variable_schemas JSON-Schema wrapper shape, req049-variable-merge.md
+      # §7.1) must never itself pull a "type"/"required"/etc. validation
+      # keyword out of `form_schema` -- that stays variable_schemas' sole
+      # authority (REQ-292 AC6). Scoped to the two real call sites rather
+      # than a whole-file keyword grep, which would also match unrelated
+      # prose elsewhere in this large file.
+      refute contents =~ ~r/form_schema[^\n]{0,80}"(type|required|minimum|maximum|pattern)"/
+      refute contents =~ ~r/"(type|required|minimum|maximum|pattern)"[^\n]{0,80}form_schema/
     end
   end
 

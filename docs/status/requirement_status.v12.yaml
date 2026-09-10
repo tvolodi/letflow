@@ -925,6 +925,20 @@ history:
       REVIEWER. No blocked-by deferral hatches reference REQ-296 --
       REQ-297/298/301 (its real dependents) remain unstartable
       regardless via the queue's own depends_on tracking.
+
+  - req: REQ-299
+    event: started
+    agent: ORCH
+    at: "2026-09-10T01:15:02Z"
+    note: >
+      WF02-REQ299-20260910 started (queue task 568, GH#1162). Makes
+      Letflow.Entities.Query.Allowlist.typed_columns/0 per-entity-type,
+      reading REQ-296's promoted-column enumeration off Definition.t()
+      rather than a second hand-maintained list, per decision 0023's
+      consequences section. Shadowing precedence rule (typed column
+      always wins over a same-named JSONB key) is unchanged. Branch:
+      feature/WF02-REQ299-20260910.
+
   - req: REQ-297
     event: done
     agent: ORCH
@@ -979,3 +993,36 @@ history:
       confirmed by both SECURITY-REVIEWER and REVIEWER. No blocked-by
       deferral hatches reference REQ-297 -- REQ-298/301 remain
       unstartable regardless via the queue's own depends_on tracking.
+
+  - req: REQ-299
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T04:07:42Z"
+    note: >
+      REQ-299 (queue task 568, GH#1162) implemented via
+      WF02-REQ299-20260910: Letflow.Entities.Query.Allowlist.typed_columns/2,
+      a new per-entity-type promoted-column accessor sharing REQ-296's
+      DDL.promoted_columns/1 enumeration -- typed_columns/0 (the fixed
+      7-entry structural table) and load/2 left byte-for-byte unchanged.
+      Real mid-run scope conflict: implementing the original AC4 wording
+      literally (wiring load/2 to the new per-entity-type set) broke
+      compiler.ex's and cursor.ex's column-atom resolution for the
+      mainline non-FK promoted-field case -- 15 test failures. REVIEWER
+      approved deferring the load/2 wiring to REQ-300, which already
+      depends_on: [REQ-298, REQ-299] and now carries an explicit
+      acceptance criterion for it; REQ-VALIDATOR and ORCH amended
+      REQ-299's AC4 wording and REQ-300's acceptance criteria to close
+      the gap REQ-300 inherits (both amendments already committed on
+      this branch, commit dfda9606, earlier in this run). Pipeline:
+      CODE-DESIGNER (3 iterations) -> CODE-DESIGN-VALIDATOR -> REVIEWER
+      (scope sign-off on the AC4 deferral) -> REQ-VALIDATOR (AC4/REQ-300
+      text fix) -> ELIXIR-DEV (2 attempts) -> SECURITY-REVIEWER (PASS) ->
+      REVIEWER (idiom PASS) -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR
+      (PASS) -> TEST-RUNNER (PASS, 3620/3620) -> RELEASE-VALIDATOR (PASS
+      after one formatting fix; full suite 3620/3620, mix letflow.check
+      clean). docs/requirements.yaml flipped in_progress -> done.
+      README.md checked -- no documented current-behavior change (pure
+      internal query-layer accessor, no user-facing effect) -- left
+      unchanged. docs/migration/decisions/0023-entity-storage-hybrid.md
+      confirmed needing no edit, per REVIEWER's own prior sign-off that
+      0023's claim doesn't need amendment.

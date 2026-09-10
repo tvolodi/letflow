@@ -18079,7 +18079,7 @@ requirements:
     title: Letflow.Entities.Query.Allowlist.typed_columns/0 becomes per-entity-type, shadowing precedence rule unchanged
     owner: ELIXIR-DEV
     impl_order: 568  # letflow-queue task id; depends_on translated to queue task ids [566]
-    status: pending
+    status: done
     stage: S10
     description: >
       0023's consequences section, quoted exactly: "Letflow.Entities.Query.Allowlist.typed_columns/0
@@ -18163,7 +18163,7 @@ requirements:
       - "typed_columns/0 (or its replacement, if renamed, with the rename justified in the completion report) returns entity-type-specific promoted columns in addition to the existing structural 7, proven by a test comparing two different entity-type fixtures with different promoted columns and asserting their typed-column sets differ accordingly"
       - "the promoted-column set returned here matches REQ-296's DDL-generator's own promoted-column enumeration for the same definition, proven by a test that constructs one definition fixture and asserts both functions agree on which fields are promoted -- not two independently-hand-maintained lists that could drift"
       - "the shadowing precedence rule is unchanged and still covers the original structural-7 case, proven by re-running (or confirming still-passing) the existing test(s) that assert a typed column wins over a same-named JSONB key, quoted"
-      - "a field that is queried: true and therefore promoted is resolved by Allowlist.load/2 as source: :typed_column, not source: :json_field, for that entity type, proven by a test -- this is the property that makes REQ-300's joins and REQ-298's indexes actually reachable through the query DSL rather than merely existing in Postgres unused"
+      - "AC4 AMENDED 2026-09-10 (REVIEWER sign-off + REQ-VALIDATOR wording, mid-implementation of WF02-REQ299-20260910): implementation proved the original wording below unsatisfiable by REQ-299 alone -- compiler.ex/cursor.ex both resolve a :typed_column field's Postgres column atom via the OLD fixed-7-entry Allowlist.typed_columns/0 map, with no other resolution path, so routing a promoted field through source: :typed_column in load/2 raises KeyError for the mainline case (any entity type with an ordinary non-FK queried: true field), and fixing compiler.ex/cursor.ex within this requirement would violate this requirement's own AC5. Allowlist.typed_columns/2 (or REQ-299's equivalent per-entity-type accessor)'s per-entity-type typed-column set includes both queried: true fields and FK-derived (foreign_keys) promoted columns, proven by a test using an entity-type fixture with at least one queried: true promoted field and at least one FK-derived promoted column, asserting both appear in that entity type's typed-column set and neither appears for a second entity-type fixture that lacks them. Allowlist.load/2 itself is NOT required to route either field through source: :typed_column yet -- REQ-299 ships the per-entity-type accessor as a building block only; wiring load/2 end-to-end (and giving Letflow.Entities.Query.Compiler/Cursor a real per-entity-type column-atom resolution path, since no per-entity-type Postgres table exists until REQ-297/298 land) is REQ-300's responsibility, which already depends_on: [REQ-298, REQ-299]. ORIGINAL WORDING (superseded, kept for the audit trail): \"a field that is queried: true and therefore promoted is resolved by Allowlist.load/2 as source: :typed_column, not source: :json_field, for that entity type, proven by a test -- this is the property that makes REQ-300's joins and REQ-298's indexes actually reachable through the query DSL rather than merely existing in Postgres unused\""
       - "git diff shows lib/letflow/entities/query/compiler.ex's build_filter_dynamic/2 and build_order_by/2 dispatch logic unmodified by this requirement -- quoted with the command, per 0023's own claim that the compiler needs no change here"
       - "mix letflow.check passes, with real output quoted"
     depends_on: [REQ-296]
@@ -18223,10 +18223,21 @@ requirements:
       expressible once (a) the FK column being joined on is a real, typed,
       indexed, REFERENCES-constrained Postgres column (REQ-298) and (b) the
       query allowlist actually resolves that column as source: :typed_column
-      for the entity type declaring the fk_def (REQ-299) -- joining against
+      for the entity type declaring the fk_def -- joining against
       a JSONB-extracted value would be exactly the unindexed-scan problem
       0023 exists to fix, so this requirement structurally cannot come
       before either.
+
+      CORRECTED 2026-09-10 (REQ-VALIDATOR, mid-implementation of
+      WF02-REQ299-20260910): the "(b)" clause above previously named
+      REQ-299 as already delivering that resolution. It doesn't -- REQ-299
+      (per its own AC4, amended the same day) ships only the per-entity-type
+      Allowlist.typed_columns/2 accessor; Allowlist.load/2 itself still
+      resolves every field via the old fixed-7-entry typed_columns/0 map
+      until wired up. Giving load/2 (and Compiler/Cursor) that real
+      per-entity-type resolution path is THIS requirement's (REQ-300's) own
+      job, not something it can assume already exists on entry -- see the
+      added acceptance criterion below.
 
       WHAT TO BUILD: extend the query DSL (Letflow.Entities.Query.Types --
       lib/letflow/entities/query/types.ex -- and Compiler) so a caller can
@@ -18263,6 +18274,7 @@ requirements:
       - "a field redacted by FieldGrants on a joined (non-primary) entity remains redacted in the joined read's result for a viewer without grant, proven by a test comparing the same query's result for a grant-holding and a non-grant-holding viewer"
       - "requesting a join on a field that is not an fk_def relationship is rejected the same way an unallowlisted filter field is today (field_not_allowed-shaped error), proven by a test -- joins do not open a new unvalidated-field surface"
       - "git diff shows no file under lib/letflow/entities/query/field_grants.ex modified beyond what's needed to compose with a join, and the completion report states explicitly what, if anything, changed there and why"
+      - "ADDED 2026-09-10 (REQ-VALIDATOR, closing the gap REQ-299's own AC4 amendment surfaced): Allowlist.load/2 resolves a promoted queried: true field (and each FK-derived join column) as source: :typed_column, not source: :json_field, for its entity type, once repointed at the per-entity-type Postgres tables REQ-297/298 create -- proven by an end-to-end test through the real Letflow.Entities.Query.Compiler/Cursor pipeline (not a mocked or stubbed allowlist) asserting the compiled query references the typed Postgres column rather than a JSONB extraction. This closes the gap REQ-299 deliberately deferred: REQ-299 ships only the per-entity-type typed_columns/2 accessor, not load/2 wiring."
       - "mix letflow.check passes, with real output quoted"
     depends_on: [REQ-298, REQ-299]
 

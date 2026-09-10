@@ -1,0 +1,84 @@
+run_id: WF02-REQ299-20260910
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-10T00:00:00Z"
+branch: feature/WF02-REQ299-20260910
+head_commit: 80a93cca
+
+git_state:
+  clean_tree: true
+  note: >
+    Working tree clean at run time; branch is 2 commits ahead of
+    origin/feature/WF02-REQ299-20260910 (not yet pushed).
+  recent_commits:
+    - 80a93cca "REQ-299: test-design for Allowlist.typed_columns/2 (AC1/AC2/AC4) [WF02-REQ299-20260910 Step 3]"
+    - 2fc0067d "REQ-299: add per-entity-type Allowlist.typed_columns/2, load/2 unchanged (AC4 wiring deferred to REQ-300)"
+    - dfda9606 "REQ-299/REQ-300: amend AC4 wording after mid-implementation scope conflict"
+    - 3dd28614 "WF02-REQ299-20260910 Step 00: git setup + started event"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v12.yaml
+    - lib/letflow/design/req299-allowlist-per-entity-type.md
+    - lib/letflow/entities/query/allowlist.ex
+    - test/letflow/entities/query_test.exs
+    - test/specs/REQ-299.md
+  note: >
+    Matches REQ-299 scope: Allowlist.typed_columns/2 addition plus its design doc,
+    test spec, and test code; load/2 left unchanged per AC4 deferral to REQ-300.
+    No other lib/letflow/ modules touched.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op)"
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 16
+  partition_count_source: nproc (also confirmed equal via getconf _NPROCESSORS_ONLN; TEST_PARALLEL_N was unset)
+  result: PASS
+  output: |
+    test_parallel: N=16 (source: nproc)
+    partition 1: 300 tests, 0 properties, 0 failures, exit 0
+    partition 2: 233 tests, 0 properties, 0 failures, exit 0
+    partition 3: 185 tests, 0 properties, 0 failures, exit 0
+    partition 4: 207 tests, 0 properties, 0 failures, exit 0
+    partition 5: 297 tests, 0 properties, 0 failures, exit 0
+    partition 6: 163 tests, 1 property, 0 failures, exit 0
+    partition 7: 194 tests, 0 properties, 0 failures, exit 0
+    partition 8: 277 tests, 0 properties, 0 failures, exit 0
+    partition 9: 218 tests, 0 properties, 0 failures, exit 0
+    partition 10: 140 tests, 0 properties, 0 failures, exit 0
+    partition 11: 375 tests, 0 properties, 0 failures, exit 0
+    partition 12: 239 tests, 0 properties, 0 failures, exit 0
+    partition 13: 185 tests, 2 properties, 0 failures, exit 0
+    partition 14: 219 tests, 0 properties, 0 failures, exit 0
+    partition 15: 158 tests, 0 properties, 0 failures, exit 0
+    partition 16: 224 tests, 3 properties, 0 failures, exit 0
+    ---
+    combined: 3614 tests, 6 properties, 0 failures (3620/3620 passed)
+  failures: []
+  cross_check: >
+    Zero-failure run across all 16 partitions; the script's parsed-count-authoritative
+    exit code was 0. No structural attribution is needed because there is nothing to
+    attribute -- no failures occurred, pre-existing or otherwise.
+
+req299_specific_checks:
+  - check: "test/letflow/entities/query_test.exs (new Allowlist.typed_columns/2 coverage for AC1/AC2/AC4) included in full-suite run above"
+    result: "Included in the combined 3614-test / 0-failure total; no isolated re-run needed since the full suite already covers it and passed clean."
+    note: >
+      TEST-DESIGN-VALIDATOR already independently confirmed these specific new tests
+      passing prior to this run (per task briefing); this run additionally confirms
+      they still pass as part of the full, unfiltered suite alongside every other
+      test in the repo.
+
+verdict: PASS
+verdict_reasoning: >
+  Full suite (not just new tests): 16 partitions, 3614 tests + 6 properties, 0
+  failures anywhere (3620/3620 passed). No pre-existing or newly-introduced failures
+  to attribute -- REQ-299's implementation and test-design gates already passed, and
+  this run confirms the full suite stays green with those changes merged into the
+  branch. Nothing to file to the issue queue.
+next_action: "Route to RELEASE-VALIDATOR"

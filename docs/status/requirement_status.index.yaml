@@ -2588,16 +2588,19 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 22
+    entries: 23
     note: >
-      Incremented to 22 by ORCH's own ISS-0589 SCOPE-CHANGE done-event
-      append (fix/ISS-0589-20260911) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v13.yaml` = 22 on-disk entries; 949
-      lines, well under the roll ceiling.
-      Incremented to 21 by ORCH's own ISS-0583 SCOPE-CHANGE done-event
-      append (fix/ISS-0583-20260911) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v13.yaml` = 21 on-disk entries; 934
-      lines, well under the roll ceiling.
+      Recounted to 23 on WF02-REQ293-20260910's own Step Final rebase onto
+      main (Step 00 commit replay), composing this branch's own REQ-293
+      started-event append with main's own ISS-0583 and ISS-0589
+      SCOPE-CHANGE done-event appends (fix/ISS-0583-20260911,
+      fix/ISS-0589-20260911), all landing on requirement_status.v13.yaml
+      with no conflict on that file itself (auto-merged cleanly by git) --
+      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 23
+      on-disk entries; 976 lines / 58801 bytes, well under the roll
+      ceiling. Recounted directly from the composed file rather than
+      carrying forward either side's independently-computed count, per
+      this note's own recount-every-time rule.
       Incremented to 20 by ORCH's own SCOPE-CHANGE done-event append
       (reopening queue task 584, GH#1202, left stuck in status: blocked
       by a sibling session's own race, via set_lock + release with

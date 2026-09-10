@@ -17342,7 +17342,7 @@ requirements:
       # once REQ-284 (queue task 560), REQ-290 (queue task 572) and REQ-292
       # (queue task 579) all landed done -- no live blocker left. depends_on
       # translated to queue task ids [560, 572, 579].
-    status: pending
+    status: in_progress
     stage: S8
     description: >
       Implements step 10 of

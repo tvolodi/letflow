@@ -900,6 +900,33 @@ history:
       applies to a different scenario, a mismatched target-claim, not this
       one). Confirmed via the release response: status: "open",
       locked_by: null. REQ-293 is now genuinely claimable.
+  - req: REQ-293
+    event: started
+    agent: ORCH
+    at: "2026-09-10T23:31:43Z"
+    note: >
+      WF02-REQ293-20260910 started (queue task 584, GH#1202). S8, decision
+      0020 D1a step 10: a TypeScript evaluator for the Expr grammar,
+      passing REQ-289's conformance corpus, wired into
+      DynamicFormRenderer.tsx (visible_when, computed, cross-field
+      validation). This is a PORT, not a design -- Letflow.Engine.Expr
+      (lib/letflow/engine/expr.ex) is the definition, a CEL SUBSET by
+      decision, and may not be extended locally. The excluded impure
+      builtins (now, date_add, date_diff) must NOT be implemented; no CEL
+      npm package may be added. The evaluator's output is never
+      authoritative -- REQ-292's server-side re-evaluation (landed done)
+      is what decides; nothing here may bypass or short-circuit a server
+      response. Three divergence-prone semantics need explicit coverage
+      beyond the corpus run: ASCII-only lower/upper, exactly-4-ASCII-char
+      trim, and the corpus's own infinity-marker encoding for
+      division-by-zero (not JS's native Infinity/NaN). An expression the
+      evaluator cannot handle must fail loudly via REQ-290's
+      version/capability marker -- never default to visible, hidden, or
+      blank. Scope fence: web/ only -- no lib/ changes, no
+      lib/letflow/engine/expr.ex changes, no CelExpressionEditor.tsx
+      client-side validation (a separate future requirement), no offline
+      caching/submission. Branch: feature/WF02-REQ293-20260910.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

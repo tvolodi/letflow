@@ -769,9 +769,22 @@ defmodule Letflow.TenantProvisioning do
     },
     %{
       name: "TASK_COMPLETED",
-      schema_version: 1,
+      schema_version: 2,
       description:
-        "Emitted by Letflow.Engine.complete_task/3 (M9, EE-04) when a user task is completed.",
+        "Emitted by Letflow.Engine.complete_task/3 (M9, EE-04) when a user task is completed. " <>
+          "Bumped from schema_version 1 to 2 (REQ-292): merged_variable_events now also carries " <>
+          "the two new FormExpressionReevaluation.reevaluation_event() kinds " <>
+          "(\"computed_field_disagreement\", \"visible_when_false_value_discarded\") alongside " <>
+          "the original \"variable_overwritten\" -- widened to a single flat item schema (this " <>
+          "validator has no oneOf/anyOf support, Letflow.EventStore.Registry.JsonSchema's own " <>
+          "moduledoc) whose \"required\" only still names \"event\" (the one key every kind " <>
+          "shares); \"key\"/\"field\"/\"old_value\"/\"new_value\"/\"submitted_value\"/" <>
+          "\"server_value\"/\"discarded_value\" are all declared but optional, since which ones " <>
+          "are present depends on which event kind a given array element is. KNOWN GAP, flagged " <>
+          "for REVIEWER, same shape as DEFINITION_PROMOTED's own schema_version 1->2 bump above: " <>
+          "this only widens the schema seeded into TENANTS PROVISIONED FROM THIS POINT ON -- a " <>
+          "tenant provisioned before this change keeps validating TASK_COMPLETED against version " <>
+          "1 (which would reject the two new event kinds outright) until something backfills it.",
       json_schema: %{
         "type" => "object",
         "properties" => %{
@@ -783,10 +796,23 @@ defmodule Letflow.TenantProvisioning do
             "items" => %{
               "type" => "object",
               "properties" => %{
-                "event" => %{"type" => "string", "enum" => ["variable_overwritten"]},
-                "key" => %{"type" => "string"}
+                "event" => %{
+                  "type" => "string",
+                  "enum" => [
+                    "variable_overwritten",
+                    "computed_field_disagreement",
+                    "visible_when_false_value_discarded"
+                  ]
+                },
+                "key" => %{"type" => "string"},
+                "field" => %{"type" => "string"},
+                "old_value" => %{},
+                "new_value" => %{},
+                "submitted_value" => %{},
+                "server_value" => %{},
+                "discarded_value" => %{}
               },
-              "required" => ["event", "key"]
+              "required" => ["event"]
             }
           },
           "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}

@@ -2588,12 +2588,53 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 16
+    entries: 20
     note: >
-      Incremented to 16 by ORCH's own REQ-293 blocked-event append
-      (chore/req293-block-20260910) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v13.yaml` = 16 on-disk entries; 760
-      lines, well under the roll ceiling.
+      Incremented to 20 by ORCH's own SCOPE-CHANGE done-event append
+      (reopening queue task 584, GH#1202, left stuck in status: blocked
+      by a sibling session's own race, via set_lock + release with
+      explicit status: "open") -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 20 on-disk entries; 902
+      lines / 54444 bytes, well under the roll ceiling, so no roll
+      triggered.
+      Recounted to 19 on WF02-REQ292-20260910's own Step Final rebase onto
+      main (deferral-reconciliation commit replay), composing this
+      branch's own SCOPE-CHANGE done-event append (REQ-293 registered as
+      queue task 584, GH#1202; REQ-294 re-scoped to blocked-by: REQ-293)
+      with main's own REQ-293 blocked-event append (filed by a sibling
+      session that raced this reconciliation), chronologically
+      interleaved into docs/status/requirement_status.v13.yaml (REQ-292
+      done 22:23:15Z, SCOPE-CHANGE reconciliation done 22:29:06Z, REQ-293
+      blocked 22:50:22Z, sorting last, no reordering needed). Recounted
+      directly from the composed file (`grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 19 on-disk entries; 881
+      lines / 53265 bytes, well under the roll ceiling) rather than
+      carrying forward either side's independently-computed count, per
+      this note's own recount-every-time rule.
+      Recounted to 17 on WF02-REQ292-20260910's own Step Final rebase onto
+      main (Step 6 commit replay), composing this branch's own REQ-292
+      done-event append with main's own REQ-293 blocked-event append
+      (chore/req293-block-20260910, filed by a sibling session before
+      REQ-292's own merge landed), chronologically interleaved into
+      docs/status/requirement_status.v13.yaml (REQ-292 done 22:23:15Z,
+      REQ-293 blocked 22:50:22Z, sorting last, no reordering needed).
+      Recounted directly from the composed file (`grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 18 on-disk entries; 863
+      lines / 52287 bytes, well under the roll ceiling) rather than
+      carrying forward either side's independently-computed count, per
+      this note's own recount-every-time rule.
+      Recounted to 17 on WF02-REQ292-20260910's own Step Final rebase onto
+      main (Step 00 commit replay), composing this branch's own REQ-292
+      started-event append with main's own REQ-293 blocked-event append
+      (chore/req293-block-20260910), chronologically interleaved into
+      docs/status/requirement_status.v13.yaml (ISS-0583 blocked 21:54:38Z,
+      REQ-292 started 20:06:37Z, REQ-293 blocked 22:50:22Z sorting last,
+      no reordering needed). Recounted directly from the composed file
+      (`grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 17
+      on-disk entries; 783 lines / 47129 bytes, well under the roll
+      ceiling) rather than carrying forward either side's
+      independently-computed count, per this note's own recount-every-time
+      rule.
       Incremented to 15 by ORCH's own ISS-0583 SCOPE-CHANGE blocked-event
       append (chore/iss0583-block-20260910) -- `grep -c "^  - req:"
       docs/status/requirement_status.v13.yaml` = 15 on-disk entries; 742

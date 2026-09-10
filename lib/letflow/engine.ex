@@ -345,6 +345,7 @@ defmodule Letflow.Engine do
   alias Letflow.Definitions.Graph
   alias Letflow.Definitions.SnapshotStore
   alias Letflow.Engine.ExecutionError
+  alias Letflow.Engine.FormExpressionReevaluation
   alias Letflow.Engine.InstanceState
   alias Letflow.Engine.PinResolver
   alias Letflow.Engine.Reconstruction
@@ -1883,20 +1884,57 @@ defmodule Letflow.Engine do
     |> Multi.run(:snapshot_and_state, fn repo, %{task: task, instance_projection: projection} ->
       build_snapshot_and_state(repo, task, projection, prefix)
     end)
+    |> Multi.run(:form_expression_reevaluation, fn _repo,
+                                                   %{
+                                                     task: task,
+                                                     snapshot_and_state: %{
+                                                       seed_instance_state: seed_state
+                                                     }
+                                                   } ->
+      # Multi.run/3's own contract: the callback itself must always succeed
+      # structurally -- reevaluate/3's domain result (which can itself be an
+      # {:error, reevaluation_error()} rejection) is carried INSIDE this
+      # {:ok, _} payload and inspected explicitly by the :merge step below,
+      # the same discipline merge_output_variables/7's own
+      # {:execution_error, _} tagging already uses (design doc §2).
+      {:ok,
+       FormExpressionReevaluation.reevaluate(
+         task.form_schema,
+         seed_state.variables,
+         output_variables
+       )}
+    end)
     |> Multi.run(:merge, fn repo,
                             %{
                               snapshot_and_state: %{seed_instance_state: seed_state},
-                              instance_projection: projection
+                              instance_projection: projection,
+                              form_expression_reevaluation: reevaluation_result
                             } ->
-      merge_output_variables(
-        projection,
-        actor_id,
-        idempotency_key,
-        seed_state.variables,
-        output_variables,
-        repo,
-        prefix
-      )
+      case reevaluation_result do
+        {:error, reevaluation_error} ->
+          error_args =
+            build_reevaluation_execution_error_args(
+              reevaluation_error,
+              projection,
+              actor_id,
+              idempotency_key,
+              seed_state.variables
+            )
+
+          {:ok, {:execution_error, error_args}}
+
+        {:ok, %{output_variables: corrected_output_variables, events: form_events}} ->
+          projection
+          |> merge_output_variables(
+            actor_id,
+            idempotency_key,
+            seed_state.variables,
+            corrected_output_variables,
+            repo,
+            prefix
+          )
+          |> prepend_form_expression_events(form_events)
+      end
     end)
     |> Multi.run(:transition, fn _repo,
                                  %{
@@ -2944,6 +2982,62 @@ defmodule Letflow.Engine do
     end
   end
 
+  # REQ-292 -- mirrors apply_variable_merge/6's own error_args construction
+  # above, for a FormExpressionReevaluation.reevaluation_error() rather than
+  # a VariableSchema rejection. Reuses the exact same
+  # ExecutionError.append_multi/3 authority mechanism (design doc §5.3/§7):
+  # the instance flips to :error, the task stays :pending, and
+  # `merge_output_variables/7` is never called at all for this completion
+  # (nothing was merged, so `variables` below is `current_variables`,
+  # unchanged).
+  @spec build_reevaluation_execution_error_args(
+          FormExpressionReevaluation.reevaluation_error(),
+          InstanceProjection.t(),
+          Ecto.UUID.t() | nil,
+          String.t(),
+          current_variables :: map()
+        ) :: ExecutionError.error_args()
+  defp build_reevaluation_execution_error_args(
+         reevaluation_error,
+         projection,
+         actor_id,
+         idempotency_key,
+         current_variables
+       ) do
+    %{
+      instance_id: projection.instance_id,
+      error_type: reevaluation_error.error_type,
+      affected: {:field, reevaluation_error.field},
+      reason: reevaluation_error.reason,
+      variables: current_variables,
+      details: reevaluation_error.details,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+  end
+
+  # REQ-292 -- rides the two new FormExpressionReevaluation.reevaluation_event()
+  # kinds inside the SAME merge_events list VariableMerge.merge/3 already
+  # produces :variable_overwritten events into (design doc §2). Identity on
+  # every other branch (an {:execution_error, _} from a corrected
+  # submission still failing variable_schema_rejected, or the pre-existing,
+  # effectively unreachable {:error, :variable_schema_lookup_failed} case) --
+  # deliberate, non-load-bearing simplification (design doc §9 open question
+  # 1): the submission is already being rejected on other grounds, so there
+  # is nothing left to log a disagreement against.
+  @spec prepend_form_expression_events(
+          {:ok, {:merged, map()} | {:execution_error, map()}} | {:error, term()},
+          [FormExpressionReevaluation.reevaluation_event()]
+        ) :: {:ok, {:merged, map()} | {:execution_error, map()}} | {:error, term()}
+  defp prepend_form_expression_events(
+         {:ok, {:merged, %{merge_events: merge_events} = merged}},
+         form_events
+       ) do
+    {:ok, {:merged, %{merged | merge_events: form_events ++ merge_events}}}
+  end
+
+  defp prepend_form_expression_events(other, _form_events), do: other
+
   # M5 -- the first {:complete_task, token_id} hop, then the existing
   # advance_until_stable/4 / tokens_needing_dispatch/3 worklist loop (reused
   # unchanged, design doc §1) for every subsequent {:advance_token, ...} hop.
@@ -3851,8 +3945,24 @@ defmodule Letflow.Engine do
   # plain maps for the event payload only, never persisted as their own
   # separate rows.
   defp encode_merge_events(merge_events) do
-    Enum.map(merge_events, fn {:variable_overwritten, key, old_value, new_value} ->
-      %{event: "variable_overwritten", key: key, old_value: old_value, new_value: new_value}
+    Enum.map(merge_events, fn
+      {:variable_overwritten, key, old_value, new_value} ->
+        %{event: "variable_overwritten", key: key, old_value: old_value, new_value: new_value}
+
+      {:computed_field_disagreement, field, submitted_value, server_value} ->
+        %{
+          event: "computed_field_disagreement",
+          field: field,
+          submitted_value: submitted_value,
+          server_value: server_value
+        }
+
+      {:visible_when_false_value_discarded, field, discarded_value} ->
+        %{
+          event: "visible_when_false_value_discarded",
+          field: field,
+          discarded_value: discarded_value
+        }
     end)
   end
 

@@ -1,0 +1,40 @@
+id: ISS-0583
+title: TASK_COMPLETED schema_version 2 backfill missing for pre-existing tenants (REQ-292)
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ292-20260910
+discovered_at: "2026-09-10T21:20:00Z"
+severity: MAJOR
+description: >
+  Found by REVIEWER while reviewing REQ-292 (server-side form-expression
+  re-evaluation). lib/letflow/tenant_provisioning.ex bumped the
+  TASK_COMPLETED event schema from version 1 to 2 to admit two new
+  merged_variable_events kinds (computed_field_disagreement,
+  visible_when_false_value_discarded). This bump only affects tenants
+  provisioned from this point forward -- a tenant provisioned BEFORE this
+  change stays registered at schema_version 1 until backfilled. Task
+  completion for such a tenant only fails when a genuine
+  disagreement/discard actually occurs (an ordinary completion with only
+  pre-existing variable_overwritten events, or none, is unaffected).
+
+  Traced the full path (lib/letflow/event_store/registry.ex get_type/2,
+  Registry.validate_payload/3, JsonSchema.validate/2, EventStore.append/2)
+  and confirmed this is NOT a crash: it surfaces as the standard
+  {:error, {:payload_validation_failed, failures}} tagged tuple, inside
+  the SAME transaction as the rest of task completion, so the whole
+  completion rolls back cleanly (task stays :pending, instance untouched)
+  rather than partially committing.
+
+  Identical shape/precedent to ISS-0332's DEFINITION_PROMOTED v1->v2
+  backfill gap, which was resolved via
+  mix letflow.backfill_event_type_versions
+  (lib/mix/tasks/letflow.backfill_event_type_versions.ex) as a separate
+  follow-up rather than bundled into the requirement that introduced the
+  bump. Bounded, not a blocker for REQ-292 -- filed as a follow-up per
+  that same established pattern.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex
+  - lib/letflow/event_store/registry.ex
+  - lib/mix/tasks/letflow.backfill_event_type_versions.ex
+queue_ref: Q-583
+github_ref: GH-1200
+status: open

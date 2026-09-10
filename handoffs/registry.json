@@ -6170,5 +6170,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0578 (queue task 578, GH#1185) -- shifting Postgrex.DBConnection.ConnectionError failures inside clone_tenant_schema!/1 under N-way parallel test execution. ISSUE-FIXER diagnosed root cause via code reading + live reproduction: a single unretried ~150-250-round-trip transaction is disproportionately likely to catch a transient TCP hiccup under load, explaining the shifting set of unrelated failing files each run -- not a code regression, pool sizing not implicated. Fix: bounded retry (3 attempts, 200ms backoff) wrapping the existing clone, struct-only match on Postgrex.Error/DBConnection.ConnectionError (no message-substring matching), cleanup-before-retry via DROP SCHEMA IF EXISTS on a fresh connection. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (1 rework: citation-range error) -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV (3 new tests using real Postgres error triggers, no mocks in this codebase) -> REVIEWER (PASS, independently re-ran full suite three times, zero new failures; one redirect needed for an illegal cross-turn background-wait). Test-support-only change, not a tenant-data-path change -- SECURITY-REVIEWER correctly skipped per design's own scope confirmation, independently confirmed by REVIEWER. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this session's established precedent (implementing agent's own tests comprehensive, REVIEWER independently verified quality)."
     }
+,
+    {
+      "run_id": "WF03-ISS0580-20260910",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0580",
+      "queue_task_id": 580,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1189,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/support/sandbox_auto_mode.ex"
+      ],
+      "branch_name": "fix/ISS-0580-20260910",
+      "started_at": "2026-09-10T15:24:07Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0580 (queue task 580, GH#1189) -- ColumnPromotionTest AC1 flaked with a unique-constraint violation under parallel suite load, independently observed 3 times this session (twice during ISS-0578's own verification). Root cause: Ecto.Adapters.SQL.Sandbox.mode(Repo, :auto) set in provisioned_tenant/0-style helpers and never restored to :manual -- a global, pool-wide setting, so this leaked real writes from concurrently-running async tests into the shared test DB. Same defect found in 7 files. Pipeline: ISSUE-FIXER -> CODE-DESIGNER (first attempt went off-script running live test-debugging spikes for 1.5h with no design-doc output, killed by ORCH, one stray uncommitted test edit reverted; relaunched with explicit read-only-investigation scope, completed cleanly) -> CODE-DESIGN-VALIDATOR (PASS first try) -> ELIXIR-DEV (new Letflow.Test.SandboxAutoMode helper, 7 call sites updated) -> REVIEWER (1 rework: caught that a necessary on_exit force-:auto reset was never paired with a restore, reopening the leak once per test instead of once per bug; fixed by calling exit_auto_mode!/1 as the last on_exit statement; re-check PASS, full suite confirmed ColumnPromotionTest flake no longer reproduces). REVIEWER flagged orphaned tenant/tenant_schemas row accumulation in the shared test DB (not caught by TenantSchemaReaper) as a follow-up candidate, not a blocker. Test-support-only change -- SECURITY-REVIEWER correctly skipped."
+    }
   ]
 }

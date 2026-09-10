@@ -62,6 +62,7 @@ defmodule Letflow.EngineConcurrencyTest do
   alias Letflow.Identity.Tenant
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
+  alias Letflow.Test.SandboxAutoMode
 
   @instance_count 100
 
@@ -88,9 +89,19 @@ defmodule Letflow.EngineConcurrencyTest do
   end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    SandboxAutoMode.enter_auto_mode!(Letflow.Repo)
 
     tenant = insert_tenant!()
+
+    # Registered FIRST so it runs LAST (ExUnit runs on_exit/1 callbacks in
+    # LIFO order): the cleanup on_exit/1 below still needs :auto mode active
+    # to commit its own DROP SCHEMA/delete_all work, so it must run before
+    # this one closes the global :auto window. See
+    # lib/letflow/design/iss0580-sandbox-auto-mode-restore-leak.md §3.3 --
+    # this file's tests deliberately keep :auto mode alive across real
+    # Task.async calls that run AFTER provisioned_tenant/0 returns, so this
+    # cannot use SandboxAutoMode.provision!/2 (which would restore too early).
+    on_exit(fn -> SandboxAutoMode.exit_auto_mode!(Letflow.Repo) end)
 
     on_exit(fn ->
       case TenantProvisioning.schema_name_for_tenant(tenant.id) do

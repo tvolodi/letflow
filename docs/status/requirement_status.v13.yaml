@@ -763,6 +763,76 @@ history:
       worked or silently dropped -- GH#1200 left open with a comment
       explaining the gap and naming REQ-292's merge as the actual
       precondition. No code changed; branch abandoned unpushed.
+  - req: REQ-292
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T22:23:15Z"
+    note: >
+      REQ-292 (queue task 579, GH#1187) implemented via
+      WF02-REQ292-20260910: S8, decision 0020 D1a step 11 (the authority
+      half) -- server-side re-evaluation of every visible_when/computed/
+      cross-field validation expression on the task's PINNED schema
+      (form_version, REQ-126) at task completion, on
+      Letflow.Engine.complete_task/3's existing transactional path.
+      CODE-DESIGNER wrote lib/letflow/design/req292-server-side-form-expression-reevaluation.md;
+      CODE-DESIGN-VALIDATOR PASSED first try, specifically confirming the
+      design's three mandatory decisions were genuinely resolved rather
+      than deferred: a computed-field disagreement disposition (server
+      wins, logged), visible_when-false handling (dropped, logged), and
+      evaluation-failure handling (routed through ExecutionError with two
+      new error_type atoms) -- and independently re-verified every source
+      citation. ELIXIR-DEV implemented: new module
+      lib/letflow/engine/form_expression_reevaluation.ex, a new
+      Multi.run(:form_expression_reevaluation, ...) step in
+      lib/letflow/engine.ex's run_complete_task/6, two new error_type
+      atoms in execution_error.ex, TASK_COMPLETED event schema bumped
+      1->2 in tenant_provisioning.ex, new test file
+      test/letflow/engine_form_expression_reevaluation_test.exs (49
+      tests), and a narrowing of
+      test/letflow/engine/task_activation_test.exs's REQ-273 scope-fence
+      test to its real boundary. mix letflow.check clean (3737/3737
+      passed). SECURITY-REVIEWER PASSED with an explicit INV-2 statement,
+      recorded here verbatim as this requirement's own AC7 completion
+      artefact: "No client-supplied value can reach a persisted variable
+      without server-side re-derivation for the two categories this
+      change governs. A computed field's persisted value is always
+      Expr.eval/2's server-side result (never the client submission, even
+      on agreement); a field whose visible_when evaluates false
+      server-side has its client-submitted value genuinely excluded from
+      the map passed into merge_output_variables/7, not merely
+      annotated." REVIEWER PASSED -- confirmed the REQ-273 test narrowing
+      is sound, confirmed idiom/Multi-integration/scope/decision-record
+      consistency, confirmed all moduledoc dispositions are present.
+      REVIEWER also investigated a flagged concern (TASK_COMPLETED
+      schema_version 1->2 lacking a backfill for pre-existing tenants),
+      confirmed it real but bounded (clean transactional rollback, typed
+      error, ISS-0332 precedent), and it was filed as
+      docs/issues/ISS-0583.yaml (queue task 583, GH#1200) by ORCH --
+      an incidental, non-blocking follow-up finding, NOT a defect in
+      REQ-292 itself. RELEASE-VALIDATOR independently re-derived evidence
+      for all 10 acceptance criteria from scratch (own test runs, own
+      greps, two own full mix letflow.check runs) -- PASS, and confirmed
+      ISS-0583 is accurately characterized as a separate bounded
+      follow-up rather than a defect in this requirement's own scope.
+      docs/requirements.yaml flipped in_progress -> done. README.md
+      checked (grepped for visible_when/computed/cross-field/task
+      completion/complete_task references) -- no hits; this change alters
+      internal server-side task-completion behavior only, with no
+      currently-documented README claim describing form-expression
+      evaluation to update -- left unchanged. decision
+      0020-frontend-architecture.md's Sequencing section checked for a
+      per-step "done" marker convention -- none exists anywhere in that
+      document (REQ-290's, REQ-303's, REQ-304's, REQ-305's and REQ-306's
+      own done-event notes above all found the same absence for their own
+      steps/records), so no edit made there. REQ-293 (the next Sequencing
+      step, the TypeScript evaluator) was checked instead: its own
+      `# impl_order: UNREGISTERED -- blocked-by: REQ-292` deferral comment
+      is now stale, since REQ-292 lands done here and REQ-293's other two
+      depends_on entries (REQ-284, REQ-290) were already done -- updated
+      that comment in this same commit to record the deferral's
+      expiration and that REQ-293 is now unblocked and eligible for
+      registration/claiming.
+
   - req: REQ-293
     event: blocked
     agent: ORCH
@@ -781,3 +851,13 @@ history:
       REQ-292's merge as the real precondition.
       docs/requirements.yaml's own status/blocked-by annotation was
       already correct and is left unchanged.
+      NOTE (ORCH, WF02-REQ292-20260910 Step Final): this entry was
+      recorded by a sibling session BEFORE REQ-292's own merge landed --
+      accurate at the time it was written (REQ-292 was still pending on
+      main), but REQ-292 lands done in this same rebase, immediately
+      superseding the premise. Queue task 584 is now stuck in a
+      `blocked` state that get_next_task's eligibility filter
+      (`WHERE status = 'open'`) will never re-select on its own --
+      reopening it (or registering a fresh task) is a follow-up ORCH
+      action, tracked separately rather than silently assumed fixed by
+      this note alone.

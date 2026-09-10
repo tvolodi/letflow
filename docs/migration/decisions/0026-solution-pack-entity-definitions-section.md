@@ -82,11 +82,11 @@ before any answer below was written — not assumed from the requirement text:
     map value and passes it through unchanged — no key-by-key reconstruction
     that could drop an attribute.
 - `lib/letflow/definitions/export_import.ex`: confirmed `@export_schema_version
-  "bpm/definition/v1"` (line 34) and the moduledoc's explicit statement (lines
-  20-26) that `SolutionPack` reuses this constant "so there is one version
-  constant in the codebase, not two" — this module's own moduledoc, not
-  `SolutionPack`'s, states the rationale, and `SolutionPack`'s moduledoc
-  (lines 20-24) confirms it reuses it for exactly that reason.
+  "bpm/definition/v1"` (line 34) and the `@doc` for `export_schema_version/0`
+  (lines 75-85, quote at lines 81-82) states "One version constant in this
+  codebase, not two" — this module's own `@doc`, not `SolutionPack`'s,
+  states the rationale, and `SolutionPack`'s moduledoc (lines 20-24) confirms
+  it reuses it for exactly that reason.
 - `lib/letflow/entities/definitions.ex` in full:
   - `create_definition/2` (lines 104-141): confirmed step 4 always inserts
     `status: :inactive` (`insert_entity_definition/6`, line 159 sets

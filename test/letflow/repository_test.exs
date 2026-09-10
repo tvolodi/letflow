@@ -32,6 +32,7 @@ defmodule Letflow.RepositoryTest do
   alias Letflow.Repository.Canonicaliser
   alias Letflow.TenantProvisioning
   alias Letflow.TenantProvisioning.Registration
+  alias Letflow.Test.SandboxAutoMode
 
   # ---------------------------------------------------------------------------------
   # Fixtures -- same shape as test/letflow/audit_test.exs's provisioned_tenant/0.
@@ -54,26 +55,43 @@ defmodule Letflow.RepositoryTest do
   end
 
   defp provisioned_tenant do
-    Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
+    SandboxAutoMode.provision!(Letflow.Repo, fn ->
+      tenant = insert_tenant!()
 
-    tenant = insert_tenant!()
+      on_exit(fn ->
+        # ISS-0580 rework: this callback runs AFTER the test process (and thus
+        # SandboxAutoMode.provision!/2's own restore-to-:manual-plus-checkout,
+        # scoped to that now-gone process) is gone -- so it must not assume
+        # :manual mode still has a connection checked out for THIS (OnExitHandler)
+        # process. Force :auto mode first so the DROP SCHEMA/delete_all cleanup
+        # below always gets a real, checked-in connection regardless of what mode
+        # the test process left the pool in. Mirrors role_registry_test.exs's own
+        # on_exit/1 handling of this exact hazard.
+        Ecto.Adapters.SQL.Sandbox.mode(Letflow.Repo, :auto)
 
-    on_exit(fn ->
-      case TenantProvisioning.schema_name_for_tenant(tenant.id) do
-        {:ok, schema_name} -> drop_schema!(schema_name)
-        {:error, :invalid_tenant_id} -> :ok
-      end
+        case TenantProvisioning.schema_name_for_tenant(tenant.id) do
+          {:ok, schema_name} -> drop_schema!(schema_name)
+          {:error, :invalid_tenant_id} -> :ok
+        end
 
-      Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
-      Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+        Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+        Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
+
+        # REVIEWER fix (ISS-0580): restore :manual after cleanup -- leaving the
+        # force-:auto above unrestored would reopen this exact leak, once per
+        # test in this file instead of once ever. No checkout needed (same
+        # reasoning as SandboxAutoMode.exit_auto_mode!/1's own doc: this
+        # OnExitHandler process is not going to issue another Repo call).
+        SandboxAutoMode.exit_auto_mode!(Letflow.Repo)
+      end)
+
+      assert {:ok, %Registration{schema_name: schema_name}} =
+               TenantProvisioning.provision_tenant_schema(tenant.id)
+
+      assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
+
+      %{tenant_id: tenant.id, schema_name: schema_name}
     end)
-
-    assert {:ok, %Registration{schema_name: schema_name}} =
-             TenantProvisioning.provision_tenant_schema(tenant.id)
-
-    assert {:ok, _applied_versions} = TenantProvisioning.replay_migrations(tenant.id)
-
-    %{tenant_id: tenant.id, schema_name: schema_name}
   end
 
   defp base_attrs(overrides \\ []) do

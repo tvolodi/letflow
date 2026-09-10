@@ -18721,7 +18721,7 @@ requirements:
     title: Add the entity_definitions section to SolutionPack export -- emit packed entity definitions alongside process definitions
     owner: ELIXIR-DEV
     impl_order: 575  # letflow-queue task id; depends_on translated to queue task ids [574]
-    status: in_progress
+    status: done
     stage: S10
     description: >
       Re-verify at start rather than trusting this description: read

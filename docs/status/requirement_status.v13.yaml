@@ -331,3 +331,66 @@ history:
       solution_packs.ex route-handler changes beyond passing the new
       parameter through (if 0026 requires it), no migration. Branch:
       feature/WF02-REQ304-20260910.
+
+  - req: REQ-304
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T14:49:53Z"
+    note: >
+      REQ-304 (queue task 575, GH#1173) implemented via
+      WF02-REQ304-20260910: adds the entity_definitions section to
+      Letflow.Definitions.SolutionPack.export/4, per decision
+      0026-solution-pack-entity-definitions-section.md (REQ-303's
+      output). New packed_entity_definition type declared on the
+      pack_document @type, carrying exactly the field list 0026
+      specifies -- entity_definition_id, name, display_name,
+      definition_json, logical_shape_version -- enough of
+      Letflow.Entities.EntityDefinition's persisted fields to
+      round-trip through create_definition/2 on install (REQ-305,
+      not yet built). export/4 takes a new entity_definition_names
+      argument alongside the existing definition_ids/version/opts,
+      with export/3 kept as a backward-compatible delegation (empty
+      entity_definition_names) so every existing caller is
+      unaffected. Each named entity definition is read via
+      Letflow.Entities.Definitions.get_definition_by_name/2 under
+      the caller's own opts[:prefix] (INV-1) -- no install/3 changes,
+      no route-layer wiring beyond what 0026 itself deferred to
+      REQ-304's scope fence, no migration, matching the requirement's
+      own export-side-only scope. CODE-DESIGNER found and corrected a
+      real signature discrepancy in REQ-303's own design doc while
+      re-verifying rather than assuming it: get_definition_by_name/2
+      takes a raw prefix string as its second argument, not an opts
+      keyword list, contrary to what the companion doc had implied --
+      independently re-verified and confirmed by
+      CODE-DESIGN-VALIDATOR (PASS on first pass). Pipeline:
+      CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS first try) ->
+      ELIXIR-DEV (real AC2/AC4 demonstrations quoted) ->
+      SECURITY-REVIEWER (PASS, traced tenant isolation through both
+      opts[:prefix]-derived scoped_repo_opts/1 and
+      get_definition_by_name/2's own scoping) -> REVIEWER (PASS,
+      confirmed clean arity-extension pattern export/3 -> export/4,
+      confirmed the route-layer deferral is legitimate per 0026's own
+      scope allocation) -> TEST-DESIGNER (10 real tests, including
+      genuine two-tenant isolation tests) -> TEST-DESIGN-VALIDATOR
+      (PASS, independently verified the jsonb-round-trip and
+      tenant-isolation tests are non-tautological) -> TEST-RUNNER
+      (PARTIAL -- found and filed two unrelated pre-existing test
+      flakes as ISS-0580 (ColumnPromotionTest) and ISS-0581
+      (PollerTest), both already committed on this branch
+      (docs/issues/ISS-0580.yaml, docs/issues/ISS-0581.yaml) and NOT
+      part of REQ-304's own scope -- no further action needed here) ->
+      RELEASE-VALIDATOR (2 rework rounds: an ISS-0069-class dead-
+      default-arg lint fix, then a pre-existing mix format miss, both
+      fixed; PASS on third pass, mix letflow.check clean, the one
+      remaining flake structurally attributed to already-filed
+      ISS-0580). docs/requirements.yaml flipped in_progress -> done.
+      README.md checked (grepped for entity_definitions/SolutionPack/
+      export references) -- no hits, no documented current-behavior
+      change (internal export-function arity extension, no route
+      wired to it yet per 0026's own deferral, no user-facing effect)
+      -- left unchanged. 0026's own text already states "built by
+      REQ-304" in its Consequences section with no stale claim to
+      correct, and this repo's decision records carry no per-step
+      "implemented by REQ-NNN" marker convention elsewhere (REQ-290's
+      own done-event note above found the same absence for 0020's
+      Sequencing section) -- confirmed no edit needed to 0026.

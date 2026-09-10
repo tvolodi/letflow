@@ -55,14 +55,55 @@ defmodule Letflow.Entities.Query.Types do
         }
 
   @typedoc """
-  The full query request shape (design §2.2). `filters`/`sort` both default
-  to `[]` when absent -- an entity-type query with neither is still routed
-  through the allowlist/compiler, so there is exactly one code path.
+  Join qualifier for a `join_clause()` (REQ-300 design §1). `:inner`
+  (default) excludes a primary row with no matching related row -- the
+  AC2-driving choice, since AC2's "a matching and a non-matching related
+  row" test only proves join correctness if the non-matching row is
+  excluded by default. `:left` is offered for a caller who explicitly wants
+  the primary row even absent a related row.
+  """
+  @type join_type :: :inner | :left
+
+  @typedoc """
+  One join request across an `fk_def()` relationship (REQ-300 design §1).
+
+  - `entity_type` -- the entity type to bring into the result: the **far**
+    side of the relation.
+  - `fk` -- the `fk_def().name` (not `.field`) naming the relation to
+    traverse. Naming by `name`, not `field`, matches how `Allowlist`/`DDL`
+    already key relations and survives a column rename that keeps the same
+    relation name.
+  - `through` -- present only for a many-to-many read: the entity type of
+    the join entity (e.g. `"question_tags"`). When present, `fk` names the
+    join-entity-to-far-entity relation; the near hop
+    (join-entity-to-primary) is resolved automatically.
+  - `type` -- `:inner` (default) or `:left`.
+
+  Scope boundary (design §1, not a TBD): a `join_clause` only says *which*
+  relation to bring into the result. It does **not** let a caller
+  filter/sort on a joined entity's own fields in this requirement --
+  `filters`/`sort` continue to resolve exclusively against the primary
+  entity type's own `Allowlist.load/2` output, unchanged.
+  """
+  @type join_clause :: %{
+          required(:entity_type) => String.t(),
+          required(:fk) => String.t(),
+          optional(:through) => String.t(),
+          optional(:type) => join_type()
+        }
+
+  @typedoc """
+  The full query request shape (design §2.2, extended by REQ-300 design §1
+  with the additive, optional `:join` field). `filters`/`sort`/`join` all
+  default to `[]` when absent -- an entity-type query with none of them is
+  still routed through the allowlist/compiler, so there is exactly one code
+  path.
   """
   @type query_request :: %{
           required(:entity_type) => String.t(),
           optional(:filters) => [filter_clause()],
-          optional(:sort) => [sort_clause()]
+          optional(:sort) => [sort_clause()],
+          optional(:join) => [join_clause()]
         }
 
   @filter_ops ~w(eq neq gt gte lt lte in not_in contains starts_with is_null is_not_null)a

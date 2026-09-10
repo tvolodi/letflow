@@ -158,8 +158,9 @@ defmodule Letflow.Entities.Query.Allowlist do
        atom.
     3. Decode `definition_json` into a `Letflow.Entities.Definition.t()`
        (already-validated JSON by construction -- no re-validation here).
-    4. Build the typed-column entries first (§3.4's fixed table), then the
-       JSON-field entries: only fields with `queried: true` are ever
+    4. Build the typed-column entries first (§3.4's fixed table, **plus**
+       REQ-300's per-entity-type promoted set -- see the note below), then
+       the JSON-field entries: only fields with `queried: true` are ever
        allowlisted from the JSONB side. `:json`-typed fields are
        structurally excluded without a special case, since
        `Definition.Validator`'s Rule 3 already forbids `queried: true` on a
@@ -178,6 +179,41 @@ defmodule Letflow.Entities.Query.Allowlist do
        entry is discarded -- the typed-column entry wins (AC3, the
        shadowing-precedence rule stated in this module's own moduledoc
        above).
+
+  ## REQ-300 AC8 -- promoted columns resolve `source: :typed_column`, gated
+  ## on the per-entity-type table actually existing
+
+  `typed_columns/2`'s promoted set is purely definition-derived (decoded
+  straight off the active `Definition.t()` document, same as
+  `fk_defs/2` -- see that function's own moduledoc note): it reports a
+  field as promoted the moment a definition declares it `queried: true` or
+  as an `fk_def().field`, **regardless of whether any `ColumnPromotion` has
+  ever actually run** for that attribute (0023's promotion rule marks
+  *eligibility*; `Letflow.TenantProvisioning.run_column_promotion/1` is the
+  separate, explicit step that lands the physical column). Naively
+  repointing `load/2` at `typed_columns/2`'s full result unconditionally
+  would therefore mark a merely-*eligible*, never-promoted field (e.g. this
+  test suite's own "customer" fixture, whose `queried: true` fields have
+  never been through a real `ColumnPromotion`) `source: :typed_column` too
+  -- and `Letflow.Entities.Query.Compiler.build_filter_dynamic/2`'s
+  `:typed_column` clause would then try to resolve it as a real physical
+  column on a table that was never created, corrupting every ordinary,
+  never-promoted-entity-type query this module's own AC3 tests (and
+  `Letflow.Entities.QueryTest`'s whole "customer" fixture) already rely on.
+
+  So `load/2` includes a **non-structural** promoted name (anything
+  `typed_columns/2` reports beyond the fixed 7) as `source: :typed_column`
+  only when `entity_type`'s per-entity-type table **physically exists**
+  right now (`TenantProvisioning.entity_table_exists?/2`, the same
+  existence check `Letflow.Entities.Query.Compiler.resolve_binding_source/2`
+  performs) -- otherwise that name is left to resolve via the ordinary
+  `:json_field` path below, exactly as it did before this requirement. This
+  keeps every existing, never-promoted-entity-type request byte-for-byte
+  unchanged (REQ-300's own hard non-regression requirement) while still
+  giving a genuinely-promoted attribute (this requirement's own AC8
+  scenario, and a join's declaring side) the real `:typed_column`
+  resolution `Letflow.Entities.Query.Compiler`'s two-path column-reference
+  split (design §3.4) needs.
   """
   @spec load(entity_type :: String.t(), prefix :: String.t()) ::
           {:ok, allowlist()}
@@ -186,8 +222,25 @@ defmodule Letflow.Entities.Query.Allowlist do
   def load(entity_type, prefix) when is_binary(entity_type) and is_binary(prefix) do
     with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
          {:ok, entity_definition} <- fetch_active_definition(entity_type, prefix) do
+      structural_names = MapSet.new(Map.keys(typed_columns()))
+
+      promoted_typed_column_names =
+        if entity_table_physically_exists?(entity_type, prefix) do
+          entity_definition
+          |> definition_document()
+          |> entity_type_typed_columns()
+          |> Map.drop(MapSet.to_list(structural_names))
+        else
+          %{}
+        end
+
       typed_column_entries =
         Map.new(typed_columns(), fn {name, {_atom, type}} ->
+          {name, %{name: name, source: :typed_column, type: type, enum_values: nil}}
+        end)
+
+      promoted_typed_column_entries =
+        Map.new(promoted_typed_column_names, fn {name, type} ->
           {name, %{name: name, source: :typed_column, type: type, enum_values: nil}}
         end)
 
@@ -207,12 +260,74 @@ defmodule Letflow.Entities.Query.Allowlist do
         end)
 
       # AC3: typed-column entries win on name collision -- merge with the
-      # typed-column map as the *second* argument so its values overwrite
-      # any same-named json_field entry.
-      allowlist = Map.merge(json_field_entries, typed_column_entries)
+      # typed-column maps as the *second*/*third* arguments so their values
+      # overwrite any same-named json_field entry. promoted_typed_column_entries
+      # is merged last so a promoted name always resolves :typed_column once
+      # its table exists, even if (impossibly, per 0023's own rule -- see
+      # this function's moduledoc note) it collided with a json_field name.
+      allowlist =
+        json_field_entries
+        |> Map.merge(typed_column_entries)
+        |> Map.merge(promoted_typed_column_entries)
 
       {:ok, allowlist}
     end
+  end
+
+  @doc """
+  The per-entity-type set of `fk_def()`s declared by `entity_type`'s active
+  definition (REQ-300 design §2) -- the full shape (`name`, `field`,
+  `references_entity`, `references_field`), not `typed_columns/2`'s
+  internal `field`-only `decoded_fk_def()`. Mirrors `typed_columns/2`'s own
+  three-step shape and reuses the same active-definition fetch
+  (`fetch_active_definition/2`) -- no second lookup path.
+
+  Returns `[]` (not an error) for an entity type with no `foreign_keys` --
+  same "absence is the common case, not an error" convention
+  `Letflow.Entities.Query.FieldGrants.load_restrictions/3` already uses for
+  zero restricted fields.
+
+  Purely definition-JSON-derived, like `typed_columns/2` -- does **not**
+  consult `ColumnPromotion`/`entity_table_exists?/2` at all. It is
+  `Letflow.Entities.Query.Compiler`'s own job (via
+  `Compiler.resolve_binding_source/2` and `Compiler.relation_column_exists?/3`)
+  to check whether a relation this function reports is actually usable
+  against real Postgres state before building a join on it.
+  """
+  @spec fk_defs(entity_type :: String.t(), prefix :: String.t()) ::
+          {:ok, [Definition.fk_def()]}
+          | {:error, :invalid_schema_name}
+          | {:error, :entity_type_not_found}
+  def fk_defs(entity_type, prefix) when is_binary(entity_type) and is_binary(prefix) do
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, entity_definition} <- fetch_active_definition(entity_type, prefix) do
+      fk_defs =
+        entity_definition.definition_json
+        |> Map.get("foreign_keys", [])
+        |> Enum.map(&full_fk_def_document/1)
+
+      {:ok, fk_defs}
+    end
+  end
+
+  defp entity_table_physically_exists?(entity_type, prefix) do
+    case TenantProvisioning.table_name_for_entity_type(entity_type) do
+      {:ok, table_name} -> TenantProvisioning.entity_table_exists?(prefix, table_name)
+      {:error, :invalid_entity_type} -> false
+    end
+  end
+
+  # Full fk_def() decode (name/field/references_entity/references_field) --
+  # a second, separate private decoder from definition_document/1's own
+  # internal decoded_fk_def() (field-only), which entity_type_typed_columns/1
+  # still exclusively consumes, unchanged.
+  defp full_fk_def_document(fk) do
+    %{
+      name: Map.fetch!(fk, "name"),
+      field: Map.fetch!(fk, "field"),
+      references_entity: Map.fetch!(fk, "references_entity"),
+      references_field: Map.get(fk, "references_field")
+    }
   end
 
   @doc """

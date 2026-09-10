@@ -136,4 +136,68 @@ defmodule Letflow.Entities.Query.FieldGrants do
   defp redact_item(%Latest{field_values: field_values} = item, restriction_set) do
     %{item | field_values: redact_field_values(field_values, restriction_set)}
   end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-300 -- FieldGrants composition with a joined read (design §7). Exactly
+  # one new public function (`redact_joined_page/2`) plus one new private
+  # helper (`redact_joined_item/2`) below this line -- `redacted_sentinel/0`,
+  # `load_restrictions/3`, `redact_field_values/2`, `redact_page/2`, and
+  # `redact_item/2` above are unmodified: same signatures, same bodies, same
+  # tests still green.
+  #
+  # `load_restrictions/3`'s own anti-join is reused exactly as designed
+  # today, for its original purpose -- computing one `(user_id,
+  # entity_type)`'s restriction set -- called once per distinct entity type
+  # present in a joined result. It is never repurposed as any part of the
+  # join *mechanism* itself, which lives entirely in
+  # `Letflow.Entities.Query.Compiler` (REQ-300 design §3-§5).
+  #
+  # `restriction_sets()` is keyed exactly the way a `Compiler.joined_row()`
+  # itself is keyed -- the atom `:primary` for the primary entity's own
+  # restriction set, and each joined `entity_type` string for that joined
+  # entity's own set -- so a caller composes it with one
+  # `load_restrictions/3` call per distinct entity type present (primary's
+  # own entity type keyed under `:primary`, plus each `join_clause.entity_type`
+  # keyed under that string; `through`'s own entity type is not included,
+  # since its row is never exposed in a joined result -- REQ-300 design
+  # §4). This is the direct answer to AC5's "keyed by entity-type-of-each-field,
+  # not just the primary entity type": a joined entity's own restriction set
+  # governs its own fields; the primary's redaction never leaks onto a
+  # joined entity's fields and vice versa, because each is resolved and
+  # redacted independently.
+  #
+  # For a non-join request (`join` absent/empty), `redact_page/2` continues
+  # to be the right call, unchanged -- `redact_joined_page/2` is additive,
+  # not a replacement.
+  # ---------------------------------------------------------------------------------
+
+  @typedoc """
+  One restriction set per distinct entity present in a joined result,
+  keyed the same way `Compiler.joined_row()` itself is keyed (design §7).
+  """
+  @type restriction_sets :: %{(:primary | String.t()) => restriction_set()}
+
+  @doc """
+  Maps `redact_field_values/2` over every entity in every joined row's own
+  `Compiler.joined_row()` map -- `:primary` and every joined `entity_type`
+  string key alike, with no special-casing of `:primary` over a joined key
+  (design §7).
+  """
+  @spec redact_joined_page(
+          Pagination.Page.t(Letflow.Entities.Query.Compiler.joined_row()),
+          restriction_sets()
+        ) :: Pagination.Page.t(Letflow.Entities.Query.Compiler.joined_row())
+  def redact_joined_page(%Pagination.Page{items: items} = page, restriction_sets)
+      when is_map(restriction_sets) do
+    %{page | items: Enum.map(items, &redact_joined_item(&1, restriction_sets))}
+  end
+
+  defp redact_joined_item(joined_row, restriction_sets) when is_map(joined_row) do
+    Map.new(joined_row, fn {key, entity_row} ->
+      restriction_set = Map.fetch!(restriction_sets, key)
+
+      {key,
+       %{entity_row | field_values: redact_field_values(entity_row.field_values, restriction_set)}}
+    end)
+  end
 end

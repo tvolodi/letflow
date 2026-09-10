@@ -184,13 +184,20 @@ defmodule Letflow.Definitions.SolutionPack do
           schema_content: String.t()
         }
 
-  @typedoc "One entity definition inside a pack document (0026 §Consequences, REQ-303 doc §1)."
+  @typedoc """
+  One entity definition inside a pack document (0026 §Consequences, REQ-303 doc §1).
+
+  `logical_shape_version` is lowercase-hex-encoded (`Base.encode16/2`, `case: :lower`)
+  -- the raw digest cannot cross a `Jason.encode!/1` boundary; see
+  `Letflow.Entities.Records.hex_version/1` for the same convention applied to the
+  event-envelope path.
+  """
   @type packed_entity_definition :: %{
           entity_definition_id: Ecto.UUID.t(),
           name: String.t(),
           display_name: String.t(),
           definition_json: map(),
-          logical_shape_version: binary()
+          logical_shape_version: String.t()
         }
 
   @type pack_document :: %{
@@ -468,8 +475,18 @@ defmodule Letflow.Definitions.SolutionPack do
       name: entity_definition.name,
       display_name: entity_definition.display_name,
       definition_json: entity_definition.definition_json,
-      logical_shape_version: entity_definition.logical_shape_version
+      logical_shape_version: encode_logical_shape_version(entity_definition.logical_shape_version)
     }
+  end
+
+  # Mirrors Letflow.Entities.Records.hex_version/1's exact convention -- the raw
+  # digest is not valid UTF-8 in general and cannot cross a Jason.encode!/1
+  # boundary. logical_shape_version is a non-nullable :binary column
+  # (EntityDefinition's @required_fields), so every %EntityDefinition{} reaching
+  # this function already has a non-nil value; no error branch is needed.
+  @spec encode_logical_shape_version(binary()) :: String.t()
+  defp encode_logical_shape_version(version) do
+    Base.encode16(version, case: :lower)
   end
 
   defp pack_variable_schemas({%ProcessDefinition{} = definition, schemas}) do
@@ -580,6 +597,7 @@ defmodule Letflow.Definitions.SolutionPack do
          {:ok, name} <- fetch_string(raw, "name"),
          {:ok, display_name} <- fetch_string(raw, "display_name"),
          {:ok, logical_shape_version} <- fetch_string(raw, "logical_shape_version"),
+         {:ok, logical_shape_version} <- decode_logical_shape_version(logical_shape_version),
          {:ok, raw_definition_json} <- fetch_object(raw, "definition_json"),
          {:ok, definition_json} <- atomize_definition_json(raw_definition_json) do
       {:ok,
@@ -594,6 +612,22 @@ defmodule Letflow.Definitions.SolutionPack do
   end
 
   defp parse_entity_definition(_not_an_object), do: {:error, :invalid_pack_document}
+
+  # Non-raising counterpart to encode_logical_shape_version/1 -- this receives
+  # caller-supplied pack-document content that has not yet been validated as
+  # well-formed hex, unlike Records.hex_version/1's duplicate-submission replay
+  # path, which decodes a value this codebase itself encoded moments earlier.
+  # Odd length, non-hex characters, or wrong case (case: :lower rejects
+  # uppercase hex digits) all fall through to :error here, reusing the existing
+  # structural-parse-failure atom rather than inventing a new error tuple.
+  @spec decode_logical_shape_version(String.t()) ::
+          {:ok, binary()} | {:error, :invalid_pack_document}
+  defp decode_logical_shape_version(hex) do
+    case Base.decode16(hex, case: :lower) do
+      {:ok, raw_bytes} -> {:ok, raw_bytes}
+      :error -> {:error, :invalid_pack_document}
+    end
+  end
 
   # Translates a string-keyed `definition_json` map (as it round-trips through
   # a JSON decode, or through Ecto's `:map`/JSONB `entity_definitions.definition_json`

@@ -60,6 +60,23 @@ in a design doc and removed).
   reuses `TenantProvisioning.table_name_for_entity_type/1` verbatim rather
   than re-deriving a table name anywhere.
 - No pre-existing `req300-*` design artefact found under `lib/letflow/design/`.
+- **Re-verified fresh this rework cycle (the gap CODE-DESIGN-VALIDATOR's
+  rework-cycle-1 review found): `lib/letflow/tenant_provisioning.ex`'s
+  `ensure_entity_table/2` (private, ~line 1301) and `do_run_column_promotion/2`
+  (private, ~line 1208) read in full, not just cited by name/prose.**
+  `ensure_entity_table/2` is called from exactly one place —
+  `do_run_column_promotion/2`, itself reachable only from
+  `run_column_promotion/1` acting on an existing `ColumnPromotion` row —
+  and is a no-op (returns `:ok` without creating anything) if the table
+  already exists. There is **no** code path that creates a per-entity-type
+  table at definition-creation/activation time independent of a promotion
+  actually running. Confirms `lib/letflow/entities/record/projector.ex:300-303`'s
+  own comment verbatim: "A rebuild for an entity type with no per-entity-type
+  table yet (the ordinary case for every entity type that has never had a
+  column promoted) does nothing extra." This is the fact rework cycle 1's
+  design got wrong by relying on `table_name_for_entity_type/1` and 0023/0024
+  prose alone without tracing *when* `ensure_entity_table/2` actually runs —
+  see §3 for the corrected mechanism this drives.
 - **New fact this design depends on, confirmed by reading
   `lib/letflow/design/req296-entity-table-ddl-generator.md` and
   `docs/migration/decisions/0024-entity-promotion-ddl-execution.md`**: a
@@ -155,7 +172,27 @@ Returns `[]` (not an error) for an entity type with no `foreign_keys` —
 same "absence is the common case, not an error" convention
 `FieldGrants.load_restrictions/3` already uses for zero restricted fields.
 
-## 3. `Letflow.Entities.Query.Compiler` — repointing `compile/2` at the per-entity-type table
+## 3. `Letflow.Entities.Query.Compiler` — a per-binding table choice, not an unconditional repoint
+
+**REWORK (CODE-DESIGN-VALIDATOR rework cycle 1): the original version of
+this section unconditionally repointed `compile/2`'s base query at a
+per-entity-type table for every call, dropping the `entity_type`
+where-clause outright. That is wrong and would have been a real
+regression: a per-entity-type table is created **only** lazily, on first
+column promotion, via `TenantProvisioning.ensure_entity_table/2` (private,
+reachable only from `do_run_column_promotion/2` via `run_column_promotion/1`
+for an existing `ColumnPromotion` row) — re-confirmed this session by
+reading `lib/letflow/tenant_provisioning.ex` lines 1181–1330 in full. An
+entity type that has never had a column promoted (the ordinary case for
+every entity type — see `lib/letflow/entities/record/projector.ex:300-303`'s
+own comment: "the ordinary case for every entity type that has never had a
+column promoted") has an active definition and **no** per-type table,
+permanently, by design. Unconditionally repointing `compile/2` at a
+per-type table would have returned `{:error, :entity_table_not_found}` for
+every ordinary filter/sort request against such an entity type — a
+regression against REQ-225..231's already-working behavior. The fix below
+makes the base-table choice a **per-binding decision**, not a blanket
+switch.**
 
 ### 3.1 New/changed `compile_error()` members
 
@@ -176,7 +213,44 @@ verbatim** — see §6 — for both "join names a field that is not an
 No new error shape is introduced for that case, per the requirement's own
 instruction to match the existing convention exactly.
 
-### 3.2 `compile/2` — revised step order
+`{:error, :entity_table_not_found}`'s trigger condition **changes** from
+the original (flawed) design: it is no longer an unconditional per-call
+check. It fires in exactly one place now (§4's join resolution) — see the
+"declarer must have a per-type table" rule below. It is never returned for
+a plain, non-join request; a plain request's per-binding table choice
+(§3.2 step 2) has no error branch — absence of a per-type table simply
+means the binding resolves to `Latest`, which is always valid.
+
+### 3.2 `resolve_binding_source/2` — the one new primitive this fix adds
+
+```
+@type binding_source :: {:per_type_table, table_name :: String.t()} | :latest
+
+@spec resolve_binding_source(entity_type :: String.t(), prefix :: String.t()) ::
+        {:ok, binding_source()} | {:error, :invalid_entity_type}
+```
+
+Body: `TenantProvisioning.table_name_for_entity_type(entity_type)` →
+`{:ok, table_name}`, then `TenantProvisioning.entity_table_exists?/2`
+(already public, `@doc false`, exported) against `prefix`/`table_name` —
+`{:ok, {:per_type_table, table_name}}` if it exists, `{:ok, :latest}`
+otherwise. `{:error, :invalid_entity_type}` only for an entity-type string
+that fails `table_name_for_entity_type/1`'s own identifier check — not
+load-bearing in practice, since `entity_type` has already passed
+`Allowlist.load/2`'s active-definition lookup by the time this is called,
+same "defensive, not load-bearing" framing the original design used for
+its (now-removed) unconditional existence check. Called once per distinct
+entity-type binding a given `compile/2` invocation needs: once for the
+primary, once for each distinct entity type appearing across the
+request's resolved join relations (a `through` entity type used by two
+hops resolves its binding source once, reused for both).
+
+This is a **query-time existence check**, not a promotion-state cache —
+it reflects whatever `entity_table_exists?/2` reports at the moment
+`compile/2` runs, same freshness guarantee the original design's check
+had.
+
+### 3.3 `compile/2` — revised step order
 
 `compile/2`'s public `@spec` is unchanged (`query_request(), prefix ::
 String.t() -> {:ok, Ecto.Query.t()} | compile_error()`); its body's step
@@ -185,32 +259,45 @@ order becomes:
 1. `Allowlist.load/2` — as today, but see §8: after this requirement,
    `load/2` marks a promoted `queried: true` field (and every `fk_def`
    field) `source: :typed_column` for its own entity type.
-2. **New:** `TenantProvisioning.table_name_for_entity_type(entity_type)` →
-   `{:ok, table_name}`; then `TenantProvisioning.entity_table_exists?/2`
-   (already public, `@doc false`, exported) against `prefix`/`table_name`
-   — `{:error, :entity_table_not_found}` if absent. (An active definition
-   without its table would mean 0024's dual-write/DDL-applied invariant
-   was violated elsewhere; this is a defensive, not load-bearing, check.)
+2. **New:** `resolve_binding_source(entity_type, prefix)` (§3.2) for the
+   **primary** entity type → `primary_source`. No error branch reachable
+   here in practice (see §3.2); this step never returns
+   `:entity_table_not_found` — that only happens in step 6, for a join's
+   declaring side.
 3. For each filter clause: value-arity check, field resolution, operator/
    field-type compatibility, `build_filter_dynamic/2` — unchanged in
-   shape; see §3.3 for the one behavioral addition (`"entity_type"`
-   special-case) `build_filter_dynamic/2`'s typed-column clause needs now
-   that the column no longer physically exists.
+   shape; see §3.4 for the one behavioral addition (`"entity_type"`
+   special-case), which fires **only when `primary_source` is
+   `{:per_type_table, _}`** — when `primary_source` is `:latest` (the
+   ordinary, non-promoted case, and every existing REQ-225..231 test),
+   filter/sort field resolution is **byte-for-byte identical to today**:
+   the fixed-name atom path against `Latest`, `entity_type` a genuine
+   physical column compared normally, no special-casing at all.
 4. Fold every clause's dynamic into one AND-combined expression — unchanged.
 5. For each sort clause: field resolution, `build_order_by/2` — unchanged
-   in shape, same §3.3 addition.
+   in shape, same §3.4 conditional addition.
 6. **New — join resolution (§4):** for each `join_clause()` in
    `Map.get(request, :join, [])`, resolve it against `Allowlist.fk_defs/2`
    and `Allowlist.typed_columns/2` for the relevant entity type(s), in
    request order. Width/depth bound enforced first (§5) before resolving
    any individual clause, so an over-wide request fails fast without
-   touching the database for its relations.
-7. **New:** assemble the base query as a **schemaless** query against the
-   dynamic table name — `from(r in {table_name, nil})` — instead of
-   `Latest`. The `where(r.entity_type == ^entity_type)` clause **is
-   dropped entirely**: table selection itself is the scoping now (there is
-   no `entity_type` column to compare against on a per-entity-type table).
-8. Apply the combined filter dynamic, resolved join clauses (§4), and
+   touching the database for its relations. For each resolved relation,
+   §4's "declarer must be on a per-type table" rule applies — this is
+   where `{:error, :entity_table_not_found}` can now actually fire,
+   defensively, if that guarantee is somehow violated.
+7. Assemble the base query **conditionally on `primary_source`** (this
+   replaces the original design's unconditional repoint):
+   - `primary_source == :latest`: `Latest |> where([r], r.entity_type ==
+     ^entity_type)` — **exactly today's code**, unchanged, byte-for-byte.
+   - `primary_source == {:per_type_table, table_name}`: `from(r in
+     {table_name, nil})`, no `entity_type` where-clause (no such column on
+     a per-type table — table selection itself is the scoping). This
+     branch is only taken when the primary entity type has actually been
+     promoted at least once (AC8's own scenario, and/or primary being a
+     join's declaring side, §4) — never for an entity type that has never
+     had a column promoted.
+8. Apply the combined filter dynamic, resolved join clauses (§4, each
+   carrying its own binding-source-driven table and ON condition), and
    order-bys, in that order — `join`s are added to the query before
    `where`/`order_by` purely as an Ecto/SQL-generation-order convenience;
    join clauses never reference the `where`/`order_by` dynamics or vice
@@ -218,7 +305,27 @@ order becomes:
 9. `{:ok, query}` — still never executed, still never calls `Repo.*`,
    matching this module's unchanged moduledoc invariant.
 
-### 3.3 Column-reference mechanism — the two-path split this repoint requires
+**Provable non-regression for the plain (non-join) case:** when `request`
+has no `join` key (or an empty one) *and* the entity type has never been
+promoted, steps 2, 6 are no-ops that touch nothing but a boolean
+existence check (`primary_source = :latest`, no join relations to
+resolve), step 3/5 take the unchanged fixed-name path, and step 7 takes
+the `:latest` branch — the exact same `Latest |> where(entity_type) |>
+where(combined) |> apply_order_bys(...)` construction
+`compiler.ex`'s current `compile/2` (lines ~81-99) already produces today.
+No behavior change, no new error branch reachable, for this case. See §10
+for the explicit test.
+
+### 3.4 Column-reference mechanism — the two-path split, gated on binding source
+
+**This dispatch only matters for a binding whose `binding_source` (§3.2)
+is `{:per_type_table, _}`.** For a binding resolved to `:latest` (the
+ordinary primary case, and any join side that isn't a relation's declarer
+and whose entity type happens to have no per-type table either),
+resolution is **unchanged from today**: `field(r, ^column_atom)`/
+`field(binding, ^column_atom)` against the fixed 7, `entity_type` a real
+physical column, no fragment path involved at all. The split below is
+additive, reached only for a per-type-table binding.
 
 `build_filter_dynamic/2`/`build_order_by/2`'s `:typed_column` clauses
 currently do `{column_atom, _type} = Map.fetch!(Allowlist.typed_columns(),
@@ -230,18 +337,33 @@ that name has no hardcoded atom, and fabricating one via
 `String.to_atom/1`/`String.to_existing_atom/1` on caller/tenant-controlled
 data is exactly what `Allowlist`'s own moduledoc (INV-C, `typed_columns/2`)
 already forbids. This design resolves that with a second, atom-free
-column-reference path, not by loosening INV-C:
+column-reference path, not by loosening INV-C. Both paths below apply only
+within a per-type-table binding:
 
 - **Fixed-name path (unchanged):** if `field_name` is a key of
   `Allowlist.typed_columns/0`'s own zero-arg 7-entry map **and is not
-  `"entity_type"`**, resolve exactly as today — `field(r, ^column_atom)`
-  with the hardcoded atom from that map.
-- **`"entity_type"` special case (new, small, contained):** `"entity_type"`
-  stays a valid, allowlisted, `:typed_column`-sourced field name (§8 does
-  not remove it from `typed_columns/0`), but it is no longer a physical
-  column on a per-entity-type table. Since the query's own `entity_type`
-  is already known statically (it is `compile/2`'s own `entity_type`
-  argument), a filter on `"entity_type"` is evaluated **in Elixir, at
+  `"entity_type"`**, resolve exactly as today — `field(binding,
+  ^column_atom)` with the hardcoded atom from that map, where `binding` is
+  whichever `Ecto.Query` binding this field resolves against (`r` for the
+  primary, the relevant join alias for a joined field) — same atom, same
+  mechanism, only the binding it's applied to varies. This path is
+  reachable both for a per-type-table binding (a promoted-column table
+  still carries the same fixed structural columns, e.g. `record_id`,
+  `deleted`) and is the **only** path ever reachable for a `:latest`
+  binding.
+- **`"entity_type"` special case (new, small, contained, per-type-table
+  only):** reachable **only when the binding in question is
+  `{:per_type_table, _}`** — for a `:latest` binding (the ordinary primary
+  case, and any join side sourced from `Latest`), `"entity_type"` is a
+  real physical column and resolves via the fixed-name path above,
+  unchanged from today, full stop. For a per-type-table binding,
+  `"entity_type"` stays a valid, allowlisted, `:typed_column`-sourced
+  field name (§8 does not remove it from `typed_columns/0`), but it is no
+  longer a physical column on that table. Since the relevant entity
+  type is already known statically at this point (it is either
+  `compile/2`'s own `entity_type` argument for the primary, or a
+  `join_clause.entity_type`/resolved through-entity string for a joined
+  binding), a filter on `"entity_type"` is evaluated **in Elixir, at
   compile time**, against that known value, and folded into the combined
   dynamic as a constant `dynamic(true)`/`dynamic(false)` — never a SQL
   comparison. `build_order_by/2` on `"entity_type"` similarly degrades to
@@ -250,9 +372,14 @@ column-reference path, not by loosening INV-C:
   fabricated constant `ORDER BY`). This is a small, fully-contained
   addition to `build_filter_dynamic/2`/`build_order_by/2`'s own dispatch,
   not a new module or mechanism.
-- **Promoted-name path (new):** any other name resolved `:typed_column` by
-  `load/2` (i.e., present in `Allowlist.typed_columns/2`'s result but not
-  in the fixed 7) is referenced via `dynamic([r], fragment("?",
+- **Promoted-name path (new, per-type-table only):** any other name
+  resolved `:typed_column` by `load/2` (i.e., present in
+  `Allowlist.typed_columns/2`'s result but not in the fixed 7) is only
+  ever reachable for a per-type-table binding (a `:latest` binding has no
+  such names in its allowlist output in the first place, since `load/2`
+  resolves promoted names only via `typed_columns/2`'s per-entity-type
+  set, which is itself only populated by an actual promotion — see §8).
+  Referenced via `dynamic([binding], fragment("?",
   literal(^field_name)))` — Ecto's own `literal/1` fragment helper, which
   emits a properly quoted SQL identifier from a runtime string **without**
   ever producing an Elixir atom. `field_name` reaching this branch has
@@ -296,16 +423,85 @@ whose `references_entity == entity_b` → `{:primary_owns_fk, ...}` match
 against `entity_a`. If not found, `Allowlist.fk_defs(entity_b, prefix)` —
 same search with `entity_a`/`entity_b` swapped → `{:target_owns_fk, ...}`.
 Neither found → `{:error, {:field_not_allowed, fk_name}}` (§6). This one
-primitive is reused for every hop:
+primitive is reused for every hop.
+
+### 4.0.1 The per-relation binding-source rule (this rework cycle's fix)
+
+Every `resolved_relation()` names an `owner_entity_type` — the entity type
+that **declares** the `fk_def` (whichever of `entity_a`/`entity_b` matched
+first). That declaring side is the one this design requires to be sourced
+from its own per-type table, and it is **guaranteed** to have one:
+`Allowlist.fk_defs/2` only returns an entry once `load/2`/`typed_columns/2`
+resolve that field `source: :typed_column` for the entity type declaring
+it (the requirement's own "WHY THIS DEPENDS ON REQ-298 AND REQ-299"
+paragraph — a join can only be requested once the declaring entity type's
+FK column has actually been promoted), and promoting any column for an
+entity type is exactly what makes `ensure_entity_table/2` create that
+entity type's per-type table in the first place (`do_run_column_promotion/2`
+calls `ensure_entity_table(schema_name, promotion.entity_type)` before
+anything else). So: **the declaring side of a resolved relation always has
+a per-type table by the time a join naming that relation can even resolve
+successfully.**
+
+Concretely, per resolved relation:
+
+- `side == :target_owns_fk` (the join's **target**, i.e. `join_clause.entity_type`
+  for a direct join, or the far entity for a `through` hop, declares the
+  `fk_def`): the target's binding **must** be `{:per_type_table, table}` —
+  computed via `resolve_binding_source/2` (§3.2) and asserted, not merely
+  hoped for: if it comes back `:latest` here, that is the "invariant
+  violated elsewhere" case the original design's defensive check was
+  guarding, and `compile/2` returns `{:error, :entity_table_not_found}`
+  (reusing the existing tag verbatim — no new error shape for this,
+  matching §6's own "reuse, don't multiply error tags" convention). The
+  primary/near side of that same relation follows the **ordinary**
+  per-binding rule (§3.2) — `resolve_binding_source/2` for its own entity
+  type, `{:per_type_table, _}` if it happens to have one, `:latest`
+  otherwise; either is fine, since only its `record_id` (present, as a
+  real typed column, on both physical shapes) is needed for the ON
+  condition.
+- `side == :primary_owns_fk` (the **primary/near** side declares the
+  `fk_def` — e.g. the primary itself has an `fk_def` pointing at the join
+  target, or a `through` entity's near hop points back at the primary):
+  the declaring side's binding **must** be `{:per_type_table, table}`,
+  same assertion/defensive-error rule as above. When the *primary itself*
+  is the declarer, this is what determines `primary_source` in §3.3 step
+  2's terms — i.e., if any resolved relation in the request has
+  `owner_entity_type == primary_entity_type`, `primary_source` **is**
+  `{:per_type_table, _}` for the whole query (a single physical binding
+  serves both the primary's own filters/sorts and every relation's ON
+  condition that needs it — per-type tables carry the same fixed
+  structural columns, including `record_id`, so this never breaks an
+  unrelated relation where the primary is the *non*-declaring side). The
+  other (non-declaring) side of that relation follows the ordinary
+  per-binding rule.
+
+Either way, the **non-declaring** side of a relation may resolve to
+`:latest` — in that case its binding is `Latest` filtered by
+`entity_type == ^that_entity_type` in the join's own `on:` clause (Latest
+is shared across every entity type, so a join against it needs the same
+scoping a top-level query would), exactly mirroring §3.3 step 7's primary
+construction, just expressed as a join condition instead of a top-level
+`where`.
+
+This closes the defect: a **plain, non-join** request never resolves any
+relation (step 6 of §3.3 is a no-op), so this rule never triggers, and
+`primary_source` is decided purely by §3.2's ordinary per-binding check —
+`:latest` for the ordinary (never-promoted) case, unchanged.
+
+Applied to the two join shapes:
 
 - **Direct join** (`join_clause` with no `through`): one call,
   `resolve_relation(primary_entity_type, join_clause.entity_type,
   join_clause.fk, prefix)`. The `"question"` + `"answer_option"` example
   resolves `:target_owns_fk` (`answer_option`'s `fk_def` named e.g.
   `"question_fk"`, `field: "question_id"`, `references_entity:
-  "question"`) — ON condition: joined table's `question_id` column
-  (promoted-name path, §3.3) equals primary's `record_id` (fixed-name
-  path).
+  "question"`) — `answer_option`'s binding is asserted
+  `{:per_type_table, _}` per the rule above; `question`'s (primary) binding
+  follows the ordinary rule and may be `:latest` or its own per-type table.
+  ON condition: joined table's `question_id` column (promoted-name path,
+  §3.4) equals primary's `record_id` (fixed-name path, on whichever
+  physical shape the primary resolved to).
 - **Many-to-many** (`join_clause` with `through: "question_tags"`,
   `entity_type: "tag"`, `fk: "tag_fk"`): **two** hops, both resolved by
   this same primitive:
@@ -316,13 +512,24 @@ primitive is reused for every hop:
      entity per side, by 0023's own m2m shape). Zero matches →
      `{:error, {:no_through_relation, through, primary_entity_type}}`;
      more than one match → `{:error, {:ambiguous_through_relation,
-     through}}` (both new, named, testable errors, §3.1).
+     through}}` (both new, named, testable errors, §3.1). This hop's
+     `owner_entity_type` is `through` (`question_tags` owns the FK
+     pointing back at `question`, per 0023's m2m shape), so `through`'s
+     binding is asserted `{:per_type_table, _}` here.
   2. Far hop: `resolve_relation(through, join_clause.entity_type,
      join_clause.fk, prefix)` — named explicitly by `fk`, since a join
      entity's *far* side is exactly the thing `fk` disambiguates (a join
      entity could in principle have more than one outgoing relation on
      that side in a richer schema, even though `question_tags` itself
-     does not).
+     does not). This hop's `owner_entity_type` is again `through`
+     (`question_tags` owns *both* its FK columns, by construction — 0023's
+     "a join table is an ordinary entity type whose promoted columns
+     happen to be two foreign keys"), so the **same** `through` binding
+     resolved for the near hop is reused for the far hop's ON condition
+     too — one physical table, one `Ecto.Query` alias, both hops' ON
+     conditions reference it. `join_clause.entity_type` (the far/`"tag"`
+     side) follows the ordinary per-binding rule, same as the primary does
+     in a direct join.
 
   The compiled query gets **two** SQL joins for a `through` request: `r
   (question) -> j_through (question_tags) -> j_far (tag)`, both `:inner`
@@ -353,7 +560,7 @@ pre-declared pool** — `:join_0`, `:join_1`, `:join_2`, `:join_3` — selected
 positionally by each `join_clause`'s index in the request's `join` list
 (bounded by §5's width cap of 4), **never** derived from the caller's
 `entity_type`/`through` strings. This closes the same atom-fabrication
-door §3.3 closes for column names, applied to join aliases instead.
+door §3.4 closes for column names, applied to join aliases instead.
 
 Result shape — one new type, `Letflow.Entities.Query.Compiler.entity_row()`
 and `joined_row()`:
@@ -378,7 +585,11 @@ and `joined_row()`:
 `compile/2`'s `select` clause, when `join` is non-empty, produces a
 `joined_row()` per output row: `:primary` mapped from `r`'s own structural
 columns (§0's fixed 7-minus-`entity_type` set — all fixed atoms, no
-fabrication), plus one entry per `join_clause`, keyed by that clause's
+fabrication) — **the same `entity_row()` shape regardless of whether `r`
+resolved to `Latest` or to primary's own per-type table** (§3.2/§3.3): both
+physical shapes carry the identical fixed-7 structural columns, so the
+`select` projection is one uniform mapping that never needs to branch on
+`primary_source` — plus one entry per `join_clause`, keyed by that clause's
 **`entity_type` string** (not its positional alias — the alias is an
 internal `Ecto.Query` binding name, never surfaced to a caller), mapped
 from the corresponding join binding's own structural columns. A request
@@ -390,13 +601,18 @@ the read-side payload for every attribute, promoted or not** (§0's
 ever selected out by name, sidestepping any further atom-fabrication
 question at the `select` layer entirely.
 
-When `join` is empty (today's behavior, unchanged), `compile/2`'s result
-row shape is **unchanged** — still the plain per-entity-type-table row
-shape (structurally equivalent to today's `Latest.t()` minus `entity_type`
-and `id`/`.id`, since the query no longer runs against `Latest`). Every
-existing test/caller that only ever used the non-join path continues to
-get exactly the fields it got before, from the new table instead of the
-old one.
+When `join` is empty, `compile/2`'s result row shape is **unchanged from
+today** in the ordinary (never-promoted) case: `primary_source` is
+`:latest` (§3.2/§3.3), the query is the exact same `Latest`-backed query
+compile/2 builds today, and every existing test/caller gets exactly the
+row shape it got before, from `Latest`, exactly as before — no new
+projection, no new row shape, nothing to adapt to. For an entity type that
+**has** been promoted (`primary_source == {:per_type_table, _}`, AC8's own
+scenario), the row read back is structurally equivalent to today's
+`Latest.t()` minus `entity_type` (that column doesn't exist on that
+table), still `entity_row()`-shaped — this is new territory (no such
+non-join, promoted-entity-type case existed before this requirement), not
+a change to any existing caller's behavior.
 
 ## 5. Maximum join depth: **1** (2 for the fixed, non-chainable `through`
    case), width capped at **4** join clauses per request
@@ -517,9 +733,9 @@ This is exactly the wiring `req299`'s own "REWORK ITERATION 1" section
 named as *this* requirement's job: "REQ-300 ... also repoints `compile/2`
 at per-entity-type tables and gives `build_filter_dynamic/2`/
 `build_order_by/2` (or their REQ-300-era replacements) a real way to
-resolve a promoted atom" — §3.3's `literal/1`-fragment path is that real
+resolve a promoted atom" — §3.4's `literal/1`-fragment path is that real
 way. `Cursor.resolved_sort_term/2`/`read_sort_value/2` (the two call sites
-`req299` also names) get the identical two-path split as §3.3 — same
+`req299` also names) get the identical two-path split as §3.4 — same
 fixed-name-atom / promoted-name-fragment branch, since both functions
 receive the same `allowlisted_field()` shape `Compiler`'s functions do.
 
@@ -570,4 +786,5 @@ non-promoted `field_values` keys).
 | AC6 (non-fk field rejection) | A `join_clause` naming a real allowlisted field that is not any `fk_def` (e.g. `fk: "not_a_relation"`) → `{:error, {:field_not_allowed, "not_a_relation"}}`. |
 | AC7 (field_grants.ex diff) | Asserted by code review / `git diff` at implementation time, not a runtime test: only `redact_joined_page/2` and its private helper are new; nothing else in the file changes. Completion report states this explicitly. |
 | AC8 (`load/2` repointed, real pipeline) | §8's end-to-end test: a `queried: true`, non-FK promoted field, filtered through the real `Compiler.compile/2`, asserting the compiled query's `wheres` reference the real column via the `literal/1`-fragment path, not a `?->>?` JSONB cast. |
+| **Regression (this rework cycle's fix, §3.2/§3.3, not tied to a single AC)** | Seed an entity type that has **never** had a column promoted (no `ColumnPromotion` row ever run for it — the ordinary case, per `projector.ex:300-303`). Run a plain, non-join filter/sort request through `Compiler.compile/2`; assert `{:ok, query}` is returned (not `{:error, :entity_table_not_found}`) and the compiled query's `from` targets `Letflow.Entities.Record.Latest` with the `entity_type` where-clause present — i.e., the exact same query shape `compile/2` produces today, byte-for-byte, proving the defect CODE-DESIGN-VALIDATOR found in rework cycle 1 (an unconditional repoint that would have broken this exact case) is closed. |
 | (whole-suite gate) | `mix letflow.check` run in full, real output quoted in the completion report, per the requirement's own final acceptance criterion. |

@@ -19,6 +19,7 @@ defmodule Letflow.Entities.QueryTest do
 
   use Letflow.DataCase, async: false
 
+  alias Letflow.Entities.Definition.DDL
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.Query.Allowlist
   alias Letflow.Entities.Query.Compiler
@@ -624,6 +625,139 @@ defmodule Letflow.Entities.QueryTest do
 
       assert {:ok, query} = Compiler.compile(%{entity_type: "customer"}, schema)
       assert length(Repo.all(query, prefix: schema)) == 1
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-299 -- Allowlist.typed_columns/2, the per-entity-type promoted-column
+  # accessor. See lib/letflow/design/req299-allowlist-per-entity-type.md.
+  # Deliberately does NOT touch load/2's own AC3 coverage above (the
+  # shadowing-precedence tests in "AC3 -- typed-column-wins shadowing
+  # precedence" are re-confirmed as-is, unmodified, by this same file already
+  # running -- load/2's behavior is unchanged per REWORK ITERATION 1, so no
+  # new AC3 test is added here).
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-299 AC1/AC2/AC4 -- typed_columns/2 per-entity-type promoted columns" do
+    # Raw, atom-keyed definition maps -- the exact shape both
+    # create_active_definition!/2 (via Definitions.create_definition/2, which
+    # persists them as definition_json) and DDL.promoted_columns/1 (which
+    # consumes a Definition.t()-shaped map directly, no JSON round-trip)
+    # accept. Kept as plain maps here (not passed through JSON encode/decode)
+    # so the AC2 test below can feed the *same* fixture value to
+    # DDL.promoted_columns/1 that Allowlist.typed_columns/2 independently
+    # re-derives after its own JSON round-trip -- proving agreement between
+    # two different code paths, not two hand-copied lists.
+    defp order_definition_fields do
+      [
+        %{
+          name: "total_amount",
+          type: :decimal,
+          queried: true,
+          decimal_precision: 10,
+          decimal_scale: 2
+        },
+        %{name: "customer_id", type: :string, queried: false}
+      ]
+    end
+
+    defp order_definition_foreign_keys do
+      [%{name: "fk_customer", field: "customer_id", references_entity: "customer"}]
+    end
+
+    defp tag_definition_fields do
+      [%{name: "label", type: :string, required: true, queried: false}]
+    end
+
+    test "AC1: typed_columns/2's promoted-column key sets differ across two entity-type fixtures with different promoted columns" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "order",
+        fields: order_definition_fields(),
+        foreign_keys: order_definition_foreign_keys()
+      })
+
+      create_active_definition!(schema, %{name: "tag", fields: tag_definition_fields()})
+
+      assert {:ok, order_columns} = Allowlist.typed_columns("order", schema)
+      assert {:ok, tag_columns} = Allowlist.typed_columns("tag", schema)
+
+      order_keys = MapSet.new(Map.keys(order_columns))
+      tag_keys = MapSet.new(Map.keys(tag_columns))
+
+      # If typed_columns/2 ignored entity_type and returned a global set (the
+      # bug this test exists to catch), order_keys and tag_keys would be
+      # identical. They must differ by exactly "order"'s two promoted names.
+      refute order_keys == tag_keys
+      assert MapSet.difference(order_keys, tag_keys) == MapSet.new(["total_amount", "customer_id"])
+    end
+
+    test "AC2: typed_columns/2's promoted names agree exactly with DDL.promoted_columns/1's own enumeration for the same definition" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      raw_definition = %{
+        fields: order_definition_fields(),
+        foreign_keys: order_definition_foreign_keys()
+      }
+
+      create_active_definition!(schema, %{
+        name: "order",
+        fields: raw_definition.fields,
+        foreign_keys: raw_definition.foreign_keys
+      })
+
+      assert {:ok, order_columns} = Allowlist.typed_columns("order", schema)
+
+      structural_names = MapSet.new(Map.keys(Allowlist.typed_columns()))
+      promoted_names_from_allowlist = MapSet.new(Map.keys(order_columns)) |> MapSet.difference(structural_names)
+
+      # DDL.promoted_columns/1 called directly here, against the very same
+      # raw definition -- not a second, independently-hand-maintained list.
+      promoted_names_from_ddl =
+        raw_definition |> DDL.promoted_columns() |> MapSet.new(& &1.name)
+
+      assert promoted_names_from_allowlist == promoted_names_from_ddl
+      assert promoted_names_from_allowlist == MapSet.new(["total_amount", "customer_id"])
+    end
+
+    test "AC4: typed_columns/2 includes a queried:true field AND an FK-derived field for 'order', and neither for 'tag' (design doc §1.2.1 fixture pair)" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "order",
+        fields: order_definition_fields(),
+        foreign_keys: order_definition_foreign_keys()
+      })
+
+      create_active_definition!(schema, %{name: "tag", fields: tag_definition_fields()})
+
+      assert {:ok, order_columns} = Allowlist.typed_columns("order", schema)
+      assert {:ok, tag_columns} = Allowlist.typed_columns("tag", schema)
+
+      structural = Map.keys(Allowlist.typed_columns())
+
+      # "order": both promoted triggers present, alongside the structural 7.
+      assert "total_amount" in Map.keys(order_columns)
+      assert "customer_id" in Map.keys(order_columns)
+      assert Enum.all?(structural, &(&1 in Map.keys(order_columns)))
+
+      # "tag": neither trigger fires -- exactly the structural 7, no more.
+      assert MapSet.new(Map.keys(tag_columns)) == MapSet.new(structural)
+      refute "total_amount" in Map.keys(tag_columns)
+      refute "customer_id" in Map.keys(tag_columns)
+    end
+
+    test "typed_columns/2 propagates {:error, :entity_type_not_found} for an unknown entity type" do
+      %{schema_name: schema} = provisioned_tenant()
+
+      assert Allowlist.typed_columns("does-not-exist", schema) ==
+               {:error, :entity_type_not_found}
+    end
+
+    test "typed_columns/2 propagates {:error, :invalid_schema_name} for a non-provisioned schema" do
+      assert Allowlist.typed_columns("order", "not_a_real_schema__") ==
+               {:error, :invalid_schema_name}
     end
   end
 end

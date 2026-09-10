@@ -1026,6 +1026,28 @@ history:
       unchanged. docs/migration/decisions/0023-entity-storage-hybrid.md
       confirmed needing no edit, per REVIEWER's own prior sign-off that
       0023's claim doesn't need amendment.
+
+  - req: REQ-301
+    event: started
+    agent: ORCH
+    at: "2026-09-10T04:35:04Z"
+    note: >
+      WF02-REQ301-20260910 started (queue task 570, GH#1164). Adds a
+      :localized_text Definition.field_type() (blob-stored, keyed by
+      locale), a per-definition supported-locale declaration, a Validator
+      carve-out letting it be queried: true (unlike :json), a generated-
+      column-per-locale case in REQ-296's DDL generator, REQ-297 executor
+      wiring, and REQ-299 allowlist exposure, per 0023's re-scoping of S10
+      gap 11. Plain-text-vs-tsvector mechanism is REQ-302's decision, not
+      this requirement's to make. Flagged at Step 00: REQ-301's AC5
+      ("filtering/sorting on a locale's generated column works end-to-end
+      through Allowlist + Compiler") may hit the exact same
+      compiler.ex/cursor.ex column-atom-resolution gap WF02-REQ299-20260910
+      found and deferred to REQ-300 -- REQ-300 is still pending and is not
+      in REQ-301's depends_on. CODE-DESIGNER instructed to check this at
+      design time rather than discover it after an implementation attempt.
+      Branch: feature/WF02-REQ301-20260910.
+
   - req: REQ-298
     event: done
     agent: ORCH

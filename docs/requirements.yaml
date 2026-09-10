@@ -18282,7 +18282,7 @@ requirements:
     title: Localized-text field type -- blob-stored, generated column per locale when queried:true (S10 gap 11, re-scoped by 0023)
     owner: ELIXIR-DEV
     impl_order: 570  # letflow-queue task id; depends_on translated to queue task ids [566, 567, 568, 565]
-    status: pending
+    status: in_progress
     stage: S10
     description: >
       S10 gap 11, re-scoped by 0023's consequences section: "S10's gap 11

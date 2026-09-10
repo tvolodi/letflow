@@ -65,7 +65,7 @@ defmodule Letflow.Definitions.SolutionPackTest do
   # test/letflow/entities/definitions_test.exs's valid_definition/1, generated
   # under a fresh, name-format-legal (`^[a-z][a-z0-9_]{0,63}$`) unique name per
   # call so tests don't collide with each other (DIRECTIVE 4, no test pollution).
-  defp valid_entity_definition(overrides \\ %{}) do
+  defp valid_entity_definition(overrides) do
     Map.merge(
       %{
         name: unique("req304_entity"),

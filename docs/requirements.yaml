@@ -18892,7 +18892,7 @@ requirements:
     title: Test coverage for entity_definitions pack export/install -- round-trip, name-collision rollback, old-pack compatibility, malformed-entry rejection
     owner: TEST-DESIGNER
     impl_order: 577  # letflow-queue task id; depends_on translated to queue task ids [575, 576]
-    status: pending
+    status: done
     stage: S10
     description: >
       Re-verify at start rather than trusting this description: read

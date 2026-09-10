@@ -593,3 +593,74 @@ history:
       not a blocker for this fix. Test-support/test-file-only change, not a
       tenant-data-path change -- SECURITY-REVIEWER sign-off correctly
       skipped per design doc's own scope confirmation.
+
+  - req: REQ-306
+    event: started
+    agent: ORCH
+    at: "2026-09-10T18:53:41Z"
+    note: >
+      WF02-REQ306-20260910 started (queue task 577, GH#1175). S10 gap 13
+      test coverage: permanent ExUnit tests for REQ-304's export side and
+      REQ-305's install side of SolutionPack's entity_definitions pack
+      section (round-trip, name-collision rollback, malformed-entry
+      rejection, old-pack compatibility, INV-1 cross-tenant isolation).
+      Owner: TEST-DESIGNER directly (no CODE-DESIGNER/ELIXIR-DEV step --
+      this requirement writes test code only). Scope fence: test/ only --
+      no lib/letflow/definitions/solution_pack.ex or lib/letflow/entities/
+      edits; a real defect found while writing tests gets filed as an
+      incidental issue, not fixed here. Branch: feature/WF02-REQ306-20260910.
+
+  - req: REQ-306
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T19:50:47Z"
+    note: >
+      REQ-306 (queue task 577, GH#1175) implemented via
+      WF02-REQ306-20260910: S10 gap 13 test coverage, permanent ExUnit
+      tests for REQ-304's export side and REQ-305's install side of
+      SolutionPack's entity_definitions pack section. Owner: TEST-DESIGNER
+      directly (test-only requirement, no ELIXIR-DEV/CODE-DESIGNER step).
+      TEST-DESIGNER extended test/letflow/definitions/solution_pack_test.exs
+      with 5 new describe blocks: round-trip export/install across
+      tenants, name-collision rollback with direct multi-table row
+      verification (process_definitions, variable_schemas,
+      entity_definitions all queried directly, zero new rows confirmed),
+      three malformed-entry-rejection tests (one per REQ-305 typed error
+      tuple), and old-pack compatibility (entity_definitions key omitted
+      entirely, not set to []). Confirmed REQ-304's existing coverage
+      already exercises cross-tenant isolation (AC5) rather than adding a
+      redundant test. Wrote test/specs/REQ-306.md, an AC-to-test mapping
+      table covering every MUST acceptance criterion in REQ-304 and
+      REQ-305. 16/16 new/extended tests passed. While writing these tests,
+      TEST-DESIGNER found and reported a real latent defect, not fixed
+      here per this requirement's own scope fence:
+      packed_entity_definition/1 embeds a raw non-UTF-8-safe SHA-256
+      digest into the pack document, breaking a real Jason.encode!/1
+      round trip -- filed as docs/issues/ISS-0582.yaml (queue task 582,
+      GH#1196) by ORCH, incidental finding, not part of REQ-306's own
+      scope. Pipeline: TEST-DESIGNER -> TEST-DESIGN-VALIDATOR (PASS --
+      independently confirmed every testable REQ-304/REQ-305 MUST AC has
+      real non-tautological coverage, confirmed the multi-table
+      zero-rows verification is a direct query rather than trusting the
+      returned error tuple, confirmed the old-pack test omits the key
+      entirely rather than setting it to [], confirmed the
+      stringify_keys/1 test-harness workaround doesn't mask a real
+      assertion) -> TEST-RUNNER (full parallel suite 3725/3726 passed,
+      sole failure the pre-existing unrelated ISS-0580 flake) ->
+      RELEASE-VALIDATOR (independently re-verified every REQ-306 AC via
+      its own re-run of the test file, 16/16, plus its own full-suite and
+      mix letflow.check.test runs, surfacing ISS-0580 and separately
+      ISS-0340, both pre-existing tracked flakes unrelated to this diff --
+      PASS). No SECURITY-REVIEWER/REVIEWER dispatch needed: test-only
+      change, no lib/ files touched, git diff --name-only confirmed only
+      files under test/ touched (AC8), TEST-DESIGN-VALIDATOR is the hard
+      gate for TEST-DESIGNER-owned work. docs/requirements.yaml flipped
+      in_progress -> done. README.md checked (grepped for
+      SolutionPack/entity_definitions/REQ-306 references) -- no hits, no
+      documented current-behavior claim to update (internal test coverage
+      only, no user-facing effect). decision
+      0026-solution-pack-entity-definitions-section.md checked for a
+      per-step "implemented by REQ-306" marker convention -- none exists;
+      this repo's decision records carry no such convention anywhere
+      (REQ-303's, REQ-304's and REQ-305's own done-event notes found the
+      same absence for their own records) -- no edit made.

@@ -249,4 +249,35 @@ defmodule Letflow.Engine.ExprCorpusDriftGuardTest do
                "extra: #{inspect(MapSet.to_list(extra))}"
     end
   end
+
+  # -----------------------------------------------------------------------
+  # manifest.json marker schema (AC3: "the corpus carries a version or
+  # capability marker") -- the describe block above only checks the
+  # *content* of `capabilities`; nothing else in this file ever reads
+  # `corpus_schema_version`, so a missing/malformed marker field would
+  # otherwise go completely uncaught. Schema per design doc §4.2: exactly
+  # two top-level keys, `corpus_schema_version` a semver "MAJOR.MINOR.PATCH"
+  # string.
+  # -----------------------------------------------------------------------
+
+  describe "manifest.json marker schema" do
+    test "has exactly the two documented top-level keys, no stray fields" do
+      assert MapSet.new(Map.keys(@manifest)) ==
+               MapSet.new(["corpus_schema_version", "capabilities"]),
+             "manifest.json top-level keys #{inspect(Map.keys(@manifest))} do not match " <>
+               "the documented schema (design doc §4.2): exactly corpus_schema_version " <>
+               "and capabilities"
+    end
+
+    test "corpus_schema_version is present and is a MAJOR.MINOR.PATCH semver string" do
+      version = @manifest["corpus_schema_version"]
+
+      assert is_binary(version),
+             "manifest.json's corpus_schema_version must be a string, got: #{inspect(version)}"
+
+      assert Regex.match?(~r/^\d+\.\d+\.\d+$/, version),
+             "manifest.json's corpus_schema_version #{inspect(version)} is not " <>
+               "MAJOR.MINOR.PATCH semver, per design doc §4.2/§4.3"
+    end
+  end
 end

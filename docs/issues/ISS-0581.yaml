@@ -26,4 +26,21 @@ affected_files:
   - test/letflow/scheduler/poller_test.exs
 queue_ref: Q-581
 github_ref: GH-1190
-status: in_progress
+status: resolved
+resolved_in_run: WF03-ISS0581-20260910
+resolved_at: "2026-09-10T16:05:00Z"
+resolution: >
+  Root cause: test/letflow/scheduler/poller_test.exs's AC8 test used a fixed
+  Process.sleep(300) followed by a single assertion on Timer.status; under
+  8-way parallel-suite CPU/DB contention, Poller tick wall-clock duration
+  inflates (each tick runs a full sequential sweep chain with real DB round
+  trips) so fewer ticks complete inside the 300ms budget, leaving the timer
+  still "pending" when the assertion fires. Confirmed test-side timing-margin
+  defect, not a Poller logic bug (config-read-freshness verified correct).
+  Fix (ELIXIR-DEV, commit 612a9ed4): replaced the fixed sleep with a local,
+  file-scoped wait_until/2 poll loop (20ms interval, 2000ms deadline ceiling),
+  matching the established per-file wait_until precedent in
+  invocation_lease_test.exs and sandbox_pool_test.exs. lib/letflow/scheduler/poller.ex
+  untouched. Verified via 7/7 isolated poller_test.exs runs (19/19 tests each)
+  and full parallel suite (TEST_PARALLEL_N=8 scripts/test_parallel.sh):
+  3716/3717 passed, sole failure the pre-existing unrelated ISS-0580 flake.

@@ -2588,8 +2588,16 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 3
+    entries: 4
     note: >
+      Incremented to 4 by ORCH's own REQ-304 started-event append (Step 00,
+      WF02-REQ304-20260910) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 4 on-disk entries. The
+      Step 00 commit (0d8121af) appended the entry to v13.yaml without
+      also bumping this index count in the same commit, caught by
+      ELIXIR-DEV during this run's own Step 2a full-suite run (A9
+      assertion). Fixed here rather than left for a later reconciliation,
+      per this file's own recount-every-time rule.
       Recounted to 3 by WF02-REQ290-20260910's Step Final rebase, which
       conflicted at this file's tail composing this branch's own REQ-290
       started/done event pair (against a stale base of 2) with main's

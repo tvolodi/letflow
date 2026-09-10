@@ -6055,5 +6055,29 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-296 (queue task 566, GH#1160) implements the DDL-generation half of decision 0023 -- Letflow.Entities.Definition.DDL.generate_table_ddl/2, a pure function returning raw SQL CREATE TABLE text matching REQ-295's execution mechanism. Two independent promotion triggers (FK membership, queried: true); :json never promoted (defence-in-depth). All identifiers validated via an anchored allowlist regex, enum values quote-doubled, decimal precision/scale integer-guarded -- SECURITY-REVIEWER independently traced every value reaching the generated SQL and found no injection vector. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS, flagged 2 non-blocking test gaps) -> REVIEWER (PASS, closed those 2 gaps directly, 24 tests total, full suite re-run solo confirming only pre-existing rustc-absent failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (comprehensive coverage independently confirmed twice). Extension point for REQ-301 stated in moduledoc, not implemented."
     }
+,
+    {
+      "run_id": "WF02-REQ297-20260909",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-297",
+      "issue_id": null,
+      "queue_task_id": 567,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1161,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/tenant_provisioning.ex",
+        "lib/letflow/tenant_provisioning/column_promotion.ex",
+        "lib/letflow/entities/records.ex",
+        "lib/letflow/entities/record/projector.ex"
+      ],
+      "branch_name": "feature/WF02-REQ297-20260909",
+      "started_at": "2026-09-09T23:21:48Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-297 (queue task 567, GH#1161) is the promotion executor -- the first code to actually run entity-storage DDL against live tenant schemas, implementing REQ-295's designed ColumnPromotion mechanism via REQ-296's DDL generator. Nine functions on TenantProvisioning, new global entity_column_promotions table (per-tenant atomicity), backfill via real rebuild_projection/2 replay with dual-write, table-creation-on-first-use (a correctly-flagged gap-fill, not a scope overreach). Additive-only enforced by a real information_schema.columns check; dual-write is a new separate Multi step leaving upsert_record_latest/3 untouched. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS -- exhaustive cross-tenant/injection trace, the highest-stakes review in this batch) -> REVIEWER (PASS -- found and confirmed a 3rd, unrelated pre-existing test flake via isolated re-run). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (17 tests, comprehensive, independently confirmed twice)."
+    }
   ]
 }

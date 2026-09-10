@@ -2368,9 +2368,12 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 15
+    entries: 16
     note: >
-      Incremented to 15 by ORCH's own REQ-296 done-event append
+      Incremented to 16 by ORCH's own REQ-297 done-event append
+      (WF02-REQ297-20260909) -- 981 lines at that point (60390 bytes),
+      well under the roll ceiling.
+      Previously incremented to 15 by ORCH's own REQ-296 done-event append
       (WF02-REQ296-20260909) -- 927 lines at that point (57052 bytes),
       well under the roll ceiling.
       Previously recounted to 14 by WF02-REQ302-20260909's own rebase onto origin/main

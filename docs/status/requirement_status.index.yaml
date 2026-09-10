@@ -2366,10 +2366,29 @@ volumes:
 
   - volume: 12
     path: docs/status/requirement_status.v12.yaml
-    status: current
+    status: closed
     opened: 2026-09-09
-    entries: 21
+    closed: 2026-09-10
+    entries: 22
+    lines: 1233
+    bytes_working_tree: 75617
+    frozen_prefix_lines: 1233
+    frozen_prefix_sha256: "44005b55709b02651a17fe6ce106046aef700c746b472308b37c411edc1d0722"
     note: >
+      Closed 2026-09-10 by WF02-REQ300-20260910's own Step Final rebase,
+      which composed this branch's own REQ-300 done-event append against
+      main's concurrently-merged REQ-301 done-event (WF02-REQ301-20260910,
+      DOC-UPDATER) in chronological `at:` order (REQ-301 done 08:45:52Z,
+      REQ-300 done 10:49:42Z), bringing this file to 22 entries across
+      1233 lines / 75617 bytes -- over the 1200-line roll ceiling flagged
+      as imminent by the prior note below. Rolled to volume 13
+      (docs/status/requirement_status.v13.yaml) per the standard
+      procedure: closure footer appended to this file, frozen_prefix_sha256
+      above computed via `sha256sum` on the working-tree file BEFORE the
+      footer was appended (the frozen prefix excludes the footer), volume
+      13 created with this volume's own header text verbatim (volume
+      number/opening date/predecessor path updated) and an empty
+      `history:` list.
       Recounted to 21 by WF02-REQ301-20260910's Step Final rebase, which
       conflicted at this file's tail a fourth time composing DOC-UPDATER's
       own REQ-301 done-event append (Step 6, against a stale base of 20)
@@ -2546,6 +2565,19 @@ volumes:
       well under the roll ceiling.
       Opened by ORCH at feature/WF02-REQ282-20260909's Step Final, successor
       to volume 11. Created with volume 11's header text verbatim (volume
+      number, opening date and predecessor path updated) and an empty
+      `history:` list, per this index's `roll_rule.on_exceed` procedure.
+      `entries:` will be incremented per HOW-TO-APPEND step 6 as real
+      appends land.
+
+  - volume: 13
+    path: docs/status/requirement_status.v13.yaml
+    status: current
+    opened: 2026-09-10
+    entries: 0
+    note: >
+      Opened by ORCH at feature/WF02-REQ300-20260910's Step Final, successor
+      to volume 12. Created with volume 12's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty
       `history:` list, per this index's `roll_rule.on_exceed` procedure.
       `entries:` will be incremented per HOW-TO-APPEND step 6 as real

@@ -458,3 +458,23 @@ history:
       flake; report test/reports/report-20260910-WF03-ISS0581-20260910.yaml).
       docs/issues/ISS-0581.yaml flipped in_progress -> resolved. GitHub
       mirror issue #1190 closed with evidence comment.
+
+  - req: REQ-305
+    event: started
+    agent: ORCH
+    at: "2026-09-10T17:26:51Z"
+    note: >
+      WF02-REQ305-20260910 started (queue task 576, GH#1174). S10 gap 13,
+      install side: extends SolutionPack.install/3 to parse and install an
+      entity_definitions section per decision
+      0026-solution-pack-entity-definitions-section.md (REQ-303's output)
+      and REQ-304's export-side entity_definitions pack section. Each
+      parsed entry installs via
+      Letflow.Entities.Definitions.create_definition/2 (and
+      activate_definition/4 iff 0026 specifies auto-activation) under the
+      caller's own opts[:prefix] (INV-1); a name collision or malformed
+      entry aborts the whole install transaction, matching install/3's
+      existing all-or-nothing stance. Scope fence: install/3 and its
+      private parse/step helpers only -- no edits under lib/letflow/entities/,
+      no migration, no further export/3 changes. Branch:
+      feature/WF02-REQ305-20260910.

@@ -394,7 +394,13 @@ defmodule Letflow.Entities.Records do
       all_columns = structural_columns ++ Enum.map(promoted_pairs, &elem(&1, 0))
       all_values = structural_values ++ Enum.map(promoted_pairs, &elem(&1, 1))
 
-      sql = build_upsert_sql(ctx.prefix, table_name, all_columns)
+      uuid_columns =
+        in_flight
+        |> Enum.filter(&(&1.pg_type == "uuid"))
+        |> Enum.map(& &1.column_name)
+        |> MapSet.new()
+
+      sql = build_upsert_sql(ctx.prefix, table_name, all_columns, uuid_columns)
 
       case Repo.query(sql, all_values, prefix: ctx.prefix) do
         {:ok, _result} -> {:ok, :written}
@@ -415,8 +421,8 @@ defmodule Letflow.Entities.Records do
     {column_name, TenantProvisioning.cast_promoted_value(raw_value, pg_type)}
   end
 
-  defp build_upsert_sql(prefix, table_name, all_columns) do
-    placeholders = placeholder_list(all_columns)
+  defp build_upsert_sql(prefix, table_name, all_columns, uuid_columns) do
+    placeholders = placeholder_list(all_columns, uuid_columns)
     column_list = Enum.map_join(all_columns, ", ", &~s("#{&1}"))
     update_columns = all_columns -- ["id", "record_id", "inserted_at"]
     update_clause = Enum.map_join(update_columns, ", ", fn c -> ~s("#{c}" = EXCLUDED."#{c}") end)
@@ -436,14 +442,25 @@ defmodule Letflow.Entities.Records do
   # client-side, double-encoding an already-encoded string; casting from
   # `::text` first keeps the parameter bound as plain text, with the real
   # cast happening server-side in Postgres.
-  defp placeholder_list(all_columns) do
+  #
+  # `uuid_columns` (REQ-298) is the set of promoted column names whose
+  # `ColumnPromotion.pg_type` is `"uuid"` -- an FK-promoted column.
+  # `TenantProvisioning.cast_promoted_value/2`'s own `"uuid"` clause keeps
+  # the value in plain text form (see that function's own moduledoc for why
+  # it deliberately does NOT dump to Postgrex's raw 16-byte binary form), so
+  # -- exactly like `"id"`/`"record_id"` -- it needs this same
+  # `($n::text)::uuid` server-side cast, not a bare `$n` placeholder (which
+  # would leave the parameter's wire type inferred as `uuid` straight from
+  # the target column, and Postgrex's `uuid` encoder rejects a plain
+  # text-form string, demanding the raw binary instead).
+  defp placeholder_list(all_columns, uuid_columns) do
     all_columns
     |> Enum.with_index(1)
     |> Enum.map(fn
       {"id", i} -> "($#{i}::text)::uuid"
       {"record_id", i} -> "($#{i}::text)::uuid"
       {"field_values", i} -> "($#{i}::text)::jsonb"
-      {_col, i} -> "$#{i}"
+      {col, i} -> if MapSet.member?(uuid_columns, col), do: "($#{i}::text)::uuid", else: "$#{i}"
     end)
   end
 

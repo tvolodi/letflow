@@ -2088,6 +2088,28 @@ defmodule Letflow.TenantProvisioning do
   def cast_promoted_value(value, "numeric(" <> _rest) when is_binary(value),
     do: Decimal.new(value)
 
+  # REQ-298's FK-promoted columns are pg_type "uuid" (a real Postgres
+  # `uuid`-typed column, required for a REFERENCES constraint to match its
+  # target's own uuid `record_id` column). `raw_value` here is always a
+  # 36-character text-form UUID string pulled out of `field_values`'s own
+  # jsonb.
+  #
+  # This does NOT dump to Postgrex's raw 16-byte binary form the way
+  # `Ecto.UUID`'s own Ecto type would for a changeset-driven write --
+  # `Letflow.Entities.Records.placeholder_list/1` and
+  # `Letflow.Entities.Record.Projector`'s own placeholder builder bind every
+  # promoted "uuid" column through the SAME `($n::text)::uuid` SQL-level
+  # double-cast idiom already established for the structural "id"/
+  # "record_id" columns (see those modules' own comments) -- which forces
+  # the bind parameter's wire type to `text`, not `uuid`. Handing that path
+  # a raw binary would break it a different way (confirmed empirically: a
+  # 16-byte binary bound as a `text`-typed parameter fails Postgres's UTF-8
+  # validation, `invalid byte sequence for encoding "UTF8"`). `Ecto.UUID.cast!/1`
+  # is used instead, purely to reject a malformed value early with a clear
+  # error and normalize casing/hyphenation, keeping the value in the same
+  # text form the SQL-side cast expects.
+  def cast_promoted_value(value, "uuid") when is_binary(value), do: Ecto.UUID.cast!(value)
+
   def cast_promoted_value(value, _pg_type), do: value
 
   # ---------------------------------------------------------------------

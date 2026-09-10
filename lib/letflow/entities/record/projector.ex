@@ -377,6 +377,17 @@ defmodule Letflow.Entities.Record.Projector do
     all_columns = structural_columns ++ Enum.map(promoted_pairs, &elem(&1, 0))
     all_values = structural_values ++ Enum.map(promoted_pairs, &elem(&1, 1))
 
+    uuid_columns =
+      promoted
+      |> Enum.filter(&(&1.pg_type == "uuid"))
+      |> Enum.map(& &1.name)
+      |> MapSet.new()
+
+    # `($n::text)::uuid`/`($n::text)::jsonb`, not a bare `$n::uuid`/`$n::jsonb`
+    # -- mirrors `Letflow.Entities.Records.placeholder_list/1`'s own comment
+    # for the full rationale. `uuid_columns` (REQ-298) generalizes the same
+    # cast to any promoted column whose pg_type is "uuid" (an FK-promoted
+    # column), not just the hardcoded structural "id"/"record_id".
     placeholders =
       all_columns
       |> Enum.with_index(1)
@@ -384,7 +395,7 @@ defmodule Letflow.Entities.Record.Projector do
         {"id", i} -> "($#{i}::text)::uuid"
         {"record_id", i} -> "($#{i}::text)::uuid"
         {"field_values", i} -> "($#{i}::text)::jsonb"
-        {_col, i} -> "$#{i}"
+        {col, i} -> if MapSet.member?(uuid_columns, col), do: "($#{i}::text)::uuid", else: "$#{i}"
       end)
 
     column_list = Enum.map_join(all_columns, ", ", &~s("#{&1}"))

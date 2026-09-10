@@ -170,6 +170,22 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
     Repo.query(sql, values)
   end
 
+  # Reads a promoted column back as text, regardless of its real pg_type --
+  # for a `uuid`-typed column this avoids needing to `Ecto.UUID.load!/1` the
+  # raw 16-byte binary a plain `Repo.query/2` (no Ecto type layer) would
+  # otherwise hand back, letting the test assert directly against the
+  # 36-character text-form record_id the rest of this suite already deals
+  # in.
+  defp entity_table_column_as_text(schema, table_name, record_id, column_name) do
+    sql =
+      ~s|SELECT ("#{column_name}")::text FROM "#{schema}"."#{table_name}" WHERE record_id = ($1::text)::uuid|
+
+    case Repo.query!(sql, [record_id]) do
+      %Postgrex.Result{rows: [[value]]} -> value
+      %Postgrex.Result{rows: []} -> :no_row
+    end
+  end
+
   defp placeholder_for(:uuid, i), do: "($#{i}::text)::uuid"
   defp placeholder_for(:jsonb, i), do: "($#{i}::text)::jsonb"
   defp placeholder_for(:text, i), do: "$#{i}"
@@ -787,6 +803,168 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
         end
 
       assert hits == [], "found array( occurrences: #{inspect(hits)}"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # Rework 1 -- SECURITY-REVIEWER-flagged bug: an FK-promoted `uuid` column
+  # written through the REAL production paths (not this file's own
+  # `insert_row!` helper, which manually applies the `($n::text)::uuid` cast
+  # itself and therefore never exercised the gap). Both real write paths are
+  # covered: the live dual-write Multi step
+  # (`Letflow.Entities.Records.create_record/2`) and the backfill/replay
+  # path (`Letflow.TenantProvisioning.backfill_column_promotion/1` ->
+  # `Letflow.Entities.Record.Projector.rebuild_projection/2`). Before the
+  # fix, both crashed with a `DBConnection.EncodeError` on any real
+  # tenant-triggered write to an FK-promoted column:
+  # `Letflow.TenantProvisioning.cast_promoted_value/2` had no `"uuid"`
+  # clause, and both `Letflow.Entities.Records.placeholder_list/1` and
+  # `Letflow.Entities.Record.Projector`'s own inline placeholder builder
+  # only special-cased the hardcoded structural `"id"`/`"record_id"`
+  # columns, never a promoted column whose own pg_type happens to be
+  # `"uuid"`.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-298 fix -- real production paths handle an FK-promoted uuid column" do
+    test "live dual-write path: Records.create_record/2 succeeds and lands the correct value" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "customer_castfix",
+        display_name: "Customer Castfix",
+        fields: [%{name: "name", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "customer_castfix", "name", "text")
+      customer_record = create_record!(schema, "customer_castfix", %{"name" => "Dual Write"})
+
+      create_active_definition!(schema, %{
+        name: "invoice_castfix",
+        display_name: "Invoice Castfix",
+        fields: [%{name: "customer_id", type: :string}],
+        foreign_keys: [
+          %{name: "fk_customer", field: "customer_id", references_entity: "customer_castfix"}
+        ]
+      })
+
+      # promote_and_create_table! runs run_column_promotion/1, landing the
+      # promotion at status "ddl_applied" -- one of the
+      # column_promotions_in_flight/2 statuses, so the very next
+      # create_record!/3 call below dual-writes through
+      # Records.dual_write_promoted_columns/3, the real production Multi
+      # step, not a test-only shortcut.
+      invoice_table =
+        promote_and_create_table!(schema, tenant_id, "invoice_castfix", "customer_id", "uuid")
+
+      # THE bug this test closes: before the fix, this call raised a
+      # DBConnection.EncodeError from inside the dual-write Multi step --
+      # cast_promoted_value/2 passed the 36-character text-form record_id
+      # through unchanged, and placeholder_list/1 bound it with a bare "$n"
+      # against the invoice table's real uuid-typed "customer_id" column.
+      invoice_record =
+        create_record!(schema, "invoice_castfix", %{"customer_id" => customer_record.record_id})
+
+      assert entity_table_column_as_text(
+               schema,
+               invoice_table,
+               invoice_record.record_id,
+               "customer_id"
+             ) == customer_record.record_id
+    end
+
+    test "backfill/replay path: backfill_column_promotion/1 rebuilds a pre-existing record's FK-promoted uuid column" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "customer_backfillfix",
+        display_name: "Customer Backfillfix",
+        fields: [%{name: "name", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "customer_backfillfix", "name", "text")
+
+      customer_record =
+        create_record!(schema, "customer_backfillfix", %{"name" => "Backfill Target"})
+
+      # "customer_id" IS declared as an fk_def field from the start -- per
+      # `Letflow.Entities.Definition.DDL.promoted_columns/1`, an fk field
+      # always promotes (regardless of `queried`) as pg_type "uuid" the
+      # moment ANY field on this entity type gets its first CREATE TABLE, so
+      # the physical column already exists once "misc" is promoted below.
+      # It is NOT yet tracked by its own `ColumnPromotion` row, though --
+      # `column_promotions_in_flight/2` only returns rows individually
+      # registered via `register_column_promotion/4`, so the live dual-write
+      # this test's own `create_record!/3` call triggers (for "misc") does
+      # NOT also write "customer_id" -- it stays NULL on the physical row
+      # despite being present in `field_values`, exactly this test's needed
+      # "genuine pre-existing row with an unpromoted attribute" setup,
+      # mirroring the many-to-many fresh-table test's own "tag_id" case
+      # above (physically present, untracked, until separately registered).
+      create_active_definition!(schema, %{
+        name: "invoice_backfillfix",
+        display_name: "Invoice Backfillfix",
+        fields: [
+          %{name: "misc", type: :string, queried: true},
+          %{name: "customer_id", type: :string}
+        ],
+        foreign_keys: [
+          %{
+            name: "fk_customer",
+            field: "customer_id",
+            references_entity: "customer_backfillfix"
+          }
+        ]
+      })
+
+      invoice_table =
+        promote_and_create_table!(schema, tenant_id, "invoice_backfillfix", "misc", "text")
+
+      invoice_record =
+        create_record!(schema, "invoice_backfillfix", %{
+          "misc" => "pre-existing",
+          "customer_id" => customer_record.record_id
+        })
+
+      # The pre-existing row's "customer_id" column is NULL -- it exists
+      # physically but was never dual-written (no ColumnPromotion row for
+      # it yet).
+      assert entity_table_column_as_text(
+               schema,
+               invoice_table,
+               invoice_record.record_id,
+               "customer_id"
+             ) == nil
+
+      # Registering + running its own ColumnPromotion now finds the column
+      # already physically present with a matching type -- the existing
+      # `check_additive_only/3` idempotent-skip path -- and marks it
+      # "ddl_applied" without issuing a second ADD COLUMN.
+      assert {:ok, [customer_id_row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice_backfillfix",
+                 "customer_id",
+                 %{pg_type: "uuid", nullable: true, references_entity: "customer_backfillfix"},
+                 [tenant_id]
+               )
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
+               TenantProvisioning.run_column_promotion(customer_id_row.id)
+
+      # THE bug this test closes on the backfill/replay path: before the
+      # fix, this call raised a DBConnection.EncodeError from inside
+      # Letflow.Entities.Record.Projector's write_entity_table_snapshots/4
+      # -> insert_entity_table_row/4 -- the same cast_promoted_value/2 gap,
+      # plus the identical missing-uuid-column gap in that module's own
+      # inline placeholder builder.
+      assert {:ok, %ColumnPromotion{status: "backfilled"}} =
+               TenantProvisioning.backfill_column_promotion(customer_id_row.id)
+
+      assert entity_table_column_as_text(
+               schema,
+               invoice_table,
+               invoice_record.record_id,
+               "customer_id"
+             ) == customer_record.record_id
     end
   end
 end

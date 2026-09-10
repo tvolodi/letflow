@@ -94,6 +94,13 @@ defmodule Letflow.Entities.Definition.DDL do
 
   @identifier_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
 
+  # REQ-301 defence-in-depth: the exact two SQL-expression shapes
+  # `localized_text_generated_expression/3` below ever emits, with `name`/
+  # `locale` constrained to the same formats Validator Rules 1/10 already
+  # enforce (`^[a-z][a-z0-9_]{0,63}$` / `^[a-z]{2,8}$`). See
+  # `valid_generated_as_expression?/1`.
+  @localized_text_generated_as_regex ~r/^(?:field_values->'[a-z][a-z0-9_]{0,63}'->>'[a-z]{2,8}'|to_tsvector\('simple', coalesce\(field_values->'[a-z][a-z0-9_]{0,63}'->>'[a-z]{2,8}', ''\)\))$/
+
   @doc """
   Generates the full `CREATE TABLE` DDL text for `definition`'s per-entity-type
   table, named `table_name`.
@@ -425,6 +432,29 @@ defmodule Letflow.Entities.Definition.DDL do
       {:error, _reason} = error -> error
     end
   end
+
+  @doc """
+  Whether `value` matches one of the two known SQL-expression shapes
+  `localized_text_column_specs/1` ever emits into a `generated_as` field
+  (REQ-301) -- the `:plain` JSONB-extract form or the `:fulltext`
+  `to_tsvector(...)` form, each with `name`/`locale` constrained to the same
+  formats `Letflow.Entities.Definition.Validator` Rules 1/10 already
+  enforce.
+
+  This is `valid_identifier?/1`'s counterpart for a SQL *expression* rather
+  than a bare identifier: `Letflow.TenantProvisioning.execute_add_column/3`
+  calls this to re-validate a `ColumnPromotion` row's `generated_as` text
+  immediately before splicing it into `ALTER TABLE ... ADD COLUMN`, the same
+  defence-in-depth posture that function already applies to
+  `table_name`/`column_name`/`pg_type` -- closing the one interpolated value
+  that re-validation set previously left uncovered.
+  """
+  @spec valid_generated_as_expression?(String.t()) :: boolean()
+  def valid_generated_as_expression?(value) when is_binary(value) do
+    Regex.match?(@localized_text_generated_as_regex, value)
+  end
+
+  def valid_generated_as_expression?(_value), do: false
 
   # --- internal ---------------------------------------------------------------
 

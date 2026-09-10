@@ -1527,11 +1527,11 @@ defmodule Letflow.TenantProvisioning do
 
   # Only ever adds a new column -- this executor never removes a column and
   # never narrows an existing column's declared type (design doc §7, AC5).
-  # `table_name`/`column_name`
-  # are re-validated via DDL.valid_identifier?/1 immediately before
-  # interpolation (defence in depth matching DDL's own posture) -- an
-  # ArgumentError here means a stored row bypassed register_column_promotion/4,
-  # a genuine defect that must not be silently swallowed as a DDL failure.
+  # `table_name`/`column_name`/`pg_type`/`generated_as` are all re-validated
+  # immediately before interpolation (defence in depth matching DDL's own
+  # posture) -- an ArgumentError here means a stored row bypassed
+  # register_column_promotion/4, a genuine defect that must not be silently
+  # swallowed as a DDL failure.
   # target_table (REQ-298) is the already-resolved physical table an
   # FK-promoted column's REFERENCES clause points at -- `nil` for the
   # common, non-FK case (identical SQL shape REQ-297 already emits).
@@ -1552,6 +1552,19 @@ defmodule Letflow.TenantProvisioning do
     if target_table != nil and not DDL.valid_identifier?(target_table) do
       raise ArgumentError,
             "invalid target_table for ALTER TABLE REFERENCES: #{inspect(target_table)}"
+    end
+
+    # REQ-301: re-validate generated_as the same way as the three fields
+    # above -- nil (every ordinary, non-generated promotion) is fine as-is;
+    # anything non-nil must match one of the two known SQL-expression
+    # shapes DDL.localized_text_column_specs/1 ever produces (SECURITY-REVIEWER's
+    # WF02-REQ301-20260910 review note: this function otherwise re-validates
+    # every interpolated value at the DDL-execution boundary, and generated_as
+    # is itself interpolated below, so it should not be the one exception).
+    unless is_nil(promotion.generated_as) or
+             DDL.valid_generated_as_expression?(promotion.generated_as) do
+      raise ArgumentError,
+            "invalid generated_as for ALTER TABLE: #{inspect(promotion.generated_as)}"
     end
 
     sql = build_add_column_sql(schema_name, table_name, promotion, target_table)

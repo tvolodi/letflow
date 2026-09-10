@@ -54,8 +54,9 @@ unrelated to the 0023/REQ-295..302 entity-storage track. It never references
     reuses for `definition_json`).
   - `check_unsupported_sections/1`: lines 613-618 — confirmed the current
     single-clause precedent: `%{service_catalog_entries: []} -> :ok`, `_ ->
-    {:error, :unsupported_pack_section}`. This doc extends it to a joint,
-    two-key AND check (§3.2).
+    {:error, :unsupported_pack_section}`. This clause is left unchanged by
+    this requirement (§3, corrected 2026-09-10) — `entity_definitions` is
+    deliberately not added to it, since it is now a supported section.
   - `run_install/5`: lines 671-689 — confirmed the `with`/`else` ->
     `Repo.rollback(reason)` shape this doc's new step plugs into unchanged.
   - `create_packed_definitions/3`: lines 720-743 — confirmed the
@@ -333,37 +334,40 @@ format, duplicate names, cardinality limits, etc.) remains
 `Validator.validate/1`'s job and is reached only once `create_definition/2`
 is actually called, inside the transaction (§3.3).
 
-## 3. Unsupported-section check — extended, not replaced (0026 §4)
+## 3. Unsupported-section check — left unchanged (0026 §4)
 
-Per 0026 §4 and REQ-303's doc §3.2, this extension must land **before** the
-create-step (§3.3) is wired in, so REQ-305's own implementation sequence
-avoids ever compiling/shipping an intermediate state that parses
-`entity_definitions` but does not yet reject a non-empty one.
+**CORRECTED 2026-09-10, post-implementation** (RELEASE-VALIDATOR/REVIEWER
+finding): this section originally specified a joint two-key AND check
+requiring `entity_definitions: []` to also be empty in the passing clause
+below. That was a genuine design-doc bug — `entity_definitions` is the
+section this requirement makes *supported*, so gating on it being empty
+would permanently prevent §4's install step from ever running on any
+non-empty `entity_definitions` pack section, making AC1 unsatisfiable and
+turning §4's ~200 lines of create-path logic into dead code. ELIXIR-DEV
+caught this during implementation, deviated from the literal text below,
+and REVIEWER explicitly signed off on the deviation (WF02-REQ305-20260910
+completion record). The corrected design is stated here in place of the
+original joint-AND-check text.
 
 ```
 @spec check_unsupported_sections(parsed :: map()) :: :ok | {:error, :unsupported_pack_section}
 ```
 
-Current clause (`solution_pack.ex:617-618`): the passing clause matches only
-when `service_catalog_entries` is bound to the empty list; a fallback clause
-matches anything else and returns `{:error, :unsupported_pack_section}`.
+Current clause (`solution_pack.ex:617-618`, pre-REQ-305): the passing clause
+matches only when `service_catalog_entries` is bound to the empty list; a
+fallback clause matches anything else and returns
+`{:error, :unsupported_pack_section}`.
 
-The passing clause's pattern gains a second key requirement,
-`entity_definitions: []`, alongside the existing `service_catalog_entries:
-[]` — both must be present and bound to the empty list for the clause to
-match. The fallback clause is unchanged and needs no edit — it already
-rejects anything the (now two-key) passing clause doesn't match.
-
-This is a **joint AND** check, per REQ-303's doc §3.2's explicit behavioral
-contract: `:ok` only when *both* keys are empty lists. A pack with a
-populated `entity_definitions` and an empty `service_catalog_entries` (or
-vice versa) still falls through to the catch-all
-`{:error, :unsupported_pack_section}` clause — there is no way for either
-section to "cover" the other's rejection. Because §2.1 always populates
-`parsed.entity_definitions` (defaulting to `[]` for an old pack via
-`fetch_list/2`), this pattern match never fails to find the key — an old
-pack (pre-REQ-305 producer, or any pack omitting the key) parses to
-`entity_definitions: []` and passes this check exactly as it does today.
+**This clause is NOT extended by REQ-305 and needs no edit.** It continues
+to gate solely on `service_catalog_entries: []` — the one section that
+remains genuinely unsupported. `entity_definitions` is deliberately absent
+from this pattern: since §2.1 always populates `parsed.entity_definitions`
+(defaulting to `[]` for an old pack via `fetch_list/2`, and to the real
+parsed list for a new pack), a populated `entity_definitions` falls through
+this unchanged clause and reaches §4's install step exactly as intended,
+while an old pack (pre-REQ-305 producer, or any pack omitting the key)
+parses to `entity_definitions: []` and passes this check exactly as it did
+before this requirement.
 
 ## 4. Install step — new transactional function, `:inactive`-only, all-or-nothing (0026 §2)
 
@@ -529,7 +533,7 @@ calling `installed_definition_maps/1`.
 |---|---|---|---|
 | `parse_entity_definition/1` (entry-level `fetch_string`/`fetch_object` miss) | Pre-transaction | `{:error, :invalid_pack_document}` | Zero (AC3) |
 | `atomize_definition_json/1` (unrecognized key, or `type`/`search_strategy`/constraint-`type` value outside its closed set) | Pre-transaction | `{:error, :invalid_pack_document}` | Zero (AC3) |
-| `check_unsupported_sections/1` (non-empty `entity_definitions` against a pack whose installer predates this requirement — N/A once this requirement lands, but the joint check itself) | Pre-transaction | `{:error, :unsupported_pack_section}` | Zero |
+| `check_unsupported_sections/1` (non-empty `service_catalog_entries` — the only section this clause still rejects; `entity_definitions` is never checked here, per §3's correction) | Pre-transaction | `{:error, :unsupported_pack_section}` | Zero |
 | `create_definition/2`'s own `Validator.validate/1` (rules 1-11, semantic — e.g. duplicate field names, bad cardinality) | Inside transaction, before that call's own `Repository.create/2` | `{:error, {:validation, violations}}` -> whole install rolls back | Zero for *this* entity definition's own artifact/entity_definitions rows; any earlier-in-the-loop process definitions/entity definitions from the SAME pack are rolled back too (AC2) |
 | `create_definition/2`'s `Repository.create/2` failure | Inside transaction | `{:error, {:repository, reason}}` -> whole install rolls back | As above |
 | `create_definition/2`'s UNIQUE-constraint hit on `(tenant_id, name, logical_shape_version)` (0026 §2 "name collision") | Inside transaction, after that entry's own `Repository.create/2` already ran | `{:error, {:persistence, changeset}}` -> whole install rolls back | As above — this is the case AC2 explicitly requires a real test to exercise: zero new rows across every affected table after the failed install |
@@ -587,7 +591,7 @@ adds no second rollback path.
 | 1 | §4.2 (`create_packed_entity_definitions/3` calling `create_definition/2` under `opts[:prefix]`), §4.4 (`installed_entity_definitions` in the returned `install_result`), §2 (no `activate_definition/4` call anywhere) |
 | 2 | §4.3 (single shared `with`/`else` -> `Repo.rollback/1` path, no new rollback path), §5 (rollback table, name-collision row) |
 | 3 | §2.2/§2.3 (`parse_entity_definition/1` + `atomize_definition_json/1`, both pure/pre-transaction, `{:error, :invalid_pack_document}` on any entry-level or shape defect, zero queries) |
-| 4 | §2.1 (`fetch_list/2`'s existing default, zero code change to it), §3 (joint `check_unsupported_sections/1` still passes `entity_definitions: []` for an old pack) |
+| 4 | §2.1 (`fetch_list/2`'s existing default, zero code change to it), §3 (`check_unsupported_sections/1` left unchanged, still passes an old pack whose `entity_definitions` defaults to `[]`) |
 | 5 | §4.1 (`install_error/0`'s new `Letflow.Entities.Definitions.create_error()` member), §4.4 (`installed_entity_definition/0` type) — both plain `@type` declarations checkable by `mix compile --warnings-as-errors` |
 | 6 (INV-1) | §6 — every new call site traced, no new tenant-identifying parameter anywhere |
 | 7 (SECURITY-REVIEWER sign-off) | Not a design-doc element — flagged here as the gate this doc's §4.2 (collision abort) and §6 (INV-1) sections exist to be reviewed against once implemented |

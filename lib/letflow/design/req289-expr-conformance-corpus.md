@@ -595,3 +595,62 @@ original 4-tag list did not fully satisfy.
 
 None. The new tag, the two entry changes (one new, one retagged), and the test wording
 change are fully specified above with no deferred decisions.
+
+---
+
+## 13. Addendum: REQ-290 client-behaviour contract for the version/capability marker (AC4)
+
+**Trigger:** REQ-290 (stage S8, "Corpus drift guard + version/capability marker")
+introduces `priv/expr_conformance/manifest.json`, a new sibling file to `corpus.json`
+(same `priv/expr_conformance/` directory) carrying two fields: `corpus_schema_version`
+(semver string) and `capabilities` (sorted, deduplicated array of the same
+`grammar_constructs` tag strings defined in §2.3 above — one vocabulary, not two). Full
+schema, the version-bump policy, the mechanically-derived-content guard, and the
+`test/support/req290_capability_check.ex` reference implementation are specified in
+`lib/letflow/design/req290-corpus-drift-guard.md` (§4, §5) — that document remains the
+authoritative source for the marker's *mechanism*. REQ-290's AC4 requires the marker's
+**client-behaviour semantics** — what a TypeScript/Dart consumer of `manifest.json` MUST
+do on an unrecognised capability — to live in this SAME companion document REQ-289
+produced (this file), matching this file's own §3 precedent ("Implementations must read
+this document for schema semantics") and the §12 addendum precedent immediately above.
+This section is that content, appended here per that requirement, and is now the single
+authoritative statement of it — `req290-corpus-drift-guard.md`'s own §4.5 is a pointer to
+this section, not a second copy.
+
+### 13.1 Client behaviour contract
+
+This is the semantic content REQ-293 (TypeScript evaluator) and REQ-294 (Dart evaluator)
+must implement, stated once here so neither invents its own convention (0020 D1a
+constraint 1):
+
+1. **At load/startup (coarse, proactive check):** a client fetches `manifest.json`,
+   computes the set-difference of `capabilities` minus its own statically-known
+   implemented-tag set. A non-empty difference means the client is running against a
+   contract with constructs it does not implement. The client MUST surface this as a
+   **stale-version state** (MOB-4's own vocabulary) — visible, not silent — before
+   attempting to render any form. It MUST NOT proceed as if compatible.
+2. **Per-expression (fine, reactive check, defense in depth):** even with an empty
+   difference at load time, a client that encounters a specific expression whose parsed
+   AST contains a tag it cannot evaluate (parse-time discovery, mirroring
+   `Expr.parse/1`'s own error path) MUST fail loudly **for that field/expression** —
+   render it as the stale-version/unavailable state, not hide the field (SKIP,
+   forbidden) and not evaluate it via a default/best-guess value (GUESS, forbidden).
+3. **Never silently skip.** A field whose `visible_when`/`computed` expression the
+   client cannot evaluate must not simply omit itself from the rendered form as if the
+   condition evaluated to a normal boolean. Doing so is indistinguishable, to the user,
+   from the field's legitimate hidden state — exactly the ambiguity constraint 1
+   (0020 D1a) exists to prevent.
+4. **Never silently guess.** A client must not substitute a default value (`true`,
+   `false`, `null`, an empty string) for a construct it cannot evaluate and proceed as
+   if that were the real answer — this is the mechanism by which the "wrong number on a
+   customer's form" failure mode REQ-290's own description names would actually occur.
+
+### 13.2 Scope note
+
+This section documents client *behaviour* only (the contract REQ-293/REQ-294 must
+satisfy). It does not restate `manifest.json`'s JSON schema, the `corpus_schema_version`
+bump policy, or the mechanical guard that keeps `capabilities` accurate — those remain
+exclusively in `req290-corpus-drift-guard.md` §4.1–§4.4 to avoid the same content living
+in two places twice over. `lib/letflow/engine/expr.ex` and
+`test/letflow/engine/expr_conformance_corpus_test.exs` are UNMODIFIED by this addendum,
+consistent with §9's scope constraints above.

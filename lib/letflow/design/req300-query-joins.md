@@ -205,6 +205,7 @@ switch.**
         | {:error, {:no_through_relation, through :: String.t(), primary :: String.t()}}
         | {:error, {:ambiguous_through_relation, through :: String.t()}}
         | {:error, {:duplicate_join_target, entity_type :: String.t()}}
+        | {:error, {:relation_column_not_found, entity_type :: String.t(), column :: String.t()}}
 ```
 
 `{:field_not_allowed, String.t()}` (already in the union) is **reused
@@ -212,6 +213,14 @@ verbatim** — see §6 — for both "join names a field that is not an
 `fk_def`" and "join names an `fk_def` that does not exist by that name."
 No new error shape is introduced for that case, per the requirement's own
 instruction to match the existing convention exactly.
+
+`{:relation_column_not_found, entity_type, column}` (new this rework
+cycle, §4.0.2) is a distinct third failure mode alongside
+`:entity_table_not_found` and `:field_not_allowed`: the relation is valid
+and its declaring table exists, but the specific promoted column the
+relation names has not physically landed on that table yet (declared in
+the active definition, not yet promoted). See §4.0.2 for the full
+scenario and why this is not a reuse of either existing tag.
 
 `{:error, :entity_table_not_found}`'s trigger condition **changes** from
 the original (flawed) design: it is no longer an unconditional per-call
@@ -425,23 +434,30 @@ same search with `entity_a`/`entity_b` swapped → `{:target_owns_fk, ...}`.
 Neither found → `{:error, {:field_not_allowed, fk_name}}` (§6). This one
 primitive is reused for every hop.
 
-### 4.0.1 The per-relation binding-source rule (this rework cycle's fix)
+### 4.0.1 The per-relation binding-source rule (rework cycle 1's fix — table-level only)
 
 Every `resolved_relation()` names an `owner_entity_type` — the entity type
 that **declares** the `fk_def` (whichever of `entity_a`/`entity_b` matched
 first). That declaring side is the one this design requires to be sourced
-from its own per-type table, and it is **guaranteed** to have one:
-`Allowlist.fk_defs/2` only returns an entry once `load/2`/`typed_columns/2`
-resolve that field `source: :typed_column` for the entity type declaring
-it (the requirement's own "WHY THIS DEPENDS ON REQ-298 AND REQ-299"
-paragraph — a join can only be requested once the declaring entity type's
-FK column has actually been promoted), and promoting any column for an
-entity type is exactly what makes `ensure_entity_table/2` create that
-entity type's per-type table in the first place (`do_run_column_promotion/2`
-calls `ensure_entity_table(schema_name, promotion.entity_type)` before
-anything else). So: **the declaring side of a resolved relation always has
-a per-type table by the time a join naming that relation can even resolve
-successfully.**
+from its own per-type table, and it is **guaranteed to have a table** (not
+guaranteed to have *this column on that table* — see §4.0.2, rework cycle
+2's fix, for why those two are not the same guarantee):
+`Allowlist.fk_defs/2` only returns an entry once **the entity's active
+`Definition.t()`** declares that `fk_def` (`fk_defs/2` is, like
+`typed_columns/2`, purely definition-JSON-derived — it decodes
+`"foreign_keys"` off whatever the *current* active definition document
+says, via the same `DDL.promotion_trigger/2`-style membership check
+`typed_columns/2` itself uses; it does **not** consult
+`ColumnPromotion`/`entity_table_exists?/2` at all), and a per-type table,
+once created, is a no-op target for `ensure_entity_table/2` from then on
+(§0's re-verified finding) — it does **not** get retrofitted with columns
+for attributes promoted, or newly declared in the definition, after the
+table's first creation. So the real chain is: *some* column promotion
+having run for this entity type at some point in the past (any column,
+not necessarily the one this `fk_def` names) guarantees a per-type table
+*exists*; it does **not** guarantee that *every currently-declared*
+`fk_def`'s column physically exists on that table. §4.0.2 is the
+column-level check this gap requires.
 
 Concretely, per resolved relation:
 
@@ -475,6 +491,113 @@ Concretely, per resolved relation:
   unrelated relation where the primary is the *non*-declaring side). The
   other (non-declaring) side of that relation follows the ordinary
   per-binding rule.
+
+### 4.0.2 The per-column existence check (this rework cycle's fix)
+
+**The concrete gap:** entity type `"answer_option"` has field `"text"`
+(`queried: true`) promoted first — its per-type table is created at that
+moment, carrying only the columns promotable as of *that* definition
+version (no `fk_def` existed yet). Later, the active definition is updated
+additively to add a new `fk_def` (`"question_fk"`, field `"question_id"`,
+`references_entity: "question"`). No `ColumnPromotion` has been
+registered/run for `"question_id"` specifically. At this point:
+`Allowlist.fk_defs/2` reports `"question_fk"` (it is definition-JSON-derived
+only, per §4.0.1); `resolve_binding_source/2` reports
+`{:per_type_table, "entity_answer_option"}` for `"answer_option"` (the
+table exists, from the earlier `"text"` promotion); §4.0.1's assertion
+passes (a table *does* exist) — but the table has no `question_id` column.
+Without a further check, §3.4's promoted-name path would emit
+`fragment("?", literal("question_id"))` against a table lacking that
+column, surfacing as a raw, unhandled Postgres "column does not exist"
+error at query *execution* time — never reachable from this design's own
+test suite (`compile/2` never executes a query), so this would ship
+looking green and fail only in production/integration use.
+
+**The fix:** a new private primitive, colocated with `resolve_binding_source/2`
+in `Letflow.Entities.Query.Compiler`:
+
+```
+@spec relation_column_exists?(
+        schema_name :: String.t(),
+        table_name :: String.t(),
+        column_name :: String.t()
+      ) :: boolean()
+```
+
+Mechanism: a direct `Repo.query!/2` against `information_schema.columns`,
+matching `TenantProvisioning.entity_table_exists?/2`'s own idiom exactly
+(same function, same query style — re-read its actual body this session,
+`lib/letflow/tenant_provisioning.ex:1111-1122`): parameterized SQL,
+`WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+`%Postgrex.Result{rows: []} -> false`, `%Postgrex.Result{rows: [_ | _]} ->
+true`. Same `Repo` alias this module already has no dependency on today —
+this is a genuinely new DB-touching call in `Compiler`, stated explicitly
+rather than glossed over: `compile/2`'s moduledoc invariant ("never calls
+`Repo.*`, never executes the query it builds") is about the query it
+*returns*, not about every step of compiling it — §3.2's `entity_table_exists?/2`
+call already touches `Repo` in exactly this same way, so this is
+consistent with a check the design already relies on, not a new class of
+side effect.
+
+**Where it's called:** inside §4.0.1's per-relation binding-source rule,
+immediately after a declaring side is asserted `{:per_type_table, table}`
+— for exactly that resolved relation's `fk_field`, i.e. once per resolved
+relation, only for the declaring side, only when that side is a per-type
+table (never for a `:latest`-sourced side, which has no promoted columns
+to check in the first place). Concretely: after `side == :target_owns_fk`
+or `side == :primary_owns_fk` asserts `{:per_type_table, table}` for the
+declaring side, call `relation_column_exists?(prefix, table,
+resolved_relation.fk_field)` before proceeding to build that relation's ON
+condition. This runs strictly inside §3.3 step 6 (join resolution) — it is
+never reached by a request with an empty/absent `join` list, since step 6
+itself is a no-op in that case (re-confirmed below).
+
+**On a `false` result:** `compile/2` returns a new, precisely-named error
+tag rather than reusing `:entity_table_not_found` — the table *does*
+exist, so that tag would misdescribe the failure and make debugging
+harder for whoever sees it. New member:
+
+```
+| {:error, {:relation_column_not_found, entity_type :: String.t(), column :: String.t()}}
+```
+
+added to `compile_error()` in §3.1, alongside the other join-era members.
+Naming both the entity type and the specific column (not just the column)
+follows this module's existing convention of naming the offending value in
+the tuple (e.g. `{:unknown_operator, raw}`, `{:too_many_joins, count}`,
+§5) rather than a bare atom — a caller/log line reading
+`{:relation_column_not_found, "answer_option", "question_id"}` says
+exactly what's missing and on which entity type, without needing to cross-
+reference which relation was being resolved. This is a genuinely new
+failure mode (a promoted-column reference to a column that doesn't
+physically exist yet, despite being declared), distinct from "no table at
+all" (`:entity_table_not_found`) and from "not a valid relation at all"
+(`:field_not_allowed`, §6) — three different causes, three different tags,
+matching this module's own error-shape convention of one tag per distinct
+cause rather than collapsing them.
+
+**Consistency with REQ-297/298's additive-only check-and-reject idiom:**
+this is the same shape as those requirements' own "declared but not yet
+backfilled" checks — a definition can additively declare something
+(a constraint, here an `fk_def`) ahead of the storage-side work
+(constraint activation there, column promotion here) actually catching up,
+and the query/activation path that depends on the storage-side state
+checks that state directly (via a real DB introspection query, not by
+trusting the definition JSON) and returns a named, caller-facing error
+rather than either crashing or silently proceeding on a stale assumption.
+
+**Non-regression, re-confirmed for this second fix specifically:**
+`relation_column_exists?/3` is called from exactly one place — inside join
+resolution (§3.3 step 6, itself only reached when `Map.get(request, :join,
+[])` is non-empty). A plain, non-join request never enters step 6 at all
+(§3.3's own "steps 2, 6 are no-ops" language, unchanged by this fix), so
+`relation_column_exists?/3` is never invoked for such a request — the
+`Latest`-backed, unconditional-repoint regression rework cycle 1 fixed
+stays fixed; this fix only adds a check *inside* the join path that cycle
+1's fix already isolated. §10's existing "Regression" test row (plain
+filter/sort, never-promoted entity type, asserting the byte-for-byte
+`Latest` query) continues to prove this without modification, since it
+carries no `join` key at all.
 
 Either way, the **non-declaring** side of a relation may resolve to
 `:latest` — in that case its binding is `Latest` filtered by
@@ -786,5 +909,6 @@ non-promoted `field_values` keys).
 | AC6 (non-fk field rejection) | A `join_clause` naming a real allowlisted field that is not any `fk_def` (e.g. `fk: "not_a_relation"`) → `{:error, {:field_not_allowed, "not_a_relation"}}`. |
 | AC7 (field_grants.ex diff) | Asserted by code review / `git diff` at implementation time, not a runtime test: only `redact_joined_page/2` and its private helper are new; nothing else in the file changes. Completion report states this explicitly. |
 | AC8 (`load/2` repointed, real pipeline) | §8's end-to-end test: a `queried: true`, non-FK promoted field, filtered through the real `Compiler.compile/2`, asserting the compiled query's `wheres` reference the real column via the `literal/1`-fragment path, not a `?->>?` JSONB cast. |
-| **Regression (this rework cycle's fix, §3.2/§3.3, not tied to a single AC)** | Seed an entity type that has **never** had a column promoted (no `ColumnPromotion` row ever run for it — the ordinary case, per `projector.ex:300-303`). Run a plain, non-join filter/sort request through `Compiler.compile/2`; assert `{:ok, query}` is returned (not `{:error, :entity_table_not_found}`) and the compiled query's `from` targets `Letflow.Entities.Record.Latest` with the `entity_type` where-clause present — i.e., the exact same query shape `compile/2` produces today, byte-for-byte, proving the defect CODE-DESIGN-VALIDATOR found in rework cycle 1 (an unconditional repoint that would have broken this exact case) is closed. |
+| **Regression (rework cycle 1's fix, §3.2/§3.3, not tied to a single AC)** | Seed an entity type that has **never** had a column promoted (no `ColumnPromotion` row ever run for it — the ordinary case, per `projector.ex:300-303`). Run a plain, non-join filter/sort request through `Compiler.compile/2`; assert `{:ok, query}` is returned (not `{:error, :entity_table_not_found}`) and the compiled query's `from` targets `Letflow.Entities.Record.Latest` with the `entity_type` where-clause present — i.e., the exact same query shape `compile/2` produces today, byte-for-byte, proving the defect CODE-DESIGN-VALIDATOR found in rework cycle 1 (an unconditional repoint that would have broken this exact case) is closed. |
+| **Regression (rework cycle 2's fix, §4.0.2, not tied to a single AC)** | Seed an entity type (e.g. `"answer_option"`) with one field (e.g. `"text"`) already promoted — its per-type table exists. Additively update its active definition to declare a **new** `fk_def` (e.g. `"question_fk"`, field `"question_id"`, `references_entity: "question"`) **without** registering/running a `ColumnPromotion` for `"question_id"`. Build a direct `join_clause` naming that relation (primary `"question"`, target `"answer_option"`, `fk: "question_fk"`); assert `Compiler.compile/2` returns `{:error, {:relation_column_not_found, "answer_option", "question_id"}}` — a named, testable error — rather than `{:ok, query}` with a query that would raise a raw Postgres "column does not exist" error only at execution time. A second assertion in the same test: a plain, non-join filter/sort request against the same entity type (querying only `"text"`, the column that *does* exist) still returns `{:ok, query}` unaffected — proving this fix's DB check is reached only on the join path, never on a plain request. |
 | (whole-suite gate) | `mix letflow.check` run in full, real output quoted in the completion report, per the requirement's own final acceptance criterion. |

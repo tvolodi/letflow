@@ -62,7 +62,9 @@ defmodule Letflow.Entities.Query.Allowlist do
           name: String.t(),
           type: Definition.field_type(),
           queried: boolean(),
-          enum_values: [String.t()] | nil
+          enum_values: [String.t()] | nil,
+          locales: [String.t()] | nil,
+          search_strategy: :plain | :fulltext | nil
         }
 
   @typedoc """
@@ -110,6 +112,21 @@ defmodule Letflow.Entities.Query.Allowlist do
   wiring this into `load/2`'s output is REQ-300's job, not this
   requirement's.
 
+  ## `:localized_text` locale columns (REQ-301)
+
+  A `:localized_text` field's promoted locale columns (e.g. `"stem_kk"`,
+  `"stem_ru"` for a field named `"stem"`) appear in this result under their
+  own composed names, typed `:string` always -- never `:localized_text` and
+  never a `tsvector`-flavored variant, since both the plain-text and
+  `tsvector` column shapes hold textual content this layer treats as
+  string-like (the ranked/`@@`-operator query semantics `:fulltext` needs
+  are a `Compiler`-layer concern REQ-300 owns). The original field name
+  (`"stem"`) never appears in this result at all -- only its locale
+  derivatives are ever promoted columns
+  (`Letflow.Entities.Definition.DDL.promoted_columns/1`'s own output for a
+  `:localized_text` field never includes an entry named after the field
+  itself).
+
     1. Validate `prefix` resolves to a provisioned tenant schema --
        `{:error, :invalid_schema_name}` before any query.
     2. `Letflow.Entities.Definitions.get_active_definition_by_name/2` --
@@ -146,7 +163,17 @@ defmodule Letflow.Entities.Query.Allowlist do
        allowlisted from the JSONB side. `:json`-typed fields are
        structurally excluded without a special case, since
        `Definition.Validator`'s Rule 3 already forbids `queried: true` on a
-       `:json` field at definition-creation time.
+       `:json` field at definition-creation time. `:localized_text`-typed
+       fields (REQ-301) ARE excluded by an explicit second filter condition
+       here -- unlike `:json`, a `:localized_text` field CAN be `queried:
+       true` (REQ-301 AC3), but its value is a JSON object keyed by locale,
+       not a scalar `Letflow.Entities.Query.Compiler.json_cast_dynamic/2`
+       has any clause for; allowlisting it under its own bare name would
+       crash that function's `:json_field` dispatch with
+       `FunctionClauseError` the moment such a field is resolved. Only its
+       derived per-locale generated columns are ever exposed, and only via
+       `typed_columns/2` (§5) -- neither this function nor `Compiler`/
+       `Cursor` resolve them yet (REQ-300's job).
     5. Merge: a JSON-field entry whose name collides with a typed-column
        entry is discarded -- the typed-column entry wins (AC3, the
        shadowing-precedence rule stated in this module's own moduledoc
@@ -168,7 +195,7 @@ defmodule Letflow.Entities.Query.Allowlist do
         entity_definition.definition_json
         |> Map.get("fields", [])
         |> Enum.map(&field_document/1)
-        |> Enum.filter(&(&1.queried == true))
+        |> Enum.filter(&(&1.queried == true and &1.type != :localized_text))
         |> Map.new(fn field ->
           {field.name,
            %{
@@ -226,9 +253,17 @@ defmodule Letflow.Entities.Query.Allowlist do
       name: Map.fetch!(field, "name"),
       type: String.to_existing_atom(Map.fetch!(field, "type")),
       queried: Map.get(field, "queried", false),
-      enum_values: Map.get(field, "enum_values")
+      enum_values: Map.get(field, "enum_values"),
+      locales: Map.get(field, "locales"),
+      search_strategy: field |> Map.get("search_strategy") |> search_strategy_atom()
     }
   end
+
+  # REQ-301: same decode `Letflow.TenantProvisioning.field_from_persisted/1`
+  # applies -- both atoms are already compiled into this codebase (Validator
+  # Rule 11, DDL's own dispatch), so `String.to_existing_atom/1` is safe.
+  defp search_strategy_atom(nil), do: nil
+  defp search_strategy_atom(value) when is_binary(value), do: String.to_existing_atom(value)
 
   # Decodes `entity_definition.definition_json` into the shape
   # `DDL.promoted_columns/1` expects (design §1.4) -- `field_document/1`'s
@@ -268,9 +303,16 @@ defmodule Letflow.Entities.Query.Allowlist do
     promoted =
       document
       |> DDL.promoted_columns()
-      |> Map.new(fn %{name: name} ->
-        field = Map.fetch!(fields_by_name, name)
-        {name, field.type}
+      |> Map.new(fn column ->
+        # REQ-301: a locale-derived generated column's own name
+        # ("stem_kk") never matches a `fields_by_name` key -- its
+        # originating field's name ("stem") is carried separately in
+        # `:source_field`. `nil` for every ordinary promoted column
+        # (its own name already equals its originating field's name), so
+        # this falls back to `column.name`, identical to before REQ-301.
+        field = Map.fetch!(fields_by_name, Map.get(column, :source_field) || column.name)
+        type = if Map.get(column, :source_field), do: :string, else: field.type
+        {column.name, type}
       end)
 
     Map.merge(promoted, structural)

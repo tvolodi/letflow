@@ -1,10 +1,11 @@
 defmodule Letflow.Entities.Definition.Validator do
   @moduledoc """
-  The 11 structural validation rules for an `Letflow.Entities.Definition.t()`
-  document (REQ-225). See
+  The 13 structural validation rules for an `Letflow.Entities.Definition.t()`
+  document (REQ-225, extended by REQ-301). See
   `lib/letflow/design/req225-entity-definition-schema-validation.md` §3 for
-  the full design this module implements -- every rule's exact trigger
-  condition and `rule` atom below matches that section 1:1.
+  the full design rules 1-9 implement, and
+  `lib/letflow/design/req301-localized-text-field-type.md` §2 for rules 10
+  and 11 (the `:locales`/`:search_strategy` shape rules REQ-301 adds).
 
   This module validates one document's own **internal** structural
   consistency only -- it takes no `tenant_id`, performs no persistence
@@ -16,7 +17,7 @@ defmodule Letflow.Entities.Definition.Validator do
 
   Basic shape/type checking (the document is a map with the required
   top-level keys; `fields` is a list of maps; each field's `type` is one of
-  the 8 known atoms; every string-typed field is actually a string) is a
+  the 9 known atoms; every string-typed field is actually a string) is a
   precondition every one of the 11 numbered rules assumes has already
   passed. A document that fails this precondition is rejected with
   `{:error, [%Violation{rule: :malformed, ...}]}` -- `:malformed` is not one
@@ -45,7 +46,18 @@ defmodule Letflow.Entities.Definition.Validator do
         }
 
   @name_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
-  @field_types [:string, :integer, :decimal, :boolean, :date, :datetime, :enum, :json]
+  @locale_format_regex ~r/^[a-z]{2,8}$/
+  @field_types [
+    :string,
+    :integer,
+    :decimal,
+    :boolean,
+    :date,
+    :datetime,
+    :enum,
+    :json,
+    :localized_text
+  ]
 
   @max_fields 200
   @max_indexes 32
@@ -70,6 +82,8 @@ defmodule Letflow.Entities.Definition.Validator do
             fk_field_coverage_violations(definition) ++
             enum_violations(definition) ++
             decimal_violations(definition) ++
+            localized_text_violations(definition) ++
+            search_strategy_violations(definition) ++
             cardinality_violations(definition) ++
             self_referential_fk_violations(definition)
 
@@ -468,6 +482,105 @@ defmodule Letflow.Entities.Definition.Validator do
               path: [:fields, name],
               message:
                 "decimal_precision and decimal_scale must be absent when type is not :decimal"
+            }
+          ]
+
+        true ->
+          []
+      end
+    end)
+  end
+
+  # --- Rule 10 -- locale-set shape (:invalid_localized_text) -------------------
+
+  defp localized_text_violations(definition) do
+    definition
+    |> get_list(:fields)
+    |> Enum.flat_map(fn field ->
+      name = Map.get(field, :name)
+      type = Map.get(field, :type)
+      locales = Map.get(field, :locales)
+
+      cond do
+        type == :localized_text and not (is_list(locales) and locales != []) ->
+          [
+            %Violation{
+              rule: :invalid_localized_text,
+              path: [:fields, name, :locales],
+              message: "locales must be a non-empty list when type is :localized_text"
+            }
+          ]
+
+        type == :localized_text and length(Enum.uniq(locales)) != length(locales) ->
+          [
+            %Violation{
+              rule: :invalid_localized_text,
+              path: [:fields, name, :locales],
+              message: "locales must not contain duplicates"
+            }
+          ]
+
+        type == :localized_text and not Enum.all?(locales, &locale_format_valid?/1) ->
+          Enum.flat_map(locales, fn locale ->
+            if locale_format_valid?(locale) do
+              []
+            else
+              [
+                %Violation{
+                  rule: :invalid_localized_text,
+                  path: [:fields, name, :locales],
+                  message: "locale #{inspect(locale)} must match ^[a-z]{2,8}$"
+                }
+              ]
+            end
+          end)
+
+        type != :localized_text and locales != nil ->
+          [
+            %Violation{
+              rule: :invalid_localized_text,
+              path: [:fields, name, :locales],
+              message: "locales must be absent when type is not :localized_text"
+            }
+          ]
+
+        true ->
+          []
+      end
+    end)
+  end
+
+  defp locale_format_valid?(locale) when is_binary(locale),
+    do: Regex.match?(@locale_format_regex, locale)
+
+  defp locale_format_valid?(_locale), do: false
+
+  # --- Rule 11 -- search_strategy shape (:invalid_search_strategy) -------------
+
+  defp search_strategy_violations(definition) do
+    definition
+    |> get_list(:fields)
+    |> Enum.flat_map(fn field ->
+      name = Map.get(field, :name)
+      type = Map.get(field, :type)
+      search_strategy = Map.get(field, :search_strategy)
+
+      cond do
+        type == :localized_text and search_strategy not in [nil, :plain, :fulltext] ->
+          [
+            %Violation{
+              rule: :invalid_search_strategy,
+              path: [:fields, name, :search_strategy],
+              message: "search_strategy must be :plain or :fulltext"
+            }
+          ]
+
+        type != :localized_text and search_strategy != nil ->
+          [
+            %Violation{
+              rule: :invalid_search_strategy,
+              path: [:fields, name, :search_strategy],
+              message: "search_strategy must be absent when type is not :localized_text"
             }
           ]
 

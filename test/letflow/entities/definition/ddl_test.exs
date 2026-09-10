@@ -461,25 +461,25 @@ defmodule Letflow.Entities.Definition.DDLTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Moduledoc extension point for REQ-301.
+  # Moduledoc citation for REQ-301 (AC6) -- the generated-column-per-locale
+  # mechanism is now implemented (see localized_text_column_specs/1 below);
+  # this replaces the REQ-296-era placeholder that asserted the opposite
+  # (extension point named, but deliberately not yet implemented).
   # ---------------------------------------------------------------------------
 
-  describe "moduledoc states the REQ-301 extension point without implementing it" do
-    test "the moduledoc mentions REQ-301 and the extension point, with no locale-related code" do
+  describe "moduledoc cites REQ-301 and 0025's plain-vs-tsvector decision (AC6)" do
+    test "the moduledoc names REQ-301, cites 0025 Sub-question 2, and does not re-derive it" do
       {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(DDL)
 
       assert moduledoc =~ "REQ-301"
       assert moduledoc =~ "locale"
+      assert moduledoc =~ "search_strategy"
+      assert moduledoc =~ "tsvector"
 
-      # Defence-in-depth against silently implementing the REQ-301 feature
-      # itself: no locale *configuration* shape (a `:locale`/`:locales` key
-      # on a field_def(), or a dedicated generated-column-per-locale
-      # function) exists yet -- only the dispatch-shape/prose extension
-      # point the moduledoc describes.
-      source = File.read!("lib/letflow/entities/definition/ddl.ex")
-      refute source =~ ":locale"
-      refute source =~ "locale:"
-      refute source =~ "generated_column"
+      assert moduledoc =~
+               "docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md"
+
+      assert moduledoc =~ "Sub-question 2"
     end
   end
 

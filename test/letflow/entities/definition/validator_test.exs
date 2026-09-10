@@ -439,7 +439,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "stem", type: :localized_text}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_localized_text, path: [:fields, "stem", :locales]}]} =
+      assert {:error,
+              [%Violation{rule: :invalid_localized_text, path: [:fields, "stem", :locales]}]} =
                Validator.validate(definition)
     end
 
@@ -450,7 +451,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "stem", type: :localized_text, locales: []}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_localized_text}]} = Validator.validate(definition)
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
     end
 
     test "duplicate locales fails only :invalid_localized_text" do
@@ -460,7 +462,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "stem", type: :localized_text, locales: ["kk", "kk"]}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_localized_text}]} = Validator.validate(definition)
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
     end
 
     test "a locale not matching ^[a-z]{2,8}$ fails only :invalid_localized_text" do
@@ -470,7 +473,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "stem", type: :localized_text, locales: ["KK"]}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_localized_text}]} = Validator.validate(definition)
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
     end
 
     test "locales present on a non-:localized_text field fails only :invalid_localized_text" do
@@ -480,7 +484,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "id", type: :string, locales: ["kk"]}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_localized_text, path: [:fields, "id", :locales]}]} =
+      assert {:error,
+              [%Violation{rule: :invalid_localized_text, path: [:fields, "id", :locales]}]} =
                Validator.validate(definition)
     end
   end
@@ -500,7 +505,12 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
       }
 
       assert {:error,
-              [%Violation{rule: :invalid_search_strategy, path: [:fields, "stem", :search_strategy]}]} =
+              [
+                %Violation{
+                  rule: :invalid_search_strategy,
+                  path: [:fields, "stem", :search_strategy]
+                }
+              ]} =
                Validator.validate(definition)
     end
 
@@ -511,7 +521,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         fields: [%{name: "id", type: :string, search_strategy: :plain}]
       }
 
-      assert {:error, [%Violation{rule: :invalid_search_strategy}]} = Validator.validate(definition)
+      assert {:error, [%Violation{rule: :invalid_search_strategy}]} =
+               Validator.validate(definition)
     end
 
     test "search_strategy absent on a :localized_text field is valid (defaults to :plain)" do
@@ -528,7 +539,9 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
       definition = %{
         name: "widget",
         display_name: "Widget",
-        fields: [%{name: "stem", type: :localized_text, locales: ["kk"], search_strategy: :fulltext}]
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk"], search_strategy: :fulltext}
+        ]
       }
 
       assert Validator.validate(definition) == :ok

@@ -357,6 +357,198 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
   end
 
   # ---------------------------------------------------------------------------
+  # REQ-301 AC1 -- :localized_text is a new, valid field_type().
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC1 -- :localized_text field type" do
+    test "a definition with a :localized_text field (locales declared) validates as :ok" do
+      definition = %{
+        name: "question",
+        display_name: "Question",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk", "ru"]}
+        ]
+      }
+
+      assert Validator.validate(definition) == :ok
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-301 AC2 -- the supported-locale set is per-definition, not project-wide.
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC2 -- per-definition locale sets" do
+    test "two entity types declare different locale sets for their own :localized_text field, each validates independently" do
+      definition_a = %{
+        name: "question_a",
+        display_name: "Question A",
+        fields: [%{name: "stem", type: :localized_text, locales: ["kk", "ru"]}]
+      }
+
+      definition_b = %{
+        name: "question_b",
+        display_name: "Question B",
+        fields: [%{name: "stem", type: :localized_text, locales: ["en", "fr", "de"]}]
+      }
+
+      assert Validator.validate(definition_a) == :ok
+      assert Validator.validate(definition_b) == :ok
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-301 AC3 -- :localized_text CAN be queried: true; :json still cannot
+  # (Rule 3's own source text is byte-for-byte unchanged by this requirement).
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC3 -- :localized_text CAN be queried: true; :json still cannot (Rule 3 unweakened)" do
+    test "a :localized_text field with queried: true validates (no :queried_json_conflict)" do
+      definition = %{
+        name: "question",
+        display_name: "Question",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk", "ru"], queried: true}
+        ]
+      }
+
+      assert Validator.validate(definition) == :ok
+    end
+
+    test "a :json field with queried: true still fails :queried_json_conflict (Rule 3 re-confirmed unweakened)" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "data", type: :json, queried: true}]
+      }
+
+      assert {:error, [%Violation{rule: :queried_json_conflict, path: [:fields, "data"]}]} =
+               Validator.validate(definition)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Rule 10 -- locale-set shape (:invalid_localized_text), new in REQ-301.
+  # ---------------------------------------------------------------------------
+
+  describe "Rule 10 -- locale-set shape (:invalid_localized_text)" do
+    test "locales absent on a :localized_text field fails only :invalid_localized_text" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "stem", type: :localized_text}]
+      }
+
+      assert {:error,
+              [%Violation{rule: :invalid_localized_text, path: [:fields, "stem", :locales]}]} =
+               Validator.validate(definition)
+    end
+
+    test "locales as an empty list on a :localized_text field fails only :invalid_localized_text" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "stem", type: :localized_text, locales: []}]
+      }
+
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
+    end
+
+    test "duplicate locales fails only :invalid_localized_text" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "stem", type: :localized_text, locales: ["kk", "kk"]}]
+      }
+
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
+    end
+
+    test "a locale not matching ^[a-z]{2,8}$ fails only :invalid_localized_text" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "stem", type: :localized_text, locales: ["KK"]}]
+      }
+
+      assert {:error, [%Violation{rule: :invalid_localized_text}]} =
+               Validator.validate(definition)
+    end
+
+    test "locales present on a non-:localized_text field fails only :invalid_localized_text" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "id", type: :string, locales: ["kk"]}]
+      }
+
+      assert {:error,
+              [%Violation{rule: :invalid_localized_text, path: [:fields, "id", :locales]}]} =
+               Validator.validate(definition)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Rule 11 -- search_strategy shape (:invalid_search_strategy), new in REQ-301.
+  # ---------------------------------------------------------------------------
+
+  describe "Rule 11 -- search_strategy shape (:invalid_search_strategy)" do
+    test "an invalid search_strategy value fails only :invalid_search_strategy" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk"], search_strategy: :ranked}
+        ]
+      }
+
+      assert {:error,
+              [
+                %Violation{
+                  rule: :invalid_search_strategy,
+                  path: [:fields, "stem", :search_strategy]
+                }
+              ]} =
+               Validator.validate(definition)
+    end
+
+    test "search_strategy present on a non-:localized_text field fails only :invalid_search_strategy" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "id", type: :string, search_strategy: :plain}]
+      }
+
+      assert {:error, [%Violation{rule: :invalid_search_strategy}]} =
+               Validator.validate(definition)
+    end
+
+    test "search_strategy absent on a :localized_text field is valid (defaults to :plain)" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "stem", type: :localized_text, locales: ["kk"]}]
+      }
+
+      assert Validator.validate(definition) == :ok
+    end
+
+    test "search_strategy explicitly :fulltext on a :localized_text field is valid" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk"], search_strategy: :fulltext}
+        ]
+      }
+
+      assert Validator.validate(definition) == :ok
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Malformed-shape precondition -- not one of the 11 rules, checked first.
   # ---------------------------------------------------------------------------
 

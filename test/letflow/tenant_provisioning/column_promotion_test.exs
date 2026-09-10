@@ -791,6 +791,134 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
   # derive column_spec.pg_type from DDL.field_type_to_pg_type/1.
   # ---------------------------------------------------------------------------------
 
+  # ---------------------------------------------------------------------------------
+  # REQ-301 -- execute_add_column/3's defensive re-validation of generated_as.
+  # See lib/letflow/design/req301-localized-text-field-type.md §4.3.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-301 -- execute_add_column/3's defensive re-validation of generated_as" do
+    test "a stored ColumnPromotion row with a malformed generated_as is rejected as ddl_failed, never applied" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+      create_active_definition!(schema)
+
+      malicious_generated_as =
+        "field_values->'amount'->>'kk'; DROP TABLE entity_column_promotions; --"
+
+      # Constructed directly (bypassing register_column_promotion/4, which
+      # does not itself validate generated_as's shape) to model "a stored
+      # row somehow holds an unsafe value" -- exactly the scenario
+      # execute_add_column/3's own re-validation guard exists for.
+      attrs = %{
+        tenant_id: tenant_id,
+        entity_type: "invoice",
+        attribute: "amount_kk",
+        column_name: "amount_kk",
+        pg_type: "text",
+        generated_as: malicious_generated_as,
+        status: "pending",
+        query_eligible: false
+      }
+
+      assert {:ok, row} = Repo.insert(ColumnPromotion.changeset(%ColumnPromotion{}, attrs))
+
+      assert {:error, {:ddl_failed, %ArgumentError{} = exception}} =
+               TenantProvisioning.run_column_promotion(row.id)
+
+      assert Exception.message(exception) =~ "invalid generated_as"
+
+      failed_row = Repo.get!(ColumnPromotion, row.id)
+      assert failed_row.status == "ddl_failed"
+      assert failed_row.last_error =~ "invalid generated_as"
+
+      assert {:ok, table_name} = TenantProvisioning.table_name_for_entity_type("invoice")
+      assert fetch_information_schema_column(schema, table_name, "amount_kk") == nil
+    end
+
+    test "a nil generated_as (an ordinary promotion) is unaffected by the re-validation guard" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+      create_active_definition!(schema)
+
+      assert {:ok, [row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert row.generated_as == nil
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied", generated_as: nil}} =
+               TenantProvisioning.run_column_promotion(row.id)
+
+      assert {:ok, table_name} = TenantProvisioning.table_name_for_entity_type("invoice")
+      assert fetch_information_schema_column(schema, table_name, "amount") == "text"
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # REQ-301 -- a well-formed generated_as, applied via the ALTER TABLE path
+  # (register_column_promotion/4 + run_column_promotion/1, not CREATE TABLE),
+  # actually computes its value from a real row's field_values.
+  # ---------------------------------------------------------------------------------
+
+  describe "REQ-301 -- generated_as applies as GENERATED ALWAYS AS ... STORED via ALTER TABLE" do
+    test "a locale-derived generated column added via ALTER TABLE computes from field_values" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+      create_active_definition!(schema)
+
+      assert {:ok, table_name} = TenantProvisioning.table_name_for_entity_type("invoice")
+
+      # First promotion ("amount", ordinary) creates the per-entity-type
+      # table via ensure_entity_table/2.
+      assert {:ok, [amount_row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
+               TenantProvisioning.run_column_promotion(amount_row.id)
+
+      generated_as_expr = ~s{field_values->'amount'->>'kk'}
+
+      assert {:ok, [locale_row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount_kk",
+                 %{pg_type: "text", nullable: true, generated_as: generated_as_expr},
+                 [tenant_id]
+               )
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied", generated_as: ^generated_as_expr}} =
+               TenantProvisioning.run_column_promotion(locale_row.id)
+
+      assert fetch_information_schema_column(schema, table_name, "amount_kk") == "text"
+
+      # Insert a row directly via raw SQL -- bypassing
+      # Letflow.Entities.Records/Record.Validator, which has no
+      # field_subschema/1 clause for :localized_text yet (a pre-existing gap
+      # outside this requirement's own scope, not exercised here) -- purely
+      # to prove the GENERATED ALWAYS AS expression itself actually computes
+      # from field_values, not merely that the column exists.
+      record_id = Ecto.UUID.generate()
+
+      Repo.query!(
+        """
+        INSERT INTO "#{schema}"."#{table_name}"
+          (id, record_id, field_values, deleted, last_event_global_seq, inserted_at, updated_at)
+        VALUES
+          (($1::text)::uuid, ($2::text)::uuid, ($3::text)::jsonb, false, 1, now(), now())
+        """,
+        [Ecto.UUID.generate(), record_id, Jason.encode!(%{"amount" => %{"kk" => "on bes"}})]
+      )
+
+      assert entity_table_row(schema, table_name, record_id, "amount_kk") == "on bes"
+    end
+  end
+
   describe "DDL.field_type_to_pg_type/1 reuse" do
     test "the caller-supplied pg_type in register_column_promotion/4 round-trips exactly as given" do
       %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()

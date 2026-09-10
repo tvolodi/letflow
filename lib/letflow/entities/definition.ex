@@ -39,15 +39,31 @@ defmodule Letflow.Entities.Definition do
           optional(:enum_values) => [String.t()],
           optional(:decimal_precision) => pos_integer(),
           optional(:decimal_scale) => non_neg_integer(),
-          optional(:default) => term()
+          optional(:default) => term(),
+          optional(:locales) => [String.t(), ...],
+          optional(:search_strategy) => :plain | :fulltext
         }
 
   @typedoc """
   The closed set of field types this slice supports. `:json` is the one type
   that Rule 3 (`Letflow.Entities.Definition.Validator`) treats specially: a
-  `:json` field may never also be `queried: true`.
+  `:json` field may never also be `queried: true`. `:localized_text`
+  (REQ-301) is the other type Rule 3's carve-out matters for: unlike `:json`,
+  a `:localized_text` field CAN be `queried: true` -- see
+  `Letflow.Entities.Definition.Validator`'s moduledoc and Rule 3's own
+  comment for why this is achieved by `:localized_text` being a distinct
+  atom, not by weakening Rule 3 itself.
   """
-  @type field_type :: :string | :integer | :decimal | :boolean | :date | :datetime | :enum | :json
+  @type field_type ::
+          :string
+          | :integer
+          | :decimal
+          | :boolean
+          | :date
+          | :datetime
+          | :enum
+          | :json
+          | :localized_text
 
   @typedoc "One entry in an entity definition's `indexes` list."
   @type index_def :: %{

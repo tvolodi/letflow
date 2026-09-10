@@ -461,25 +461,164 @@ defmodule Letflow.Entities.Definition.DDLTest do
   end
 
   # ---------------------------------------------------------------------------
-  # Moduledoc extension point for REQ-301.
+  # Moduledoc citation for REQ-301 (AC6) -- the generated-column-per-locale
+  # mechanism is now implemented (see localized_text_column_specs/1 below);
+  # this replaces the REQ-296-era placeholder that asserted the opposite
+  # (extension point named, but deliberately not yet implemented).
   # ---------------------------------------------------------------------------
 
-  describe "moduledoc states the REQ-301 extension point without implementing it" do
-    test "the moduledoc mentions REQ-301 and the extension point, with no locale-related code" do
+  describe "moduledoc cites REQ-301 and 0025's plain-vs-tsvector decision (AC6)" do
+    test "the moduledoc names REQ-301, cites 0025 Sub-question 2, and does not re-derive it" do
       {:docs_v1, _, _, _, %{"en" => moduledoc}, _, _} = Code.fetch_docs(DDL)
 
       assert moduledoc =~ "REQ-301"
       assert moduledoc =~ "locale"
+      assert moduledoc =~ "search_strategy"
+      assert moduledoc =~ "tsvector"
 
-      # Defence-in-depth against silently implementing the REQ-301 feature
-      # itself: no locale *configuration* shape (a `:locale`/`:locales` key
-      # on a field_def(), or a dedicated generated-column-per-locale
-      # function) exists yet -- only the dispatch-shape/prose extension
-      # point the moduledoc describes.
-      source = File.read!("lib/letflow/entities/definition/ddl.ex")
-      refute source =~ ":locale"
-      refute source =~ "locale:"
-      refute source =~ "generated_column"
+      assert moduledoc =~
+               "docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md"
+
+      assert moduledoc =~ "Sub-question 2"
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-301 AC4 -- a queried: true :localized_text field promotes to one
+  # generated column per declared locale.
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC4 -- :localized_text with queried: true generates one column per locale" do
+    test "promoted_columns/1 and generate_table_ddl/2 produce one generated column per locale" do
+      definition = %{
+        name: "question",
+        display_name: "Question",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk", "ru"], queried: true}
+        ]
+      }
+
+      assert [col_kk, col_ru] = DDL.promoted_columns(definition)
+      assert col_kk.name == "stem_kk"
+      assert col_ru.name == "stem_ru"
+      assert col_kk.source_field == "stem"
+      assert col_ru.source_field == "stem"
+
+      assert {:ok, sql} = DDL.generate_table_ddl(definition, "question_table")
+      assert sql =~ ~s|"stem_kk" text GENERATED ALWAYS AS|
+      assert sql =~ ~s|"stem_ru" text GENERATED ALWAYS AS|
+      # The base field name never appears as its own column.
+      refute sql =~ ~s|"stem" |
+    end
+
+    test "a third locale produces a third column, in declared order" do
+      definition = %{
+        name: "question2",
+        display_name: "Question2",
+        fields: [
+          %{name: "stem", type: :localized_text, locales: ["kk", "ru", "en"], queried: true}
+        ]
+      }
+
+      assert [col_kk, col_ru, col_en] = DDL.promoted_columns(definition)
+      assert [col_kk.name, col_ru.name, col_en.name] == ["stem_kk", "stem_ru", "stem_en"]
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-301 AC6 -- plain-vs-tsvector generated-column shape, per field-level
+  # search_strategy (docs/migration/decisions/0025 Sub-question 2).
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC6 -- plain-vs-tsvector generated-column shape" do
+    test ":plain (default) search_strategy generates a text column via a JSONB path-extract expression, no to_tsvector" do
+      field = %{name: "stem", type: :localized_text, locales: ["kk"], queried: true}
+      definition = %{name: "q1", display_name: "Q1", fields: [field]}
+
+      assert [col] = DDL.promoted_columns(definition)
+      assert col.pg_type == "text"
+      assert col.generated_as == ~s{field_values->'stem'->>'kk'}
+      refute col.generated_as =~ "to_tsvector"
+
+      assert {:ok, sql} = DDL.generate_table_ddl(definition, "q1_table")
+
+      assert sql =~
+               ~s|"stem_kk" text GENERATED ALWAYS AS (field_values->'stem'->>'kk') STORED|
+
+      refute sql =~ "to_tsvector"
+    end
+
+    test ":fulltext search_strategy generates a tsvector column via to_tsvector('simple', coalesce(...))" do
+      field = %{
+        name: "stem",
+        type: :localized_text,
+        locales: ["kk"],
+        queried: true,
+        search_strategy: :fulltext
+      }
+
+      definition = %{name: "q2", display_name: "Q2", fields: [field]}
+
+      assert [col] = DDL.promoted_columns(definition)
+      assert col.pg_type == "tsvector"
+
+      assert col.generated_as ==
+               ~s{to_tsvector('simple', coalesce(field_values->'stem'->>'kk', ''))}
+
+      assert {:ok, sql} = DDL.generate_table_ddl(definition, "q2_table")
+
+      assert sql =~
+               ~s|"stem_kk" tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(field_values->'stem'->>'kk', ''))) STORED|
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-301 AC7 -- a :localized_text field NOT marked queried: true stays
+  # entirely inside field_values -- no generated column at all.
+  # ---------------------------------------------------------------------------
+
+  describe "REQ-301 AC7 -- :localized_text NOT queried stays entirely inside field_values" do
+    test "a :localized_text field without queried: true produces zero promoted columns and no trace in the DDL" do
+      definition = %{
+        name: "q3",
+        display_name: "Q3",
+        fields: [%{name: "stem", type: :localized_text, locales: ["kk", "ru"]}]
+      }
+
+      assert DDL.promoted_columns(definition) == []
+
+      assert {:ok, sql} = DDL.generate_table_ddl(definition, "q3_table")
+      refute sql =~ "stem"
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # valid_generated_as_expression?/1 -- the counterpart to valid_identifier?/1
+  # for a SQL *expression*, used by TenantProvisioning.execute_add_column/3's
+  # defensive re-validation.
+  # ---------------------------------------------------------------------------
+
+  describe "valid_generated_as_expression?/1" do
+    test "accepts the two shapes localized_text_column_specs/1 ever emits" do
+      assert DDL.valid_generated_as_expression?(~s{field_values->'stem'->>'kk'})
+
+      assert DDL.valid_generated_as_expression?(
+               ~s{to_tsvector('simple', coalesce(field_values->'stem'->>'kk', ''))}
+             )
+    end
+
+    test "rejects a SQL-injection-shaped or otherwise malformed expression" do
+      refute DDL.valid_generated_as_expression?(
+               ~s{field_values->'stem'->>'kk'; DROP TABLE users; --}
+             )
+
+      refute DDL.valid_generated_as_expression?("not a valid generated_as expression at all")
+      # Uppercase field name -- doesn't match the closed name-format regex.
+      refute DDL.valid_generated_as_expression?(~s{field_values->'Stem'->>'kk'})
+      # Uppercase locale -- doesn't match the closed locale-format regex.
+      refute DDL.valid_generated_as_expression?(~s{field_values->'stem'->>'KK'})
+      refute DDL.valid_generated_as_expression?("")
+      refute DDL.valid_generated_as_expression?(nil)
     end
   end
 

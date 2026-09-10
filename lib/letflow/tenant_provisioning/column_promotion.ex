@@ -59,6 +59,16 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
   entity-type-space-until-execution-time posture `entity_type`/`attribute`
   already have on this row. See
   `lib/letflow/design/req298-constraint-fk-activation.md` §3.
+
+  ## `generated_as` (REQ-301)
+
+  `generated_as :: String.t() | nil` -- nullable, absent from
+  `@required_fields`, exactly like every other field on an ordinary
+  (non-generated) promotion's row. Non-`nil` only for a locale-derived
+  generated column (`Letflow.Entities.Definition.DDL.localized_text_column_specs/1`),
+  where it carries the SQL expression text `Letflow.TenantProvisioning`'s
+  `execute_add_column/3` wraps in `GENERATED ALWAYS AS (...) STORED`. See
+  `lib/letflow/design/req301-localized-text-field-type.md` §4.1.
   """
 
   use Ecto.Schema
@@ -76,6 +86,7 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
     field(:last_error, :string)
     field(:suspend_reason, :string)
     field(:references_entity, :string)
+    field(:generated_as, :string)
     field(:attempted_at, :naive_datetime)
     field(:ddl_applied_at, :naive_datetime)
     field(:backfilled_at, :naive_datetime)
@@ -99,6 +110,7 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
     :last_error,
     :suspend_reason,
     :references_entity,
+    :generated_as,
     :attempted_at,
     :ddl_applied_at,
     :backfilled_at,

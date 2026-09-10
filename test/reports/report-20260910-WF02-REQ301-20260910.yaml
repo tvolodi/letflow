@@ -1,0 +1,149 @@
+run_id: WF02-REQ301-20260910
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-10T07:00:00Z"
+branch: feature/WF02-REQ301-20260910
+head_commit: 96217e8b
+
+git_state:
+  clean_tree: true
+  note: >
+    Working tree clean at run time; branch is 3 commits ahead of
+    origin/feature/WF02-REQ301-20260910 (not yet pushed).
+  recent_commits:
+    - 96217e8b "REQ-301: test specs and coverage for :localized_text field type"
+    - 1fa174ca "REQ-301: defensively re-validate generated_as expression before DDL execution"
+    - b6ee194e "REQ-301: add :localized_text field type with per-locale generated columns (Compiler/Cursor wiring deferred to REQ-300)"
+    - d75c08af "REQ-301/REQ-300: amend AC5 wording after design-time scope conflict"
+    - 9f4466ce "WF02-REQ301-20260910 Step 00: git setup + started event"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.v12.yaml
+    - lib/letflow/design/req301-localized-text-field-type.md
+    - lib/letflow/entities/definition.ex
+    - lib/letflow/entities/definition/ddl.ex
+    - lib/letflow/entities/definition/validator.ex
+    - lib/letflow/entities/query/allowlist.ex
+    - lib/letflow/tenant_provisioning.ex
+    - lib/letflow/tenant_provisioning/column_promotion.ex
+    - priv/repo/migrations/20260910000001_add_generated_as_to_entity_column_promotions.exs
+    - test/letflow/entities/definition/ddl_test.exs
+    - test/letflow/entities/definition/validator_test.exs
+    - test/letflow/entities/query_test.exs
+    - test/letflow/tenant_provisioning/column_promotion_test.exs
+    - test/specs/REQ-301.md
+  note: >
+    Matches REQ-301 scope: :localized_text field type across Definition/Validator/DDL/
+    TenantProvisioning/ColumnPromotion/Allowlist, its migration, design doc, test spec,
+    and test code. docs/status/requirement_status.index.yaml (the file carrying the
+    declared per-volume entry count) is NOT in this diff -- load-bearing for the
+    attribution below.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op)"
+  orphan_process_check: >
+    One erl.exe (PID 15560) found running before the suite started; inspected via
+    Get-CimInstance and confirmed to be VS Code's ElixirLS language server
+    (launch.exs from jakebecker.elixir-ls-0.31.1), not a stray mix test/partition
+    process. Left running -- not related to test_parallel.sh.
+
+backend_suite:
+  command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+  partitions: 8
+  partition_count_source: >
+    Explicit override (TEST_PARALLEL_N=8), chosen below the machine's nproc=16
+    default per this run's briefing, given this branch's documented history of
+    too_many_connections errors at N=16.
+  result: FAIL (1 of 3664 tests failing)
+  output: |
+    test_parallel: N=8 (source: env override)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    partition 1: 551 tests, 2 properties, 1 failures, exit 2
+    partition 2: 387 tests, 0 properties, 0 failures, exit 0
+    partition 3: 557 tests, 0 properties, 0 failures, exit 0
+    partition 4: 433 tests, 0 properties, 0 failures, exit 0
+    partition 5: 479 tests, 2 properties, 0 failures, exit 0
+    partition 6: 438 tests, 1 property, 0 failures, exit 0
+    partition 7: 360 tests, 0 properties, 0 failures, exit 0
+    partition 8: 453 tests, 1 property, 0 failures, exit 0
+    ---
+    combined: 3658 tests, 6 properties, 1 failures (3663/3664 passed)
+  wall_clock: "7m42.7s"
+  failures:
+    - test: "test A9: every indexed volume's declared entries: count equals what is actually on disk"
+      module: "Letflow.Docs.RequirementStatusInvariantsTest"
+      file: "test/docs/requirement_status_invariants_test.exs:464"
+      assertion_output: |
+        A9 -- a volume's declared entries: count has drifted from what is on disk.
+
+        (path, declared entries:, actual entries on disk) for each mismatch:
+        [{"docs/status/requirement_status.v12.yaml", 18, 19}]
+      attribution:
+        route: "(b) reproduced at merge-base, plus (a) file-diff evidence -- caused by this run's own branch, NOT pre-existing"
+        evidence: >
+          This run's briefing named RequirementStatusInvariantsTest's v12.yaml
+          drift as a known pre-existing failure already on main and instructed
+          verifying it is STILL the current state before treating it as
+          pre-existing. Verification found the opposite: on main
+          (`git show main:docs/status/requirement_status.v12.yaml | grep -c
+          "^  - req:"` = 18) the declared count in
+          docs/status/requirement_status.index.yaml (entries: 18, per its v12
+          block's note "Recounted to 18 by WF02-REQ299-20260910's Step Final
+          rebase") matches the actual on-disk count exactly -- A9 passes clean
+          at merge-base. This branch's own Step 00 commit
+          (9f4466ce, "WF02-REQ301-20260910 Step 00: git setup + started event")
+          appended one new `- req: REQ-301 / event: started` entry to
+          docs/status/requirement_status.v12.yaml (confirmed via
+          `git diff main...HEAD -- docs/status/requirement_status.v12.yaml`,
+          insertion-only, +1 entry), bringing the on-disk count to 19
+          (`grep -c "^  - req:" docs/status/requirement_status.v12.yaml` = 19
+          on this branch) -- but docs/status/requirement_status.index.yaml is
+          absent from `git diff --name-only main...HEAD` entirely, so its
+          declared `entries: 18` for volume 12 was never incremented in the
+          same commit, violating HOW-TO-APPEND step 6. This is this branch's
+          own bookkeeping gap from Step 00, not a pre-existing drift on main.
+        conclusion: >
+          NOT pre-existing. Do not treat this as the pre-existing exception the
+          briefing anticipated -- that exception no longer applies since
+          REQ-299's own Step 6 fix (visible in the index.yaml note) already
+          closed the previously-known drift. This run's Step 00 reopened it.
+          Out of TEST-RUNNER's ownership (docs/status/ bookkeeping, not
+          test/ code) -- reporting to ORCH rather than fixing it directly.
+          Fix: increment docs/status/requirement_status.index.yaml's volume-12
+          `entries:` from 18 to 19 (and append a recount note per the file's
+          own convention), in a commit alongside or before Step Final's own
+          append, so the count stays accurate through this run's remaining
+          steps.
+
+req301_specific_checks:
+  - check: "test/letflow/entities/definition/ddl_test.exs, validator_test.exs, tenant_provisioning/column_promotion_test.exs, entities/query_test.exs (REQ-301's new/extended :localized_text coverage) included in full-suite run above"
+    result: >
+      All included in the combined run; every one of these files' tests passed
+      (the suite's single failure is RequirementStatusInvariantsTest, an
+      unrelated docs-invariant test, not any REQ-301 test file).
+    note: >
+      TEST-DESIGN-VALIDATOR already independently confirmed these specific new
+      tests passing prior to this run (per task briefing); this run additionally
+      confirms they still pass as part of the full, unfiltered suite.
+
+verdict: PARTIAL
+verdict_reasoning: >
+  3663/3664 tests passed (6 properties, 8 partitions at TEST_PARALLEL_N=8). Every
+  REQ-301-scoped test file passed clean. The sole failure
+  (Letflow.Docs.RequirementStatusInvariantsTest, A9, v12.yaml declared-vs-actual
+  entry count 18 vs 19) is attributable to this run's own diff per the structural
+  evidence above -- this branch's Step 00 commit appended a history entry without
+  incrementing the volume's declared count in requirement_status.index.yaml. Not a
+  REQ-301 implementation/test-code defect; not a pre-existing failure either
+  (verified against merge-base, where A9 passes clean). This is a docs bookkeeping
+  gap outside TEST-RUNNER's file ownership (test/ and test/support/data_case.ex
+  only) -- reporting to ORCH to route the index.yaml increment (DOC-UPDATER or a
+  follow-up commit on this branch) rather than fixing it here.
+next_action: >
+  Report to ORCH: increment docs/status/requirement_status.index.yaml's volume-12
+  entries: from 18 to 19 before/alongside this run's later steps, then re-run
+  scripts/test_parallel.sh to confirm A9 goes green, before routing to
+  RELEASE-VALIDATOR.

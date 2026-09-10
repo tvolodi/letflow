@@ -1130,6 +1130,16 @@ defmodule Letflow.TenantProvisioning do
   promoted `field_def()` -- this function does not re-derive the type
   mapping. `column_spec.nullable` is always treated as `true`, per 0023's
   additive-only rule -- there is no caller override. Issues no DDL.
+
+  `column_spec.generated_as` (REQ-301) is optional and defaults to `nil`
+  via `Map.get/2` (never `Map.fetch!/2`) -- absent means an ordinary,
+  non-generated column, exactly as every existing caller's two-key shape
+  already produces. For a `:localized_text` field's locale columns, the
+  caller calls this function once per `column_spec()`
+  `Letflow.Entities.Definition.DDL.promoted_columns/1` returns for that
+  field (once per locale), passing `attribute: column_spec.name` (e.g.
+  `"stem_kk"`) and `column_spec.generated_as` set to that entry's
+  generation-expression text.
   """
   @spec register_column_promotion(
           entity_type :: String.t(),
@@ -1137,7 +1147,8 @@ defmodule Letflow.TenantProvisioning do
           column_spec :: %{
             required(:pg_type) => String.t(),
             required(:nullable) => true,
-            optional(:references_entity) => String.t()
+            optional(:references_entity) => String.t(),
+            optional(:generated_as) => String.t() | nil
           },
           tenant_ids :: [Ecto.UUID.t()] | :all
         ) :: {:ok, [ColumnPromotion.t()]} | {:error, term()}
@@ -1146,6 +1157,7 @@ defmodule Letflow.TenantProvisioning do
     tenant_ids = resolve_tenant_ids(tenant_ids)
     pg_type = Map.fetch!(column_spec, :pg_type)
     references_entity = Map.get(column_spec, :references_entity)
+    generated_as = Map.get(column_spec, :generated_as)
 
     Repo.transaction(fn ->
       Enum.map(tenant_ids, fn tenant_id ->
@@ -1156,6 +1168,7 @@ defmodule Letflow.TenantProvisioning do
           column_name: attribute,
           pg_type: pg_type,
           references_entity: references_entity,
+          generated_as: generated_as,
           status: "pending",
           query_eligible: false
         }
@@ -1503,7 +1516,8 @@ defmodule Letflow.TenantProvisioning do
     # REQ-298 -- an FK-promoted column's physical type (DDL's
     # fk_column_pg_type/2 override; see that function's own comment for
     # why `text` cannot be used for a REFERENCES-bearing column).
-    "uuid"
+    "uuid",
+    "tsvector"
   ]
   @numeric_pg_type_regex ~r/^numeric(\(\d+,\s?\d+\))?$/
 
@@ -1513,11 +1527,11 @@ defmodule Letflow.TenantProvisioning do
 
   # Only ever adds a new column -- this executor never removes a column and
   # never narrows an existing column's declared type (design doc §7, AC5).
-  # `table_name`/`column_name`
-  # are re-validated via DDL.valid_identifier?/1 immediately before
-  # interpolation (defence in depth matching DDL's own posture) -- an
-  # ArgumentError here means a stored row bypassed register_column_promotion/4,
-  # a genuine defect that must not be silently swallowed as a DDL failure.
+  # `table_name`/`column_name`/`pg_type`/`generated_as` are all re-validated
+  # immediately before interpolation (defence in depth matching DDL's own
+  # posture) -- an ArgumentError here means a stored row bypassed
+  # register_column_promotion/4, a genuine defect that must not be silently
+  # swallowed as a DDL failure.
   # target_table (REQ-298) is the already-resolved physical table an
   # FK-promoted column's REFERENCES clause points at -- `nil` for the
   # common, non-FK case (identical SQL shape REQ-297 already emits).
@@ -1540,6 +1554,19 @@ defmodule Letflow.TenantProvisioning do
             "invalid target_table for ALTER TABLE REFERENCES: #{inspect(target_table)}"
     end
 
+    # REQ-301: re-validate generated_as the same way as the three fields
+    # above -- nil (every ordinary, non-generated promotion) is fine as-is;
+    # anything non-nil must match one of the two known SQL-expression
+    # shapes DDL.localized_text_column_specs/1 ever produces (SECURITY-REVIEWER's
+    # WF02-REQ301-20260910 review note: this function otherwise re-validates
+    # every interpolated value at the DDL-execution boundary, and generated_as
+    # is itself interpolated below, so it should not be the one exception).
+    unless is_nil(promotion.generated_as) or
+             DDL.valid_generated_as_expression?(promotion.generated_as) do
+      raise ArgumentError,
+            "invalid generated_as for ALTER TABLE: #{inspect(promotion.generated_as)}"
+    end
+
     sql = build_add_column_sql(schema_name, table_name, promotion, target_table)
 
     Repo.query!(sql)
@@ -1549,13 +1576,21 @@ defmodule Letflow.TenantProvisioning do
   end
 
   defp build_add_column_sql(schema_name, table_name, promotion, nil) do
-    ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type})
+    ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type}#{generated_as_suffix(promotion.generated_as)})
   end
 
   defp build_add_column_sql(schema_name, table_name, promotion, target_table) do
     ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type}) <>
       ~s| REFERENCES "#{schema_name}"."#{target_table}"("record_id") ON DELETE RESTRICT|
   end
+
+  # REQ-301: a locale-derived generated column's `ColumnPromotion.generated_as`
+  # carries the same `GENERATED ALWAYS AS (...) STORED` expression text
+  # `Letflow.Entities.Definition.DDL`'s own `CREATE TABLE` path emits
+  # (`column_sql_line/1`) -- kept textually consistent across both halves of
+  # table DDL. `nil` (every ordinary promotion) produces no suffix at all.
+  defp generated_as_suffix(nil), do: ""
+  defp generated_as_suffix(generated_as), do: " GENERATED ALWAYS AS (#{generated_as}) STORED"
 
   defp mark_ddl_applied(promotion) do
     now = naive_now()
@@ -2171,7 +2206,9 @@ defmodule Letflow.TenantProvisioning do
       queried: Map.get(field, "queried", false),
       decimal_precision: Map.get(field, "decimal_precision"),
       decimal_scale: Map.get(field, "decimal_scale"),
-      enum_values: Map.get(field, "enum_values")
+      enum_values: Map.get(field, "enum_values"),
+      locales: Map.get(field, "locales"),
+      search_strategy: field |> Map.get("search_strategy") |> search_strategy_atom()
     }
   end
 
@@ -2199,4 +2236,13 @@ defmodule Letflow.TenantProvisioning do
       fields: Map.fetch!(constraint, "fields")
     }
   end
+
+  # REQ-301: `search_strategy` is persisted as a JSON string ("plain"/
+  # "fulltext") in `definition_json`, decoded back to the atom
+  # `Letflow.Entities.Definition.DDL.localized_text_column_specs/1` expects.
+  # Both atoms are already compiled into this codebase (Validator's Rule 11,
+  # DDL's own dispatch), so `String.to_existing_atom/1` is safe here -- same
+  # posture as `field_from_persisted/1`'s own `type` decode above.
+  defp search_strategy_atom(nil), do: nil
+  defp search_strategy_atom(value) when is_binary(value), do: String.to_existing_atom(value)
 end

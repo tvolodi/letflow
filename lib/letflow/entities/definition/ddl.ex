@@ -39,20 +39,20 @@ defmodule Letflow.Entities.Definition.DDL do
   through the migrator) -- one representation used consistently across both
   halves of table DDL, not two.
 
-  ## Extension point for REQ-301 (generated-column-per-locale)
+  ## REQ-301 -- generated-column-per-locale for `:localized_text`
 
   `promoted_columns/1`'s per-field dispatch (via `field_type_to_pg_type/1`
-  and `promotion_trigger/2`) is a **closed case dispatch over
-  `Definition.field_type()`**, not a single monolithic string-building
-  block. REQ-301, when it adds a localized-text type (or a
-  `localized: true` flag on `:string`, whichever REQ-301 itself decides),
-  can extend this dispatch with one more case that emits N generated
-  columns per configured locale instead of the current one-column-per-attribute
-  shape -- without needing to touch `structural_columns/0` or the
-  structural/promoted/blob split in `generate_table_ddl/2`. This module
-  does **not** implement that case, add a locale configuration shape, or
-  reserve a field name/flag for it -- only the dispatch shape that makes
-  adding it additive.
+  and `promotion_trigger/2`) is a closed case dispatch over
+  `Definition.field_type()`. A `:localized_text` field (REQ-301) dispatches
+  instead to `localized_text_column_specs/1`, which emits one generated
+  column per configured locale -- either a plain `text` column or a
+  `tsvector` column, selected per-field by the field's `search_strategy`
+  attribute (`:plain`, the default, or `:fulltext`). This per-field choice
+  is `docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md`
+  "Sub-question 2"'s decision, implemented here verbatim -- see that record
+  for the reasoning; it is not re-derived in this module. See
+  `lib/letflow/design/req301-localized-text-field-type.md` for the full
+  design this section implements.
 
   ## ON DELETE policy for promoted FK columns (REQ-298)
 
@@ -70,12 +70,19 @@ defmodule Letflow.Entities.Definition.DDL do
 
   alias Letflow.Entities.Definition
 
-  @typedoc "One column in a generated `CREATE TABLE` statement."
+  @typedoc """
+  One column in a generated `CREATE TABLE` statement. `:generated_as` and
+  `:source_field` (REQ-301) are `nil`/absent for every structural or
+  ordinary promoted column -- non-`nil` only for a locale-derived generated
+  column (see `localized_text_column_specs/1`).
+  """
   @type column_spec :: %{
-          name: String.t(),
-          pg_type: String.t(),
-          nullable: boolean(),
-          references_entity: String.t() | nil
+          required(:name) => String.t(),
+          required(:pg_type) => String.t(),
+          required(:nullable) => boolean(),
+          optional(:references_entity) => String.t() | nil,
+          optional(:generated_as) => String.t() | nil,
+          optional(:source_field) => String.t() | nil
         }
 
   @typedoc "Failure reason for `generate_table_ddl/3`."
@@ -86,6 +93,13 @@ defmodule Letflow.Entities.Definition.DDL do
           | {:missing_fk_target_table, entity_type: String.t()}
 
   @identifier_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
+
+  # REQ-301 defence-in-depth: the exact two SQL-expression shapes
+  # `localized_text_generated_expression/3` below ever emits, with `name`/
+  # `locale` constrained to the same formats Validator Rules 1/10 already
+  # enforce (`^[a-z][a-z0-9_]{0,63}$` / `^[a-z]{2,8}$`). See
+  # `valid_generated_as_expression?/1`.
+  @localized_text_generated_as_regex ~r/^(?:field_values->'[a-z][a-z0-9_]{0,63}'->>'[a-z]{2,8}'|to_tsvector\('simple', coalesce\(field_values->'[a-z][a-z0-9_]{0,63}'->>'[a-z]{2,8}', ''\)\))$/
 
   @doc """
   Generates the full `CREATE TABLE` DDL text for `definition`'s per-entity-type
@@ -183,14 +197,20 @@ defmodule Letflow.Entities.Definition.DDL do
   @doc """
   Applies the promotion rule to `definition.fields`, using
   `definition.foreign_keys` to determine trigger 1 (foreign key). Returns
-  one `column_spec()` per promoted attribute, in `definition.fields`'s
-  original order (stable, deterministic output).
+  zero or more `column_spec()`s per promoted attribute, in
+  `definition.fields`'s original order (stable, deterministic output) --
+  exactly one for every ordinary promoted type, and one per locale (REQ-301)
+  for a promoted `:localized_text` field.
 
-  A field is filtered on `field_type_to_pg_type/1` returning `{:ok, _}`,
-  not merely on `promotion_trigger/2`'s result -- this is the
-  defence-in-depth that keeps a `:json`-typed field excluded even if it is
-  somehow marked `queried: true` (Validator's Rule 3 bypassed, or relaxed
-  by a future change) or somehow appears as an `fk_def().field`.
+  A non-`:localized_text` field is filtered on `field_type_to_pg_type/1`
+  returning `{:ok, _}`, not merely on `promotion_trigger/2`'s result -- this
+  is the defence-in-depth that keeps a `:json`-typed field excluded even if
+  it is somehow marked `queried: true` (Validator's Rule 3 bypassed, or
+  relaxed by a future change) or somehow appears as an `fk_def().field`.
+  A `:localized_text` field dispatches to `localized_text_column_specs/1`
+  instead, which always returns `length(field.locales)` entries (never
+  zero, since Rule 10 already guarantees a non-empty `:locales` for any
+  `:localized_text` field that reaches this function).
   """
   @spec promoted_columns(Definition.t()) :: [column_spec()]
   def promoted_columns(definition) do
@@ -202,28 +222,32 @@ defmodule Letflow.Entities.Definition.DDL do
 
     definition
     |> Map.get(:fields, [])
+    |> Enum.filter(fn field -> promotion_trigger(field, fk_field_names) != :not_promoted end)
     |> Enum.flat_map(fn field ->
-      trigger = promotion_trigger(field, fk_field_names)
+      if Map.get(field, :type) == :localized_text do
+        localized_text_column_specs(field)
+      else
+        trigger = promotion_trigger(field, fk_field_names)
 
-      case {trigger, field_type_to_pg_type(field)} do
-        {:not_promoted, _pg_type_result} ->
-          []
+        case field_type_to_pg_type(field) do
+          :never_promoted ->
+            []
 
-        {_trigger, :never_promoted} ->
-          []
+          {:ok, mapped_pg_type} ->
+            name = Map.get(field, :name)
+            references_entity = Map.get(references_entity_by_field, name)
 
-        {trigger, {:ok, mapped_pg_type}} ->
-          name = Map.get(field, :name)
-          references_entity = Map.get(references_entity_by_field, name)
-
-          [
-            %{
-              name: name,
-              pg_type: fk_column_pg_type(trigger, mapped_pg_type),
-              nullable: true,
-              references_entity: references_entity
-            }
-          ]
+            [
+              %{
+                name: name,
+                pg_type: fk_column_pg_type(trigger, mapped_pg_type),
+                nullable: true,
+                references_entity: references_entity,
+                generated_as: nil,
+                source_field: nil
+              }
+            ]
+        end
       end
     end)
   end
@@ -259,9 +283,13 @@ defmodule Letflow.Entities.Definition.DDL do
   the field's optional `decimal_precision`/`decimal_scale`, and `:enum`'s
   depends on its `enum_values`.
 
-  Returns `:never_promoted` for `:json` -- the defence-in-depth measure
-  described in `promoted_columns/1`'s doc. Never raises on any of the 8
-  `field_type()` values.
+  Returns `:never_promoted` for `:json` and `:localized_text` -- the
+  defence-in-depth measure described in `promoted_columns/1`'s doc.
+  `:localized_text` always promotes via the N-column
+  `localized_text_column_specs/1` path instead (dispatched in
+  `promoted_columns/1` before this function is ever called for such a
+  field) -- this clause exists purely so this function stays exhaustive and
+  never raises. Never raises on any of the 9 `field_type()` values.
 
   Exposed publicly so REQ-297's own `column_spec` construction for a single
   later promotion (its own, separate `ALTER TABLE ADD COLUMN`) reuses the
@@ -278,7 +306,53 @@ defmodule Letflow.Entities.Definition.DDL do
       :datetime -> {:ok, "timestamp(6) without time zone"}
       :enum -> {:ok, "text"}
       :json -> :never_promoted
+      :localized_text -> :never_promoted
     end
+  end
+
+  @doc """
+  Given a `:localized_text` `field_def()` that has already passed
+  `Letflow.Entities.Definition.Validator.validate/1` (so `:locales` is a
+  non-empty, deduplicated, `^[a-z]{2,8}$`-validated list, and
+  `:search_strategy` is `:plain`, `:fulltext`, or absent-meaning-`:plain`),
+  returns one `column_spec()` per locale, in `:locales`'s declared order.
+
+  Per `docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md`
+  Sub-question 2: a `:plain` field (the default) promotes to one plain
+  `text` column per locale, extracted from the `field_values` blob with a
+  JSONB path-then-text-extract expression; a `:fulltext` field promotes to
+  one `tsvector` column per locale instead, built via
+  `to_tsvector('simple', ...)` (Postgres's always-available,
+  language-neutral text-search configuration -- no per-locale
+  dictionary/stemming policy is decided here or by `0025`).
+  """
+  @spec localized_text_column_specs(Definition.field_def()) :: [column_spec()]
+  def localized_text_column_specs(field) do
+    name = Map.get(field, :name)
+    search_strategy = Map.get(field, :search_strategy) || :plain
+
+    field
+    |> Map.get(:locales, [])
+    |> Enum.map(fn locale ->
+      %{
+        name: "#{name}_#{locale}",
+        pg_type: localized_text_pg_type(search_strategy),
+        nullable: true,
+        generated_as: localized_text_generated_expression(search_strategy, name, locale),
+        source_field: name
+      }
+    end)
+  end
+
+  defp localized_text_pg_type(:plain), do: "text"
+  defp localized_text_pg_type(:fulltext), do: "tsvector"
+
+  defp localized_text_generated_expression(:plain, name, locale) do
+    ~s{field_values->'#{name}'->>'#{locale}'}
+  end
+
+  defp localized_text_generated_expression(:fulltext, name, locale) do
+    ~s{to_tsvector('simple', coalesce(field_values->'#{name}'->>'#{locale}', ''))}
   end
 
   @doc """
@@ -356,6 +430,29 @@ defmodule Letflow.Entities.Definition.DDL do
       {:error, _reason} = error -> error
     end
   end
+
+  @doc """
+  Whether `value` matches one of the two known SQL-expression shapes
+  `localized_text_column_specs/1` ever emits into a `generated_as` field
+  (REQ-301) -- the `:plain` JSONB-extract form or the `:fulltext`
+  `to_tsvector(...)` form, each with `name`/`locale` constrained to the same
+  formats `Letflow.Entities.Definition.Validator` Rules 1/10 already
+  enforce.
+
+  This is `valid_identifier?/1`'s counterpart for a SQL *expression* rather
+  than a bare identifier: `Letflow.TenantProvisioning.execute_add_column/3`
+  calls this to re-validate a `ColumnPromotion` row's `generated_as` text
+  immediately before splicing it into `ALTER TABLE ... ADD COLUMN`, the same
+  defence-in-depth posture that function already applies to
+  `table_name`/`column_name`/`pg_type` -- closing the one interpolated value
+  that re-validation set previously left uncovered.
+  """
+  @spec valid_generated_as_expression?(String.t()) :: boolean()
+  def valid_generated_as_expression?(value) when is_binary(value) do
+    Regex.match?(@localized_text_generated_as_regex, value)
+  end
+
+  def valid_generated_as_expression?(_value), do: false
 
   # --- internal ---------------------------------------------------------------
 
@@ -440,22 +537,28 @@ defmodule Letflow.Entities.Definition.DDL do
          %{name: name, pg_type: pg_type, nullable: nullable} = column,
          fk_target_tables
        ) do
-    null_clause = if nullable, do: "", else: " NOT NULL"
-    default_clause = default_clause_for(column)
-    base = ~s("#{name}" #{pg_type}#{null_clause}#{default_clause})
-
-    case Map.get(column, :references_entity) do
+    case Map.get(column, :generated_as) do
       nil ->
-        {:ok, base}
+        null_clause = if nullable, do: "", else: " NOT NULL"
+        default_clause = default_clause_for(column)
+        base = ~s("#{name}" #{pg_type}#{null_clause}#{default_clause})
 
-      entity_type ->
-        case Map.fetch(fk_target_tables, entity_type) do
-          {:ok, target_table} ->
-            {:ok, base <> ~s| REFERENCES "#{target_table}"("record_id") ON DELETE RESTRICT|}
+        case Map.get(column, :references_entity) do
+          nil ->
+            {:ok, base}
 
-          :error ->
-            {:error, {:missing_fk_target_table, entity_type: entity_type}}
+          entity_type ->
+            case Map.fetch(fk_target_tables, entity_type) do
+              {:ok, target_table} ->
+                {:ok, base <> ~s| REFERENCES "#{target_table}"("record_id") ON DELETE RESTRICT|}
+
+              :error ->
+                {:error, {:missing_fk_target_table, entity_type: entity_type}}
+            end
         end
+
+      generated_as ->
+        {:ok, ~s{"#{name}" #{pg_type} GENERATED ALWAYS AS (#{generated_as}) STORED}}
     end
   end
 

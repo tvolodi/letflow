@@ -222,20 +222,18 @@ defmodule Letflow.Entities.Definition.DDL do
 
     definition
     |> Map.get(:fields, [])
+    |> Enum.filter(fn field -> promotion_trigger(field, fk_field_names) != :not_promoted end)
     |> Enum.flat_map(fn field ->
       if Map.get(field, :type) == :localized_text do
         localized_text_column_specs(field)
       else
         trigger = promotion_trigger(field, fk_field_names)
 
-        case {trigger, field_type_to_pg_type(field)} do
-          {:not_promoted, _pg_type_result} ->
+        case field_type_to_pg_type(field) do
+          :never_promoted ->
             []
 
-          {_trigger, :never_promoted} ->
-            []
-
-          {trigger, {:ok, mapped_pg_type}} ->
+          {:ok, mapped_pg_type} ->
             name = Map.get(field, :name)
             references_entity = Map.get(references_entity_by_field, name)
 

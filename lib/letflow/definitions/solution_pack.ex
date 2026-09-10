@@ -214,11 +214,20 @@ defmodule Letflow.Definitions.SolutionPack do
 
   @type role_checklist_entry :: %{role_name: String.t(), bound: boolean()}
 
+  @typedoc "One entity definition installed by `install/3` (REQ-305)."
+  @type installed_entity_definition :: %{
+          source_entity_definition_id: String.t(),
+          new_entity_definition_id: Ecto.UUID.t(),
+          name: String.t(),
+          status: String.t()
+        }
+
   @type install_result :: %{
           pack_id: String.t(),
           version: String.t(),
           install_id: Ecto.UUID.t(),
           installed_definitions: [installed_definition()],
+          installed_entity_definitions: [installed_entity_definition()],
           variable_schemas_written: non_neg_integer(),
           role_mapping_checklist: [role_checklist_entry()],
           warnings: [String.t()]
@@ -241,6 +250,7 @@ defmodule Letflow.Definitions.SolutionPack do
           | {:error, :duplicate_pack_install}
           | {:error, :missing_prefix}
           | Definitions.create_error()
+          | Letflow.Entities.Definitions.create_error()
           | Definitions.common_error()
 
   @default_pack_version "1.0.0"
@@ -483,8 +493,10 @@ defmodule Letflow.Definitions.SolutionPack do
          {:ok, raw_definitions} <- fetch_list(document, "definitions"),
          {:ok, raw_variable_schemas} <- fetch_list(document, "variable_schemas"),
          {:ok, raw_catalog} <- fetch_list(document, "service_catalog_entries"),
+         {:ok, raw_entity_definitions} <- fetch_list(document, "entity_definitions"),
          {:ok, definitions} <- parse_definitions(raw_definitions),
          {:ok, variable_schemas} <- parse_variable_schemas(raw_variable_schemas),
+         {:ok, entity_definitions} <- parse_entity_definitions(raw_entity_definitions),
          {:ok, required_roles} <- parse_required_roles(Map.get(document, "manifest")) do
       {:ok,
        %{
@@ -494,6 +506,7 @@ defmodule Letflow.Definitions.SolutionPack do
          definitions: definitions,
          variable_schemas: variable_schemas,
          service_catalog_entries: raw_catalog,
+         entity_definitions: entity_definitions,
          required_roles: required_roles
        }}
     end
@@ -546,6 +559,197 @@ defmodule Letflow.Definitions.SolutionPack do
   end
 
   defp parse_definition(_not_an_object), do: {:error, :invalid_pack_document}
+
+  # ── install/3 parsing -- entity_definitions (REQ-305, 0026) ──────────────
+
+  defp parse_entity_definitions(raw_entity_definitions) do
+    Enum.reduce_while(raw_entity_definitions, {:ok, []}, fn raw, {:ok, acc} ->
+      case parse_entity_definition(raw) do
+        {:ok, entity_definition} -> {:cont, {:ok, [entity_definition | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp parse_entity_definition(raw) when is_map(raw) and not is_struct(raw) do
+    with {:ok, entity_definition_id} <- fetch_string(raw, "entity_definition_id"),
+         {:ok, name} <- fetch_string(raw, "name"),
+         {:ok, display_name} <- fetch_string(raw, "display_name"),
+         {:ok, logical_shape_version} <- fetch_string(raw, "logical_shape_version"),
+         {:ok, raw_definition_json} <- fetch_object(raw, "definition_json"),
+         {:ok, definition_json} <- atomize_definition_json(raw_definition_json) do
+      {:ok,
+       %{
+         entity_definition_id: entity_definition_id,
+         name: name,
+         display_name: display_name,
+         definition_json: definition_json,
+         logical_shape_version: logical_shape_version
+       }}
+    end
+  end
+
+  defp parse_entity_definition(_not_an_object), do: {:error, :invalid_pack_document}
+
+  # Translates a string-keyed `definition_json` map (as it round-trips through
+  # a JSON decode, or through Ecto's `:map`/JSONB `entity_definitions.definition_json`
+  # column, which never atomizes on read) into the atom-keyed
+  # `Letflow.Entities.Definition.t()` shape `Letflow.Entities.Definition.Validator.validate/1`
+  # requires. Static whitelist translation only -- never
+  # `String.to_existing_atom/1` on caller-supplied text (INV-4/INV-8). Any key
+  # or closed-set enum value not in these whitelists is rejected outright,
+  # never silently dropped (0026 §4). Pure and total -- no query, never raises.
+  @top_level_keys %{
+    "name" => :name,
+    "display_name" => :display_name,
+    "description" => :description,
+    "fields" => :fields,
+    "indexes" => :indexes,
+    "foreign_keys" => :foreign_keys,
+    "constraints" => :constraints
+  }
+
+  @field_keys %{
+    "name" => :name,
+    "type" => :type,
+    "required" => :required,
+    "queried" => :queried,
+    "enum_values" => :enum_values,
+    "decimal_precision" => :decimal_precision,
+    "decimal_scale" => :decimal_scale,
+    "default" => :default,
+    "locales" => :locales,
+    "search_strategy" => :search_strategy
+  }
+
+  @field_types %{
+    "string" => :string,
+    "integer" => :integer,
+    "decimal" => :decimal,
+    "boolean" => :boolean,
+    "date" => :date,
+    "datetime" => :datetime,
+    "enum" => :enum,
+    "json" => :json,
+    "localized_text" => :localized_text
+  }
+
+  @search_strategies %{"plain" => :plain, "fulltext" => :fulltext}
+
+  @index_keys %{"name" => :name, "fields" => :fields, "unique" => :unique}
+
+  @fk_keys %{
+    "name" => :name,
+    "field" => :field,
+    "references_entity" => :references_entity,
+    "references_field" => :references_field
+  }
+
+  @constraint_keys %{"name" => :name, "type" => :type, "fields" => :fields}
+
+  @spec atomize_definition_json(map()) ::
+          {:ok, Letflow.Entities.Definition.t()} | {:error, :invalid_pack_document}
+  defp atomize_definition_json(raw) when is_map(raw) and not is_struct(raw) do
+    with {:ok, top} <- translate_keys(raw, @top_level_keys),
+         {:ok, top} <- translate_list_value(top, :fields, &translate_field/1),
+         {:ok, top} <- translate_list_value(top, :indexes, &translate_index/1),
+         {:ok, top} <- translate_list_value(top, :foreign_keys, &translate_fk/1),
+         {:ok, top} <- translate_list_value(top, :constraints, &translate_constraint/1) do
+      {:ok, top}
+    end
+  end
+
+  defp atomize_definition_json(_not_an_object), do: {:error, :invalid_pack_document}
+
+  # Translates every key in `raw` via `whitelist`, rejecting on the first
+  # unrecognized key. Non-map/non-binary-keyed input is not expected here --
+  # every call site already guarded its input as a map via `fetch_object/2`
+  # or an `Enum.all?(&is_map/1)`-style check upstream.
+  defp translate_keys(raw, whitelist) do
+    Enum.reduce_while(raw, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case Map.fetch(whitelist, key) do
+        {:ok, atom_key} -> {:cont, {:ok, Map.put(acc, atom_key, value)}}
+        :error -> {:halt, {:error, :invalid_pack_document}}
+      end
+    end)
+  end
+
+  # Applies `translator` to each entry of `top[list_key]`, if present, and
+  # replaces it with the translated list. Absent key is left untouched
+  # (optional list-valued keys, e.g. `:indexes`, may be legitimately absent).
+  defp translate_list_value(top, list_key, translator) do
+    case Map.fetch(top, list_key) do
+      :error ->
+        {:ok, top}
+
+      {:ok, entries} when is_list(entries) ->
+        Enum.reduce_while(entries, {:ok, []}, fn entry, {:ok, acc} ->
+          case translator.(entry) do
+            {:ok, translated} -> {:cont, {:ok, [translated | acc]}}
+            {:error, _reason} = error -> {:halt, error}
+          end
+        end)
+        |> case do
+          {:ok, acc} -> {:ok, Map.put(top, list_key, Enum.reverse(acc))}
+          {:error, _reason} = error -> error
+        end
+
+      {:ok, _not_a_list} ->
+        {:error, :invalid_pack_document}
+    end
+  end
+
+  defp translate_field(raw) when is_map(raw) and not is_struct(raw) do
+    with {:ok, field} <- translate_keys(raw, @field_keys),
+         {:ok, field} <- translate_enum_value(field, :type, @field_types),
+         {:ok, field} <- translate_enum_value(field, :search_strategy, @search_strategies) do
+      {:ok, field}
+    end
+  end
+
+  defp translate_field(_not_an_object), do: {:error, :invalid_pack_document}
+
+  defp translate_index(raw) when is_map(raw) and not is_struct(raw),
+    do: translate_keys(raw, @index_keys)
+
+  defp translate_index(_not_an_object), do: {:error, :invalid_pack_document}
+
+  defp translate_fk(raw) when is_map(raw) and not is_struct(raw),
+    do: translate_keys(raw, @fk_keys)
+
+  defp translate_fk(_not_an_object), do: {:error, :invalid_pack_document}
+
+  defp translate_constraint(raw) when is_map(raw) and not is_struct(raw) do
+    with {:ok, constraint} <- translate_keys(raw, @constraint_keys) do
+      case Map.fetch(constraint, :type) do
+        {:ok, "unique"} -> {:ok, Map.put(constraint, :type, :unique)}
+        :error -> {:ok, constraint}
+        {:ok, _other} -> {:error, :invalid_pack_document}
+      end
+    end
+  end
+
+  defp translate_constraint(_not_an_object), do: {:error, :invalid_pack_document}
+
+  # Translates `map[atom_key]`'s closed-set string value via `whitelist`, if
+  # the key is present. Absent key is left untouched (e.g. `search_strategy`
+  # is optional).
+  defp translate_enum_value(map, atom_key, whitelist) do
+    case Map.fetch(map, atom_key) do
+      :error ->
+        {:ok, map}
+
+      {:ok, value} ->
+        case Map.fetch(whitelist, value) do
+          {:ok, translated} -> {:ok, Map.put(map, atom_key, translated)}
+          :error -> {:error, :invalid_pack_document}
+        end
+    end
+  end
 
   defp fetch_object(map, key) do
     case Map.get(map, key) do
@@ -614,6 +818,18 @@ defmodule Letflow.Definitions.SolutionPack do
   # see this module's moduledoc "service_catalog_entries" bullet. REQ-192
   # is named as the owning follow-up for deciding the install-time
   # visibility policy a packed entry would need.
+  # NOTE (ELIXIR-DEV, REQ-305): the design doc's §3 literally specifies a
+  # joint `%{service_catalog_entries: [], entity_definitions: []}` passing
+  # clause -- i.e. requiring entity_definitions to ALSO be empty. Implemented
+  # literally that would make `entity_definitions` un-installable through
+  # `install/3` forever (this clause runs before `run_install/5`, so
+  # `create_packed_entity_definitions/3`, §4, would be permanently
+  # unreachable), directly contradicting AC1 and the design doc's own §4.
+  # `entity_definitions` is a newly *supported* section (that is this whole
+  # requirement's point), not an unsupported one like
+  # `service_catalog_entries` still is -- so only the latter gates here.
+  # Flagged for REVIEWER/CODE-DESIGNER: the design doc's §3 prose needs
+  # correcting.
   defp check_unsupported_sections(%{service_catalog_entries: []}), do: :ok
   defp check_unsupported_sections(_parsed), do: {:error, :unsupported_pack_section}
 
@@ -672,12 +888,15 @@ defmodule Letflow.Definitions.SolutionPack do
     Repo.transaction(fn ->
       with {:ok, install} <- insert_install_row(parsed, tenant_id),
            {:ok, installed} <- create_packed_definitions(parsed.definitions, actor_id, opts),
+           {:ok, installed_entities} <-
+             create_packed_entity_definitions(parsed.entity_definitions, actor_id, opts),
            {:ok, written, warnings} <- register_packed_schemas(installed, decoded_schemas, opts) do
         %{
           pack_id: parsed.pack_id,
           version: parsed.version,
           install_id: install.id,
           installed_definitions: installed_definition_maps(installed),
+          installed_entity_definitions: installed_entity_definition_maps(installed_entities),
           variable_schemas_written: written,
           role_mapping_checklist: role_mapping_checklist(parsed.required_roles),
           warnings: warnings
@@ -742,6 +961,32 @@ defmodule Letflow.Definitions.SolutionPack do
     end
   end
 
+  # Every entity definition lands in the caller's own schema via
+  # `opts[:prefix]` and nowhere else -- no `tenant_id`, `schema_name`, or
+  # `slug` parameter appears anywhere in this helper (INV-1). `:inactive`-only
+  # (0026 §2): no `Letflow.Entities.Definitions.activate_definition/4` call
+  # anywhere -- `create_definition/2` already defaults every inserted row to
+  # `status: :inactive`. All-or-nothing: the first failure aborts, halting
+  # this reduce and flowing into `run_install/5`'s single shared
+  # `with`/`else` -> `Repo.rollback/1` path (no new rollback path).
+  defp create_packed_entity_definitions(packed_entity_definitions, actor_id, opts) do
+    Enum.reduce_while(packed_entity_definitions, {:ok, []}, fn packed, {:ok, acc} ->
+      create_attrs = %{definition: packed.definition_json, created_by: actor_id}
+
+      case Letflow.Entities.Definitions.create_definition(create_attrs, prefix(opts)) do
+        {:ok, %EntityDefinition{} = created} ->
+          {:cont, {:ok, [{packed, created} | acc]}}
+
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
   # Step 7 -- the ONLY write into `variable_schemas`, and it goes through
   # Letflow.Definitions.register_variable_schemas/3, the single shared insert
   # path REQ-082's import also calls. This module adds no second one.
@@ -789,6 +1034,17 @@ defmodule Letflow.Definitions.SolutionPack do
         source_definition_id: packed.definition_id,
         new_definition_id: created.id,
         process_key: created.name,
+        status: "installed"
+      }
+    end)
+  end
+
+  defp installed_entity_definition_maps(installed_entities) do
+    Enum.map(installed_entities, fn {packed, created} ->
+      %{
+        source_entity_definition_id: packed.entity_definition_id,
+        new_entity_definition_id: created.id,
+        name: created.name,
         status: "installed"
       }
     end)

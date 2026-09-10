@@ -1,0 +1,101 @@
+run_id: WF02-REQ306-20260910
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-11T00:00:00Z"
+branch: feature/WF02-REQ306-20260910
+head_commit: 3d0b4d23
+
+git_state:
+  clean_tree: true
+  note: >
+    Working tree clean at run time. REQ-306 added new test coverage to
+    test/letflow/definitions/solution_pack_test.exs for REQ-304/REQ-305's
+    entity_definitions pack export/install feature. Test-only change, no lib/
+    files touched. Already passed TEST-DESIGN-VALIDATOR.
+  diff_scope: "test/letflow/definitions/solution_pack_test.exs only (per briefing, test-only change)."
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op). No .env LETFLOW_DB_PORT override present; default port 5462 in effect."
+  additional_checks:
+    - check: "mix compile --warnings-as-errors"
+      result: "PASS -- clean compile, zero output, zero warnings."
+    - check: "mix format --check-formatted"
+      result: "PASS -- clean, zero output, nothing unformatted."
+
+backend_suite:
+  command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+  partitions: 8
+  result: PASS (1 of 3726 tests failing, matches a known pre-existing flake)
+  output: |
+    test_parallel: N=8 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 8 per-partition build paths from _build/test (sequential)
+    partition 1: 475 tests, 0 properties, 0 failures, exit 0
+    partition 2: 402 tests, 0 properties, 1 failures, exit 2
+    partition 3: 479 tests, 1 property, 0 failures, exit 0
+    partition 4: 473 tests, 0 properties, 0 failures, exit 0
+    partition 5: 673 tests, 0 properties, 0 failures, exit 0
+    partition 6: 380 tests, 2 properties, 0 failures, exit 0
+    partition 7: 464 tests, 0 properties, 0 failures, exit 0
+    partition 8: 374 tests, 3 properties, 0 failures, exit 0
+    ---
+    combined: 3720 tests, 6 properties, 1 failures (3725/3726 passed)
+  failures:
+    - test: "test AC1 -- DDL applied to every tenant, verified directly against Postgres register_column_promotion/4 with :all + run_column_promotion/1 lands the column in both tenant schemas"
+      module: "Letflow.TenantProvisioning.ColumnPromotionTest"
+      file: "test/letflow/tenant_provisioning/column_promotion_test.exs:154"
+      assertion_output: |
+        match (=) failed
+        code:  assert {:ok, rows} =
+                 TenantProvisioning.register_column_promotion(
+                   "invoice",
+                   "amount",
+                   %{pg_type: "text", nullable: true},
+                   :all
+                 )
+        left:  {:ok, rows}
+        right: {:error,
+                #Ecto.Changeset<
+                  action: :insert,
+                  changes: %{status: "pending", attribute: "amount",
+                    tenant_id: "77a5d826-1071-4906-a9fa-faab1dcd0117",
+                    entity_type: "invoice", column_name: "amount",
+                    pg_type: "text", query_eligible: false},
+                  errors: [tenant_id: {"has already been taken",
+                    [constraint: :unique,
+                     constraint_name: "entity_column_promotions_tenant_id_entity_type_attribute_idx"]}],
+                  valid?: false, ...>}
+      attribution:
+        route: "known pre-existing flake, named explicitly in this run's briefing (ISS-0580, unique-constraint race)"
+        evidence: >
+          Module/file is unrelated to this branch's sole diff
+          (test/letflow/definitions/solution_pack_test.exs). Signature (unique-constraint
+          "has already been taken" on entity_column_promotions(tenant_id,
+          entity_type, attribute)) matches the ISS-0580 pattern named in the
+          briefing exactly.
+        conclusion: "Pre-existing, already-known flake (ISS-0580). Not a regression from REQ-306."
+
+req306_specific_checks:
+  - check: "Any failure in solution_pack_test.exs or other entities-related tests"
+    result: "NONE. All solution_pack_test.exs tests passed across whichever partition ran them."
+  - check: "Other known flakes named in briefing (Letflow.Scheduler.PollerTest REQ-218 AC3 / ISS-0453, Letflow.Api.ContextTest scoped_repo_opts/1 race, Letflow.EngineTest idempotency-key edge case)"
+    result: "None of these appeared in this run."
+
+verdict: PASS
+verdict_reasoning: >
+  3725/3726 tests passed (6 properties, 8 partitions at TEST_PARALLEL_N=8, single
+  clean run, no retry needed). The one failure
+  (Letflow.TenantProvisioning.ColumnPromotionTest AC1) is the exact known
+  pre-existing flake (ISS-0580, unique-constraint race) called out in this run's
+  own briefing as a non-blocker, and is structurally unrelated to REQ-306's sole
+  changed file (test/letflow/definitions/solution_pack_test.exs) -- it lives in
+  test/letflow/tenant_provisioning/, exercises TenantProvisioning.ColumnPromotion,
+  and touches entity_column_promotions, none of which REQ-306 touches. No new
+  failures, and nothing in solution_pack_test.exs failed. mix compile
+  --warnings-as-errors and mix format --check-formatted both passed clean with
+  zero output.
+next_action: >
+  No action needed for REQ-306. Report PASS to ORCH; proceed to
+  RELEASE-VALIDATOR, which re-runs the suite independently rather than trusting
+  this report.

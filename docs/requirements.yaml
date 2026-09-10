@@ -17251,7 +17251,10 @@ requirements:
   - id: REQ-292
     title: Server-side re-evaluation of visible_when, computed and cross-field validation on task completion (0020 D1a step 11, the authority half)
     owner: ELIXIR-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-291 (queue task 561) landed 2026-09-09; REQ-290 is still pending, and this entry's own depends_on: [REQ-286, REQ-290, REQ-291] makes it unstartable until it lands too. Now safe to scope directly to REQ-290 (previously avoided to prevent a cycle, since REQ-290's own deferral pointed back at this entry) -- REQ-290's deferral has been re-scoped to REQ-289 (now registered as queue task 544), so the chain is REQ-292 -> REQ-290 -> REQ-289, no cycle
+    impl_order: 579  # letflow-queue task id, GH#1187. Registered 2026-09-10 by ORCH
+      # once REQ-286 (queue task 556), REQ-290 (queue task 572) and REQ-291
+      # (queue task 561) all landed done -- no live blocker left. depends_on
+      # translated to queue task ids [556, 572, 561].
     status: pending
     stage: S8
     description: >
@@ -17335,7 +17338,7 @@ requirements:
   - id: REQ-293
     title: TypeScript evaluator for the Expr grammar, passing the conformance corpus, wired into DynamicFormRenderer (0020 D1a step 10)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-284 (queue task 560) landed 2026-09-09; REQ-290 and REQ-292 are still pending, and this entry's own depends_on: [REQ-284, REQ-290, REQ-292] makes it unstartable until all three land, so the deferral re-scopes to the next live blocker rather than expiring
+    # impl_order: UNREGISTERED -- blocked-by: REQ-292 -- REQ-284 (queue task 560) and REQ-290 (queue task 572) both landed done 2026-09-10; REQ-292 (queue task 579) is still pending, and this entry's own depends_on: [REQ-284, REQ-290, REQ-292] makes it unstartable until REQ-292 also lands, so the deferral re-scopes to that next live blocker rather than expiring
     status: pending
     stage: S8
     description: >
@@ -17457,7 +17460,7 @@ requirements:
   - id: REQ-294
     title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
     owner: MOBILE-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-290 -- REQ-290 is still pending; record 0020's sequencing makes this entry unstartable until it lands
+    # impl_order: UNREGISTERED -- blocked-by: REQ-292 -- REQ-290 (queue task 572) landed done 2026-09-10; this entry's own depends_on: [REQ-290, REQ-292, REQ-293] makes it unstartable until REQ-292 and REQ-293 also land, so the deferral re-scopes to REQ-292, the earliest still-pending link in that chain (REQ-293 itself depends_on REQ-292, so REQ-292 is the true bottleneck). MOBILE-DEV remains dormant per CLAUDE.md's roster regardless of this hatch's own expiry -- nothing routes to this entry until S9's backend gaps close and apps/mobile/ exists, independent of this mechanical staleness check
     status: pending
     stage: S9
     description: >

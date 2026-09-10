@@ -28,6 +28,7 @@ defmodule Letflow.Entities.Query.Allowlist do
   """
 
   alias Letflow.Entities.Definition
+  alias Letflow.Entities.Definition.DDL
   alias Letflow.Entities.Definitions
   alias Letflow.TenantProvisioning
 
@@ -52,6 +53,30 @@ defmodule Letflow.Entities.Query.Allowlist do
   @typedoc "`resolve_field/2`'s field-not-allowed error (design §3.5, AC2)."
   @type field_not_allowed_error :: {:error, {:field_not_allowed, String.t()}}
 
+  @typedoc """
+  Enough of `Definition.field_def()` for `DDL.promoted_columns/1` and this
+  module's own type lookup (design §1.4). Private -- feeds
+  `DDL.promoted_columns/1` only, never returned to any caller.
+  """
+  @type decoded_field_def :: %{
+          name: String.t(),
+          type: Definition.field_type(),
+          queried: boolean(),
+          enum_values: [String.t()] | nil
+        }
+
+  @typedoc """
+  Enough of `Definition.fk_def()` for `DDL.promoted_columns/1`'s
+  `fk_field_names` computation (design §1.4). Private.
+  """
+  @type decoded_fk_def :: %{field: String.t()}
+
+  @typedoc "The `DDL.promoted_columns/1`-compatible decoded shape (design §1.4)."
+  @type definition_document :: %{
+          required(:fields) => [decoded_field_def()],
+          required(:foreign_keys) => [decoded_fk_def()]
+        }
+
   @doc """
   The fixed typed-column table (design §3.3 step 4's first pass, §3.4) --
   every entry present on **every** entity type's allowlist, since these
@@ -70,6 +95,38 @@ defmodule Letflow.Entities.Query.Allowlist do
       "inserted_at" => {:inserted_at, :datetime},
       "updated_at" => {:updated_at, :datetime}
     }
+  end
+
+  @doc """
+  The per-entity-type typed-column table (design §1.2, AC1): the union of
+  `typed_columns/0`'s fixed 7 structural columns and every attribute
+  `Letflow.Entities.Definition.DDL.promoted_columns/1` reports as promoted
+  for `entity_type`'s current active definition in the tenant schema named
+  by `prefix`. Name -> `Definition.field_type()` only, deliberately with no
+  column atom (design §5.3) -- nothing in this module's scope fabricates a
+  column reference for a promoted attribute; that remains
+  `typed_columns/0`'s exclusive, unchanged responsibility. **Additive and
+  currently uncalled by `load/2`** (design §1.5, REWORK ITERATION 1) --
+  wiring this into `load/2`'s output is REQ-300's job, not this
+  requirement's.
+
+    1. Validate `prefix` resolves to a provisioned tenant schema --
+       `{:error, :invalid_schema_name}` before any query.
+    2. `Letflow.Entities.Definitions.get_active_definition_by_name/2` --
+       `{:error, :not_found}` remapped to `{:error, :entity_type_not_found}`.
+    3. Decode into `DDL.promoted_columns/1`'s expected shape
+       (`definition_document/1`) and compute the union
+       (`entity_type_typed_columns/1`).
+  """
+  @spec typed_columns(entity_type :: String.t(), prefix :: String.t()) ::
+          {:ok, %{String.t() => Definition.field_type()}}
+          | {:error, :invalid_schema_name}
+          | {:error, :entity_type_not_found}
+  def typed_columns(entity_type, prefix) when is_binary(entity_type) and is_binary(prefix) do
+    with {:ok, _tenant_id} <- TenantProvisioning.tenant_id_for_schema_name(prefix),
+         {:ok, entity_definition} <- fetch_active_definition(entity_type, prefix) do
+      {:ok, entity_type_typed_columns(definition_document(entity_definition))}
+    end
   end
 
   @doc """
@@ -171,5 +228,51 @@ defmodule Letflow.Entities.Query.Allowlist do
       queried: Map.get(field, "queried", false),
       enum_values: Map.get(field, "enum_values")
     }
+  end
+
+  # Decodes `entity_definition.definition_json` into the shape
+  # `DDL.promoted_columns/1` expects (design §1.4) -- `field_document/1`'s
+  # per-field decode, reused, plus `"foreign_keys"` -> `decoded_fk_def()`,
+  # which neither `field_document/1` nor `Records.definition_document/1`
+  # decode today. Defaults to `[]` when `"foreign_keys"` is absent (an
+  # entity type with no relationships). Feeds `typed_columns/2` only --
+  # `load/2` does not call this (design §1.5, REWORK ITERATION 1).
+  @spec definition_document(entity_definition :: struct()) :: definition_document()
+  defp definition_document(entity_definition) do
+    fields =
+      entity_definition.definition_json
+      |> Map.get("fields", [])
+      |> Enum.map(&field_document/1)
+
+    foreign_keys =
+      entity_definition.definition_json
+      |> Map.get("foreign_keys", [])
+      |> Enum.map(fn fk -> %{field: Map.fetch!(fk, "field")} end)
+
+    %{fields: fields, foreign_keys: foreign_keys}
+  end
+
+  # Structural 7 (from `typed_columns/0`, type half only) union the promoted
+  # set `DDL.promoted_columns/1` reports for `document` (design §1.3, INV-B).
+  # Structural entries win on any name collision -- consistent with, not a
+  # change to, the existing shadowing-precedence rule. Feeds `typed_columns/2`
+  # only -- `load/2` does not call this (design §1.5, REWORK ITERATION 1).
+  @spec entity_type_typed_columns(definition_document()) :: %{
+          String.t() => Definition.field_type()
+        }
+  defp entity_type_typed_columns(document) do
+    structural = Map.new(typed_columns(), fn {name, {_atom, type}} -> {name, type} end)
+
+    fields_by_name = Map.new(document.fields, &{&1.name, &1})
+
+    promoted =
+      document
+      |> DDL.promoted_columns()
+      |> Map.new(fn %{name: name} ->
+        field = Map.fetch!(fields_by_name, name)
+        {name, field.type}
+      end)
+
+    Map.merge(promoted, structural)
   end
 end

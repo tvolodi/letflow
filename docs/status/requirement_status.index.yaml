@@ -2588,8 +2588,18 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 12
+    entries: 13
     note: >
+      Recounted to 13 on WF02-REQ306-20260910's own Step Final rebase onto
+      main, composing this branch's own REQ-306 done-event append
+      (Step 6, DOC-UPDATER, independently computed as 12 against a stale
+      base of 11) with main's own ISS-0580 SCOPE-CHANGE done-event, already
+      folded into the on-disk file by the prior conflict resolution above
+      -- `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 13
+      on-disk entries; 666 lines / 40055 bytes, well under the roll
+      ceiling, so no roll triggered. Recounted directly from the composed
+      file rather than carrying forward either side's independently-
+      computed 12, per this note's own recount-every-time rule.
       Recounted to 12 on WF02-REQ306-20260910's own Step Final rebase onto
       main, composing this branch's own REQ-306 started-event append
       (independently computed as 11, against a stale

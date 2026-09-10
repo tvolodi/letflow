@@ -1,0 +1,31 @@
+id: ISS-0582
+title: packed_entity_definition/1 embeds non-UTF8-safe raw SHA-256 digest into pack document, breaking Jason.encode!/1
+discovered_by: TEST-DESIGNER
+discovered_in_run: WF02-REQ306-20260910
+discovered_at: "2026-09-10T19:15:00Z"
+severity: MINOR
+description: >
+  TEST-DESIGNER (WF02-REQ306-20260910), while writing round-trip test
+  coverage for SolutionPack entity_definitions export/install (REQ-304's
+  export side, REQ-305's install side), found that
+  lib/letflow/definitions/solution_pack.ex's packed_entity_definition/1
+  embeds Letflow.Entities.EntityDefinition.logical_shape_version verbatim
+  into the pack document -- but logical_shape_version is a raw
+  (non-UTF-8-safe) SHA-256 digest, not a hex-encoded string. A real
+  Jason.encode!/1 round trip on any real entity definition pack raises
+  Jason.EncodeError, since the module's own moduledoc describes the
+  pack_document as "the raw decoded JSON body" -- i.e. it is expected to
+  actually serialize to/from JSON, which this field currently cannot do.
+
+  Reproduced directly while writing the REQ-306 round-trip test; worked
+  around in the test itself with a non-Jason stringify_keys/1 helper so
+  the test could still exercise the real code paths, but the underlying
+  defect in solution_pack.ex is real and unfixed. Likely fix: hex-encode
+  (or Base64-encode) logical_shape_version when packing, and decode on
+  install, or store/compare a hex-encoded form throughout rather than the
+  raw digest bytes.
+affected_files:
+  - lib/letflow/definitions/solution_pack.ex
+queue_ref: Q-582
+github_ref: GH-1196
+status: open

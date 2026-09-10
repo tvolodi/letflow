@@ -2588,8 +2588,19 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 10
+    entries: 11
     note: >
+      Recounted to 11 on ORCH's fix/ISS-0580-20260910 rebase onto main,
+      composing this branch's own ISS-0580 SCOPE-CHANGE done-event
+      (independently computed as 9, against a stale base of 8) with main's
+      REQ-305 started+done event pair (independently computed as 10),
+      chronologically interleaved into docs/status/requirement_status.v13.yaml
+      (REQ-305 started 17:26:51Z, REQ-305 done 18:38:37Z, ISS-0580 done
+      18:42:49Z). Recounted directly from the composed file (`grep -c
+      "^  - req:" docs/status/requirement_status.v13.yaml` = 11 on-disk
+      entries; 595 lines / 35086 bytes, well under the roll ceiling) rather
+      than carrying forward either side's independently-computed 9/10, per
+      this note's own recount-every-time rule.
       Incremented to 10 by WF02-REQ305-20260910 (DOC-UPDATER)'s own REQ-305
       done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v13.yaml` = 10 on-disk entries; 558
@@ -2600,6 +2611,10 @@ volumes:
       docs/status/requirement_status.v13.yaml` = 9 on-disk entries; 480
       lines / 28150 bytes, well under the 1200-line/120000-byte roll
       ceiling, so no roll triggered.
+      Recounted to 9 on ORCH's fix/ISS-0580-20260910 rebase onto main,
+      appending this branch's own ISS-0580 SCOPE-CHANGE done-event on top of
+      main's already-composed 8 entries (`grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 9 on-disk entries).
       Recounted to 8 on WF03-ISS0581-20260910's own Step Final rebase onto
       main, composing this branch's own SCOPE-CHANGE started+done event
       pair for ISS-0581 with main's own ISS-0578 SCOPE-CHANGE done-event,

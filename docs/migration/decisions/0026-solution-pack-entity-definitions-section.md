@@ -523,15 +523,134 @@ does not substitute for that later review.
 
 ## REVIEWER sign-off
 
-**Verdict: (unfilled — REVIEWER to complete).**
+**Verdict: PASS (2026-09-10, `REVIEWER`, REQ-303).**
 
-Scope: idiom/decision-record consistency review — confirm this record's
-format matches 0022's/0023's/0024's/0025's own Question/Decision/Reasoning/
-Consequences/What this record does not decide/sign-off shape; confirm the
-independence claim from 0023/REQ-295..302 is stated correctly and does not
-manufacture an unwarranted consistency obligation against those records
-(0023 never mentions `entity_definitions`); confirm the companion design
-doc contains no implementation code, only signatures/types per
-CODE-DESIGNER's own scope fence; confirm `git diff --name-only` shows only
-this decision record and the companion design doc touched, per the
-requirement's scope fence.
+**1. Format matches the established shape.** `## Question` / `## Decision`
+/ `## Reasoning` / `## Consequences` / `## What this record does not
+decide` / `## SECURITY-REVIEWER sign-off` / `## REVIEWER sign-off` appear
+in that order, matching 0024's and 0025's section headers exactly (both
+verified directly — `grep -n '^##'` against
+`0024-entity-promotion-ddl-execution.md` and
+`0025-promoted-fk-ondelete-and-localized-text-search-strategy.md`). 0022
+and 0023 predate the split into a separate `SECURITY-REVIEWER sign-off`
+section and carry only `REVIEWER sign-off`; 0026 correctly follows the
+newer two-section convention 0024/0025 established, not the older one.
+The extra `## Independence from 0023...` and `## Re-verification
+performed` sections are additive, sit before `## Question`, and do not
+displace or rename any required section — no format defect.
+
+**2. Independence statement re-checked against 0023's own text, not just
+0026's characterization of it.** Re-read 0023 in full (again, independently
+of 0026's summary): 0023's `## Question` frames its subject as
+`entity_record_latest`'s indexing/join limitations; its `## Decision` and
+`## Consequences` sections talk about per-entity-type tables, promoted
+columns, and `constraint_def` activation. **0023 never mentions
+`SolutionPack`, `pack_document`, or any pack section anywhere in its
+text.** 0026's claim that "0023 never mentions `entity_definitions`" is
+accurate, and stronger than that — 0023 never mentions the pack-delivery
+concern at all, in either direction. There is no place in 0023's own
+`## What this record does not decide` or `## Consequences` where a pack
+section is implied to be in scope, so 0026's independence framing does not
+contradict 0023 and does not manufacture an obligation 0023 never took on.
+0022's REVIEWER-sign-off amendment is the one place gap 13 (this
+requirement's subject) is actually named, and it names it as a separate
+gap from 10/11, which 0026 is consistent with.
+
+**3. 0024/0025 correctly kept as optional context, not prerequisites.**
+`## Independence...` states `depends_on` is `[]` and calls 0024/0025
+"optional context... never a dependency," and the record does not, at any
+point in `## Decision`, `## Reasoning`, or `## Consequences`, gate any of
+its five answers on either record's content — each answer is derived from
+`solution_pack.ex`, `entities/definitions.ex`, and `entity_definition.ex`
+directly (see the `## Re-verification performed` citations), not from
+0024/0025's DDL-execution or `ON DELETE` mechanisms. This matches the
+task's instruction that 0024/0025 having since landed does not change
+their status here — reading them for format precedent (sign-off section
+shape) is the only use made of them, consistent with the stated stance.
+
+**4. All five numbered questions answered with concrete mechanisms.**
+§1 (schema versioning: `bpm_export_schema_version` unchanged, old-pack/
+new-installer via `fetch_list/2`'s existing default, new-pack/old-installer
+via extending `parse_document/1` so `check_unsupported_sections/1` has
+something to reject) — concrete. §2 (install semantics: `:inactive`-only,
+no `activate_definition/4` call; collision aborts the whole transaction,
+keyed on `(tenant_id, name, logical_shape_version)` specifically, with the
+same-name-different-shape-version non-collision case called out) —
+concrete. §3 (form-schema: traced to `attributes["form_schema"]` on a
+`:HUMAN_TASK` node inside `graph`, already carried verbatim by
+`pack_definition/1`/`parse_definition/1`, no new section) — concrete and
+falsifiable against the cited line numbers, which I spot-checked (see
+below). §4 (`service_catalog_entries` precedent: same reject-until-
+supported joint check, with the REQ-304/REQ-305 interim window named and
+assigned) — concrete. §5 (INV-1: no new caller-supplied tenant identifier)
+— present, and consistent with the rest of the record; I did not
+re-derive it in depth per this task's own instruction, only confirmed the
+SECURITY-REVIEWER section is filled, addresses INV-1 by name, and does not
+contradict §1–§4 above (its point 4, on the collision constraint's leading
+`tenant_id` column, agrees with §2's own citation of the same migration
+line range).
+
+I spot-checked two of the record's own citations directly rather than
+taking them on trust: `solution_pack.ex`'s `check_unsupported_sections/1`
+does reject any non-empty, unrecognized `parsed` content
+(`service_catalog_entries: []` is the only passing clause today), and
+`entities/definitions.ex`'s `create_definition/2` does hard-code
+`status: :inactive` with no activation path in the same function. Both
+match the record's claims.
+
+**5. 0024/0025 not cited as blocking prerequisites — confirmed.** Neither
+appears in `## Decision`, `## Reasoning`, or the "does not decide" section
+as something REQ-304/REQ-305 must wait on; the one dependency actually
+stated is intra-record (REQ-305 must land the parse/reject extension
+before or atomically with its own create-path logic) and is not phrased
+as a wait on 0024/0025.
+
+**6. Companion design doc — signatures/types only, no implementation.**
+Read `lib/letflow/design/req303-solution-pack-entity-definitions.md` in
+full. Every code block is a `@typedoc`/`@type`/`@spec` declaration or a
+type-shape comment (`# parsed_packed_entity_definition() :: ...`, marked
+as a comment specifically because it has no `@type` outside the module,
+matching `parse_definition/1`'s own undeclared-return-shape precedent).
+Behavior is described in prose ("Calls ... once per ... via
+`Enum.reduce_while`, same shape as `create_packed_definitions/3`") rather
+than as executable clauses — no `def`, no `case`, no pattern-matched
+function head, no pipeline anywhere in the file. This matches
+CODE-DESIGNER's own scope fence and 0026 §"What this record does not
+decide" ("Implementation... REQ-304 and REQ-305 build against the
+companion design doc").
+
+**7. Install-side collision handling (abort the whole transaction) does
+not reopen or contradict any other record's transactional stance.**
+0026 §2 derives this directly from `SolutionPack.install/3`'s own
+documented all-or-nothing behavior (quoted from the moduledoc) — it is
+describing existing, shipped transactional semantics for the pack
+installer as a whole, not introducing a new one. Checked this against
+0023's per-entity-type-tables design (transactions are per-tenant-schema
+DDL, orthogonal to `install/3`'s runtime transaction) and against 0024's
+partial-failure semantics (0024 governs a promotion migration's own
+per-tenant retry/rollback state machine for DDL execution, a different
+transaction entirely from a pack install's `Repo.transaction/1` call) —
+neither record makes any claim about `SolutionPack.install/3`'s
+transactional granularity, so there is nothing for 0026 to reopen. No
+conflict found.
+
+**8. Scope fence — confirmed via `git diff --stat main...HEAD`.** Exactly
+three files touched: `docs/migration/decisions/0026-solution-pack-entity-
+definitions-section.md`, `lib/letflow/design/req303-solution-pack-entity-
+definitions.md`, and `docs/requirements.yaml` (a one-line `status:
+pending` → `status: in_progress` change on REQ-303's own entry — pure
+status bookkeeping, no requirement text altered). No file under
+`lib/letflow/definitions/solution_pack.ex`, `lib/letflow/entities/`,
+`priv/repo/migrations/`, or any test path appears in the diff.
+
+**9. No literal implementation code in either document.** Confirmed for
+the design doc under point 6 above. The decision record itself quotes
+short existing-code fragments only as evidence during re-verification
+(e.g. `%{service_catalog_entries: []} -> :ok`, quoted to describe code
+that already exists on this branch) and the moduledoc sentence it cites
+verbatim for the all-or-nothing stance — neither is new code the record is
+proposing; both are citations of what is already shipped, correctly
+attributed to file:line.
+
+**No defects found.** This gate PASSes. REQ-304 and REQ-305 may build
+against 0026 and its companion design doc as written.

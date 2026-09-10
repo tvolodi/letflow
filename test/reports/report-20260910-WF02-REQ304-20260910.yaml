@@ -1,0 +1,173 @@
+run_id: WF02-REQ304-20260910
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-10T13:45:35Z"
+branch: feature/WF02-REQ304-20260910
+head_commit: e7c54510
+
+git_state:
+  clean_tree: true
+  note: >
+    Working tree clean at run time; branch is 3 commits ahead of
+    origin/feature/WF02-REQ304-20260910 (not yet pushed).
+  recent_commits:
+    - e7c54510 "REQ-304: test design -- entity_definitions export spec + coverage"
+    - c0ef4dbd "REQ-304: commit design doc; fix requirement_status.index.yaml A9 drift"
+    - 3e27f93e "REQ-304: add entity_definitions section to SolutionPack export"
+    - 0d8121af "WF02-REQ304-20260910 Step 00: git setup + started event"
+    - b5f1db42 "feat: CI guard against Expr/corpus drift + version marker [WF02-REQ290-20260910] (#1188)"
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v13.yaml
+    - lib/letflow/definitions/solution_pack.ex
+    - lib/letflow/design/req304-solution-pack-entity-definitions-export.md
+    - test/letflow/definitions/solution_pack_test.exs
+    - test/specs/REQ-304.md
+  note: >
+    Matches REQ-304 scope: entity_definitions export added to
+    Letflow.Definitions.SolutionPack, its design doc, test spec, and test code,
+    plus this run's own status/requirements bookkeeping.
+
+environment:
+  docker_compose: "letflow-postgres-1 (port 5462) and letflow-keycloak-1 already running (docker compose up -d, no-op); no .env LETFLOW_DB_PORT override present."
+  orphan_process_check: >
+    tasklist /FI "IMAGENAME eq erl.exe" returned zero matches before the suite
+    started -- no orphaned erl.exe processes from any prior killed/timed-out run.
+  nproc: 16
+
+backend_suite:
+  command: "TEST_PARALLEL_N=8 scripts/test_parallel.sh"
+  partitions: 8
+  partition_count_source: >
+    Explicit override (TEST_PARALLEL_N=8), chosen below the machine's nproc=16
+    default per this run's briefing (documented too_many_connections pattern
+    at higher N on this project). Ran clean at N=8 -- no retry needed.
+  result: FAIL (2 of 3717 tests failing)
+  output: |
+    test_parallel: N=8 (source: env override)
+    test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    partition 1: 475 tests, 0 properties, 0 failures, exit 0
+    partition 2: 402 tests, 0 properties, 1 failures, exit 2
+    partition 3: 479 tests, 1 property, 0 failures, exit 0
+    partition 4: 473 tests, 0 properties, 0 failures, exit 0
+    partition 5: 667 tests, 0 properties, 1 failures, exit 2
+    partition 6: 380 tests, 2 properties, 0 failures, exit 0
+    partition 7: 468 tests, 0 properties, 0 failures, exit 0
+    partition 8: 367 tests, 3 properties, 0 failures, exit 0
+    ---
+    combined: 3711 tests, 6 properties, 2 failures (3715/3717 passed)
+  wall_clock: "~6m50s (partitions launched 18:33:xx, last teardown 18:39:25 partition 2 log; overall command exited 18:44)"
+  failures:
+    - test: "test AC1 -- DDL applied to every tenant, verified directly against Postgres register_column_promotion/4 with :all + run_column_promotion/1 lands the column in both tenant schemas"
+      module: "Letflow.TenantProvisioning.ColumnPromotionTest"
+      file: "test/letflow/tenant_provisioning/column_promotion_test.exs:154"
+      assertion_output: |
+        match (=) failed
+        code:  assert {:ok, rows} =
+                 TenantProvisioning.register_column_promotion(
+                   "invoice",
+                   "amount",
+                   %{pg_type: "text", nullable: true},
+                   :all
+                 )
+        left:  {:ok, rows}
+        right: {:error,
+                #Ecto.Changeset<
+                  action: :insert,
+                  changes: %{status: "pending", attribute: "amount",
+                    tenant_id: "77a5d826-1071-4906-a9fa-faab1dcd0117",
+                    entity_type: "invoice", column_name: "amount",
+                    pg_type: "text", query_eligible: false},
+                  errors: [tenant_id: {"has already been taken",
+                    [constraint: :unique,
+                     constraint_name: "entity_column_promotions_tenant_id_entity_type_attribute_idx"]}],
+                  valid?: false, ...>}
+      attribution:
+        route: "(a) failing module not in git diff --name-only main...HEAD"
+        evidence: >
+          test/letflow/tenant_provisioning/column_promotion_test.exs and
+          lib/letflow/tenant_provisioning/column_promotion.ex are both absent
+          from this branch's diff_scope above (REQ-304 touches only
+          Letflow.Definitions.SolutionPack and its own test/design files --
+          zero overlap with tenant_provisioning). No existing docs/issues/
+          entry matches this exact signature: grepped
+          docs/issues/*.yaml for "column_promotion"/"ColumnPromotion" --
+          zero hits. Symptom (a unique-constraint "has already been taken" on
+          tenant_id/entity_type/attribute against a tenant_id that appears
+          nowhere else in this test's own fixture setup shown in the log)
+          looks like cross-test data leakage/reuse of a promotion row rather
+          than anything REQ-304 could cause -- REQ-304 never touches
+          entity_column_promotions.
+        conclusion: "Pre-existing, unrelated to this branch's diff. New finding -- report for filing, no existing issue matches."
+    - test: "test AC8: Poller.handle_info(:tick, _) reads config fresh and uses the overridden poll_interval_ms -- a timer armed after the Poller's own first tick is still fired well within the overridden interval, far faster than the 5000ms default would allow"
+      module: "Letflow.Scheduler.PollerTest"
+      file: "test/letflow/scheduler/poller_test.exs:137"
+      assertion_output: |
+        Assertion with == failed
+        code:  assert reloaded.status == "fired"
+        left:  "pending"
+        right: "fired"
+      attribution:
+        route: "(a) failing module not in git diff --name-only main...HEAD"
+        evidence: >
+          test/letflow/scheduler/poller_test.exs is absent from this branch's
+          diff_scope above -- REQ-304 touches only
+          Letflow.Definitions.SolutionPack. This is a wall-clock-timing
+          assertion (a timer must fire "far faster than the 5000ms default"
+          under parallel CI/runner load) -- same general family as
+          docs/issues/ISS-0453.yaml (poller_test.exs AC3, a different,
+          already-filed timing/contention flake in the same file/module) and
+          the ISS-0578.yaml class of broad test-suite flakiness under
+          scripts/test_parallel.sh -- but neither matches exactly: ISS-0453
+          is AC3's antagonist-contention partial-skip assertion, not AC8's
+          fresh-config timer-latency assertion; ISS-0578's signature is
+          Postgrex.DBConnection.ConnectionError ("tcp recv: closed") inside
+          clone_tenant_schema!/1, not present anywhere in this failure's
+          output (no connection error, a plain status-value mismatch).
+        conclusion: "Pre-existing, unrelated to this branch's diff. Kin to ISS-0453's timing-flake family but not a duplicate of it or of ISS-0578 -- report for filing as a new AC8-specific finding."
+
+req304_specific_checks:
+  - check: "test/letflow/definitions/solution_pack_test.exs (REQ-304's 10 new entity_definitions-export tests) included in and passing within the full-suite run above"
+    result: >
+      Confirmed via partition-5.log: all 10 Letflow.Definitions.SolutionPackTest
+      cases (AC1/AC2 x4, AC3/AC4 x4, AC5 x2) ran to teardown with no entry in
+      that partition's failures section -- partition 5's sole failure is
+      Letflow.Scheduler.PollerTest (unrelated, see above). No SolutionPackTest
+      failures appear in any partition log.
+    note: >
+      Prior ad hoc runs (this branch's own isolated test-file run: 10 passed;
+      background mix letflow.check.test: clean, exit 0) are consistent with
+      this result, but this check was independently re-derived from the
+      partition-5.log content itself, not taken on the prior reports' word.
+
+verdict: PARTIAL
+verdict_reasoning: >
+  3715/3717 tests passed (6 properties, 8 partitions at TEST_PARALLEL_N=8,
+  no retry needed -- ran clean at N=8 with no too_many_connections and no
+  orphaned erl.exe processes found beforehand). Both failures
+  (Letflow.TenantProvisioning.ColumnPromotionTest AC1, Letflow.Scheduler.PollerTest
+  AC8) are attributable to pre-existing conditions unrelated to this branch's
+  diff, per structural evidence (a): neither failing test file, nor any module
+  it exercises, appears in `git diff --name-only main...HEAD` for this branch,
+  which touches only Letflow.Definitions.SolutionPack and REQ-304's own
+  design/test/status files. REQ-304's own 10 new tests in
+  test/letflow/definitions/solution_pack_test.exs all pass within this full,
+  unfiltered run. Neither failure has an exact match in docs/issues/ --
+  ColumnPromotionTest's unique-constraint collision is a wholly new finding;
+  PollerTest AC8 is kin to ISS-0453's poller-timing-flake family and ISS-0578's
+  broad flakiness class but matches neither signature exactly.
+next_action: >
+  Report both failures to ORCH for filing as new docs/issues/ entries (TEST-RUNNER
+  does not call the queue or gh itself):
+  (1) Letflow.TenantProvisioning.ColumnPromotionTest AC1 -- unique-constraint
+  "has already been taken" on entity_column_promotions(tenant_id, entity_type,
+  attribute) against a tenant_id not otherwise visible in this test's own setup;
+  looks like cross-test data reuse/leakage, not a REQ-304 regression.
+  (2) Letflow.Scheduler.PollerTest AC8 -- timer-latency assertion flake under
+  parallel-suite load; same family as ISS-0453 but a different AC, not a
+  duplicate. Once filed, route to RELEASE-VALIDATOR, which re-runs the suite
+  independently rather than trusting this report.

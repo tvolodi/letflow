@@ -54,6 +54,14 @@ defmodule Letflow.Test.TenantTemplate do
   # VM's lifetime.
   @built_marker_key {__MODULE__, :template_built}
 
+  # ISS-0578 design §1.1/§1.2: bounded retry-with-backoff around
+  # do_clone/2's whole clone transaction, for the narrow class of transient
+  # connection failure named there. 3 total attempts (initial + 2 retries),
+  # fixed (not exponential) 200ms backoff between attempts -- see the design
+  # doc for why these values are reasoned, not measured.
+  @clone_max_attempts 3
+  @clone_retry_backoff_ms 200
+
   @doc """
   Idempotent. Builds the `"tenant_template"` schema exactly once per BEAM VM /
   test-partition database (design §4.2). Safe to call from many tests; see
@@ -181,7 +189,7 @@ defmodule Letflow.Test.TenantTemplate do
           | {:error, {:clone_failed, term()}}
   def clone_tenant_schema!(source_tenant_id) do
     with {:ok, clone_schema} <- TenantProvisioning.schema_name_for_tenant(source_tenant_id) do
-      do_clone(source_tenant_id, clone_schema)
+      do_clone_with_retry(source_tenant_id, clone_schema)
     else
       {:error, reason} -> {:error, {:clone_failed, reason}}
     end
@@ -550,6 +558,54 @@ defmodule Letflow.Test.TenantTemplate do
   # ---------------------------------------------------------------------------
   # Clone (design §2.3 steps 1-8)
   # ---------------------------------------------------------------------------
+
+  # ISS-0578 design §3.1: bounded retry-with-backoff wrapper around
+  # do_clone/2's whole clone transaction. do_clone/2 itself is unchanged --
+  # this function only inspects the outer {:error, {:clone_failed, reason}}
+  # tuple do_clone/2 already normalizes every failure mode down to (its own
+  # rescue / Repo.transaction/1-error-branch, `:636-642` area), and only ever
+  # retries when `reason` is a %Postgrex.Error{}/%DBConnection.ConnectionError{}
+  # struct (design §1.3 -- struct/module match, never a message-substring
+  # match). Any other error, or the success case, returns immediately with no
+  # cleanup and no added latency (design INV-1/INV-2).
+  @spec do_clone_with_retry(source_tenant_id :: Ecto.UUID.t(), clone_schema :: String.t()) ::
+          {:ok, schema_name :: String.t()}
+          | {:error, {:clone_failed, term()}}
+  defp do_clone_with_retry(source_tenant_id, clone_schema) do
+    do_clone_with_retry(source_tenant_id, clone_schema, 1)
+  end
+
+  defp do_clone_with_retry(source_tenant_id, clone_schema, attempt) do
+    case do_clone(source_tenant_id, clone_schema) do
+      {:ok, schema_name} ->
+        {:ok, schema_name}
+
+      {:error, {:clone_failed, reason}} = error ->
+        if retryable?(reason) and attempt < @clone_max_attempts do
+          cleanup_before_retry(clone_schema)
+          Process.sleep(@clone_retry_backoff_ms)
+          do_clone_with_retry(source_tenant_id, clone_schema, attempt + 1)
+        else
+          error
+        end
+    end
+  end
+
+  # design §1.3: match by exception struct/module alone, never by
+  # Exception.message/1 text.
+  defp retryable?(%Postgrex.Error{}), do: true
+  defp retryable?(%DBConnection.ConnectionError{}), do: true
+  defp retryable?(_other), do: false
+
+  # design §2.1/§2.2: plain top-level Repo.query!/1 call, outside any
+  # Repo.transaction/1 block, against the failed attempt's own deterministic
+  # clone_schema name -- best-effort, single rescue-and-discard, no nested
+  # retry (matches build_template!/0's own cleanup shape, `:304-307`).
+  defp cleanup_before_retry(clone_schema) do
+    Repo.query!(~s(DROP SCHEMA IF EXISTS "#{clone_schema}" CASCADE))
+  rescue
+    _cleanup_failure -> :ok
+  end
 
   defp do_clone(source_tenant_id, clone_schema) do
     Repo.transaction(fn ->

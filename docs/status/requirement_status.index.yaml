@@ -2368,20 +2368,31 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 17
+    entries: 18
     note: >
-      Recounted to 17 by WF02-REQ299-20260910's Step Final rebase, which
-      conflicted at this file's tail composing two independent bases-of-15
-      increments (below) with this branch's own Step 00 REQ-299
-      started-event (commit 3dd28614) and main's REQ-297 done-event
-      (WF02-REQ297-20260909), both now present in
+      Recounted to 18 by WF02-REQ299-20260910's Step Final rebase, which
+      conflicted at this file's tail a second time composing DOC-UPDATER's
+      own REQ-299 done-event append (Step 6, against a stale base of 17)
+      with main's REQ-297 done-event (WF02-REQ297-20260909) and this
+      branch's own Step 00 started-event, both already composed into
       docs/status/requirement_status.v12.yaml in chronological `at:` order
-      (REQ-299 started 01:15:02Z, REQ-297 done 01:36:48Z, per that file's
-      own composition). Recounted directly from the composed file
-      (`grep -c "^  - req:" docs/status/requirement_status.v12.yaml` = 17
+      (REQ-299 started 01:15:02Z, REQ-297 done 01:36:48Z, REQ-299 done
+      04:07:42Z). Recounted directly from the composed file
+      (`grep -c "^  - req:" docs/status/requirement_status.v12.yaml` = 18
       on-disk entries) rather than carrying forward either side's
-      independently-computed 16, per this note's own recount-every-time
+      independently-computed 17, per this note's own recount-every-time
       rule.
+      Incremented to 17 by DOC-UPDATER's own REQ-299 done-event append
+      (WF02-REQ299-20260910, Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v12.yaml` = 17 on-disk entries at that
+      run's own pre-rebase base, no rebase conflict on this file at the
+      time it was written. 973 lines / 60538 bytes at this point, well
+      under the 1200-line/120000-byte roll ceiling, so no roll triggered.
+      Separately, and concurrently, recounted to 17 by this same run's
+      earlier Step Final rebase attempt (first conflict on this file),
+      which composed two independent bases-of-15 increments (below) with
+      this branch's own Step 00 REQ-299 started-event (commit 3dd28614)
+      and main's REQ-297 done-event (WF02-REQ297-20260909).
       Incremented to 16 by ORCH's own REQ-297 done-event append
       (WF02-REQ297-20260909) -- 981 lines at that point (60390 bytes),
       well under the roll ceiling, against a base of 15.

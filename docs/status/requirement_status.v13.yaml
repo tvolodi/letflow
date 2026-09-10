@@ -716,6 +716,29 @@ history:
       hash (the value isn't load-bearing for any of REQ-306's assertions
       since create_definition/2 recomputes logical_shape_version fresh
       regardless); all 17 tests in the composed file pass.
+
+  - req: REQ-292
+    event: started
+    agent: ORCH
+    at: "2026-09-10T20:06:37Z"
+    note: >
+      WF02-REQ292-20260910 started (queue task 579, GH#1187). S8, decision
+      0020 D1a step 11 (the authority half): server-side re-evaluation of
+      every visible_when/computed/cross-field validation expression on the
+      task's PINNED schema (form_version) at task completion, on
+      Letflow.Engine.complete_task/3's existing transactional path
+      alongside variable_schemas' existing validation authority (unchanged
+      -- REQ-292 re-evaluates EXPRESSIONS, never validates submitted values
+      against form_schema's own type/constraint keywords). A submitted
+      computed value never wins over the server's own recomputation; a
+      server-side expression evaluation FAILURE must be distinguishable
+      from a false result (use the diagnosable eval/2 path, not
+      evaluate_condition/2's bare-false-collapsing @spec). Security-
+      relevant: SECURITY-REVIEWER must explicitly assess against INV-2.
+      Scope fence: backend only, no web/ changes, no
+      lib/letflow/engine/expr.ex changes (closed EXP-102 decision -- the
+      grammar is not extended toward CEL). Branch: feature/WF02-REQ292-20260910.
+
   - req: SCOPE-CHANGE
     event: blocked
     agent: ORCH

@@ -62,13 +62,13 @@
 # 5. Verify you appended and did not replace, AND that what landed is what you
 #    wrote — two checks, neither optional:
 #      a. The line count must GROW:
-#           git diff --numstat docs/status/requirement_status.v12.yaml
+#           git diff --numstat docs/status/requirement_status.v13.yaml
 #         Any nonzero deletion count on this file is a defect. Revert and redo.
 #         This proves you appended; it proves nothing about WHAT you appended —
 #         a shell that silently ate a backtick span still line-balances.
 #      b. Re-read what you just wrote:
-#           Bash:       tail -n 8 docs/status/requirement_status.v12.yaml
-#           PowerShell: Get-Content docs/status/requirement_status.v12.yaml -Tail 8
+#           Bash:       tail -n 8 docs/status/requirement_status.v13.yaml
+#           PowerShell: Get-Content docs/status/requirement_status.v13.yaml -Tail 8
 #         Confirm the note text reads exactly as you intended — no missing
 #         words, no blank span where a backtick-quoted field name belonged.
 #         This is the check (a) structurally cannot make: ISS-0199 was a real
@@ -169,6 +169,88 @@
 
 
 history:
+
+  - req: REQ-290
+    event: started
+    agent: ORCH
+    at: "2026-09-10T09:57:51Z"
+    note: >
+      WF02-REQ290-20260910 started (queue task 572, GH#1168). CI-enforced
+      guard failing when Letflow.Engine.Expr's accepted surface (builtin
+      whitelist, closed cmp_op/arith_op/ast type unions) changes without
+      REQ-289's conformance corpus changing with it, driven by
+      Expr.builtin_function_names/0 and the type unions themselves, never
+      a hardcoded count. Also pins a corpus version/capability marker
+      (documented in REQ-289's companion doc) so a client fails loudly on
+      an unrecognised marker rather than skip/guess. Scope fence: the
+      guard, the marker, and their tests -- no lib/letflow/engine/expr.ex
+      edits, no TypeScript/Dart. Branch: feature/WF02-REQ290-20260910.
+      NOTE: this entry was originally appended to (the now-closed)
+      volume 12, then composed here instead by this run's own Step Final
+      rebase, since volume 12 was independently closed by
+      WF02-REQ300-20260910 before this branch's own Step Final ran --
+      "one run's started/done land one in each volume across a roll
+      boundary," per this index's own established pattern.
+
+  - req: REQ-290
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T11:50:53Z"
+    note: >
+      REQ-290 (queue task 572, GH#1168) implemented via
+      WF02-REQ290-20260910: a mechanical CI guard failing when
+      Letflow.Engine.Expr's accepted surface changes without REQ-289's
+      conformance corpus changing with it, driven by
+      Code.Typespec.fetch_types/1 introspecting Expr's closed cmp_op/
+      arith_op/ast type unions at runtime (plus builtin_function_names/0
+      for the builtin whitelist) rather than any hardcoded list or count.
+      Also delivers priv/expr_conformance/manifest.json, a corpus
+      version/capability marker, and a reference client proving the
+      documented fail-loud/never-skip/never-guess contract on an
+      unrecognised marker. One rework round: AC4's document-placement
+      question (which document states the marker's client-behaviour
+      semantics) was initially left open at design time, closed by
+      committing to append the semantics as a new section 13 to REQ-289's
+      own companion doc (lib/letflow/design/req289-expr-conformance-corpus.md)
+      rather than writing a second document -- confirmed present at that
+      file's line 601. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR
+      (FAIL on the AC4 placement gap, rework, re-check PASS) -> ELIXIR-DEV
+      (real local fail-then-pass demonstration: the guard shown failing
+      against a scratch ninth builtin-whitelist entry, then passing again
+      once reverted) -> SECURITY-REVIEWER (out of scope -- CI/test tooling
+      only, no tenant-data path) -> REVIEWER (PASS, with real scrutiny of
+      the Code.Typespec.fetch_types/1 introspection mechanism itself, not
+      just its output) -> TEST-DESIGNER (found and filled one real
+      coverage gap: manifest.json's version marker had no test) ->
+      TEST-DESIGN-VALIDATOR (PASS) -> TEST-RUNNER (PARTIAL -- unrelated
+      pre-existing test flakiness, structurally attributed rather than
+      masked) -> RELEASE-VALIDATOR (PASS, independently re-verified all
+      8 acceptance criteria). RELEASE-VALIDATOR separately filed ISS-0578
+      (docs/issues/ISS-0578.yaml, already committed on this branch) for a
+      broader connection-drop test-flakiness issue found while
+      re-verifying -- unrelated to REQ-290's own diff, filed as an
+      incidental finding, not part of this requirement's scope, and
+      needs no further action here. lib/letflow/engine/expr.ex confirmed
+      unmodified by git diff, per AC6. docs/requirements.yaml flipped
+      in_progress -> done. README.md checked (grepped for
+      Expr/conformance/CI guard/corpus references) -- no hits, no
+      documented current-behavior change (internal CI/test tooling, no
+      user-facing effect) -- left unchanged. decision
+      docs/migration/decisions/0020-frontend-architecture.md's Sequencing
+      section (step 9, D1a-conformance's CI-guard half) checked for a
+      per-step "done" marker convention -- none exists anywhere in the
+      document (no other step is marked complete either), so no edit
+      made; the record's own prose already states step 9 as the
+      conformance-corpus step this requirement implements, with no
+      stale claim to correct.
+      NOTE: composed into volume 13 (not 12) for the same reason the
+      started-event above was -- volume 12 was already closed by
+      WF02-REQ300-20260910 before this branch's own Step Final rebase.
+      This entry's own append (not REQ-300's) was originally what
+      triggered this branch's local roll to volume 13; volume 12's
+      actual frozen boundary/footer is main's (WF02-REQ300-20260910's),
+      unchanged by this run.
+
   - req: REQ-303
     event: done
     agent: ORCH

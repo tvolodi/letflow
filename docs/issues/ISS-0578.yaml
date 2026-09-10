@@ -1,0 +1,49 @@
+id: ISS-0578
+title: Broad DBConnection.ConnectionError (tcp recv: closed) flakiness in clone_tenant_schema!/1 under parallel test suite, wider than ISS-0219 class
+discovered_by: RELEASE-VALIDATOR
+discovered_in_run: WF02-REQ290-20260910
+discovered_at: "2026-09-10T11:49:25Z"
+severity: MAJOR
+description: >
+  RELEASE-VALIDATOR (WF02-REQ290-20260910, Step 5) ran the full
+  scripts/test_parallel.sh suite 5 separate times while verifying REQ-290
+  (2x scripts/test_parallel.sh directly, 2x mix letflow.check.test, 1x mix
+  letflow.check). Every run failed, but with a DIFFERENT, non-deterministic
+  set of unrelated failing test files each time -- observed across runs:
+  Req196AuditRouteTest, Scheduler.PollerTest, SchedulerTest,
+  ServiceTaskDispatcherTest, Repository.AttachmentsTest,
+  Definitions.RollbackTest, Routers.DefinitionsWriteTest, Api.ContextTest,
+  Routers.IdentityTest, Routers.InstancesTest,
+  Routers.Req078SupportingRoutesTest, Engine.TimerWiringTest,
+  Letflow.ServiceCatalogTest -- always bearing the identical signature:
+  Postgrex.DBConnection.ConnectionError ("tcp recv: closed" / "connection
+  is closed" / timeout) raised inside clone_tenant_schema!/1 during
+  tenant-schema provisioning setup.
+
+  None of the affected files or the tenant-provisioning chain appear in
+  WF02-REQ290-20260910's own diff (docs/requirements.yaml, docs/status/*,
+  two design docs, priv/expr_conformance/manifest.json, and REQ-290's own
+  new test/support files only). Every affected file was independently
+  re-run in isolation and passed clean (e.g. ServiceCatalogTest 33/33,
+  Api.ContextTest 11/11), confirming the tests themselves are sound and
+  this is resource contention under the parallel harness, not a code
+  regression.
+
+  This is a real, currently-live degradation distinct from the existing
+  ISS-0219/ISS-0409/ISS-0416/ISS-0458/ISS-0468 chain, which covers a
+  narrower, stable/repeatable class (a stale tenant schema left behind by
+  an interrupted prior run, undefined_table on a specific schema name).
+  This finding is about live tcp connection drops during
+  clone_tenant_schema!/1 itself, with a SHIFTING failure set across runs
+  -- suggesting Postgres connection/resource exhaustion or host-level
+  contention (many concurrent partitions, each cloning a tenant schema)
+  rather than stale leftover schemas specifically. Not yet root-caused;
+  filed as a real, reproducible-today degradation for a dedicated WF-03
+  investigation.
+affected_files:
+  - lib/letflow/tenant_provisioning.ex (clone_tenant_schema!/1)
+  - scripts/test_parallel.sh
+  - test/support/tenant_fixture.ex (likely call site, re-verify at start)
+queue_ref: Q-578
+github_ref: GH-1185
+status: open

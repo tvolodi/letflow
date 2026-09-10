@@ -1,0 +1,159 @@
+run_id: WF02-REQ290-20260910
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-10T15:59:00Z"
+branch: feature/WF02-REQ290-20260910
+head_commit: 344a425a
+
+git_state:
+  clean_tree: true
+
+diff_scope:
+  command: "git diff --name-only main...HEAD"
+  files:
+    - docs/requirements.yaml
+    - docs/status/requirement_status.index.yaml
+    - docs/status/requirement_status.v12.yaml
+    - lib/letflow/design/req289-expr-conformance-corpus.md
+    - lib/letflow/design/req290-corpus-drift-guard.md
+    - priv/expr_conformance/manifest.json
+    - test/letflow/engine/expr_corpus_drift_guard_test.exs
+    - test/specs/REQ-290.md
+    - test/support/req290_capability_check.ex
+    - test/support/req290_capability_check_test.exs
+  note: >
+    Confirms the pre-briefed scope exactly. Notably absent: lib/letflow/engine/expr.ex,
+    priv/expr_conformance/corpus.json, test/letflow/service_catalog_test.exs,
+    lib/letflow/service_catalog.ex, and any tenant-provisioning path
+    (test/support/tenant_template.ex, lib/letflow tenant schema code). This is the
+    basis for this report's own Route 1 attribution below, independently re-derived,
+    not copied from prior steps' reports.
+
+pre_run_checks:
+  docker: "docker compose ps -- postgres (5462) and keycloak (8093) both Up/healthy, no .env override present"
+  orphaned_processes: >
+    One erl.exe (PID 15560) found running at start. Inspected via
+    Get-CimInstance Win32_Process: command line shows it is ElixirLS
+    (VSCode extension language server, launch.exs), not a leftover
+    mix test/test_parallel.sh process. pg_stat_activity showed only 6
+    idle connections total, none from a test run. Left it running --
+    not an orphan relevant to this suite run.
+
+backend_suite:
+  command: "scripts/test_parallel.sh (full suite, blocking foreground run)"
+  partitions: 16 (source: nproc)
+  duration_note: "ran past the tool's 120s foreground-call ceiling; continued as a tracked background process and polled its output file directly (no Monitor, no cross-turn wait) until the 'combined:' summary line appeared, per this role's no-background-wait rule."
+  output: |
+    partition 1: 250 tests, 1 property, 0 failures, exit 0
+    partition 2: 256 tests, 0 properties, 6 failures, exit 2
+    partition 3: 279 tests, 0 properties, 0 failures, exit 0
+    partition 4: 178 tests, 2 properties, 0 failures, exit 0
+    partition 5: 276 tests, 0 properties, 0 failures, exit 0
+    partition 6: 197 tests, 0 properties, 0 failures, exit 0
+    partition 7: 204 tests, 1 property, 0 failures, exit 0
+    partition 8: 200 tests, 0 properties, 0 failures, exit 0
+    partition 9: 220 tests, 0 properties, 0 failures, exit 0
+    partition 10: 202 tests, 0 properties, 0 failures, exit 0
+    partition 11: 207 tests, 0 properties, 0 failures, exit 0
+    partition 12: 359 tests, 0 properties, 0 failures, exit 0
+    partition 13: 260 tests, 0 properties, 0 failures, exit 0
+    partition 14: 169 tests, 2 properties, 0 failures, exit 0
+    partition 15: 242 tests, 0 properties, 0 failures, exit 0
+    partition 16: 190 tests, 0 properties, 0 failures, exit 0
+    ---
+    combined: 3689 tests, 6 properties, 6 failures (3689/3695 passed)
+  failures:
+    - module: Letflow.ServiceCatalogTest
+      partition: 2
+      count: 6
+      tests:
+        - "AC6: delete/1 referential guard -- a service id appearing only as a substring inside an unrelated string does NOT block delete"
+        - "AC6: delete/1 referential guard -- delete of an unreferenced service succeeds"
+        - "AC7: update_scope/2 narrow/widen -- narrowing global -> tenant is refused, naming the conflicting tenant, when another tenant's ACTIVE definition references it"
+        - "AC6: delete/1 referential guard -- delete of a service referenced by an ACTIVE definition is refused, naming the referencing definition id"
+        - "AC7: update_scope/2 narrow/widen -- narrowing global -> tenant succeeds when only the assignee tenant itself references it (self-exemption)"
+        - "AC6: delete/1 referential guard -- a concurrent delete of the same row is treated as a benign not-found, not a crash"
+      error: >
+        Postgrex.Error 42P01 undefined_table: relation
+        "tenant_template_build_fd4f501c2cd9764911181528a7f9a004.process_definitions"
+        does not exist, raised from
+        Letflow.ServiceCatalog.referencing_active_definitions/2 (service_catalog.ex:548-551)
+        querying every provisioned tenant schema for process_definitions rows.
+
+structural_attribution:
+  method: "own re-derivation per core-directives.md 'Failure Attribution Is Structural, Never By Count-Matching' -- not accepted on the prior reports' framing"
+  route_1_diff_disjoint:
+    result: CONFIRMED
+    evidence: >
+      `git diff --name-only main...HEAD` (quoted in full above) contains neither
+      lib/letflow/service_catalog.ex, test/letflow/service_catalog_test.exs, nor any
+      tenant-provisioning file (test/support/tenant_template.ex or equivalent
+      lib/letflow tenant-schema-build code). This branch cannot have caused a
+      referencing_active_definitions/2 defect.
+  route_3_demonstrated_mechanism:
+    result: CONFIRMED, with direct measurement (not asserted)
+    evidence: >
+      Queried the live letflow_test2 database directly (docker exec psql, not
+      inherited from any prior report):
+        1. `select nspname from pg_namespace where nspname like 'tenant_template_build%'`
+           -- the schema tenant_template_build_fd4f501c2cd9764911181528a7f9a004 exists.
+        2. `\dt tenant_template_build_fd4f501c2cd9764911181528a7f9a004.*` -- contains
+           only `schema_migrations`; process_definitions (and the rest of the tenant
+           schema's tables) were never created.
+        3. `select * from tenant_schemas where schema_name =
+           'tenant_template_build_fd4f501c2cd9764911181528a7f9a004'` -- one row,
+           migrations_applied_at IS NULL, provisioned_at = 2026-09-10 05:19:21 --
+           roughly 10.5 hours before this run's own test timestamps (~15:59), and an
+           incomplete-migration marker (a completed build's migrations_applied_at is
+           always set).
+      This is a genuinely stale, incompletely-provisioned tenant-template-build schema
+      left behind by some earlier, unrelated, interrupted mix test invocation on this
+      shared test database -- byte-for-byte the same mechanism (a leftover
+      migrations_applied_at-null / table-incomplete tenant schema row from an
+      interrupted prior run) this project has already independently diagnosed and
+      resolved multiple times: docs/issues/ISS-0409.yaml (day-old stale
+      service_catalog rows), docs/issues/ISS-0468.yaml's own resolution note
+      (identical undefined_table-on-*.process_definitions signature from a stale
+      tenant_schemas row left by a force-killed foreground run), and
+      docs/issues/ISS-0458.yaml (same Letflow.ServiceCatalogTest / undefined_table
+      signature, superseded_by ISS-0219, verdict: instrumented/intermittent, not a
+      code defect). No new root cause found -- this is a recurrence of an
+      already-documented, already-resolved-as-a-class intermittency, not this
+      branch's problem.
+  conclusion: "PRE-EXISTING, both Route 1 and Route 3 independently satisfied with fresh evidence gathered this run (not copied from ELIXIR-DEV/TEST-DESIGNER/TEST-DESIGN-VALIDATOR's prior reports)."
+
+req290_specific_checks:
+  - check: "test/letflow/engine/expr_corpus_drift_guard_test.exs + test/support/req290_capability_check_test.exs, full-suite pass"
+    result: "Both ran as part of the 16-partition full run above with zero failures attributed to them (all 6 failures are ServiceCatalogTest, none are ExprCorpusDriftGuardTest or Req290CapabilityCheckTest)."
+  - check: "isolated confirmation run"
+    command: "MIX_ENV=test mix test test/letflow/engine/expr_corpus_drift_guard_test.exs test/support/req290_capability_check_test.exs"
+    result: "Result: 11 passed, 0 failures"
+
+pre_existing_issue_filing:
+  action: "NONE FILED -- already has existing docs/issues/ coverage"
+  detail: >
+    This exact failure class (Letflow.ServiceCatalogTest / undefined_table on a
+    tenant schema's process_definitions, root-caused to stale/incomplete
+    tenant_template_build_* rows from an interrupted prior test run) is already
+    on record in docs/issues/ISS-0409.yaml (no_defect), ISS-0416.yaml (no_defect,
+    cross-process contention variant), ISS-0458.yaml (status: instrumented,
+    superseded_by ISS-0219, explicitly anticipates recurrence and says to fold
+    further occurrences into ISS-0219/that record rather than file new), and
+    ISS-0468.yaml (resolved, same signature from a force-killed run's leftover
+    row). Per ISS-0458's own resolution_note, a recurrence of this exact signature
+    with no new mechanism belongs folded into that existing chain, not filed as a
+    new issue. Flagging to ORCH for awareness/folding rather than a new filing;
+    the specific stale schema (tenant_template_build_fd4f501c2cd9764911181528a7f9a004,
+    provisioned_at 2026-09-10T05:19:21) was left in place, not cleaned up, since
+    DB cleanup is outside this role's scope.
+
+verdict: PARTIAL
+verdict_reasoning: >
+  3689/3695 passed (6 failures), all 6 independently attributed to a pre-existing,
+  already-documented environmental intermittency (stale tenant-template-build schema
+  from an unrelated interrupted run) via both diff-disjointness (Route 1) and a fresh,
+  self-gathered measurement of the actual stale DB state (Route 3) -- not accepted on
+  the prior steps' say-so. REQ-290's own two new test files pass both in the full run
+  and in isolation (11/11). No new issue filed: the failure signature already has
+  standing docs/issues/ coverage that anticipates exactly this recurrence.
+next_action: "Route to RELEASE-VALIDATOR. Flag the ISS-0458/ISS-0219 recurrence (with this run's specific stale-schema evidence) to ORCH for awareness; no code or test change needed on this branch."

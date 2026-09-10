@@ -2389,6 +2389,20 @@ volumes:
       13 created with this volume's own header text verbatim (volume
       number/opening date/predecessor path updated) and an empty
       `history:` list.
+      NOTE (WF02-REQ290-20260910's own Step Final rebase): this branch's
+      Step 00 (commit afc61205) had appended a REQ-290 started-event to
+      v12.yaml against a stale pre-closure base, and later branch commits
+      (dc1ea7db, db711a3b) bumped this index's declared count and closure
+      metadata to match a second, competing closure of v12 -- both
+      superseded here. v12 was independently closed on main first (via
+      WF02-REQ300-20260910, above) with its own frozen 22-entry content
+      that does NOT include REQ-290's started-event. Per this file's own
+      established pattern for a started-event that predates a roll it
+      wasn't present for ("one run's started/done land one in each volume
+      across a roll boundary"), neither of REQ-290's started/done events
+      was inserted into this now-frozen volume; both are composed into
+      volume 13 instead as part of this same rebase. v12's on-disk
+      content and this entry's fields are therefore main's, unchanged.
       Recounted to 21 by WF02-REQ301-20260910's Step Final rebase, which
       conflicted at this file's tail a fourth time composing DOC-UPDATER's
       own REQ-301 done-event append (Step 6, against a stale base of 20)
@@ -2574,8 +2588,19 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 1
+    entries: 3
     note: >
+      Recounted to 3 by WF02-REQ290-20260910's Step Final rebase, which
+      conflicted at this file's tail composing this branch's own REQ-290
+      started/done event pair (against a stale base of 2) with main's
+      REQ-303 done-event append (independently computed as 1), both
+      already composed into docs/status/requirement_status.v13.yaml in
+      chronological `at:` order (REQ-290 started 09:57:51Z, REQ-290 done
+      11:50:53Z, REQ-303 done 11:56:54Z). Recounted directly from the
+      composed file (`grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 3 on-disk entries)
+      rather than carrying forward either side's independently-computed
+      1/2, per this note's own recount-every-time rule.
       Incremented to 1 by ORCH's own REQ-303 done-event append
       (WF02-REQ303-20260910) -- 234 lines at that point (13704 bytes),
       well under the roll ceiling.
@@ -2583,8 +2608,14 @@ volumes:
       to volume 12. Created with volume 12's header text verbatim (volume
       number, opening date and predecessor path updated) and an empty
       `history:` list, per this index's `roll_rule.on_exceed` procedure.
-      `entries:` will be incremented per HOW-TO-APPEND step 6 as real
-      appends land.
+      Incremented to 2 by WF02-REQ290-20260910's own Step Final rebase,
+      which composed this branch's REQ-290 started- and done-event pair
+      into this volume rather than the now-closed volume 12 -- see volume
+      12's own note above for the full reasoning. Both events' own `at:`
+      timestamps (09:57:51Z, 11:50:53Z) predate this volume's `opened:`
+      date only nominally; they are appended here, not reordered into
+      volume 12, per the same "one run's started/done land one in each
+      volume across a roll boundary" precedent.
 
 
 known_anomalies:

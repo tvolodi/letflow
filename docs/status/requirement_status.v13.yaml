@@ -833,6 +833,22 @@ history:
       expiration and that REQ-293 is now unblocked and eligible for
       registration/claiming.
 
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-10T22:29:06Z"
+    note: >
+      REQ-292's Step Final merge reconciliation (WF02-REQ292-20260910):
+      mix letflow.check_deferral_staleness FAILED post-merge with REQ-293's
+      DOC-UPDATER-updated deferral comment now itself stale (stage-scoped,
+      S8 active) and REQ-294's blocked-by: REQ-292 expired (REQ-292 done).
+      Registered REQ-293 (queue task 584, GH#1202, depends_on now fully
+      satisfied -- REQ-284/REQ-290/REQ-292 all done) via register_task,
+      recorded its real impl_order in docs/requirements.yaml. Re-scoped
+      REQ-294's deferral from blocked-by: REQ-292 to blocked-by: REQ-293
+      (the sole remaining still-pending link in its depends_on chain).
+      Re-ran mix letflow.check_deferral_staleness: 0 stale, PASS.
+
   - req: REQ-293
     event: blocked
     agent: ORCH
@@ -852,10 +868,12 @@ history:
       docs/requirements.yaml's own status/blocked-by annotation was
       already correct and is left unchanged.
       NOTE (ORCH, WF02-REQ292-20260910 Step Final): this entry was
-      recorded by a sibling session BEFORE REQ-292's own merge landed --
-      accurate at the time it was written (REQ-292 was still pending on
-      main), but REQ-292 lands done in this same rebase, immediately
-      superseding the premise. Queue task 584 is now stuck in a
+      recorded by a sibling session BEFORE it saw this branch's own
+      reconciliation (immediately above) or REQ-292's merge lands --
+      accurate at the moment it was written, but stale on arrival by
+      this rebase: REQ-293 was already registered as queue task 584 by
+      this branch's own reconciliation minutes earlier, and REQ-292 lands
+      done in this same rebase. Queue task 584 is now stuck in a
       `blocked` state that get_next_task's eligibility filter
       (`WHERE status = 'open'`) will never re-select on its own --
       reopening it (or registering a fresh task) is a follow-up ORCH

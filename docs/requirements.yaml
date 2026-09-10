@@ -17338,7 +17338,10 @@ requirements:
   - id: REQ-293
     title: TypeScript evaluator for the Expr grammar, passing the conformance corpus, wired into DynamicFormRenderer (0020 D1a step 10)
     owner: FRONTEND-DEV
-    # impl_order: UNREGISTERED -- blocked-by: NONE -- REQ-284 (queue task 560), REQ-290 (queue task 572) and REQ-292 (queue task 579) have all landed done as of 2026-09-10 (REQ-292 via WF02-REQ292-20260910); this entry's own depends_on: [REQ-284, REQ-290, REQ-292] is now fully satisfied, so it is unblocked and eligible for registration/claiming -- this deferral hatch has expired and is left here as the record of why, not as a live gate
+    impl_order: 584  # letflow-queue task id, GH#1202. Registered 2026-09-10 by ORCH
+      # once REQ-284 (queue task 560), REQ-290 (queue task 572) and REQ-292
+      # (queue task 579) all landed done -- no live blocker left. depends_on
+      # translated to queue task ids [560, 572, 579].
     status: pending
     stage: S8
     description: >
@@ -17460,7 +17463,7 @@ requirements:
   - id: REQ-294
     title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
     owner: MOBILE-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-292 -- REQ-290 (queue task 572) landed done 2026-09-10; this entry's own depends_on: [REQ-290, REQ-292, REQ-293] makes it unstartable until REQ-292 and REQ-293 also land, so the deferral re-scopes to REQ-292, the earliest still-pending link in that chain (REQ-293 itself depends_on REQ-292, so REQ-292 is the true bottleneck). MOBILE-DEV remains dormant per CLAUDE.md's roster regardless of this hatch's own expiry -- nothing routes to this entry until S9's backend gaps close and apps/mobile/ exists, independent of this mechanical staleness check
+    # impl_order: UNREGISTERED -- blocked-by: REQ-293 -- REQ-290 (queue task 572) and REQ-292 (queue task 579) both landed done 2026-09-10; this entry's own depends_on: [REQ-290, REQ-292, REQ-293] makes it unstartable until REQ-293 also lands, so the deferral re-scopes to REQ-293 (queue task 584), the sole remaining still-pending link in that chain, since REQ-292 no longer blocks anything here. MOBILE-DEV remains dormant per CLAUDE.md's roster regardless of this hatch's own expiry -- nothing routes to this entry until S9's backend gaps close and apps/mobile/ exists, independent of this mechanical staleness check
     status: pending
     stage: S9
     description: >

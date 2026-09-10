@@ -1109,3 +1109,52 @@ history:
       by both SECURITY-REVIEWER and REVIEWER. No blocked-by deferral
       hatches reference REQ-298 -- REQ-300 (its real dependent) remains
       unstartable regardless via the queue's own depends_on tracking.
+
+  - req: REQ-301
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-10T08:45:52Z"
+    note: >
+      REQ-301 (queue task 570, GH#1164) implemented via
+      WF02-REQ301-20260910: adds a :localized_text
+      Letflow.Entities.Definition.field_type() -- blob-stored, keyed by
+      locale, with a per-definition declared locale set -- plus a Validator
+      carve-out from Rule 3 letting it be queried: true (unlike :json,
+      whose Rule 3 rejection stays fully intact), a generated-column-per-
+      locale case in REQ-296's DDL generator, REQ-297 executor wiring, and
+      Allowlist.typed_columns/2 exposure of the resulting per-locale
+      generated columns, per 0023's re-scoping of S10 gap 11. Real
+      design-time scope conflict, caught BEFORE any implementation attempt
+      this time (contrast REQ-299's post-implementation discovery of the
+      same class of gap): original AC5 wording required end-to-end
+      filter/sort reachability through Allowlist + Compiler, but
+      compiler.ex/cursor.ex both resolve a :typed_column field's Postgres
+      column atom only via the old fixed-7-entry Allowlist.typed_columns/0
+      map -- the identical compiler.ex/cursor.ex column-atom-resolution gap
+      REQ-299's own AC4 hit. CODE-DESIGNER flagged it during design;
+      REVIEWER signed off on deferring end-to-end Compiler/Cursor
+      reachability to REQ-300; REQ-VALIDATOR/ORCH amended REQ-301's AC5
+      wording (superseded original kept in the acceptance_criteria text for
+      the audit trail) and added a second acceptance criterion to REQ-300
+      covering the one-field-fans-out-to-many-columns shape, alongside
+      REQ-299's earlier FK-derived addition -- both amendments committed on
+      this branch (commit d75c08af). REVIEWER also made a small defensive
+      fix directly during the idiom gate (commit 1fa174ca): added
+      DDL.valid_generated_as_expression?/1 and a defensive re-validation of
+      the generated_as expression in TenantProvisioning.execute_add_column/3
+      before DDL execution. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR
+      (PASS first try) -> REVIEWER (scope sign-off on the AC5 deferral) ->
+      REQ-VALIDATOR (AC5/REQ-300 text fix) -> ELIXIR-DEV -> SECURITY-REVIEWER
+      (PASS) -> REVIEWER (idiom PASS + the defensive generated_as fix above)
+      -> TEST-DESIGNER -> TEST-DESIGN-VALIDATOR (PASS) -> TEST-RUNNER
+      (PARTIAL: one failure, self-caused by this run's own Step 00
+      requirement_status.index.yaml A9 drift, fixed) -> RELEASE-VALIDATOR
+      (PASS after one formatting fix; mix letflow.check 3664/3664 clean).
+      docs/requirements.yaml flipped in_progress -> done. README.md checked
+      -- no documented current-behavior change (internal Definition/DDL/
+      query-layer capability, no web/ touched, no user-facing effect) --
+      left unchanged. docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md
+      (REQ-302's decision record, which this requirement implements)
+      confirmed needing no edit -- REVIEWER already confirmed the
+      moduledoc correctly cites it during the idiom gate, no contradiction
+      found.

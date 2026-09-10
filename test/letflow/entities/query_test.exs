@@ -690,7 +690,9 @@ defmodule Letflow.Entities.QueryTest do
       # bug this test exists to catch), order_keys and tag_keys would be
       # identical. They must differ by exactly "order"'s two promoted names.
       refute order_keys == tag_keys
-      assert MapSet.difference(order_keys, tag_keys) == MapSet.new(["total_amount", "customer_id"])
+
+      assert MapSet.difference(order_keys, tag_keys) ==
+               MapSet.new(["total_amount", "customer_id"])
     end
 
     test "AC2: typed_columns/2's promoted names agree exactly with DDL.promoted_columns/1's own enumeration for the same definition" do
@@ -710,7 +712,9 @@ defmodule Letflow.Entities.QueryTest do
       assert {:ok, order_columns} = Allowlist.typed_columns("order", schema)
 
       structural_names = MapSet.new(Map.keys(Allowlist.typed_columns()))
-      promoted_names_from_allowlist = MapSet.new(Map.keys(order_columns)) |> MapSet.difference(structural_names)
+
+      promoted_names_from_allowlist =
+        MapSet.new(Map.keys(order_columns)) |> MapSet.difference(structural_names)
 
       # DDL.promoted_columns/1 called directly here, against the very same
       # raw definition -- not a second, independently-hand-maintained list.

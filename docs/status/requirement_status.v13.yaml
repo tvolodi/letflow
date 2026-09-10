@@ -314,3 +314,20 @@ history:
       policy). Design-only requirement -- no lib/ code, no migration,
       REQ-304/305 build the export/install sides against this record's
       answers. No blocked-by deferral hatches reference REQ-303.
+
+  - req: REQ-304
+    event: started
+    agent: ORCH
+    at: "2026-09-10T13:01:54Z"
+    note: >
+      WF02-REQ304-20260910 started (queue task 575, GH#1173). S10 gap 13,
+      export side: extends SolutionPack.export/3 and its pack_document
+      output with a new entity_definitions section, per decision
+      0026-solution-pack-entity-definitions-section.md (REQ-303's
+      output). Named entity definitions read via
+      Letflow.Entities.Definitions.get_definition_by_name/2 under the
+      caller's own opts[:prefix] (INV-1). Scope fence: export/3 and its
+      helpers, the pack_document @type -- no install/3, no
+      solution_packs.ex route-handler changes beyond passing the new
+      parameter through (if 0026 requires it), no migration. Branch:
+      feature/WF02-REQ304-20260910.

@@ -1,0 +1,34 @@
+id: ISS-0580
+title: ColumnPromotionTest AC1 flakes with entity_column_promotions unique-constraint violation under parallel suite load
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ304-20260910
+discovered_at: "2026-09-10T13:46:35Z"
+severity: MINOR
+description: >
+  TEST-RUNNER (WF02-REQ304-20260910, Step 4) hit a real, reproducible-today
+  failure in test/letflow/tenant_provisioning/column_promotion_test.exs:154
+  ("AC1 -- DDL applied to every tenant, verified directly against
+  Postgres"): register_column_promotion/4 with :all + run_column_promotion/1
+  raised a unique-constraint violation on
+  entity_column_promotions_tenant_id_entity_type_attribute_idx ("has already
+  been taken") against a tenant_id not otherwise visible in the test's own
+  setup, under 8-way parallel scripts/test_parallel.sh execution.
+
+  Structurally attributed as unrelated to WF02-REQ304-20260910's own diff:
+  `git diff --name-only main...HEAD` for that branch touches only
+  docs/requirements.yaml, docs/status/*, lib/letflow/design/req304-*.md,
+  lib/letflow/definitions/solution_pack.ex,
+  test/letflow/definitions/solution_pack_test.exs, test/specs/REQ-304.md --
+  none of which are in ColumnPromotionTest's dependency chain.
+
+  Suspected root cause: cross-test tenant_id collision or a leftover row
+  from a concurrently-running partition -- not yet root-caused. Filed as a
+  real, reproducible-today finding for a dedicated investigation rather
+  than folded into an existing record; does not match ISS-0578's signature
+  (no Postgrex.DBConnection.ConnectionError).
+affected_files:
+  - test/letflow/tenant_provisioning/column_promotion_test.exs
+  - lib/letflow/tenant_provisioning.ex (register_column_promotion/4, run_column_promotion/1)
+queue_ref: Q-580
+github_ref: GH-1189
+status: open

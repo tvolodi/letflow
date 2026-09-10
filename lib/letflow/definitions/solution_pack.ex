@@ -159,6 +159,7 @@ defmodule Letflow.Definitions.SolutionPack do
   alias Letflow.Definitions.ProcessDefinition
   alias Letflow.Definitions.SolutionPackInstall
   alias Letflow.Engine.VariableSchema
+  alias Letflow.Entities.EntityDefinition
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
@@ -183,6 +184,15 @@ defmodule Letflow.Definitions.SolutionPack do
           schema_content: String.t()
         }
 
+  @typedoc "One entity definition inside a pack document (0026 §Consequences, REQ-303 doc §1)."
+  @type packed_entity_definition :: %{
+          entity_definition_id: Ecto.UUID.t(),
+          name: String.t(),
+          display_name: String.t(),
+          definition_json: map(),
+          logical_shape_version: binary()
+        }
+
   @type pack_document :: %{
           pack_id: String.t(),
           version: String.t(),
@@ -191,6 +201,7 @@ defmodule Letflow.Definitions.SolutionPack do
           definitions: [packed_definition()],
           service_catalog_entries: [],
           variable_schemas: [packed_variable_schema()],
+          entity_definitions: [packed_entity_definition()],
           manifest: %{required_roles: [String.t()]}
         }
 
@@ -215,6 +226,7 @@ defmodule Letflow.Definitions.SolutionPack do
 
   @type export_error ::
           {:error, {:definition_not_found, definition_id :: String.t()}}
+          | {:error, {:entity_definition_not_found, name :: String.t()}}
           | {:error, :empty_definition_ids}
           | Definitions.common_error()
 
@@ -258,10 +270,38 @@ defmodule Letflow.Definitions.SolutionPack do
           version :: String.t() | nil,
           opts :: Definitions.opts()
         ) :: {:ok, pack_document()} | export_error()
-  def export([], _version, _opts), do: {:error, :empty_definition_ids}
+  def export(definition_ids, version, opts), do: export(definition_ids, [], version, opts)
 
-  def export(definition_ids, version, opts) when is_list(definition_ids) and is_list(opts) do
-    with {:ok, packed} <- pack_each_definition(definition_ids, opts) do
+  @doc """
+  Same as `export/3`, plus `entity_definition_names` -- `Letflow.Entities.EntityDefinition`
+  `name` values, read (in the order given) via
+  `Letflow.Entities.Definitions.get_definition_by_name/2` under the caller's own
+  `opts[:prefix]`, and packed into the document's `entity_definitions` array.
+
+  `export/3` delegates here with `entity_definition_names: []`, so a
+  process-definitions-only export is byte-for-byte unchanged.
+
+  Naming zero `definition_ids` **and** zero `entity_definition_names` is still
+  `{:error, :empty_definition_ids}`; naming only entity definitions (empty
+  `definition_ids`) is a legitimate entity-definitions-only pack.
+
+  An unresolvable name becomes `{:error, {:entity_definition_not_found, name}}`
+  and no document is produced -- same cross-tenant-invisibility reasoning as
+  `{:error, {:definition_not_found, id}}` above (INV-1/INV-5).
+  """
+  @spec export(
+          definition_ids :: [String.t()],
+          entity_definition_names :: [String.t()],
+          version :: String.t() | nil,
+          opts :: Definitions.opts()
+        ) :: {:ok, pack_document()} | export_error()
+  def export([], [], _version, _opts), do: {:error, :empty_definition_ids}
+
+  def export(definition_ids, entity_definition_names, version, opts)
+      when is_list(definition_ids) and is_list(entity_definition_names) and is_list(opts) do
+    with {:ok, packed} <- pack_each_definition(definition_ids, opts),
+         {:ok, entity_definitions} <-
+           pack_each_entity_definition(entity_definition_names, opts) do
       {:ok,
        %{
          pack_id: Ecto.UUID.generate(),
@@ -272,6 +312,7 @@ defmodule Letflow.Definitions.SolutionPack do
            Enum.map(packed, fn {definition, _schemas} -> pack_definition(definition) end),
          service_catalog_entries: [],
          variable_schemas: Enum.flat_map(packed, &pack_variable_schemas/1),
+         entity_definitions: Enum.map(entity_definitions, &pack_entity_definition/1),
          manifest: %{required_roles: []}
        }}
     end
@@ -381,6 +422,43 @@ defmodule Letflow.Definitions.SolutionPack do
       name: definition.name,
       version: definition.version,
       graph: definition.graph
+    }
+  end
+
+  # Reads in the order the caller listed the names, so a not-found error names
+  # the first offending name deterministically -- mirrors pack_each_definition/2.
+  @spec pack_each_entity_definition([String.t()], Definitions.opts()) ::
+          {:ok, [EntityDefinition.t()]} | export_error()
+  defp pack_each_entity_definition(entity_definition_names, opts) do
+    Enum.reduce_while(entity_definition_names, {:ok, []}, fn name, {:ok, acc} ->
+      case Letflow.Entities.Definitions.get_definition_by_name(name, prefix(opts)) do
+        {:ok, %EntityDefinition{} = entity_definition} ->
+          {:cont, {:ok, [entity_definition | acc]}}
+
+        {:error, :not_found} ->
+          {:halt, {:error, {:entity_definition_not_found, name}}}
+
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # Hand-built, explicit key list -- never a Jason.Encoder derivation over
+  # %EntityDefinition{} (INV-2). Keeps tenant_id/content_hash/artifact_version_id/
+  # status (storage-only fields) out of the pack document.
+  @spec pack_entity_definition(EntityDefinition.t()) :: packed_entity_definition()
+  defp pack_entity_definition(%EntityDefinition{} = entity_definition) do
+    %{
+      entity_definition_id: entity_definition.id,
+      name: entity_definition.name,
+      display_name: entity_definition.display_name,
+      definition_json: entity_definition.definition_json,
+      logical_shape_version: entity_definition.logical_shape_version
     }
   end
 

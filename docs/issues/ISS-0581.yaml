@@ -1,0 +1,29 @@
+id: ISS-0581
+title: Scheduler.PollerTest AC8 timer-latency flake under parallel suite load
+discovered_by: TEST-RUNNER
+discovered_in_run: WF02-REQ304-20260910
+discovered_at: "2026-09-10T13:46:43Z"
+severity: MINOR
+description: >
+  TEST-RUNNER (WF02-REQ304-20260910, Step 4) hit
+  test/letflow/scheduler/poller_test.exs:137 (AC8) failing under 8-way
+  parallel scripts/test_parallel.sh: `reloaded.status` expected `"fired"`,
+  got `"pending"` -- a timer-latency assertion that did not resolve in time
+  under load.
+
+  Structurally attributed as unrelated to WF02-REQ304-20260910's own diff
+  (touches only docs/requirements.yaml, docs/status/*,
+  lib/letflow/design/req304-*.md, lib/letflow/definitions/solution_pack.ex,
+  test/letflow/definitions/solution_pack_test.exs, test/specs/REQ-304.md --
+  none in PollerTest's dependency chain).
+
+  Kin to ISS-0453's poller-timing-flake family but a DIFFERENT acceptance
+  criterion (AC3 in that record vs. AC8 here, a different assertion) --
+  filed as a distinct, real, reproducible-today finding rather than folded
+  into that existing record. Does not match ISS-0578's signature (no
+  Postgrex.DBConnection.ConnectionError).
+affected_files:
+  - test/letflow/scheduler/poller_test.exs
+queue_ref: Q-581
+github_ref: GH-1190
+status: open

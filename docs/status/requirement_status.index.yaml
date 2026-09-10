@@ -2588,8 +2588,15 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 19
+    entries: 20
     note: >
+      Incremented to 20 by ORCH's own SCOPE-CHANGE done-event append
+      (reopening queue task 584, GH#1202, left stuck in status: blocked
+      by a sibling session's own race, via set_lock + release with
+      explicit status: "open") -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 20 on-disk entries; 902
+      lines / 54444 bytes, well under the roll ceiling, so no roll
+      triggered.
       Recounted to 19 on WF02-REQ292-20260910's own Step Final rebase onto
       main (deferral-reconciliation commit replay), composing this
       branch's own SCOPE-CHANGE done-event append (REQ-293 registered as

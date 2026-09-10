@@ -879,3 +879,24 @@ history:
       reopening it (or registering a fresh task) is a follow-up ORCH
       action, tracked separately rather than silently assumed fixed by
       this note alone.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-10T23:17:47Z"
+    note: >
+      REQ-292's Step Final merge reconciliation, part 2 (WF02-REQ292-20260910):
+      a sibling session's own REQ-293 blocked-event (recorded above) left
+      queue task 584 (GH#1202) stuck in status: blocked, unlocked, which
+      get_next_task's eligibility filter (WHERE status = 'open') never
+      re-selects on its own -- and REQ-292 has since landed done in this
+      same Step Final, genuinely satisfying REQ-293's depends_on. Reopened
+      it via set_lock (task 584, accepted despite status: blocked per the
+      service's own "unlocked, or same agent_id" contract) immediately
+      followed by release with an explicit status: "open" (a bare release
+      with no status argument preserved the existing blocked status rather
+      than defaulting to open, confirmed live -- the "release it back to
+      open (no status)" pattern documented elsewhere in TASK_QUEUE.md
+      applies to a different scenario, a mismatched target-claim, not this
+      one). Confirmed via the release response: status: "open",
+      locked_by: null. REQ-293 is now genuinely claimable.

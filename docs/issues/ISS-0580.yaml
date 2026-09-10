@@ -31,4 +31,7 @@ affected_files:
   - lib/letflow/tenant_provisioning.ex (register_column_promotion/4, run_column_promotion/1)
 queue_ref: Q-580
 github_ref: GH-1189
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0580-20260910
+resolved_at: "2026-09-10T19:17:45Z"

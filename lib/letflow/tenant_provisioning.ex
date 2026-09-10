@@ -164,6 +164,23 @@ defmodule Letflow.TenantProvisioning do
   4. **Rollback**: `suspend_column_promotion/2` flips `query_eligible` to
      `false` (query-layer exclusion via the future `Allowlist`), leaving
      `status` at `"active"` — never a drop or narrow of the column itself.
+
+  ## REQ-298 — constraint_def unique-index activation and fk_def referential
+  ## integrity (AC6 moduledoc citation)
+
+  See `docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md`
+  and `lib/letflow/design/req298-constraint-fk-activation.md` for the
+  decision and design this section implements. Extends REQ-296's DDL
+  generator (`Letflow.Entities.Definition.DDL.generate_table_ddl/3`,
+  `unique_constraint_clauses/1`) and REQ-297's promotion executor
+  (`execute_add_column/4`, extended from `execute_add_column/3`;
+  `execute_create_table/1`, unchanged) — no new per-tenant-DDL-execution
+  code path. Adds exactly one new DDL-issuing function,
+  `run_constraint_activation/1`, using the identical `Repo.query!/1` +
+  `rescue` shape and the identical per-tenant `pg_advisory_xact_lock`
+  critical section `run_column_promotion/1` already establishes, so a
+  constraint activation and a column promotion against the same tenant
+  schema never interleave.
   """
 
   import Ecto.Query
@@ -176,6 +193,7 @@ defmodule Letflow.TenantProvisioning do
   alias Letflow.EventStore.Registry
   alias Letflow.Repo
   alias Letflow.TenantProvisioning.ColumnPromotion
+  alias Letflow.TenantProvisioning.ConstraintActivation
   alias Letflow.TenantProvisioning.Registration
 
   @doc """
@@ -1116,13 +1134,18 @@ defmodule Letflow.TenantProvisioning do
   @spec register_column_promotion(
           entity_type :: String.t(),
           attribute :: String.t(),
-          column_spec :: %{pg_type: String.t(), nullable: true},
+          column_spec :: %{
+            required(:pg_type) => String.t(),
+            required(:nullable) => true,
+            optional(:references_entity) => String.t()
+          },
           tenant_ids :: [Ecto.UUID.t()] | :all
         ) :: {:ok, [ColumnPromotion.t()]} | {:error, term()}
   def register_column_promotion(entity_type, attribute, column_spec, tenant_ids)
       when is_binary(entity_type) and is_binary(attribute) and is_map(column_spec) do
     tenant_ids = resolve_tenant_ids(tenant_ids)
     pg_type = Map.fetch!(column_spec, :pg_type)
+    references_entity = Map.get(column_spec, :references_entity)
 
     Repo.transaction(fn ->
       Enum.map(tenant_ids, fn tenant_id ->
@@ -1132,6 +1155,7 @@ defmodule Letflow.TenantProvisioning do
           attribute: attribute,
           column_name: attribute,
           pg_type: pg_type,
+          references_entity: references_entity,
           status: "pending",
           query_eligible: false
         }
@@ -1183,10 +1207,11 @@ defmodule Letflow.TenantProvisioning do
 
   defp do_run_column_promotion(schema_name, promotion) do
     with {:ok, table_name} <- checked_table_name(promotion),
-         :ok <- ensure_entity_table(schema_name, promotion.entity_type) do
+         :ok <- ensure_entity_table(schema_name, promotion.entity_type),
+         {:ok, target_table} <- resolve_fk_target_table(promotion) do
       case check_additive_only(schema_name, table_name, promotion) do
         :ok ->
-          add_column_and_mark(schema_name, table_name, promotion)
+          add_column_and_mark(schema_name, table_name, promotion, target_table)
 
         :idempotent_skip ->
           mark_ddl_applied(promotion)
@@ -1211,8 +1236,30 @@ defmodule Letflow.TenantProvisioning do
     end
   end
 
-  defp add_column_and_mark(schema_name, table_name, promotion) do
-    case execute_add_column(schema_name, table_name, promotion) do
+  # REQ-298 §3.3 -- resolves a ColumnPromotion's optional references_entity
+  # (an entity-type string) to a physical target table name, immediately
+  # after ensure_entity_table/2 succeeds and before check_additive_only/3.
+  # {:ok, nil} for the common, non-FK case -- no behavior change from
+  # REQ-297. A {:error, :invalid_entity_type} result is only reachable if a
+  # row bypassed register_column_promotion/4's own input (same
+  # defence-in-depth posture as checked_table_name/1), remapped here to
+  # {:error, :invalid_fk_target_entity_type} and returned directly,
+  # short-circuiting before any DDL is attempted -- reachable from
+  # realistic (if invalid) stored data, so this is a with-chain addition,
+  # not a raise.
+  @spec resolve_fk_target_table(ColumnPromotion.t()) ::
+          {:ok, target_table :: String.t() | nil} | {:error, :invalid_fk_target_entity_type}
+  defp resolve_fk_target_table(%ColumnPromotion{references_entity: nil}), do: {:ok, nil}
+
+  defp resolve_fk_target_table(%ColumnPromotion{references_entity: entity_type}) do
+    case table_name_for_entity_type(entity_type) do
+      {:ok, target_table} -> {:ok, target_table}
+      {:error, :invalid_entity_type} -> {:error, :invalid_fk_target_entity_type}
+    end
+  end
+
+  defp add_column_and_mark(schema_name, table_name, promotion, target_table) do
+    case execute_add_column(schema_name, table_name, promotion, target_table) do
       :ok ->
         mark_ddl_applied(promotion)
 
@@ -1285,8 +1332,12 @@ defmodule Letflow.TenantProvisioning do
   defp create_and_populate_entity_table(schema_name, entity_type, table_name) do
     with {:ok, definition} <- Definitions.get_active_definition_by_name(entity_type, schema_name),
          document = document_from_persisted(definition),
-         {:ok, sql} <- DDL.generate_table_ddl(document, table_name),
-         :ok <- execute_create_table(qualify_create_table_sql(sql, schema_name, table_name)) do
+         {:ok, fk_target_tables} <- resolve_fk_target_tables(document),
+         {:ok, sql} <- DDL.generate_table_ddl(document, table_name, fk_target_tables),
+         :ok <-
+           execute_create_table(
+             qualify_create_table_sql(sql, schema_name, table_name, fk_target_tables)
+           ) do
       case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
         {:ok, _result} ->
           :ok
@@ -1310,14 +1361,48 @@ defmodule Letflow.TenantProvisioning do
     exception -> {:error, {:ddl_failed, exception}}
   end
 
-  # generate_table_ddl/2 is deliberately schema-agnostic (its own moduledoc)
-  # and returns `CREATE TABLE "<table_name>" (...)` unqualified -- this
-  # module is the one that knows the target tenant schema, so it qualifies
-  # the statement itself rather than asking DDL to grow schema awareness.
-  defp qualify_create_table_sql(sql, schema_name, table_name) do
+  # generate_table_ddl/3 is deliberately schema-agnostic (its own moduledoc)
+  # and returns `CREATE TABLE "<table_name>" (...)` (with any `REFERENCES
+  # "<target_table>"` clauses also unqualified) -- this module is the one
+  # that knows the target tenant schema, so it qualifies the statement
+  # itself rather than asking DDL to grow schema awareness. REQ-298 extends
+  # this to also schema-qualify every REFERENCES target, the same way it
+  # already qualifies the leading CREATE TABLE table name.
+  defp qualify_create_table_sql(sql, schema_name, table_name, fk_target_tables) do
     unqualified_prefix = "CREATE TABLE \"#{table_name}\" ("
     qualified_prefix = "CREATE TABLE \"#{schema_name}\".\"#{table_name}\" ("
-    String.replace_prefix(sql, unqualified_prefix, qualified_prefix)
+
+    sql
+    |> String.replace_prefix(unqualified_prefix, qualified_prefix)
+    |> qualify_fk_references(schema_name, fk_target_tables)
+  end
+
+  defp qualify_fk_references(sql, schema_name, fk_target_tables) do
+    Enum.reduce(fk_target_tables, sql, fn {_entity_type, target_table}, acc ->
+      unqualified = ~s|REFERENCES "#{target_table}"(|
+      qualified = ~s|REFERENCES "#{schema_name}"."#{target_table}"(|
+      String.replace(acc, unqualified, qualified)
+    end)
+  end
+
+  # REQ-298 §3.4 -- resolves every distinct references_entity named by
+  # document.foreign_keys to its physical table name, via
+  # table_name_for_entity_type/1 (a pure function of the entity-type string
+  # alone -- no target Definition.t() lookup needed). Built for
+  # DDL.generate_table_ddl/3's own fk_target_tables argument.
+  @spec resolve_fk_target_tables(Letflow.Entities.Definition.t()) ::
+          {:ok, %{String.t() => String.t()}} | {:error, {:invalid_entity_type, String.t()}}
+  defp resolve_fk_target_tables(document) do
+    document
+    |> Map.get(:foreign_keys, [])
+    |> Enum.map(&Map.get(&1, :references_entity))
+    |> Enum.uniq()
+    |> Enum.reduce_while({:ok, %{}}, fn entity_type, {:ok, acc} ->
+      case table_name_for_entity_type(entity_type) do
+        {:ok, table_name} -> {:cont, {:ok, Map.put(acc, entity_type, table_name)}}
+        {:error, :invalid_entity_type} -> {:halt, {:error, {:invalid_entity_type, entity_type}}}
+      end
+    end)
   end
 
   # ---------------------------------------------------------------------
@@ -1409,7 +1494,17 @@ defmodule Letflow.TenantProvisioning do
   # (register_column_promotion/4 requires the caller to have already called
   # that function), checked again here (defence in depth) before
   # interpolation.
-  @known_fixed_pg_types ["text", "bigint", "boolean", "date", "timestamp(6) without time zone"]
+  @known_fixed_pg_types [
+    "text",
+    "bigint",
+    "boolean",
+    "date",
+    "timestamp(6) without time zone",
+    # REQ-298 -- an FK-promoted column's physical type (DDL's
+    # fk_column_pg_type/2 override; see that function's own comment for
+    # why `text` cannot be used for a REFERENCES-bearing column).
+    "uuid"
+  ]
   @numeric_pg_type_regex ~r/^numeric(\(\d+,\s?\d+\))?$/
 
   defp valid_pg_type?(pg_type) do
@@ -1423,7 +1518,10 @@ defmodule Letflow.TenantProvisioning do
   # interpolation (defence in depth matching DDL's own posture) -- an
   # ArgumentError here means a stored row bypassed register_column_promotion/4,
   # a genuine defect that must not be silently swallowed as a DDL failure.
-  defp execute_add_column(schema_name, table_name, promotion) do
+  # target_table (REQ-298) is the already-resolved physical table an
+  # FK-promoted column's REFERENCES clause points at -- `nil` for the
+  # common, non-FK case (identical SQL shape REQ-297 already emits).
+  defp execute_add_column(schema_name, table_name, promotion, target_table) do
     unless DDL.valid_identifier?(table_name) do
       raise ArgumentError, "invalid table_name for ALTER TABLE: #{inspect(table_name)}"
     end
@@ -1437,13 +1535,26 @@ defmodule Letflow.TenantProvisioning do
       raise ArgumentError, "invalid pg_type for ALTER TABLE: #{inspect(promotion.pg_type)}"
     end
 
-    sql =
-      ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type})
+    if target_table != nil and not DDL.valid_identifier?(target_table) do
+      raise ArgumentError,
+            "invalid target_table for ALTER TABLE REFERENCES: #{inspect(target_table)}"
+    end
+
+    sql = build_add_column_sql(schema_name, table_name, promotion, target_table)
 
     Repo.query!(sql)
     :ok
   rescue
     exception -> {:error, {:ddl_failed, exception}}
+  end
+
+  defp build_add_column_sql(schema_name, table_name, promotion, nil) do
+    ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type})
+  end
+
+  defp build_add_column_sql(schema_name, table_name, promotion, target_table) do
+    ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type}) <>
+      ~s| REFERENCES "#{schema_name}"."#{target_table}"("record_id") ON DELETE RESTRICT|
   end
 
   defp mark_ddl_applied(promotion) do
@@ -1648,6 +1759,236 @@ defmodule Letflow.TenantProvisioning do
     end
   end
 
+  # =========================================================================
+  # REQ-298 -- constraint_def unique-index activation (ConstraintActivation)
+  #
+  # See lib/letflow/design/req298-constraint-fk-activation.md §4 for the
+  # full design this section implements. Retrofit-only: a fresh
+  # CREATE TABLE already emits every constraint_def's inline
+  # UNIQUE(...) clause via DDL.generate_table_ddl/3 -- these two functions
+  # exist only for a constraint_def added to an entity type's definition
+  # AFTER its per-entity-type table already exists, and whose target
+  # columns may not all be promoted for a given tenant yet.
+  # =========================================================================
+
+  @doc """
+  Creates one `pending` `ConstraintActivation` row per tenant. `:all`
+  resolves via `resolve_tenant_ids/1`, the exact same tenant-enumeration
+  mechanism `register_column_promotion/4` already uses -- no second
+  mechanism. Issues no DDL. Mirrors `register_column_promotion/4` exactly.
+  """
+  @spec register_constraint_activation(
+          entity_type :: String.t(),
+          constraint_def :: Letflow.Entities.Definition.constraint_def(),
+          tenant_ids :: [Ecto.UUID.t()] | :all
+        ) :: {:ok, [ConstraintActivation.t()]} | {:error, term()}
+  def register_constraint_activation(entity_type, constraint_def, tenant_ids)
+      when is_binary(entity_type) and is_map(constraint_def) do
+    tenant_ids = resolve_tenant_ids(tenant_ids)
+    constraint_name = Map.fetch!(constraint_def, :name)
+    fields = Map.fetch!(constraint_def, :fields)
+
+    Repo.transaction(fn ->
+      Enum.map(tenant_ids, fn tenant_id ->
+        attrs = %{
+          tenant_id: tenant_id,
+          entity_type: entity_type,
+          constraint_name: constraint_name,
+          fields: fields,
+          status: "pending"
+        }
+
+        case Repo.insert(ConstraintActivation.changeset(%ConstraintActivation{}, attrs)) do
+          {:ok, row} -> row
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end)
+  end
+
+  @doc """
+  Single-tenant, single-activation, taking only `activation_id` -- same
+  calling convention as `run_column_promotion/1`. Steps, inside the SAME
+  `pg_advisory_xact_lock(hashtext(schema_name))`-guarded transaction
+  `run_column_promotion/1` already takes for that tenant (same lock key --
+  the tenant schema -- so a concurrent column promotion and constraint
+  activation against the same table never interleave):
+
+    1. Load the row; resolve `schema_name`/`table_name`.
+    2. Check every one of `activation.fields` already exists as a real
+       column, via `information_schema.columns` -- any field absent ->
+       `{:error, {:columns_not_ready, missing_fields}}`, marks the row
+       `ddl_failed` with that reason (retryable later, once the missing
+       column(s)' own promotion(s) land -- not a terminal failure).
+    3. If a constraint named `activation.constraint_name` already exists on
+       that table (`information_schema.table_constraints`) -> idempotent
+       skip, mark `ddl_applied` (mirrors `check_additive_only/3`'s
+       `:idempotent_skip` shape).
+    4. Otherwise, build the constraint clause via
+       `DDL.unique_constraint_clauses/1` applied to a synthetic
+       single-constraint `Definition.t()` built from this row's own
+       `constraint_name`/`fields` alone (this row is self-sufficient by
+       design -- no re-fetch of the live `entity_definitions` row), and
+       issue `ALTER TABLE "<schema>"."<table>" ADD <clause>` via
+       `Repo.query!/1`, rescued into `{:ddl_failed, exception}` -- the same
+       shape `execute_create_table/1`/`execute_add_column/4` already use.
+  """
+  @spec run_constraint_activation(activation_id :: Ecto.UUID.t()) ::
+          {:ok, ConstraintActivation.t()}
+          | {:error,
+             :activation_not_found
+             | :tenant_not_provisioned
+             | {:columns_not_ready, missing_fields :: [String.t()]}
+             | {:ddl_failed, Exception.t()}}
+  def run_constraint_activation(activation_id) do
+    with {:ok, activation} <- fetch_constraint_activation(activation_id),
+         {:ok, schema_name} <- resolve_schema_name(activation.tenant_id) do
+      {:ok, outcome} =
+        Repo.transaction(fn ->
+          Repo.query!("SELECT pg_advisory_xact_lock(hashtext($1))", [schema_name])
+          do_run_constraint_activation(schema_name, activation)
+        end)
+
+      outcome
+    end
+  end
+
+  defp do_run_constraint_activation(schema_name, activation) do
+    with {:ok, table_name} <- checked_constraint_table_name(activation),
+         :ok <- check_columns_ready(schema_name, table_name, activation.fields) do
+      if constraint_exists?(schema_name, table_name, activation.constraint_name) do
+        mark_constraint_ddl_applied(activation)
+      else
+        add_constraint_and_mark(schema_name, table_name, activation)
+      end
+    else
+      {:error, {:columns_not_ready, missing_fields}} ->
+        mark_constraint_ddl_failed_and_return(
+          activation,
+          "columns not ready: #{inspect(missing_fields)}",
+          {:columns_not_ready, missing_fields}
+        )
+    end
+  end
+
+  # Same defence-in-depth posture as checked_table_name/1 -- unreachable via
+  # this module's own public surface (register_constraint_activation/3
+  # already validates entity_type via table_name_for_entity_type/1 at
+  # insert time... actually it does not re-validate there either, matching
+  # register_column_promotion/4's own posture of trusting its caller's
+  # entity_type string; this check exists purely as the same last-resort
+  # guard checked_table_name/1 already establishes for ColumnPromotion).
+  defp checked_constraint_table_name(activation) do
+    case table_name_for_entity_type(activation.entity_type) do
+      {:ok, table_name} ->
+        {:ok, table_name}
+
+      {:error, :invalid_entity_type} ->
+        raise ArgumentError,
+              "ConstraintActivation #{activation.id} has an invalid entity_type: " <>
+                inspect(activation.entity_type)
+    end
+  end
+
+  defp check_columns_ready(schema_name, table_name, fields) do
+    query = """
+    SELECT column_name FROM information_schema.columns
+    WHERE table_schema = $1 AND table_name = $2 AND column_name = ANY($3)
+    """
+
+    %Postgrex.Result{rows: rows} = Repo.query!(query, [schema_name, table_name, fields])
+    present = MapSet.new(rows, fn [column_name] -> column_name end)
+    missing = Enum.reject(fields, &MapSet.member?(present, &1))
+
+    case missing do
+      [] -> :ok
+      _missing -> {:error, {:columns_not_ready, missing}}
+    end
+  end
+
+  defp constraint_exists?(schema_name, table_name, constraint_name) do
+    query = """
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE constraint_schema = $1 AND table_name = $2 AND constraint_name = $3
+    """
+
+    case Repo.query!(query, [schema_name, table_name, constraint_name]) do
+      %Postgrex.Result{rows: []} -> false
+      %Postgrex.Result{rows: [_ | _]} -> true
+    end
+  end
+
+  defp add_constraint_and_mark(schema_name, table_name, activation) do
+    case execute_add_constraint(schema_name, table_name, activation) do
+      :ok ->
+        mark_constraint_ddl_applied(activation)
+
+      {:error, {:ddl_failed, exception}} ->
+        mark_constraint_ddl_failed_and_return(
+          activation,
+          Exception.message(exception),
+          {:ddl_failed, exception}
+        )
+    end
+  end
+
+  # Builds the clause via DDL.unique_constraint_clauses/1 applied to a
+  # synthetic, self-sufficient single-constraint Definition.t() (design §4.3
+  # step 5) -- one shared source of the clause text with the fresh-CREATE-TABLE
+  # path, never two independently hand-written SQL strings.
+  defp execute_add_constraint(schema_name, table_name, activation) do
+    unless DDL.valid_identifier?(table_name) do
+      raise ArgumentError,
+            "invalid table_name for ALTER TABLE ADD CONSTRAINT: #{inspect(table_name)}"
+    end
+
+    synthetic_definition = %{
+      constraints: [
+        %{name: activation.constraint_name, type: :unique, fields: activation.fields}
+      ]
+    }
+
+    case DDL.unique_constraint_clauses(synthetic_definition) do
+      {:ok, [clause]} ->
+        sql = ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD #{clause})
+        Repo.query!(sql)
+        :ok
+
+      {:error, reason} ->
+        raise ArgumentError,
+              "invalid constraint identifiers for ALTER TABLE ADD CONSTRAINT: #{inspect(reason)}"
+    end
+  rescue
+    exception -> {:error, {:ddl_failed, exception}}
+  end
+
+  defp mark_constraint_ddl_applied(activation) do
+    now = naive_now()
+    attrs = %{status: "ddl_applied", ddl_applied_at: now, attempted_at: now, last_error: nil}
+
+    case Repo.update(ConstraintActivation.changeset(activation, attrs)) do
+      {:ok, updated} -> {:ok, updated}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp mark_constraint_ddl_failed_and_return(activation, message, error_reason) do
+    now = naive_now()
+    attrs = %{status: "ddl_failed", last_error: message, attempted_at: now}
+
+    case Repo.update(ConstraintActivation.changeset(activation, attrs)) do
+      {:ok, _updated} -> {:error, error_reason}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp fetch_constraint_activation(activation_id) do
+    case Repo.get(ConstraintActivation, activation_id) do
+      nil -> {:error, :activation_not_found}
+      %ConstraintActivation{} = row -> {:ok, row}
+    end
+  end
+
   @doc """
   Read-only accessor `Letflow.Entities.Query.Allowlist` (REQ-299) calls
   before including a promoted attribute as a `:typed_column` entry. `false`
@@ -1747,6 +2088,28 @@ defmodule Letflow.TenantProvisioning do
   def cast_promoted_value(value, "numeric(" <> _rest) when is_binary(value),
     do: Decimal.new(value)
 
+  # REQ-298's FK-promoted columns are pg_type "uuid" (a real Postgres
+  # `uuid`-typed column, required for a REFERENCES constraint to match its
+  # target's own uuid `record_id` column). `raw_value` here is always a
+  # 36-character text-form UUID string pulled out of `field_values`'s own
+  # jsonb.
+  #
+  # This does NOT dump to Postgrex's raw 16-byte binary form the way
+  # `Ecto.UUID`'s own Ecto type would for a changeset-driven write --
+  # `Letflow.Entities.Records.placeholder_list/1` and
+  # `Letflow.Entities.Record.Projector`'s own placeholder builder bind every
+  # promoted "uuid" column through the SAME `($n::text)::uuid` SQL-level
+  # double-cast idiom already established for the structural "id"/
+  # "record_id" columns (see those modules' own comments) -- which forces
+  # the bind parameter's wire type to `text`, not `uuid`. Handing that path
+  # a raw binary would break it a different way (confirmed empirically: a
+  # 16-byte binary bound as a `text`-typed parameter fails Postgres's UTF-8
+  # validation, `invalid byte sequence for encoding "UTF8"`). `Ecto.UUID.cast!/1`
+  # is used instead, purely to reject a malformed value early with a clear
+  # error and normalize casing/hyphenation, keeping the value in the same
+  # text form the SQL-side cast expects.
+  def cast_promoted_value(value, "uuid") when is_binary(value), do: Ecto.UUID.cast!(value)
+
   def cast_promoted_value(value, _pg_type), do: value
 
   # ---------------------------------------------------------------------
@@ -1796,7 +2159,8 @@ defmodule Letflow.TenantProvisioning do
       name: Map.fetch!(json, "name"),
       display_name: Map.get(json, "display_name"),
       fields: json |> Map.get("fields", []) |> Enum.map(&field_from_persisted/1),
-      foreign_keys: json |> Map.get("foreign_keys", []) |> Enum.map(&fk_from_persisted/1)
+      foreign_keys: json |> Map.get("foreign_keys", []) |> Enum.map(&fk_from_persisted/1),
+      constraints: json |> Map.get("constraints", []) |> Enum.map(&constraint_from_persisted/1)
     }
   end
 
@@ -1811,5 +2175,28 @@ defmodule Letflow.TenantProvisioning do
     }
   end
 
-  defp fk_from_persisted(fk), do: %{field: Map.fetch!(fk, "field")}
+  # REQ-298: `references_entity` is now needed by DDL.promoted_columns/1 (to
+  # populate column_spec.references_entity) and by
+  # resolve_fk_target_tables/1 above -- both previously unreachable via this
+  # conversion, since the pre-REQ-298 shape only round-tripped `field`.
+  defp fk_from_persisted(fk) do
+    %{
+      name: Map.fetch!(fk, "name"),
+      field: Map.fetch!(fk, "field"),
+      references_entity: Map.fetch!(fk, "references_entity")
+    }
+  end
+
+  # REQ-298: constraints (constraint_def(), always type: :unique today) were
+  # not part of document_from_persisted/1's round-trip at all before this
+  # requirement -- needed so the fresh-CREATE-TABLE path
+  # (create_and_populate_entity_table/3) can emit a constraint_def's inline
+  # UNIQUE(...) clause via DDL.generate_table_ddl/3.
+  defp constraint_from_persisted(constraint) do
+    %{
+      name: Map.fetch!(constraint, "name"),
+      type: String.to_existing_atom(Map.fetch!(constraint, "type")),
+      fields: Map.fetch!(constraint, "fields")
+    }
+  end
 end

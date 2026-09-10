@@ -40,7 +40,8 @@ defmodule Letflow.Entities.Definition.DDLTest do
         ]
       }
 
-      assert {:ok, sql} = DDL.generate_table_ddl(definition, "invoice_table")
+      assert {:ok, sql} =
+               DDL.generate_table_ddl(definition, "invoice_table", %{"customer" => "customer"})
 
       assert sql =~ ~s|CREATE TABLE "invoice_table" (|
 
@@ -55,8 +56,11 @@ defmodule Letflow.Entities.Definition.DDLTest do
       assert sql =~ ~s|"inserted_at" timestamp(6) without time zone NOT NULL|
       assert sql =~ ~s|"updated_at" timestamp(6) without time zone NOT NULL|
 
-      # Promoted columns: customer_id (FK) and amount (queried).
-      assert sql =~ ~s|"customer_id" text|
+      # Promoted columns: customer_id (FK, with its REQ-298 REFERENCES clause)
+      # and amount (queried).
+      assert sql =~
+               ~s|"customer_id" uuid REFERENCES "customer"("record_id") ON DELETE RESTRICT|
+
       assert sql =~ ~s|"amount" numeric(10, 2)|
 
       # Not promoted / never promoted.
@@ -67,7 +71,26 @@ defmodule Letflow.Entities.Definition.DDLTest do
 
       assert [customer_id, amount] = DDL.promoted_columns(definition)
       assert customer_id.name == "customer_id"
+      assert customer_id.references_entity == "customer"
       assert amount.name == "amount"
+      assert amount.references_entity == nil
+    end
+
+    test "returns {:error, {:missing_fk_target_table, _}} when fk_target_tables omits an entry" do
+      definition = %{
+        name: "invoice",
+        display_name: "Invoice",
+        fields: [%{name: "customer_id", type: :string}],
+        foreign_keys: [
+          %{name: "customer_fk", field: "customer_id", references_entity: "customer"}
+        ]
+      }
+
+      assert {:error, {:missing_fk_target_table, entity_type: "customer"}} =
+               DDL.generate_table_ddl(definition, "invoice_table")
+
+      assert {:error, {:missing_fk_target_table, entity_type: "customer"}} =
+               DDL.generate_table_ddl(definition, "invoice_table", %{})
     end
   end
 
@@ -337,6 +360,107 @@ defmodule Letflow.Entities.Definition.DDLTest do
   end
 
   # ---------------------------------------------------------------------------
+  # REQ-298 AC1 -- unique_constraint_clauses/1, the shared clause-text
+  # builder both the fresh CREATE TABLE path and
+  # Letflow.TenantProvisioning.run_constraint_activation/1's retrofit path
+  # (§7 test-coverage plan item 1's "N=1 works identically" case included).
+  # ---------------------------------------------------------------------------
+
+  describe "unique_constraint_clauses/1" do
+    test "emits one named CONSTRAINT ... UNIQUE (...) clause per constraint_def, in order" do
+      definition = %{
+        name: "question_tags",
+        display_name: "Question tags",
+        fields: [],
+        constraints: [
+          %{name: "uq_pair", type: :unique, fields: ["question_id", "tag_id"]},
+          %{name: "uq_single", type: :unique, fields: ["tag_id"]}
+        ]
+      }
+
+      assert {:ok,
+              [
+                ~s|CONSTRAINT "uq_pair" UNIQUE ("question_id", "tag_id")|,
+                ~s|CONSTRAINT "uq_single" UNIQUE ("tag_id")|
+              ]} = DDL.unique_constraint_clauses(definition)
+    end
+
+    test "returns [] for a definition with no constraints" do
+      assert {:ok, []} =
+               DDL.unique_constraint_clauses(%{name: "x", display_name: "X", fields: []})
+    end
+
+    test "rejects a malformed constraint name" do
+      definition = %{
+        name: "x",
+        display_name: "X",
+        fields: [],
+        constraints: [%{name: "Bad Name", type: :unique, fields: ["a"]}]
+      }
+
+      assert {:error, {:invalid_identifier, field: :constraint_name, value: "Bad Name"}} =
+               DDL.unique_constraint_clauses(definition)
+    end
+
+    test "rejects a malformed constraint field name" do
+      definition = %{
+        name: "x",
+        display_name: "X",
+        fields: [],
+        constraints: [%{name: "uq_x", type: :unique, fields: ["Bad Field"]}]
+      }
+
+      assert {:error, {:invalid_identifier, field: :constraint_field, value: "Bad Field"}} =
+               DDL.unique_constraint_clauses(definition)
+    end
+
+    test "generate_table_ddl/3 folds the constraint clause into the CREATE TABLE's own constraint list" do
+      definition = %{
+        name: "question_tags",
+        display_name: "Question tags",
+        fields: [
+          %{name: "question_id", type: :string},
+          %{name: "tag_id", type: :string}
+        ],
+        foreign_keys: [
+          %{name: "fk_question", field: "question_id", references_entity: "questions"},
+          %{name: "fk_tag", field: "tag_id", references_entity: "tags"}
+        ],
+        constraints: [
+          %{name: "uq_question_tag_pair", type: :unique, fields: ["question_id", "tag_id"]}
+        ]
+      }
+
+      assert {:ok, sql} =
+               DDL.generate_table_ddl(definition, "question_tags_table", %{
+                 "questions" => "entity_questions",
+                 "tags" => "entity_tags"
+               })
+
+      assert sql =~
+               ~s|"question_id" uuid REFERENCES "entity_questions"("record_id") ON DELETE RESTRICT|
+
+      assert sql =~
+               ~s|"tag_id" uuid REFERENCES "entity_tags"("record_id") ON DELETE RESTRICT|
+
+      assert sql =~ ~s|CONSTRAINT "uq_question_tag_pair" UNIQUE ("question_id", "tag_id")|
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # REQ-298 AC3 -- moduledoc cites 0025's ON DELETE RESTRICT decision by name.
+  # ---------------------------------------------------------------------------
+
+  describe "moduledoc cites 0025's ON DELETE RESTRICT decision (REQ-298 AC3)" do
+    test "the moduledoc quotes the fixed clause and cites the decision record" do
+      source = File.read!("lib/letflow/entities/definition/ddl.ex")
+
+      assert source =~ "ON DELETE RESTRICT"
+      assert source =~ "0025-promoted-fk-ondelete-and-localized-text-search-strategy.md"
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # Moduledoc extension point for REQ-301.
   # ---------------------------------------------------------------------------
 
@@ -385,10 +509,14 @@ defmodule Letflow.Entities.Definition.DDLTest do
         ],
         foreign_keys: [
           %{name: "customer_fk", field: "customer_id", references_entity: "customer"}
+        ],
+        constraints: [
+          %{name: "uq_widget_status", type: :unique, fields: ["status"]}
         ]
       }
 
-      assert {:ok, sql} = DDL.generate_table_ddl(definition, table_name)
+      assert {:ok, sql} =
+               DDL.generate_table_ddl(definition, table_name, %{"customer" => "customer"})
 
       # ExUnit runs on_exit callbacks LIFO, most-recently-registered first --
       # this one runs before Letflow.DataCase's own checkin/rollback, so the
@@ -400,6 +528,11 @@ defmodule Letflow.Entities.Definition.DDLTest do
 
       Repo.query!(~s|CREATE SCHEMA "#{schema_name}"|)
       Repo.query!(~s|SET search_path TO "#{schema_name}"|)
+
+      # The FK target table this widget table's REFERENCES clause points at
+      # -- must exist before the generated CREATE TABLE below runs, since a
+      # real REFERENCES constraint is checked by Postgres at creation time.
+      Repo.query!(~s|CREATE TABLE "customer" (record_id uuid PRIMARY KEY)|)
 
       result = Repo.query!(sql)
 
@@ -430,6 +563,39 @@ defmodule Letflow.Entities.Definition.DDLTest do
         |> MapSet.new()
 
       assert actual_columns == expected_columns
+
+      # REQ-298 AC1/AC2 -- the fresh-CREATE-TABLE path's REFERENCES clause
+      # and inline UNIQUE(...) constraint are real, Postgres-enforced
+      # integrity rules, not merely present in the schema catalog.
+      customer_record_id = Ecto.UUID.generate()
+
+      Repo.query!(~s|INSERT INTO "customer" (record_id) VALUES (($1::text)::uuid)|, [
+        customer_record_id
+      ])
+
+      insert_widget = fn record_id, customer_id, status ->
+        Repo.query(
+          """
+          INSERT INTO "#{table_name}"
+            (id, record_id, field_values, deleted, last_event_global_seq,
+             inserted_at, updated_at, customer_id, amount, status)
+          VALUES (($1::text)::uuid, ($2::text)::uuid, '{}'::jsonb, false, 1, now(), now(), ($3::text)::uuid, $4, $5)
+          """,
+          [Ecto.UUID.generate(), record_id, customer_id, Decimal.new("1.00"), status]
+        )
+      end
+
+      assert {:ok, _result} = insert_widget.(Ecto.UUID.generate(), customer_record_id, "active")
+
+      # AC1 -- a duplicate value for the constrained ("status") column is
+      # rejected as a real unique_violation.
+      assert {:error, %Postgrex.Error{postgres: %{code: :unique_violation}}} =
+               insert_widget.(Ecto.UUID.generate(), customer_record_id, "active")
+
+      # AC2 -- a customer_id with no matching "customer" row is rejected as
+      # a real foreign_key_violation.
+      assert {:error, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}} =
+               insert_widget.(Ecto.UUID.generate(), Ecto.UUID.generate(), "inactive")
 
       Repo.query!(~s|SET search_path TO public|)
     end

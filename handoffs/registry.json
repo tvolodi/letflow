@@ -6079,5 +6079,30 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-297 (queue task 567, GH#1161) is the promotion executor -- the first code to actually run entity-storage DDL against live tenant schemas, implementing REQ-295's designed ColumnPromotion mechanism via REQ-296's DDL generator. Nine functions on TenantProvisioning, new global entity_column_promotions table (per-tenant atomicity), backfill via real rebuild_projection/2 replay with dual-write, table-creation-on-first-use (a correctly-flagged gap-fill, not a scope overreach). Additive-only enforced by a real information_schema.columns check; dual-write is a new separate Multi step leaving upsert_record_latest/3 untouched. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (PASS -- exhaustive cross-tenant/injection trace, the highest-stakes review in this batch) -> REVIEWER (PASS -- found and confirmed a 3rd, unrelated pre-existing test flake via isolated re-run). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (17 tests, comprehensive, independently confirmed twice)."
     }
+,
+    {
+      "run_id": "WF02-REQ298-20260910",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-298",
+      "issue_id": null,
+      "queue_task_id": 569,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1163,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/entities/definition/ddl.ex",
+        "lib/letflow/tenant_provisioning.ex",
+        "lib/letflow/tenant_provisioning/constraint_activation.ex",
+        "lib/letflow/entities/records.ex",
+        "lib/letflow/entities/record/projector.ex"
+      ],
+      "branch_name": "feature/WF02-REQ298-20260910",
+      "started_at": "2026-09-10T01:55:45Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-298 (queue task 569, GH#1163) activates constraint_def unique indexes and fk_def referential integrity (REFERENCES ... ON DELETE RESTRICT per REQ-302), extending REQ-296's generator and REQ-297's executor. FK REFERENCES rides the same ADD COLUMN statement; multi-column unique constraints use a new ConstraintActivation retrofit mechanism under the same advisory-lock serialization. Many-to-many worked example verified with no join-table special case. A genuine necessity (FK-promoted columns forced to uuid pg_type) surfaced a real production-crashing bug SECURITY-REVIEWER caught: cast_promoted_value/2 and both write-path placeholder builders lacked a uuid case, masked by the original test helper's own manual cast. Fixed with fail-first-proven tests exercising the real production paths. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS) -> ELIXIR-DEV -> SECURITY-REVIEWER (1 rework: real bug caught and fixed, re-check PASS with independently-reproduced fail-first proof) -> REVIEWER (PASS). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped (44 tests, comprehensive, independently confirmed twice)."
+    }
   ]
 }

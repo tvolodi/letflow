@@ -47,6 +47,18 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
     -specific meaning and would destroy history on a `retry` after a
     suspend. A dedicated field resolves the design's own explicitly-left-open
     question cleanly.
+
+  ## `references_entity` (REQ-298)
+
+  `references_entity :: String.t() | nil` -- the target entity-type
+  **string** (never a resolved table name) for an FK-promoted column,
+  stored verbatim as given to `register_column_promotion/4`. `nil` for the
+  common, non-FK case. Resolved to a physical table name only at
+  `run_column_promotion/1` time
+  (`Letflow.TenantProvisioning.resolve_fk_target_table/1`), the same
+  entity-type-space-until-execution-time posture `entity_type`/`attribute`
+  already have on this row. See
+  `lib/letflow/design/req298-constraint-fk-activation.md` §3.
   """
 
   use Ecto.Schema
@@ -63,6 +75,7 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
     field(:query_eligible, :boolean, default: false)
     field(:last_error, :string)
     field(:suspend_reason, :string)
+    field(:references_entity, :string)
     field(:attempted_at, :naive_datetime)
     field(:ddl_applied_at, :naive_datetime)
     field(:backfilled_at, :naive_datetime)
@@ -85,6 +98,7 @@ defmodule Letflow.TenantProvisioning.ColumnPromotion do
     :query_eligible,
     :last_error,
     :suspend_reason,
+    :references_entity,
     :attempted_at,
     :ddl_applied_at,
     :backfilled_at,

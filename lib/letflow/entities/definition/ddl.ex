@@ -53,6 +53,19 @@ defmodule Letflow.Entities.Definition.DDL do
   does **not** implement that case, add a locale configuration shape, or
   reserve a field name/flag for it -- only the dispatch shape that makes
   adding it additive.
+
+  ## ON DELETE policy for promoted FK columns (REQ-298)
+
+  Every promoted-FK-column `REFERENCES` constraint this module emits carries
+  a fixed, unconditional `ON DELETE RESTRICT` clause (Ecto:
+  `on_delete: :restrict`), per
+  `docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md`,
+  "Decision" section, "Sub-question 1 -- `ON DELETE RESTRICT`": *"Every
+  promoted-FK-column `REFERENCES` constraint uses **`ON DELETE RESTRICT`**
+  (Ecto: `on_delete: :restrict`)."* This module does not re-derive or
+  second-guess that record's reconciliation of `ON DELETE RESTRICT` against
+  `Letflow.Entities.Records.delete_record/2`'s soft-delete semantics -- 0025
+  already did that reasoning; this module only implements its answer.
   """
 
   alias Letflow.Entities.Definition
@@ -61,11 +74,16 @@ defmodule Letflow.Entities.Definition.DDL do
   @type column_spec :: %{
           name: String.t(),
           pg_type: String.t(),
-          nullable: boolean()
+          nullable: boolean(),
+          references_entity: String.t() | nil
         }
 
-  @typedoc "Failure reason for `generate_table_ddl/2` -- identifier-shape failures only."
-  @type ddl_error :: {:invalid_identifier, field: :table_name | :attribute, value: String.t()}
+  @typedoc "Failure reason for `generate_table_ddl/3`."
+  @type ddl_error ::
+          {:invalid_identifier,
+           field: :table_name | :attribute | :constraint_name | :constraint_field,
+           value: String.t()}
+          | {:missing_fk_target_table, entity_type: String.t()}
 
   @identifier_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
 
@@ -78,22 +96,45 @@ defmodule Letflow.Entities.Definition.DDL do
   invent a table-naming convention; it validates whatever name it is given
   and uses it verbatim in the emitted `CREATE TABLE "<table_name>" (...)`.
 
-  Returns `{:error, ddl_error()}` only for a defence-in-depth identifier-shape
-  failure (`table_name` or a promoted column name not matching the safe
-  identifier format) -- never for a structurally-invalid `Definition.t()`,
-  which is the Validator's job and is assumed already passed per the
-  precondition stated in the moduledoc.
+  `fk_target_tables` (REQ-298) maps every `references_entity` value named by
+  `definition.foreign_keys` to its already-resolved physical table name.
+  This module never resolves an `entity_type -> table_name` mapping itself
+  (per its own "pure function, no I/O, no tenant/schema awareness"
+  invariant) -- that is the caller's job
+  (`Letflow.TenantProvisioning.table_name_for_entity_type/1`), same as
+  `table_name` (the entity type's own physical name) already is today.
+  Defaults to `%{}`, so every existing 2-arity call site (a definition with
+  no `foreign_keys`) keeps compiling and behaving identically. If
+  `definition.foreign_keys` names a `references_entity` absent from
+  `fk_target_tables`, this function returns
+  `{:error, {:missing_fk_target_table, entity_type: that_entity_type}}`
+  rather than silently omitting the `REFERENCES` clause or guessing a table
+  name.
+
+  Returns `{:error, ddl_error()}` for a defence-in-depth identifier-shape
+  failure (`table_name`, a promoted column name, or a `constraint_def`'s
+  name/fields not matching the safe identifier format), or for a missing FK
+  target table -- never for a structurally-invalid `Definition.t()`, which
+  is the Validator's job and is assumed already passed per the precondition
+  stated in the moduledoc.
   """
-  @spec generate_table_ddl(Definition.t(), table_name :: String.t()) ::
-          {:ok, String.t()} | {:error, ddl_error()}
-  def generate_table_ddl(definition, table_name) do
+  @spec generate_table_ddl(
+          Definition.t(),
+          table_name :: String.t(),
+          fk_target_tables :: %{optional(String.t()) => String.t()}
+        ) :: {:ok, String.t()} | {:error, ddl_error()}
+  def generate_table_ddl(definition, table_name, fk_target_tables \\ %{}) do
     promoted = promoted_columns(definition)
     columns = structural_columns() ++ promoted
 
     with :ok <- check_identifier(:table_name, table_name),
-         :ok <- check_column_identifiers(columns) do
+         :ok <- check_column_identifiers(columns),
+         {:ok, unique_constraint_lines} <- unique_constraint_clauses(definition),
+         {:ok, column_lines} <- build_column_lines(columns, fk_target_tables) do
       enum_checks = enum_check_constraints(definition, promoted)
-      {:ok, build_create_table_sql(table_name, columns, enum_checks)}
+
+      {:ok,
+       build_create_table_sql(table_name, column_lines, enum_checks, unique_constraint_lines)}
     end
   end
 
@@ -113,14 +154,29 @@ defmodule Letflow.Entities.Definition.DDL do
   @spec structural_columns() :: [column_spec()]
   def structural_columns do
     [
-      %{name: "id", pg_type: "uuid", nullable: false},
-      %{name: "record_id", pg_type: "uuid", nullable: false},
-      %{name: "field_values", pg_type: "jsonb", nullable: false},
-      %{name: "deleted", pg_type: "boolean", nullable: false},
-      %{name: "entity_def_version", pg_type: "bytea", nullable: true},
-      %{name: "last_event_global_seq", pg_type: "bigint", nullable: false},
-      %{name: "inserted_at", pg_type: "timestamp(6) without time zone", nullable: false},
-      %{name: "updated_at", pg_type: "timestamp(6) without time zone", nullable: false}
+      %{name: "id", pg_type: "uuid", nullable: false, references_entity: nil},
+      %{name: "record_id", pg_type: "uuid", nullable: false, references_entity: nil},
+      %{name: "field_values", pg_type: "jsonb", nullable: false, references_entity: nil},
+      %{name: "deleted", pg_type: "boolean", nullable: false, references_entity: nil},
+      %{name: "entity_def_version", pg_type: "bytea", nullable: true, references_entity: nil},
+      %{
+        name: "last_event_global_seq",
+        pg_type: "bigint",
+        nullable: false,
+        references_entity: nil
+      },
+      %{
+        name: "inserted_at",
+        pg_type: "timestamp(6) without time zone",
+        nullable: false,
+        references_entity: nil
+      },
+      %{
+        name: "updated_at",
+        pg_type: "timestamp(6) without time zone",
+        nullable: false,
+        references_entity: nil
+      }
     ]
   end
 
@@ -138,21 +194,64 @@ defmodule Letflow.Entities.Definition.DDL do
   """
   @spec promoted_columns(Definition.t()) :: [column_spec()]
   def promoted_columns(definition) do
-    fk_field_names = MapSet.new(Map.get(definition, :foreign_keys, []), &Map.get(&1, :field))
+    foreign_keys = Map.get(definition, :foreign_keys, [])
+    fk_field_names = MapSet.new(foreign_keys, &Map.get(&1, :field))
+
+    references_entity_by_field =
+      Map.new(foreign_keys, fn fk -> {Map.get(fk, :field), Map.get(fk, :references_entity)} end)
 
     definition
     |> Map.get(:fields, [])
-    |> Enum.filter(fn field -> promotion_trigger(field, fk_field_names) != :not_promoted end)
     |> Enum.flat_map(fn field ->
-      case field_type_to_pg_type(field) do
-        {:ok, pg_type} ->
-          [%{name: Map.get(field, :name), pg_type: pg_type, nullable: true}]
+      trigger = promotion_trigger(field, fk_field_names)
 
-        :never_promoted ->
+      case {trigger, field_type_to_pg_type(field)} do
+        {:not_promoted, _pg_type_result} ->
           []
+
+        {_trigger, :never_promoted} ->
+          []
+
+        {trigger, {:ok, mapped_pg_type}} ->
+          name = Map.get(field, :name)
+          references_entity = Map.get(references_entity_by_field, name)
+
+          [
+            %{
+              name: name,
+              pg_type: fk_column_pg_type(trigger, mapped_pg_type),
+              nullable: true,
+              references_entity: references_entity
+            }
+          ]
       end
     end)
   end
+
+  # REQ-298 correction, flagged for REVIEWER (found empirically while
+  # implementing this requirement, not named by the req298 design doc's
+  # literal text): a `:fk`-triggered column's physical Postgres type MUST be
+  # `uuid`, never `field_type_to_pg_type/1`'s ordinary `:string -> "text"`
+  # mapping. `fk_def.field` is, per 0023's own characterization, "an
+  # ordinary `:string`-typed field ... holding a record_id-shaped UUID
+  # string" -- but the *target* of every `REFERENCES` clause this module
+  # emits is always `record_id`, a `uuid`-typed structural column
+  # (`structural_columns/0`). Postgres's `ADD CONSTRAINT`/`ADD COLUMN
+  # ... REFERENCES` check requires the referencing and referenced columns
+  # to share a compatible equality operator; `text` and `uuid` do not have
+  # one by default, so a `text`-typed FK column can never actually get a
+  # real `REFERENCES` constraint at all -- confirmed empirically against a
+  # real Postgres instance while building this requirement's own tests
+  # (`ERROR 42804: foreign key constraint ... cannot be implemented ...
+  # incompatible types: text and uuid`). Since every `fk_def.field` in this
+  # codebase's own worked examples is `:string`-typed (0023 §"Many-to-many
+  # is not a special case"), applying this module's ordinary mapping
+  # unconditionally would make AC2 -- a real, Postgres-enforced FK --
+  # unsatisfiable for the only field shape that ever triggers it. This
+  # override is narrowly scoped to the `:fk` trigger only; a `:queried`
+  # -triggered `:string` field (no FK) still gets `"text"`, unchanged.
+  defp fk_column_pg_type(:fk, _mapped_pg_type), do: "uuid"
+  defp fk_column_pg_type(_trigger, mapped_pg_type), do: mapped_pg_type
 
   @doc """
   The type-mapping table as a function. Takes the full `field_def()` (not
@@ -219,6 +318,45 @@ defmodule Letflow.Entities.Definition.DDL do
 
   def valid_identifier?(_value), do: false
 
+  @doc """
+  Builds the `CONSTRAINT "<name>" UNIQUE (...)` clause text for every entry
+  in `definition.constraints` (`constraint_def()`, REQ-298) -- always a
+  **named** constraint, never a bare `UNIQUE (...)`, because
+  `Letflow.TenantProvisioning.run_constraint_activation/1`'s own retrofit
+  `ADD CONSTRAINT` step (the many-fields-promoted-independently case a
+  single-column `ADD COLUMN` cannot express) must reference the same name
+  for its own idempotent-skip check against
+  `information_schema.table_constraints`.
+
+  Public so both the fresh-`CREATE TABLE` path (this module's own
+  `generate_table_ddl/3`) and the retrofit path
+  (`Letflow.TenantProvisioning.run_constraint_activation/1`) build the
+  identical clause text from one shared function -- never two independently
+  hand-written SQL strings.
+
+  Validates `constraint_def.name` and every entry of `constraint_def.fields`
+  via `valid_identifier?/1` (defence in depth, same posture as
+  `check_column_identifiers/1`) -- returns `{:error, ddl_error()}` on the
+  first invalid identifier found, never silently drops or truncates a
+  malformed constraint.
+  """
+  @spec unique_constraint_clauses(Definition.t()) ::
+          {:ok, [String.t()]} | {:error, ddl_error()}
+  def unique_constraint_clauses(definition) do
+    definition
+    |> Map.get(:constraints, [])
+    |> Enum.reduce_while({:ok, []}, fn constraint, {:ok, acc} ->
+      case unique_constraint_clause(constraint) do
+        {:ok, clause} -> {:cont, {:ok, [clause | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, clauses} -> {:ok, Enum.reverse(clauses)}
+      {:error, _reason} = error -> error
+    end
+  end
+
   # --- internal ---------------------------------------------------------------
 
   defp decimal_pg_type(field) do
@@ -270,11 +408,10 @@ defmodule Letflow.Entities.Definition.DDL do
     "'#{escaped}'"
   end
 
-  defp build_create_table_sql(table_name, columns, enum_checks) do
-    column_lines = Enum.map(columns, &column_sql_line/1)
-
+  defp build_create_table_sql(table_name, column_lines, enum_checks, unique_constraint_lines) do
     constraint_lines =
-      ["PRIMARY KEY (\"id\")", "UNIQUE (\"record_id\")"] ++ enum_checks
+      ["PRIMARY KEY (\"id\")", "UNIQUE (\"record_id\")"] ++
+        enum_checks ++ unique_constraint_lines
 
     lines = column_lines ++ constraint_lines
 
@@ -285,14 +422,69 @@ defmodule Letflow.Entities.Definition.DDL do
     """
   end
 
-  defp column_sql_line(%{name: name, pg_type: pg_type, nullable: nullable} = column) do
+  defp build_column_lines(columns, fk_target_tables) do
+    columns
+    |> Enum.reduce_while({:ok, []}, fn column, {:ok, acc} ->
+      case column_sql_line(column, fk_target_tables) do
+        {:ok, line} -> {:cont, {:ok, [line | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, lines} -> {:ok, Enum.reverse(lines)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp column_sql_line(
+         %{name: name, pg_type: pg_type, nullable: nullable} = column,
+         fk_target_tables
+       ) do
     null_clause = if nullable, do: "", else: " NOT NULL"
     default_clause = default_clause_for(column)
+    base = ~s("#{name}" #{pg_type}#{null_clause}#{default_clause})
 
-    ~s("#{name}" #{pg_type}#{null_clause}#{default_clause})
+    case Map.get(column, :references_entity) do
+      nil ->
+        {:ok, base}
+
+      entity_type ->
+        case Map.fetch(fk_target_tables, entity_type) do
+          {:ok, target_table} ->
+            {:ok, base <> ~s| REFERENCES "#{target_table}"("record_id") ON DELETE RESTRICT|}
+
+          :error ->
+            {:error, {:missing_fk_target_table, entity_type: entity_type}}
+        end
+    end
   end
 
   defp default_clause_for(%{name: "field_values"}), do: " DEFAULT '{}'::jsonb"
   defp default_clause_for(%{name: "deleted"}), do: " DEFAULT false"
   defp default_clause_for(_column), do: ""
+
+  defp unique_constraint_clause(%{name: name, fields: fields}) do
+    with :ok <- check_constraint_name_identifier(name),
+         :ok <- check_constraint_field_identifiers(fields) do
+      field_list = Enum.map_join(fields, ", ", &~s("#{&1}"))
+      {:ok, ~s|CONSTRAINT "#{name}" UNIQUE (#{field_list})|}
+    end
+  end
+
+  defp check_constraint_name_identifier(name) do
+    if valid_identifier?(name) do
+      :ok
+    else
+      {:error, {:invalid_identifier, field: :constraint_name, value: name}}
+    end
+  end
+
+  defp check_constraint_field_identifiers(fields) do
+    fields
+    |> Enum.find(fn field -> not valid_identifier?(field) end)
+    |> case do
+      nil -> :ok
+      field -> {:error, {:invalid_identifier, field: :constraint_field, value: field}}
+    end
+  end
 end

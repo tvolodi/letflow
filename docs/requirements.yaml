@@ -17107,7 +17107,7 @@ requirements:
     owner: ELIXIR-DEV
     impl_order: 572  # letflow-queue task id, GH#1168. Registered 2026-09-09 by ORCH
       # once REQ-289 (its sole dependency) landed done -- no live blocker left.
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Second half of step 9 of

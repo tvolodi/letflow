@@ -2588,8 +2588,12 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 14
+    entries: 15
     note: >
+      Incremented to 15 by ORCH's own ISS-0583 SCOPE-CHANGE blocked-event
+      append (chore/iss0583-block-20260910) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 15 on-disk entries; 742
+      lines, well under the roll ceiling.
       Recounted to 14 on ORCH's fix/ISS-0582-20260910 Step Final rebase
       onto main, composing this branch's own ISS-0582 SCOPE-CHANGE
       done-event (independently computed as 12, against a stale base of

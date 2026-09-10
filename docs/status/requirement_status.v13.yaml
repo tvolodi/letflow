@@ -716,3 +716,27 @@ history:
       hash (the value isn't load-bearing for any of REQ-306's assertions
       since create_definition/2 recomputes logical_shape_version fresh
       regardless); all 17 tests in the composed file pass.
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: "2026-09-10T21:54:38Z"
+    note: >
+      ISS-0583 (GH#1200, queue task 583) -- filed by REVIEWER while
+      reviewing REQ-292's own not-yet-merged branch (WF02-REQ292-20260910),
+      alleging lib/letflow/tenant_provisioning.ex had already bumped
+      TASK_COMPLETED's event schema v1->v2 (to admit
+      computed_field_disagreement/visible_when_false_value_discarded) and
+      needed a pre-existing-tenant backfill, per the established
+      ISS-0332/DEFINITION_PROMOTED precedent. CODE-DESIGNER investigated
+      and found the premise does not hold on main: TASK_COMPLETED is still
+      registered at schema_version 1 only, neither new event-kind string
+      appears anywhere in the tracked tree, and REQ-292 itself is still
+      status: pending (locked/in-progress on a separate session at filing
+      time) -- correctly declined to fabricate a design for a v2 schema
+      that doesn't exist yet, per core-directives.md's no-speculation
+      rule, rather than guessing its shape. Confirmed independently by
+      ORCH via direct grep/requirements.yaml read before releasing.
+      Queue task released as blocked (not done, not closed) rather than
+      worked or silently dropped -- GH#1200 left open with a comment
+      explaining the gap and naming REQ-292's merge as the actual
+      precondition. No code changed; branch abandoned unpushed.

@@ -664,3 +664,55 @@ history:
       this repo's decision records carry no such convention anywhere
       (REQ-303's, REQ-304's and REQ-305's own done-event notes found the
       same absence for their own records) -- no edit made.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-10T19:55:18Z"
+    note: >
+      ISS-0582 (GH#1196, queue task 582) -- pack_entity_definition/1
+      embedded EntityDefinition.logical_shape_version (a raw, non-UTF-8-safe
+      SHA-256 digest) verbatim into the SolutionPack pack document, which is
+      documented to serialize through Jason.encode!/1 -- a real call raised
+      Jason.EncodeError. Discovered by TEST-DESIGNER while writing REQ-306's
+      round-trip coverage. Pipeline: CODE-DESIGNER (design doc PASS first
+      try, verified create_definition/2 recomputes logical_shape_version
+      fresh and never reads the packed value, so decode is round-trip-
+      fidelity only, not load-bearing; explicitly called this in-scope for
+      SECURITY-REVIEWER since pack_entity_definition/1 is response-shaping
+      code for a tenant-scoped entity, matching REQ-304/305's own sign-off
+      scope) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (hex-
+      encodes at pack time via encode_logical_shape_version/1, matching
+      Letflow.Entities.Records.hex_version/1's existing convention;
+      hex-decodes at parse time via decode_logical_shape_version/1,
+      non-raising, reusing the existing :invalid_pack_document error atom;
+      real AC1/AC2 evidence via a throwaway test: Jason round trip succeeds,
+      cross-tenant install round-trips the digest byte-identical) ->
+      SECURITY-REVIEWER PASS (confirmed INV-1 unaffected, confirmed
+      Base.decode16/2's non-raising contract correctly exhausted, confirmed
+      evidence wasn't fabricated) -> REVIEWER PASS (confirmed REQ-306's
+      named workaround doesn't exist yet on this branch so nothing to
+      remove there, confirmed decision 0026 unaffected, full suite run
+      showed only environmental too_many_connections/queue_timeout
+      failures unrelated to this diff) -> TEST-DESIGNER added one
+      permanent regression test exercising the real export/4 ->
+      Jason.encode!/1 -> Jason.decode!/1 -> install/3 pipeline end to end
+      (closing the gap left by the throwaway proof), fail-first-proven by
+      reverting the encode call and confirming the test reproduces the
+      exact original Jason.EncodeError, then confirming it passes again
+      restored (11 passed). TEST-DESIGN-VALIDATOR skipped per this
+      session's established precedent (single self-verified fail-first-
+      proven test, REVIEWER already passed the underlying fix). This
+      branch's own Step Final rebase onto main hit a real content
+      conflict (not the usual append-only status-file conflict) in
+      test/letflow/definitions/solution_pack_test.exs against REQ-306's
+      own now-merged coverage: REQ-306's collision-rollback test's
+      packed_entity_definition_json/1 fixture used a placeholder
+      "req306-shape-<name>" string for logical_shape_version, which
+      decode_logical_shape_version/1 (this fix) correctly rejects as
+      non-hex -- {:error, :invalid_pack_document} instead of reaching
+      the collision path. Fixed during conflict resolution by changing
+      the fixture's default to a real Base.encode16/2-encoded SHA-256
+      hash (the value isn't load-bearing for any of REQ-306's assertions
+      since create_definition/2 recomputes logical_shape_version fresh
+      regardless); all 17 tests in the composed file pass.

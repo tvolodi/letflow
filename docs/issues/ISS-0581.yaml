@@ -26,4 +26,4 @@ affected_files:
   - test/letflow/scheduler/poller_test.exs
 queue_ref: Q-581
 github_ref: GH-1190
-status: open
+status: in_progress

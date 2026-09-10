@@ -418,3 +418,16 @@ history:
       failures). Test-support-only change, not a tenant-data-path change --
       SECURITY-REVIEWER sign-off correctly skipped per design doc's own
       scope confirmation, confirmed independently by REVIEWER.
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-10T15:02:52Z"
+    note: >
+      WF03-ISS0581-20260910 started (queue task 581, GH#1190,
+      docs/issues/ISS-0581.yaml). Scheduler.PollerTest AC8 timer-latency
+      flake under 8-way parallel scripts/test_parallel.sh:
+      reloaded.status expected "fired", got "pending" -- self-filed by
+      this same session during WF02-REQ304-20260910's own Step 4. Kin to
+      the existing ISS-0453 poller-timing-flake family but a different
+      AC (AC3 there, AC8 here). Branch: fix/WF03-ISS0581-20260910.

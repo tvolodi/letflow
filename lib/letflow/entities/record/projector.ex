@@ -55,10 +55,27 @@ defmodule Letflow.Entities.Record.Projector do
   `TenantProvisioning` change adds a real distinction) but is dead as of
   this implementation -- flagged for REVIEWER rather than silently dropped
   from the type or silently invented as a real, reachable branch here.
+
+  ## REQ-297 §9 -- `rebuild_projection/2` is the backfill mechanism for
+  ## column promotion
+
+  Per `docs/migration/decisions/0024-entity-promotion-ddl-execution.md` §3
+  and `lib/letflow/design/req297-entity-promotion-executor.md` §9,
+  `Letflow.TenantProvisioning.backfill_column_promotion/1` calls this
+  module's `rebuild_projection/2` to populate a tenant's per-entity-type
+  table. This module's own public `@spec` for `rebuild_projection/2` is
+  **unchanged** -- no new opt was added -- so every existing caller is
+  unaffected; what changed is `write_snapshots/3`'s *internal* behavior,
+  via a new private `maybe_write_entity_table_snapshots/3` step that is a
+  no-op whenever the entity type in question has no per-entity-type table
+  yet (the ordinary case for every entity type that has never had a column
+  promoted).
   """
 
   import Ecto.Query
 
+  alias Letflow.Entities.Definition.DDL
+  alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityTypeInstance
   alias Letflow.Entities.Record.Latest
   alias Letflow.EventStore
@@ -268,8 +285,114 @@ defmodule Letflow.Entities.Record.Projector do
         |> Repo.insert!(prefix: prefix)
       end)
 
-      length(snapshots)
+      case maybe_write_entity_table_snapshots(entity_type, snapshots, prefix) do
+        :ok -> length(snapshots)
+        {:error, reason} -> Repo.rollback(reason)
+      end
     end)
+  end
+
+  # ---------------------------------------------------------------------
+  # REQ-297 §9 -- backfill's write side. New private step, called from
+  # write_snapshots/3 immediately after its existing Latest
+  # delete+reinsert, inside the SAME Repo.transaction/1. Public @spec of
+  # rebuild_projection/2 above is UNCHANGED -- no new opt, every existing
+  # caller is unaffected. A rebuild for an entity type with no
+  # per-entity-type table yet (the ordinary case for every entity type that
+  # has never had a column promoted) does nothing extra, preserving
+  # today's behavior exactly.
+  # ---------------------------------------------------------------------
+
+  defp maybe_write_entity_table_snapshots(entity_type, snapshots, prefix) do
+    with {:ok, table_name} <- TenantProvisioning.table_name_for_entity_type(entity_type) do
+      if TenantProvisioning.entity_table_exists?(prefix, table_name) do
+        write_entity_table_snapshots(entity_type, table_name, snapshots, prefix)
+      else
+        :ok
+      end
+    end
+  end
+
+  # Writes structural columns plus every column DDL.promoted_columns/1
+  # reports for the entity type's CURRENT definition (not only the one
+  # attribute the in-progress promotion targets) -- so a rebuild started
+  # for promotion N also correctly repopulates any promotion 1..N-1 columns
+  # that already reached "active" for this tenant. Row-count parity with
+  # the Latest reinsert above is guaranteed by construction: the same
+  # `snapshots` list drives both writes, in the same transaction.
+  defp write_entity_table_snapshots(entity_type, table_name, snapshots, prefix) do
+    with {:ok, definition} <- Definitions.get_active_definition_by_name(entity_type, prefix) do
+      document = TenantProvisioning.document_from_persisted(definition)
+      promoted = DDL.promoted_columns(document)
+
+      unless DDL.valid_identifier?(table_name) do
+        raise ArgumentError, "invalid per-entity-type table_name: #{inspect(table_name)}"
+      end
+
+      Repo.query!(~s(DELETE FROM "#{prefix}"."#{table_name}"))
+
+      Enum.each(snapshots, fn snapshot ->
+        insert_entity_table_row(prefix, table_name, promoted, snapshot)
+      end)
+
+      :ok
+    end
+  end
+
+  defp insert_entity_table_row(prefix, table_name, promoted, snapshot) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    promoted_pairs =
+      Enum.map(promoted, fn %{name: name, pg_type: pg_type} ->
+        unless DDL.valid_identifier?(name) do
+          raise ArgumentError, "invalid promoted column_name: #{inspect(name)}"
+        end
+
+        raw_value = Map.get(snapshot.field_values, name)
+        {name, TenantProvisioning.cast_promoted_value(raw_value, pg_type)}
+      end)
+
+    structural_columns = [
+      "id",
+      "record_id",
+      "field_values",
+      "deleted",
+      "entity_def_version",
+      "last_event_global_seq",
+      "inserted_at",
+      "updated_at"
+    ]
+
+    structural_values = [
+      Ecto.UUID.generate(),
+      snapshot.record_id,
+      Jason.encode!(snapshot.field_values),
+      snapshot.deleted,
+      snapshot.entity_def_version,
+      snapshot.last_event_global_seq,
+      now,
+      now
+    ]
+
+    all_columns = structural_columns ++ Enum.map(promoted_pairs, &elem(&1, 0))
+    all_values = structural_values ++ Enum.map(promoted_pairs, &elem(&1, 1))
+
+    placeholders =
+      all_columns
+      |> Enum.with_index(1)
+      |> Enum.map(fn
+        {"id", i} -> "($#{i}::text)::uuid"
+        {"record_id", i} -> "($#{i}::text)::uuid"
+        {"field_values", i} -> "($#{i}::text)::jsonb"
+        {_col, i} -> "$#{i}"
+      end)
+
+    column_list = Enum.map_join(all_columns, ", ", &~s("#{&1}"))
+
+    sql =
+      "INSERT INTO \"#{prefix}\".\"#{table_name}\" (#{column_list}) VALUES (#{Enum.join(placeholders, ", ")})"
+
+    Repo.query!(sql, all_values)
   end
 
   # `Latest.insert_changeset/2`'s `@insert_fields` never casts `:deleted`

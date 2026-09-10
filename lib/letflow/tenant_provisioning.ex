@@ -141,12 +141,41 @@ defmodule Letflow.TenantProvisioning do
   an explicit acceptance criterion for this gap — see its entry in
   `docs/requirements.yaml`. `docs/issues/ISS-0230.yaml` records the full
   reasoning.
+
+  ## REQ-297 — entity column-promotion executor (AC6 moduledoc citation)
+
+  See `docs/migration/decisions/0024-entity-promotion-ddl-execution.md` (the
+  decision) and `lib/letflow/design/req297-entity-promotion-executor.md`
+  (the design this section of the module implements) for the full detail.
+  This module implements all four of 0024's sub-answers:
+
+  1. **The mechanism**: this module (`Letflow.TenantProvisioning`), extended
+     — not a second module — issues `ALTER TABLE`/`CREATE TABLE` directly
+     against a tenant's own Postgres schema.
+  2. **Partial-failure**: per-tenant, tracked one row per
+     `(tenant_id, entity_type, attribute)` in `entity_column_promotions`
+     (`Letflow.TenantProvisioning.ColumnPromotion`) — no cross-tenant
+     atomicity; each tenant's row succeeds or fails on its own, and repair
+     (`retry_failed_column_promotion/1`) retries only that one row.
+  3. **Backfill**: a replay through
+     `Letflow.Entities.Record.Projector.rebuild_projection/2` (never an
+     inline `UPDATE`), with dual-write into the per-entity-type table kept
+     current for the whole `ddl_applied..backfilled` window.
+  4. **Rollback**: `suspend_column_promotion/2` flips `query_eligible` to
+     `false` (query-layer exclusion via the future `Allowlist`), leaving
+     `status` at `"active"` — never a drop or narrow of the column itself.
   """
 
   import Ecto.Query
 
+  alias Letflow.Entities.Definition.DDL
+  alias Letflow.Entities.Definitions
+  alias Letflow.Entities.EntityDefinition
+  alias Letflow.Entities.Record.Latest
+  alias Letflow.Entities.Record.Projector
   alias Letflow.EventStore.Registry
   alias Letflow.Repo
+  alias Letflow.TenantProvisioning.ColumnPromotion
   alias Letflow.TenantProvisioning.Registration
 
   @doc """
@@ -1005,4 +1034,782 @@ defmodule Letflow.TenantProvisioning do
       end
     end)
   end
+
+  # =========================================================================
+  # REQ-297 -- entity column-promotion executor
+  #
+  # See lib/letflow/design/req297-entity-promotion-executor.md for the full
+  # design this section implements, and
+  # docs/migration/decisions/0024-entity-promotion-ddl-execution.md for the
+  # decision it's built from. This section implements all four of 0024's
+  # sub-answers:
+  #
+  #   1. THE MECHANISM: this module (Letflow.TenantProvisioning), extended --
+  #      not a second module -- issuing `ALTER TABLE`/`CREATE TABLE`
+  #      directly against a tenant's own Postgres schema.
+  #   2. PARTIAL-FAILURE: per-tenant, tracked one row per
+  #      (tenant_id, entity_type, attribute) in `entity_column_promotions`
+  #      (Letflow.TenantProvisioning.ColumnPromotion) -- a promotion is NOT
+  #      atomic across tenants; each tenant's row succeeds or fails on its
+  #      own, and repair is a retry of that one row
+  #      (retry_failed_column_promotion/1), never a whole-batch re-run.
+  #   3. BACKFILL: a replay through
+  #      Letflow.Entities.Record.Projector.rebuild_projection/2 (never an
+  #      inline UPDATE), with dual-write into the per-entity-type table kept
+  #      current for the whole ddl_applied..backfilled window
+  #      (column_promotion_dual_write?/3, wired into
+  #      Letflow.Entities.Records's write path below).
+  #   4. ROLLBACK: suspend_column_promotion/2 flips `query_eligible` to
+  #      `false` (query-layer exclusion) while leaving `status` at `"active"`
+  #      -- this executor has no code path that drops or narrows a column;
+  #      "rollback" here means "stop querying it," never "undo the DDL."
+  # =========================================================================
+
+  @doc """
+  Derives the physical per-entity-type table name for `entity_type`, mirroring
+  `schema_name_for_tenant/1`'s own `"tenant_" <> hex` shape. The only place a
+  physical per-entity-type table name is ever derived -- every function below
+  that needs one calls this rather than re-deriving the `"entity_" <>` prefix
+  inline.
+
+  Validated against `Letflow.Entities.Definition.DDL.valid_identifier?/1`
+  (the same public, independent regex `DDL` already exposes), not by
+  importing `Letflow.Entities.Definition.Validator`'s own private
+  name-format rule.
+  """
+  @spec table_name_for_entity_type(entity_type :: String.t()) ::
+          {:ok, table_name :: String.t()} | {:error, :invalid_entity_type}
+  def table_name_for_entity_type(entity_type) when is_binary(entity_type) do
+    if DDL.valid_identifier?(entity_type) do
+      {:ok, "entity_" <> entity_type}
+    else
+      {:error, :invalid_entity_type}
+    end
+  end
+
+  def table_name_for_entity_type(_entity_type), do: {:error, :invalid_entity_type}
+
+  @doc false
+  @spec entity_table_exists?(schema_name :: String.t(), table_name :: String.t()) :: boolean()
+  def entity_table_exists?(schema_name, table_name) do
+    query = """
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = $1 AND table_name = $2
+    """
+
+    case Repo.query!(query, [schema_name, table_name]) do
+      %Postgrex.Result{rows: []} -> false
+      %Postgrex.Result{rows: [_ | _]} -> true
+    end
+  end
+
+  @doc """
+  Creates one `pending` `Letflow.TenantProvisioning.ColumnPromotion` row per
+  tenant. `:all` resolves via `list_registrations/0` at call time (this
+  module's own tenant-enumeration mechanism, reused rather than a second
+  one). `column_spec.pg_type` is supplied by the caller from
+  `Letflow.Entities.Definition.DDL.field_type_to_pg_type/1` applied to the
+  promoted `field_def()` -- this function does not re-derive the type
+  mapping. `column_spec.nullable` is always treated as `true`, per 0023's
+  additive-only rule -- there is no caller override. Issues no DDL.
+  """
+  @spec register_column_promotion(
+          entity_type :: String.t(),
+          attribute :: String.t(),
+          column_spec :: %{pg_type: String.t(), nullable: true},
+          tenant_ids :: [Ecto.UUID.t()] | :all
+        ) :: {:ok, [ColumnPromotion.t()]} | {:error, term()}
+  def register_column_promotion(entity_type, attribute, column_spec, tenant_ids)
+      when is_binary(entity_type) and is_binary(attribute) and is_map(column_spec) do
+    tenant_ids = resolve_tenant_ids(tenant_ids)
+    pg_type = Map.fetch!(column_spec, :pg_type)
+
+    Repo.transaction(fn ->
+      Enum.map(tenant_ids, fn tenant_id ->
+        attrs = %{
+          tenant_id: tenant_id,
+          entity_type: entity_type,
+          attribute: attribute,
+          column_name: attribute,
+          pg_type: pg_type,
+          status: "pending",
+          query_eligible: false
+        }
+
+        case Repo.insert(ColumnPromotion.changeset(%ColumnPromotion{}, attrs)) do
+          {:ok, row} -> row
+          {:error, changeset} -> Repo.rollback(changeset)
+        end
+      end)
+    end)
+  end
+
+  defp resolve_tenant_ids(:all), do: Enum.map(list_registrations(), & &1.tenant_id)
+  defp resolve_tenant_ids(tenant_ids) when is_list(tenant_ids), do: tenant_ids
+
+  @doc """
+  The one function that issues DDL. Single-tenant, single-promotion, taking
+  only `promotion_id` -- `tenant_id` is never a second, independently
+  supplied argument (design doc §4 step 1; matches the fix
+  SECURITY-REVIEWER's re-check already confirmed for req295 §2's text).
+
+  Steps: load the row, resolve its tenant's schema, take the same per-schema
+  advisory lock `provision_tenant_schema/1` already takes, ensure the
+  per-entity-type table exists (`ensure_entity_table/2`, private below),
+  run the additive-only check against real `information_schema.columns`
+  state, then issue `ALTER TABLE ... ADD COLUMN` (or skip it, as an
+  idempotent retry, if an identically-typed column is already present).
+  """
+  @spec run_column_promotion(promotion_id :: Ecto.UUID.t()) ::
+          {:ok, ColumnPromotion.t()}
+          | {:error,
+             :promotion_not_found
+             | :tenant_not_provisioned
+             | {:column_type_conflict, existing_pg_type :: String.t(),
+                requested_pg_type :: String.t()}
+             | {:ddl_failed, Exception.t()}}
+  def run_column_promotion(promotion_id) do
+    with {:ok, promotion} <- fetch_column_promotion(promotion_id),
+         {:ok, schema_name} <- resolve_schema_name(promotion.tenant_id) do
+      {:ok, outcome} =
+        Repo.transaction(fn ->
+          Repo.query!("SELECT pg_advisory_xact_lock(hashtext($1))", [schema_name])
+          do_run_column_promotion(schema_name, promotion)
+        end)
+
+      outcome
+    end
+  end
+
+  defp do_run_column_promotion(schema_name, promotion) do
+    with {:ok, table_name} <- checked_table_name(promotion),
+         :ok <- ensure_entity_table(schema_name, promotion.entity_type) do
+      case check_additive_only(schema_name, table_name, promotion) do
+        :ok ->
+          add_column_and_mark(schema_name, table_name, promotion)
+
+        :idempotent_skip ->
+          mark_ddl_applied(promotion)
+
+        {:error, {:column_type_conflict, existing, requested}} ->
+          mark_ddl_failed_and_return(
+            promotion,
+            "column type conflict: existing #{existing}, requested #{requested}",
+            {:column_type_conflict, existing, requested}
+          )
+      end
+    else
+      {:error, {:ddl_failed, exception}} ->
+        mark_ddl_failed_and_return(
+          promotion,
+          Exception.message(exception),
+          {:ddl_failed, exception}
+        )
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp add_column_and_mark(schema_name, table_name, promotion) do
+    case execute_add_column(schema_name, table_name, promotion) do
+      :ok ->
+        mark_ddl_applied(promotion)
+
+      {:error, {:ddl_failed, exception}} ->
+        mark_ddl_failed_and_return(
+          promotion,
+          Exception.message(exception),
+          {:ddl_failed, exception}
+        )
+    end
+  end
+
+  # entity_type/column_name were already validated as safe identifiers at
+  # register_column_promotion/4 time -- re-checked here anyway (defence in
+  # depth matching DDL's own posture) and raised as an ArgumentError, never
+  # silently proceeded, if a stored row somehow holds an unsafe value (which
+  # would mean some write path bypassed register_column_promotion/4
+  # entirely). This is why :invalid_entity_type is not in run_column_promotion/1's
+  # own @spec -- it is unreachable via any function on this module's own
+  # public surface.
+  defp checked_table_name(promotion) do
+    case table_name_for_entity_type(promotion.entity_type) do
+      {:ok, table_name} ->
+        {:ok, table_name}
+
+      {:error, :invalid_entity_type} ->
+        raise ArgumentError,
+              "ColumnPromotion #{promotion.id} has an invalid entity_type: " <>
+                inspect(promotion.entity_type)
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # Table-lifecycle step (design doc §6) -- resolves the executor's own
+  # narrow table-creation-on-first-use gap (design doc §1). Private -- not
+  # part of req295 §2's public function list.
+  # ---------------------------------------------------------------------
+
+  @spec ensure_entity_table(schema_name :: String.t(), entity_type :: String.t()) ::
+          :ok | {:error, {:ddl_failed, Exception.t()}} | {:error, term()}
+  defp ensure_entity_table(schema_name, entity_type) do
+    with {:ok, table_name} <- table_name_for_entity_type(entity_type) do
+      if entity_table_exists?(schema_name, table_name) do
+        :ok
+      else
+        create_and_populate_entity_table(schema_name, entity_type, table_name)
+      end
+    end
+  end
+
+  # Creates the per-entity-type table carrying the entity type's FULL
+  # current promoted-column set (not just the one attribute triggering this
+  # particular promotion), then immediately populates it via
+  # rebuild_projection/2 -- the "first population" design doc §1 names,
+  # folded into table creation rather than left as a separately-triggered
+  # step (an empty freshly-created table would otherwise silently
+  # under-count in the very next backfill_column_promotion/1 verification
+  # check).
+  #
+  # What happens if generate_table_ddl/2 returns {:error, {:invalid_identifier, _}}
+  # here (design doc §6's own narration, per CODE-DESIGN-VALIDATOR's nit):
+  # realistically unreachable, since `table_name` is this module's own
+  # `"entity_" <> entity_type` derivation (already checked via
+  # table_name_for_entity_type/1 above) and every promoted column name is a
+  # field name that already passed Letflow.Entities.Definition.Validator's
+  # identical name-format check at entity-definition-creation time -- stated
+  # explicitly here rather than left an unnarrated catch-all. If it were
+  # ever reached anyway, generate_table_ddl/2's own {:error, ddl_error()}
+  # return flows straight out of this `with` unchanged.
+  defp create_and_populate_entity_table(schema_name, entity_type, table_name) do
+    with {:ok, definition} <- Definitions.get_active_definition_by_name(entity_type, schema_name),
+         document = document_from_persisted(definition),
+         {:ok, sql} <- DDL.generate_table_ddl(document, table_name),
+         :ok <- execute_create_table(qualify_create_table_sql(sql, schema_name, table_name)) do
+      case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
+        {:ok, _result} ->
+          :ok
+
+        # A brand-new entity type with zero records yet has no
+        # entity_type_instances row -- nothing to backfill, not a real
+        # failure. The freshly-created table is simply left empty.
+        {:error, :entity_type_not_found} ->
+          :ok
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp execute_create_table(sql) do
+    Repo.query!(sql)
+    :ok
+  rescue
+    exception -> {:error, {:ddl_failed, exception}}
+  end
+
+  # generate_table_ddl/2 is deliberately schema-agnostic (its own moduledoc)
+  # and returns `CREATE TABLE "<table_name>" (...)` unqualified -- this
+  # module is the one that knows the target tenant schema, so it qualifies
+  # the statement itself rather than asking DDL to grow schema awareness.
+  defp qualify_create_table_sql(sql, schema_name, table_name) do
+    unqualified_prefix = "CREATE TABLE \"#{table_name}\" ("
+    qualified_prefix = "CREATE TABLE \"#{schema_name}\".\"#{table_name}\" ("
+    String.replace_prefix(sql, unqualified_prefix, qualified_prefix)
+  end
+
+  # ---------------------------------------------------------------------
+  # Additive-only enforcement (design doc §7) -- the concrete mechanism
+  # AC4/AC5 require: a real information_schema.columns check, never a
+  # heuristic on the definition alone.
+  # ---------------------------------------------------------------------
+
+  defp check_additive_only(schema_name, table_name, promotion) do
+    case fetch_existing_column(schema_name, table_name, promotion.column_name) do
+      nil ->
+        :ok
+
+      {existing_data_type, existing_precision, existing_scale} ->
+        if pg_types_equivalent?(
+             existing_data_type,
+             existing_precision,
+             existing_scale,
+             promotion.pg_type
+           ) do
+          :idempotent_skip
+        else
+          existing_repr =
+            format_existing_pg_type(existing_data_type, existing_precision, existing_scale)
+
+          {:error, {:column_type_conflict, existing_repr, promotion.pg_type}}
+        end
+    end
+  end
+
+  defp fetch_existing_column(schema_name, table_name, column_name) do
+    query = """
+    SELECT data_type, numeric_precision, numeric_scale
+    FROM information_schema.columns
+    WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+    """
+
+    case Repo.query!(query, [schema_name, table_name, column_name]) do
+      %Postgrex.Result{rows: []} -> nil
+      %Postgrex.Result{rows: [[data_type, precision, scale]]} -> {data_type, precision, scale}
+    end
+  end
+
+  # A small, explicit Postgres-type-name equivalence table (design doc §4
+  # step 6) -- never a raw string compare against `data_type` alone, since
+  # Postgres reports `numeric` precision/scale in separate columns.
+  defp pg_types_equivalent?(
+         existing_data_type,
+         existing_precision,
+         existing_scale,
+         requested_pg_type
+       ) do
+    case parse_requested_pg_type(requested_pg_type) do
+      {"numeric", requested_precision, requested_scale} ->
+        existing_data_type == "numeric" and existing_precision == requested_precision and
+          existing_scale == requested_scale
+
+      {normalized_type, _p, _s} ->
+        existing_data_type == normalized_type
+    end
+  end
+
+  defp parse_requested_pg_type("numeric(" <> rest) do
+    [precision, scale] =
+      rest
+      |> String.trim_trailing(")")
+      |> String.split(",")
+      |> Enum.map(&(&1 |> String.trim() |> String.to_integer()))
+
+    {"numeric", precision, scale}
+  end
+
+  defp parse_requested_pg_type("numeric"), do: {"numeric", nil, nil}
+
+  defp parse_requested_pg_type("timestamp(6) without time zone"),
+    do: {"timestamp without time zone", nil, nil}
+
+  defp parse_requested_pg_type(other), do: {other, nil, nil}
+
+  defp format_existing_pg_type("numeric", precision, scale)
+       when is_integer(precision) and is_integer(scale) do
+    "numeric(#{precision}, #{scale})"
+  end
+
+  defp format_existing_pg_type(data_type, _precision, _scale), do: data_type
+
+  # The known closed set DDL.field_type_to_pg_type/1 can ever produce --
+  # promotion.pg_type is never caller-free-text at this point
+  # (register_column_promotion/4 requires the caller to have already called
+  # that function), checked again here (defence in depth) before
+  # interpolation.
+  @known_fixed_pg_types ["text", "bigint", "boolean", "date", "timestamp(6) without time zone"]
+  @numeric_pg_type_regex ~r/^numeric(\(\d+,\s?\d+\))?$/
+
+  defp valid_pg_type?(pg_type) do
+    pg_type in @known_fixed_pg_types or Regex.match?(@numeric_pg_type_regex, pg_type)
+  end
+
+  # Only ever adds a new column -- this executor never removes a column and
+  # never narrows an existing column's declared type (design doc §7, AC5).
+  # `table_name`/`column_name`
+  # are re-validated via DDL.valid_identifier?/1 immediately before
+  # interpolation (defence in depth matching DDL's own posture) -- an
+  # ArgumentError here means a stored row bypassed register_column_promotion/4,
+  # a genuine defect that must not be silently swallowed as a DDL failure.
+  defp execute_add_column(schema_name, table_name, promotion) do
+    unless DDL.valid_identifier?(table_name) do
+      raise ArgumentError, "invalid table_name for ALTER TABLE: #{inspect(table_name)}"
+    end
+
+    unless DDL.valid_identifier?(promotion.column_name) do
+      raise ArgumentError,
+            "invalid column_name for ALTER TABLE: #{inspect(promotion.column_name)}"
+    end
+
+    unless valid_pg_type?(promotion.pg_type) do
+      raise ArgumentError, "invalid pg_type for ALTER TABLE: #{inspect(promotion.pg_type)}"
+    end
+
+    sql =
+      ~s(ALTER TABLE "#{schema_name}"."#{table_name}" ADD COLUMN "#{promotion.column_name}" #{promotion.pg_type})
+
+    Repo.query!(sql)
+    :ok
+  rescue
+    exception -> {:error, {:ddl_failed, exception}}
+  end
+
+  defp mark_ddl_applied(promotion) do
+    now = naive_now()
+
+    attrs = %{status: "ddl_applied", ddl_applied_at: now, attempted_at: now, last_error: nil}
+
+    case Repo.update(ColumnPromotion.changeset(promotion, attrs)) do
+      {:ok, updated} -> {:ok, updated}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp mark_ddl_failed_and_return(promotion, message, error_reason) do
+    now = naive_now()
+    attrs = %{status: "ddl_failed", last_error: message, attempted_at: now}
+
+    case Repo.update(ColumnPromotion.changeset(promotion, attrs)) do
+      {:ok, _updated} -> {:error, error_reason}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  @doc """
+  Fan-out wrapper: loads every `pending` row for `promotion_ref`, calls
+  `run_column_promotion/1` for each, and does **not** abort on the first
+  failure (0024 §2 -- per-tenant, not atomic). Does not call
+  `list_registrations/0` itself -- fans out over already-created
+  `ColumnPromotion` rows only (design doc §5): a tenant provisioned after
+  `register_column_promotion/4` ran is simply not part of this batch.
+  """
+  @spec run_column_promotion_for_all_tenants(
+          promotion_ref :: {entity_type :: String.t(), attribute :: String.t()}
+        ) :: %{ok: [ColumnPromotion.t()], failed: [ColumnPromotion.t()]}
+  def run_column_promotion_for_all_tenants({entity_type, attribute}) do
+    query =
+      from(cp in ColumnPromotion,
+        where:
+          cp.entity_type == ^entity_type and cp.attribute == ^attribute and cp.status == "pending"
+      )
+
+    Repo.all(query)
+    |> Enum.reduce(%{ok: [], failed: []}, fn row, acc ->
+      case run_column_promotion(row.id) do
+        {:ok, updated} ->
+          %{acc | ok: acc.ok ++ [updated]}
+
+        {:error, _reason} ->
+          %{acc | failed: acc.failed ++ [Repo.get!(ColumnPromotion, row.id)]}
+      end
+    end)
+  end
+
+  @doc """
+  Requires `status == "ddl_failed"` (`{:error, :not_ddl_failed}` otherwise --
+  a new, small error atom this design adds since req295 §2's text names the
+  precondition but not its own failure atom), then re-invokes
+  `run_column_promotion/1` for the same row, clearing `last_error` on
+  success. Idempotent to call repeatedly. **Takes only `promotion_id`.**
+  """
+  @spec retry_failed_column_promotion(promotion_id :: Ecto.UUID.t()) ::
+          {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | :not_ddl_failed | term()}
+  def retry_failed_column_promotion(promotion_id) do
+    with {:ok, promotion} <- fetch_column_promotion(promotion_id) do
+      if promotion.status == "ddl_failed" do
+        run_column_promotion(promotion_id)
+      else
+        {:error, :not_ddl_failed}
+      end
+    end
+  end
+
+  @doc """
+  Requires the row to be `ddl_applied` or `backfilling`. Transitions to
+  `backfilling`, replays via
+  `Letflow.Entities.Record.Projector.rebuild_projection/2` (never an inline
+  `UPDATE`), then runs the row-count-parity verification check between the
+  per-entity-type table and `entity_record_latest` before transitioning to
+  `backfilled`. On a mismatch, the row **stays** `backfilling` and this
+  function returns `{:error, {:backfill_incomplete, _}}` -- callers may call
+  it again, since replay is idempotent. **Takes only `promotion_id`.**
+  """
+  @spec backfill_column_promotion(promotion_id :: Ecto.UUID.t()) ::
+          {:ok, ColumnPromotion.t()}
+          | {:error,
+             :promotion_not_found | :not_ddl_applied | {:backfill_incomplete, map()} | term()}
+  def backfill_column_promotion(promotion_id) do
+    with {:ok, promotion} <- fetch_column_promotion(promotion_id) do
+      if promotion.status in ["ddl_applied", "backfilling"] do
+        do_backfill(promotion)
+      else
+        {:error, :not_ddl_applied}
+      end
+    end
+  end
+
+  defp do_backfill(promotion) do
+    with {:ok, schema_name} <- resolve_schema_name(promotion.tenant_id),
+         {:ok, promotion} <- ensure_backfilling_status(promotion),
+         {:ok, table_name} <- table_name_for_entity_type(promotion.entity_type),
+         :ok <- run_rebuild_projection(schema_name, promotion.entity_type) do
+      verify_and_finalize_backfill(schema_name, table_name, promotion)
+    end
+  end
+
+  # A brand-new entity type with zero records yet has no
+  # entity_type_instances row -- nothing to backfill, not a real failure.
+  defp run_rebuild_projection(schema_name, entity_type) do
+    case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
+      {:ok, _result} -> :ok
+      {:error, :entity_type_not_found} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp ensure_backfilling_status(%ColumnPromotion{status: "backfilling"} = promotion) do
+    {:ok, promotion}
+  end
+
+  defp ensure_backfilling_status(promotion) do
+    Repo.update(ColumnPromotion.changeset(promotion, %{status: "backfilling"}))
+  end
+
+  # design doc §4 step 2's fixed comparison: row-count parity between the
+  # per-entity-type table and entity_record_latest for this entity type,
+  # both restricted to non-deleted rows.
+  defp verify_and_finalize_backfill(schema_name, table_name, promotion) do
+    actual = count_entity_table_rows(schema_name, table_name)
+    expected = count_latest_rows(schema_name, promotion.entity_type)
+
+    if actual == expected do
+      attrs = %{status: "backfilled", backfilled_at: naive_now()}
+
+      case Repo.update(ColumnPromotion.changeset(promotion, attrs)) do
+        {:ok, updated} -> {:ok, updated}
+        {:error, changeset} -> {:error, changeset}
+      end
+    else
+      {:error, {:backfill_incomplete, %{expected: expected, actual: actual}}}
+    end
+  end
+
+  defp count_entity_table_rows(schema_name, table_name) do
+    unless DDL.valid_identifier?(table_name) do
+      raise ArgumentError, "invalid table_name for row-count check: #{inspect(table_name)}"
+    end
+
+    query = "SELECT count(*) FROM \"#{schema_name}\".\"#{table_name}\" WHERE deleted = false"
+    %Postgrex.Result{rows: [[count]]} = Repo.query!(query)
+    count
+  end
+
+  defp count_latest_rows(schema_name, entity_type) do
+    query = from(r in Latest, where: r.entity_type == ^entity_type and r.deleted == false)
+    Repo.aggregate(query, :count, prefix: schema_name)
+  end
+
+  @doc """
+  Requires `status == "backfilled"`. Sets `status: "active"`,
+  `query_eligible: true`, `activated_at: now`. Issues no DDL, touches no
+  table. **Takes only `promotion_id`.**
+  """
+  @spec activate_column_promotion(promotion_id :: Ecto.UUID.t()) ::
+          {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | :not_backfilled}
+  def activate_column_promotion(promotion_id) do
+    with {:ok, promotion} <- fetch_column_promotion(promotion_id) do
+      if promotion.status == "backfilled" do
+        attrs = %{status: "active", query_eligible: true, activated_at: naive_now()}
+
+        case Repo.update(ColumnPromotion.changeset(promotion, attrs)) do
+          {:ok, updated} -> {:ok, updated}
+          {:error, changeset} -> {:error, changeset}
+        end
+      else
+        {:error, :not_backfilled}
+      end
+    end
+  end
+
+  @doc """
+  Requires `status == "active"`. Sets `query_eligible: false` only --
+  `status` stays `"active"` (0024 §4: deliberate, preserves "reached active
+  at least once"). `reason` is stored in the dedicated `suspend_reason`
+  field (see `ColumnPromotion`'s moduledoc for why `last_error` is not
+  reused). **Takes only `promotion_id`** (plus `reason`, which carries no
+  cross-tenant risk).
+  """
+  @spec suspend_column_promotion(promotion_id :: Ecto.UUID.t(), reason :: String.t()) ::
+          {:ok, ColumnPromotion.t()} | {:error, :promotion_not_found | :not_active}
+  def suspend_column_promotion(promotion_id, reason) when is_binary(reason) do
+    with {:ok, promotion} <- fetch_column_promotion(promotion_id) do
+      if promotion.status == "active" do
+        attrs = %{query_eligible: false, suspend_reason: reason}
+
+        case Repo.update(ColumnPromotion.changeset(promotion, attrs)) do
+          {:ok, updated} -> {:ok, updated}
+          {:error, changeset} -> {:error, changeset}
+        end
+      else
+        {:error, :not_active}
+      end
+    end
+  end
+
+  @doc """
+  Read-only accessor `Letflow.Entities.Query.Allowlist` (REQ-299) calls
+  before including a promoted attribute as a `:typed_column` entry. `false`
+  for any `(tenant_id, entity_type, attribute)` with no `ColumnPromotion`
+  row at all.
+  """
+  @spec column_promotion_query_eligible?(
+          tenant_id :: Ecto.UUID.t(),
+          entity_type :: String.t(),
+          attribute :: String.t()
+        ) :: boolean()
+  def column_promotion_query_eligible?(tenant_id, entity_type, attribute) do
+    case fetch_column_promotion_by_natural_key(tenant_id, entity_type, attribute) do
+      nil -> false
+      %ColumnPromotion{query_eligible: query_eligible} -> query_eligible
+    end
+  end
+
+  @doc """
+  Read-only accessor `Letflow.Entities.Records`/`Projector`'s write path
+  calls before deciding whether to also write `attribute`'s value into the
+  per-entity-type table. `true` while `status` is `"ddl_applied"`,
+  `"backfilling"`, or `"backfilled"`; `false` for no row, `"pending"`,
+  `"ddl_failed"`, or `"active"`.
+  """
+  @spec column_promotion_dual_write?(
+          tenant_id :: Ecto.UUID.t(),
+          entity_type :: String.t(),
+          attribute :: String.t()
+        ) :: boolean()
+  def column_promotion_dual_write?(tenant_id, entity_type, attribute) do
+    case fetch_column_promotion_by_natural_key(tenant_id, entity_type, attribute) do
+      nil -> false
+      %ColumnPromotion{status: status} -> status in ["ddl_applied", "backfilling", "backfilled"]
+    end
+  end
+
+  @doc """
+  Every `ColumnPromotion` row for `(tenant_id, entity_type)` currently
+  mid-promotion (`status in ["ddl_applied", "backfilling", "backfilled"]`).
+  Used by `Letflow.Entities.Records`'s new `:dual_write_promoted_columns`
+  Multi step (design doc §8) -- the live write path does not otherwise know
+  which attributes might be mid-promotion, so it asks for the whole set in
+  one query rather than calling `column_promotion_dual_write?/3` once per
+  possible attribute name.
+  """
+  @spec column_promotions_in_flight(tenant_id :: Ecto.UUID.t(), entity_type :: String.t()) :: [
+          ColumnPromotion.t()
+        ]
+  def column_promotions_in_flight(tenant_id, entity_type) do
+    query =
+      from(cp in ColumnPromotion,
+        where:
+          cp.tenant_id == ^tenant_id and cp.entity_type == ^entity_type and
+            cp.status in ["ddl_applied", "backfilling", "backfilled"]
+      )
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Shared value-casting helper (design doc §10), used both by
+  `Letflow.Entities.Records`'s dual-write Multi step and by
+  `Letflow.Entities.Record.Projector`'s backfill write path -- one shared
+  cast table, not two independently hand-maintained copies. Mirrors
+  `Letflow.Entities.Definition.DDL.field_type_to_pg_type/1`'s own closed
+  dispatch.
+  """
+  @spec cast_promoted_value(raw_value :: term(), pg_type :: String.t()) :: term()
+  def cast_promoted_value(nil, _pg_type), do: nil
+  def cast_promoted_value(value, "text"), do: value
+  def cast_promoted_value(value, "bigint") when is_integer(value), do: value
+  def cast_promoted_value(value, "bigint") when is_binary(value), do: String.to_integer(value)
+  def cast_promoted_value(value, "boolean") when is_boolean(value), do: value
+  def cast_promoted_value(%Date{} = value, "date"), do: value
+  def cast_promoted_value(value, "date") when is_binary(value), do: Date.from_iso8601!(value)
+
+  def cast_promoted_value(%NaiveDateTime{} = value, "timestamp(6) without time zone"), do: value
+
+  def cast_promoted_value(value, "timestamp(6) without time zone") when is_binary(value) do
+    NaiveDateTime.from_iso8601!(value)
+  end
+
+  def cast_promoted_value(%Decimal{} = value, "numeric"), do: value
+
+  def cast_promoted_value(value, "numeric") when is_number(value),
+    do: Decimal.new(to_string(value))
+
+  def cast_promoted_value(value, "numeric") when is_binary(value), do: Decimal.new(value)
+
+  def cast_promoted_value(%Decimal{} = value, "numeric(" <> _rest), do: value
+
+  def cast_promoted_value(value, "numeric(" <> _rest = _pg_type) when is_number(value) do
+    Decimal.new(to_string(value))
+  end
+
+  def cast_promoted_value(value, "numeric(" <> _rest) when is_binary(value),
+    do: Decimal.new(value)
+
+  def cast_promoted_value(value, _pg_type), do: value
+
+  # ---------------------------------------------------------------------
+  # Shared lookups used across this section.
+  # ---------------------------------------------------------------------
+
+  defp fetch_column_promotion(promotion_id) do
+    case Repo.get(ColumnPromotion, promotion_id) do
+      nil -> {:error, :promotion_not_found}
+      %ColumnPromotion{} = row -> {:ok, row}
+    end
+  end
+
+  defp fetch_column_promotion_by_natural_key(tenant_id, entity_type, attribute) do
+    Repo.get_by(ColumnPromotion,
+      tenant_id: tenant_id,
+      entity_type: entity_type,
+      attribute: attribute
+    )
+  end
+
+  defp resolve_schema_name(tenant_id) do
+    case Repo.get_by(Registration, tenant_id: tenant_id) do
+      nil -> {:error, :tenant_not_provisioned}
+      %Registration{schema_name: schema_name} -> {:ok, schema_name}
+    end
+  end
+
+  defp naive_now, do: NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+  # Converts a persisted, string-keyed `EntityDefinition.definition_json`
+  # back into the atom-keyed `Letflow.Entities.Definition.t()` shape
+  # `Letflow.Entities.Definition.DDL` expects -- same round-trip concern
+  # `Letflow.Entities.Records`'s own private `definition_document/1` already
+  # solves for `Letflow.Entities.Record.Validator`'s narrower needs, but
+  # extended here to also carry `:queried`, the decimal precision/scale
+  # pair, and `:foreign_keys` (`DDL.promoted_columns/1` needs all of these;
+  # `Record.Validator` needs none of them) -- not a re-derivation of an
+  # identical mapping, a superset for a different consumer. Exposed here
+  # (not duplicated in `Letflow.Entities.Record.Projector`) so both this
+  # module's own `create_and_populate_entity_table/3` and Projector's
+  # backfill write path (design doc §9) share the one conversion.
+  @doc false
+  @spec document_from_persisted(EntityDefinition.t()) :: Letflow.Entities.Definition.t()
+  def document_from_persisted(%EntityDefinition{definition_json: json}) do
+    %{
+      name: Map.fetch!(json, "name"),
+      display_name: Map.get(json, "display_name"),
+      fields: json |> Map.get("fields", []) |> Enum.map(&field_from_persisted/1),
+      foreign_keys: json |> Map.get("foreign_keys", []) |> Enum.map(&fk_from_persisted/1)
+    }
+  end
+
+  defp field_from_persisted(field) do
+    %{
+      name: Map.fetch!(field, "name"),
+      type: String.to_existing_atom(Map.fetch!(field, "type")),
+      queried: Map.get(field, "queried", false),
+      decimal_precision: Map.get(field, "decimal_precision"),
+      decimal_scale: Map.get(field, "decimal_scale"),
+      enum_values: Map.get(field, "enum_values")
+    }
+  end
+
+  defp fk_from_persisted(fk), do: %{field: Map.fetch!(fk, "field")}
 end

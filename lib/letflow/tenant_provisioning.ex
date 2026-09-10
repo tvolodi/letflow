@@ -1122,6 +1122,50 @@ defmodule Letflow.TenantProvisioning do
   end
 
   @doc """
+  Whether `column_name` physically exists on `table_name` in the tenant
+  schema named by `schema_name` -- the column-granularity counterpart to
+  `entity_table_exists?/2` above, same idiom exactly (parameterised SQL
+  against `information_schema.columns`, `Repo.query!/2`, `rows == []` ->
+  `false`).
+
+  REQ-300 rework cycle 3 (SECURITY-REVIEWER-reported regression): a
+  per-entity-type table can exist while a *specific* declared-but-never-
+  promoted column on it does not (0023's additive-declare-then-promote
+  rule allows a definition to declare a new `queried: true` field or
+  `fk_def` after the table already exists from an earlier promotion).
+  Checking only `entity_table_exists?/2` is table-granularity and
+  therefore insufficient to decide whether one particular column is safe
+  to reference as a real Postgres identifier -- this function is the
+  shared, single implementation of the column-granularity check, called
+  by both `Letflow.Entities.Query.Allowlist.load/2` (gating `:typed_column`
+  classification per candidate promoted column name, so a
+  declared-but-unpromoted field falls back to the always-safe
+  `:json_field`/JSONB path instead) and
+  `Letflow.Entities.Query.Compiler.relation_column_exists?/3` (which
+  delegates here rather than duplicating this query, for the join-path's
+  own declaring-side check). Colocated with `entity_table_exists?/2`
+  rather than in either caller, since both callers already depend on this
+  module for table-existence and neither should own physical-schema
+  introspection that the other also needs.
+  """
+  @spec entity_column_exists?(
+          schema_name :: String.t(),
+          table_name :: String.t(),
+          column_name :: String.t()
+        ) :: boolean()
+  def entity_column_exists?(schema_name, table_name, column_name) do
+    query = """
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = $1 AND table_name = $2 AND column_name = $3
+    """
+
+    case Repo.query!(query, [schema_name, table_name, column_name]) do
+      %Postgrex.Result{rows: []} -> false
+      %Postgrex.Result{rows: [_ | _]} -> true
+    end
+  end
+
+  @doc """
   Creates one `pending` `Letflow.TenantProvisioning.ColumnPromotion` row per
   tenant. `:all` resolves via `list_registrations/0` at call time (this
   module's own tenant-enumeration mechanism, reused rather than a second

@@ -1158,3 +1158,106 @@ history:
       confirmed needing no edit -- REVIEWER already confirmed the
       moduledoc correctly cites it during the idiom gate, no contradiction
       found.
+  - req: REQ-300
+    event: done
+    agent: ORCH
+    at: "2026-09-10T10:49:42Z"
+    note: >
+      REQ-300 (queue task 571, GH#1165) implemented via
+      WF02-REQ300-20260910: joins in Letflow.Entities.Query.Compiler
+      over promoted FK columns (S10 gap 10). New :join field on
+      query_request(), Allowlist.fk_defs/2 accessor, a per-relation
+      resolver distinguishing the FK-declaring side, many-to-many via
+      a "through" join entity reusing the same resolver for both hops
+      (no join-table special case), max join depth 1 (2 for through)
+      and width cap 4 with named rejection errors, and
+      FieldGrants.redact_joined_page/2 composing with the EXISTING,
+      unmodified redaction mechanism so a redacted field on a joined
+      (non-primary) entity stays redacted.
+      This requirement's design went through TWO rework cycles at
+      CODE-DESIGN-VALIDATOR before any code was written, both catching
+      real, would-have-shipped regressions in the same root-cause
+      class: (1) the original design unconditionally repointed
+      compile/2's base query from the shared entity_record_latest
+      table to a per-entity-type table for EVERY query, which would
+      have broken plain filter/sort against any entity type that has
+      never had a column promoted -- confirmed via
+      lib/letflow/entities/record/projector.ex's own comment that this
+      is "the ordinary case for every entity type," not an edge case;
+      fixed by keeping the primary on Latest unless it's itself the
+      FK-declaring side of a requested join. (2) the fixed design's
+      table-existence check for a join's declaring side operated at
+      TABLE granularity when the real guarantee needed is at COLUMN
+      granularity -- an entity type whose table already exists from an
+      earlier, unrelated promotion, with a NEW fk_def declared
+      additively but never itself promoted, would let a join reference
+      a column that doesn't physically exist, surfacing as a raw
+      Postgres error rather than a named one; fixed with a new
+      relation_column_exists?/3 information_schema.columns check
+      before any join SQL references the column.
+      A THIRD instance of the identical bug class surfaced at
+      IMPLEMENTATION time, in a place the design's own two rework
+      cycles hadn't covered: the ORDINARY (non-join) filter/sort path.
+      SECURITY-REVIEWER wrote and ran a real reproduction -- an entity
+      type with a per-type table (from one promoted field) plus a
+      SECOND, additively-declared-but-never-promoted field, filtered
+      directly with no join -- and got an unhandled Postgrex.Error
+      instead of the safe pre-REQ-300 JSONB fallback, a genuine
+      regression. Fixed by moving the per-column existence check into
+      Allowlist.load/2 itself (one shared TenantProvisioning.entity_column_exists?/3
+      primitive now gates both the join path and the ordinary
+      filter/sort path), so a not-yet-promoted field silently and
+      correctly falls back to :json_field exactly as it did before
+      this requirement, with no new error tag needed for that case.
+      REVIEWER's own final gate pass explicitly swept the entire diff
+      for a FOURTH instance of this bug class before clearing it --
+      traced every promoted-column reference (join declaring side,
+      ordinary filter/sort, the non-declaring join side's fixed
+      record_id column, select/select_merge projections, FieldGrants'
+      field_values-only redaction, and the purely-definition-derived
+      relation-resolution functions) and found none uncovered.
+      Pipeline: CODE-DESIGNER (2 rework cycles, both design-stage
+      regressions above) -> CODE-DESIGN-VALIDATOR (PASS on third
+      pass) -> ELIXIR-DEV (self-flagged 3 deviations, including
+      proactively catching and fixing part of what would become the
+      third bug instance) -> SECURITY-REVIEWER (1 rework cycle: the
+      third bug instance, caught via a real written-and-run
+      reproduction, not just code reading; re-check PASS with an
+      independently-reproduced test and a from-scratch full-suite
+      re-run) -> REVIEWER (PASS -- deliberately swept for a fourth
+      instance of the bug class given the pattern, found none).
+      TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped -- 12 tests already
+      map all 8 ACs plus all 3 regression scenarios with real
+      Postgres-verified, non-tautological assertions, independently
+      confirmed by both SECURITY-REVIEWER and REVIEWER. No blocked-by
+      deferral hatches reference REQ-300.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 12 — CLOSED 2026-09-10. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-09 through
+# 2026-09-10 (22 entries, lines 1-1233). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at feature/WF02-REQ300-20260910's
+# Step Final rebase, which composed this branch's own REQ-300 done-event append
+# with main's concurrently-merged REQ-301 done-event, bringing this file to
+# 1233 lines -- over its declared roll_rule ceiling (max_lines: 1200) -- confirmed
+# via `wc -l` on the working-tree file per this volume's own "WHEN THIS VOLUME IS
+# FULL" procedure. Reads of this volume are TARGETED reads only -- a line
+# range or a pattern match, never a whole-file read. Use whichever your shell
+# has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v13.yaml
+#
+# Why this file was closed: WF02-REQ300-20260910's own rebase, composing this
+# branch's REQ-300 done-event with main's REQ-301 done-event, brought the
+# on-disk count to 22 entries across 1233 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

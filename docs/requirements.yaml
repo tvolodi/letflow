@@ -18172,7 +18172,7 @@ requirements:
     title: Joins in Letflow.Entities.Query.Compiler over promoted FK columns (S10 gap 10)
     owner: ELIXIR-DEV
     impl_order: 571  # letflow-queue task id; depends_on translated to queue task ids [569, 568]
-    status: pending
+    status: done
     stage: S10
     description: >
       S10 gap 10 (docs/migration/stage-10-bilimbaga-vertical.md's gap

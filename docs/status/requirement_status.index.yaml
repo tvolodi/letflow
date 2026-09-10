@@ -2368,9 +2368,21 @@ volumes:
     path: docs/status/requirement_status.v12.yaml
     status: current
     opened: 2026-09-09
-    entries: 18
+    entries: 19
     note: >
-      Recounted to 18 by WF02-REQ299-20260910's Step Final rebase, which
+      Recounted to 19 by WF02-REQ298-20260910's Step Final rebase, which
+      conflicted at this file's tail composing ORCH's own REQ-298
+      done-event append (against a stale base of 17) with main's
+      REQ-299 done-event (WF02-REQ299-20260910, DOC-UPDATER), both
+      composed into docs/status/requirement_status.v12.yaml in
+      chronological `at:` order (REQ-299 done 04:07:42Z, REQ-298 done
+      05:33:45Z). Recounted directly from the composed file
+      (`grep -c "^  - req:" docs/status/requirement_status.v12.yaml` = 19
+      on-disk entries) rather than carrying forward either side's
+      independently-computed 17, per this note's own recount-every-time
+      rule. 1089 lines / 66743 bytes at this point, still under the
+      1200-line/120000-byte roll ceiling but with less margin.
+      Previously recounted to 18 by WF02-REQ299-20260910's Step Final rebase, which
       conflicted at this file's tail a second time composing DOC-UPDATER's
       own REQ-299 done-event append (Step 6, against a stale base of 17)
       with main's REQ-297 done-event (WF02-REQ297-20260909) and this

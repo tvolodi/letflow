@@ -1026,3 +1026,64 @@ history:
       unchanged. docs/migration/decisions/0023-entity-storage-hybrid.md
       confirmed needing no edit, per REVIEWER's own prior sign-off that
       0023's claim doesn't need amendment.
+  - req: REQ-298
+    event: done
+    agent: ORCH
+    at: "2026-09-10T05:33:45Z"
+    note: >
+      REQ-298 (queue task 569, GH#1163) implemented via
+      WF02-REQ298-20260910: activates constraint_def as real Postgres
+      unique indexes and fk_def.references_entity as real referential
+      integrity (REFERENCES ... ON DELETE RESTRICT, per REQ-302's
+      exact decision), extending REQ-296's DDL generator and REQ-297's
+      promotion executor -- no new per-tenant-DDL-execution code path.
+      FK REFERENCES rides the same ALTER TABLE ADD COLUMN statement
+      (single column, syntactically valid); a multi-column
+      constraint_def unique index needs a follow-up ALTER TABLE ADD
+      CONSTRAINT, handled by a new ConstraintActivation retrofit
+      mechanism firing once all of a constraint's fields exist as
+      real columns, under the SAME per-tenant pg_advisory_xact_lock
+      serialization run_column_promotion/1 already uses (so a
+      constraint activation and a column promotion against the same
+      tenant schema never interleave). Many-to-many (a question_tags-
+      shaped worked example, two fk_def entries plus one constraint_def
+      of type: :unique over both) verified with no join-table special
+      case in either the generator or the executor; no array-of-
+      references anti-pattern anywhere in the diff.
+      A genuine implementation necessity surfaced mid-build: FK-promoted
+      columns' Postgres type must be forced to uuid (not the ordinary
+      :string -> text mapping) since Postgres requires matching
+      equality-operator types for a REFERENCES constraint against a
+      uuid record_id target -- flagged explicitly rather than silently
+      decided, and this in turn surfaced a REAL, genuinely
+      production-crashing gap SECURITY-REVIEWER caught on first pass:
+      the new uuid pg_type wasn't handled by cast_promoted_value/2 or
+      the two placeholder builders in Letflow.Entities.Records and
+      Letflow.Entities.Record.Projector, so any real dual-write or
+      backfill against an FK-promoted column would crash with a
+      Postgrex encode error -- masked by the original test suite's own
+      helper manually applying the missing cast instead of exercising
+      the real production path. Fixed at all three sites plus two new
+      tests genuinely exercising Records.create_record/2's dual-write
+      and the real backfill/replay path, both verified via git stash
+      to fail pre-fix and pass post-fix.
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (PASS, no rework
+      -- independently assessed the new ConstraintActivation state
+      machine as proportional and race-free, not a disproportionate
+      second competing mechanism) -> ELIXIR-DEV -> SECURITY-REVIEWER
+      (1 rework cycle: the production-crashing uuid-placeholder bug
+      above, caught on first pass with full trace-through of the
+      write paths; re-check PASS with an independently-reproduced
+      fail-first proof and a from-scratch full-suite re-run) ->
+      REVIEWER (PASS -- confirmed the placeholder generalization is
+      genuinely additive with zero behavioral change to any
+      non-FK-promoted write path, confirmed ConstraintActivation needs
+      no dedicated supervision review per REQ-045's precedent, cited
+      SECURITY-REVIEWER's already-fresh full-suite evidence rather
+      than re-running a third 25+-minute suite unnecessarily).
+      TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped -- 44 tests across
+      both touched test files already map every acceptance criterion
+      with real Postgres-verified assertions, independently confirmed
+      by both SECURITY-REVIEWER and REVIEWER. No blocked-by deferral
+      hatches reference REQ-298 -- REQ-300 (its real dependent) remains
+      unstartable regardless via the queue's own depends_on tracking.

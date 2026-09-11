@@ -20505,7 +20505,7 @@ requirements:
     title: Add the entity-record export/import permission atoms to Letflow.Api.Authorization (S10 gap 12, part 1)
     owner: ELIXIR-DEV
     impl_order: 608  # letflow-queue task id; depends_on [REQ-314] = queue task 604, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Per 0022's rule 1 this requirement's title, description,

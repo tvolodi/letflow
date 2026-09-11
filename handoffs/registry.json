@@ -6322,6 +6322,26 @@
       ],
       "last_known_step": "Step Final PASS -- merged.",
       "note": "REQ-316 (queue task 607, GH#1264, depends_on [REQ-313]) -- S10 gap 3 part 1: the entity_record_attachments migration, Ecto schema, and Letflow.Repository.EntityAttachments context module, per the already-PASSed design lib/letflow/design/req313-entity-record-attachments.md (§1/§2). Composite DEFERRABLE INITIALLY DEFERRED FK to entity_record_latest(entity_type, record_id); upload/2, list/2, get/2, get_content/2, delete/2 mirror Letflow.Repository.Attachments with instance_id replaced by entity_type+record_id; shared repository_artifacts dedup; tenant_id derived explicitly via TenantProvisioning.tenant_id_for_schema_name!/1, acting on SECURITY-REVIEWER's non-blocking §10 note. Self-reported deviation: foreign_key_constraint/3 does not catch a DEFERRABLE FK violation (Postgres checks only at COMMIT); fixed with a narrow try/rescue on the exact Postgrex error code and constraint name, reraising anything else. Pipeline: no fresh design cycle (REQ-313's PASSed design fully specified scope) -> ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER PASS (confirmed the try/rescue idiom already exists at pin_rebind.ex:388, reconstruction.ex:970, event_store/registry.ex:229, scheduler.ex:241,642, definitions.ex:1673; independently ran entity_attachments_test.exs: 25 passed; ran full suite: only the 3 pre-existing unrelated failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent (25 tests independently judged comprehensive by REVIEWER). Scope fence held -- no route, no permission atom; REQ-317 owns those."
+    },
+    {
+      "run_id": "WF02-REQ318-20260911",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-318",
+      "issue_id": null,
+      "queue_task_id": 608,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1265,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/api/authorization.ex"
+      ],
+      "branch_name": "feature/WF02-REQ318-20260911",
+      "started_at": "2026-09-11T21:03:54Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-318 (queue task 608, GH#1265, depends_on [REQ-314]) -- S10 gap 12 part 1: three new permission atoms on Letflow.Api.Authorization per the already-PASSed design lib/letflow/design/req314-entity-record-bulk-export-import.md §5. :EntitiesRecordsExport and :EntitiesRecordsImport are route-level (real endpoint_policy_key/2 clauses); :EntitiesRecordsExportUnredacted is deliberately NOT route-level -- checked in-handler only by REQ-319's future handler. No new role_allows?/2 clauses for PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER -- only PLATFORM_ADMIN's catch-all grants the three atoms, matching the :DlqOperate/:WebhooksManage precedent. :EntitiesRecordsImport kept genuinely separate from :EntitiesRecordsWrite. Pipeline: no fresh design cycle (REQ-314's PASSed design fully specified scope) -> ELIXIR-DEV (91 tests) -> SECURITY-REVIEWER PASS (traced role_allows?/2's closed-list fallback to confirm deny-by-default, confirmed :EntitiesRecordsExportUnredacted unreachable via routing, confirmed no privilege-escalation gap) -> REVIEWER PASS (confirmed design conformance/idiom, independently ran the full suite: 3912/3914 passed, only the 2 pre-existing rust-toolchain-environmental failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent -- both hard-gate reviewers independently verified coverage. No route, no router change, no migration -- REQ-319/320 own those."
     }
   ]
 }

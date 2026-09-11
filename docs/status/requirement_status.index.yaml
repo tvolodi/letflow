@@ -2909,8 +2909,23 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 26
+    entries: 27
     note: >
+      Recounted to 27 on WF02-REQ318-20260911's Step Final SECOND rebase
+      (main moved again during this PR's CI run, landing PR #1278 --
+      WF02-REQ315-20260911's own close-out commit -- in the meantime).
+      Conflicted at this file's tail between this run's own already-
+      composed note (previous recount: 26) and PR #1278's close-out note
+      (also claiming 26, computed independently before either side saw
+      the other). docs/status/requirement_status.v14.yaml's own tail
+      required manual composition (both sides inserted at the same
+      point relative to the file's prior tail) -- REQ-318's done-event
+      placed before REQ-315's close-out done-event, preserving each
+      side's own text verbatim. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v14.yaml` = 27 on-disk
+      entries, rather than carrying forward either side's independently-
+      computed 26, per this note's own recount-every-time rule. 951
+      lines / 54882 bytes, well under the roll ceiling.
       Incremented to 26 by this close-out run's own REQ-315 done-event
       append (WF02-REQ315-20260911 close-out, DOC-UPDATER) -- `grep -c
       "^  - req:" docs/status/requirement_status.v14.yaml` = 26 on-disk

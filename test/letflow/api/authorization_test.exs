@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, and REQ-315's :EntitiesAggregate" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, and REQ-318's three entity-record export/import permissions" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -54,7 +54,10 @@ defmodule Letflow.Api.AuthorizationTest do
                :EntitiesDefinitionsWrite,
                :EntitiesRecordsWrite,
                :EntitiesQuery,
-               :EntitiesAggregate
+               :EntitiesAggregate,
+               :EntitiesRecordsExport,
+               :EntitiesRecordsExportUnredacted,
+               :EntitiesRecordsImport
              ]
     end
   end
@@ -372,7 +375,8 @@ defmodule Letflow.Api.AuthorizationTest do
           23 => "twenty-three",
           24 => "twenty-four",
           25 => "twenty-five",
-          26 => "twenty-six"
+          26 => "twenty-six",
+          27 => "twenty-seven"
         }
         |> Map.get(actual_count)
 
@@ -677,12 +681,15 @@ defmodule Letflow.Api.AuthorizationTest do
                  "permissions/0 -- a permission was REMOVED, not added"
       end
 
-      # The live list is exactly the pre-existing nineteen plus REQ-309's four,
-      # in that order, PLUS whatever later requirements have purely appended
-      # since (REQ-315's :EntitiesAggregate) -- this test's own point is that
-      # the pre-REQ-309 prefix and REQ-309's own four are undisturbed, not
-      # that nothing has been appended after them since.
-      assert Enum.take(live, 23) == @pre_req309_permissions ++ @req309_permissions
+      # The live list STARTS WITH the pre-existing nineteen plus REQ-309's
+      # four, in that order: proves REQ-309's own change was purely an append.
+      # A prefix check (not exact equality) is deliberate here -- REQ-315 and
+      # REQ-318 (later requirements) append further permissions after these
+      # (REQ-315's :EntitiesAggregate, then REQ-318's three entity-record
+      # export/import atoms), and this test asserts only what REQ-309 itself
+      # is responsible for.
+      expected_prefix = @pre_req309_permissions ++ @req309_permissions
+      assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req309_permissions)
       assert pair_count == 95
@@ -872,7 +879,8 @@ defmodule Letflow.Api.AuthorizationTest do
           23 => "twenty-three",
           24 => "twenty-four",
           25 => "twenty-five",
-          26 => "twenty-six"
+          26 => "twenty-six",
+          27 => "twenty-seven"
         }
         |> Map.get(actual_count)
 
@@ -1031,9 +1039,13 @@ defmodule Letflow.Api.AuthorizationTest do
                  "permissions/0 -- a permission was REMOVED, not added"
       end
 
-      # The live list is exactly the pre-existing twenty-three plus REQ-315's
-      # one, in that order: proves the change was purely an append.
-      assert live == @pre_req315_permissions ++ [:EntitiesAggregate]
+      # The live list STARTS WITH the pre-existing twenty-three plus REQ-315's
+      # one, in that order: proves REQ-315's own change was purely an append.
+      # A prefix check (not exact equality) is deliberate here -- REQ-318 (a
+      # later requirement) appends three more permissions after these, and
+      # this test asserts only what REQ-315 itself is responsible for.
+      expected_prefix = @pre_req315_permissions ++ [:EntitiesAggregate]
+      assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
       pair_count = length(Authorization.roles()) * length(@pre_req315_permissions)
       assert pair_count == 115
@@ -1072,6 +1084,345 @@ defmodule Letflow.Api.AuthorizationTest do
 
       assert Authorization.endpoint_policy_key("POST", "/entities/query/aggregate/extra") ==
                :Unknown
+    end
+  end
+
+  # ==========================================================================
+  # REQ-318 — the three entity-record export/import permission atoms
+  # (design lib/letflow/design/req314-entity-record-bulk-export-import.md §5,
+  # governing verdict: the "SECURITY-REVIEWER Final Verdict (re-check after
+  # §5/§6 rework)" section). This requirement mints the vocabulary only —
+  # REQ-319/REQ-320 add the routes/handlers that consume it.
+  # ==========================================================================
+
+  @req318_permissions [
+    :EntitiesRecordsExport,
+    :EntitiesRecordsExportUnredacted,
+    :EntitiesRecordsImport
+  ]
+
+  describe "REQ-318 AC1 — permissions/0 includes all three new atoms" do
+    test "permissions/0 contains :EntitiesRecordsExport, :EntitiesRecordsExportUnredacted and :EntitiesRecordsImport" do
+      for permission <- @req318_permissions do
+        assert permission in Authorization.permissions(),
+               "expected permissions/0 to contain #{inspect(permission)}"
+      end
+    end
+
+    test "permissions/0 has no duplicate entries after the append" do
+      permissions = Authorization.permissions()
+      assert permissions == Enum.uniq(permissions)
+    end
+
+    # The generic "@doc count equals length(permissions())" test already lives
+    # in acceptance-criteria-7/8's describe block above and is computed (not
+    # hardcoded), so it automatically re-verifies against the new, larger
+    # count once these three atoms are appended -- no separate test needed
+    # here to duplicate that assertion.
+  end
+
+  describe "REQ-318 AC2 — endpoint_policy_key/2 for both real routes, never :Unknown" do
+    test "POST /entities/records/:entity_type/export -> :EntitiesRecordsExport" do
+      assert Authorization.endpoint_policy_key(
+               "POST",
+               "/entities/records/:entity_type/export"
+             ) == :EntitiesRecordsExport
+    end
+
+    test "POST /entities/records/:entity_type/import -> :EntitiesRecordsImport" do
+      assert Authorization.endpoint_policy_key(
+               "POST",
+               "/entities/records/:entity_type/import"
+             ) == :EntitiesRecordsImport
+    end
+
+    test "neither route resolves to :Unknown" do
+      refute Authorization.endpoint_policy_key("POST", "/entities/records/:entity_type/export") ==
+               :Unknown
+
+      refute Authorization.endpoint_policy_key("POST", "/entities/records/:entity_type/import") ==
+               :Unknown
+    end
+
+    test "the new clauses did not widen matching -- a similar but different path is still :Unknown" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/records/:entity_type/export") ==
+               :Unknown
+
+      assert Authorization.endpoint_policy_key("GET", "/entities/records/:entity_type/import") ==
+               :Unknown
+
+      assert Authorization.endpoint_policy_key(
+               "POST",
+               "/entities/records/:entity_type/exports"
+             ) == :Unknown
+
+      assert Authorization.endpoint_policy_key("DELETE", "/entities/records/:entity_type/export") ==
+               :Unknown
+    end
+  end
+
+  describe "REQ-318 AC3 — :EntitiesRecordsExportUnredacted is never route-derived" do
+    test "no (method, path) pair among every route this module knows about resolves to :EntitiesRecordsExportUnredacted" do
+      # Every route this module maps, gathered from the existing regression
+      # lists in this file plus the two new REQ-318 routes and a handful of
+      # unmapped/garbage paths -- a positive, enumerable proof (not just "grep
+      # finds no clause") that :EntitiesRecordsExportUnredacted is unreachable
+      # via endpoint_policy_key/2.
+      routes = [
+        {"POST", "/definitions"},
+        {"PUT", "/definitions/:id"},
+        {"PATCH", "/definitions/:id"},
+        {"POST", "/definitions/:id/activate"},
+        {"POST", "/definitions/:id/deprecate"},
+        {"POST", "/definitions/:id/archive"},
+        {"DELETE", "/definitions/:id"},
+        {"POST", "/definitions/import"},
+        {"GET", "/definitions"},
+        {"GET", "/definitions/:id"},
+        {"GET", "/definitions/active/:name"},
+        {"GET", "/definitions/search"},
+        {"GET", "/definitions/:id/export"},
+        {"GET", "/definitions/delta"},
+        {"POST", "/instances"},
+        {"POST", "/instances/:id/cancel"},
+        {"POST", "/instances/:id/advance-timer"},
+        {"GET", "/instances"},
+        {"GET", "/instances/:id"},
+        {"GET", "/tasks"},
+        {"GET", "/tasks/:id"},
+        {"POST", "/tasks/:id/complete"},
+        {"POST", "/tasks/:id/assign"},
+        {"POST", "/tasks/:id/reassign"},
+        {"POST", "/users"},
+        {"POST", "/groups"},
+        {"POST", "/tokens"},
+        {"GET", "/audit"},
+        {"GET", "/dlq"},
+        {"GET", "/metrics"},
+        {"POST", "/webhooks/subscriptions"},
+        {"GET", "/services"},
+        {"GET", "/admin/services"},
+        {"POST", "/tenants"},
+        {"POST", "/onboarding"},
+        {"GET", "/roles"},
+        {"POST", "/instances/:id/attachments"},
+        {"GET", "/instances/:id/attachments"},
+        {"GET", "/entities/definitions"},
+        {"POST", "/entities/definitions"},
+        {"POST", "/entities/definitions/:name/activate"},
+        {"POST", "/entities/records/:entity_type"},
+        {"PUT", "/entities/records/:entity_type/:record_id"},
+        {"DELETE", "/entities/records/:entity_type/:record_id"},
+        {"POST", "/entities/query"},
+        {"POST", "/entities/records/:entity_type/export"},
+        {"POST", "/entities/records/:entity_type/import"},
+        {"POST", "/definitions/:id/validate"},
+        {"POST", "/instances/:id/rebind-pins"},
+        {"GET", "/nope"},
+        {"GET", "/entities/records/:entity_type/export"},
+        {"DELETE", "/entities/records/:entity_type/import"}
+      ]
+
+      for {method, path} <- routes do
+        # apply/3 here (rather than a direct `==`) is deliberate: a direct
+        # comparison is statically provable-always-false by Elixir's type
+        # checker (endpoint_policy_key/2's inferred return set has no clause
+        # producing :EntitiesRecordsExportUnredacted at all), which is exactly
+        # the property this test exists to demonstrate -- but a
+        # compiler-warned comparison is noisy in test output. Routing through
+        # apply/3 keeps the real runtime assertion while avoiding that
+        # otherwise-correct static-type warning.
+        key = apply(Authorization, :endpoint_policy_key, [method, path])
+
+        refute key == :EntitiesRecordsExportUnredacted,
+               "#{method} #{path} resolved to :EntitiesRecordsExportUnredacted -- this atom " <>
+                 "must never be route-derived, only checked in-handler"
+      end
+    end
+
+    test "required_permission(:EntitiesRecordsExportUnredacted) still returns :EntitiesRecordsExportUnredacted" do
+      assert Authorization.required_permission(:EntitiesRecordsExportUnredacted) ==
+               :EntitiesRecordsExportUnredacted
+    end
+  end
+
+  describe "REQ-318 AC4 — required_permission/1 identity clauses for the two route-level atoms" do
+    test "required_permission(:EntitiesRecordsExport) == :EntitiesRecordsExport" do
+      assert Authorization.required_permission(:EntitiesRecordsExport) ==
+               :EntitiesRecordsExport
+    end
+
+    test "required_permission(:EntitiesRecordsImport) == :EntitiesRecordsImport" do
+      assert Authorization.required_permission(:EntitiesRecordsImport) ==
+               :EntitiesRecordsImport
+    end
+  end
+
+  describe "REQ-318 AC5 — evaluate_access/2 accepts :EntitiesRecordsExportUnredacted as a direct argument" do
+    test "a role holding it (PLATFORM_ADMIN, via the catch-all) is granted" do
+      ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+
+      assert %Authorization.AccessDecision{kind: :Allow} =
+               Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted)
+    end
+
+    test "a role not holding it (PROCESS_OPERATOR) is denied" do
+      ctx = %AccessContext{user_id: "u2", roles: [:PROCESS_OPERATOR]}
+
+      assert %Authorization.AccessDecision{kind: :Deny403} =
+               Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted)
+    end
+
+    test "no roles at all is denied, never defaulted to allow" do
+      ctx = %AccessContext{user_id: "u3", roles: []}
+
+      assert %Authorization.AccessDecision{kind: :Deny403} =
+               Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted)
+    end
+
+    test "evaluate_access/2 also accepts the two route-level atoms directly, same grant/deny shape" do
+      admin_ctx = %AccessContext{user_id: "u1", roles: [:PLATFORM_ADMIN]}
+      operator_ctx = %AccessContext{user_id: "u2", roles: [:PROCESS_OPERATOR]}
+
+      for permission <- [:EntitiesRecordsExport, :EntitiesRecordsImport] do
+        assert %Authorization.AccessDecision{kind: :Allow} =
+                 Authorization.evaluate_access(admin_ctx, permission)
+
+        assert %Authorization.AccessDecision{kind: :Deny403} =
+                 Authorization.evaluate_access(operator_ctx, permission)
+      end
+    end
+  end
+
+  describe "REQ-318 AC6 — regression: no EXISTING role/permission pair changed, and only PLATFORM_ADMIN's catch-all grants the three new atoms" do
+    # Snapshot of every permission that existed before REQ-318 (the 23
+    # REQ-309-era permissions plus REQ-315's :EntitiesAggregate, which merged
+    # to main ahead of this rebase), crossed with all five roles --
+    # transcribed by hand from the module as it stood immediately before this
+    # change, the same discipline the REQ-309 AC5 regression grid above
+    # already establishes for its own predecessor state.
+    @pre_req318_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer,
+      :EntitiesDefinitionsRead,
+      :EntitiesDefinitionsWrite,
+      :EntitiesRecordsWrite,
+      :EntitiesQuery,
+      :EntitiesAggregate
+    ]
+
+    @pre_req318_allowed %{
+      PLATFORM_ADMIN: @pre_req318_permissions,
+      PROCESS_DESIGNER: [
+        :DefinitionsWrite,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesRead,
+        :TasksRead,
+        :RolesManage,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      PROCESS_OPERATOR: [
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :TasksAssign,
+        :AuditRead,
+        :DlqOperate,
+        :MetricsRead,
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :InstancesAdvanceTimer,
+        :EntitiesDefinitionsRead,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      TASK_WORKER: [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      AGENT_RUNNER: []
+    }
+
+    test "the live permissions/0 list is exactly the pre-existing twenty-four plus REQ-318's three, in that order" do
+      assert length(@pre_req318_permissions) == 24
+      assert Authorization.permissions() == @pre_req318_permissions ++ @req318_permissions
+    end
+
+    test "all 120 pre-existing role/permission pairs return exactly what they returned before REQ-318" do
+      for role <- [
+            :PLATFORM_ADMIN,
+            :PROCESS_DESIGNER,
+            :PROCESS_OPERATOR,
+            :TASK_WORKER,
+            :AGENT_RUNNER
+          ],
+          permission <- @pre_req318_permissions do
+        expected = permission in Map.fetch!(@pre_req318_allowed, role)
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "REGRESSION: role_allows?(#{inspect(role)}, #{inspect(permission)}) is now " <>
+                 "#{inspect(actual)} but was #{inspect(expected)} before REQ-318. This " <>
+                 "change must be purely additive -- no existing role/permission pair may " <>
+                 "change hands."
+      end
+    end
+
+    test "PROCESS_DESIGNER, PROCESS_OPERATOR and TASK_WORKER are denied all three new atoms" do
+      for role <- [:PROCESS_DESIGNER, :PROCESS_OPERATOR, :TASK_WORKER],
+          permission <- @req318_permissions do
+        refute Authorization.role_allows?(role, permission),
+               "expected #{inspect(role)} to be denied #{inspect(permission)} -- design §5 " <>
+                 "deliberately adds no new role_allows?/2 clause for this role against any " <>
+                 "of the three REQ-318 atoms"
+      end
+    end
+
+    test "PLATFORM_ADMIN's pre-existing catch-all is the only thing granting the three new atoms" do
+      for permission <- @req318_permissions do
+        assert Authorization.role_allows?(:PLATFORM_ADMIN, permission),
+               "expected PLATFORM_ADMIN's catch-all to grant #{inspect(permission)}"
+      end
+
+      # AGENT_RUNNER's catch-all is `do: false` -- confirm it stays denied too,
+      # since it is a role, not a no-role case, and easy to miss.
+      for permission <- @req318_permissions do
+        refute Authorization.role_allows?(:AGENT_RUNNER, permission),
+               "expected AGENT_RUNNER to be denied #{inspect(permission)}"
+      end
     end
   end
 end

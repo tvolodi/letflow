@@ -601,8 +601,13 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
       |> Enum.join("\n")
 
     case Regex.run(~r/defp run_query\(.*?\n\s*with (.*?) do\n/s, code, capture: :all_but_first) do
-      [chain] -> chain
-      nil -> flunk("expected lib/letflow/routers/entities.ex to define run_query/5 with a with/1 chain")
+      [chain] ->
+        chain
+
+      nil ->
+        flunk(
+          "expected lib/letflow/routers/entities.ex to define run_query/5 with a with/1 chain"
+        )
     end
   end
 

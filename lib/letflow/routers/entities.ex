@@ -6,10 +6,9 @@ defmodule Letflow.Routers.Entities do
   §2 settles one-router-not-two, §5 the security posture, §6 pagination, §7
   the error mapping per delegate.
 
-  REQ-310 creates this module with the **nine** definition and record routes
-  below. `POST /entities/query` (§1's tenth row) is REQ-311's, appended to
-  this same module later — the module is deliberately shaped so that is an
-  append, not a restructure.
+  REQ-310 created this module with the nine definition and record routes
+  below; REQ-311 appended §1's tenth row, `POST /entities/query`, to this
+  same module — an append, not a restructure.
 
   Its permission vocabulary (`:EntitiesDefinitionsRead`,
   `:EntitiesDefinitionsWrite`, `:EntitiesRecordsWrite`, and REQ-311's
@@ -29,6 +28,7 @@ defmodule Letflow.Routers.Entities do
   | create_record | `POST /entities/records/:entity_type` | `Letflow.Entities.Records.create_record/2` | `EntitiesRecordsWrite` | 201 / 404 / 422 |
   | update_record | `PUT /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.update_record/2` | `EntitiesRecordsWrite` | 200 / 404 / 409 / 422 |
   | delete_record | `DELETE /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.delete_record/2` | `EntitiesRecordsWrite` | 200 / 404 |
+  | query | `POST /entities/query` | `Letflow.Entities.Query.Compiler.compile/2` then `Letflow.Entities.Query.Allowlist.load/2` then `Letflow.Entities.Query.Cursor.paginate/5` then a `Letflow.Entities.Query.FieldGrants` redaction step | `EntitiesQuery` | 200 / 400 / 404 / 422 |
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -67,6 +67,43 @@ defmodule Letflow.Routers.Entities do
   `conn.assigns.auth_context.user_id`, never from a body or query field.
   This module performs **no `Repo` call of any kind** — every read and write
   happens inside a context module.
+
+  ## INV-2 — `POST /query` redacts on BOTH branches, by two different calls
+
+  Redaction happens before `Letflow.Api.Response.ok/2` ever serialises a
+  page, and which redactor runs is decided by `request.join` — the SAME
+  field `Letflow.Entities.Query.Compiler.compile/2` itself branches on to
+  pick `compile_plain` vs `compile_joined`. Branching on the same input
+  makes it structurally impossible for the redactor to disagree with the
+  row shape it is redacting.
+
+    * **join-bearing** (`join: [_ | _]`) →
+      `Letflow.Entities.Query.FieldGrants.redact_joined_page/2`, given a
+      `restriction_sets()` map built from ONE
+      `FieldGrants.load_restrictions/3` call per EXPOSED entity type:
+      `:primary` for the primary's own type, plus each
+      `join_clause().entity_type` keyed by that string. A `through`
+      entity's type is deliberately NOT among them — its row is never
+      exposed in a `Compiler.joined_row()` (that type's own typedoc), so
+      no key of a joined row could ever be looked up against it.
+    * **non-join** → this module's own **`redact_plain_page/2`**, NOT
+      `FieldGrants.redact_page/2`.
+
+  ⛔ That last point is not a stylistic preference and this paragraph must
+  not be "simplified" back to naming `redact_page/2`. `redact_page/2`'s
+  private `redact_item/2` matches `%Letflow.Entities.Record.Latest{}`
+  only, but `Compiler.compile_plain/5` emits a plain
+  `Compiler.entity_row()` MAP (never a `%Latest{}`) whenever the entity
+  type has a promoted per-entity-type table — so `redact_page/2` raises
+  `FunctionClauseError` on exactly the rows a promoted type produces,
+  which through this route would surface as a 500 on a read that must
+  instead be redacted. That gap is filed as **ISS-0600**
+  (`docs/issues/ISS-0600.yaml`) against `Letflow.Entities.Query.FieldGrants`
+  itself, where the real fix belongs; `redact_plain_page/2` here is a
+  shape ADAPTER over the public `FieldGrants.redact_field_values/2`, not a
+  second redaction policy. **When ISS-0600 lands, delete
+  `redact_plain_page/2`/`redact_plain_item/2` and this paragraph, and call
+  `FieldGrants.redact_page/2` directly.**
 
   ## INV-5 — not-found and cross-tenant are the same bytes
 
@@ -113,6 +150,11 @@ defmodule Letflow.Routers.Entities do
   alias Letflow.Entities.Definition.Validator.Violation, as: DefinitionViolation
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
+  alias Letflow.Entities.Query.Allowlist
+  alias Letflow.Entities.Query.Compiler
+  alias Letflow.Entities.Query.Cursor
+  alias Letflow.Entities.Query.FieldGrants
+  alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.EventStore.Registry.ValidationFailure
@@ -169,6 +211,22 @@ defmodule Letflow.Routers.Entities do
 
   authz_delete "/records/:entity_type/:record_id", :EntitiesRecordsWrite do
     handle_delete_record(conn, conn.params["entity_type"], conn.params["record_id"])
+  end
+
+  # ── Query route ───────────────────────────────────────────────────────
+  #
+  # POST for a NON-mutating read: the query DSL is an unboundedly nested
+  # structure (a list of typed filter clauses, a list of sort clauses, up
+  # to four join clauses each with an optional `through`) with no flat
+  # query-string encoding in this codebase and no way to express it as
+  # repeated ?field=op:value pairs without inventing a mini-language
+  # design §4 declines to invent. Gated by the READ permission
+  # :EntitiesQuery -- the same read-permission-on-a-POST-route shape
+  # Letflow.Routers.Definitions' own POST /definitions/:id/validate uses,
+  # for the same reason.
+
+  authz_post "/query", :EntitiesQuery do
+    handle_query(conn)
   end
 
   match _ do
@@ -822,6 +880,430 @@ defmodule Letflow.Routers.Entities do
     Logger.warning("entity record command failed: #{inspect(reason)}")
     Response.internal_error(conn)
   end
+
+  # ══ POST /entities/query ══════════════════════════════════════════════
+  #
+  # The one route in this module that composes several delegate calls
+  # rather than fronting one. That is not a router-local business-logic
+  # layer: Compiler/Allowlist/Cursor/FieldGrants is the existing
+  # REQ-230/231/300 division of labour, and design §1 specifies exactly
+  # this sequence -- no new combining context module is introduced.
+  #
+  # INV-1: `prefix` is prefix!/1's output and NOTHING else; `user_id` is
+  # conn.assigns.auth_context.user_id and NOTHING else. A body carrying
+  # "tenant_id"/"schema"/"slug"/"prefix"/"user_id" is inert -- those keys
+  # are never read anywhere below.
+
+  defp handle_query(conn) do
+    user_id = conn.assigns.auth_context.user_id
+
+    case object_body(conn) do
+      {:ok, body} ->
+        run_query(conn, body, user_id, prefix!(conn))
+
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+    end
+  end
+
+  # ⛔ `run_query/5`'s `with` chain IS the composition design §1 specifies,
+  # and test/letflow/entities/query_cursor_field_grants_test.exs extracts
+  # exactly this chain (comments stripped) to assert its order. Keep the
+  # four steps here, in this order.
+  #
+  # `Allowlist.load/2` is called here even though `compile/2` loads one
+  # internally, and that is DELIBERATE, not an oversight to optimise away.
+  # `Cursor.paginate/5` takes the allowlist as its own third positional
+  # argument (it re-resolves every sort field's type/source against it),
+  # and `compile/2` does not return the one it built -- threading it out
+  # would mean changing `compile/2`'s public signature, which this route
+  # has no business doing. The cost is real and is accepted: `load/2`
+  # performs a genuine SECOND definition fetch
+  # (`Definitions.get_active_definition_by_name/2`) plus its own
+  # information_schema column-existence probes. It is idempotent, so the
+  # second call agrees with the first, but it is not free.
+  @spec run_query(Plug.Conn.t(), map(), String.t(), String.t()) :: Plug.Conn.t()
+  defp run_query(conn, body, user_id, prefix) do
+    with {:ok, request} <- build_query_request(body),
+         {:ok, opts} <- build_paginate_opts(body),
+         {:ok, compiled} <- Compiler.compile(request, prefix),
+         {:ok, allowlist} <- Allowlist.load(request.entity_type, prefix),
+         {:ok, page} <- Cursor.paginate(request, compiled, allowlist, opts, prefix),
+         {:ok, redacted} <- redact(page, request, user_id, prefix) do
+      Response.ok(conn, %{
+        "items" => Enum.map(redacted.items, &query_item_map/1),
+        "next_cursor" => redacted.next_cursor
+      })
+    else
+      {:error, reason} -> render_query_error(conn, reason)
+    end
+  end
+
+  # ══ INV-2 -- the two redaction branches ═══════════════════════════════
+  #
+  # ⛔ TWO clauses, branching on `request.join` -- the SAME field
+  # `Compiler.compile/2` branches on to choose compile_plain vs
+  # compile_joined. Not one clause with an optional argument, and not a
+  # branch on the page's runtime item shape: deriving the branch from the
+  # same input the compiler used is what makes it impossible for the
+  # redactor to disagree with the shape it is handed.
+  #
+  # ⛔ The fallthrough clause calls this module's own redact_plain_page/2,
+  # NOT FieldGrants.redact_page/2 -- see this module's moduledoc "INV-2"
+  # section for why (ISS-0600), and delete the workaround when that issue
+  # lands.
+
+  @spec redact(Pagination.Page.t(term()), map(), String.t(), String.t()) ::
+          {:ok, Pagination.Page.t(term())} | {:error, :invalid_schema_name}
+  defp redact(page, %{join: [_ | _] = joins} = request, user_id, prefix) do
+    # One load_restrictions/3 per EXPOSED entity type: :primary for the
+    # primary's own type, plus each join clause's own entity_type. A
+    # `through` entity's type is NOT here -- its row never appears as a key
+    # of a Compiler.joined_row(), so a restriction set keyed for it could
+    # never be fetched, and including it would signal that the key list was
+    # mis-derived (the failure mode being a MISSING exposed key, which
+    # redact_joined_item/2's Map.fetch!/2 turns into a 500).
+    keys = [{:primary, request.entity_type} | Enum.map(joins, &{&1.entity_type, &1.entity_type})]
+
+    Enum.reduce_while(keys, {:ok, %{}}, fn {key, entity_type}, {:ok, acc} ->
+      case FieldGrants.load_restrictions(user_id, entity_type, prefix) do
+        {:ok, set} -> {:cont, {:ok, Map.put(acc, key, set)}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, restriction_sets} -> {:ok, FieldGrants.redact_joined_page(page, restriction_sets)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp redact(page, request, user_id, prefix) do
+    with {:ok, restriction_set} <-
+           FieldGrants.load_restrictions(user_id, request.entity_type, prefix) do
+      {:ok, redact_plain_page(page, restriction_set)}
+    end
+  end
+
+  # ⛔ ISS-0600 WORKAROUND -- delete this function and its two item clauses
+  # when that issue lands, and call FieldGrants.redact_page/2 instead.
+  #
+  # This is a SHAPE ADAPTER over the public
+  # FieldGrants.redact_field_values/2, never a reimplementation of the
+  # redaction policy itself -- what counts as restricted and what the
+  # sentinel is both stay FieldGrants' alone. It exists only because
+  # FieldGrants.redact_page/2's private redact_item/2 matches %Latest{}
+  # and nothing else, while compile_plain/5 emits plain
+  # Compiler.entity_row() maps for a PROMOTED entity type.
+  @spec redact_plain_page(Pagination.Page.t(term()), FieldGrants.restriction_set()) ::
+          Pagination.Page.t(term())
+  defp redact_plain_page(%Pagination.Page{items: items} = page, restriction_set) do
+    %{page | items: Enum.map(items, &redact_plain_item(&1, restriction_set))}
+  end
+
+  # Two clauses, one per shape compile_plain/5 can actually emit. ⛔ There
+  # is deliberately NO third, permissive clause: a shape neither of these
+  # matches must RAISE (a logged, detail-free 500 via the pipeline's own
+  # error handler) rather than fall through UNREDACTED, which is the one
+  # failure mode INV-2 cannot tolerate.
+  defp redact_plain_item(%Latest{field_values: field_values} = item, restriction_set) do
+    %{item | field_values: FieldGrants.redact_field_values(field_values, restriction_set)}
+  end
+
+  defp redact_plain_item(%{field_values: field_values} = item, restriction_set)
+       when is_map(item) do
+    %{item | field_values: FieldGrants.redact_field_values(field_values, restriction_set)}
+  end
+
+  # ══ Request parsing (design §4) ═══════════════════════════════════════
+  #
+  # ⛔ `Types.parse_filter_op/1`/`parse_sort_dir/1` run on the RAW strings
+  # HERE, before the Types.query_request() map is built -- so an
+  # unrecognised literal is a 400 (malformed primitive) while compile/2's
+  # own semantic rejections are 422. A handler that skipped this step and
+  # let compile/2 reject the operator would answer 422 to both and
+  # collapse design §4's error-class distinction.
+
+  defp build_query_request(body) do
+    with {:ok, entity_type} <- query_entity_type(body),
+         {:ok, filters} <- parse_filters(Map.get(body, "filters")),
+         {:ok, sort} <- parse_sorts(Map.get(body, "sort")),
+         {:ok, join} <- parse_joins(Map.get(body, "join")) do
+      {:ok, %{entity_type: entity_type, filters: filters, sort: sort, join: join}}
+    end
+  end
+
+  defp query_entity_type(body) do
+    case Map.get(body, "entity_type") do
+      entity_type when is_binary(entity_type) and entity_type != "" -> {:ok, entity_type}
+      _other -> {:error, {:query_field_invalid, "entity_type"}}
+    end
+  end
+
+  defp parse_filters(nil), do: {:ok, []}
+
+  defp parse_filters(filters) when is_list(filters) do
+    map_while_ok(filters, &parse_filter_clause/1)
+  end
+
+  defp parse_filters(_other), do: {:error, {:query_field_invalid, "filters"}}
+
+  defp parse_filter_clause(%{"field" => field, "op" => raw_op} = clause)
+       when is_binary(field) and is_binary(raw_op) do
+    with {:ok, op} <- Types.parse_filter_op(raw_op) do
+      # ⛔ Map.has_key?/2, NOT Map.get/2. `:is_null`/`:is_not_null` carry NO
+      # value at all, while `:eq` REQUIRES one -- and `Map.get/2` returns
+      # `nil` for both "absent" and "present as JSON null", which would make
+      # an omitted `:eq` value indistinguishable from a legitimately-null
+      # one and silently hide the {:value_arity_mismatch, _} compile/2
+      # rejects it with (design §4, 422).
+      if Map.has_key?(clause, "value") do
+        {:ok, %{field: field, op: op, value: Map.fetch!(clause, "value")}}
+      else
+        {:ok, %{field: field, op: op}}
+      end
+    end
+  end
+
+  defp parse_filter_clause(_other), do: {:error, {:query_field_invalid, "filters"}}
+
+  defp parse_sorts(nil), do: {:ok, []}
+
+  defp parse_sorts(sorts) when is_list(sorts), do: map_while_ok(sorts, &parse_sort_clause/1)
+  defp parse_sorts(_other), do: {:error, {:query_field_invalid, "sort"}}
+
+  defp parse_sort_clause(%{"field" => field, "dir" => raw_dir})
+       when is_binary(field) and is_binary(raw_dir) do
+    with {:ok, dir} <- Types.parse_sort_dir(raw_dir) do
+      {:ok, %{field: field, dir: dir}}
+    end
+  end
+
+  defp parse_sort_clause(_other), do: {:error, {:query_field_invalid, "sort"}}
+
+  defp parse_joins(nil), do: {:ok, []}
+
+  defp parse_joins(joins) when is_list(joins), do: map_while_ok(joins, &parse_join_clause/1)
+  defp parse_joins(_other), do: {:error, {:query_field_invalid, "join"}}
+
+  # `through` and `type` are optional and only put when present, so
+  # `Compiler.check_join_shape/1`'s own Map.has_key? tests see exactly what
+  # the caller sent. No parse step of this router's own applies to them --
+  # they are entity-type/relation NAMES, resolved by compile/2 against the
+  # tenant's own definitions (a wrong one is one of its 422s), not closed
+  # atom vocabularies like `op`/`dir`.
+  defp parse_join_clause(%{"entity_type" => entity_type, "fk" => fk} = clause)
+       when is_binary(entity_type) and is_binary(fk) do
+    join =
+      %{entity_type: entity_type, fk: fk}
+      |> maybe_put_optional(:through, clause, "through")
+      |> maybe_put_optional(:type, clause, "type")
+
+    {:ok, join}
+  end
+
+  defp parse_join_clause(_other), do: {:error, {:query_field_invalid, "join"}}
+
+  defp map_while_ok(list, mapper) do
+    Enum.reduce_while(list, {:ok, []}, fn element, {:ok, acc} ->
+      case mapper.(element) do
+        {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, parsed} -> {:ok, Enum.reverse(parsed)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # `cursor`/`page_size` are Cursor.paginate/5's own paginate_opts() fields,
+  # carried FLAT at the top level of the same body (design §4/§6) -- the
+  # same shape every other paginated route in this codebase uses for them,
+  # differing only in arriving as body fields rather than query params.
+  #
+  # `page_size` is type-checked HERE because Pagination.validate_page_size/1
+  # has clauses for `nil` and positive integers only -- handing it a string
+  # or a float from a JSON body would raise FunctionClauseError rather than
+  # return its own {:error, :page_size_too_large}.
+  defp build_paginate_opts(body) do
+    with {:ok, cursor} <- query_cursor(body),
+         {:ok, page_size} <- query_page_size(body) do
+      {:ok, %{cursor: cursor, page_size: page_size}}
+    end
+  end
+
+  defp query_cursor(body) do
+    case Map.get(body, "cursor") do
+      nil -> {:ok, nil}
+      cursor when is_binary(cursor) -> {:ok, cursor}
+      _other -> {:error, {:query_field_invalid, "cursor"}}
+    end
+  end
+
+  defp query_page_size(body) do
+    case Map.get(body, "page_size") do
+      nil -> {:ok, nil}
+      page_size when is_integer(page_size) and page_size > 0 -> {:ok, page_size}
+      _other -> {:error, {:query_field_invalid, "page_size"}}
+    end
+  end
+
+  # ══ Query error mapping (design §4) ═══════════════════════════════════
+  #
+  # Both unions this route can return are mapped exhaustively, terminating
+  # in a logged, detail-free 500 catch-all (INV-8).
+  #
+  # compile_error(), all 15 members:
+  #   :entity_type_not_found              -> 404 (INV-5)
+  #   {:unknown_operator, _}              -> 400 (pre-parsed above; mapped)
+  #   {:unknown_sort_dir, _}              -> 400 (pre-parsed above; mapped)
+  #   {:field_not_allowed, _}             -> 422
+  #   {:value_arity_mismatch, _}          -> 422
+  #   {:invalid_in_value, _}              -> 422
+  #   {:operator_not_valid_for_type,_,_}  -> 422
+  #   :entity_table_not_found             -> 422
+  #   {:too_many_joins, _}                -> 422
+  #   :join_depth_exceeded                -> 422
+  #   {:no_through_relation, _, _}        -> 422
+  #   {:ambiguous_through_relation, _}    -> 422
+  #   {:duplicate_join_target, _}         -> 422
+  #   {:relation_column_not_found, _, _}  -> 422
+  #   :invalid_schema_name                -> 500 (unreachable, INV-1)
+  #
+  # Cursor.paginate/5's own union:
+  #   :page_size_too_large / :invalid_cursor / :wrong_endpoint /
+  #   :resume_key_arity_mismatch          -> 400
+  #   :expired                            -> the dedicated cursor-expired
+  #                                          problem document
+  #   {:field_not_allowed, _}             -> 422 (shared clause above)
+
+  defp render_query_error(conn, {:query_field_invalid, field}),
+    do: Response.bad_request(conn, "#{field} is missing or malformed")
+
+  defp render_query_error(conn, {:unknown_operator, raw}),
+    do: Response.bad_request(conn, "unknown filter operator: #{inspect(raw)}")
+
+  defp render_query_error(conn, {:unknown_sort_dir, raw}),
+    do: Response.bad_request(conn, "unknown sort direction: #{inspect(raw)}")
+
+  defp render_query_error(conn, :entity_type_not_found), do: Response.not_found(conn)
+
+  defp render_query_error(conn, {:field_not_allowed, field}),
+    do: Response.unprocessable(conn, "field is not queryable: #{inspect(field)}")
+
+  defp render_query_error(conn, {:value_arity_mismatch, op}),
+    do: Response.unprocessable(conn, "wrong value arity for operator #{inspect(op)}")
+
+  defp render_query_error(conn, {:invalid_in_value, field}),
+    do: Response.unprocessable(conn, "value must be a list for field #{inspect(field)}")
+
+  defp render_query_error(conn, {:operator_not_valid_for_type, op, type}),
+    do:
+      Response.unprocessable(
+        conn,
+        "operator #{inspect(op)} is not valid for a field of type #{inspect(type)}"
+      )
+
+  defp render_query_error(conn, :entity_table_not_found),
+    do: Response.unprocessable(conn, "entity type has no queryable table for this request")
+
+  defp render_query_error(conn, {:too_many_joins, count}),
+    do: Response.unprocessable(conn, "too many joins: #{count}")
+
+  defp render_query_error(conn, :join_depth_exceeded),
+    do: Response.unprocessable(conn, "a join clause may not itself carry a join")
+
+  defp render_query_error(conn, {:no_through_relation, through, primary}),
+    do:
+      Response.unprocessable(
+        conn,
+        "no relation from #{inspect(through)} to #{inspect(primary)}"
+      )
+
+  defp render_query_error(conn, {:ambiguous_through_relation, through}),
+    do: Response.unprocessable(conn, "ambiguous through relation: #{inspect(through)}")
+
+  defp render_query_error(conn, {:duplicate_join_target, entity_type}),
+    do: Response.unprocessable(conn, "duplicate join target: #{inspect(entity_type)}")
+
+  defp render_query_error(conn, {:relation_column_not_found, entity_type, column}),
+    do:
+      Response.unprocessable(
+        conn,
+        "relation column #{inspect(column)} is not available on #{inspect(entity_type)}"
+      )
+
+  defp render_query_error(conn, :page_size_too_large),
+    do: Response.bad_request(conn, "page_size out of range")
+
+  defp render_query_error(conn, :invalid_cursor), do: Response.bad_request(conn, "invalid cursor")
+
+  defp render_query_error(conn, :wrong_endpoint),
+    do: Response.bad_request(conn, "cursor is not valid for this endpoint")
+
+  defp render_query_error(conn, :resume_key_arity_mismatch),
+    do: Response.bad_request(conn, "cursor does not match this request's sort clause")
+
+  defp render_query_error(conn, :expired), do: Response.send_problem(conn, Error.cursor_expired())
+
+  # INV-8 terminal catch-all: :invalid_schema_name (unreachable -- INV-1
+  # makes prefix server-resolved) and any term() no clause above names.
+  # Logged server-side, detail-free on the wire.
+  defp render_query_error(conn, reason) do
+    Logger.warning("entity query failed: #{inspect(reason)}")
+    Response.internal_error(conn)
+  end
+
+  # ══ Query response allowlist (INV-2) ══════════════════════════════════
+  #
+  # Three item shapes reach here: a %Latest{} struct (unpromoted, non-join),
+  # a Compiler.entity_row() map (promoted, non-join), and a
+  # Compiler.joined_row() map keyed :primary + each joined entity_type
+  # (join). The joined clause is matched FIRST -- a joined_row() has no
+  # :field_values key of its own, so an entity-row clause could never match
+  # it, but ordering it first states the intent rather than relying on that.
+
+  defp query_item_map(%Latest{} = record), do: record_map(record)
+
+  defp query_item_map(%{field_values: _field_values} = entity_row),
+    do: entity_row_map(entity_row)
+
+  defp query_item_map(joined_row) when is_map(joined_row) do
+    Map.new(joined_row, fn {key, entity_row} ->
+      {joined_key_string(key), entity_row_map(entity_row)}
+    end)
+  end
+
+  defp joined_key_string(:primary), do: "primary"
+  defp joined_key_string(entity_type) when is_binary(entity_type), do: entity_type
+
+  # Same allowlist record_map/1 applies to a %Latest{}, so a promotion is
+  # not observable in a response body.
+  #
+  # ⛔ `record_id` needs normalising and `%Latest{}`'s does not: Latest
+  # declares it `Ecto.UUID`, so Ecto loads it as the canonical string, but
+  # Compiler.select_entity_row/1 selects the per-type table's column through
+  # a SCHEMALESS query with no :uuid type information -- it comes back as
+  # the raw 16-byte binary. Left alone, that would reach Jason as invalid
+  # UTF-8 and the same record would render differently depending on whether
+  # its entity type happened to have been promoted.
+  defp entity_row_map(entity_row) do
+    %{
+      "record_id" => normalise_record_id(entity_row.record_id),
+      "field_values" => entity_row.field_values,
+      "deleted" => entity_row.deleted,
+      "entity_def_version" => encode_entity_def_version(entity_row.entity_def_version),
+      "last_event_global_seq" => entity_row.last_event_global_seq
+    }
+  end
+
+  defp normalise_record_id(<<_::binary-size(16)>> = raw), do: Ecto.UUID.load!(raw)
+  defp normalise_record_id(record_id) when is_binary(record_id), do: record_id
+
+  defp encode_entity_def_version(nil), do: nil
+
+  defp encode_entity_def_version(version) when is_binary(version),
+    do: Base.encode16(version, case: :lower)
 
   # ══ Response allowlists (INV-2) ═══════════════════════════════════════
 

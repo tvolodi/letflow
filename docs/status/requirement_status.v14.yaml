@@ -349,3 +349,29 @@ history:
       none was warranted. Commits: 24ee128f (Step 00), 7e257217
       (CODE-DESIGNER), 439be0b1 (SECURITY-REVIEWER PASS). Branch:
       design/REQ308-20260911.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T06:39:05Z"
+    note: >
+      ISS-0593 (GH#1219, queue task 593) -- main's live branch protection
+      had enforce_admins: true, contradicting decision
+      0018-branch-protection-posture.md section (d)'s explicit rejection
+      of that setting ("No, enforce_admins: true is not appropriate --
+      reject it"), meaning 0018's documented --admin override path for a
+      genuine CI-infrastructure break did not currently exist. Not a
+      code fix -- a live GitHub repo security-setting change, so
+      confirmed with the user before acting rather than treating it as
+      pre-authorized humanless-pipeline work. User chose to restore the
+      recorded posture. Confirmed check-run names unchanged
+      ("Backend gate (mix letflow.check)", "Frontend gate (npm run
+      check)") per 0018's own Step 1, including after the just-merged
+      ISS-0591/0592 CI dedup/path-filter change. Applied 0018's own
+      exact recorded configuration via gh api --method PUT
+      .../branches/main/protection (enforce_admins: false, same required
+      status checks, required_pull_request_reviews: null,
+      allow_force_pushes: false, allow_deletions: false). Verified live
+      via a fresh GET matching every field. No claim about how the
+      live setting diverged in the first place -- outside this issue's
+      scope, and the decision record itself needed no amendment since
+      it already correctly describes the intended posture.

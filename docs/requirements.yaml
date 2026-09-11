@@ -20174,6 +20174,7 @@ requirements:
   - id: REQ-315
     title: Implement the aggregation/reporting query route for entity records (S10 gap 2)
     owner: ELIXIR-DEV
+    impl_order: 606  # letflow-queue task id; depends_on [REQ-312] = queue task 602, mirrored
     status: pending
     stage: S10
     description: >
@@ -20303,6 +20304,7 @@ requirements:
   - id: REQ-316
     title: Create the entity_record_attachments table and Letflow.Repository.EntityAttachments context module (S10 gap 3, part 1)
     owner: ELIXIR-DEV
+    impl_order: 607  # letflow-queue task id; depends_on [REQ-313] = queue task 603, mirrored
     status: pending
     stage: S10
     description: >
@@ -20410,6 +20412,7 @@ requirements:
   - id: REQ-317
     title: Add the entity-attachment permission atoms and the four record-attachment routes to Letflow.Routers.Entities (S10 gap 3, part 2)
     owner: ELIXIR-DEV
+    impl_order: 609  # letflow-queue task id; depends_on [REQ-316] = queue task 607, mirrored
     status: pending
     stage: S10
     description: >
@@ -20501,6 +20504,7 @@ requirements:
   - id: REQ-318
     title: Add the entity-record export/import permission atoms to Letflow.Api.Authorization (S10 gap 12, part 1)
     owner: ELIXIR-DEV
+    impl_order: 608  # letflow-queue task id; depends_on [REQ-314] = queue task 604, mirrored
     status: pending
     stage: S10
     description: >
@@ -20577,6 +20581,7 @@ requirements:
   - id: REQ-319
     title: Add POST /entities/records/:entity_type/export, with the two-tier default-redacted/escalated-unredacted mechanism (S10 gap 12, part 2)
     owner: ELIXIR-DEV
+    impl_order: 610  # letflow-queue task id; depends_on [REQ-318] = queue task 608, mirrored
     status: pending
     stage: S10
     description: >
@@ -20666,6 +20671,7 @@ requirements:
   - id: REQ-320
     title: Add POST /entities/records/:entity_type/import, with per-record partial-success batch semantics (S10 gap 12, part 3)
     owner: ELIXIR-DEV
+    impl_order: 611  # letflow-queue task id; depends_on [REQ-318] = queue task 608, mirrored
     status: pending
     stage: S10
     description: >

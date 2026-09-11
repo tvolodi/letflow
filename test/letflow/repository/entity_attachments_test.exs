@@ -21,7 +21,7 @@ defmodule Letflow.Repository.EntityAttachmentsTest do
   alias Letflow.Repository.EntityAttachment
   alias Letflow.Repository.EntityAttachments
 
-  defp provisioned_tenant(slug_prefix \\ "req316-entity-attach") do
+  defp provisioned_tenant(slug_prefix) do
     Letflow.TenantFixture.provisioned_tenant!(
       slug_prefix: slug_prefix,
       display_name: "REQ-316 EntityAttachments Test Tenant"
@@ -44,7 +44,7 @@ defmodule Letflow.Repository.EntityAttachmentsTest do
     |> Repo.insert!(prefix: schema)
   end
 
-  defp upload_attrs(overrides \\ []) do
+  defp upload_attrs(overrides) do
     Map.merge(
       %{
         entity_type: "widget",
@@ -61,7 +61,7 @@ defmodule Letflow.Repository.EntityAttachmentsTest do
 
   # Convenience: provisions a tenant, inserts a real parent
   # entity_record_latest row, and returns {schema, entity_type, record_id}.
-  defp provisioned_tenant_with_record(slug_prefix \\ "req316-entity-attach") do
+  defp provisioned_tenant_with_record(slug_prefix) do
     %{schema_name: schema} = provisioned_tenant(slug_prefix)
     entity_type = "widget"
     record_id = Ecto.UUID.generate()

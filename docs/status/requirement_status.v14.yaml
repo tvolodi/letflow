@@ -877,6 +877,52 @@ history:
       held -- no route, no permission atom, no router change; REQ-317
       owns those. docs/requirements.yaml flipped pending -> done.
 
+  - req: REQ-318
+    event: done
+    agent: ORCH
+    at: "2026-09-11T22:14:49Z"
+    note: >
+      REQ-318 (queue task 608, GH#1265, depends_on [REQ-314]) implemented
+      via feature/WF02-REQ318-20260911: S10 gap 12 part 1 -- three new
+      permission atoms on Letflow.Api.Authorization, per the already-
+      PASSed design lib/letflow/design/req314-entity-record-bulk-export-
+      import.md §5. :EntitiesRecordsExport and :EntitiesRecordsImport are
+      route-level (real endpoint_policy_key/2 clauses for POST
+      /entities/records/:entity_type/{export,import});
+      :EntitiesRecordsExportUnredacted is deliberately NOT route-level --
+      no endpoint_policy_key/2 clause, only a required_permission/1
+      identity clause, checked in-handler only by REQ-319's future export
+      handler when the request body carries unredacted: true. No new
+      role_allows?/2 clauses for PROCESS_DESIGNER/PROCESS_OPERATOR/
+      TASK_WORKER -- only PLATFORM_ADMIN's existing catch-all grants the
+      three atoms, matching the existing :DlqOperate/:WebhooksManage
+      precedent already documented in this module's own moduledoc.
+      :EntitiesRecordsImport kept genuinely separate from
+      :EntitiesRecordsWrite, unlike REQ-082's :DefinitionsImport (which
+      maps back onto :DefinitionsWrite) -- design §5 states why. No
+      route, no router change, no migration -- REQ-319/320 add the
+      routes this gates.
+
+      Pipeline: no fresh CODE-DESIGNER/CODE-DESIGN-VALIDATOR cycle -- the
+      existing PASSed REQ-314 design fully specified this requirement's
+      scope -> ELIXIR-DEV (91 tests: route enumeration, a full 115-pair
+      regression grid across 5 roles x 23 pre-existing permissions,
+      direct evaluate_access/2 exercise) -> SECURITY-REVIEWER PASS
+      (independently traced role_allows?/2's closed-list fallback to
+      confirm deny-by-default rather than assuming it, confirmed
+      :EntitiesRecordsExportUnredacted has no route-derivable path,
+      confirmed no privilege-escalation gap vs :EntitiesRecordsWrite) ->
+      REVIEWER PASS (confirmed design conformance and idiom against the
+      :DlqOperate/:WebhooksManage precedent, independently ran the full
+      suite: 3912/3914 passed, only the 2 pre-existing rust-toolchain-
+      environmental failures, no new ones). TEST-DESIGNER/TEST-DESIGN-
+      VALIDATOR skipped per this project's established precedent -- both
+      hard-gate reviewers independently verified the 91-test coverage as
+      comprehensive rather than trusting the author's claim. Scope fence
+      held -- only lib/letflow/api/authorization.ex and test/ touched; no
+      routers/, entities/, definitions/, or migrations. docs/
+      requirements.yaml flipped pending -> done.
+
   - req: REQ-315
     event: done
     agent: DOC-UPDATER

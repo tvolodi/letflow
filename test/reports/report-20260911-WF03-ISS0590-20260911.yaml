@@ -1,0 +1,75 @@
+run_id: WF03-ISS0590-20260911
+agent: TEST-RUNNER
+workflow: WF-03 (Issue Fix), final independent test-verification step before merge
+timestamp_utc: "2026-09-11T03:12:00Z"
+branch: fix/ISS0590-20260911
+head_commit: e2bfcc96
+
+purpose: >
+  Independently verify ISS-0590's fix: replaced a pool-internal-state proxy
+  wait in test/letflow/sandbox_pool_test.exs's RT-6 death-path-c test (a
+  flaky assertion) with a real-Postgres cleanup wait, so the test observes
+  actual schema-drop completion instead of an internal proxy signal. Already
+  passed REVIEWER (idiom + root-cause re-verification). No lib/ change --
+  test-only fix.
+
+diff_scope:
+  files:
+    - test/letflow/sandbox_pool_test.exs
+  note: >
+    Only file changed by this fix. Per the dispatching task, no lib/ change
+    was made.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op); no .env LETFLOW_DB_PORT override present (.env has no LETFLOW_DB_PORT key), so default port 5462 used by both compose and Ecto."
+
+compile_check:
+  command: "mix compile --warnings-as-errors"
+  result: PASS (clean, no output, exit 0)
+
+format_check:
+  command: "mix format --check-formatted"
+  result: PASS (clean, no output, exit 0)
+
+backend_suite:
+  command: "TEST_PARALLEL_N=4 scripts/test_parallel.sh"
+  partitions: 4
+  result: PASS -- 0 failures across the full suite
+  output: |
+    test_parallel: N=4 (source: env override)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=20 (computed: N=4, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 4 per-partition build paths from _build/test (sequential)
+    test_parallel: partition logs in /tmp/letflow_test_parallel.nTZwhr
+    test_parallel: TEST_PARALLEL_GROUP=tp31398 (shared by all 4 partitions)
+    partition 1: 1027 tests, 2 properties, 0 failures, exit 0
+    partition 2: 890 tests, 0 properties, 0 failures, exit 0
+    partition 3: 884 tests, 0 properties, 0 failures, exit 0
+    partition 4: 935 tests, 4 properties, 0 failures, exit 0
+    ---
+    combined: 3736 tests, 6 properties, 0 failures (3742/3742 passed)
+  failures: []
+  known_flakes_observed: >
+    None of the known pre-existing flakes named in the dispatching task
+    (Letflow.Scheduler.PollerTest REQ-218 AC3 / ISS-0453,
+    Letflow.ServiceCatalogReaperTest / Letflow.TenantSchemaReaperTest
+    concurrent-invocation-guard tests, Letflow.Api.ContextTest
+    scoped_repo_opts/1 race) surfaced in this run. Zero failures anywhere,
+    including sandbox_pool_test.exs's RT-6 death-path-c.
+  sandbox_pool_test_result: >
+    test/letflow/sandbox_pool_test.exs (RT-6 death-path-c included) passed
+    cleanly with 0 failures in whichever partition it landed in.
+
+verdict: PASS
+verdict_reasoning: >
+  Clean compile with --warnings-as-errors, clean mix format --check-formatted,
+  and a full 4-way parallel suite run at 3742/3742 tests passing (0
+  failures, 6 properties all passing). None of the named pre-existing flakes
+  surfaced. The fixed RT-6 death-path-c test in sandbox_pool_test.exs passed
+  along with the rest of the suite -- no evidence of flakiness or regression
+  from the real-Postgres cleanup wait change.
+next_action: >
+  Report PASS to the dispatching session for WF-03 close-out (merge
+  fix/ISS0590-20260911, flip ISS-0590 status). Per core-directives,
+  RELEASE-VALIDATOR (or equivalent gate) should still independently re-run
+  the suite rather than trust this report alone.

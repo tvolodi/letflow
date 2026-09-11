@@ -2588,23 +2588,26 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 27
+    entries: 29
     note: >
-      Recounted to 27 on WF02-REQ307-20260911's merge of origin/main.
-      BOTH sides of that merge independently declared 26 and both were
-      correct in isolation: this branch appended REQ-307's done-event,
-      main appended ISS-0588's SCOPE-CHANGE done-event, and each
-      recounted against a file containing only its own addition. Once
-      composed, both events are present and the real figure is 27 --
-      which is exactly why this note's recount-every-time rule says to
-      recount from the composed file rather than carry forward either
-      side's number. Conflict resolved by keeping both events in
-      timestamp order (ISS-0588 at 02:06:46Z, then REQ-307 at
-      03:22:38Z), not by choosing a side --
-      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 27
-      on-disk entries; 1132 lines / 67401 bytes, still well under the
-      roll ceiling. The A9 invariant in test/docs/ is what verifies this
-      figure; it is re-run after resolution.
+      Recounted to 29 on WF02-REQ307-20260911's second merge of
+      origin/main. This is the same concurrent-append collision as the
+      previous recount, now three-way: this branch carried REQ-307's
+      done-event (declaring 27 after composing ISS-0588's), while main
+      carried ISS-0590's SCOPE-CHANGE done-event (declaring 28). Each
+      figure was correct against the file its own side could see. All
+      three events are present after composition and the real figure is
+      29.
+
+      Resolved by keeping every event in timestamp order -- 02:26:04Z,
+      03:03:59Z, then REQ-307 at 03:22:38Z -- and recounting from the
+      composed file rather than carrying forward any side's number,
+      which is what this note's recount-every-time rule exists for. No
+      event from either side is dropped;
+      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 29
+      on-disk entries; 1179 lines / 70080 bytes, still under the roll
+      ceiling. The A9 invariant in test/docs/ verifies this figure and
+      is re-run after resolution.
 
       Prior state, retained as history: 25 on WF02-REQ293-20260910's
       Step Final rebase onto main (deferral-reconciliation commit

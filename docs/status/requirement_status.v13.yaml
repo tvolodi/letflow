@@ -1100,6 +1100,53 @@ history:
       function/@spec, no migration, no supervision-tree file, not a
       tenant-data path, no test's expected value changes). Corrected
       "Twelve" -> "Thirteen".
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-11T02:26:04Z"
+    note: >
+      WF03-ISS0590-20260911 started (queue task 590, GH#1215,
+      docs/issues/ISS-0590.yaml). test/letflow/sandbox_pool_test.exs:1085
+      RT-6 (death path c) flakes -- a crashed provisioning worker's
+      half-created sandbox schema is not always dropped from
+      information_schema.schemata before the test's assertion runs.
+      Demonstrably a flake (identical commit c8f55604/PR #1209 passed and
+      failed under parallel CI runs), a timing/ordering dependency in the
+      test's observation point, not a real crash-path schema leak.
+      Suggested fix direction (from the filing): poll for cleanup
+      completion with a bounded timeout rather than sampling schemata at
+      a fixed point. Branch: fix/ISS0590-20260911.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-11T03:03:59Z"
+    note: >
+      WF03-ISS0590-20260911 done (queue task 590, GH#1215,
+      docs/issues/ISS-0590.yaml). Diagnosis confirmed: RT-6's death-path-c
+      test sampled information_schema.schemata at a fixed point after the
+      provisioning worker's crash, racing the async schema-drop rather than
+      waiting for it -- lib/letflow/sandbox_pool.ex's own crash/cleanup path
+      traced and confirmed clean, no real leak. CODE-DESIGNER wrote
+      lib/letflow/design/iss0590-sandboxpool-rt6-death-path-c-schema-drop-wait.md
+      (gate-passed first try). ELIXIR-DEV inserted a call to the existing
+      wait_until_schema_dropped(o_schema) helper into RT-6, mirroring an
+      existing precedent test in the same file. SECURITY-REVIEWER skipped
+      (test-file-only change, no tenant-data path, confirmed by
+      CODE-DESIGN-VALIDATOR and independently by REVIEWER). REVIEWER PASSED
+      -- independently re-traced the crash/cleanup happens-before chain and
+      confirmed both the diagnosis and the genuineness of the fix (changes
+      what the test waits on, not a padded timeout), no scope creep.
+      TEST-RUNNER PASSED -- full parallel suite
+      (TEST_PARALLEL_N=4 scripts/test_parallel.sh): 3742/3742 passed, 0
+      failures, zero pre-existing flakes surfaced. Report:
+      test/reports/report-20260911-WF03-ISS0590-20260911.yaml. Also 5/5
+      isolated post-fix runs of the specific test passed, and honest
+      non-reproduction of the original flake both pre- and post-fix locally
+      (consistent with a CI-parallel-contention-dependent flake). GitHub
+      mirror issue #1215 closed with an evidence comment. Branch:
+      fix/ISS0590-20260911. Step Final (merge) left to a separate run per
+      this run's own instructions.
   - req: REQ-307
     event: done
     agent: ORCH

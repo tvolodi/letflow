@@ -1112,6 +1112,12 @@ defmodule Letflow.SandboxPoolTest do
 
       assert drained.in_flight == nil
 
+      # Core regression assertion: the schema is dropped from real Postgres --
+      # not merely that the pool's own bookkeeping has drained -- once the
+      # compensating DROP SCHEMA for the crashed worker's pre-minted schema has
+      # actually committed.
+      wait_until_schema_dropped(o_schema)
+
       # NO SCHEMA LEAK -- possible only because the pool pre-minted the schema name, so
       # a worker that died without returning anything is still nameable.
       final = sandbox_schema_names()

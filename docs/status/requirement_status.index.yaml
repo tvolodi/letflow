@@ -2588,8 +2588,15 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 29
+    entries: 30
     note: >
+      Incremented to 30 by ORCH's own SCOPE-CHANGE blocked-event append
+      (WF03-ISS0594-20260911, a genuine sequencing blocker -- PR #1224's
+      unmerged content is the actual premise this issue depends on) --
+      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 30
+      on-disk entries; 1196 lines / 71945 bytes, still under the
+      1200-line/120000-byte roll ceiling (close to it -- next append to
+      this volume should re-measure before assuming headroom remains).
       Incremented to 29 by ORCH's own SCOPE-CHANGE started-event append
       (Step 00, WF03-ISS0594-20260911) -- `grep -c "^  - req:"
       docs/status/requirement_status.v13.yaml` = 29 on-disk entries; 1170

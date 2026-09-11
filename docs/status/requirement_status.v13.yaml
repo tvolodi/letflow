@@ -1168,3 +1168,29 @@ history:
       the actual current property (policy documented as unowned, hard-fail
       retained) rather than a requirement-id substring. Branch:
       fix/ISS0594-20260911.
+
+  - req: SCOPE-CHANGE
+    event: blocked
+    agent: ORCH
+    at: "2026-09-11T03:43:28Z"
+    note: >
+      WF03-ISS0594-20260911 (queue task 594, GH#1222) -- ISSUE-FIXER
+      diagnosed a genuine sequencing blocker: ISS-0594's own filing
+      describes lib/letflow/definitions/solution_pack.ex's moduledoc as
+      already saying the service_catalog_entries policy is "UNOWNED", but
+      that text only exists on the still-open, unmerged
+      feature/WF02-REQ307-20260910 branch (PR #1224, CI green but not yet
+      merged by its own session) -- confirmed via
+      `git merge-base --is-ancestor 6a10a5b9 HEAD` returning false. On
+      today's main, the moduledoc still legitimately defers to REQ-192,
+      so the currently-failing-in-the-future assertion this issue flags
+      does not yet exist to fix, and writing the corrected assertion now
+      would break the test against real content. Declined to merge
+      PR #1224 myself (a sibling session's own in-flight WF-02 run; CI
+      green does not confirm its own humanless pipeline gates completed)
+      or to guess at its unmerged content. Released the queue task as
+      blocked (not done, not worked) rather than fabricating a premise;
+      GH#1222 left open. Revisit once PR #1224 merges to main -- rebase
+      onto it and proceed with ISSUE-FIXER's already-completed diagnosis
+      and recommended replacement wording. No code changed; branch
+      fix/ISS0594-20260911 abandoned unpushed.

@@ -186,7 +186,7 @@ corpus — S10 does not have to invent its own definition of parity, and
   R-Co source (S9 is the first) — it lives in `docs/migration/` by naming
   convention only, and that directory's framing as a *historical* record does not
   extend to it.
-- **Twelve platform gaps become bucket-B requirements**, filed and closed before any
+- **Thirteen platform gaps become bucket-B requirements**, filed and closed before any
   bucket-A pack work begins. The full table — what is already filed (`REQ-281`–
   `REQ-286`, `REQ-291`–`REQ-293`) and what is not (an entity-records HTTP
   surface; an aggregation query surface; attachments beyond `instance_attachments`;

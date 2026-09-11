@@ -44,6 +44,54 @@ defmodule Letflow.Simulation.Req207VortexTest do
   verification trail. Disposition unaffected; this scenario's blocker
   remains the S8 harness (Signal 5), unchanged by this round.
 
+  ## REQ-315 lands, 2026-09-12 (eleventh route -- re-derived, not waved through)
+
+  REQ-315 ("Implement the aggregation/reporting query route for entity
+  records (S10 gap 2)") is the IMPLEMENTATION of REQ-312's design, and unlike
+  REQ-312/313/314 it is not design-only: it lands real code -- a new
+  `Letflow.Api.Authorization` permission atom `:EntitiesAggregate`, a new
+  `Letflow.Entities.Query.Compiler.run_aggregate/2`, and an eleventh route,
+  `POST /entities/query/aggregate`, mounted on `Letflow.Routers.Entities`
+  (confirmed live via `__authz_routes__/0`, not trusted from the requirement
+  text). That makes it look like the REQ-310/311 case (builds the HTTP
+  surface) rather than the REQ-312/313/314 case (attaches nothing), so per
+  the ⛔ block below it was NOT dropped straight into `allowed_ids` --  it was
+  re-derived first, the same procedure REQ-310 and REQ-311 were put through.
+
+  The re-derivation's finding: this scenario's six `:gui` steps are list,
+  filter x2, sort, page and field-redaction reads over individual entity
+  records, and all six read through `POST /entities/query` (REQ-311's
+  route) -- none of them aggregates anything. `POST /entities/query/aggregate`
+  is a DIFFERENT read shape (aggregate result rows, no `next_cursor`, gated
+  by the DISTINCT `:EntitiesAggregate` permission, per the route's own
+  design §2/§4) that this scenario's fixture never calls and has no reason
+  to. So, unlike REQ-310 (closed the "no HTTP surface" gap) and REQ-311
+  (closed the "no record-read route" gap), REQ-315 closes no gap this
+  scenario was waiting on. Signal 3'' below was updated to assert the real,
+  now-eleven-route set by equality (never membership, so a twelfth route or a
+  dropped one lands back here too), and the disposition itself is
+  UNCHANGED: still `BLOCKED_ON_DEPENDENCY`, still on S8's GUI-step harness
+  (Signal 5), still nothing under `lib/` left for this scenario to wait on.
+  REQ-315 was then admitted to `allowed_ids` on the strength of that
+  completed re-derivation -- the same basis REQ-310/311 were, not the
+  "never builds anything" basis REQ-308/312/313/314 were.
+
+  ## REQ-317/318/319/320 triaged the same day, discovered while fixing REQ-315
+
+  Filing REQ-315 landing also exposed that REQ-317 (attachment routes),
+  REQ-318 (export/import permission atoms), REQ-319 (export route) and
+  REQ-320 (import route) -- filed on `main` alongside REQ-315 in the same
+  S10 gap 3/12 batch -- also trip this tripwire and had not yet been
+  triaged. All four are `status: pending` (nothing landed) and none of
+  their planned routes serves this scenario's six `:gui` steps (individual-
+  record list/filter/sort/page/redaction, exclusively through REQ-311's
+  `POST /entities/query`), so all four were admitted to `allowed_ids`
+  unconditionally -- see the allowlist entries themselves for why this is
+  safe even for the two (REQ-317, REQ-319/320) that plan to extend
+  `Letflow.Routers.Entities`: Signal 3'' below already asserts that
+  router's route set by equality, so their eventual landing is caught
+  structurally regardless of this allowlist's state.
+
   Full reasoning and the complete re-derivation history live in that describe
   block's own comments; `test/specs/REQ-310.md` states the test cases.
 
@@ -1320,7 +1368,63 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # 311's ten routes -- no eleventh route for attachments exists.
           "REQ-312",
           "REQ-313",
-          "REQ-314"
+          "REQ-314",
+          # REQ-315, admitted 2026-09-12 -- NOT via the REQ-312/313/314 route.
+          # REQ-315 lands real code (a new :EntitiesAggregate permission, a
+          # new Compiler.run_aggregate/2, and an eleventh route mounted on
+          # Letflow.Routers.Entities: POST /entities/query/aggregate,
+          # confirmed live against __authz_routes__/0). That builds the HTTP
+          # surface, the REQ-310/311 shape the ⛔ block below warns against
+          # silencing -- so it was re-derived first, not admitted on sight.
+          # The re-derivation (full account in the moduledoc above): this
+          # scenario's six :gui steps are individual-record list/filter/
+          # sort/page/redaction reads, every one of them served by REQ-311's
+          # POST /entities/query; none aggregates anything, so the new
+          # aggregate route (a different read shape, gated by the DISTINCT
+          # :EntitiesAggregate permission) closes no gap this scenario was
+          # waiting on. Signal 3'' below now asserts the real eleven-route
+          # set by equality; the disposition is unchanged -- still blocked
+          # on S8's GUI harness (Signal 5). Admitted here only because that
+          # re-derivation is complete and its output is what Signal 3''
+          # below now asserts, exactly the REQ-310/311 precedent.
+          "REQ-315",
+          # REQ-317/318/319/320, admitted 2026-09-12 -- the S10 gap 3
+          # part-2/gap 12 batch filed alongside REQ-315..320 (main commits
+          # ac492a25/6fdcbcd8/9cf2c177). All four are `status: pending` --
+          # filing builds nothing, so unconditional admission is correct
+          # regardless of tier for THAT reason alone, matching
+          # REQ-295/296/299/300/302/304/308/309/312/314's precedent. But two
+          # of them (REQ-317: four record-attachment routes; REQ-319/320:
+          # the export/import routes) DO plan to build real HTTP surface on
+          # Letflow.Routers.Entities once implemented, which is the
+          # REQ-310/311 shape the pending_only_ids tier exists for -- so the
+          # honest question is whether they belong there instead.
+          #
+          # They do not, and here is why admitting them straight to
+          # allowed_ids is still safe, not the wrong reflex: none of the
+          # three routes they plan (attachments CRUD, bulk export, bulk
+          # import) is anything this scenario's six :gui steps read through
+          # -- those six are individual-record list/filter/sort/page/
+          # redaction, served exclusively by REQ-311's POST /entities/query,
+          # exactly the same reasoning that put REQ-315's aggregate route in
+          # allowed_ids above. AND, unlike when REQ-310/311 were filed (the
+          # equality check Signal 3'' now runs did not exist yet, so nothing
+          # would have caught their landing except this very allowlist),
+          # Signal 3'' already asserts Letflow.Routers.Entities'
+          # __authz_routes__/0 by EQUALITY today. Any route REQ-317/319/320
+          # add will change that set and fail Signal 3'' the moment it lands,
+          # forcing exactly the re-derivation pending_only_ids was built to
+          # force -- with or without this entity-title tripwire's help. The
+          # structural backstop already exists for this router; the
+          # two-tier mechanism's stated purpose (kept above, empty, for
+          # "the next such requirement") is for a requirement that builds
+          # surface OUTSIDE what Signal 3'' already watches, and none of
+          # these four do. REQ-318 builds no route at all (permission atoms
+          # only, the REQ-309 shape).
+          "REQ-317",
+          "REQ-318",
+          "REQ-319",
+          "REQ-320"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
@@ -1550,23 +1654,32 @@ defmodule Letflow.Simulation.Req207VortexTest do
           {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
           # REQ-311's tenth row -- the record read path. Its ARRIVAL is what
           # fired this tripwire; its DEPARTURE would now fire it too.
-          {"POST", "/query", :EntitiesQuery}
+          {"POST", "/query", :EntitiesQuery},
+          # REQ-315's eleventh row (2026-09-12) -- the aggregation/reporting
+          # route, a DIFFERENT read shape gated by the DISTINCT
+          # :EntitiesAggregate permission. Re-derived (moduledoc above) and
+          # found to close no gap this scenario's six :gui steps were
+          # waiting on -- none of them aggregates anything, all six read
+          # through POST /entities/query above. Included here so this
+          # equality assertion reflects the router's real, live surface;
+          # its DEPARTURE would fire this tripwire same as any other row's.
+          {"POST", "/query/aggregate", :EntitiesAggregate}
         ])
 
       actual_routes = MapSet.new(Letflow.Routers.Entities.__authz_routes__())
 
       assert MapSet.equal?(actual_routes, expected_routes),
              "Letflow.Routers.Entities must serve exactly REQ-310's nine routes plus " <>
-               "REQ-311's POST /query. " <>
+               "REQ-311's POST /query and REQ-315's POST /query/aggregate. " <>
                "Unexpected: #{inspect(MapSet.to_list(MapSet.difference(actual_routes, expected_routes)))}; " <>
                "missing: #{inspect(MapSet.to_list(MapSet.difference(expected_routes, actual_routes)))}. " <>
-               "An ELEVENTH route, or a MISSING one, means this router's surface changed " <>
-               "again and this scenario's disposition must be re-derived a third time -- " <>
+               "A TWELFTH route, or a MISSING one, means this router's surface changed " <>
+               "again and this scenario's disposition must be re-derived once more -- " <>
                "see the banner at the top of this test. In particular, {\"POST\", \"/query\", " <>
                ":EntitiesQuery} going MISSING would mean the record read path was reverted, " <>
                "which would move the blocker back to S10 from S8."
 
-      assert MapSet.size(actual_routes) == 10
+      assert MapSet.size(actual_routes) == 11
 
       # POSITIVE now, where the previous round refuted it. The record read
       # route exists, and it carries the read permission REQ-309 minted for it.
@@ -1739,7 +1852,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
             "and NOT the record read route, which REQ-311 completed -- both on 2026-09-11. " <>
             "Nothing under lib/ blocks this scenario any longer.",
         evidence: [
-          "Letflow.Routers.Entities.__authz_routes__/0 returns exactly 10 routes: 6 definition CRUD + 3 record WRITES + REQ-311's {\"POST\", \"/query\", :EntitiesQuery}. The record READ path is COMPLETE -- asserted by set EQUALITY above, so a route added or dropped in either direction re-fires this re-derivation",
+          "Letflow.Routers.Entities.__authz_routes__/0 returns exactly 11 routes: 6 definition CRUD + 3 record WRITES + REQ-311's {\"POST\", \"/query\", :EntitiesQuery} + REQ-315's {\"POST\", \"/query/aggregate\", :EntitiesAggregate}. The record READ path is COMPLETE, and REQ-315's aggregate route (re-derived 2026-09-12) reads nothing this scenario's six steps need -- asserted by set EQUALITY above, so a route added or dropped in either direction re-fires this re-derivation",
           "POST /entities/query is a real composing handler (Types -> Compiler -> Allowlist -> Cursor -> FieldGrants, with both the plain and the join-bearing redaction branches), not a stub -- it is the single surface all six of this scenario's :gui steps (list, filter x2, sort, page, field redaction) would read records through",
           "Letflow.Api.Authorization.endpoint_policy_key(\"POST\", \"/entities/query\") == :EntitiesQuery AND a real route now carries that permission -- the 'specified but unserved' state the previous disposition rested on has ENDED (REQ-309 minted the vocabulary; REQ-311's route consumes it)",
           "lib/letflow/plugs/api_pipeline.ex: forward(\"/entities\", to: Letflow.Routers.Entities) IS mounted (REQ-310 point 5) -- the 2026-09-09 'no HTTP surface' evidence line has been false since REQ-310 and is retained only as history",

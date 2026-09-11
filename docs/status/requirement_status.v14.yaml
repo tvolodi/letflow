@@ -765,6 +765,20 @@ history:
       edges resolved correctly, registered in dependency order, not
       repeating ISS-0599's empty-edge mistake. impl_order written back
       into docs/requirements.yaml for all six.
+  - req: REQ-315
+    event: started
+    agent: ORCH
+    at: "2026-09-11T18:21:41Z"
+    note: >
+      Run WF02-REQ315-20260911. Claimed via get_next_task (queue task
+      606, GH#1263). Implements lib/letflow/design/req312-query-
+      aggregation.md: new :EntitiesAggregate permission atom, new
+      compile_aggregate/2 alongside compile/2, POST
+      /entities/query/aggregate on Letflow.Routers.Entities, with the
+      design's final INV-2 mechanism (pre-compilation field-restriction
+      check covering aggregate_target, group_by AND filters fields, no
+      exemption). Branch: feature/WF02-REQ315-20260911. Dispatching
+      ELIXIR-DEV next, gated by SECURITY-REVIEWER (tenant-data path).
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

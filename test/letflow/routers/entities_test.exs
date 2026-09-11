@@ -251,14 +251,15 @@ defmodule Letflow.Routers.EntitiesTest do
   defp normalise_problem(conn), do: conn |> body_of() |> Map.delete("trace_id")
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 -- __authz_routes__/0 returns exactly the nine designed routes.
+  # AC1 -- __authz_routes__/0 returns exactly the eleven designed routes.
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- the declared route table matches design §1" do
-    # REQ-311 raised this from nine to TEN: the tenth is POST /query, and
-    # the count is asserted explicitly so appending an eleventh route
-    # without updating design §1's table fails here rather than silently.
-    test "__authz_routes__/0 returns exactly the ten designed routes, with their designed policy keys" do
+    # REQ-311 raised this from nine to TEN (POST /query); REQ-315 raises it
+    # from TEN to ELEVEN (POST /query/aggregate). The count is asserted
+    # explicitly so appending a twelfth route without updating design §1's
+    # table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the eleven designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -269,14 +270,16 @@ defmodule Letflow.Routers.EntitiesTest do
         {"POST", "/records/:entity_type", :EntitiesRecordsWrite},
         {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
-        {"POST", "/query", :EntitiesQuery}
+        {"POST", "/query", :EntitiesQuery},
+        {"POST", "/query/aggregate", :EntitiesAggregate}
       ]
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 10
+      assert length(actual) == 11
       assert Enum.sort(actual) == Enum.sort(expected)
       assert {"POST", "/query", :EntitiesQuery} in actual
+      assert {"POST", "/query/aggregate", :EntitiesAggregate} in actual
     end
 
     test "⛔ no GET route exists under /records -- record reads are POST /entities/query only" do

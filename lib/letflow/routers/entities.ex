@@ -8,7 +8,13 @@ defmodule Letflow.Routers.Entities do
 
   REQ-310 created this module with the nine definition and record routes
   below; REQ-311 appended §1's tenth row, `POST /entities/query`, to this
-  same module — an append, not a restructure.
+  same module — an append, not a restructure. REQ-315 appended an eleventh
+  row, `POST /entities/query/aggregate` — the aggregation/reporting query
+  route, per `lib/letflow/design/req312-query-aggregation.md`. Its handler
+  calls `Letflow.Entities.Query.Compiler.run_aggregate/2`, a thin wrapper
+  around `compile_aggregate/2` plus the query's own execution, added
+  specifically so this route stays composition-only, same as every other
+  route here — this module executes no query of its own (INV-1, below).
 
   Its permission vocabulary (`:EntitiesDefinitionsRead`,
   `:EntitiesDefinitionsWrite`, `:EntitiesRecordsWrite`, and REQ-311's
@@ -29,6 +35,7 @@ defmodule Letflow.Routers.Entities do
   | update_record | `PUT /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.update_record/2` | `EntitiesRecordsWrite` | 200 / 404 / 409 / 422 |
   | delete_record | `DELETE /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.delete_record/2` | `EntitiesRecordsWrite` | 200 / 404 |
   | query | `POST /entities/query` | `Letflow.Entities.Query.Compiler.compile/2` then `Letflow.Entities.Query.Allowlist.load/2` then `Letflow.Entities.Query.Cursor.paginate/5` then a `Letflow.Entities.Query.FieldGrants` redaction step | `EntitiesQuery` | 200 / 400 / 404 / 422 |
+  | query_aggregate | `POST /entities/query/aggregate` | a `Letflow.Entities.Query.FieldGrants.load_restrictions/3` field-restriction check then `Letflow.Entities.Query.Compiler.run_aggregate/2` | `EntitiesAggregate` | 200 / 400 / 403 / 404 / 422 |
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -238,6 +245,19 @@ defmodule Letflow.Routers.Entities do
 
   authz_post "/query", :EntitiesQuery do
     handle_query(conn)
+  end
+
+  # ── Aggregation/reporting query route (REQ-315) ──────────────────────
+  #
+  # A SIBLING route, not a field on the query DSL above -- design §2's own
+  # justification: an aggregate result is not row-shaped (no next_cursor, no
+  # per-row redaction), so it gets its own route rather than smuggling a
+  # second, structurally incompatible response shape through handle_query/1.
+  # Gated by the DISTINCT :EntitiesAggregate permission, not :EntitiesQuery
+  # (design §3).
+
+  authz_post "/query/aggregate", :EntitiesAggregate do
+    handle_query_aggregate(conn)
   end
 
   match _ do
@@ -1143,6 +1163,191 @@ defmodule Letflow.Routers.Entities do
       _other -> {:error, {:query_field_invalid, "page_size"}}
     end
   end
+
+  # ══ POST /entities/query/aggregate (REQ-315) ══════════════════════════
+  #
+  # INV-1: same discipline as handle_query/1 -- `prefix` is prefix!/1's
+  # output and NOTHING else; `user_id` is conn.assigns.auth_context.user_id
+  # and NOTHING else. A body carrying "tenant_id"/"schema"/"slug"/"prefix"/
+  # "user_id" is inert -- those keys are never read anywhere below.
+  #
+  # ⛔ INV-2, THE HARD PART (design §4's reworked, SECURITY-REVIEWER-cleared
+  # mechanism): `check_aggregate_field_restrictions/2` runs BEFORE
+  # `Compiler.compile_aggregate/2` is ever called, against EVERY field named
+  # anywhere in the request -- every aggregate target's `:field`, every
+  # `group_by` field, AND every `filters` field, with NO exemption for
+  # `filters` on this route (unlike `POST /entities/query`, untouched by this
+  # section). A single restricted field anywhere rejects the WHOLE request
+  # with 403, before any query is built.
+
+  defp handle_query_aggregate(conn) do
+    user_id = conn.assigns.auth_context.user_id
+
+    case object_body(conn) do
+      {:ok, body} ->
+        run_query_aggregate(conn, body, user_id, prefix!(conn))
+
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+    end
+  end
+
+  @spec run_query_aggregate(Plug.Conn.t(), map(), String.t(), String.t()) :: Plug.Conn.t()
+  defp run_query_aggregate(conn, body, user_id, prefix) do
+    with {:ok, request} <- build_aggregate_request(body),
+         {:ok, restriction_set} <-
+           FieldGrants.load_restrictions(user_id, request.entity_type, prefix),
+         :ok <- check_aggregate_field_restrictions(request, restriction_set),
+         {:ok, rows} <- Compiler.run_aggregate(request, prefix) do
+      Response.ok(conn, %{"results" => Enum.map(rows, &aggregate_result_map/1)})
+    else
+      {:error, reason} -> render_aggregate_error(conn, reason)
+    end
+  end
+
+  # Every field named ANYWHERE in the request -- aggregate targets, group_by,
+  # AND filters alike (design §4's final, reworked mechanism -- no exemption
+  # for filters on THIS route). `restriction_set` is raw field-name strings
+  # (Letflow.Entities.Query.FieldGrants.load_restrictions/3's own output) --
+  # this check runs against caller-supplied strings directly, before any
+  # allowlist resolution, so it cannot be bypassed by a field that would
+  # otherwise fail allowlisting for an unrelated reason.
+  defp check_aggregate_field_restrictions(request, restriction_set) do
+    request
+    |> aggregate_request_field_names()
+    |> Enum.find(&MapSet.member?(restriction_set, &1))
+    |> case do
+      nil -> :ok
+      field_name -> {:error, {:aggregate_field_restricted, field_name}}
+    end
+  end
+
+  defp aggregate_request_field_names(request) do
+    aggregate_fields =
+      Enum.flat_map(request.aggregates, fn target -> List.wrap(Map.get(target, :field)) end)
+
+    group_by_fields = Enum.map(request.group_by, & &1.field)
+    filter_fields = Enum.map(request.filters, & &1.field)
+
+    aggregate_fields ++ group_by_fields ++ filter_fields
+  end
+
+  # ══ Aggregate request parsing (design §1) ═════════════════════════════
+  #
+  # Mirrors build_query_request/1's own discipline: every raw string is
+  # parsed against a closed enum HERE (never String.to_atom/1 on caller
+  # input, INV-7) before the Compiler.aggregate_request() map is built.
+
+  defp build_aggregate_request(body) do
+    with {:ok, entity_type} <- query_entity_type(body),
+         {:ok, aggregates} <- parse_aggregates(Map.get(body, "aggregates")),
+         {:ok, group_by} <- parse_group_by(Map.get(body, "group_by")),
+         {:ok, filters} <- parse_filters(Map.get(body, "filters")),
+         {:ok, join} <- parse_joins(Map.get(body, "join")) do
+      {:ok,
+       %{
+         entity_type: entity_type,
+         aggregates: aggregates,
+         group_by: group_by,
+         filters: filters,
+         join: join
+       }}
+    end
+  end
+
+  defp parse_aggregates(aggregates) when is_list(aggregates) and aggregates != [] do
+    map_while_ok(aggregates, &parse_aggregate_target/1)
+  end
+
+  defp parse_aggregates(_other), do: {:error, {:query_field_invalid, "aggregates"}}
+
+  defp parse_aggregate_target(%{"fn" => raw_fn} = clause) when is_binary(raw_fn) do
+    with {:ok, fn_} <- parse_aggregate_fn(raw_fn) do
+      case Map.get(clause, "field") do
+        nil -> {:ok, %{fn: fn_}}
+        field when is_binary(field) -> {:ok, %{fn: fn_, field: field}}
+        _other -> {:error, {:query_field_invalid, "aggregates"}}
+      end
+    end
+  end
+
+  defp parse_aggregate_target(_other), do: {:error, {:query_field_invalid, "aggregates"}}
+
+  defp parse_aggregate_fn("count"), do: {:ok, :count}
+  defp parse_aggregate_fn("sum"), do: {:ok, :sum}
+  defp parse_aggregate_fn("avg"), do: {:ok, :avg}
+  defp parse_aggregate_fn("min"), do: {:ok, :min}
+  defp parse_aggregate_fn("max"), do: {:ok, :max}
+  defp parse_aggregate_fn(_other), do: {:error, {:query_field_invalid, "aggregates"}}
+
+  defp parse_group_by(nil), do: {:ok, []}
+
+  defp parse_group_by(group_by) when is_list(group_by),
+    do: map_while_ok(group_by, &parse_group_by_clause/1)
+
+  defp parse_group_by(_other), do: {:error, {:query_field_invalid, "group_by"}}
+
+  defp parse_group_by_clause(%{"field" => field}) when is_binary(field),
+    do: {:ok, %{field: field}}
+
+  defp parse_group_by_clause(_other), do: {:error, {:query_field_invalid, "group_by"}}
+
+  # ══ Aggregate response shaping (design §5) ════════════════════════════
+  #
+  # Compiler.compile_aggregate/2's own select produces one FLAT map per row,
+  # each key prefixed "group__"/"agg__" (compiler.ex's own comment on
+  # apply_aggregate_select/3 for why: two namespaces that can never collide,
+  # built via one select + select_merge per remaining key). This is the one
+  # place that reshapes it into design §5's
+  # {"group": {...}, "values": {...}} envelope -- "group" is present only
+  # when the request carried group_by, matching design §5 exactly.
+
+  defp aggregate_result_map(row) when is_map(row) do
+    {group_pairs, value_pairs} =
+      Enum.split_with(row, fn {key, _value} -> String.starts_with?(key, "group__") end)
+
+    values =
+      Map.new(value_pairs, fn {key, value} -> {String.replace_prefix(key, "agg__", ""), value} end)
+
+    case group_pairs do
+      [] ->
+        %{"values" => values}
+
+      _ ->
+        group =
+          Map.new(group_pairs, fn {key, value} ->
+            {String.replace_prefix(key, "group__", ""), value}
+          end)
+
+        %{"group" => group, "values" => values}
+    end
+  end
+
+  # design §2's aggregate_compile_error() union: the three aggregate-specific
+  # members map to 422 here; every compile_error() member it inherits, plus
+  # every parse-level rejection (query_field_invalid/unknown_operator/
+  # unknown_sort_dir), is mapped IDENTICALLY to POST /entities/query's own
+  # render_query_error/2 (design §2/§5, "unchanged"). The one member with no
+  # row-query analogue at all, {:aggregate_field_restricted, _} (design §4),
+  # maps to 403 -- the field named exists and is allowlisted, but this caller
+  # specifically lacks read access to it.
+  defp render_aggregate_error(conn, {:aggregate_field_restricted, _field_name}),
+    do: Response.forbidden(conn, "one or more requested fields are restricted for this caller")
+
+  defp render_aggregate_error(conn, {:aggregate_field_required, fn_}),
+    do: Response.unprocessable(conn, "aggregate function #{inspect(fn_)} requires a field")
+
+  defp render_aggregate_error(conn, {:aggregate_field_not_allowed, fn_}),
+    do: Response.unprocessable(conn, "aggregate function #{inspect(fn_)} does not accept a field")
+
+  defp render_aggregate_error(conn, {:aggregate_type_not_valid, fn_, type}),
+    do:
+      Response.unprocessable(
+        conn,
+        "aggregate function #{inspect(fn_)} is not valid for a field of type #{inspect(type)}"
+      )
+
+  defp render_aggregate_error(conn, reason), do: render_query_error(conn, reason)
 
   # ══ Query error mapping (design §4) ═══════════════════════════════════
   #

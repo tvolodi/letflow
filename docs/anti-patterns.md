@@ -2798,3 +2798,5 @@ columns happen to be two foreign keys, with a `constraint_def` of
 attributes the relationship carries. See
 `docs/migration/decisions/0023-entity-storage-hybrid.md`, "Many-to-many is
 not a special case".
+
+<!-- scratch PR A: docs-only change for ISS-0591/0592 verification (safe to remove) -->

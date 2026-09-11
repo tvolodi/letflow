@@ -257,6 +257,143 @@ defmodule Letflow.TenantProvisioning.BackfillTest do
     tenant.id
   end
 
+  # ---------------------------------------------------------------------------
+  # ISS-0583: TASK_COMPLETED backfill (REQ-292 v1 -> v2 bump)
+  # ---------------------------------------------------------------------------
+
+  # V1 attrs: event enum only admits "variable_overwritten", item-level
+  # required: ["event", "key"] -- the exact pre-REQ-292 seed
+  # (git show 18f68e12^ -- lib/letflow/tenant_provisioning.ex).
+  defp task_completed_v1_attrs do
+    %{
+      "name" => "TASK_COMPLETED",
+      "schema_version" => 1,
+      "description" => "ISS-0583 v1 test fixture",
+      "json_schema" => %{
+        "type" => "object",
+        "properties" => %{
+          "task_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "output_variables" => %{"type" => "object"},
+          "merged_variable_events" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "event" => %{"type" => "string", "enum" => ["variable_overwritten"]},
+                "key" => %{"type" => "string"}
+              },
+              "required" => ["event", "key"]
+            }
+          },
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+        },
+        "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
+      }
+    }
+  end
+
+  # V2 attrs: exact copy of lib/letflow/tenant_provisioning.ex lines ~788-821
+  # (independently transcribed from tenant_provisioning.ex, not from the mix
+  # task's own @task_completed_v2_attrs, per design doc §5.1).
+  defp task_completed_v2_attrs do
+    %{
+      "name" => "TASK_COMPLETED",
+      "schema_version" => 2,
+      "description" => "ISS-0583 v2 test fixture",
+      "json_schema" => %{
+        "type" => "object",
+        "properties" => %{
+          "task_id" => %{"type" => "string"},
+          "node_id" => %{"type" => "string"},
+          "output_variables" => %{"type" => "object"},
+          "merged_variable_events" => %{
+            "type" => "array",
+            "items" => %{
+              "type" => "object",
+              "properties" => %{
+                "event" => %{
+                  "type" => "string",
+                  "enum" => [
+                    "variable_overwritten",
+                    "computed_field_disagreement",
+                    "visible_when_false_value_discarded"
+                  ]
+                },
+                "key" => %{"type" => "string"},
+                "field" => %{"type" => "string"},
+                "old_value" => %{},
+                "new_value" => %{},
+                "submitted_value" => %{},
+                "server_value" => %{},
+                "discarded_value" => %{}
+              },
+              "required" => ["event"]
+            }
+          },
+          "activated_nodes" => %{"type" => "array", "items" => %{"type" => "string"}}
+        },
+        "required" => ["task_id", "node_id", "output_variables", "activated_nodes"]
+      }
+    }
+  end
+
+  # Removes all TASK_COMPLETED entries from the tenant's event_type_registry and
+  # inserts a fresh v1 row, simulating a pre-REQ-292 provisioned tenant.
+  defp downgrade_task_completed_to_v1!(schema_name) do
+    from(e in EventType, where: e.name == "TASK_COMPLETED")
+    |> Repo.delete_all(prefix: schema_name)
+
+    EventType.changeset(%EventType{}, task_completed_v1_attrs())
+    |> Repo.insert!(prefix: schema_name)
+  end
+
+  describe "TASK_COMPLETED backfill (ISS-0583)" do
+    test "regression: ISS-0583 -- backfill updates pre-existing tenant to schema_version 2" do
+      %{tenant_id: tenant_id, schema_name: schema_name} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "iss0583-ac1")
+
+      downgrade_task_completed_to_v1!(schema_name)
+
+      assert {:ok, %EventType{schema_version: 1}} =
+               Registry.get_type("TASK_COMPLETED", tenant_id)
+
+      assert {:ok, %{updated: updated, skipped: _skipped}} =
+               Backfill.run(task_completed_v2_attrs())
+
+      assert updated >= 1
+
+      assert {:ok, %EventType{schema_version: 2}} =
+               Registry.get_type("TASK_COMPLETED", tenant_id)
+    end
+
+    test "regression: ISS-0583 -- idempotent: already-v2 tenant is skipped, not errored" do
+      # template: :replay -- the default :clone path clones from the cached
+      # "tenant_template" schema (ISS-0427), which is only self-checked against
+      # applied migration *versions*, not against event_type_registry seed
+      # *content* (test/support/tenant_template.ex's self-check). A template
+      # built before REQ-292 landed would still carry TASK_COMPLETED at v1 even
+      # though current code seeds v2, which would make this specific assertion
+      # about provisioned_tenant!'s default seed state flaky against a stale
+      # cache. :replay drives the real TenantProvisioning.replay_migrations/1
+      # path, which always reflects the current in-code seed.
+      %{tenant_id: tenant_id} =
+        TenantFixture.provisioned_tenant!(slug_prefix: "iss0583-ac3", template: :replay)
+
+      # provisioned_tenant! (via :replay) seeds TASK_COMPLETED at v2.
+      assert {:ok, %EventType{schema_version: 2}} =
+               Registry.get_type("TASK_COMPLETED", tenant_id)
+
+      assert {:ok, %{updated: _updated, skipped: skipped}} =
+               Backfill.run(task_completed_v2_attrs())
+
+      assert skipped >= 1
+
+      assert {:ok, %EventType{schema_version: 2}} =
+               Registry.get_type("TASK_COMPLETED", tenant_id)
+    end
+  end
+
   test "regression: ISS-0343 -- a tenant whose schema vanished mid-sweep is skipped, not a crash of the whole run" do
     # A normal, healthy tenant that the sweep must still update.
     %{tenant_id: healthy_tenant_id, schema_name: healthy_schema_name} =

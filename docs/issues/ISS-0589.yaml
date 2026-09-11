@@ -35,3 +35,20 @@ description: >
 affected_files:
   - lib/letflow/entities/query/types.ex
 queue_ref: Q-589
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0589-20260911
+resolved_at: "2026-09-11T02:30:00Z"
+resolution: >
+  Fixed on main by commit 204519c0 (PR #1214, a concurrent session)
+  while this file was still unmerged on
+  chore/WF01-REQ307-REQ308-20260911 -- which is why that session's
+  closeout could not flip this record: it did not exist on main yet.
+  Flipped here instead, on the branch that introduced it.
+
+  The fix was verified independently rather than taken from the commit
+  message: lib/letflow/entities/query/types.ex now reads
+  `(e.g. "item_tags")` where it read `(e.g. "question_tags")`, a
+  one-line doc-comment change, and a case-insensitive grep of that file
+  for question/exam/candidate/certificat/quiz returns nothing. The
+  bucket-B module is clear of vertical vocabulary.

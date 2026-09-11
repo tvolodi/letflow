@@ -1,0 +1,37 @@
+id: ISS-0589
+title: entities/query/types.ex uses "question_tags" as a doc example, vertical vocabulary in a bucket-B platform module
+discovered_by: REQ-VALIDATOR
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T00:45:51Z"
+severity: MINOR
+description: >
+  Found by REQ-VALIDATOR while checking REQ-308's compliance with
+  decision 0022 rule 1 (a bucket-B requirement may not name the
+  vertical -- "not in its title, not in its acceptance criteria, not
+  in the module it produces").
+
+  lib/letflow/entities/query/types.ex:77 uses "question_tags" as a
+  documentation example. REQ-308's own text is clean -- the rule-1
+  check passed -- but this is the vertical's vocabulary sitting in a
+  generic platform module, which is the leakage rule 1 exists to
+  prevent.
+
+  Pre-existing: it landed with REQ-300 (joins in Query.Compiler), not
+  with anything in this run. Documentation only, no behaviour change,
+  hence MINOR.
+
+  It is worth fixing rather than ignoring for one specific reason:
+  Types is a module CODE-DESIGNER will read directly before designing
+  REQ-308's query surface, so the example is positioned to propagate
+  into new bucket-B design work at exactly the moment S10 starts. It
+  also makes the stage's bucket-C inventory a less honest health
+  metric -- 0022 rule 3 measures leakage by what lands under
+  lib/letflow/exam/, which a doc example in a platform module escapes
+  entirely.
+
+  Fix is to rename the example to a domain-neutral one. Out of
+  REQ-308's scope fence (design-only, and it explicitly excludes
+  lib/letflow/entities/), so filed separately.
+affected_files:
+  - lib/letflow/entities/query/types.ex
+queue_ref: Q-589

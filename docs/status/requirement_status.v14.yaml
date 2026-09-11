@@ -765,3 +765,41 @@ history:
       edges resolved correctly, registered in dependency order, not
       repeating ISS-0599's empty-edge mistake. impl_order written back
       into docs/requirements.yaml for all six.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T18:40:34Z"
+    note: >
+      ISS-0613 (GH#1271, queue task 613) -- two concurrent sessions
+      independently allocated REQ-312 on 2026-09-11, because REQ-NNN
+      ids are picked by scanning docs/requirements.yaml's own max
+      rather than the queue's atomic register_task allocator -- a
+      read-then-write race identical in shape to the ISS-NNNN
+      issue-id collisions this project already fixed (eight
+      collisions before switching to an atomic allocator, per
+      ISSUE_QUEUE.md's own history). Session A (this one, working
+      S10 gap 2) lost the race, renamed to REQ-321, and re-registered;
+      queue task 605, permanently carrying the now-wrong REQ-312
+      label, was released blocked forever -- letflow-queue has no
+      update/delete endpoint, so it cannot be cleaned up.
+      Pipeline: CODE-DESIGNER (PASS first try; considered and rejected
+      deriving REQ-NNN from the queue -- prevents the race but changes
+      the yaml/queue numbering convention TASK_QUEUE.md currently
+      describes, fixing a cosmetic-label problem rather than the real
+      "duplicate write can land on main undetected" defect; also
+      rejected documentation-only, citing the identical ISS-NNNN
+      precedent already failing eight times) -> CODE-DESIGN-VALIDATOR
+      PASS first try (independently traced the actual incident through
+      the proposed detection logic and confirmed it would have caught
+      the second session's PR) -> ELIXIR-DEV (new mix
+      letflow.check_req_id_collision task, wired into mix
+      letflow.check right after check_requirements_registration; 22
+      tests against real disposable git repos, no mocked git) ->
+      REVIEWER PASS (independently verified the normalization logic
+      can't mask a genuine collision, confirmed the git-fixture tests
+      are real, independently re-ran the full suite). No decision
+      record judged warranted -- ordinary tooling work following
+      existing check-task precedent, not a cross-cutting process
+      decision. SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR
+      correctly skipped (pure process/tooling, no tenant-data path,
+      comprehensive real-git-fixture coverage already written).

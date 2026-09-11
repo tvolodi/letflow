@@ -91,6 +91,12 @@ defmodule Letflow.MixProject do
       "letflow.check": [
         "letflow.check_toolchain",
         "letflow.check_requirements_registration",
+        # ISS-0613: shares a parse of docs/requirements.yaml and the same "id" concept
+        # as check_requirements_registration immediately above, so it is slotted right
+        # after it -- cheap, no compile step, catches a REQ-NNN id collision with
+        # origin/main before a full compile+test cycle. See
+        # lib/letflow/design/iss0613-req-id-collision-check.md section 3.4.
+        "letflow.check_req_id_collision",
         # ISS-0258: positioned immediately after the registration check per design
         # D5 -- it shares a parse of docs/requirements.yaml with that check, so a
         # stale deferral is reported in a second rather than after a full

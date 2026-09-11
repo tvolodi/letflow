@@ -74,7 +74,7 @@ defmodule Letflow.Entities.Query.Types do
     already key relations and survives a column rename that keeps the same
     relation name.
   - `through` -- present only for a many-to-many read: the entity type of
-    the join entity (e.g. `"question_tags"`). When present, `fk` names the
+    the join entity (e.g. `"item_tags"`). When present, `fk` names the
     join-entity-to-far-entity relation; the near hop
     (join-entity-to-primary) is resolved automatically.
   - `type` -- `:inner` (default) or `:left`.

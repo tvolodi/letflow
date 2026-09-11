@@ -41,13 +41,19 @@ defmodule Letflow.Definitions.SolutionPack do
       — tenant-scoped-to-the-installer only (consistent with every other
       `install/3` write) or a `scope: :global`, cross-tenant-visible entry
       (which no other `install/3` write does, and which raises its own
-      write-authorization question) — is a decision left to REQ-192, the
-      requirement already positioned to decide this catalog's
-      write-authorization policy for its HTTP surface (SVC-04:
-      `:AdminServicesManage`). Resolving `service_catalog_entries` at the
-      same time avoids inventing a second, possibly inconsistent
-      authorization stance later. Export still always emits `[]`; install
-      still **rejects** a non-empty array with
+      write-authorization question) — **is currently UNOWNED. No open
+      requirement owns it.** This bullet previously deferred the decision to
+      REQ-192, on the reasoning that resolving `service_catalog_entries`
+      alongside the catalog's HTTP write-authorization policy (SVC-04:
+      `:AdminServicesManage`) would avoid inventing a second, possibly
+      inconsistent authorization stance later. That deferral is stale:
+      REQ-192 is `done` and landed the service-catalog route surface
+      *without* lifting this pack restriction, so nothing is pending that
+      would decide it. S10's gaps 4 (email) and 5 (PDF + QR rendering) both
+      want a packed catalog entry and are therefore blocked on this policy —
+      see `docs/migration/stage-10-bilimbaga-vertical.md`'s "Open questions"
+      section, which records the same thing. Export still always emits `[]`;
+      install still **rejects** a non-empty array with
       `{:error, :unsupported_pack_section}` rather than silently discarding
       tenant-supplied content or guessing at a policy this module was never
       asked to decide.
@@ -849,9 +855,15 @@ defmodule Letflow.Definitions.SolutionPack do
   # ── install/3 steps 1-3 (pure, zero queries) ──────────────────────────────
 
   # REQ-191 retains this hard-fail as-is (does not make it functional) --
-  # see this module's moduledoc "service_catalog_entries" bullet. REQ-192
-  # is named as the owning follow-up for deciding the install-time
-  # visibility policy a packed entry would need.
+  # see this module's moduledoc "service_catalog_entries" bullet. This
+  # comment previously named REQ-192 as the owning follow-up for deciding
+  # the install-time visibility policy a packed entry would need; that is
+  # stale. REQ-192 is done and landed the service-catalog route surface
+  # WITHOUT lifting this restriction, so the policy is currently UNOWNED --
+  # no open requirement owns it. S10's gaps 4 and 5 both want a packed
+  # catalog entry and are blocked on it (see
+  # docs/migration/stage-10-bilimbaga-vertical.md, "Open questions").
+  # Until some requirement owns and decides it, this hard-fail stays.
   # NOTE (ELIXIR-DEV, REQ-305): the design doc's §3 literally specifies a
   # joint `%{service_catalog_entries: [], entity_definitions: []}` passing
   # clause -- i.e. requiring entity_definitions to ALSO be empty. Implemented

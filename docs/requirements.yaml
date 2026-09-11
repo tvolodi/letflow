@@ -19012,7 +19012,7 @@ requirements:
     title: Reconcile the S10 stage file with the landed REQ-295..REQ-306 state, and correct solution_pack.ex's stale REQ-192 pointer
     owner: DOC-UPDATER
     impl_order: 586  # letflow-queue task id; depends_on [] so no translation needed
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: N/A WITH A STATED REASON, and the reason is recorded here

@@ -736,3 +736,32 @@ history:
       touched) both verified. No lib/ implementation, no route
       mounted, no migration, no test, matching this requirement's own
       scope fence. docs/requirements.yaml flipped pending -> done.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T17:53:31Z"
+    note: >
+      Run WF01-S10gaps-2-3-12-impl-20260911. Filed and registered the
+      implementation batch for the three now-PASSed S10 gap designs:
+      REQ-315 (aggregation route, implements REQ-312's design),
+      REQ-316 (entity_record_attachments migration + context module)
+      and REQ-317 (attachment routes + permissions, depends_on
+      REQ-316) implementing REQ-313's design, REQ-318 (export/import
+      permission atoms), REQ-319 (export route, depends_on REQ-318)
+      and REQ-320 (import route, depends_on REQ-318) implementing
+      REQ-314's design. REQ-ANALYST drafted (commit f12e0dc8);
+      REQ-VALIDATOR ran two rounds -- first PASSed REQ-315/316/318/319
+      but FAILed REQ-317 (missing 404/422 error-path coverage for
+      create-attachment) and REQ-320 (an internally-contradictory
+      idempotency AC inherited from imprecise "re-POSTing is
+      idempotent" wording in REQ-314's own design doc); REQ-ANALYST
+      fixed both (commit 25812800), REQ-VALIDATOR re-checked and
+      PASSed all six. PR #1260 merged (commit 6fdcbcd8). Registered in
+      letflow-queue as tasks 606 (REQ-315, depends_on [602]), 607
+      (REQ-316, depends_on [603]), 609 (REQ-317, depends_on [607]),
+      608 (REQ-318, depends_on [604]), 610 (REQ-319, depends_on
+      [608]), 611 (REQ-320, depends_on [608]) -- all real queue-id
+      edges resolved correctly, registered in dependency order, not
+      repeating ISS-0599's empty-edge mistake. impl_order written back
+      into docs/requirements.yaml for all six.

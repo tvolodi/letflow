@@ -2588,8 +2588,19 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 23
+    entries: 24
     note: >
+      Recounted to 24 on WF02-REQ293-20260910's own Step Final rebase onto
+      main (Step 6 commit replay), composing this branch's own REQ-293
+      done-event append (Step 6) with main's own ISS-0583/ISS-0589
+      SCOPE-CHANGE done-events, already folded into the on-disk file by
+      the prior conflict resolution, with no conflict on
+      requirement_status.v13.yaml itself (auto-merged cleanly) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v13.yaml` = 24 on-disk
+      entries; 1061 lines / 64482 bytes, well under the roll ceiling.
+      Recounted directly from the composed file rather than carrying
+      forward either side's independently-computed count, per this note's
+      own recount-every-time rule.
       Recounted to 23 on WF02-REQ293-20260910's own Step Final rebase onto
       main (Step 00 commit replay), composing this branch's own REQ-293
       started-event append with main's own ISS-0583 and ISS-0589

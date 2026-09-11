@@ -927,6 +927,91 @@ history:
       client-side validation (a separate future requirement), no offline
       caching/submission. Branch: feature/WF02-REQ293-20260910.
 
+  - req: REQ-293
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-11T00:36:34Z"
+    note: >
+      REQ-293 (queue task 584, GH#1202) implemented via
+      WF02-REQ293-20260910: S8, decision 0020 D1a step 10 -- a TypeScript
+      evaluator for the Expr grammar, wired into DynamicFormRenderer.
+      CODE-DESIGNER wrote
+      lib/letflow/design/req293-typescript-expr-evaluator.md;
+      CODE-DESIGN-VALIDATOR FAILED once (the manifest-transport mechanism
+      for shipping REQ-289's conformance corpus into web/ was left
+      undecided, an AC10 scope-fence risk), reworked to a build-time Vite
+      virtual module (`virtual:expr-manifest`, via a new
+      exprManifestPlugin() in web/vite.config.ts reading
+      priv/expr_conformance/manifest.json), re-check PASSED. FRONTEND-DEV
+      implemented a TypeScript port of Letflow.Engine.Expr under
+      web/src/utils/expr/{types,tokenizer,parser,evaluator,capability,
+      translateCel,index}.ts, wired into DynamicFormRenderer.tsx via a new
+      useFormExpressions.ts hook and a new ExpressionUnavailableBanner.tsx
+      component. Also fixed a genuine pre-existing bug in
+      DynamicFormRenderer.tsx: formFields was cast from raw schema
+      properties instead of parseFormSchema's parsed tree, which would
+      have made this whole feature's fields structurally unreachable.
+      npm run check (type-check+lint+test+guards) clean, 454 tests passed,
+      48 guard tests passed including a real production-build bundle
+      scan. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework
+      round, PASS) -> FRONTEND-DEV -> SECURITY-REVIEWER (PASS, out of
+      scope -- no tenant-data path; confirmed the manifest content and
+      unevaluable-state banner leak nothing tenant-sensitive, confirmed no
+      eval/new Function/dynamic import anywhere) -> REVIEWER (PASS --
+      independently verified the grammar port fidelity against expr.ex
+      directly: ASCII-only lower/upper, 4-char trim, signed
+      infinity/NaN encoding, absent impure builtins; independently traced
+      the AC8 server-authority boundary in the actual code; confirmed the
+      DynamicFormRenderer bug fix was genuine and in-scope; confirmed idiom
+      quality and no scope creep; confirmed decision-record consistency
+      with 0020 D1a's both halves) -> RELEASE-VALIDATOR (independently
+      re-derived evidence for all 12 acceptance criteria from scratch: own
+      greps, own test runs, own npm run check re-run -- 454 passed, 48
+      guards passed -- PASS). A known, accepted, corpus-scoped limitation
+      (int-variable arithmetic divergence, design doc section 6.2) was
+      confirmed by both CODE-DESIGN-VALIDATOR and REVIEWER as a real but
+      bounded gap (server-side re-evaluation, REQ-292, is the actual
+      authority) -- not a defect requiring a filed issue, already
+      documented in the design doc's own open-questions section.
+      docs/requirements.yaml flipped in_progress -> done. README.md
+      checked (grepped for DynamicFormRenderer/visible_when/computed/
+      cross-field/form/expression/evaluator references, case-insensitive)
+      -- no hits; no documented current-behavior claim about form
+      rendering or the Expr grammar's client-side status exists to update,
+      even though the SPA can now actually evaluate expressions -- left
+      unchanged. decision 0020-frontend-architecture.md's Sequencing
+      section checked -- no per-step "done" marker convention exists
+      anywhere in that document (REQ-290's, REQ-292's, REQ-303's,
+      REQ-304's, REQ-305's and REQ-306's own done-event notes above all
+      found the same absence for their own steps), so no edit made; step
+      11 (REQ-292, server-side authority) already landed done before this
+      step 10 lands, honouring the record's own "step 11 must not lag step
+      10" sequencing rule. REQ-294 (step 12, D1a-dart, S9, dormant) was
+      checked next: its `blocked-by: REQ-293` deferral hatch has now
+      EXPIRED now that REQ-293 is done, confirmed live via
+      `mix letflow.check_deferral_staleness` (2 violations, S1+S3, naming
+      REQ-294) -- but unlike REQ-293's own prior expiry (after REQ-292
+      landed), this is NOT "now unblocked and eligible for registration":
+      MOBILE-DEV stays dormant per CLAUDE.md's roster and apps/mobile/
+      still does not exist, so REQ-294 must not be started. Every link in
+      REQ-294's own depends_on is now done and S9 is independently ACTIVE
+      regardless (REQ-124..127, all done), so there is no remaining live
+      REQ-NNN left to re-scope the `blocked-by:` hatch to -- the checker's
+      only two outs (register_task, or a live blocked-by target) both fail
+      to apply here, which is a genuine gap in the checker's model, not
+      something to close by fabricating a blocked-by target (that would be
+      satisfying a gate by editing what it measures). Updated REQ-294's own
+      rationale comment in this same commit to record the expiry and this
+      finding rather than silently leaving a now-false claim standing;
+      left the requirement's own status/owner/depends_on untouched.
+      FLAGGED FOR ORCH: mix letflow.check_deferral_staleness now fails on
+      main with REQ-294 as of this commit -- this needs either a filed
+      issue against the checker (an "owner dormant" escape it currently
+      has no way to express) or a decision on how an S9-dormant deferral
+      with a fully-satisfied depends_on chain should be represented; not
+      resolved here since register_task and any checker-model change are
+      outside DOC-UPDATER's role.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH

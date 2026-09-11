@@ -17342,7 +17342,7 @@ requirements:
       # once REQ-284 (queue task 560), REQ-290 (queue task 572) and REQ-292
       # (queue task 579) all landed done -- no live blocker left. depends_on
       # translated to queue task ids [560, 572, 579].
-    status: in_progress
+    status: done
     stage: S8
     description: >
       Implements step 10 of
@@ -17463,7 +17463,26 @@ requirements:
   - id: REQ-294
     title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
     owner: MOBILE-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-293 -- REQ-290 (queue task 572) and REQ-292 (queue task 579) both landed done 2026-09-10; this entry's own depends_on: [REQ-290, REQ-292, REQ-293] makes it unstartable until REQ-293 also lands, so the deferral re-scopes to REQ-293 (queue task 584), the sole remaining still-pending link in that chain, since REQ-292 no longer blocks anything here. MOBILE-DEV remains dormant per CLAUDE.md's roster regardless of this hatch's own expiry -- nothing routes to this entry until S9's backend gaps close and apps/mobile/ exists, independent of this mechanical staleness check
+    # impl_order: UNREGISTERED -- REQ-293 (queue task 584) landed done 2026-09-10
+      # (WF02-REQ293-20260910), so the blocked-by: REQ-293 hatch this comment
+      # previously carried has EXPIRED -- confirmed live via
+      # `mix letflow.check_deferral_staleness`: it now fails with S1+S3
+      # violations naming this entry, because every link in this entry's own
+      # depends_on: [REQ-290, REQ-292, REQ-293] is done and S9 is independently
+      # ACTIVE regardless (via REQ-124..127, all done) -- there is no remaining
+      # live REQ-NNN to re-scope the hatch to. This is NOT "now unblocked and
+      # eligible for registration," unlike REQ-293's own prior expiry: MOBILE-DEV
+      # stays dormant per CLAUDE.md's roster and apps/mobile/ still does not
+      # exist, so starting this entry would be wrong. The mechanical checker has
+      # no "owner is dormant" escape -- its only two outs are register_task
+      # (wrong here) or a live blocked-by (none exists) -- so this is a genuine
+      # gap in the checker, not something to paper over with a fabricated
+      # blocked-by target (core-directives.md's "Never Satisfy a Gate by Editing
+      # What It Measures"). Left mechanically stale on purpose; flagged to ORCH
+      # (WF02-REQ293-20260910 Step 6) to file as an issue against the checker or
+      # decide how S9-dormant deferrals should be expressed once every
+      # depends_on link is done and no mobile-tier-activation requirement id
+      # exists yet to block on.
     status: pending
     stage: S9
     description: >

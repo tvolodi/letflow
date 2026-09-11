@@ -2588,8 +2588,16 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 29
+    entries: 30
     note: >
+      Recounted to 30 on ORCH's fix/ISS-0595-20260911 second rebase onto
+      main, composing this branch's own already-resolved 29-entry state
+      with main's own newly-landed REQ-307 done-event (declaring 27
+      against a now-stale base) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 30 on-disk entries;
+      1201 lines / 71184 bytes, well under the roll ceiling. Recounted
+      directly from the composed file per this note's own
+      recount-every-time rule.
       Recounted to 29 on WF02-REQ307-20260911's second merge of
       origin/main. This is the same concurrent-append collision as the
       previous recount, now three-way: this branch carried REQ-307's
@@ -2614,6 +2622,54 @@ volumes:
       replay), composing that branch's own SCOPE-CHANGE done-event
       append (REQ-294 registered as queue task 585, GH#1205,
       locked+released as status: "blocked") with
+      Recounted to 29 on ORCH's fix/ISS-0595-20260911 Step Final rebase
+      onto main, composing this branch's own ISS-0595 SCOPE-CHANGE
+      done-event (independently computed as 27, against a stale base of
+      26) with main's own ISS-0590 started+done event pair
+      (independently computed as 28) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 29 on-disk entries;
+      1171 lines / 69383 bytes, well under the roll ceiling. Recounted
+      directly from the composed file rather than carrying forward
+      either side's independently-computed 27/28, per this note's own
+      recount-every-time rule.
+      Recounted to 28 on WF03-ISS0590-20260911's own Step Final rebase
+      onto main (Step 5 commit replay), composing this branch's own
+      ISS-0590 SCOPE-CHANGE done-event append (Step 5, ISSUE-FIXER) with
+      main's own ISS-0588 SCOPE-CHANGE done-event, already folded into
+      the on-disk file by the prior conflict resolution above -- `grep -c
+      "^  - req:" docs/status/requirement_status.v13.yaml` = 28 on-disk
+      entries; 1150 lines / 69430 bytes, well under the roll ceiling.
+      Recounted directly from the composed file rather than carrying
+      forward either side's independently-computed count, per this
+      note's own recount-every-time rule.
+      Recounted to 27 on WF03-ISS0590-20260911's own Step Final rebase
+      onto main (Step 00 commit replay), composing this branch's own
+      ISS-0590 started-event append with main's own ISS-0588 SCOPE-CHANGE
+      done-event, no conflict on requirement_status.v13.yaml itself
+      (auto-merged cleanly) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 27 on-disk entries; 1119
+      lines / 67558 bytes, well under the roll ceiling. Recounted directly
+      from the composed file rather than carrying forward either side's
+      independently-computed count, per this note's own recount-every-time
+      rule.
+      Incremented to 27 by ORCH's own ISS-0595 SCOPE-CHANGE done-event
+      append (fix/ISS-0595-20260911) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 27 on-disk entries;
+      1122 lines, well under the roll ceiling.
+      Recounted to 26 on ORCH's fix/ISS-0588-20260911 Step Final rebase
+      onto main, appending this branch's own ISS-0588 SCOPE-CHANGE
+      done-event on top of main's already-composed 25 entries
+      (requirement_status.v13.yaml itself auto-merged cleanly by git,
+      no conflict) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 26 on-disk entries;
+      1102 lines / 65600 bytes, well under the roll ceiling. Recounted
+      directly from the composed file rather than carrying forward
+      either side's independently-computed count, per this note's own
+      recount-every-time rule.
+      Recounted to 25 on WF02-REQ293-20260910's own Step Final rebase onto
+      main (deferral-reconciliation commit replay), composing this
+      branch's own SCOPE-CHANGE done-event append (REQ-294 registered as
+      queue task 585, GH#1205, locked+released as status: "blocked") with
       main's own ISS-0583/ISS-0589 SCOPE-CHANGE done-events, no conflict
       on requirement_status.v13.yaml itself (auto-merged cleanly) --
       1084 lines / 65761 bytes at that point.

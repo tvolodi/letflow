@@ -1147,6 +1147,7 @@ history:
       mirror issue #1215 closed with an evidence comment. Branch:
       fix/ISS0590-20260911. Step Final (merge) left to a separate run per
       this run's own instructions.
+
   - req: REQ-307
     event: done
     agent: ORCH
@@ -1177,3 +1178,24 @@ history:
       REQ-192 substring assertion in service_catalog_test.exs) and
       ISS-0595 (GH#1223, stale content-array counts in solution_pack.ex's
       moduledoc).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T03:24:55Z"
+    note: >
+      ISS-0595 (GH#1223, queue task 595) -- lib/letflow/definitions/
+      solution_pack.ex's moduledoc claimed "Letflow supports two" of
+      R-Co's four content arrays, stale since before entity_definitions
+      even landed: the bullet list itself already showed three supported
+      (definitions, variable_schemas, manifest.required_roles), only
+      service_catalog_entries unsupported. Discovered by DOC-UPDATER
+      during REQ-307, confirmed by RELEASE-VALIDATOR, deliberately not
+      fixed there (REQ-307's scope fence named two specific other comment
+      sites). Verified service_catalog_entries genuinely still rejects
+      non-empty via check_unsupported_sections/1 -- that part of the
+      moduledoc is accurate. Corrected the count to three, and added the
+      entirely-missing entity_definitions bullet (REQ-303-306, not one
+      of R-Co's original four at all). Documentation only, no behaviour
+      change -- direct ORCH action per ORCHESTRATOR.md Sec.10's sizing
+      rule.

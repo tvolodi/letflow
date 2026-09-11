@@ -1,0 +1,48 @@
+id: ISS-0593
+title: main's branch protection has enforce_admins true, which decision 0018 section (d) explicitly rejects
+discovered_by: ORCH
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T02:50:00Z"
+severity: MAJOR
+description: >
+  Live state, read 2026-09-11 via
+  `gh api repos/tvolodi/letflow/branches/main/protection`:
+
+    {"contexts":["Backend gate (mix letflow.check)",
+                 "Frontend gate (npm run check)"],
+     "enforce_admins":true,
+     "strict":true}
+
+  docs/migration/decisions/0018-branch-protection-posture.md section
+  (d) is titled "No, `enforce_admins: true` is not appropriate --
+  reject it", and the record's entire override discipline is built on
+  `enforce_admins: false` plus a deliberate, attributable
+  `gh pr merge --admin` (section (b), and the Normal / Override /
+  No-attribution three-path breakdown at lines 82-100).
+
+  So the deployed posture contradicts the decision record on precisely
+  the axis the record exists to settle.
+
+  The practical consequence: the `--admin` override path 0018
+  describes DOES NOT CURRENTLY EXIST. An agent following 0018 for a
+  genuine CI-infrastructure break -- the wasm_hang / ISS-0352 /
+  ISS-0418 class the record names by example -- will find the
+  documented escape hatch unavailable. 0018 itself notes the remaining
+  alternative is multi-step and non-atomic (PUT protection to false,
+  merge, PUT it back), which is why it rejected this posture.
+
+  This issue takes NO position on which posture is correct -- that is
+  0018's to re-decide, not an issue's to settle. What is wrong is the
+  silent divergence. Either the protection is restored to the recorded
+  posture, or 0018 is amended to record what changed, when, and why.
+  CLAUDE.md's "Don't silently re-decide what a decision record already
+  settled" is the rule in play.
+
+  Discovered while determining whether `--admin` was available to
+  merge PR #1209 past a flaky required check (ISS-0590). It was not,
+  and the merge proceeded on the normal path instead after a clean
+  re-run -- so nothing was bypassed, but the gap is real and would
+  bite the next agent that needs the documented override.
+affected_files:
+  - docs/migration/decisions/0018-branch-protection-posture.md
+queue_ref: Q-593

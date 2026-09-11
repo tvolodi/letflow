@@ -87,6 +87,7 @@ defmodule Letflow.Entities.Query.Compiler do
   alias Letflow.Entities.Query.Allowlist
   alias Letflow.Entities.Query.Types
   alias Letflow.Entities.Record.Latest
+  alias Letflow.Repo
   alias Letflow.TenantProvisioning
 
   @type compile_error ::
@@ -680,6 +681,24 @@ defmodule Letflow.Entities.Query.Compiler do
 
         {:ok, query}
       end
+    end
+  end
+
+  @doc """
+  Compiles `request` per `compile_aggregate/2` and executes it, scoped to the
+  tenant schema named by `prefix` -- the one place in this module that calls
+  `Repo.*` to *execute* a query it built (design §4: an aggregate result has
+  no `Cursor`-shaped execution wrapper, unlike `compile/2`'s row-query path).
+  Added so `Letflow.Routers.Entities` -- whose own moduledoc states "router
+  composes existing context/query-module calls, never executes its own SQL"
+  -- has a context-module call to compose here too, instead of calling
+  `Repo.all/2` itself (SECURITY-REVIEWER structural finding, REQ-315).
+  """
+  @spec run_aggregate(aggregate_request(), prefix :: String.t()) ::
+          {:ok, [map()]} | aggregate_compile_error()
+  def run_aggregate(request, prefix) do
+    with {:ok, query} <- compile_aggregate(request, prefix) do
+      {:ok, Repo.all(query, prefix: prefix)}
     end
   end
 

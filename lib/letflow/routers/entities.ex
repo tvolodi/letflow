@@ -10,13 +10,11 @@ defmodule Letflow.Routers.Entities do
   below; REQ-311 appended §1's tenth row, `POST /entities/query`, to this
   same module — an append, not a restructure. REQ-315 appended an eleventh
   row, `POST /entities/query/aggregate` — the aggregation/reporting query
-  route, per `lib/letflow/design/req312-query-aggregation.md`. Unlike every
-  route above it, this one's handler calls `Repo.all/2` directly (design §4:
-  `compile_aggregate/2` returns a not-yet-executed `Ecto.Query.t()`, same as
-  `compile/2`, and no `Cursor`-shaped execution wrapper exists for an
-  aggregate result) — the one deliberate exception to this module's own
-  "no `Repo` call of any kind" INV-1 statement below, which predates this
-  route.
+  route, per `lib/letflow/design/req312-query-aggregation.md`. Its handler
+  calls `Letflow.Entities.Query.Compiler.run_aggregate/2`, a thin wrapper
+  around `compile_aggregate/2` plus the query's own execution, added
+  specifically so this route stays composition-only, same as every other
+  route here — this module executes no query of its own (INV-1, below).
 
   Its permission vocabulary (`:EntitiesDefinitionsRead`,
   `:EntitiesDefinitionsWrite`, `:EntitiesRecordsWrite`, and REQ-311's
@@ -37,7 +35,7 @@ defmodule Letflow.Routers.Entities do
   | update_record | `PUT /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.update_record/2` | `EntitiesRecordsWrite` | 200 / 404 / 409 / 422 |
   | delete_record | `DELETE /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.delete_record/2` | `EntitiesRecordsWrite` | 200 / 404 |
   | query | `POST /entities/query` | `Letflow.Entities.Query.Compiler.compile/2` then `Letflow.Entities.Query.Allowlist.load/2` then `Letflow.Entities.Query.Cursor.paginate/5` then a `Letflow.Entities.Query.FieldGrants` redaction step | `EntitiesQuery` | 200 / 400 / 404 / 422 |
-  | query_aggregate | `POST /entities/query/aggregate` | a `Letflow.Entities.Query.FieldGrants.load_restrictions/3` field-restriction check then `Letflow.Entities.Query.Compiler.compile_aggregate/2` then `Repo.all/2` | `EntitiesAggregate` | 200 / 400 / 403 / 404 / 422 |
+  | query_aggregate | `POST /entities/query/aggregate` | a `Letflow.Entities.Query.FieldGrants.load_restrictions/3` field-restriction check then `Letflow.Entities.Query.Compiler.run_aggregate/2` | `EntitiesAggregate` | 200 / 400 / 403 / 404 / 422 |
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -178,7 +176,6 @@ defmodule Letflow.Routers.Entities do
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.EventStore.Registry.ValidationFailure
-  alias Letflow.Repo
 
   # ── Definition write routes ───────────────────────────────────────────
   #
@@ -1201,8 +1198,7 @@ defmodule Letflow.Routers.Entities do
          {:ok, restriction_set} <-
            FieldGrants.load_restrictions(user_id, request.entity_type, prefix),
          :ok <- check_aggregate_field_restrictions(request, restriction_set),
-         {:ok, compiled} <- Compiler.compile_aggregate(request, prefix) do
-      rows = Repo.all(compiled, prefix: prefix)
+         {:ok, rows} <- Compiler.run_aggregate(request, prefix) do
       Response.ok(conn, %{"results" => Enum.map(rows, &aggregate_result_map/1)})
     else
       {:error, reason} -> render_aggregate_error(conn, reason)

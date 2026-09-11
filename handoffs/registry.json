@@ -6275,5 +6275,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-314 (queue task 604, GH#1255) -- S10 gap 12, design-only requirement for bulk import/export of entity records, a records-level sibling to Letflow.Definitions.ExportImport. Own schema-versioned document format, export reuses the POST /entities/query selection pipeline, import goes through create_record/2 exclusively with no independent validation. Pipeline: CODE-DESIGNER (3 rework cycles: two self-referential grep-quine citation issues, then a genuine INV-2 permission-model gap) -> CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS (found the original single-tier unredacted-export argument was a category error -- no existing capability lets one identity bypass FieldGrants at scale; fixed with a two-tier atom scheme, default respects FieldGrants, a new explicitly-exceptional atom gates the unredacted variant with fail-closed 403) -> CODE-DESIGN-VALIDATOR final re-check PASS. No lib/ implementation, no route mounted, no migration, no test."
     }
+,
+    {
+      "run_id": "WF03-ISS0613-20260911",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0613",
+      "queue_task_id": 613,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1271,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.check_req_id_collision.ex"
+      ],
+      "branch_name": "fix/ISS-0613-20260911",
+      "started_at": "2026-09-11T18:04:34Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0613 (queue task 613, GH#1271) -- two concurrent sessions independently allocated REQ-312, a read-then-write race identical in shape to the ISS-NNNN issue-id collisions already fixed by this project. New mix letflow.check_req_id_collision task detects a genuine collision (a newly-added REQ-NNN id also on origin/main with different content) before merge, wired into mix letflow.check. Pipeline: CODE-DESIGNER (PASS first try, rejected deriving REQ-NNN from the queue as fixing a cosmetic problem, rejected documentation-only citing the ISS-NNNN precedent's 8 prior collisions) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (22 tests against real disposable git repos, no mocked git) -> REVIEWER PASS. No decision record warranted -- ordinary tooling work. SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR correctly skipped."
+    }
   ]
 }

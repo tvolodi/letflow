@@ -1,0 +1,62 @@
+id: ISS-0613
+title: Requirement-id collision -- two sessions independently allocated REQ-312, because REQ- ids are picked from docs/requirements.yaml and not from the queue
+discovered_by: ORCH
+discovered_in_run: WF01-REQ321-20260911
+discovered_at: "2026-09-11T13:05:00Z"
+severity: MAJOR
+description: >
+  On 2026-09-11 two concurrent sessions both allocated REQ-312.
+
+  Session A (this one) drafted "Design decision record for the
+  SolutionPack service_catalog_entries install policy" and registered it
+  as queue task 605. Session B independently drafted "Design an
+  aggregation/reporting query capability" as REQ-312 and MERGED it to
+  main first, along with REQ-313 and REQ-314, then filed REQ-315..320.
+  Session A's branch never even triggered CI, so the collision surfaced
+  only when its ORCH went to merge.
+
+  ROOT CAUSE, and it is a gap in the protocol rather than a mistake by
+  either session. TASK_QUEUE.md makes the queue authoritative for
+  CLAIMING work and forbids reading docs/requirements.yaml to PICK work.
+  But it says nothing about ALLOCATING A NEW REQUIREMENT ID. Both
+  sessions did the only thing available -- read the max REQ- id out of
+  docs/requirements.yaml and add one -- and both read the same max at
+  roughly the same time, before either had pushed. The queue's
+  autoincrement task id IS allocated atomically across hosts and would
+  not have collided; the REQ- id is not.
+
+  RESOLUTION TAKEN. Session A renumbered to REQ-321 (max on main was
+  320) and re-registered as queue task 612. Task 605, which carries the
+  now-wrong "REQ-312:" title and duplicates task 602's label, was
+  released with status "blocked" so get_next_task cannot hand it out. It
+  cannot be retitled or deleted -- letflow-queue deliberately exposes
+  exactly four endpoints and no generic update operation
+  (TASK_QUEUE.md lines 117-118), so a mislabelled task is permanent.
+
+  WHY IT MATTERS BEYOND THIS INCIDENT: the failure was silent on session
+  B's side and loud only on session A's. Had session A merged first,
+  session B would have hit it instead. Nothing detects it at draft time.
+  With the pipeline routinely running several sessions per repo, this
+  recurs whenever two sessions draft requirements in the same window --
+  exactly what happened here, one session working S10 gap 1 while
+  another worked gaps 2/3/12.
+
+  Severity MAJOR: no data loss, and the collision was caught before
+  merge, but it cost a full re-registration cycle, left a permanently
+  mislabelled queue task, and the detection was accidental rather than
+  systematic.
+
+  FIX DIRECTIONS, none free:
+  (a) Allocate REQ- ids from the queue too -- register_task first, derive
+      the REQ- id from the returned task id. Makes allocation atomic, but
+      changes the yaml/queue relationship TASK_QUEUE.md describes.
+  (b) A pre-push or CI check failing any PR whose new REQ- ids already
+      exist on main. Catches it late but automatically and cheaply.
+  (c) A documented convention that a session pushes its requirement entry
+      before drafting further against it.
+  (b) is the cheapest and detects the actual failure mode; (a) prevents
+  it outright.
+affected_files:
+  - docs/agents/protocols/TASK_QUEUE.md
+  - docs/requirements.yaml
+queue_ref: Q-613

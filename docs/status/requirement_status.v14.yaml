@@ -803,3 +803,62 @@ history:
       decision. SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR
       correctly skipped (pure process/tooling, no tenant-data path,
       comprehensive real-git-fixture coverage already written).
+  - req: REQ-316
+    event: done
+    agent: ORCH
+    at: "2026-09-11T20:22:14Z"
+    note: >
+      REQ-316 (queue task 607, GH#1264, depends_on [REQ-313]) implemented
+      via feature/WF02-REQ316-20260911: S10 gap 3 part 1 -- the migration,
+      Ecto schema, and Letflow.Repository.EntityAttachments context module
+      for entity-record attachments, per the already-PASSed design
+      lib/letflow/design/req313-entity-record-attachments.md (§1 schema/
+      migration, §2 context module). New entity_record_attachments table
+      (prefix: schema, per-tenant), composite index
+      [:entity_type, :record_id, desc: :created_at], index on
+      [:content_hash], and a composite DEFERRABLE INITIALLY DEFERRED FK to
+      entity_record_latest(entity_type, record_id) via a literal execute/1
+      statement -- load-bearing per §1's trace of the promotion backfill's
+      delete-then-reinsert-in-one-transaction path, not stylistic.
+      upload/2, list/2, get/2, get_content/2, delete/2 mirror
+      Letflow.Repository.Attachments' own four (plus get_content/2) with
+      instance_id replaced by entity_type + record_id throughout; shared
+      @max_upload_bytes gate, AttachmentScanner config key, and
+      repository_artifacts dedup (no second content store). tenant_id
+      derived explicitly via
+      TenantProvisioning.tenant_id_for_schema_name!/1 in upload/2's insert
+      path, never accepted from caller attrs -- acting on SECURITY-
+      REVIEWER's one non-blocking note from the design's own §10 verdict.
+      Registered the new migration in tenant_provisioning.ex's tenant-
+      scoped manifest; bumped tenant_fixture's expected table count
+      43 -> 44.
+
+      Self-reported deviation found during implementation:
+      foreign_key_constraint/3 does not catch a DEFERRABLE INITIALLY
+      DEFERRED FK violation, since Postgres only evaluates it at
+      transaction COMMIT, after Repo.insert/2 has already returned
+      {:ok, _} inside the transaction function -- surfaced as a raw
+      unhandled Postgrex.Error. Fixed by wrapping the transaction in
+      try/rescue, narrowly pattern-matching
+      %Postgrex.Error{postgres: %{code: :foreign_key_violation}} AND the
+      exact constraint name (entity_record_attachments_record_fkey),
+      reraising anything else.
+
+      Pipeline: no fresh CODE-DESIGNER/CODE-DESIGN-VALIDATOR cycle --
+      the existing PASSed REQ-313 design fully specified this
+      requirement's scope, matching this project's established
+      design-doc-reuse precedent -> ELIXIR-DEV -> SECURITY-REVIEWER PASS
+      (verified INV-1 tenant_id derivation, the DEFERRABLE FK rationale,
+      and dedup sharing) -> REVIEWER PASS (confirmed design conformance,
+      confirmed repository_artifacts sharing is genuinely the same
+      function not a fork, confirmed the try/rescue idiom is NOT novel --
+      identical pattern already exists at pin_rebind.ex:388,
+      reconstruction.ex:970, event_store/registry.ex:229,
+      scheduler.ex:241,642, definitions.ex:1673 -- independently ran
+      entity_attachments_test.exs: 25 passed, exit 0; independently ran
+      the full suite: only the 3 pre-existing unrelated failures,
+      no new ones). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this
+      project's established precedent: entity_attachments_test.exs (25
+      tests) independently judged comprehensive by REVIEWER. Scope fence
+      held -- no route, no permission atom, no router change; REQ-317
+      owns those. docs/requirements.yaml flipped pending -> done.

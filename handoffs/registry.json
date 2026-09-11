@@ -6295,6 +6295,33 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0613 (queue task 613, GH#1271) -- two concurrent sessions independently allocated REQ-312, a read-then-write race identical in shape to the ISS-NNNN issue-id collisions already fixed by this project. New mix letflow.check_req_id_collision task detects a genuine collision (a newly-added REQ-NNN id also on origin/main with different content) before merge, wired into mix letflow.check. Pipeline: CODE-DESIGNER (PASS first try, rejected deriving REQ-NNN from the queue as fixing a cosmetic problem, rejected documentation-only citing the ISS-NNNN precedent's 8 prior collisions) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (22 tests against real disposable git repos, no mocked git) -> REVIEWER PASS. No decision record warranted -- ordinary tooling work. SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR correctly skipped."
+    },
+    {
+      "run_id": "WF02-REQ316-20260911",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-316",
+      "issue_id": null,
+      "queue_task_id": 607,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1264,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/repository/entity_attachment.ex",
+        "lib/letflow/repository/entity_attachments.ex",
+        "priv/repo/migrations/"
+      ],
+      "branch_name": "feature/WF02-REQ316-20260911",
+      "started_at": null,
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": true,
+      "backfill_source": [
+        "docs/requirements.yaml (REQ-316 entry, depends_on [REQ-313])",
+        "REVIEWER's Step Final PASS verdict for this branch",
+        "docs/status/requirement_status.v14.yaml (REQ-316 done event)"
+      ],
+      "last_known_step": "Step Final PASS -- merged.",
+      "note": "REQ-316 (queue task 607, GH#1264, depends_on [REQ-313]) -- S10 gap 3 part 1: the entity_record_attachments migration, Ecto schema, and Letflow.Repository.EntityAttachments context module, per the already-PASSed design lib/letflow/design/req313-entity-record-attachments.md (§1/§2). Composite DEFERRABLE INITIALLY DEFERRED FK to entity_record_latest(entity_type, record_id); upload/2, list/2, get/2, get_content/2, delete/2 mirror Letflow.Repository.Attachments with instance_id replaced by entity_type+record_id; shared repository_artifacts dedup; tenant_id derived explicitly via TenantProvisioning.tenant_id_for_schema_name!/1, acting on SECURITY-REVIEWER's non-blocking §10 note. Self-reported deviation: foreign_key_constraint/3 does not catch a DEFERRABLE FK violation (Postgres checks only at COMMIT); fixed with a narrow try/rescue on the exact Postgrex error code and constraint name, reraising anything else. Pipeline: no fresh design cycle (REQ-313's PASSed design fully specified scope) -> ELIXIR-DEV -> SECURITY-REVIEWER PASS -> REVIEWER PASS (confirmed the try/rescue idiom already exists at pin_rebind.ex:388, reconstruction.ex:970, event_store/registry.ex:229, scheduler.ex:241,642, definitions.ex:1673; independently ran entity_attachments_test.exs: 25 passed; ran full suite: only the 3 pre-existing unrelated failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent (25 tests independently judged comprehensive by REVIEWER). Scope fence held -- no route, no permission atom; REQ-317 owns those."
     }
   ]
 }

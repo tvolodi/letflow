@@ -2909,7 +2909,7 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 13
+    entries: 15
     note: >
       Incremented to 13 by ORCH's own ISS-0600 SCOPE-CHANGE done-event
       append (fix/ISS-0600-20260911) -- `grep -c "^  - req:"

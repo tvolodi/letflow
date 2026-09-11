@@ -1,0 +1,60 @@
+id: ISS-0600
+title: FieldGrants.redact_page/2 raises FunctionClauseError on entity_row() map items from a promoted per-type table
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF02-REQ311-20260911
+discovered_at: "2026-09-11T11:30:00Z"
+severity: MAJOR
+description: >
+  lib/letflow/entities/query/field_grants.ex:136's private redact_item/2
+  matches %Latest{field_values: _} ONLY. But compiler.ex's
+  compile_plain/5, in its {:per_type_table, table_name} branch, calls
+  select_entity_row/1 which emits a PLAIN MAP (Compiler.entity_row()),
+  not a %Latest{} struct. So redact_page/2 raises FunctionClauseError on
+  any non-join query against an entity type with a promoted per-type
+  table.
+
+  PRE-EXISTING, not introduced by REQ-311. REQ-231 built FieldGrants
+  before per-type tables existed; REQ-296/297/298 added them afterwards
+  and redact_page/2 was never updated for the second row shape. Its
+  @spec still says Pagination.Page.t(Latest.t()), which is now a lie
+  that dialyzer cannot catch, because the promoted path produces an
+  untyped map. query_cursor_field_grants_test.exs only ever exercised
+  redact_page/2 against %Latest{}.
+
+  WHY IT STAYED LATENT: verified at the merge base that there were ZERO
+  callers of redact_page/2 anywhere in lib/. REQ-311's
+  POST /entities/query is the first caller, and it hit the crash
+  immediately.
+
+  CURRENT STATE. REQ-311 works around it router-side:
+  Letflow.Routers.Entities.redact_plain_page/2 dispatches on shape and
+  hands BOTH shapes to the same public
+  FieldGrants.redact_field_values/2, so INV-2 is enforced identically.
+  SECURITY-REVIEWER confirmed security-equivalence against the code
+  (same page mapping, same per-item function, same restriction set --
+  not a weakened copy) and confirmed a third shape would RAISE
+  (fail-loud) rather than pass through unredacted (fail-open).
+  REVIEWER ruled the workaround stands because it is a shape adapter,
+  not a router-local reimplementation of the redaction rule -- but made
+  filing this issue a CONDITION of that ruling.
+
+  Severity MAJOR: fail-loud, not a data leak, so nothing is exposed
+  today. But every other future caller of redact_page/2 gets a 500 on a
+  promoted entity type without REQ-311's local workaround, and the
+  wrong @spec makes that invisible to static analysis.
+
+  FIX DIRECTION: add a clause to redact_item/2 accepting the
+  entity_row() map shape (the same %{field_values: fv} = item shape the
+  router's adapter matches); correct redact_page/2's @spec to admit
+  both row types; extend query_cursor_field_grants_test.exs to cover
+  the promoted shape; THEN delete
+  Letflow.Routers.Entities.redact_plain_page/2 and its two
+  redact_plain_item/2 clauses and point the non-join branch back at
+  FieldGrants.redact_page/2. The router's moduledoc and the inline
+  comment above redact/4 both name ISS-0600 and say to delete the
+  workaround when it lands.
+affected_files:
+  - lib/letflow/entities/query/field_grants.ex
+  - lib/letflow/routers/entities.ex
+  - test/letflow/entities/query_cursor_field_grants_test.exs
+queue_ref: Q-600

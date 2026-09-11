@@ -31,12 +31,20 @@ defmodule Letflow.Routers.EntitiesTest do
   import Plug.Test
   import Plug.Conn
 
+  # REQ-311: only for the ColumnPromotion cleanup in promote_and_create_table!/5
+  # below. No test in this file issues a query of its own -- every read and
+  # write goes through a context module or through the HTTP routes themselves.
+  import Ecto.Query, only: [from: 2]
+
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EventTypes
+  alias Letflow.Entities.Query.Cursor
+  alias Letflow.Entities.Query.FieldGrants
   alias Letflow.Entities.Records
   alias Letflow.Identity
   alias Letflow.Identity.User
   alias Letflow.TenantFixture
+  alias Letflow.TenantProvisioning
 
   # ── Full-pipeline dispatch ─────────────────────────────────────────────
 
@@ -103,11 +111,40 @@ defmodule Letflow.Routers.EntitiesTest do
       Identity.create_token(user.id, %{roles: roles, expires_at: nil}, prefix: tenant.schema_name)
 
     %{
+      # REQ-311 added `tenant_id` (needed by
+      # TenantProvisioning.register_column_promotion/4, which the join tests
+      # use to create real per-entity-type tables) and `tenant` (needed by
+      # the INV-5 cross-tenant test, which mints a SECOND credential against
+      # an existing tenant).
+      tenant_id: tenant.tenant_id,
       schema_name: tenant.schema_name,
       slug: tenant.tenant.slug,
       plaintext: plaintext,
       user_id: user.id
     }
+  end
+
+  # A SECOND credential for a tenant that already exists, belonging to a
+  # DIFFERENT user in the same schema. REQ-311's INV-1 two-user test needs
+  # two callers whose `user_entity_grants` rows differ while every other
+  # input -- the request body included -- is byte-identical.
+  defp second_user_ctx(ctx, roles \\ ["PLATFORM_ADMIN"]) do
+    user =
+      %User{}
+      |> Ecto.Changeset.change(%{
+        username: "req311-user2-#{Ecto.UUID.generate()}",
+        display_name: "REQ-311 Second User",
+        email: "req311-2-#{Ecto.UUID.generate()}@example.com",
+        password_hash: "__NO_PASSWORD_SET__",
+        status: :active,
+        auth_source: :internal
+      })
+      |> Repo.insert!(prefix: ctx.schema_name)
+
+    {:ok, %{plaintext: plaintext}} =
+      Identity.create_token(user.id, %{roles: roles, expires_at: nil}, prefix: ctx.schema_name)
+
+    %{ctx | plaintext: plaintext, user_id: user.id}
   end
 
   defp definition_body(overrides \\ %{}) do
@@ -218,7 +255,10 @@ defmodule Letflow.Routers.EntitiesTest do
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- the declared route table matches design §1" do
-    test "__authz_routes__/0 returns exactly the nine non-query routes, with their designed policy keys" do
+    # REQ-311 raised this from nine to TEN: the tenth is POST /query, and
+    # the count is asserted explicitly so appending an eleventh route
+    # without updating design §1's table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the ten designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -228,13 +268,15 @@ defmodule Letflow.Routers.EntitiesTest do
         {"GET", "/definitions", :EntitiesDefinitionsRead},
         {"POST", "/records/:entity_type", :EntitiesRecordsWrite},
         {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
-        {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite}
+        {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
+        {"POST", "/query", :EntitiesQuery}
       ]
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 9
+      assert length(actual) == 10
       assert Enum.sort(actual) == Enum.sort(expected)
+      assert {"POST", "/query", :EntitiesQuery} in actual
     end
 
     test "⛔ no GET route exists under /records -- record reads are POST /entities/query only" do
@@ -1077,5 +1119,896 @@ defmodule Letflow.Routers.EntitiesTest do
       assert second.status == 200
       assert body_of(second)["deleted"] == true
     end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # REQ-311 -- POST /entities/query.
+  #
+  # Fixture helpers below mirror test/letflow/entities/query_joins_test.exs's
+  # own (that file is the REQ-300 join suite these routes now front) -- real
+  # per-entity-type tables via the real REQ-297 column-promotion mechanism,
+  # real entity_field_restrictions/user_entity_grants rows. Nothing is mocked.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  defp query(ctx, body, opts \\ []),
+    do: request(:post, "/api/v1/entities/query", ctx, body, opts)
+
+  # The "widget" definition the query tests use. Deliberately NOT
+  # `seed_active_definition!/2` above (which REQ-310's own route tests share):
+  # this one marks both fields `queried: true`, which is what puts them on
+  # `Allowlist.load/2`'s output at all. Using the shared fixture here would
+  # make every filter in this block fail as {:field_not_allowed, _} and
+  # silently stop testing whatever it was written to test, while changing the
+  # shared fixture would perturb REQ-310's nine route tests.
+  defp seed_queryable_widget!(ctx) do
+    create_active_definition!(ctx, %{
+      name: "widget",
+      display_name: "Widget",
+      fields: [
+        %{name: "title", type: :string, queried: true},
+        %{name: "quantity", type: :integer, queried: true}
+      ]
+    })
+  end
+
+  defp create_active_definition!(ctx, definition) do
+    {:ok, entity_definition} =
+      Definitions.create_definition(
+        %{definition: definition, created_by: ctx.user_id},
+        ctx.schema_name
+      )
+
+    {:ok, activated} =
+      Definitions.activate_definition(
+        entity_definition.name,
+        ctx.user_id,
+        "req311 go-live",
+        ctx.schema_name
+      )
+
+    activated
+  end
+
+  # Promotes one attribute for `entity_type`, creating that entity type's own
+  # per-entity-type table on the first promotion -- the real REQ-297 path.
+  #
+  # ⛔ Registers its OWN on_exit to delete this tenant's `entity_column_promotions`
+  # rows. `Letflow.TenantFixture`'s shared teardown deletes the schema, the
+  # Registration and the Tenant, but NOT ColumnPromotion rows -- nothing had
+  # created any before REQ-311, since none of REQ-310's nine routes promotes a
+  # column. Without this, the tenant delete fails on
+  # `entity_column_promotions_tenant_id_fkey` and every join test in this file
+  # fails in teardown even when its body passed.
+  #
+  # ExUnit runs on_exit callbacks LIFO, and this one is registered strictly
+  # after `provisioned_tenant!/1`'s (a promotion can only happen once a tenant
+  # exists), so it runs BEFORE the tenant delete -- which is the order the FK
+  # requires. `test/letflow/entities/query_joins_test.exs` does the same
+  # cleanup inline in its own hand-rolled tenant fixture.
+  defp promote_and_create_table!(ctx, entity_type, attribute, pg_type, opts \\ []) do
+    references_entity = Keyword.get(opts, :references_entity)
+
+    on_exit(fn ->
+      Repo.delete_all(
+        from(cp in Letflow.TenantProvisioning.ColumnPromotion,
+          where: cp.tenant_id == ^ctx.tenant_id
+        )
+      )
+    end)
+
+    column_spec =
+      if references_entity do
+        %{pg_type: pg_type, nullable: true, references_entity: references_entity}
+      else
+        %{pg_type: pg_type, nullable: true}
+      end
+
+    {:ok, [row]} =
+      TenantProvisioning.register_column_promotion(
+        entity_type,
+        attribute,
+        column_spec,
+        [ctx.tenant_id]
+      )
+
+    {:ok, %{status: "ddl_applied"}} = TenantProvisioning.run_column_promotion(row.id)
+    :ok
+  end
+
+  defp insert_field_restriction!(ctx, entity_type, field_name) do
+    Repo.insert_all(
+      "entity_field_restrictions",
+      [
+        %{
+          id: Ecto.UUID.bingenerate(),
+          entity_type: entity_type,
+          field_name: field_name,
+          inserted_at: NaiveDateTime.utc_now(),
+          updated_at: NaiveDateTime.utc_now()
+        }
+      ],
+      prefix: ctx.schema_name
+    )
+  end
+
+  defp insert_user_grant!(ctx, user_id, entity_type, field_name) do
+    Repo.insert_all(
+      "user_entity_grants",
+      [
+        %{
+          id: Ecto.UUID.bingenerate(),
+          user_id: Ecto.UUID.dump!(user_id),
+          entity_type: entity_type,
+          field_name: field_name,
+          inserted_at: NaiveDateTime.utc_now()
+        }
+      ],
+      prefix: ctx.schema_name
+    )
+  end
+
+  # The redaction sentinel as it appears ON THE WIRE. `FieldGrants`' sentinel
+  # is the ATOM `:__field_redacted__` (deliberately an atom, so it cannot
+  # collide with any JSON-decoded value -- that module's own moduledoc);
+  # Jason encodes an atom as its string name, so a decoded response body
+  # carries `"__field_redacted__"`. Derived from `redacted_sentinel/0` rather
+  # than hardcoded, so renaming the sentinel cannot leave these tests
+  # asserting a stale literal that no longer means "redacted".
+  defp wire_sentinel, do: Atom.to_string(FieldGrants.redacted_sentinel())
+
+  # The design's own worked join example: "question" <- "answer_option", the
+  # far side carrying BOTH a restricted field and an unrestricted one, so a
+  # far-side redaction test can prove redaction happened AND that it was
+  # selective.
+  defp seed_join_fixture!(ctx) do
+    create_active_definition!(ctx, %{
+      name: "question",
+      display_name: "Question",
+      fields: [%{name: "stem", type: :string, queried: true}]
+    })
+
+    promote_and_create_table!(ctx, "question", "stem", "text")
+
+    create_active_definition!(ctx, %{
+      name: "answer_option",
+      display_name: "Answer Option",
+      fields: [
+        %{name: "text", type: :string, queried: true},
+        %{name: "secret_note", type: :string, queried: true},
+        %{name: "question_id", type: :string}
+      ],
+      foreign_keys: [
+        %{name: "question_fk", field: "question_id", references_entity: "question"}
+      ]
+    })
+
+    promote_and_create_table!(ctx, "answer_option", "question_id", "uuid",
+      references_entity: "question"
+    )
+
+    :ok
+  end
+
+  defp seed_query_record!(ctx, entity_type, field_values) do
+    {:ok, %{record: record}} =
+      Records.create_record(
+        %{
+          entity_type: entity_type,
+          field_values: field_values,
+          actor_id: ctx.user_id,
+          idempotency_key: Ecto.UUID.generate()
+        },
+        ctx.schema_name
+      )
+
+    record
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # ⛔ AC1/AC2/AC3 -- THE JOIN-BEARING REDACTION BRANCH.
+  #
+  # This is the block SECURITY-REVIEWER's verdict on design §11 exists for:
+  # "it would be easy to implement only the simpler branch and let it
+  # silently under-redact joined reads." A handler that called
+  # redact_page/2 (or nothing) on a joined result would return the far-side
+  # entity's restricted field IN CLEAR and still pass every non-join test in
+  # this file.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC1 -- a JOINED far-side entity's restricted field is redacted" do
+    test "⛔ far-side restricted field -> sentinel, AND an unrestricted far-side field on the SAME row keeps its real value" do
+      ctx = tenant_ctx("req311-join-redact")
+      seed_join_fixture!(ctx)
+
+      # The restriction is on the FAR side of the join ("answer_option"),
+      # NOT on the primary ("question"). The querying user holds no
+      # user_entity_grants row for it, so it is in their redaction set for
+      # that entity type -- reachable ONLY through redact_joined_page/2's
+      # "answer_option"-keyed restriction set.
+      insert_field_restriction!(ctx, "answer_option", "secret_note")
+
+      q = seed_query_record!(ctx, "question", %{"stem" => "2 + 2 = ?"})
+
+      seed_query_record!(ctx, "answer_option", %{
+        "text" => "4",
+        "secret_note" => "THE ANSWER IS FOUR",
+        "question_id" => q.record_id
+      })
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "question",
+          "filters" => [%{"field" => "stem", "op" => "eq", "value" => "2 + 2 = ?"}],
+          "join" => [%{"entity_type" => "answer_option", "fk" => "question_fk"}]
+        })
+
+      assert conn.status == 200
+      assert [item] = body_of(conn)["items"]
+
+      far_side = item["answer_option"]
+
+      # HALF 1 -- the restricted far-side field IS redacted.
+      assert far_side["field_values"]["secret_note"] == wire_sentinel()
+      refute far_side["field_values"]["secret_note"] == "THE ANSWER IS FOUR"
+
+      # HALF 2 -- an UNRESTRICTED far-side field on the SAME row keeps its
+      # real value. Without this, the test would pass just as well against a
+      # handler that redacted every field of everything.
+      assert far_side["field_values"]["text"] == "4"
+
+      # And the primary side, which has no restrictions at all, is untouched.
+      assert item["primary"]["field_values"]["stem"] == "2 + 2 = ?"
+    end
+
+    test "a far-side restricted field the user DOES hold a grant for is NOT redacted -- proving the grant, not the join, decides" do
+      ctx = tenant_ctx("req311-join-granted")
+      seed_join_fixture!(ctx)
+
+      insert_field_restriction!(ctx, "answer_option", "secret_note")
+      insert_user_grant!(ctx, ctx.user_id, "answer_option", "secret_note")
+
+      q = seed_query_record!(ctx, "question", %{"stem" => "granted?"})
+
+      seed_query_record!(ctx, "answer_option", %{
+        "text" => "yes",
+        "secret_note" => "VISIBLE TO THE GRANT HOLDER",
+        "question_id" => q.record_id
+      })
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "question",
+          "join" => [%{"entity_type" => "answer_option", "fk" => "question_fk"}]
+        })
+
+      assert conn.status == 200
+      assert [item] = body_of(conn)["items"]
+      assert item["answer_option"]["field_values"]["secret_note"] == "VISIBLE TO THE GRANT HOLDER"
+    end
+  end
+
+  describe "REQ-311 AC2 -- the two redaction branches are actually distinct" do
+    test "a join-bearing and a non-join request over the same entity type both succeed, and only the join-bearing one carries the joined key" do
+      ctx = tenant_ctx("req311-two-branches")
+      seed_join_fixture!(ctx)
+
+      insert_field_restriction!(ctx, "question", "stem")
+      insert_field_restriction!(ctx, "answer_option", "secret_note")
+
+      q = seed_query_record!(ctx, "question", %{"stem" => "shared question"})
+
+      seed_query_record!(ctx, "answer_option", %{
+        "text" => "an option",
+        "secret_note" => "hidden",
+        "question_id" => q.record_id
+      })
+
+      # Branch A -- no join: items are flat entity rows, redact_page/2's
+      # shape. A "primary"/"answer_option" key here would mean the joined
+      # shape leaked into the non-join path.
+      plain = query(ctx, %{"entity_type" => "question"})
+      assert plain.status == 200
+      assert [plain_item] = body_of(plain)["items"]
+      refute Map.has_key?(plain_item, "primary")
+      refute Map.has_key?(plain_item, "answer_option")
+      assert plain_item["field_values"]["stem"] == wire_sentinel()
+
+      # Branch B -- join-bearing: items ARE the joined shape. The presence of
+      # the "answer_option" key is what proves redact_joined_page/2 ran:
+      # redact_page/2 on this page would have crashed or passed the joined
+      # rows through unredacted, and a redact_page/2-shaped result carries no
+      # per-entity keys at all.
+      joined =
+        query(ctx, %{
+          "entity_type" => "question",
+          "join" => [%{"entity_type" => "answer_option", "fk" => "question_fk"}]
+        })
+
+      assert joined.status == 200
+      assert [joined_item] = body_of(joined)["items"]
+      assert Map.has_key?(joined_item, "primary")
+      assert Map.has_key?(joined_item, "answer_option")
+
+      # BOTH sides redacted, each by its OWN entity type's restriction set.
+      assert joined_item["primary"]["field_values"]["stem"] == wire_sentinel()
+      assert joined_item["answer_option"]["field_values"]["secret_note"] == wire_sentinel()
+      assert joined_item["answer_option"]["field_values"]["text"] == "an option"
+    end
+  end
+
+  describe "REQ-311 -- the NON-join branch redacts BOTH of its own item shapes" do
+    # Regression test for a pre-existing gap this route was the first caller
+    # to reach: FieldGrants.redact_page/2's private redact_item/2 used to
+    # match %Latest{} only, but Compiler.compile_plain/5 emits a plain
+    # Compiler.entity_row() MAP whenever the entity type has a promoted
+    # per-entity-type table -- so a non-join query against a PROMOTED entity
+    # type raised FunctionClauseError -> 500. REQ-311's scope fence forbade
+    # touching lib/letflow/entities/, so it shipped behind a router-local
+    # shape adapter and filed the real gap as ISS-0600. That fix has landed
+    # (redact_item/2 now has a %{field_values: _} when is_map(item) clause)
+    # and the adapter is gone; both shapes below are redacted by
+    # FieldGrants.redact_page/2 itself. ⛔ These two tests assert the wire
+    # OUTCOME, not which function produced it -- they were unchanged by the
+    # adapter's retirement and must stay that way.
+    test "a non-join query against a PROMOTED entity type (entity_row() map items, not %Latest{}) still redacts" do
+      ctx = tenant_ctx("req311-promoted-plain")
+      seed_join_fixture!(ctx)
+
+      insert_field_restriction!(ctx, "question", "stem")
+      seed_query_record!(ctx, "question", %{"stem" => "CLEARTEXT STEM"})
+
+      conn = query(ctx, %{"entity_type" => "question"})
+
+      assert conn.status == 200
+      assert [item] = body_of(conn)["items"]
+      assert item["field_values"]["stem"] == wire_sentinel()
+      refute item["field_values"]["stem"] == "CLEARTEXT STEM"
+    end
+
+    test "a non-join query against an UNPROMOTED entity type (%Latest{} items) still redacts" do
+      ctx = tenant_ctx("req311-unpromoted-plain")
+      seed_queryable_widget!(ctx)
+
+      insert_field_restriction!(ctx, "widget", "title")
+      seed_record!(ctx, "widget", %{"title" => "CLEARTEXT TITLE"})
+
+      conn = query(ctx, %{"entity_type" => "widget"})
+
+      assert conn.status == 200
+      assert [item] = body_of(conn)["items"]
+      assert item["field_values"]["title"] == wire_sentinel()
+    end
+
+    test "record_id is the SAME canonical UUID-string form on both shapes -- a promotion is not observable in a response body" do
+      promoted = tenant_ctx("req311-rid-promoted")
+      seed_join_fixture!(promoted)
+      seeded = seed_query_record!(promoted, "question", %{"stem" => "x"})
+
+      unpromoted = tenant_ctx("req311-rid-unpromoted")
+      seed_queryable_widget!(unpromoted)
+      seed_record!(unpromoted, "widget", %{"title" => "y"})
+
+      assert [p_item] = body_of(query(promoted, %{"entity_type" => "question"}))["items"]
+      assert [u_item] = body_of(query(unpromoted, %{"entity_type" => "widget"}))["items"]
+
+      # The promoted binding reads record_id back as a raw 16-byte binary;
+      # both must reach the wire as the canonical string form.
+      assert p_item["record_id"] == seeded.record_id
+      assert {:ok, _} = Ecto.UUID.cast(p_item["record_id"])
+      assert {:ok, _} = Ecto.UUID.cast(u_item["record_id"])
+    end
+  end
+
+  describe "REQ-311 AC3 -- the restriction_sets map excludes the `through` entity's type" do
+    test "a many-to-many query through a join entity returns rows keyed :primary + the joined type only, never the through type" do
+      ctx = tenant_ctx("req311-through")
+
+      create_active_definition!(ctx, %{
+        name: "topic",
+        display_name: "Topic",
+        fields: [%{name: "stem", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(ctx, "topic", "stem", "text")
+
+      create_active_definition!(ctx, %{
+        name: "label",
+        display_name: "Label",
+        fields: [%{name: "caption", type: :string, queried: true}]
+      })
+
+      promote_and_create_table!(ctx, "label", "caption", "text")
+
+      create_active_definition!(ctx, %{
+        name: "topic_labels",
+        display_name: "Topic Labels",
+        fields: [
+          %{name: "topic_id", type: :string},
+          %{name: "label_id", type: :string}
+        ],
+        foreign_keys: [
+          %{name: "fk_topic", field: "topic_id", references_entity: "topic"},
+          %{name: "fk_label", field: "label_id", references_entity: "label"}
+        ]
+      })
+
+      promote_and_create_table!(ctx, "topic_labels", "topic_id", "uuid",
+        references_entity: "topic"
+      )
+
+      promote_and_create_table!(ctx, "topic_labels", "label_id", "uuid",
+        references_entity: "label"
+      )
+
+      # ⛔ THE TRAP THIS TEST GUARDS: a restriction row on the THROUGH entity.
+      # If the handler wrongly keyed a restriction set by the through
+      # entity's type, this row would be loaded for a key no joined row
+      # carries -- harmless-looking. The real defect it flags is the
+      # converse: a through-keyed set means the implementer mis-derived the
+      # key list, and the same mis-derivation omits or misnames a key that IS
+      # exposed, which Map.fetch!/2 turns into a 500.
+      insert_field_restriction!(ctx, "topic_labels", "topic_id")
+
+      t = seed_query_record!(ctx, "topic", %{"stem" => "linked topic"})
+      l = seed_query_record!(ctx, "label", %{"caption" => "math"})
+
+      seed_query_record!(ctx, "topic_labels", %{
+        "topic_id" => t.record_id,
+        "label_id" => l.record_id
+      })
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "topic",
+          "filters" => [%{"field" => "stem", "op" => "eq", "value" => "linked topic"}],
+          "join" => [
+            %{"entity_type" => "label", "through" => "topic_labels", "fk" => "fk_label"}
+          ]
+        })
+
+      assert conn.status == 200
+      assert [item] = body_of(conn)["items"]
+
+      # The row's key set is EXACTLY :primary + the joined type. The through
+      # entity is absent -- its row is never exposed, so no restriction set
+      # is keyed for it either.
+      assert MapSet.new(Map.keys(item)) == MapSet.new(["primary", "label"])
+      refute Map.has_key?(item, "topic_labels")
+
+      assert item["primary"]["field_values"]["stem"] == "linked topic"
+      assert item["label"]["field_values"]["caption"] == "math"
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC4 -- the 400-vs-422 error-class split (design §4).
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC4 -- 400 for a malformed literal, 422 for a semantic rejection" do
+    setup do
+      ctx = tenant_ctx("req311-400-422")
+      seed_queryable_widget!(ctx)
+      %{ctx: ctx}
+    end
+
+    test "400: an unrecognised filter \"op\" string -- Types.parse_filter_op/1 rejects it BEFORE compile/2",
+         %{ctx: ctx} do
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "title", "op" => "SQUIGGLE", "value" => "x"}]
+        })
+
+      assert conn.status == 400
+      assert body_of(conn)["detail"] =~ "SQUIGGLE"
+    end
+
+    test "400: an unrecognised sort \"dir\" string -- Types.parse_sort_dir/1 rejects it BEFORE compile/2",
+         %{ctx: ctx} do
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "sort" => [%{"field" => "title", "dir" => "sideways"}]
+        })
+
+      assert conn.status == 400
+      assert body_of(conn)["detail"] =~ "sideways"
+    end
+
+    test "422: a filter naming a field absent from the allowlist -- well-formed, semantically rejected",
+         %{ctx: ctx} do
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "no_such_field", "op" => "eq", "value" => "x"}]
+        })
+
+      assert conn.status == 422
+      assert body_of(conn)["detail"] =~ "no_such_field"
+    end
+
+    test "422: an :in filter whose value is not a list", %{ctx: ctx} do
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "title", "op" => "in", "value" => "not-a-list"}]
+        })
+
+      assert conn.status == 422
+    end
+
+    # The pre-parsing is what makes these two DIFFERENT statuses. A handler
+    # that skipped it and let compile/2 reject the operator would answer 422
+    # to both -- asserted as one comparison so the distinction cannot be lost
+    # by editing either test above alone.
+    test "the two classes are genuinely different statuses for the same field", %{ctx: ctx} do
+      bad_literal =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "title", "op" => "SQUIGGLE", "value" => "x"}]
+        })
+
+      bad_semantics =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "nope", "op" => "eq", "value" => "x"}]
+        })
+
+      assert {bad_literal.status, bad_semantics.status} == {400, 422}
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC5 -- every caller-reachable compile_error() member maps to its
+  # design-§4 status.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC5 -- compile_error() members map to design §4's statuses" do
+    test ":entity_type_not_found -> 404" do
+      ctx = tenant_ctx("req311-ce-404")
+      conn = query(ctx, %{"entity_type" => "no-such-entity-type"})
+      assert conn.status == 404
+    end
+
+    test "{:field_not_allowed, _} -> 422" do
+      ctx = tenant_ctx("req311-ce-fna")
+      seed_queryable_widget!(ctx)
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "unknown", "op" => "eq", "value" => 1}]
+        })
+
+      assert conn.status == 422
+    end
+
+    test "{:value_arity_mismatch, _} -> 422 (an :eq clause with no value at all)" do
+      ctx = tenant_ctx("req311-ce-arity")
+      seed_queryable_widget!(ctx)
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "title", "op" => "eq"}]
+        })
+
+      assert conn.status == 422
+    end
+
+    test "{:invalid_in_value, _} -> 422" do
+      ctx = tenant_ctx("req311-ce-in")
+      seed_queryable_widget!(ctx)
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "title", "op" => "not_in", "value" => 7}]
+        })
+
+      assert conn.status == 422
+    end
+
+    test "{:operator_not_valid_for_type, _, _} -> 422 (a :contains on an integer field)" do
+      ctx = tenant_ctx("req311-ce-optype")
+
+      create_active_definition!(ctx, %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "quantity", type: :integer, queried: true}]
+      })
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "filters" => [%{"field" => "quantity", "op" => "contains", "value" => "3"}]
+        })
+
+      assert conn.status == 422
+    end
+
+    test "{:too_many_joins, _} -> 422 (five joins exceeds Compiler's @max_joins of four)" do
+      ctx = tenant_ctx("req311-ce-joins")
+      seed_queryable_widget!(ctx)
+
+      joins =
+        for n <- 1..5, do: %{"entity_type" => "other_#{n}", "fk" => "fk_#{n}"}
+
+      conn = query(ctx, %{"entity_type" => "widget", "join" => joins})
+
+      assert conn.status == 422
+      assert body_of(conn)["detail"] =~ "5"
+    end
+
+    test "{:duplicate_join_target, _} -> 422" do
+      ctx = tenant_ctx("req311-ce-dup")
+      seed_queryable_widget!(ctx)
+
+      conn =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "join" => [
+            %{"entity_type" => "answer_option", "fk" => "a"},
+            %{"entity_type" => "answer_option", "fk" => "b"}
+          ]
+        })
+
+      assert conn.status == 422
+      assert body_of(conn)["detail"] =~ "answer_option"
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC6 -- Cursor.paginate/5's own error union.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC6 -- Cursor.paginate/5's error union maps per design §4" do
+    setup do
+      ctx = tenant_ctx("req311-cursor")
+      seed_queryable_widget!(ctx)
+      seed_record!(ctx)
+      %{ctx: ctx}
+    end
+
+    test ":page_size_too_large -> 400", %{ctx: ctx} do
+      conn = query(ctx, %{"entity_type" => "widget", "page_size" => 100_000})
+      assert conn.status == 400
+      assert body_of(conn)["detail"] =~ "page_size"
+    end
+
+    test ":invalid_cursor -> 400", %{ctx: ctx} do
+      conn = query(ctx, %{"entity_type" => "widget", "cursor" => "not-a-real-cursor"})
+      assert conn.status == 400
+    end
+
+    test ":wrong_endpoint -> 400 (a well-formed cursor minted for a DIFFERENT endpoint)", %{
+      ctx: ctx
+    } do
+      # Structurally valid and unexpired -- it differs from this endpoint's
+      # own cursors ONLY in its prefix literal, which is exactly what
+      # Pagination.decode_cursor/4's prefix check exists to catch.
+      foreign_cursor = mint_cursor("DEF:", System.system_time(:microsecond), [])
+
+      conn = query(ctx, %{"entity_type" => "widget", "cursor" => foreign_cursor})
+
+      assert conn.status == 400
+      assert body_of(conn)["detail"] =~ "endpoint"
+    end
+
+    test ":expired -> the dedicated cursor-expired PROBLEM DOCUMENT, not merely a status", %{
+      ctx: ctx
+    } do
+      # This endpoint's own prefix, but minted a year ago -- so it passes the
+      # prefix check and fails the expiry check, isolating :expired from
+      # :wrong_endpoint and :invalid_cursor.
+      year_ago_us = System.system_time(:microsecond) - 365 * 24 * 60 * 60 * 1_000_000
+
+      expired_cursor = mint_cursor(Cursor.cursor_prefix(), year_ago_us, [0])
+
+      conn = query(ctx, %{"entity_type" => "widget", "cursor" => expired_cursor})
+
+      body = body_of(conn)
+      expected = Letflow.Api.Error.cursor_expired()
+
+      # Asserted on the problem document's own type/status members -- the
+      # dedicated Error.cursor_expired() path -- not just on conn.status,
+      # which a generic bad_request would also satisfy.
+      assert body["type"] == expected.type
+      assert body["status"] == expected.status
+      assert conn.status == expected.status
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC7 -- the success envelope, and real cursor paging.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC7 -- response envelope is exactly {items, next_cursor}" do
+    test "the decoded body's KEY SET is exactly [\"items\", \"next_cursor\"] -- no \"count\" key" do
+      ctx = tenant_ctx("req311-envelope")
+      seed_queryable_widget!(ctx)
+      seed_record!(ctx)
+
+      conn = query(ctx, %{"entity_type" => "widget"})
+
+      assert conn.status == 200
+      assert MapSet.new(Map.keys(body_of(conn))) == MapSet.new(["items", "next_cursor"])
+      refute Map.has_key?(body_of(conn), "count")
+    end
+
+    test "paging with the returned next_cursor walks two pages and the final page's next_cursor is null" do
+      ctx = tenant_ctx("req311-paging")
+      seed_queryable_widget!(ctx)
+
+      for n <- 1..3, do: seed_record!(ctx, "widget", %{"title" => "row-#{n}"})
+
+      page1 = query(ctx, %{"entity_type" => "widget", "page_size" => 2})
+      assert page1.status == 200
+      body1 = body_of(page1)
+      assert length(body1["items"]) == 2
+      assert is_binary(body1["next_cursor"])
+
+      page2 =
+        query(ctx, %{
+          "entity_type" => "widget",
+          "page_size" => 2,
+          "cursor" => body1["next_cursor"]
+        })
+
+      assert page2.status == 200
+      body2 = body_of(page2)
+      assert length(body2["items"]) == 1
+      assert body2["next_cursor"] == nil
+
+      # Every seeded row was seen exactly once across the two pages.
+      ids = Enum.map(body1["items"] ++ body2["items"], & &1["record_id"])
+      assert length(Enum.uniq(ids)) == 3
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC8 -- INV-1: nothing tenant- or identity-bearing comes from the body.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC8 -- INV-1: prefix and user_id are server-resolved only" do
+    test "tenant_id/schema/slug sent as BODY FIELDS change nothing -- the response is identical to the same request without them" do
+      ctx = tenant_ctx("req311-inv1-body")
+      seed_queryable_widget!(ctx)
+      seed_record!(ctx, "widget", %{"title" => "only row"})
+
+      trace = "req311-inv1-#{Ecto.UUID.generate()}"
+
+      clean = query(ctx, %{"entity_type" => "widget"}, trace_id: trace)
+
+      spoofed =
+        query(
+          ctx,
+          %{
+            "entity_type" => "widget",
+            "tenant_id" => Ecto.UUID.generate(),
+            "schema" => "some_other_tenant_schema",
+            "slug" => "some-other-tenant",
+            "prefix" => "public",
+            "user_id" => Ecto.UUID.generate()
+          },
+          trace_id: trace
+        )
+
+      assert clean.status == 200
+      assert spoofed.status == 200
+      assert spoofed.resp_body == clean.resp_body
+    end
+
+    test "the user_id used for redaction is the AUTHENTICATED caller's -- the SAME body from two users with different grants is redacted differently" do
+      ctx = tenant_ctx("req311-inv1-users")
+      seed_queryable_widget!(ctx)
+
+      insert_field_restriction!(ctx, "widget", "title")
+
+      # User 1 holds a grant for the restricted field; user 2 does not.
+      insert_user_grant!(ctx, ctx.user_id, "widget", "title")
+      other = second_user_ctx(ctx)
+
+      seed_record!(ctx, "widget", %{"title" => "CLEARTEXT TITLE"})
+
+      body = %{"entity_type" => "widget"}
+
+      granted = query(ctx, body)
+      ungranted = query(other, body)
+
+      assert granted.status == 200
+      assert ungranted.status == 200
+
+      assert [granted_item] = body_of(granted)["items"]
+      assert [ungranted_item] = body_of(ungranted)["items"]
+
+      assert granted_item["field_values"]["title"] == "CLEARTEXT TITLE"
+      assert ungranted_item["field_values"]["title"] == wire_sentinel()
+
+      # The one identical body producing two different bodies is the proof
+      # that user_id came from the credential, not the request.
+      refute granted.resp_body == ungranted.resp_body
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC9 -- INV-5: cross-tenant and nonexistent are the same bytes.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC9 -- INV-5: a cross-tenant entity type is byte-identical to a nonexistent one" do
+    test "an entity_type that exists only in ANOTHER tenant's schema produces the same bytes as one that exists nowhere" do
+      ctx = tenant_ctx("req311-inv5-a")
+      other_tenant = tenant_ctx("req311-inv5-b")
+
+      # "hidden_type" is a real, active entity type -- in the OTHER tenant's
+      # schema only. The caller below is scoped to their own schema, where it
+      # does not exist.
+      create_active_definition!(other_tenant, %{
+        name: "hidden_type",
+        display_name: "Hidden Type",
+        fields: [%{name: "stem", type: :string, queried: true}]
+      })
+
+      trace = "req311-inv5-#{Ecto.UUID.generate()}"
+
+      cross_tenant = query(ctx, %{"entity_type" => "hidden_type"}, trace_id: trace)
+      nonexistent = query(ctx, %{"entity_type" => "absolutely_no_such_type"}, trace_id: trace)
+
+      assert cross_tenant.status == 404
+
+      # ONE assertion comparing the whole documents -- not two separate
+      # "both are 404" assertions, which would pass even if the bodies
+      # differed and leaked existence.
+      assert {cross_tenant.status, cross_tenant.resp_body} ==
+               {nonexistent.status, nonexistent.resp_body}
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # AC10 -- authorization: the route is really gated by :EntitiesQuery.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  describe "REQ-311 AC10 -- the route is gated by a real, enforced :EntitiesQuery clause" do
+    test "endpoint_policy_key/2 resolves POST /entities/query to :EntitiesQuery" do
+      assert Letflow.Api.Authorization.endpoint_policy_key("POST", "/entities/query") ==
+               :EntitiesQuery
+    end
+
+    test "a caller whose role does not hold :EntitiesQuery is refused, and one that holds it is not" do
+      seeded = tenant_ctx("req311-authz")
+      seed_queryable_widget!(seeded)
+
+      # :AGENT_RUNNER holds NO permission at all (Authorization's own
+      # role_allows?(:AGENT_RUNNER, _) -> false); :TASK_WORKER is the
+      # narrowest role that DOES hold :EntitiesQuery. Both are members of
+      # Authorization's five closed roles, so this is driven by the real
+      # matrix, not by a role string invented here.
+      denied = %{seeded | plaintext: mint_token!(seeded, ["AGENT_RUNNER"])}
+      allowed = %{seeded | plaintext: mint_token!(seeded, ["TASK_WORKER"])}
+
+      assert query(denied, %{"entity_type" => "widget"}).status == 403
+      assert query(allowed, %{"entity_type" => "widget"}).status == 200
+    end
+  end
+
+  defp mint_token!(ctx, roles) do
+    {:ok, %{plaintext: plaintext}} =
+      Identity.create_token(ctx.user_id, %{roles: roles, expires_at: nil},
+        prefix: ctx.schema_name
+      )
+
+    plaintext
+  end
+
+  # Mints a cursor in exactly the wire format `Letflow.Api.Pagination`'s own
+  # decoder expects -- `"<prefix><mint_time_us>:<resume_key_json>"`,
+  # base64url-encoded -- so a test can isolate the prefix check and the
+  # expiry check from each other and from a merely-unparseable string.
+  # Built from `Pagination.encode_cursor/1` and `Cursor.cursor_prefix/0`
+  # rather than a hardcoded literal.
+  defp mint_cursor(prefix, mint_time_us, resume_values) do
+    Letflow.Api.Pagination.encode_cursor(
+      "#{prefix}#{mint_time_us}:#{Jason.encode!(resume_values)}"
+    )
   end
 end

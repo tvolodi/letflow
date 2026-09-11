@@ -537,3 +537,31 @@ history:
       REQ-231; REQ-311 is its first caller. Worked around router-side
       with a shape adapter both gates confirmed security-equivalent and
       fail-loud.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T12:24:53Z"
+    note: >
+      ISS-0601 (GH#1248, queue task 601) -- test/letflow/sandbox_pool_test.exs's
+      RT-6 (the same death-path-c test ISS-0590 fixed earlier the same
+      day) flaked once under full-suite load, even though ISS-0590's own
+      fix genuinely ran, losing the race under heavier Postgres/DDL
+      contention than whatever run originally validated it. Filed by
+      ORCH per SECURITY-REVIEWER's recommendation during ISS-0600's own
+      review. Pipeline: CODE-DESIGNER (PASS first try; traced the
+      crash/cleanup path end-to-end confirming no lib/ defect, chose
+      raising the timeout over a new completion signal as the smallest
+      fix for a MINOR flake, and surfaced a load-bearing secondary
+      finding: doubling wait_until_schema_dropped/2's deadline would push
+      RT-6's combined internal wait past ExUnit's own 60s default
+      per-test timeout, requiring @tag timeout: :infinity on both
+      affected tests) -> CODE-DESIGN-VALIDATOR PASS first try
+      (independently re-derived every load-bearing claim from source,
+      including the ExUnit-timeout arithmetic) -> ELIXIR-DEV (honestly
+      reported the flake did not reproduce in this run's full suite,
+      correctly not oversold as proof) -> REVIEWER PASS (independently
+      re-verified the crash/cleanup trace, confirmed no decision-record
+      conflict with ISS-0590, independently re-ran the full suite).
+      SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR correctly
+      skipped (test-file-only, no tenant-data path, no new coverage --
+      only timing-parameter adjustments to existing tests).

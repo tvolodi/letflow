@@ -20138,3 +20138,626 @@ requirements:
       - "CODE-DESIGN-VALIDATOR confirms the artefact contains no implementation code and is unambiguous enough for an ELIXIR-DEV requirement to build from without re-deriving the document format or route shape"
       - "git diff --name-only shows only the new file under lib/letflow/design/ (plus a decision record under docs/migration/decisions/ if CODE-DESIGNER judges one warranted) -- no file under lib/letflow/routers/, lib/letflow/entities/, lib/letflow/definitions/, lib/letflow/api/, priv/repo/migrations/, or test/ touched; quoted with the command"
     depends_on: [REQ-311]
+
+  # ── S10, fifth batch (drafted 2026-09-11) ─────────────────────────────────
+  # REQ-315..REQ-320 are the implementation of S10 gaps 2, 3 and 12 against the
+  # three now-PASSed designs REQ-312/313/314 landed
+  # (lib/letflow/design/req312-query-aggregation.md,
+  # req313-entity-record-attachments.md, req314-entity-record-bulk-export-import.md).
+  # Each design document is THE SPEC for its gap -- settled decisions, not starting
+  # points to re-derive. This mirrors exactly how REQ-309/310/311 implemented
+  # REQ-308's design for gap 1.
+  #
+  # WHY SIX REQUIREMENTS AND NOT THREE. Gap 2 (aggregation) is a single new
+  # permission atom, one new compiler function and one new route -- comparable in
+  # size to REQ-311 alone (one complex, multi-module route), so it stays one
+  # requirement. Gaps 3 and 12 are each larger than gap 1's REQ-309 (a permission-
+  # atoms-only requirement) plus one route requirement combined:
+  #   Gap 3 (REQ-313's design) calls for a NEW TABLE with a composite deferred FK,
+  #   a new context module, AND two new permission atoms gating four new routes --
+  #   REQ-316 is the migration/schema/context-module precondition (no atoms, no
+  #   routes, matching REQ-308's own "build the module the route depends on first"
+  #   shape), REQ-317 is the atoms-plus-routes requirement that depends on it,
+  #   matching REQ-309-then-REQ-310's compile-time-precondition seam exactly (the
+  #   authz_get/authz_post macros need each atom's endpoint_policy_key/2 clause to
+  #   exist before a route can declare it).
+  #   Gap 12 (REQ-314's design) introduces THREE new permission atoms (one of them,
+  #   :EntitiesRecordsExportUnredacted, deliberately not tied to any route-level
+  #   endpoint_policy_key clause -- it is checked in-handler) gating TWO
+  #   structurally independent routes, each carrying its own non-trivial security
+  #   mechanism (export's two-tier redaction, import's batch/idempotency/413-cap
+  #   semantics). REQ-318 is the atoms-only precondition; REQ-319 (export) and
+  #   REQ-320 (import) both depend on it and are independent of each other --
+  #   folding either into REQ-318 would repeat REQ-311's own "the route this
+  #   composes with several modules doesn't fit alongside the atoms that gate it"
+  #   reasoning, applied twice.
+  - id: REQ-315
+    title: Implement the aggregation/reporting query route for entity records (S10 gap 2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. An aggregation surface over entity records serves any tenant's
+      any entity type. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind. "entity type", "field", "filter", "join",
+      "aggregate" and "group_by" are this subsystem's own generic nouns (already
+      used, or directly analogous to nouns already used, by the modules this
+      requirement extends), not any one vertical's objects.
+
+      THE SPEC IS lib/letflow/design/req312-query-aggregation.md, status PASS
+      (its final "SECURITY-REVIEWER Verdict — re-check of the §4/§6 rework"
+      section is the governing, superseding verdict -- read it, not only the
+      first, FAILed pass above it). Read the whole document before writing
+      anything. §1 is the aggregation vocabulary, §2 the route shape and the
+      compile_aggregate/2 split from compile/2, §3 the permission atom, §4 the
+      final (rewored) INV-2 mechanism, §5 the response shape, §6 the explicit
+      out-of-scope list. These are settled decisions -- implement them, do not
+      re-derive them. If implementing reveals the design is wrong about a
+      verifiable fact, report it per docs/agents/protocols/ISSUE_QUEUE.md rather
+      than silently diverging.
+
+      WHAT TO BUILD:
+
+      1. ONE NEW PERMISSION ATOM, `:EntitiesAggregate`, in
+      lib/letflow/api/authorization.ex -- the @type permission union, the
+      @permissions list (with its @doc count corrected), the @type
+      endpoint_policy_key union, a new `endpoint_policy_key("POST",
+      "/entities/query/aggregate")` clause returning `:EntitiesAggregate`
+      (declared above the catch-all), a `required_permission(:EntitiesAggregate)`
+      identity clause, and role_allows?/2 matrix arms per design §3's table:
+      PROCESS_DESIGNER, PROCESS_OPERATOR and TASK_WORKER all gain
+      :EntitiesAggregate (mirroring which roles already hold :EntitiesQuery);
+      PLATFORM_ADMIN's and AGENT_RUNNER's catch-alls are not edited. No existing
+      role loses a permission and no existing permission changes hands -- prove
+      this with a regression test against an explicit expected grid, the same
+      shape REQ-309's own regression test used.
+
+      2. `compile_aggregate/2` in lib/letflow/entities/query/compiler.ex, per §2 --
+      a NEW function alongside compile/2, not a fourth branch of it. Add the
+      `aggregate_fn`, `aggregate_target`, `group_by_clause`, `aggregate_request`
+      and `aggregate_compile_error` types exactly as §1/§2 specify. Resolve every
+      group_by/aggregate target field via `Allowlist.resolve_field/2` (the same
+      call build_one_filter_dynamic/3 already makes) -- do not invent a second
+      allowlist or a second field-resolution primitive. Reuse
+      check_join_shape/1, Allowlist.load/2, resolve_binding_source/2,
+      resolve_joins/4 and build_all_filter_dynamics/3 unmodified. Build the
+      group_by/select clauses using the SAME two existing field-reference
+      idioms compile/2's own filter/sort building already uses --
+      `fragment("?", literal(^field_name))` for a promoted/JSON column and
+      `field(r, ^column_atom)` (atom sourced only from typed_columns/0's closed
+      table) for a fixed-7 typed column. No new fragment-building primitive, no
+      String.to_atom/1 on caller input (INV-7).
+
+      3. `POST /entities/query/aggregate` appended to Letflow.Routers.Entities
+      (the module REQ-310/311 created), declared
+      `authz_post "/query/aggregate", :EntitiesAggregate`. ⛔ THE §4 INV-2
+      MECHANISM IS THE HARDEST PART OF THIS REQUIREMENT AND IS NOT OPTIONAL:
+      before compile_aggregate/2 is ever called, the handler calls
+      `FieldGrants.load_restrictions(user_id, entity_type, prefix)` once and
+      checks EVERY field named anywhere in the request -- every
+      aggregate_target().field, every group_by_clause().field, AND every
+      filter_clause().field in the request's own filters list -- against the
+      returned restriction_set(). If any is a member, the WHOLE request is
+      rejected 403 (`{:error, {:aggregate_field_restricted, field_name}}`)
+      before any query is compiled. There is deliberately NO exemption for
+      filters fields on this route (unlike the plain POST /entities/query
+      route, which this requirement does not touch) -- design §4's rework
+      explains why: pairing a filter on a restricted field with `count`/
+      `group_by`, or with `sum`/`avg`/`min`/`max`, turns a weak per-request
+      oracle into an exact per-group count or a bisectable numeric channel.
+      `count` with no `field` is exempt only from the aggregate-target half of
+      the check (it names no field there); its own filters/group_by fields are
+      still checked identically to any other request.
+
+      4. RESPONSE SHAPE per §5: `{"results": [...]}`, each entry
+      `%{group?: %{...}, values: %{...}}` -- not a Cursor.paginate/5-shaped
+      page, no next_cursor. `:sum`/`:avg` over zero matching rows yield `nil`
+      (SQL NULL surfaced, never a fabricated 0); `:count` over zero matching
+      rows yields `0`. Reuse Letflow.Api.Response unchanged (ok/2 for success,
+      bad_request/2 for a malformed operator/dir, unprocessable/2 for a
+      compile-time semantic error, not_found/1 for entity_type_not_found, a
+      403 sender for the field-restriction rejection) -- no second response
+      envelope module.
+
+      5. ERROR MAPPING per §2's aggregate_compile_error union and §4's INV-5
+      section: every compile_error() member maps exactly as POST
+      /entities/query already maps it (REQ-311's own mapping, unchanged);
+      the three new members (`{:aggregate_field_required, fn}`,
+      `{:aggregate_field_not_allowed, fn}`, `{:aggregate_type_not_valid, fn,
+      type}`) map to 422; `:entity_type_not_found` maps to 404, identical shape
+      to a cross-tenant entity_type (no new pre-check added).
+
+      6. MODULEDOC. Add the new route as one more row to
+      Letflow.Routers.Entities' existing route table, same column form as the
+      other rows.
+
+      SCOPE FENCE: this requirement edits lib/letflow/api/authorization.ex
+      (one atom, its four edit sites), lib/letflow/entities/query/compiler.ex
+      (compile_aggregate/2 and its new types only -- compile/2 itself and its
+      two existing private helpers are byte-for-byte unchanged), and
+      lib/letflow/routers/entities.ex (one new route and its handler), plus
+      tests. It does not touch lib/letflow/entities/query/allowlist.ex,
+      cursor.ex or field_grants.ex, does not create a migration, and adds no
+      dashboard, cache or persisted reporting layer (design §6).
+    acceptance_criteria:
+      - "Letflow.Api.Authorization.permissions/0 includes :EntitiesAggregate, its @doc count matches length(permissions()), and a test asserts endpoint_policy_key(\"POST\", \"/entities/query/aggregate\") returns :EntitiesAggregate and never :Unknown"
+      - "a regression test proves no EXISTING role/permission pair changed -- asserted against an explicit expected grid written in the test, matching REQ-309's own regression-test shape"
+      - "a test asserts each of :count/:sum/:avg/:min/:max produces the correct aggregate value against seeded records, including :count over zero matching rows returning 0 and :sum/:avg over zero matching rows returning nil (not 0) -- real output quoted"
+      - "a test asserts a group_by request returns one result entry per distinct grouping-key combination, each carrying a group map keyed by the group_by field name"
+      - "⛔ THE FILTERS-ON-A-RESTRICTED-FIELD CHECK IS PROVEN FOR BOTH VARIANTS NAMED IN THE DESIGN'S FINAL SECURITY-REVIEWER VERDICT: a test issues a POST /entities/query/aggregate with a filters entry naming a field the caller has no user_entity_grants row for, aggregates: [{fn: :count}], and a group_by clause on an unrestricted field, and asserts 403 (not a redacted or partial 200); a second test repeats this with aggregates: [{fn: :sum, field: <some unrestricted numeric field>}] and asserts 403 identically -- both real outputs quoted, proving the check is not exempted for either aggregate function"
+      - "a test asserts an aggregate_target or group_by field itself named as restricted also produces 403, distinctly from the filters case above (i.e. at least three independent 403 tests: restricted aggregate target, restricted group_by target, restricted filter field)"
+      - "a test asserts a sum/avg over the WRONG field type (e.g. :sum over a :string field) returns 422 with {:aggregate_type_not_valid, ...}, and a test asserts :sum/:avg/:min/:max naming no field returns 422 with {:aggregate_field_required, ...}, and :count naming a field returns 422 with {:aggregate_field_not_allowed, ...} -- all three real outputs quoted"
+      - "INV-1: a test sends tenant_id/schema/slug as body fields and asserts the response is unchanged from the same request without them; `grep -n 'Repo\\.' lib/letflow/routers/entities.ex` output is unchanged in count from before this requirement (no new direct Repo call in the router), quoted with the command"
+      - "INV-5: a POST /entities/query/aggregate naming an entity_type that exists only in a different tenant's schema returns a response byte-identical to one naming an entity_type that exists nowhere -- both compared in one assertion"
+      - "INV-7: `grep -n 'String.to_atom' lib/letflow/entities/query/compiler.ex` returns zero hits touching caller-supplied field names, quoted with the command; a test confirms group_by/aggregate target fields absent from the allowlist return 422 with {:field_not_allowed, _}"
+      - "`grep -n 'def compile_aggregate' lib/letflow/entities/query/compiler.ex` confirms the function exists alongside, not inside, compile/2, and `git diff` on that file shows zero changed lines inside the existing compile/2, compile_plain/6 or compile_joined/6 function bodies -- quoted with the commands"
+      - "the module's moduledoc route table carries the new row for POST /entities/query/aggregate in the same column form as the other rows"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2 (naming the filters-on-restricted-field check explicitly and confirming it covers both the count/group_by and sum/avg/min/max variants), INV-5 and INV-7 by name, having read the handler and compiler function themselves rather than this requirement's text"
+      - "git diff --name-only shows only lib/letflow/api/authorization.ex, lib/letflow/entities/query/compiler.ex, lib/letflow/routers/entities.ex and file(s) under test/ -- no change to allowlist.ex, cursor.ex, field_grants.ex, lib/letflow/router.ex, lib/letflow/plugs/, or priv/repo/migrations/; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-312]
+
+  - id: REQ-316
+    title: Create the entity_record_attachments table and Letflow.Repository.EntityAttachments context module (S10 gap 3, part 1)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Attachments scoped to an entity record serve any tenant's any
+      entity type. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind.
+
+      THE SPEC IS lib/letflow/design/req313-entity-record-attachments.md,
+      status PASS. Read the whole document before writing anything. §1 is the
+      schema and migration, §2 is the context module, §6 is the content-type/
+      size trust inheritance, §10 is the recorded SECURITY-REVIEWER verdict --
+      including its one non-blocking note (quoted below) that this requirement
+      must act on even though the verdict is already PASS.
+
+      SCOPE: the migration, the Ecto schema module and the context module only
+      -- NO permission atoms, NO route, NO router change. REQ-317 depends on
+      this requirement and adds those. This split mirrors REQ-308's own
+      precondition-module-first shape: a route cannot sensibly be built before
+      the module it delegates to exists.
+
+      WHAT TO BUILD:
+
+      1. A migration creating `entity_record_attachments`, per §1's exact
+      column/index/FK list: `id` (binary_id, primary key), `tenant_id`
+      (binary_id, not null), `entity_type` (string, not null), `record_id`
+      (binary_id, not null), `content_hash` (references
+      repository_artifacts.content_hash, type: :binary, on_delete: :restrict,
+      not null), `file_name` (string, size 255, not null), `content_type`
+      (string, not null), `byte_size` (bigint, not null), `uploaded_by`
+      (binary_id, not null), `description` (text, nullable), `scan_status`
+      (string, not null, default "pending"), and `timestamps(updated_at:
+      false, inserted_at: :created_at, type: :utc_datetime_usec)`. All at
+      `prefix: schema` (per-tenant), matching instance_attachments' own
+      placement. Add the composite index `[:entity_type, :record_id, desc:
+      :created_at]` and an index on `[:content_hash]`. Add the composite FK
+      via a literal `execute/1` statement -- `ALTER TABLE
+      <schema>.entity_record_attachments ADD CONSTRAINT
+      entity_record_attachments_record_fkey FOREIGN KEY (entity_type,
+      record_id) REFERENCES <schema>.entity_record_latest (entity_type,
+      record_id) DEFERRABLE INITIALLY DEFERRED` -- §1 traces in full why
+      DEFERRABLE INITIALLY DEFERRED is load-bearing (the promotion backfill
+      path's delete-then-reinsert of entity_record_latest inside one
+      transaction), not stylistic; do not simplify it to a plain FK.
+
+      2. An Ecto schema module for `entity_record_attachments`
+      (`Letflow.Repository.EntityAttachment`, or the module name §2 implies --
+      name it consistently with `Letflow.Repository.Attachment`'s own naming
+      if that module exists, verify by reading lib/letflow/repository/).
+
+      3. `Letflow.Repository.EntityAttachments`, a new context module, sibling
+      to `Letflow.Repository.Attachments`, with `upload/2`, `list/2`, `get/2`,
+      `get_content/2` and `delete/2` per §2's exact @specs -- the SAME
+      behavior as `Letflow.Repository.Attachments`' own four (plus
+      get_content/2) functions with ONE substitution throughout: `instance_id`
+      becomes `entity_type` + `record_id`. `upload/2` reuses the shared
+      `@max_upload_bytes` gate, `Letflow.Repository.AttachmentScanner` (the
+      SAME config key, not a second one), and `Repository.upsert_content/6`
+      against the SAME `repository_artifacts` table (shared dedup with
+      instance attachments, per §2 -- do not create a second content store).
+      `list/2` is cursor-paginated per REQ-067's contract, ordered `(created_at
+      desc, id desc)`, with NO existence check against entity_record_latest
+      (an empty page for a nonexistent (entity_type, record_id) pair is
+      correct, per §5's INV-5 reasoning -- REQ-317 owns the route that exposes
+      this, but the context module's own behavior is specified and tested
+      here). `get/2`/`get_content/2`/`delete/2` cast the id first
+      (`Ecto.UUID.cast/1`, `{:error, :invalid_id}` on failure, no DB
+      round-trip) then do a prefix-scoped `Repo.get/3`.
+
+      4. ⛔ SECURITY-REVIEWER'S NON-BLOCKING NOTE, ACTED ON HERE: §10's INV-1
+      section flags that §5's own INV-1 prose never explicitly names how
+      `tenant_id` is derived at write time, even though §1 introduces that
+      column. `upload/2`'s implementation MUST state
+      `tenant_id: TenantProvisioning.tenant_id_for_schema_name!(prefix)` (or
+      the equivalent real call) explicitly in the insert changeset/attrs --
+      never accepted from caller-supplied attrs, matching
+      Letflow.Repository.Attachments' own documented mechanism for its own
+      `tenant_id` column.
+
+      5. A TEST proving the deferred composite FK actually rejects an
+      attachment against a genuinely nonexistent (entity_type, record_id) pair
+      -- upload/2 against a pair with no entity_record_latest row returns
+      `{:error, %Ecto.Changeset{}}` via a `foreign_key_constraint(:record_id,
+      ...)` clause, not a raised, unhandled Postgres error.
+
+      SCOPE FENCE: this requirement creates one migration under
+      priv/repo/migrations/, one new schema module and
+      lib/letflow/repository/entity_attachments.ex, plus tests. It does not
+      touch lib/letflow/api/authorization.ex, lib/letflow/routers/, or
+      lib/letflow/router.ex, and mounts no route.
+    acceptance_criteria:
+      - "the migration runs cleanly against a real test database (mix ecto.migrate, or the project's equivalent test-db setup command) and creates entity_record_attachments with every column, both indexes, and the composite deferred FK exactly as §1 specifies -- real command and output quoted"
+      - "a test proves the FK is DEFERRABLE INITIALLY DEFERRED, not a plain FK: within one Repo.transaction/1, deleting then reinserting entity_record_latest rows for an entity_type that has an existing attachment does NOT raise mid-transaction (mirroring the promotion-backfill trace in §1), while a genuinely nonexistent (entity_type, record_id) pair on upload/2 still produces {:error, %Ecto.Changeset{}} -- both real outputs quoted"
+      - "a test for each of upload/2's documented outcomes (:file_too_large, :infected, :scan_unavailable, changeset FK violation, success) against a real or faked AttachmentScanner, matching Letflow.Repository.Attachments' own existing test shape for the same outcomes"
+      - "a test for list/2's cursor pagination (at least two pages walked, next_cursor null on the final page) and a test confirming list/2 against a nonexistent (entity_type, record_id) pair returns an EMPTY page, not an error"
+      - "a test for get/2, get_content/2 and delete/2 each asserting {:error, :invalid_id} for a malformed id (no DB round-trip proven by a mock/telemetry assertion or equivalent) and {:error, :not_found} for a well-formed but absent id"
+      - "a test confirms repository_artifacts dedup is shared: uploading byte-identical content once as an instance attachment and once as an entity-record attachment results in exactly one repository_artifacts row for that content_hash"
+      - "the implementation states tenant_id's derivation explicitly via TenantProvisioning.tenant_id_for_schema_name!/1 (or equivalent) in upload/2's insert path -- verified by grep of the diff, quoted, confirming the call site exists and confirming no upload_attrs() field named tenant_id is accepted from caller input"
+      - "mix test passes for the new test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "git diff --name-only shows only the new migration file, the new schema module, lib/letflow/repository/entity_attachments.ex and file(s) under test/ -- no file under lib/letflow/routers/, lib/letflow/api/, or lib/letflow/router.ex touched; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-313]
+
+  - id: REQ-317
+    title: Add the entity-attachment permission atoms and the four record-attachment routes to Letflow.Routers.Entities (S10 gap 3, part 2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind.
+
+      THE SPEC IS lib/letflow/design/req313-entity-record-attachments.md §3
+      (route table), §4 (permission vocabulary, including §7 OQ-2's concrete
+      role-matrix proposal), and §5 (security posture). Read them in full.
+      REQ-316 must be done first -- this requirement delegates to
+      `Letflow.Repository.EntityAttachments`, which REQ-316 creates.
+
+      WHAT TO BUILD:
+
+      1. TWO NEW PERMISSION ATOMS in lib/letflow/api/authorization.ex --
+      `:EntitiesAttachmentsManage` and `:EntitiesAttachmentsRead` -- added to
+      the @type permission union, the @permissions list (@doc count
+      corrected), the @type endpoint_policy_key union, and four new
+      endpoint_policy_key/2 clauses (declared above the catch-all):
+      `POST /entities/records/:entity_type/:record_id/attachments` ->
+      :EntitiesAttachmentsManage; `GET
+      /entities/records/:entity_type/:record_id/attachments` ->
+      :EntitiesAttachmentsRead; `GET
+      /entities/records/:entity_type/:record_id/attachments/:attachment_id` ->
+      :EntitiesAttachmentsRead; `DELETE
+      /entities/records/:entity_type/:record_id/attachments/:attachment_id` ->
+      :EntitiesAttachmentsManage. Plus required_permission/1 identity clauses
+      for both new atoms.
+
+      2. ROLE-MATRIX ARMS per §7 OQ-2's concrete table: PROCESS_DESIGNER gains
+      :EntitiesAttachmentsRead only; PROCESS_OPERATOR gains both
+      :EntitiesAttachmentsManage and :EntitiesAttachmentsRead; TASK_WORKER
+      gains :EntitiesAttachmentsRead only. PLATFORM_ADMIN's and AGENT_RUNNER's
+      catch-alls are not edited. A regression test must prove no existing
+      role/permission pair changed.
+
+      3. FOUR NEW ROUTES appended to Letflow.Routers.Entities (the module
+      REQ-310/311 created; REQ-315 may already have appended the aggregate
+      route -- append after it, do not reorder existing routes), per §3's
+      table: `create_record_attachment` (201/404/422), `list_record_attachments`
+      (200/400/404), `get_record_attachment_content` (200 raw bytes/404/500),
+      `delete_record_attachment` (204/404) -- delegating to
+      `Letflow.Repository.EntityAttachments.upload/2`, `.list/2`,
+      `.get_content/2` and `.delete/2` respectively (REQ-316). §3 confirms
+      route-ordering relative to the existing `/records/:entity_type/:record_id`
+      routes is not load-bearing here (different path lengths), but declare
+      these after the existing three record routes for readability, matching
+      the design's own stated convention.
+
+      4. `uploaded_by` is sourced from `conn.assigns.auth_context.user_id`,
+      never a body field. `entity_type`/`record_id` come from the path.
+      `prefix` comes only from `conn.assigns.scoped_opts`. `get_content/2`'s
+      response sets `Content-Type` from the stored `content_type` field
+      (caller-declared, untrusted per §6/INV-a -- do not add MIME-sniffing).
+
+      5. §5 INV-2: NO FieldGrants-style redaction on this surface --
+      attachment metadata/content is a fixed, code-defined column set, not a
+      tenant-authored field_values document. Gating is purely at the route-
+      permission level, matching Letflow.Repository.Attachments' own REQ-212
+      precedent exactly.
+
+      6. MODULEDOC. Add all four routes as new rows to Letflow.Routers.Entities'
+      existing route table.
+
+      SCOPE FENCE: this requirement edits lib/letflow/api/authorization.ex
+      (two atoms, their edit sites) and lib/letflow/routers/entities.ex (four
+      new routes and their handlers), plus tests. It does not touch
+      lib/letflow/repository/, does not create a migration, and does not
+      modify Letflow.Repository.Attachments or lib/letflow/routers/instances.ex.
+    acceptance_criteria:
+      - "Letflow.Api.Authorization.permissions/0 includes :EntitiesAttachmentsManage and :EntitiesAttachmentsRead, its @doc count matches length(permissions()), and a test asserts endpoint_policy_key/2 returns the correct atom for each of the four new (method, path) pairs, never :Unknown"
+      - "a test asserts the exact role/permission grid for the two new permissions across all five roles matches §7 OQ-2's table: PLATFORM_ADMIN true for both; PROCESS_DESIGNER true for Read, false for Manage; PROCESS_OPERATOR true for both; TASK_WORKER true for Read, false for Manage; AGENT_RUNNER false for both"
+      - "a regression test proves no EXISTING role/permission pair changed, matching REQ-309's own regression-test shape"
+      - "every one of the four routes returns its designed success status against a real request through the full Letflow.Plugs.ApiPipeline stack: 201 for create, 200 for list and get-content (with the correct Content-Type header taken from the stored value), 204 for delete -- real output quoted"
+      - "every error branch in design §3's route table and §7 OQ-1's FK statement for create_record_attachment/2 is reachable and returns the designed status: a test asserts POSTing an attachment against an (entity_type, record_id) pair that never existed in entity_record_latest returns 404 (the FK-constraint-violation branch of upload/2's Ecto.Changeset.t() error, per §7 OQ-1's closed sub-question -- not the cross-tenant list-vs-get distinction, which INV-5/§5 already covers elsewhere in this requirement's AC), and a separate test asserts a validation-or-content-scan failure on create (at minimum one of upload/2's :file_too_large, {:infected, verdict}, or :scan_unavailable branches, per design §2/§6) returns 422 -- both real outputs quoted"
+      - "a request to each of the four routes by a caller holding NONE of the required permission returns 403, and by a caller holding it returns non-403 -- at least one 403 case per distinct permission atom"
+      - "INV-5: get/get-content/delete on an attachment id belonging to another tenant's schema returns byte-identical response body and status to one for an id that exists nowhere; list against a nonexistent or cross-tenant (entity_type, record_id) pair returns an EMPTY 200 page, not 404 -- both compared in one assertion each"
+      - "INV-1: a test sends tenant_id/schema/slug as body fields and query-string parameters on the create and list routes and asserts the response is identical to the same request without them; `grep -n 'Repo\\.' lib/letflow/routers/entities.ex` shows no new direct Repo call added by this requirement (only calls into Letflow.Repository.EntityAttachments), quoted with the command"
+      - "`grep -n 'FieldGrants' lib/letflow/routers/entities.ex` shows no new FieldGrants call added by the four new handlers, quoted with the command, confirming §5's route-permission-only INV-2 posture"
+      - "the module's moduledoc route table carries the four new rows in the same column form as the other rows"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2, INV-5 and INV-7 by name, having read lib/letflow/routers/entities.ex's four new handlers themselves rather than this requirement's text"
+      - "git diff --name-only shows only lib/letflow/api/authorization.ex, lib/letflow/routers/entities.ex and file(s) under test/ -- no file under lib/letflow/repository/, priv/repo/migrations/, lib/letflow/router.ex, or lib/letflow/plugs/ touched; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-316]
+
+  - id: REQ-318
+    title: Add the entity-record export/import permission atoms to Letflow.Api.Authorization (S10 gap 12, part 1)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind.
+
+      THE SPEC IS lib/letflow/design/req314-entity-record-bulk-export-import.md
+      §5, status PASS (its final "SECURITY-REVIEWER Final Verdict (re-check
+      after §5/§6 rework)" section is the governing verdict). Read the whole
+      document before writing anything; this requirement implements §5's
+      permission vocabulary only -- REQ-319 (export) and REQ-320 (import) each
+      depend on this requirement and implement the two routes it gates.
+
+      WHAT TO BUILD, three atoms, none reused from an existing atom:
+
+      1. `:EntitiesRecordsExport` (read-classified) -- ROUTE-LEVEL atom for
+      `POST /entities/records/:entity_type/export`. Gets a real
+      `endpoint_policy_key/2` clause.
+
+      2. `:EntitiesRecordsExportUnredacted` (read-classified) -- ⛔ NOT a
+      route-level atom. Per §6's final mechanism, this atom is checked a
+      SECOND time, in-handler, only when the export request body carries
+      `unredacted: true` -- it gets NO `endpoint_policy_key/2` clause of its
+      own (there is no route whose method+path maps to it). It still needs a
+      `required_permission/1` identity clause and a place in the @type
+      permission union and @permissions list, since REQ-319's handler will
+      call `Letflow.Api.Authorization.evaluate_access/2` against it directly.
+      Do not add an endpoint_policy_key clause for it -- doing so would be
+      wrong, since no route's method+path resolves to this atom.
+
+      3. `:EntitiesRecordsImport` (write-classified) -- ROUTE-LEVEL atom for
+      `POST /entities/records/:entity_type/import`. Gets a real
+      `endpoint_policy_key/2` clause. Per §5, this is a genuinely separate
+      grant from `:EntitiesRecordsWrite`, not a policy-key-only divergence
+      mapped back onto it (contrast REQ-082's `:DefinitionsImport`, which DOES
+      map back onto `:DefinitionsWrite` -- §5 states explicitly why entity-
+      record import does not follow that precedent).
+
+      4. ⛔ ROLE-MATRIX ARMS ARE DELIBERATELY NOT ADDED BY THIS REQUIREMENT.
+      Design §5 explicitly declines to propose a default role mapping for
+      these three atoms beyond the existing PLATFORM_ADMIN/AGENT_RUNNER
+      catch-alls, and flags `:EntitiesRecordsExportUnredacted` in particular
+      as "reserved only to a break-glass or platform-administrative role,
+      never bundled into an ordinary tenant role's default grant set" --  a
+      REVIEWER judgment call this requirement does not resolve. Add the three
+      atoms with NO new role_allows?/2 clause for PROCESS_DESIGNER,
+      PROCESS_OPERATOR or TASK_WORKER -- only PLATFORM_ADMIN's existing
+      catch-all (`role_allows?(:PLATFORM_ADMIN, _permission), do: true`)
+      grants any of the three, by construction, with no new clause needed for
+      it either. This is the SAME "atom ported ahead of its consuming route
+      and, here, also ahead of its role-matrix decision" state
+      lib/letflow/api/authorization.ex's own moduledoc already documents for
+      :DlqOperate/:WebhooksManage -- it is deliberate, not an oversight, and a
+      future REVIEWER-led role-matrix pass is expected to close it once export/
+      import ships and real usage patterns exist.
+
+      SCOPE FENCE: this requirement edits lib/letflow/api/authorization.ex
+      only, plus tests. It creates no route, mounts nothing, and does not
+      touch lib/letflow/routers/, lib/letflow/entities/, or
+      lib/letflow/definitions/.
+    acceptance_criteria:
+      - "Letflow.Api.Authorization.permissions/0 includes :EntitiesRecordsExport, :EntitiesRecordsExportUnredacted and :EntitiesRecordsImport, and its @doc count matches length(permissions())"
+      - "a test asserts endpoint_policy_key(\"POST\", \"/entities/records/:entity_type/export\") returns :EntitiesRecordsExport and endpoint_policy_key(\"POST\", \"/entities/records/:entity_type/import\") returns :EntitiesRecordsImport, both never :Unknown"
+      - "a test asserts NO (method, path) pair resolves to :EntitiesRecordsExportUnredacted via endpoint_policy_key/2 -- confirming it is checked only in-handler, never route-derived -- while required_permission(:EntitiesRecordsExportUnredacted) still returns :EntitiesRecordsExportUnredacted"
+      - "a test confirms Letflow.Api.Authorization.evaluate_access/2 accepts :EntitiesRecordsExportUnredacted as a direct argument (not derived from a route) and returns the correct grant/deny result against a role holding vs. not holding it"
+      - "a regression test proves no EXISTING role/permission pair changed, and confirms role_allows?/2 returns false for PROCESS_DESIGNER, PROCESS_OPERATOR and TASK_WORKER against all three new atoms (only PLATFORM_ADMIN's pre-existing catch-all returns true) -- matching design §5's deliberate narrow-by-default stance"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "git diff --name-only shows only lib/letflow/api/authorization.ex and file(s) under test/ -- no file under lib/letflow/routers/, lib/letflow/entities/, lib/letflow/definitions/, or priv/repo/migrations/ touched; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-314]
+
+  - id: REQ-319
+    title: Add POST /entities/records/:entity_type/export, with the two-tier default-redacted/escalated-unredacted mechanism (S10 gap 12, part 2)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind.
+
+      THE SPEC IS lib/letflow/design/req314-entity-record-bulk-export-import.md
+      §1 (document shape), §2 (selection mechanism), §4 (route shape), §6
+      (the FINAL, reworked two-tier INV-2 mechanism -- read the
+      "SECURITY-REVIEWER Final Verdict" section at the bottom of the document,
+      not only the original FAILed pass above it), and §7 (size limit). Read
+      the whole document before writing anything. REQ-318 must be done first --
+      this requirement uses both `:EntitiesRecordsExport` and
+      `:EntitiesRecordsExportUnredacted`.
+
+      WHAT TO BUILD:
+
+      1. `POST /entities/records/:entity_type/export` appended to
+      Letflow.Routers.Entities, declared `authz_post "/records/:entity_type/export",
+      :EntitiesRecordsExport`. Body: an optional `query_request()`-shaped
+      object (filters/sort/join, entity_type from the path, not duplicated in
+      the body -- a mismatch is 422 before any selection runs) plus one new
+      optional field, `unredacted :: boolean()` (default false). An
+      absent/empty body means no filter, natural order, redacted.
+
+      2. THE SELECTION PIPELINE, per §2: reuse the identical
+      `Allowlist.load/2` -> `Compiler.compile/2` -> `Cursor.paginate/5`
+      sequence `POST /entities/query`'s own handler already uses (REQ-311),
+      capped at `Letflow.Api.Pagination.max_page_size/0` (200) records per
+      call -- the caller cannot request a larger page than this cap. No new
+      selection grammar is introduced.
+
+      3. ⛔ THE TWO-TIER MECHANISM, per §6, IS THE CORE OF THIS REQUIREMENT:
+
+      DEFAULT mode (`unredacted` absent or false): the route-level
+      `:EntitiesRecordsExport` check (already run by `authz_post`) is the only
+      check. The handler then calls `FieldGrants.load_restrictions(user_id,
+      entity_type, prefix)` (the SAME call `POST /entities/query`'s handler
+      already makes) and applies `redact_field_values/2` over each selected
+      record's `field_values` before building the response -- the exact same
+      disclosure strength `:EntitiesQuery` already gives that caller, reached
+      via this bulk route instead of the paginated interactive one.
+
+      ESCALATED mode (`unredacted: true` in the body): after the route-level
+      check already passed, the handler calls
+      `Letflow.Api.Authorization.evaluate_access/2` a SECOND time, manually,
+      against `:EntitiesRecordsExportUnredacted` directly. If that check
+      fails, reject 403 IMMEDIATELY, before the selection query is even
+      compiled -- never silently fall back to serving the redacted default.
+      If it succeeds, skip `FieldGrants` entirely for that call and return
+      every field, unredacted.
+
+      4. EXPORT DOCUMENT SHAPE per §1: `record_export_schema_version:
+      "entities/record-export/v1"`, `entity_type`, `exported_at`, `records:
+      [%{record_id, field_values, deleted}]` -- `deleted` copied verbatim from
+      `entity_record_latest.deleted`; no entity-definition-version field.
+
+      5. ERROR MAPPING per §6/§7/INV-5: entity_type not found or cross-tenant
+      -> 404, identical shape to `POST /entities/query`'s own
+      `entity_type_not_found` handling (no new pre-check); a restricted-field
+      403 on the unredacted path as above; the usual filter/sort/join 400/422
+      mapping reused unchanged from REQ-311's own handler.
+
+      SCOPE FENCE: this requirement appends ONE route and its handler to
+      lib/letflow/routers/entities.ex, updates its moduledoc route table, and
+      adds tests. It does not touch lib/letflow/api/authorization.ex (REQ-318
+      already added both atoms it uses), does not modify
+      lib/letflow/entities/query/compiler.ex, allowlist.ex, cursor.ex or
+      field_grants.ex, and does not implement the import route (REQ-320).
+    acceptance_criteria:
+      - "a test asserts default-mode export (unredacted absent) returns records with a restricted field's value replaced by FieldGrants.redacted_sentinel() for a caller who is redacted from that field under :EntitiesQuery, and returns the real value for a caller who is not -- proving default mode's disclosure strength matches :EntitiesQuery exactly, using the SAME two-caller comparison technique REQ-311's own INV-1 test used"
+      - "a test asserts a caller holding only base :EntitiesRecordsExport (not :EntitiesRecordsExportUnredacted) who requests unredacted: true gets 403, and that this 403 is returned BEFORE any selection query executes (proven by a mock/telemetry assertion, or by asserting the response body carries no record data at all)"
+      - "a test asserts a caller holding BOTH atoms and requesting unredacted: true receives every field of every selected record with no redaction, even for fields that caller's own user_entity_grants would restrict under :EntitiesQuery"
+      - "a test asserts a caller holding only :EntitiesQuery (not :EntitiesRecordsExport at all) gets 403 on the export route entirely -- proving no atom implies another"
+      - "a test asserts a selection matching more than 200 records returns exactly the first 200 plus a working next_cursor, and a second call with that cursor returns the remainder -- real output quoted"
+      - "a test asserts the export_document response carries record_export_schema_version 'entities/record-export/v1', entity_type, exported_at, and a records list whose entries carry record_id/field_values/deleted, with deleted matching entity_record_latest.deleted for a soft-deleted record included in the selection"
+      - "INV-5: export against an entity_type existing only in a different tenant's schema returns a response byte-identical to one against an entity_type existing nowhere -- both compared in one assertion"
+      - "a test asserts the entity_type path segment and the (absent or present) body's entity_type field, if both given and mismatched, produce 422 before any selection runs"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2 (naming the two-tier mechanism and confirming a base-only caller cannot reach unredacted data by any request shape), INV-5 and INV-7 by name, having read the handler itself rather than this requirement's text"
+      - "git diff --name-only shows only lib/letflow/routers/entities.ex and file(s) under test/ -- no change to lib/letflow/api/authorization.ex, lib/letflow/entities/, or priv/repo/migrations/; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-318]
+
+  - id: REQ-320
+    title: Add POST /entities/records/:entity_type/import, with per-record partial-success batch semantics (S10 gap 12, part 3)
+    owner: ELIXIR-DEV
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Per 0022's rule 1 this requirement's title, description,
+      acceptance criteria and the code it produces contain no domain-vertical
+      vocabulary of any kind.
+
+      THE SPEC IS lib/letflow/design/req314-entity-record-bulk-export-import.md
+      §1 (document shape, shared with REQ-319's export), §3 (the import write
+      path and batch-failure semantics), §4 (route shape), §6/INV-5, and §7
+      (the 200-record import cap and its 413 behaviour). Read the whole
+      document before writing anything. REQ-318 must be done first -- this
+      requirement uses `:EntitiesRecordsImport`. This requirement is
+      independent of REQ-319 (export) -- it consumes the SAME export_document
+      shape §1 defines, but does not depend on the export route's own
+      implementation existing.
+
+      WHAT TO BUILD:
+
+      1. `POST /entities/records/:entity_type/import` appended to
+      Letflow.Routers.Entities, declared `authz_post
+      "/records/:entity_type/import", :EntitiesRecordsImport`. Body: an
+      `export_document`-shaped object per §1 (`record_export_schema_version`,
+      `entity_type`, `records: [%{record_id, field_values, deleted}]`).
+
+      2. ⛔ THE 200-RECORD CAP IS CHECKED FIRST, PER §7, BEFORE ANYTHING ELSE:
+      if `length(records)` exceeds 200, reject the WHOLE request with 413
+      before entity-type/definition resolution or any per-entry validation --
+      never silently truncate.
+
+      3. THE SCHEMA-VERSION GATE, per §1/§3's `ExportImport` precedent: check
+      `record_export_schema_version == "entities/record-export/v1"` before
+      touching tenant resolution or the database; a mismatch is a distinct,
+      named error (do not conflate it with a generic validation failure).
+
+      4. THE `entity_type` PATH-VS-BODY CHECK: the document's own `entity_type`
+      field must match the route's `:entity_type` path segment exactly, or 422
+      before any create_record/2 call.
+
+      5. PER-ENTRY IMPORT VIA `Letflow.Entities.Records.create_record/2`,
+      UNCHANGED, per §3 -- NO independent/parallel validation added ahead of
+      it. For each `export_record_entry()`: build `create_attrs()` with
+      `entity_type` (from the path), `field_values: entry.field_values`,
+      `actor_id: conn.assigns.auth_context.user_id`, and a deterministically
+      derived `idempotency_key` from `(import_request_id, entry.record_id)`
+      where `import_request_id` is a FRESH `Ecto.UUID.generate()` minted once
+      per HTTP call (never read from the document or from `entry` itself). A
+      `deleted: true` entry is imported as a live create identically to a
+      non-deleted one -- do not attempt to reproduce delete history via a
+      create-then-delete pair. `create_record/2` always mints its own fresh
+      `record_id` -- the document's `entry.record_id` is never used to address
+      or update an existing row, and is carried in the response purely for the
+      caller's own reconciliation.
+
+      6. PER-BATCH FAILURE SEMANTICS, per §3: per-record partial success, NOT
+      whole-batch atomicity (`create_record/2` commits its own internal
+      transaction per call and is not composed into an outer Multi). The
+      response is `%{results: [entry_result]}` where each entry_result is
+      either `{:ok, %{record_id, source_record_id}}` or `{:error,
+      source_record_id, reason}` with `reason` being `create_record/2`'s own
+      unmodified `command_error()`. A batch with some failing entries still
+      returns a 200-class response carrying both outcomes -- it does not
+      return an HTTP error status for a partial failure.
+
+      7. ERROR MAPPING: the whole-request 413 (§7) and 422 (schema-version
+      mismatch, entity_type path/body mismatch) checks happen before any
+      per-entry processing and short-circuit the whole request; a
+      `{:error, {:definition_not_found, entity_type}}` from the FIRST entry's
+      `create_record/2` call, if the entity type itself has no active
+      definition in the importing tenant, folds to the same 404
+      `Letflow.Entities.Records`' own single-write path already produces --
+      per §6/INV-5, no cross-tenant-specific pre-check anywhere.
+
+      SCOPE FENCE: this requirement appends ONE route and its handler to
+      lib/letflow/routers/entities.ex, updates its moduledoc route table, and
+      adds tests. It does not touch lib/letflow/api/authorization.ex (REQ-318
+      already added :EntitiesRecordsImport), does not modify
+      lib/letflow/entities/records.ex or create_record/2 itself, and does not
+      implement the export route (REQ-319).
+    acceptance_criteria:
+      - "a test asserts a batch exceeding 200 records returns 413 before any create_record/2 call is made -- proven by asserting zero records were created against the entity type after the 413 response, real output quoted"
+      - "a test asserts a document whose record_export_schema_version does not equal 'entities/record-export/v1' is rejected with a distinct, named error before any database touch, and a test asserts a document whose entity_type does not match the route's :entity_type path segment is rejected 422 before any create_record/2 call"
+      - "a test asserts a batch with some entries valid and one entry deliberately invalid (e.g. a field_values violation create_record/2 would reject standalone) returns a 200-class response whose results list contains both a success entry (with a freshly-minted record_id distinct from source_record_id) and a failure entry (carrying the same command_error() create_record/2 would return for that entry submitted alone) -- proving partial success, not whole-batch rollback, with real output quoted"
+      - "NOTE correcting an imprecision inherited from design doc req314-entity-record-bulk-export-import.md lines ~306-317's own English description ('re-POSTing... is idempotent'): under the mandated mechanism -- idempotency_key derived from (import_request_id, entry.record_id), where import_request_id is a FRESH Ecto.UUID.generate() minted once per HTTP call and never read from the document -- a literal re-POST mints a NEW import_request_id and is therefore a genuinely separate call, not a recognizable duplicate; idempotency exists only WITHIN one call's own entry list, never across two calls. This AC is written to what the mechanism actually guarantees, not to a cross-call idempotency claim the design's own mechanism cannot deliver."
+      - "a test asserts that WITHIN one import call, if the request document's own entry list contains the same entry.record_id value more than once, only one record is created for that repeated value (the shared import_request_id makes the derived idempotency_key collide for the second occurrence) -- proving intra-call dedup"
+      - "a test asserts that two genuinely SEPARATE HTTP calls -- including a literal byte-identical re-POST of the same request body -- each mint their own fresh import_request_id and therefore each creates its own independent record(s) for the same entry.record_id value, with NO cross-call deduplication of any kind: the assertion must show the record COUNT after the second call increased by the number of entries in that call's own document, not that the second call was a no-op"
+      - "a test asserts a deleted: true entry in the import document is imported as a live, non-deleted record (create_record/2 called exactly as for a non-deleted entry) -- confirming §3's explicit scope cut"
+      - "a test asserts importing against an entity_type with no active definition in the importing tenant returns 404 with the same shape Letflow.Entities.Records.create_record/2's own single-write path already produces for {:error, {:definition_not_found, _}}"
+      - "a test confirms the response's success entries never reuse entry.record_id as the created row's own id -- the returned record_id differs from source_record_id in every success case (record_id is minted fresh by create_record/2)"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-5 and INV-7 by name, having read the handler itself rather than this requirement's text"
+      - "git diff --name-only shows only lib/letflow/routers/entities.ex and file(s) under test/ -- no change to lib/letflow/api/authorization.ex, lib/letflow/entities/, or priv/repo/migrations/; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-318]

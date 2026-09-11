@@ -2586,10 +2586,27 @@ volumes:
 
   - volume: 13
     path: docs/status/requirement_status.v13.yaml
-    status: current
+    status: closed
     opened: 2026-09-10
+    closed: 2026-09-11
     entries: 30
+    lines: 1231
+    bytes_working_tree: 73235
+    frozen_prefix_lines: 1201
+    frozen_prefix_sha256: "d4d92201bf111e8b06456ed2f007eb5475f621f87dc7f62459dd5df1f192b577"
     note: >
+      Closed 2026-09-11 by fix/ISS-0595-20260911's own Step Final rebase,
+      which composed this branch's own ISS-0595 done-event append against
+      main's concurrently-merged REQ-307 done-event, bringing this file to
+      30 entries across 1201 lines / 71184 bytes -- over the 1200-line
+      roll ceiling. Rolled to volume 14
+      (docs/status/requirement_status.v14.yaml) per the standard
+      procedure: closure footer appended to this file, frozen_prefix_sha256
+      above computed via `sha256sum` on the working-tree file BEFORE the
+      footer was appended (the frozen prefix excludes the footer), volume
+      14 created with this volume's own header text verbatim (volume
+      number/opening date/predecessor path updated) and an empty
+      `history:` list.
       Recounted to 30 on ORCH's fix/ISS-0595-20260911 second rebase onto
       main, composing this branch's own already-resolved 29-entry state
       with main's own newly-landed REQ-307 done-event (declaring 27
@@ -2877,6 +2894,19 @@ volumes:
       date only nominally; they are appended here, not reordered into
       volume 12, per the same "one run's started/done land one in each
       volume across a roll boundary" precedent.
+
+  - volume: 14
+    path: docs/status/requirement_status.v14.yaml
+    status: current
+    opened: 2026-09-11
+    entries: 0
+    note: >
+      Opened by ORCH at fix/ISS-0595-20260911's Step Final rebase,
+      successor to volume 13. Created with volume 13's header text
+      verbatim (volume number, opening date and predecessor path
+      updated) and an empty `history:` list, per this index's
+      `roll_rule.on_exceed` procedure. `entries:` will be incremented
+      per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

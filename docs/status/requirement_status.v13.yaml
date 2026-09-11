@@ -1100,3 +1100,20 @@ history:
       function/@spec, no migration, no supervision-tree file, not a
       tenant-data path, no test's expected value changes). Corrected
       "Twelve" -> "Thirteen".
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-11T02:26:04Z"
+    note: >
+      WF03-ISS0590-20260911 started (queue task 590, GH#1215,
+      docs/issues/ISS-0590.yaml). test/letflow/sandbox_pool_test.exs:1085
+      RT-6 (death path c) flakes -- a crashed provisioning worker's
+      half-created sandbox schema is not always dropped from
+      information_schema.schemata before the test's assertion runs.
+      Demonstrably a flake (identical commit c8f55604/PR #1209 passed and
+      failed under parallel CI runs), a timing/ordering dependency in the
+      test's observation point, not a real crash-path schema leak.
+      Suggested fix direction (from the filing): poll for cleanup
+      completion with a bounded timeout rather than sampling schemata at
+      a fixed point. Branch: fix/ISS0590-20260911.

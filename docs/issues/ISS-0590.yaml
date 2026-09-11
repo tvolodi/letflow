@@ -50,3 +50,5 @@ description: >
 affected_files:
   - test/letflow/sandbox_pool_test.exs
 queue_ref: Q-590
+github_ref: GH-1215
+status: in_progress

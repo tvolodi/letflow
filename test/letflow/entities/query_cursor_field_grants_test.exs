@@ -23,11 +23,13 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   alias Letflow.Entities.Query.Compiler
   alias Letflow.Entities.Query.Cursor
   alias Letflow.Entities.Query.FieldGrants
+  alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.Identity
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.ColumnPromotion
   alias Letflow.TenantProvisioning.Registration
 
   import Ecto.Query
@@ -65,6 +67,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
       end
 
       Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+      Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^tenant.id))
       Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
     end)
 
@@ -115,6 +118,21 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   defp create_record!(schema, field_values) do
     attrs = %{
       entity_type: "customer",
+      field_values: field_values,
+      actor_id: Ecto.UUID.generate(),
+      idempotency_key: Ecto.UUID.generate()
+    }
+
+    assert {:ok, %{record: record}} = Records.create_record(attrs, schema)
+    record
+  end
+
+  # Same as create_record!/2 but for an arbitrary entity_type (ISS-0600's
+  # "promoted_customer" fixture, not the "customer" this file's other
+  # tests use) -- mirrors query_joins_test.exs's own create_record!/3.
+  defp create_record_for!(schema, entity_type, field_values) do
+    attrs = %{
+      entity_type: entity_type,
       field_values: field_values,
       actor_id: Ecto.UUID.generate(),
       idempotency_key: Ecto.UUID.generate()
@@ -492,6 +510,119 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
                FieldGrants.load_restrictions(user.id, "does-not-exist-entity-type", schema)
 
       assert MapSet.size(restriction_set) == 0
+    end
+  end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0600 -- redact_page/2 (via redact_item/2) crashed with
+  # FunctionClauseError on a promoted per-type-table row (a bare
+  # Compiler.entity_row() map), since redact_item/2 previously only matched
+  # a %Latest{} struct. See
+  # lib/letflow/design/iss0600-field-grants-per-type-table-row-shape.md.
+  # promote_and_create_table!/5 below is copied verbatim (not imported --
+  # it's `defp` in query_joins_test.exs) from
+  # test/letflow/entities/query_joins_test.exs:112-135, matching this
+  # codebase's convention of duplicating small test helpers across files.
+  # ---------------------------------------------------------------------------------
+
+  defp promote_and_create_table!(schema, tenant_id, entity_type, attribute, pg_type, opts \\ []) do
+    references_entity = Keyword.get(opts, :references_entity)
+
+    column_spec =
+      if references_entity do
+        %{pg_type: pg_type, nullable: true, references_entity: references_entity}
+      else
+        %{pg_type: pg_type, nullable: true}
+      end
+
+    assert {:ok, [row]} =
+             TenantProvisioning.register_column_promotion(
+               entity_type,
+               attribute,
+               column_spec,
+               [tenant_id]
+             )
+
+    assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
+             TenantProvisioning.run_column_promotion(row.id)
+
+    assert {:ok, table_name} = TenantProvisioning.table_name_for_entity_type(entity_type)
+    table_name
+  end
+
+  describe "promoted per-type-table row shape (ISS-0600)" do
+    setup do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema, %{
+        name: "promoted_customer",
+        display_name: "Promoted Customer",
+        fields: [
+          %{name: "customer_name", type: :string, required: true, queried: true},
+          %{name: "age", type: :integer, queried: true},
+          %{name: "ssn", type: :string, queried: true}
+        ]
+      })
+
+      promote_and_create_table!(schema, tenant_id, "promoted_customer", "customer_name", "text")
+
+      record =
+        create_record_for!(schema, "promoted_customer", %{
+          "customer_name" => "Alice",
+          "age" => 30,
+          "ssn" => "123-45-6789"
+        })
+
+      insert_field_restriction!(schema, "promoted_customer", "ssn")
+
+      %{schema: schema, record: record}
+    end
+
+    test "redact_page/2 accepts a promoted per-type-table row (entity_row() map shape) and redacts it identically to the %Latest{} path",
+         %{schema: schema} do
+      assert {:ok, query} = Compiler.compile(%{entity_type: "promoted_customer"}, schema)
+
+      assert [%{field_values: %{"ssn" => "123-45-6789"}} = row] = Repo.all(query, prefix: schema)
+      refute match?(%Latest{}, row)
+
+      page = Pagination.page_response([row], "some-next-cursor")
+
+      user_without_grant = create_user!(schema, "promoted-no-grant-user")
+
+      assert {:ok, restriction_set} =
+               FieldGrants.load_restrictions(
+                 user_without_grant.id,
+                 "promoted_customer",
+                 schema
+               )
+
+      redacted_page = FieldGrants.redact_page(page, restriction_set)
+
+      assert redacted_page.next_cursor == "some-next-cursor"
+      assert redacted_page.count == 1
+      [item] = redacted_page.items
+      assert item.field_values["ssn"] == FieldGrants.redacted_sentinel()
+      assert item.field_values["customer_name"] == "Alice"
+      assert item.field_values["age"] == 30
+    end
+
+    test "a user holding an explicit grant sees the field populated, promoted-table shape",
+         %{schema: schema} do
+      assert {:ok, query} = Compiler.compile(%{entity_type: "promoted_customer"}, schema)
+      assert [row] = Repo.all(query, prefix: schema)
+
+      page = Pagination.page_response([row], "some-next-cursor")
+
+      grant_user = create_user!(schema, "promoted-granted-user")
+      insert_user_grant!(schema, grant_user.id, "promoted_customer", "ssn")
+
+      assert {:ok, restriction_set} =
+               FieldGrants.load_restrictions(grant_user.id, "promoted_customer", schema)
+
+      redacted_page = FieldGrants.redact_page(page, restriction_set)
+
+      [item] = redacted_page.items
+      assert item.field_values["ssn"] == "123-45-6789"
     end
   end
 

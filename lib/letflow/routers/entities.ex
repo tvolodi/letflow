@@ -86,24 +86,35 @@ defmodule Letflow.Routers.Entities do
       entity's type is deliberately NOT among them — its row is never
       exposed in a `Compiler.joined_row()` (that type's own typedoc), so
       no key of a joined row could ever be looked up against it.
-    * **non-join** → this module's own **`redact_plain_page/2`**, NOT
-      `FieldGrants.redact_page/2`.
+    * **non-join** → `Letflow.Entities.Query.FieldGrants.redact_page/2`,
+      given the ONE `restriction_set()` for `request.entity_type`.
 
-  ⛔ That last point is not a stylistic preference and this paragraph must
-  not be "simplified" back to naming `redact_page/2`. `redact_page/2`'s
-  private `redact_item/2` matches `%Letflow.Entities.Record.Latest{}`
-  only, but `Compiler.compile_plain/5` emits a plain
-  `Compiler.entity_row()` MAP (never a `%Latest{}`) whenever the entity
-  type has a promoted per-entity-type table — so `redact_page/2` raises
-  `FunctionClauseError` on exactly the rows a promoted type produces,
-  which through this route would surface as a 500 on a read that must
-  instead be redacted. That gap is filed as **ISS-0600**
-  (`docs/issues/ISS-0600.yaml`) against `Letflow.Entities.Query.FieldGrants`
-  itself, where the real fix belongs; `redact_plain_page/2` here is a
-  shape ADAPTER over the public `FieldGrants.redact_field_values/2`, not a
-  second redaction policy. **When ISS-0600 lands, delete
-  `redact_plain_page/2`/`redact_plain_item/2` and this paragraph, and call
-  `FieldGrants.redact_page/2` directly.**
+  Both branches now call `FieldGrants` directly, and neither redacts
+  anything here in the router. ⛔ Keep it that way: a redaction policy
+  (what counts as restricted, what the sentinel is) belongs to
+  `FieldGrants` alone, and a second copy in a router is how the two
+  drift apart.
+
+  ### Build record — the ISS-0600 detour, now closed
+
+  REQ-311 shipped the non-join branch against a router-local
+  `redact_plain_page/2` instead, because `FieldGrants.redact_page/2`'s
+  private `redact_item/2` matched `%Letflow.Entities.Record.Latest{}`
+  only, while `Compiler.compile_plain/5` emits a plain
+  `Compiler.entity_row()` MAP whenever the entity type has a promoted
+  per-entity-type table — so `redact_page/2` raised `FunctionClauseError`
+  on exactly the rows a promoted type produces, surfacing through this
+  route as a 500 on a read that must instead be redacted. This route was
+  the first caller to reach that gap. REQ-311's scope fence forbade
+  touching `lib/letflow/entities/`, so the shape adapter lived here and
+  the real gap was filed as **ISS-0600**
+  (`docs/issues/ISS-0600.yaml`) against `FieldGrants` itself; both gates
+  made filing it a condition of their PASS. ISS-0600's fix has since
+  landed: `redact_item/2` now carries a second clause,
+  `%{field_values: _} when is_map(item)`, so `redact_page/2` handles both
+  row shapes natively. The adapter was deleted and this branch points at
+  `redact_page/2` again — same redaction outcome on both shapes, one
+  policy owner.
 
   ## INV-5 — not-found and cross-tenant are the same bytes
 
@@ -948,10 +959,12 @@ defmodule Letflow.Routers.Entities do
   # same input the compiler used is what makes it impossible for the
   # redactor to disagree with the shape it is handed.
   #
-  # ⛔ The fallthrough clause calls this module's own redact_plain_page/2,
-  # NOT FieldGrants.redact_page/2 -- see this module's moduledoc "INV-2"
-  # section for why (ISS-0600), and delete the workaround when that issue
-  # lands.
+  # ⛔ Both clauses delegate to FieldGrants and neither redacts anything
+  # here: redact_joined_page/2 for the joined shape, redact_page/2 for the
+  # plain one. No redaction policy lives in this module. (A router-local
+  # shape adapter stood in for redact_page/2 until ISS-0600's fix gave
+  # FieldGrants.redact_item/2 its plain-map clause -- see this module's
+  # moduledoc "INV-2" section for that build record.)
 
   # `request` is typed as the built `Types.query_request()`, not a bare `map()`:
   # this function's branch selection reads `request.join`, and typing it lets
@@ -986,38 +999,15 @@ defmodule Letflow.Routers.Entities do
   defp redact(page, request, user_id, prefix) do
     with {:ok, restriction_set} <-
            FieldGrants.load_restrictions(user_id, request.entity_type, prefix) do
-      {:ok, redact_plain_page(page, restriction_set)}
+      # FieldGrants.redact_page/2 covers BOTH shapes compile_plain/5 can
+      # emit -- %Latest{} (unpromoted) and a plain Compiler.entity_row()
+      # map (promoted) -- via redact_item/2's two clauses. ⛔ It has no
+      # third, permissive clause: a shape neither matches RAISES (a
+      # logged, detail-free 500 via the pipeline's own error handler)
+      # rather than falling through UNREDACTED, which is the one failure
+      # mode INV-2 cannot tolerate. Do not add a rescue here.
+      {:ok, FieldGrants.redact_page(page, restriction_set)}
     end
-  end
-
-  # ⛔ ISS-0600 WORKAROUND -- delete this function and its two item clauses
-  # when that issue lands, and call FieldGrants.redact_page/2 instead.
-  #
-  # This is a SHAPE ADAPTER over the public
-  # FieldGrants.redact_field_values/2, never a reimplementation of the
-  # redaction policy itself -- what counts as restricted and what the
-  # sentinel is both stay FieldGrants' alone. It exists only because
-  # FieldGrants.redact_page/2's private redact_item/2 matches %Latest{}
-  # and nothing else, while compile_plain/5 emits plain
-  # Compiler.entity_row() maps for a PROMOTED entity type.
-  @spec redact_plain_page(Pagination.Page.t(term()), FieldGrants.restriction_set()) ::
-          Pagination.Page.t(term())
-  defp redact_plain_page(%Pagination.Page{items: items} = page, restriction_set) do
-    %{page | items: Enum.map(items, &redact_plain_item(&1, restriction_set))}
-  end
-
-  # Two clauses, one per shape compile_plain/5 can actually emit. ⛔ There
-  # is deliberately NO third, permissive clause: a shape neither of these
-  # matches must RAISE (a logged, detail-free 500 via the pipeline's own
-  # error handler) rather than fall through UNREDACTED, which is the one
-  # failure mode INV-2 cannot tolerate.
-  defp redact_plain_item(%Latest{field_values: field_values} = item, restriction_set) do
-    %{item | field_values: FieldGrants.redact_field_values(field_values, restriction_set)}
-  end
-
-  defp redact_plain_item(%{field_values: field_values} = item, restriction_set)
-       when is_map(item) do
-    %{item | field_values: FieldGrants.redact_field_values(field_values, restriction_set)}
   end
 
   # ══ Request parsing (design §4) ═══════════════════════════════════════

@@ -453,6 +453,40 @@ history:
       Letflow.Routers.Entities graduated -- Letflow.Routers.EntityQuery
       never existed as a module and was retired by merge per design
       section 2.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T11:22:11Z"
+    note: >
+      ISS-0600 (GH#1245, queue task 600) -- FieldGrants.redact_item/2
+      matched %Latest{} only, but Compiler's {:per_type_table, _} query
+      branch emits a plain entity_row() map, causing redact_page/2 to
+      raise FunctionClauseError on any non-join query against a promoted
+      entity type. Pre-existing since REQ-296-298 added per-type tables
+      after FieldGrants was built (REQ-231); latent until REQ-311's
+      still-in-progress POST /entities/query became the first real
+      caller. REQ-311's own router-side workaround (not yet on main) was
+      confirmed security-equivalent by that branch's own SECURITY-REVIEWER;
+      REVIEWER there made filing this issue a condition of accepting it.
+      Pipeline: CODE-DESIGNER (PASS first try; a research fork briefly
+      exceeded its read-only brief and wrote a competing design doc,
+      caught and deleted by CODE-DESIGNER itself before reporting back)
+      -> CODE-DESIGN-VALIDATOR PASS first try (independently verified the
+      Elixir clause-ordering semantics claim: a %Latest{} struct also
+      structurally matches a bare map pattern, confirming the new clause
+      correctly placed second) -> ELIXIR-DEV (fail-first-proven: reproduced
+      the exact FunctionClauseError with the fix removed, 13/13 passing
+      restored) -> SECURITY-REVIEWER PASS (confirmed no divergent
+      redaction logic, no extra field exposed; investigated a recurring
+      SandboxPoolTest RT-6 failure in the full-suite run and determined
+      it's a genuine residual flake in ISS-0590's own earlier fix under
+      heavier full-suite contention, not a regression from this diff --
+      recommended a distinct follow-up issue) -> REVIEWER PASS
+      (independently re-ran the full suite; RT-6 didn't reproduce that
+      run, consistent with it being a flake). REQ-311's router-side
+      workaround removal explicitly deferred to whoever merges that
+      branch. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this
+      session's established precedent.
   - req: REQ-311
     event: done
     agent: ORCH

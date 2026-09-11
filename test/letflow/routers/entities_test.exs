@@ -1437,15 +1437,19 @@ defmodule Letflow.Routers.EntitiesTest do
   end
 
   describe "REQ-311 -- the NON-join branch redacts BOTH of its own item shapes" do
-    # Regression test for a pre-existing gap this route is the first caller to
-    # reach: FieldGrants.redact_page/2's private redact_item/2 matches
-    # %Latest{} only, but Compiler.compile_plain/5 emits a plain
+    # Regression test for a pre-existing gap this route was the first caller
+    # to reach: FieldGrants.redact_page/2's private redact_item/2 used to
+    # match %Latest{} only, but Compiler.compile_plain/5 emits a plain
     # Compiler.entity_row() MAP whenever the entity type has a promoted
-    # per-entity-type table. Before the router's own redact_plain_page/2, a
-    # non-join query against a PROMOTED entity type raised
-    # FunctionClauseError -> 500. Flagged for REVIEWER; the fix lives in the
-    # router because REQ-311's scope fence forbids touching
-    # lib/letflow/entities/.
+    # per-entity-type table -- so a non-join query against a PROMOTED entity
+    # type raised FunctionClauseError -> 500. REQ-311's scope fence forbade
+    # touching lib/letflow/entities/, so it shipped behind a router-local
+    # shape adapter and filed the real gap as ISS-0600. That fix has landed
+    # (redact_item/2 now has a %{field_values: _} when is_map(item) clause)
+    # and the adapter is gone; both shapes below are redacted by
+    # FieldGrants.redact_page/2 itself. ⛔ These two tests assert the wire
+    # OUTCOME, not which function produced it -- they were unchanged by the
+    # adapter's retirement and must stay that way.
     test "a non-join query against a PROMOTED entity type (entity_row() map items, not %Latest{}) still redacts" do
       ctx = tenant_ctx("req311-promoted-plain")
       seed_join_fixture!(ctx)

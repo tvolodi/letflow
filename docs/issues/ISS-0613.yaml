@@ -60,3 +60,21 @@ affected_files:
   - docs/agents/protocols/TASK_QUEUE.md
   - docs/requirements.yaml
 queue_ref: Q-613
+github_ref: GH-1271
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0613-20260911
+resolved_at: "2026-09-11T19:17:45Z"
+resolution_note: >
+  Fixed via PR #1273: chose fix direction (b) -- a new
+  mix letflow.check_req_id_collision task, wired into mix letflow.check,
+  that fails a PR introducing a REQ-NNN id already present on
+  origin/main with different content. Rejected (a) (allocate REQ- ids
+  from the queue) as fixing a cosmetic-label problem rather than the
+  real "duplicate write can land on main undetected" defect, at the
+  cost of a disruptive numbering-convention change. Rejected (c)
+  (documentation only) citing the identical ISS-NNNN precedent that
+  already failed eight times before an atomic allocator was adopted.
+  Queue task 605 remains permanently blocked and documented, as this
+  record's own text anticipated -- letflow-queue has no update/delete
+  endpoint.

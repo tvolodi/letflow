@@ -398,3 +398,58 @@ history:
       attempted -- 597 genuinely in progress under a live lock, cancelling
       would be disruptive not corrective. docs/requirements.yaml's own
       depends_on chain remains authoritative.
+  - req: REQ-309
+    event: done
+    agent: ORCH
+    at: "2026-09-11T09:05:00Z"
+    note: >
+      Four entity permission atoms, ten endpoint_policy_key/2 clauses and
+      role_allows?/2 matrix arms added to Letflow.Api.Authorization, per
+      REQ-308 design section 3. Landed ahead of its consuming router by
+      design -- authz_* macros take the policy key as a compile-time
+      literal and the enforcement test fails any route resolving to
+      :Unknown, so the vocabulary must exist first. SECURITY-REVIEWER
+      PASS, REVIEWER PASS; both independently re-derived the 95-pair
+      regression grid's honesty and each ran its own mutation to confirm
+      it bites. Merged as PR #1242.
+  - req: REQ-310
+    event: done
+    agent: ORCH
+    at: "2026-09-11T10:00:06Z"
+    note: >
+      Letflow.Routers.Entities created with nine definition and record
+      routes, mounted at /entities, and both deferred-routes rows retired
+      from router.ex. POST /entities/query deliberately absent -- REQ-311
+      appends it. SECURITY-REVIEWER PASS on the first pass (INV-1, INV-2,
+      INV-5, INV-6, INV-7, INV-8 apply; verified the prefix shape at all
+      nine call sites and that idempotency keys are namespaced per tenant
+      schema). REVIEWER returned FAIL on round 1 with two blocking
+      defects, both found by issuing real requests rather than reading
+      code: activate_definition declared rationale optional while the
+      delegate requires it non-empty, so a legal request returned an
+      opaque 422; and build_definition_document/1's blanket rescue
+      degraded real validation errors into a detail-free 422, with which
+      error a caller received depending on whether their typo coincided
+      with an atom already loaded in the BEAM. Both fixed in rework round
+      1, which also found a third instance the review missed
+      (whitespace-only rationale passed FieldConstraint's exact-""
+      check). REVIEWER PASS on re-gate after re-deriving test
+      non-vacuity itself with three independent reverts.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T10:00:06Z"
+    note: >
+      Two tests re-derived rather than silenced after REQ-310 falsified
+      their dispositions. req207_vortex_test.exs's armed tripwire fired
+      exactly as its own 2026-09-11 UPDATE block predicted: the scenario
+      is still blocked but for a narrower true reason (the record query
+      route is REQ-311's, not "no HTTP surface exists"), its Signal 3 had
+      become a tautology asserting flat paths that would never exist, and
+      the tripwire is re-armed against REQ-311 with four killed mutants.
+      router_test.exs's REQ-070 AC5 hardcoded 11 deferred routes; REQ-310
+      retired two, and the block grew from 2 assertions to 5 rather than
+      merely decrementing a count. Correction recorded in both: only
+      Letflow.Routers.Entities graduated -- Letflow.Routers.EntityQuery
+      never existed as a module and was retired by merge per design
+      section 2.

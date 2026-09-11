@@ -19361,7 +19361,7 @@ requirements:
     title: Add the four entity permission atoms, endpoint_policy_key/2 clauses and role_allows?/2 matrix arms to Letflow.Api.Authorization
     owner: ELIXIR-DEV
     impl_order: 596  # letflow-queue task id; [] -- no translation needed
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A permission vocabulary over a generic entity-definition and
@@ -19462,7 +19462,7 @@ requirements:
     title: Create Letflow.Routers.Entities with the nine definition and record routes, mount it at /entities, and retire the two deferred-routes rows
     owner: ELIXIR-DEV
     impl_order: 597  # letflow-queue task id; yaml depends_on [REQ-309] = queue task 596; NOT mirrored as a queue edge, see note
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A route surface over Letflow.Entities.{Definitions,Records}

@@ -2909,7 +2909,7 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 9
+    entries: 12
     note: >
       Incremented to 9 by ORCH's own ISS-0599 SCOPE-CHANGE done-event
       append (chore/iss0599-queue-race-mitigation-20260911) -- `grep -c

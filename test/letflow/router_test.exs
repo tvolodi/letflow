@@ -171,27 +171,101 @@ defmodule Letflow.RouterTest do
     end
   end
 
-  describe "REQ-070 AC5: router.ex names all 11 deferred routes and states readiness not-ported" do
-    test "all 11 deferred sub-router module names are listed" do
+  # REQ-070 AC5 originally pinned 11 deferred module names. The number is 9 as of
+  # REQ-310 (commit f6e0ae64), and the drop is not arbitrary: REQ-310 built the entity
+  # HTTP surface and deleted BOTH the `Letflow.Routers.Entities` and the
+  # `Letflow.Routers.EntityQuery` rows from router.ex's deferred table, per
+  # lib/letflow/design/req308-entity-http-surface.md §8, which specifies clean removal
+  # rather than annotation ("a table documenting 'not yet mounted' routes has nothing
+  # left to say once the corresponding module exists and is forwarded"). Two rows went,
+  # but only ONE module was built: design §2 ruled the two names an R-Co-filename
+  # artefact rather than two URL prefixes, and merged both into the single
+  # `Letflow.Routers.Entities`, mounted by `forward("/entities", ...)` in
+  # lib/letflow/plugs/api_pipeline.ex. `Letflow.Routers.EntityQuery` was therefore
+  # retired without ever existing — its query surface lands as POST /entities/query on
+  # the merged module (REQ-311), not as a module of its own.
+  #
+  # AC5's property is unchanged: the table names exactly the routes that are genuinely
+  # still unmounted. The expected list below stays an explicit literal (never derived
+  # from router.ex itself, which would make it a tautology that always passes), and the
+  # retirement assertion below it is what keeps the count honest in the other direction.
+  describe "REQ-070 AC5: router.ex names all 9 deferred routes and states readiness not-ported" do
+    # The nine module names router.ex's deferred table carries, spelled out literally.
+    @deferred [
+      "Letflow.Routers.Dlq",
+      "Letflow.Routers.Services",
+      "Letflow.Routers.PlatformMigrations",
+      "Letflow.Routers.Webhooks",
+      "Letflow.Routers.SimulationTest",
+      "Letflow.Routers.ProcessModules",
+      "Letflow.Routers.AgentRequests",
+      "Letflow.Routers.AgentResponses",
+      "Letflow.Routers.AgentEvents"
+    ]
+
+    # The two names REQ-310 retired. Named specifically rather than as a catch-all, so
+    # this asserts the retirement actually happened and catches an accidental
+    # re-addition of either row by a future edit.
+    @retired ["Letflow.Routers.Entities", "Letflow.Routers.EntityQuery"]
+
+    test "all 9 deferred sub-router module names are listed" do
       source = File.read!("lib/letflow/router.ex")
 
-      deferred = [
-        "Letflow.Routers.Dlq",
-        "Letflow.Routers.Services",
-        "Letflow.Routers.PlatformMigrations",
-        "Letflow.Routers.Webhooks",
-        "Letflow.Routers.SimulationTest",
-        "Letflow.Routers.ProcessModules",
-        "Letflow.Routers.Entities",
-        "Letflow.Routers.EntityQuery",
-        "Letflow.Routers.AgentRequests",
-        "Letflow.Routers.AgentResponses",
-        "Letflow.Routers.AgentEvents"
-      ]
-
-      for name <- deferred do
+      for name <- @deferred do
         assert String.contains?(source, name), "router.ex missing deferred route: #{name}"
       end
+    end
+
+    test "the deferred table holds exactly 9 rows, no more" do
+      # Guards the other direction from the membership test above: that one would still
+      # pass if a tenth row were added. Counts rows in the deferred table only — the
+      # region between its header and the end of the moduledoc — so the mounted
+      # forwards in the route table above it are not miscounted as deferred.
+      source = File.read!("lib/letflow/router.ex")
+
+      [_, deferred_section] = String.split(source, "## Deferred routes", parts: 2)
+      [table, _] = String.split(deferred_section, ~s("""), parts: 2)
+
+      rows =
+        table
+        |> String.split("\n")
+        |> Enum.filter(&String.contains?(&1, "| `Letflow.Routers."))
+
+      assert length(rows) == length(@deferred),
+             "expected #{length(@deferred)} deferred rows, found #{length(rows)}:\n" <>
+               Enum.join(rows, "\n")
+    end
+
+    test "REQ-310's two retired rows are gone from the deferred table" do
+      # Letflow.Routers.Entities is now BUILT and MOUNTED (api_pipeline.ex forwards
+      # /entities to it), and Letflow.Routers.EntityQuery was merged into it and never
+      # built. Neither belongs in a table of not-yet-mounted routes. Asserted against
+      # the deferred table specifically, not the whole file: router.ex is free to
+      # mention either name elsewhere in prose later, and that would not be a defect.
+      source = File.read!("lib/letflow/router.ex")
+
+      [_, deferred_section] = String.split(source, "## Deferred routes", parts: 2)
+      [table, _] = String.split(deferred_section, ~s("""), parts: 2)
+
+      for name <- @retired do
+        refute String.contains?(table, name),
+               "#{name} was retired from router.ex's deferred table by REQ-310, but is " <>
+                 "listed there again — it is mounted/merged, not deferred"
+      end
+    end
+
+    test "Letflow.Routers.Entities is genuinely mounted, which is why it left the table" do
+      # The justification for the row's removal, asserted rather than assumed: the
+      # module exists and Letflow.Plugs.ApiPipeline forwards to it. If a future change
+      # unmounted it, the row would have to come back, and this test is what says so.
+      assert Code.ensure_loaded?(Letflow.Routers.Entities)
+
+      pipeline_source = File.read!("lib/letflow/plugs/api_pipeline.ex")
+
+      assert String.contains?(
+               pipeline_source,
+               ~s|forward("/entities", to: Letflow.Routers.Entities)|
+             )
     end
 
     test "readiness endpoint is documented as not ported" do

@@ -111,18 +111,22 @@ its justification for no DB-level FK. That claim is **false** — re-verified di
 unique index on `(entity_type, record_id)` exists, per-tenant, in the same schema this new
 table lives in. The FK decision below is re-derived from that corrected fact.
 
-**Decision, re-derived: a real DB-level composite FK IS used.**
+**Decision, re-derived: a real DB-level composite FK IS used, `DEFERRABLE INITIALLY
+DEFERRED`.**
 `entity_record_attachments(entity_type, record_id)` → `entity_record_latest(entity_type,
 record_id)`, added via a raw `execute/1` statement in the migration (Ecto's `references/2`
 helper only emits single-column FKs; a composite FK needs a literal, migration-authored
 `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY (entity_type, record_id) REFERENCES
-entity_record_latest (entity_type, record_id)` — no interpolated tenant- or user-controlled
-data, so INV-7 is unaffected). Postgres permits a FK to target any column set covered by a
-unique index, not only a primary key, so the composite unique index above is sufficient to
-back this FK.
+entity_record_latest (entity_type, record_id) DEFERRABLE INITIALLY DEFERRED` — no
+interpolated tenant- or user-controlled data, so INV-7 is unaffected). Postgres permits a
+FK to target any column set covered by a unique index, not only a primary key, so the
+composite unique index above is sufficient to back this FK. The `DEFERRABLE INITIALLY
+DEFERRED` clause is not a stylistic default — it is load-bearing, per the third candidate
+reason below.
 
-Re-checking the two candidate reasons a real FK might still be *wrong* despite the index
-existing, both against `lib/letflow/design/req297-entity-promotion-executor.md`:
+Re-checking three candidate reasons a real FK might still be *wrong* despite the index
+existing (round 2 checked the first two only; round 3 adds the third, found by
+CODE-DESIGN-VALIDATOR):
   - **Multiple promotion write paths into `entity_record_latest` itself?** No — req297 §8
     step 4 (line 505) states plainly: "Never touches `entity_record_latest` — that table's
     write already happened in the preceding `:upsert_record_latest` step; this step is
@@ -130,19 +134,90 @@ existing, both against `lib/letflow/design/req297-entity-promotion-executor.md`:
     *per-entity-type promoted table*, via `Multi.insert`/`Multi.update` inside
     `Letflow.Entities.Records`' own command functions (`create_record/2` → `Multi.insert`,
     `update_record/2`/`delete_record/2` → `Multi.update`) — a single write path into
-    `entity_record_latest`, never a delete-then-reinsert. `entity_type`/`record_id` are
-    also stated as "structurally immutable after insert" by that schema's own moduledoc
-    (`latest.ex` lines 66-71). So the composite key an FK would pin to is stable for the
-    row's whole lifetime.
-  - **Rows replaceable/mutable in a way that violates FK semantics?** No — `delete_record/2`
-    is a soft/event-sourced delete (`entity_record_latest.deleted` flag, via
-    `update_changeset/2`, never a row removal — see that schema's `@update_fields`). The row
-    is never actually deleted by any documented write path, so a FK (default `ON DELETE
-    RESTRICT`, unspecified — matching this table's own `content_hash` FK choice one column
-    up) never has an opportunity to fire, and never blocks a legitimate delete.
+    `entity_record_latest` for ordinary CRUD, never a delete-then-reinsert. `entity_type`/
+    `record_id` are also stated as "structurally immutable after insert" by that schema's
+    own moduledoc (`latest.ex` lines 66-71). So the composite key an FK would pin to is
+    stable for the row's whole lifetime under ordinary CRUD.
+  - **Rows replaceable/mutable in a way that violates FK semantics under ordinary CRUD?**
+    No — `delete_record/2` is a soft/event-sourced delete (`entity_record_latest.deleted`
+    flag, via `update_changeset/2`, never a row removal — see that schema's
+    `@update_fields`). The row is never removed by `delete_record/2`.
+  - **The backfill path — `rebuild_projection/2`'s `write_snapshots/3`, req297 §9's own
+    backfill mechanism.** This is the one round 2 missed. Read directly
+    (`lib/letflow/entities/record/projector.ex:270-293`):
+    `write_snapshots/3` runs `Repo.delete_all(from(r in Latest, where: r.entity_type ==
+    ^entity_type), prefix: prefix)` — a real, unconditional delete of **every**
+    `entity_record_latest` row for that `entity_type` — then reinserts one row per
+    `snapshot` via `Repo.insert!/2`, all inside one `Repo.transaction/1`
+    (`rebuild_projection/2`'s own `@doc`, confirmed at the call site: "One `Repo.
+    transaction/1` call PER entity type"). A plain (non-deferred) FK would raise on that
+    `delete_all` the instant any `entity_record_attachments` row exists for the entity
+    type being rebuilt — a real, unhandled crash of `Letflow.TenantProvisioning.
+    backfill_column_promotion/1`, not a hypothetical.
 
-Neither candidate reason survives against the corrected facts, so nothing remains to
-justify a soft reference. `upload/2`'s changeset gains a
+    Three properties of this same code, traced directly, are what make `DEFERRABLE
+    INITIALLY DEFERRED` (not a plain FK, and not dropping to a soft reference) the correct
+    fix rather than a leap of faith:
+    1. **The delete and every reinsert share one transaction, and the deferred check runs
+       at that transaction's commit** — not per-statement. So the only moment Postgres
+       actually evaluates the FK is after the full reinsert loop has run.
+    2. **`write_snapshots/3` is only ever invoked with a COMPLETE snapshot list for the
+       entity type**, never a partial one. `rebuild_one_entity_type/3` (line 239) computes
+       `snapshots` via `fold_all_records/2` — a pure, DB-free fold over `grouped` — and only
+       calls `write_snapshots(entity_type, snapshots, prefix)` in the `{:ok, snapshots}`
+       branch; the `{:error, _}` branch returns before `write_snapshots/3` is invoked at
+       all, so the `delete_all` never runs unless the *entire* record set already folded
+       successfully. There is no code path that reaches the `delete_all` with a doomed
+       partial reinsert already decided.
+    3. **Every `record_id` that ever had any event for the entity type reappears in the
+       reinsert, including soft-deleted ones.** `grouped` (line 243-245) is
+       `merged_events |> Enum.group_by(& &1.payload["record_id"])` over the entity type's
+       *full* event history — a `DELETED` event does not remove its `record_id` from
+       `grouped`; `apply_event/3`'s `@deleted_event` clause (line 494-504) folds it to
+       `deleted: true` on the same accumulator, which `write_snapshots/3` then persists via
+       `maybe_mark_deleted(changeset, true)` (line 284, `Ecto.Changeset.put_change(:deleted,
+       true)`) — a row, not an absence. So the reinsert always restores the same
+       `(entity_type, record_id)` key set that existed before the `delete_all`, deleted
+       rows included.
+    4. **Mid-loop failure never reaches commit.** If any `Repo.insert!/2` in the reinsert
+       loop raises (data corruption, an unexpected constraint violation unrelated to this
+       FK), the exception propagates out of the `Repo.transaction/1` closure, which rolls
+       the whole transaction back — `delete_all` included. A deferred check never even
+       evaluates against a rolled-back transaction, so a genuine mid-rebuild failure cannot
+       produce a state where the deferred FK either wrongly passes or wrongly raises; it
+       simply never gets asked, and the old rows (and any attachments pointing at them)
+       are exactly as they were before the rebuild attempt.
+
+    Net: at the one point Postgres actually checks this constraint (commit), the full
+    `(entity_type, record_id)` key set for that entity type is either fully back in place
+    (success path) or the transaction never committed at all (failure path) — there is no
+    reachable state where the deferred check observes a genuinely missing key. A plain
+    (non-deferred) FK does not have this property — it would evaluate mid-transaction,
+    immediately after `delete_all` and before any reinsert has happened, guaranteeing a
+    crash. Dropping to a soft/app-level reference (candidate 3 from CODE-DESIGN-VALIDATOR's
+    prior round) is therefore unnecessary: it would trade away the real integrity guarantee
+    (§1's stated close of former OQ-1 — an attachment can never be created against a
+    nonexistent record) to work around a failure mode `DEFERRABLE INITIALLY DEFERRED`
+    already eliminates, for free, using only standard Postgres constraint-timing semantics.
+    Changing `write_snapshots/3` itself to an upsert (candidate 2) is also unnecessary for
+    the same reason, and would additionally modify already-shipped REQ-229/297 code outside
+    this design's scope (this document specifies `entity_record_attachments` only, no
+    `lib/letflow/entities/record/projector.ex` change is proposed or required) — worth
+    flagging as a possible independent future cleanup of `write_snapshots/3`'s delete-then-
+    reinsert shape, but not something this design recommends doing, since deferred-FK
+    correctness does not depend on it.
+
+    One residual note, not a blocker: while a rebuild's transaction is open (between its
+    `delete_all` and its commit), a *concurrent* `EntityAttachments.upload/2` transaction
+    against the same `(entity_type, record_id)` still reads the pre-rebuild row under
+    Postgres's default READ COMMITTED isolation (an uncommitted delete is invisible to
+    other transactions), so it is unaffected either way — it either commits before the
+    rebuild's delete_all, or its own FK check (also deferred) resolves after the rebuild
+    commits and the row is back. No new failure mode from concurrency is introduced by
+    choosing `DEFERRABLE INITIALLY DEFERRED`.
+
+Nothing survives against the corrected facts and the backfill path re-derivation above, so
+nothing remains to justify a soft reference. `upload/2`'s changeset gains a
 `foreign_key_constraint(:record_id, name: <constraint name>)` clause; a violation (caller
 supplies an `(entity_type, record_id)` pair with no matching `entity_record_latest` row)
 surfaces as `{:error, Ecto.Changeset.t()}` — already part of `upload/2`'s declared `@spec`
@@ -187,11 +262,21 @@ create index(:entity_record_attachments, [:content_hash], prefix: schema)
 # literal, migration-authored statement (no interpolated tenant/user data, INV-7
 # unaffected) backed by entity_record_latest's own composite unique index
 # (entity_record_latest_entity_type_record_id_idx, confirmed in §0/§1 above).
+#
+# DEFERRABLE INITIALLY DEFERRED is load-bearing, not stylistic: §1 re-derives that
+# Letflow.Entities.Record.Projector.write_snapshots/3 (req297 §9's backfill write path)
+# deletes every entity_record_latest row for an entity_type and reinserts all of them
+# inside ONE Repo.transaction/1. A plain (immediate) FK would raise on that delete_all
+# the instant any entity_record_attachments row exists for the entity type being
+# rebuilt. Deferring the check to transaction commit lets the reinsert complete first --
+# see §1 for the full trace of why that always fully restores the same
+# (entity_type, record_id) key set before commit.
 execute("""
 ALTER TABLE #{schema}.entity_record_attachments
   ADD CONSTRAINT entity_record_attachments_record_fkey
   FOREIGN KEY (entity_type, record_id)
   REFERENCES #{schema}.entity_record_latest (entity_type, record_id)
+  DEFERRABLE INITIALLY DEFERRED
 """)
 ```
 
@@ -511,9 +596,12 @@ flagged again here for the same reason rather than silently re-deriving a differ
 ## 7. Open questions
 
   - **OQ-1.** `Letflow.Entities.Records.delete_record/2` is a soft/event-sourced delete
-    (`entity_record_latest.deleted` flag), never a row removal — §1's FK (re-derived) does
-    not cascade or reject on this, since it never fires on a soft delete (the row is never
-    actually removed). A "deleted" record's attachments therefore remain listable forever
+    (`entity_record_latest.deleted` flag), never a row removal — §1's FK (re-derived,
+    `DEFERRABLE INITIALLY DEFERRED`) does not cascade or reject on this, since it never
+    fires on a soft delete (the row is never actually removed) and, per §1's backfill-path
+    trace, a rebuild always restores the same row (deleted flag included) before its
+    transaction commits, so a rebuild after a soft delete does not disturb this either. A
+    "deleted" record's attachments therefore remain listable forever
     via direct `attachment_id` lookup (`get`/`get_content`) and via `list/2`
     (entity_type+record_id still resolves rows even though the parent record now reads as
     deleted through `POST /entities/query`). Whether that is the intended lifecycle
@@ -576,3 +664,90 @@ the forbidden vertical noun "[exam] question [image]"; confirmed by inspection o
 the four lines cited by a broader `grep -n "question"` pass. Only the "S10 gap 3"
 stage-bookkeeping citation in this document's own title line is a permitted exception under
 the rule.
+
+## 10. SECURITY-REVIEWER verdict (WF02-REQ313-20260911)
+
+**Status: PASS.** Design-only gate against `docs/agents/instructions/security-invariants.md`
+INV-1..INV-9. Every applicable-invariant claim below was checked directly against the cited
+code on `main` (not taken on the design's word) — file/line references are to the state of
+the repo at review time.
+
+- **INV-1 (tenant data isolation) — APPLIES, SATISFIED.** Verified `Letflow.Api.Context.
+  scoped_repo_opts/1` (`lib/letflow/api/context.ex:219-230`) directly: it resolves `prefix`
+  solely from `conn.assigns.auth_context.tenant_id` via
+  `TenantProvisioning.schema_name_for_tenant/1` — no caller-supplied tenant id or schema name
+  path exists in that function. Verified `Letflow.Routers.Entities.prefix!/1`
+  (`entities.ex:1354`, `Keyword.fetch!(conn.assigns.scoped_opts, :prefix)`) is the only prefix
+  source the new routes would use, matching every other handler in that router (`authorize.ex:122`
+  assigns `scoped_opts` once, upstream of all handlers). §1's migration places the new table
+  and both indexes `prefix: schema` (per-tenant), never `public`. (c) — the design's §2
+  "mirrored 1:1... one substitution throughout (`instance_id` → `entity_type` + `record_id`)"
+  language, read against `Letflow.Repository.Attachments`' own documented mechanism
+  (`attachments.ex:18-20`: `tenant_id` "is never accepted from caller-supplied attrs — it is
+  always derived from `opts[:prefix]` via `Letflow.TenantProvisioning.
+  tenant_id_for_schema_name/1`"), is sufficient to establish that `entity_record_attachments.
+  tenant_id` is populated the same way, not caller-supplied — `upload_attrs()` (§2) has no
+  `tenant_id` field at all. **Non-blocking note:** §5's dedicated INV-1 section does not
+  itself name this mechanism (it only discusses `prefix` for query scoping, not the
+  `tenant_id` column's write-time derivation) even though §1 introduces that column — this is
+  exactly the class of thing INV-1(c) exists to make explicit. The design is not wrong, but
+  ELIXIR-DEV should state `tenant_id: TenantProvisioning.tenant_id_for_schema_name!(prefix)` (or
+  equivalent) explicitly in the implementation rather than relying on the reader to infer it
+  from §2's "mirrored 1:1" phrasing.
+
+- **INV-2 (server-side field authorisation) — APPLIES (live API surface exists today, not
+  deferred to S4 despite this file's stale stage note), SATISFIED.** §5's "route-permission-
+  gated only, no FieldGrants" decision was checked against `Letflow.Entities.Query.
+  FieldGrants` (`lib/letflow/entities/query/field_grants.ex`, exists) and against REQ-212's own
+  shipped precedent (`Letflow.Repository.Attachments`/`Letflow.Routers.Instances`'s attachment
+  routes apply no `FieldGrants` step either, gating purely on `:AttachmentsManage`/
+  `:AttachmentsRead`). `FieldGrants` redacts a tenant-authored open `field_values` document;
+  `entity_record_attachments` is a small, fixed, code-defined column set — the design's
+  reasoning that no analog applies here is correct and consistent with existing precedent.
+
+- **INV-3 (untrusted runtime sandboxing) — NOT APPLICABLE.** No Lua/WASM/scripting path
+  touched by this design.
+
+- **INV-4 (secrets by reference only) — NOT APPLICABLE.** No new secret material, config, or
+  env var resolution introduced by this design.
+
+- **INV-5 (not-found/forbidden indistinguishability) — APPLIES (live lookup-by-ID endpoints
+  exist today), SATISFIED.** Verified directly against `Letflow.Routers.Entities` (not taken
+  on the design's word): `render_get_definition/2` (`entities.ex:670`), the record-command
+  renderer (`entities.ex:852-856`), and the raw `:error -> Response.not_found(conn)` path
+  (`entities.ex:660`) all fold distinct error atoms — including cross-tenant-invisible "row
+  exists in another tenant's schema" and "row never existed" — to the same zero-detail
+  `Response.not_found/1` (`lib/letflow/api/response.ex:147`). §5's claim that `get/2`/
+  `get_content/2`/`delete/2` follow the identical two-stage shape (`Ecto.UUID.cast/1` first, no
+  DB round-trip on a malformed id, then a prefix-scoped `Repo.get/3`) and that `list/2` returns
+  an empty 200 page rather than a 404 (avoiding an existence-check timing signal) both match
+  this precedent and INV-5's own timing-signal concern.
+
+- **INV-6 (new data-access paths prove their scoping) — APPLIES, SATISFIED by this review
+  itself** — a SECURITY-REVIEWER handoff now exists for this design with `status: PASS` and an
+  explicit per-invariant disposition, per this section.
+
+- **INV-7 (no SQL string interpolation) — APPLIES, SATISFIED.** `EntityAttachments` per §5 uses
+  `Ecto.Query`/`Repo.*` exclusively for all four functions — `entity_type`/`record_id` bound as
+  `^`-pinned values, never string-interpolated. The one raw-SQL exception, the composite FK's
+  `execute/1` statement in §1, was checked against the one existing precedent for this pattern
+  in the codebase: `priv/repo/migrations/20260907000001_add_entity_definitions_active_partial_
+  index.exs` (lines 49-54, 58-93) documents the identical reasoning — `schema = prefix()` is
+  Ecto's own migration-resolved, non-caller-controlled value, not tenant/user-supplied content
+  — and interpolates it into raw SQL the same way. The design's `#{schema}` interpolation in
+  its FK `execute/1` snippet matches this established, already-reviewed pattern.
+
+- **INV-8 (no unhandled crashes on realistic failure paths) — APPLIES, SATISFIED.** Every
+  function's `@spec` in §2 (`upload/2`, `list/2`, `get/2`, `get_content/2`, `delete/2`) returns
+  a tagged `{:ok, _} | {:error, _}` result covering every realistic failure mode named
+  (`:invalid_id`, `:not_found`, `:file_too_large`, `:infected`, `:scan_unavailable`,
+  `Ecto.Changeset.t()`, `:content_missing`, `:not_available`, cursor-pagination errors) — no
+  bare pattern match against external I/O or tenant input is specified anywhere in this design.
+
+- **INV-9 (tenant-controlled outbound URL validation) — NOT APPLICABLE.** This design makes no
+  outbound HTTP/HTTPS request derived from tenant-controlled input.
+
+**Overall: PASS.** No BLOCKER gap found. One non-blocking strengthening note recorded under
+INV-1 above for ELIXIR-DEV to make the `tenant_id` derivation mechanism explicit in the
+implementation (it is unambiguous by inference from §2, but not independently stated in §5's
+security section, which is the section INV-1(c) is checked against).

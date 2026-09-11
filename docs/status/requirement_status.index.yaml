@@ -2588,8 +2588,12 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 20
+    entries: 21
     note: >
+      Incremented to 21 by ORCH's own ISS-0583 SCOPE-CHANGE done-event
+      append (fix/ISS-0583-20260911) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 21 on-disk entries; 934
+      lines, well under the roll ceiling.
       Incremented to 20 by ORCH's own SCOPE-CHANGE done-event append
       (reopening queue task 584, GH#1202, left stuck in status: blocked
       by a sibling session's own race, via set_lock + release with

@@ -6212,5 +6212,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0582 (queue task 582, GH#1196) -- pack_entity_definition/1 embedded a raw, non-UTF-8-safe SHA-256 digest (logical_shape_version) verbatim into the SolutionPack pack document, breaking Jason.encode!/1 for real. Discovered by TEST-DESIGNER writing REQ-306's round-trip coverage. Fix: hex-encode at pack time (encode_logical_shape_version/1, matching Records.hex_version/1's convention), hex-decode at parse time (decode_logical_shape_version/1, non-raising, reusing :invalid_pack_document). create_definition/2 recomputes logical_shape_version fresh and never reads the packed value, so this is round-trip-fidelity only, not load-bearing for install correctness. Pipeline: CODE-DESIGNER (PASS first try, explicitly called this in-scope for SECURITY-REVIEWER) -> CODE-DESIGN-VALIDATOR PASS first try -> ELIXIR-DEV (real AC1/AC2 evidence via throwaway test) -> SECURITY-REVIEWER PASS -> REVIEWER PASS -> TEST-DESIGNER added one permanent regression test (real export/4 -> Jason encode/decode -> install/3 pipeline, fail-first-proven against the pre-fix code). TEST-DESIGN-VALIDATOR skipped per established precedent."
     }
+,
+    {
+      "run_id": "WF03-ISS0583-20260911",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0583",
+      "queue_task_id": 583,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1200,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/mix/tasks/letflow.backfill_event_type_versions.ex"
+      ],
+      "branch_name": "fix/ISS-0583-20260911",
+      "started_at": "2026-09-11T00:22:37Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0583 (queue task 583, GH#1200) -- reattempted after REQ-292 merged (PR #1204), resolving an earlier blocked outcome (2026-09-10T21:54Z) whose precondition (a real TASK_COMPLETED v2 schema) did not yet exist. Extends mix letflow.backfill_event_type_versions (ISS-0332's already-generic mechanism) with a byte-verbatim TASK_COMPLETED v2 seed, backfilling pre-existing tenants stuck at schema_version 1. Pipeline: CODE-DESIGNER (re-verified premise for real; 1 rework for a phantom 'DIRECTIVE T-4' citation) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (fail-first-proven regression test, real AC1 evidence) -> SECURITY-REVIEWER FAIL then PASS (1 rework: caught the new test file reintroducing the exact global Sandbox.mode(:auto) leak ISS-0580 had just closed hours earlier, causing a real ColumnPromotionTest regression in the same run -- fixed via SandboxAutoMode.provision!/2, independently re-verified) -> REVIEWER PASS. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent."
+    }
   ]
 }

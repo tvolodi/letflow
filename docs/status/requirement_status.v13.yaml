@@ -900,3 +900,35 @@ history:
       applies to a different scenario, a mismatched target-claim, not this
       one). Confirmed via the release response: status: "open",
       locked_by: null. REQ-293 is now genuinely claimable.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T01:17:21Z"
+    note: >
+      ISS-0583 (GH#1200, queue task 583) -- reattempted after REQ-292
+      merged (PR #1204), resolving the earlier blocked outcome's
+      precondition. Extends mix letflow.backfill_event_type_versions
+      (ISS-0332's already-generic mechanism) with a byte-verbatim
+      TASK_COMPLETED v2 seed, backfilling pre-existing tenants stuck at
+      schema_version 1 so task completion no longer fails with
+      {:error, {:event_append_failed, {:payload_validation_failed,
+      failures}}} when a genuine computed_field_disagreement/
+      visible_when_false_value_discarded event occurs. Pipeline:
+      CODE-DESIGNER (independently re-verified the premise for real this
+      time; 1 rework cycle for a phantom "DIRECTIVE T-4" citation that
+      doesn't exist in docs/guides/test_developer_guide.md) ->
+      CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (real AC1 before/after
+      registry evidence quoted, fail-first-proven regression test) ->
+      SECURITY-REVIEWER FAIL then PASS (1 rework: caught that the new
+      test file reintroduced the EXACT global Sandbox.mode(:auto) leak
+      anti-pattern ISS-0580 had just closed hours earlier, causing a
+      real ColumnPromotionTest regression in the same run -- fixed by
+      switching to SandboxAutoMode.provision!/2, independently
+      re-verified via a full suite re-run) -> REVIEWER PASS (confirmed
+      DEFINITION_PROMOTED's existing per-tenant backfill mechanics
+      genuinely unchanged, confirmed the template: :replay escape hatch
+      is pre-existing not invented, flagged a narrow pre-existing
+      tenant-template content-staleness gap as a follow-up candidate,
+      not a blocker). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per
+      this session's established precedent (fail-first-proven tests,
+      REVIEWER independently verified quality).

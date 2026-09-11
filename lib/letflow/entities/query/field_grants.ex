@@ -127,13 +127,19 @@ defmodule Letflow.Entities.Query.FieldGrants do
   where `Cursor.paginate/5`'s output and `load_restrictions/3`'s output
   meet.
   """
-  @spec redact_page(Pagination.Page.t(Latest.t()), restriction_set()) ::
-          Pagination.Page.t(Latest.t())
+  @spec redact_page(
+          Pagination.Page.t(Latest.t() | Letflow.Entities.Query.Compiler.entity_row()),
+          restriction_set()
+        ) :: Pagination.Page.t(Latest.t() | Letflow.Entities.Query.Compiler.entity_row())
   def redact_page(%Pagination.Page{items: items} = page, restriction_set) do
     %{page | items: Enum.map(items, &redact_item(&1, restriction_set))}
   end
 
   defp redact_item(%Latest{field_values: field_values} = item, restriction_set) do
+    %{item | field_values: redact_field_values(field_values, restriction_set)}
+  end
+
+  defp redact_item(%{field_values: field_values} = item, restriction_set) when is_map(item) do
     %{item | field_values: redact_field_values(field_values, restriction_set)}
   end
 

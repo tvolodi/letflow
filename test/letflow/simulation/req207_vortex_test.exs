@@ -1260,7 +1260,32 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # now complete and every assertion in this block that spoke of it as
           # missing has been inverted to assert its presence. It is not being
           # waved through -- it was triaged, and the triage changed the test.
-          "REQ-311"
+          "REQ-311",
+          # REQ-312 (S10 gap 2, aggregation query design) matches this
+          # module's own word-bounded entity/entities regex via its title
+          # ("...for entity records"). Design-only -- no lib/ implementation,
+          # no route mounted -- so it does not change this disposition;
+          # admitted here per the same triage precedent as REQ-295/296/299/
+          # 300/302/304/308/309/310/311 above.
+          "REQ-312",
+          # REQ-313 (S10 gap 3, "Design attachments on an entity record") also
+          # matches the regex via its title, but is a DIFFERENT exemption
+          # shape than every id above: it is not `status: done` at time of
+          # admission (still `pending`), and unlike REQ-310/REQ-311 it is not
+          # a requirement that builds THIS scenario's subsystem at all --
+          # attachments-on-a-record is an unrelated S10 gap, orthogonal to
+          # the query/record-read route the six :gui steps above depend on.
+          # Its own eventual `status: done` will not change this scenario's
+          # disposition, so it belongs here rather than in the pending_only
+          # tripwire tier below (which exists specifically for requirements
+          # that DO build this subsystem and must be re-derived on landing).
+          "REQ-313",
+          # REQ-314 (S10 gap 12, "Design bulk import/export of entity
+          # records") -- same exemption shape and reasoning as REQ-313
+          # immediately above: matches the regex via title only, still
+          # `pending`, and bulk import/export is orthogonal to the
+          # query/record-read route this scenario's six :gui steps track.
+          "REQ-314"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

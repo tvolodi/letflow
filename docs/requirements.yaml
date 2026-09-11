@@ -19792,7 +19792,7 @@ requirements:
     title: Design an aggregation/reporting query capability for entity records (S10 gap 2)
     owner: CODE-DESIGNER
     impl_order: 602  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. An aggregation surface over entity records serves any

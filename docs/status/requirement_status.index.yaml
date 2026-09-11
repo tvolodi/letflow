@@ -2909,8 +2909,12 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 17
+    entries: 18
     note: >
+      Incremented to 18 by ORCH's own REQ-312 done-event append
+      (feature/WF02-REQ312-20260911) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 18 on-disk entries;
+      625 lines, well under the roll ceiling.
       Incremented to 17 by ORCH's own WF01-S10gaps-2-3-12-20260911
       SCOPE-CHANGE done-event append (REQ-312..314 filed and
       registered) -- `grep -c "^  - req:"

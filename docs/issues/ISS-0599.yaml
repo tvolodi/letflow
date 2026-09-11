@@ -60,3 +60,21 @@ affected_files:
   - docs/requirements.yaml
   - docs/agents/protocols/TASK_QUEUE.md
 queue_ref: Q-599
+github_ref: GH-1240
+status: resolved
+resolved_by: ORCH
+resolved_in_run: chore/iss0599-queue-race-mitigation-20260911
+resolved_at: "2026-09-11T08:00:56Z"
+resolution_note: >
+  Applied option (a) from this record's own fix direction, narrowed to
+  also close the get_next_task exposure: at pickup time, task 596
+  (REQ-309) was locked by orch-session-7ca7f9f6, and task 597 (REQ-310)
+  had ALREADY been locked by tvolodi-orch -- confirming the exact
+  residual risk this issue named had already begun to materialize.
+  597's lock was left untouched (an active interactive-session lock,
+  not a fix target). Task 598 (REQ-311), still unlocked, was locked
+  and immediately released with status: "blocked", closing the
+  remaining exposure window for any future get_next_task call.
+  docs/requirements.yaml's own depends_on chain remains authoritative.
+  Option (b) (cancel+re-register) was not attempted since 597 is
+  genuinely in progress under a live lock.

@@ -19157,7 +19157,7 @@ requirements:
     title: Design the HTTP surface for entity definitions and entity records, including the query DSL over HTTP (S10 gap 1)
     owner: CODE-DESIGNER
     impl_order: 587  # letflow-queue task id; depends_on [] so no translation needed
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A route surface over Letflow.Entities.{Definitions,Records}

@@ -36,7 +36,7 @@ defmodule Letflow.Routers.EntitiesAggregateTest do
 
   defp dispatch(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))
 
-  defp request(method, path, ctx, body \\ nil, opts \\ []) do
+  defp request(method, path, ctx, body, opts) do
     conn =
       case body do
         nil ->

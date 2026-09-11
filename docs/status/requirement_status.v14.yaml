@@ -169,3 +169,57 @@
 
 
 history:
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-11T03:39:58Z"
+    note: >
+      WF03-ISS0594-20260911 started (queue task 594, GH#1222,
+      docs/issues/ISS-0594.yaml). test/letflow/service_catalog_test.exs:588's
+      "SolutionPack's moduledoc names REQ-192 as the owner" test is a bare
+      substring check (module_source =~ "REQ-192") that REQ-307's own
+      moduledoc correction (2026-09-11) has semantically inverted: the
+      corrected text now says the service_catalog_entries install policy
+      is UNOWNED, but the test still passes only because the string
+      "REQ-192" still happens to appear. A latent false-green in the
+      dangerous direction -- removing that string entirely (making the
+      moduledoc MORE correct) would FAIL this test. test/specs/REQ-191.md
+      lines 179-182 carry the same stale wording. Fix direction: assert
+      the actual current property (policy documented as unowned, hard-fail
+      retained) rather than a requirement-id substring. Branch:
+      fix/ISS0594-20260911.
+      NOTE: this entry was originally appended to (the now-closed) volume
+      13, then composed here instead by this run's own Step Final rebase,
+      since volume 13 was independently closed by fix/ISS-0595-20260911
+      before this branch's own Step Final ran -- "one run's started/done
+      land one in each volume across a roll boundary," per this index's
+      own established pattern.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-11T04:19:50Z"
+    note: >
+      WF03-ISS0594-20260911 done (queue task 594, GH#1222). Root cause:
+      test/letflow/service_catalog_test.exs's AC10 test had a
+      semantically-inverted bare substring assertion
+      (module_source =~ "REQ-192") that kept passing after REQ-307
+      corrected solution_pack.ex's moduledoc/comment to say the
+      service_catalog_entries policy is UNOWNED rather than deferred to
+      REQ-192 -- a test that would FAIL if a future edit made the
+      moduledoc MORE correct by removing the "REQ-192" substring
+      entirely. Fix (CODE-DESIGNER design, TEST-DESIGNER
+      implementation): renamed the describe block/test and swapped the
+      assertion to module_source =~ "UNOWNED"; corrected
+      test/specs/REQ-191.md's matching stale wording. No lib/ change.
+      mix test test/letflow/service_catalog_test.exs: 33/33 passed;
+      mix compile --warnings-as-errors and mix format
+      --check-formatted clean. SECURITY-REVIEWER skipped (test/spec-doc
+      -only, no tenant-data path, confirmed by CODE-DESIGN-VALIDATOR and
+      REVIEWER). REVIEWER PASSED, independently confirmed via git
+      log/git show that the new assertion is a genuine pre/post-REQ-307
+      discriminator. Branch: fix/ISS0594-20260911.
+      NOTE: this entry was originally appended to (the now-closed) volume
+      13, then composed here instead, for the same roll-boundary reason
+      this run's own started-event above already states.

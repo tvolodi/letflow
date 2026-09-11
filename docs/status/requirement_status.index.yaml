@@ -2615,6 +2615,16 @@ volumes:
       1201 lines / 71184 bytes, well under the roll ceiling. Recounted
       directly from the composed file per this note's own
       recount-every-time rule.
+      WF03-ISS0594-20260911's own Step Final rebase found this volume
+      already independently closed at 30 entries by
+      fix/ISS-0595-20260911 above -- since a closed volume never regains
+      an entry once rolled, this run's own two SCOPE-CHANGE events
+      (started 03:39:58Z, done 04:19:50Z) were composed into volume 14
+      instead, per the established "one run's started/done land one in
+      each volume across a roll boundary" pattern. This volume's frozen
+      content (30 entries, 1201-line frozen prefix) is unchanged by that
+      composition -- confirmed identical to the pre-rebase working-tree
+      file.
       Recounted to 29 on WF02-REQ307-20260911's second merge of
       origin/main. This is the same concurrent-append collision as the
       previous recount, now three-way: this branch carried REQ-307's
@@ -2899,8 +2909,16 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 0
+    entries: 2
     note: >
+      Incremented to 2 by ORCH's own WF03-ISS0594-20260911 started+done
+      SCOPE-CHANGE event pair (composed here at this branch's own Step
+      Final rebase, since volume 13 was independently closed by
+      fix/ISS-0595-20260911 before this run's own rebase, per the
+      established "one run's started/done land one in each volume across
+      a roll boundary" pattern) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 2 on-disk entries; 225
+      lines / 13086 bytes, well under the roll ceiling.
       Opened by ORCH at fix/ISS-0595-20260911's Step Final rebase,
       successor to volume 13. Created with volume 13's header text
       verbatim (volume number, opening date and predecessor path

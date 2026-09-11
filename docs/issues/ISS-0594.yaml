@@ -47,3 +47,22 @@ affected_files:
   - test/letflow/service_catalog_test.exs
   - test/specs/REQ-191.md
 queue_ref: Q-594
+github_ref: GH-1222
+status: resolved
+resolved_in_run: WF03-ISS0594-20260911
+resolved_at: "2026-09-11T04:19:50Z"
+resolution: >
+  CODE-DESIGNER designed, TEST-DESIGNER implemented: renamed the AC10
+  describe block/test (dropped the "REQ-192 named" framing) and swapped
+  the bare substring assertion from `module_source =~ "REQ-192"` to
+  `module_source =~ "UNOWNED"`, matching solution_pack.ex's REQ-307-
+  corrected moduledoc/comment text that now states the
+  service_catalog_entries install policy is UNOWNED rather than
+  deferred to REQ-192. Corrected test/specs/REQ-191.md's matching stale
+  wording in the same change. No lib/ changes. Confirmed the new
+  assertion is a genuine pre/post-REQ-307 discriminator (old moduledoc
+  text had no "UNOWNED" substring at all) via git log/git show.
+  mix test test/letflow/service_catalog_test.exs: 33/33 passed.
+  mix compile --warnings-as-errors and mix format --check-formatted:
+  clean. SECURITY-REVIEWER skipped (test/spec-doc-only, no tenant-data
+  path). REVIEWER PASSED.

@@ -577,3 +577,118 @@ addressed by name in that verdict per REQ-308's acceptance criteria, not as a ge
 pass.
 
 *(Space reserved for SECURITY-REVIEWER's recorded verdict.)*
+
+---
+
+### SECURITY-REVIEWER verdict — 2026-09-11
+
+**Scope test.** This design specifies a new HTTP surface (`Letflow.Routers.Entities`)
+reading and writing tenant-scoped data (entity definitions and records), including a
+lookup-by-id path (`/entities/definitions/:id`, `/entities/definitions/active/:name`,
+`/entities/definitions/by-name/:name`) and response-shaping for tenant-scoped entities
+(the field-grant redaction path). It is squarely a tenant-data path. In scope.
+
+Reviewed against `docs/agents/instructions/security-invariants.md` INV-1..INV-9, code
+read in full (not taken on the design doc's word) at each cited location.
+
+**INV-1 (tenant data isolation) — APPLIES, PASS.** Read
+`Letflow.Api.Context.scoped_repo_opts/1` (`lib/letflow/api/context.ex:219-230`):
+`tenant_id` is read exclusively from `conn.assigns[:auth_context].tenant_id`
+(`tenant_id_from_auth_context/1`, private, no other input path) and resolved to a
+schema name via `TenantProvisioning.schema_name_for_tenant/1`; the function accepts no
+caller-supplied tenant/schema argument at all — its only parameter is `conn`. Every
+route in the design's §1 table delegates to a context/query module that takes `prefix`
+positionally and derives `tenant_id` server-side from it (confirmed for
+`FieldGrants.load_restrictions/3` below; design's own premises-section grep confirms
+the same shape for `Definitions.*`/`Records.*`/`Compiler.compile/2`). No route in §1
+accepts a tenant id, schema name, or slug from path/query/body. Design correctly states
+the mechanism and cites the correct function.
+
+**INV-2 (server-side field authorisation) — APPLIES, PASS.** Read
+`Letflow.Entities.Query.FieldGrants` in full
+(`lib/letflow/entities/query/field_grants.ex`, 203 lines). `load_restrictions/3` is
+prefix-scoped (calls `TenantProvisioning.tenant_id_for_schema_name/1` and runs its
+anti-join `Repo.all(query, prefix: prefix)`), keyed by `user_id` — server-resolved
+per the design's §5 (`conn.assigns.auth_context.user_id`), never caller-supplied.
+`redact_page/2` (non-join) and `redact_joined_page/2` (join, REQ-300 addition) both
+redact before the page ever leaves this module — `Response.ok/2` is the next step per
+the design's own ordering, so redaction happens pre-serialisation. `redact_joined_page/2`
+correctly redacts every distinct entity key in a `joined_row()` (`:primary` and each
+joined `entity_type` string, confirmed by `redact_joined_item/2`'s
+`Map.new(joined_row, fn {key, entity_row} -> ...)` loop over all keys, no special-casing)
+— the design's claim that the joined case is handled with the same rigor as the primary
+case holds up against the actual code, not just the moduledoc's assertion.
+
+**INV-3 (untrusted runtime sandboxing) — NOT APPLICABLE.** This design introduces no
+Lua/WASM execution or tenant-authored-script host-capability surface. S5 has not
+started; correctly out of scope.
+
+**INV-4 (secrets by reference only) — NOT APPLICABLE.** This design introduces no new
+secret material, credential, or token handling — permission atoms and route
+declarations only. `grep -rn "System.get_env" ...` / the hardcoded-secret heuristic
+grep are not relevant to this diff (design doc only, no `lib/` or `config/` changes).
+
+**INV-5 (not-found/forbidden indistinguishability) — APPLIES, PASS.** Read the
+not-found shaping in `lib/letflow/routers/definitions.ex`: `render_get_by_id/2`
+(`:error, :not_found} -> Response.not_found(conn)`, line 408) and its own moduledoc
+note (lines 190-192) confirm the existing precedent — `Response.not_found/1` takes no
+detail, and the prefix-scoped lookup itself makes a cross-tenant row structurally
+invisible rather than a distinguishable "yes but forbidden" case, so the same code path
+serves both a genuinely nonexistent id and a cross-tenant probe. The design's §5 and §7
+extend this exact mechanism (`{:error, :entity_type_not_found}`,
+`{:error, {:definition_not_found, _}}`, `{:error, {:record_not_found, _}}}` all folding
+to `Response.not_found/1`) and explicitly commit to adding no cross-tenant existence
+pre-check. No timing asymmetry is introduced — all three error atoms arise from the
+same single prefix-scoped query each delegate already performs (confirmed: no
+additional round-trip is described in §5/§7 for the not-found path specifically).
+
+**INV-6 (new data-access paths prove their scoping) — APPLIES, PASS.** This handoff and
+§5's by-name treatment of INV-1/INV-2/INV-5/INV-7 (§11's own instruction to address them
+by name, not generally) is exactly what this invariant requires. Satisfied by this
+review itself plus the design's explicit §5 statement.
+
+**INV-7 (no SQL string interpolation) — APPLIES, PASS.** Read
+`lib/letflow/entities/query/compiler.ex`'s filter/order-by construction in full: every
+`promoted_column_dynamic/json_cast_dynamic/json_field_dynamic` clause uses
+`fragment("?", literal(^field_name))` (Ecto's own parameterized `literal/1`, not string
+interpolation) for column-name-shaped values and `^value`/`^pattern` pins for
+caller-supplied comparison values — no `<>` or `"#{...}"` string-building anywhere in
+the file. Read `lib/letflow/entities/records.ex:405`: the one raw-SQL path
+(`write_entity_table_row/3`) calls `Repo.query(sql, all_values, prefix: ctx.prefix)` —
+bound parameters, not concatenation. Also checked `Letflow.Entities.Query.Types.parse_filter_op/1`/
+`parse_sort_dir/1` (`lib/letflow/entities/query/types.ex:122-153`): both are closed
+`case` clauses over a fixed string set, never `String.to_atom/1` on caller input — so
+the router's pre-parsing step the design describes (§4) introduces no atom-exhaustion
+risk either, a related-but-distinct concern the design didn't have to address under
+INV-7's letter but is worth noting held up on inspection. This design's own router adds
+no new `Repo.query`/string-built SQL; it composes only these already-parameterized
+delegates.
+
+**INV-8 (no unhandled crashes on realistic failure paths) — APPLIES, PASS.** Every
+error union this design routes through (§4's `compile_error()`, §4's `Cursor.paginate/5`
+error union, §7's `Records.command_error()`, `create_error()`) is mapped exhaustively to
+an HTTP status including a generic `any other term() -> 500` catch-all (§7) — no bare
+`{:ok, x} = ...`-shaped assumption anywhere in the design's own handler composition.
+External I/O and tenant-controlled input (query filters, join clauses, record payloads)
+all flow through typed `{:ok, _} | {:error, _}` results at every step described.
+
+**INV-9 (tenant-controlled outbound URL validation) — NOT APPLICABLE.** This design
+makes no outbound HTTP request derived from tenant-controlled input; it is an inbound
+HTTP surface only.
+
+**Verdict: PASS.** INV-1, INV-2, INV-5, INV-6, INV-7, INV-8 apply and are satisfied by
+the design as specified, verified against the actual cited code (not the design doc's
+assurances alone). INV-3, INV-4, INV-9 do not apply to this diff's scope. No gap found
+that would let an implementer building exactly to this spec violate an applicable
+invariant. Two notes for ELIXIR-DEV to preserve at implementation time (not blockers,
+since the design already commits to both): (1) the join-branch redaction path
+(`redact_joined_page/2`) must actually be wired for `join`-bearing requests, not just
+the non-join `redact_page/2` path — it would be easy to implement only the simpler
+branch and let it silently under-redact joined reads; (2) the §4 pre-parsing step
+(`Types.parse_filter_op/1`/`parse_sort_dir/1` called before `compile/2`) must run
+before the `query_request()` map is constructed, not be skipped as "redundant" with
+`compile/2`'s own error union — skipping it would not reopen a security gap (the atoms
+are still closed at `compile/2`'s own boundary) but would violate the design's stated
+400-vs-422 error-class distinction.
+
+— SECURITY-REVIEWER

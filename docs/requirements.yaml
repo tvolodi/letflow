@@ -19902,7 +19902,7 @@ requirements:
     title: Design attachments on an entity record (S10 gap 3)
     owner: CODE-DESIGNER
     impl_order: 603  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Attachments scoped to an entity record (rather than a

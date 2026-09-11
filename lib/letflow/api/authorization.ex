@@ -79,6 +79,44 @@ defmodule Letflow.Api.Authorization do
   function and record reads happen only through `POST /entities/query`, so an
   `:EntitiesRecordsRead` would be dead vocabulary. See
   `lib/letflow/design/req308-entity-http-surface.md` §1 and §3.
+
+  ## `EntitiesRecordsExport`/`EntitiesRecordsExportUnredacted`/`EntitiesRecordsImport` (REQ-318) — added ahead of their consuming routes
+
+  Three more atoms, minted ahead of REQ-319/REQ-320's routes, the same
+  "ported/added ahead of its consuming route" state `:DlqOperate`/
+  `:WebhooksManage` and REQ-309's four `Entities*` atoms above already sat in
+  — see `lib/letflow/design/req314-entity-record-bulk-export-import.md` §5.
+
+  * `:EntitiesRecordsExport` — route-level, gates
+    `POST /entities/records/:entity_type/export` (REQ-319). Real
+    `endpoint_policy_key/2` clause.
+  * `:EntitiesRecordsExportUnredacted` — **deliberately NOT route-level**.
+    No `(method, path)` pair resolves to it via `endpoint_policy_key/2` — no
+    route exists whose method+path maps to it, since it is checked a SECOND
+    time, in-handler, only when an export request body carries
+    `unredacted: true` (design §6 INV-2's two-tier mechanism). It still has a
+    `required_permission/1` identity clause and a place in `permission()`/
+    `endpoint_policy_key()`/`@permissions`, because REQ-319's handler calls
+    `evaluate_access/2` against it directly, positionally, exactly as this
+    module's own INV-2 moduledoc section above already establishes nothing
+    requires the atom passed to `evaluate_access/2` to be one
+    `endpoint_policy_key/2` itself resolves.
+  * `:EntitiesRecordsImport` — route-level, gates
+    `POST /entities/records/:entity_type/import` (REQ-320). Real
+    `endpoint_policy_key/2` clause. Deliberately a genuinely separate grant
+    from `:EntitiesRecordsWrite` — not a policy-key-only divergence mapped
+    back onto it the way `:DefinitionsImport` maps back onto
+    `:DefinitionsWrite` above (design §5 states why bulk record import is
+    materially riskier than a single `create_record/2` call).
+
+  Per design §5, this requirement deliberately adds **no** new
+  `role_allows?/2` clause for `PROCESS_DESIGNER`, `PROCESS_OPERATOR`, or
+  `TASK_WORKER` against any of the three — only `PLATFORM_ADMIN`'s existing
+  catch-all grants them today. A future REVIEWER-led role-matrix pass decides
+  wider role assignment once REQ-319/REQ-320 ship; `:EntitiesRecordsExportUnredacted`
+  in particular is flagged (design §5) as reserved for a break-glass/
+  platform-administrative role, never bundled into an ordinary tenant role's
+  default grant set.
   """
 
   @type role ::
@@ -113,6 +151,9 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsWrite
           | :EntitiesQuery
           | :EntitiesAggregate
+          | :EntitiesRecordsExport
+          | :EntitiesRecordsExportUnredacted
+          | :EntitiesRecordsImport
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -154,6 +195,9 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsWrite
           | :EntitiesQuery
           | :EntitiesAggregate
+          | :EntitiesRecordsExport
+          | :EntitiesRecordsExportUnredacted
+          | :EntitiesRecordsImport
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -184,7 +228,10 @@ defmodule Letflow.Api.Authorization do
     :EntitiesDefinitionsWrite,
     :EntitiesRecordsWrite,
     :EntitiesQuery,
-    :EntitiesAggregate
+    :EntitiesAggregate,
+    :EntitiesRecordsExport,
+    :EntitiesRecordsExportUnredacted,
+    :EntitiesRecordsImport
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
@@ -192,13 +239,15 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All twenty-four `Permission` values — R-Co's fourteen, plus REQ-075's
+  All twenty-seven `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
   (`:EntitiesDefinitionsRead`, `:EntitiesDefinitionsWrite`,
   `:EntitiesRecordsWrite`, `:EntitiesQuery`), plus REQ-315's
-  `:EntitiesAggregate`.
+  `:EntitiesAggregate`, plus REQ-318's three entity-record export/import
+  permissions (`:EntitiesRecordsExport`, `:EntitiesRecordsExportUnredacted`,
+  `:EntitiesRecordsImport`).
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -501,6 +550,18 @@ defmodule Letflow.Api.Authorization do
   # :EntitiesQuery immediately above.
   def endpoint_policy_key("POST", "/entities/query/aggregate"), do: :EntitiesAggregate
 
+  # REQ-318 — entity-record bulk export/import routes (REQ-319/REQ-320
+  # implement the routers that consume these; see this module's moduledoc and
+  # design `lib/letflow/design/req314-entity-record-bulk-export-import.md` §4/§5).
+  # `:EntitiesRecordsExportUnredacted` deliberately gets NO clause here — no
+  # (method, path) pair resolves to it; it is checked a second time, in-handler,
+  # only when the export request body carries `unredacted: true`.
+  def endpoint_policy_key("POST", "/entities/records/:entity_type/export"),
+    do: :EntitiesRecordsExport
+
+  def endpoint_policy_key("POST", "/entities/records/:entity_type/import"),
+    do: :EntitiesRecordsImport
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -600,6 +661,17 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:EntitiesQuery), do: :EntitiesQuery
   # REQ-315 — identity clause (policy-key name == permission name), design §3.
   def required_permission(:EntitiesAggregate), do: :EntitiesAggregate
+
+  # REQ-318 — identity clauses (policy-key name == permission name), design §5.
+  # :EntitiesRecordsExportUnredacted has no endpoint_policy_key/2 clause (see
+  # that function above) but still needs this identity clause: REQ-319's
+  # handler calls evaluate_access/2 against it directly, positionally.
+  def required_permission(:EntitiesRecordsExport), do: :EntitiesRecordsExport
+
+  def required_permission(:EntitiesRecordsExportUnredacted),
+    do: :EntitiesRecordsExportUnredacted
+
+  def required_permission(:EntitiesRecordsImport), do: :EntitiesRecordsImport
 
   def required_permission(:Unknown), do: :MetricsRead
 

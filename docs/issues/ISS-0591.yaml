@@ -1,0 +1,38 @@
+id: ISS-0591
+title: CI runs every job twice per commit -- bare `on: [push, pull_request]` with no concurrency group
+discovered_by: ORCH
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T02:50:00Z"
+severity: MAJOR
+description: >
+  .github/workflows/ci.yml lines 99-101 declare `on:` with a bare
+  `push:` and `pull_request:`, and the file has no `concurrency:` key.
+  On a PR branch both events fire, so every commit runs the full
+  backend gate (`mix letflow.check`, ~8-9 minutes with a live
+  postgres:16 service and real migrations) AND the frontend gate
+  twice, concurrently, on byte-identical code.
+
+  MEASURED, not inferred. `gh run list --branch
+  chore/WF01-REQ307-REQ308-20260911` returns 14 runs for 7 commits --
+  one `push` and one `pull_request` run for every single commit.
+
+  Two costs. The obvious one is roughly doubled CI minutes across the
+  whole project. The subtler one is doubled contention on the shared
+  test database: ISS-0590 records a SandboxPoolTest cleanup-timing
+  flake, and parallel full-suite runs are exactly the pressure that
+  makes such a race surface. That same run listing shows commit
+  9dec76c2 with pull_request=failure and push=success -- the identical
+  commit, opposite outcomes, which is ISS-0590 caught in the act.
+
+  Standard fix is a `concurrency:` group keyed on workflow + ref with
+  cancel-in-progress, and/or narrowing `push:` to `branches: [main]`
+  so branch pushes are covered by the pull_request event alone.
+
+  CAUTION for whoever implements it: both job `name:` strings are
+  required status-check contexts on main's branch protection (decision
+  0018, verified live 2026-09-11). Any change must keep those contexts
+  reporting on PRs. A context that stops being reported reads as
+  MISSING, which blocks merges permanently rather than passing.
+affected_files:
+  - .github/workflows/ci.yml
+queue_ref: Q-591

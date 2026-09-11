@@ -99,21 +99,57 @@ require inventing a new caller-facing identifier this design has no reason to ad
 alone is not guaranteed globally unique across different entity types — mirroring
 `entity_record_latest`'s own choice to carry both columns rather than `record_id` alone.
 
-**No foreign key to `entity_record_latest`.** A real FK (`references(:entity_record_latest,
-column: :record_id, ...)`) is not used, for the same reason `entity_record_latest` itself
-carries no FK to a per-entity-type table: `record_id` is not `entity_record_latest`'s own
-primary key (its primary key is the internal `id`; `record_id` is merely a unique-ish
-business column with no unique index stated in its own schema module, and REQ-296/301's
-promotion path can create/select rows through more than one write path). A soft reference
-(plain columns, no DB-level FK) is therefore this design's choice, consistent with how
-`entity_record_latest` itself references no other entity-record table by FK. Deleting an
-entity record does not cascade-delete its attachments at the DB level — mirrored explicitly
-in §2's `delete/2` behavior note and flagged as an open question (§7 OQ-1) for
-ELIXIR-DEV/REVIEWER, since `Letflow.Entities.Records.delete_record/2` is a soft/event-
-sourced delete (`entity_record_latest.deleted` flag — see that schema's `@update_fields`),
-not a row removal, so "the record disappeared" never actually orphans an attachment row at
-the storage level; it only makes the parent record read as deleted through `POST
-/entities/query`.
+**Correction to an earlier draft of this section.** A prior version of this design claimed
+`record_id` has "no unique index stated in its own schema module" and used that as part of
+its justification for no DB-level FK. That claim is **false** — re-verified directly:
+`lib/letflow/entities/record/latest.ex`'s `insert_changeset/2` (lines 61-63) calls
+`unique_constraint([:entity_type, :record_id], name:
+:entity_record_latest_entity_type_record_id_idx)`, and the backing migration
+`priv/repo/migrations/20260906010001_create_entity_record_latest.exs` confirms a real
+`unique_index(:entity_record_latest, [:entity_type, :record_id], name:
+:entity_record_latest_entity_type_record_id_idx, prefix: schema)`. A genuine composite
+unique index on `(entity_type, record_id)` exists, per-tenant, in the same schema this new
+table lives in. The FK decision below is re-derived from that corrected fact.
+
+**Decision, re-derived: a real DB-level composite FK IS used.**
+`entity_record_attachments(entity_type, record_id)` → `entity_record_latest(entity_type,
+record_id)`, added via a raw `execute/1` statement in the migration (Ecto's `references/2`
+helper only emits single-column FKs; a composite FK needs a literal, migration-authored
+`ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY (entity_type, record_id) REFERENCES
+entity_record_latest (entity_type, record_id)` — no interpolated tenant- or user-controlled
+data, so INV-7 is unaffected). Postgres permits a FK to target any column set covered by a
+unique index, not only a primary key, so the composite unique index above is sufficient to
+back this FK.
+
+Re-checking the two candidate reasons a real FK might still be *wrong* despite the index
+existing, both against `lib/letflow/design/req297-entity-promotion-executor.md`:
+  - **Multiple promotion write paths into `entity_record_latest` itself?** No — req297 §8
+    step 4 (line 505) states plainly: "Never touches `entity_record_latest` — that table's
+    write already happened in the preceding `:upsert_record_latest` step; this step is
+    additive only." The promotion dual-write path (§8) only ever writes to the
+    *per-entity-type promoted table*, via `Multi.insert`/`Multi.update` inside
+    `Letflow.Entities.Records`' own command functions (`create_record/2` → `Multi.insert`,
+    `update_record/2`/`delete_record/2` → `Multi.update`) — a single write path into
+    `entity_record_latest`, never a delete-then-reinsert. `entity_type`/`record_id` are
+    also stated as "structurally immutable after insert" by that schema's own moduledoc
+    (`latest.ex` lines 66-71). So the composite key an FK would pin to is stable for the
+    row's whole lifetime.
+  - **Rows replaceable/mutable in a way that violates FK semantics?** No — `delete_record/2`
+    is a soft/event-sourced delete (`entity_record_latest.deleted` flag, via
+    `update_changeset/2`, never a row removal — see that schema's `@update_fields`). The row
+    is never actually deleted by any documented write path, so a FK (default `ON DELETE
+    RESTRICT`, unspecified — matching this table's own `content_hash` FK choice one column
+    up) never has an opportunity to fire, and never blocks a legitimate delete.
+
+Neither candidate reason survives against the corrected facts, so nothing remains to
+justify a soft reference. `upload/2`'s changeset gains a
+`foreign_key_constraint(:record_id, name: <constraint name>)` clause; a violation (caller
+supplies an `(entity_type, record_id)` pair with no matching `entity_record_latest` row)
+surfaces as `{:error, Ecto.Changeset.t()}` — already part of `upload/2`'s declared `@spec`
+(§2), so no new error shape is introduced. This also closes half of former OQ-1: an
+attachment can no longer be created against a nonexistent record at all (DB-enforced, not
+just app-checked) — soft-delete's effect on *existing* attachments (whether they should
+still be listable once the parent record reads as deleted) remains open, restated below.
 
 **Migration — columns and indexes**, per-tenant placement (Decision B, matching
 `instance_attachments`' own placement rationale — this is ordinary tenant business data,
@@ -146,6 +182,17 @@ create index(:entity_record_attachments, [:entity_type, :record_id, desc: :creat
        name: :entity_record_attachments_type_record_created_at_idx, prefix: schema)
 
 create index(:entity_record_attachments, [:content_hash], prefix: schema)
+
+# Composite FK — Ecto's `references/2` only emits single-column FKs, so this is a
+# literal, migration-authored statement (no interpolated tenant/user data, INV-7
+# unaffected) backed by entity_record_latest's own composite unique index
+# (entity_record_latest_entity_type_record_id_idx, confirmed in §0/§1 above).
+execute("""
+ALTER TABLE #{schema}.entity_record_attachments
+  ADD CONSTRAINT entity_record_attachments_record_fkey
+  FOREIGN KEY (entity_type, record_id)
+  REFERENCES #{schema}.entity_record_latest (entity_type, record_id)
+""")
 ```
 
 Column-for-column identical to `instance_attachments` except `instance_id :binary_id`
@@ -376,12 +423,12 @@ def endpoint_policy_key("DELETE", "/entities/records/:entity_type/:record_id/att
 for `:EntitiesAttachmentsRead`), per the existing pattern every other atom in that function
 already follows.
 
-**Role-grant question (OPEN — §7 OQ-2):** which existing roles (the ones currently holding
-`:EntitiesRecordsWrite`/`:EntitiesQuery`, per `authorization.ex` lines ~618-666) should also
-receive `:EntitiesAttachmentsManage`/`:EntitiesAttachmentsRead` by default. This design does
-not resolve that assignment — it is a role-policy decision, not a schema/route/permission-
-vocabulary one, and is called out explicitly rather than guessed at (per this agent's own
-instructions: no silently-resolved open question).
+**Role-grant default — see §7 OQ-2 for the concrete table.** Which existing roles receive
+`:EntitiesAttachmentsManage`/`:EntitiesAttachmentsRead` by default is a role-policy
+judgment call, not a schema/route/permission-vocabulary one — §7 OQ-2 proposes a concrete
+default (modeled on `authorization.ex`'s actual current role list and req308's own
+Role/Grants precedent) rather than leaving it a bare unresolved question, but it is still
+flagged there for REVIEWER sign-off, not silently decided.
 
 ## 5. Tenant scoping and the security boundary (INV-1/2/5/7)
 
@@ -464,18 +511,40 @@ flagged again here for the same reason rather than silently re-deriving a differ
 ## 7. Open questions
 
   - **OQ-1.** `Letflow.Entities.Records.delete_record/2` is a soft/event-sourced delete
-    (`entity_record_latest.deleted` flag), never a row removal — so this design's
-    no-FK, no-cascade choice (§1) means a "deleted" record's attachments remain listable
-    forever via direct `attachment_id` lookup (`get`/`get_content`) and via `list/2`
+    (`entity_record_latest.deleted` flag), never a row removal — §1's FK (re-derived) does
+    not cascade or reject on this, since it never fires on a soft delete (the row is never
+    actually removed). A "deleted" record's attachments therefore remain listable forever
+    via direct `attachment_id` lookup (`get`/`get_content`) and via `list/2`
     (entity_type+record_id still resolves rows even though the parent record now reads as
     deleted through `POST /entities/query`). Whether that is the intended lifecycle
     (attachments outlive a soft-deleted record, matching how the record's own event history
     also isn't purged) or whether a future requirement should reject/soft-delete
     attachments when their parent record is soft-deleted is NOT decided by this design —
-    flagged for ELIXIR-DEV/REVIEWER rather than resolved by assumption.
+    flagged for ELIXIR-DEV/REVIEWER rather than resolved by assumption. (What §1's FK DOES
+    now guarantee: an attachment can never be *created* against an `(entity_type,
+    record_id)` pair that never existed in `entity_record_latest` in the first place — that
+    narrower question is closed, not open.)
   - **OQ-2.** Which existing roles should be granted `:EntitiesAttachmentsManage`/
-    `:EntitiesAttachmentsRead` by default (§4) — a role-policy decision this design
-    deliberately leaves open rather than guesses at.
+    `:EntitiesAttachmentsRead` by default (§4). **Resolved as a default proposal, still
+    flagged as a judgment call for REVIEWER** — not silently decided — following the same
+    discipline `lib/letflow/design/req308-entity-http-surface.md`'s own Role/Grants table
+    (lines 200-218) used for the identical class of question on `:EntitiesDefinitionsRead`/
+    `:EntitiesDefinitionsWrite`/`:EntitiesRecordsWrite`/`:EntitiesQuery`. Modeled directly
+    on the actual current role list and grants in `lib/letflow/api/authorization.ex`
+    (`role_allows?/2`, lines ~618-666):
+
+    | Role | Grants | Reasoning |
+    |---|---|---|
+    | `PLATFORM_ADMIN` | both (existing catch-all: `role_allows?(:PLATFORM_ADMIN, _permission), do: true` — unchanged) | no change needed |
+    | `PROCESS_DESIGNER` | `EntitiesAttachmentsRead` only | holds `EntitiesQuery`/`EntitiesDefinitionsRead`/`EntitiesDefinitionsWrite` but NOT `EntitiesRecordsWrite` (`authorization.ex` lines ~618-632) — a schema-authoring role, not the "operate on live tenant data" class §4 already draws the Manage/Read line around; mirrors req308's own reasoning for withholding write-class grants from this role (req308 lines 211-212) |
+    | `PROCESS_OPERATOR` | `EntitiesAttachmentsManage`, `EntitiesAttachmentsRead` | holds `EntitiesRecordsWrite` (`authorization.ex` lines ~633-651) and both instance-scoped `AttachmentsManage`/`AttachmentsRead` already — tracks the same "operate on live tenant data" class req308 assigned `EntitiesRecordsWrite` to for this exact role (req308 lines 213-215) |
+    | `TASK_WORKER` | `EntitiesAttachmentsRead` only | holds `EntitiesQuery` and instance-scoped `AttachmentsRead` but no write-class entity permission at all (`authorization.ex` lines ~653-663) — read-only in this subsystem, mirroring "every role that can read anything here also holds `EntitiesQuery`" (req308 line 216) |
+    | `AGENT_RUNNER` | none (existing catch-all: `role_allows?(:AGENT_RUNNER, _permission), do: false` — unchanged) | no change needed |
+
+    Implementation shape: two new permission atoms added to each of `PROCESS_DESIGNER`'s,
+    `PROCESS_OPERATOR`'s, and `TASK_WORKER`'s `role_allows?/2` clause bodies per the table
+    above — same three-edit shape (`@permissions`, `endpoint_policy_key/2`, `role_allows?/2`)
+    req308 §3 already establishes for this permission pair's own siblings.
   - **OQ-3 (inherited, not new).** `Letflow.Repository.Attachments`' own `@max_upload_bytes`
     judgement call (§6) applies here unchanged and is re-flagged, not re-litigated.
 

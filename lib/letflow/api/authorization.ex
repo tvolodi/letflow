@@ -60,6 +60,25 @@ defmodule Letflow.Api.Authorization do
   list/download (read) — REQ-212's own acceptance criteria require the split
   kept, not collapsed. See design
   `lib/letflow/design/req212-instance-attachments-routes.md` §6.
+
+  ## `Entities*` (REQ-309) — added ahead of their consuming router
+
+  `:EntitiesDefinitionsRead`, `:EntitiesDefinitionsWrite`,
+  `:EntitiesRecordsWrite` and `:EntitiesQuery` (plus their identically-named
+  `endpoint_policy_key/0` values and the ten `endpoint_policy_key/2` clauses for
+  `/entities/...`) are added by REQ-309 **before** `Letflow.Routers.Entities`
+  exists — REQ-310 creates that router and mounts it. This is a compile-time
+  precondition, not an oversight: `Letflow.Api.AuthorizedRouter`'s `authz_*`
+  macros take the policy key as a literal and
+  `test/letflow/api/authorization_enforcement_test.exs` asserts every declared
+  route resolves to a real, non-`:Unknown` key, so a router declaring
+  `:EntitiesDefinitionsRead` before that clause exists would fail immediately.
+  Same "added ahead of its consuming route" state `:DlqOperate`/
+  `:WebhooksManage` above already sat in. There is deliberately **no**
+  `:EntitiesRecordsRead` atom — `Letflow.Entities.Records` exposes no read
+  function and record reads happen only through `POST /entities/query`, so an
+  `:EntitiesRecordsRead` would be dead vocabulary. See
+  `lib/letflow/design/req308-entity-http-surface.md` §1 and §3.
   """
 
   @type role ::
@@ -89,6 +108,10 @@ defmodule Letflow.Api.Authorization do
           | :AttachmentsManage
           | :AttachmentsRead
           | :InstancesAdvanceTimer
+          | :EntitiesDefinitionsRead
+          | :EntitiesDefinitionsWrite
+          | :EntitiesRecordsWrite
+          | :EntitiesQuery
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -125,6 +148,10 @@ defmodule Letflow.Api.Authorization do
           | :AttachmentsManage
           | :AttachmentsRead
           | :InstancesAdvanceTimer
+          | :EntitiesDefinitionsRead
+          | :EntitiesDefinitionsWrite
+          | :EntitiesRecordsWrite
+          | :EntitiesQuery
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -150,14 +177,30 @@ defmodule Letflow.Api.Authorization do
     :RolesManage,
     :AttachmentsManage,
     :AttachmentsRead,
-    :InstancesAdvanceTimer
+    :InstancesAdvanceTimer,
+    :EntitiesDefinitionsRead,
+    :EntitiesDefinitionsWrite,
+    :EntitiesRecordsWrite,
+    :EntitiesQuery
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
   @spec roles() :: [role()]
   def roles, do: @roles
 
-  @doc "All eighteen `Permission` values — R-Co's fourteen plus REQ-076's `:RolesManage` plus REQ-212's `:AttachmentsManage`/`:AttachmentsRead` plus ISS-0389's `:InstancesAdvanceTimer`."
+  @doc """
+  All twenty-three `Permission` values — R-Co's fourteen, plus REQ-075's
+  `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
+  `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
+  `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
+  (`:EntitiesDefinitionsRead`, `:EntitiesDefinitionsWrite`,
+  `:EntitiesRecordsWrite`, `:EntitiesQuery`).
+
+  The stated count is asserted against `length(permissions())` by
+  `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
+  hardcoded, so it cannot go stale again the way "eighteen" did (the list held
+  nineteen entries before REQ-309).
+  """
   @spec permissions() :: [permission()]
   def permissions, do: @permissions
 
@@ -393,6 +436,58 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("GET", "/instances/:id/attachments/:attachment_id"),
     do: :AttachmentsRead
 
+  # REQ-309 — entity-subsystem routes (the future `Letflow.Routers.Entities`,
+  # mounted at `/entities`), per design
+  # `lib/letflow/design/req308-entity-http-surface.md` §1's route table and §3's
+  # permission vocabulary. Path templates are the FULL external paths as seen
+  # after the `/api/v1` prefix is stripped — the same convention every clause
+  # above uses ("/instances/:id/attachments", not a router-local
+  # "/:id/attachments").
+  #
+  # These four atoms are minted AHEAD of the router that consumes them
+  # (REQ-310 creates `lib/letflow/routers/entities.ex`), the same
+  # "ported/added ahead of its consuming route" state `:DlqOperate` and
+  # `:WebhooksManage` sat in — see this module's moduledoc. Until that router
+  # exists, `authorization_enforcement_test.exs` simply never walks these
+  # clauses (it iterates the routers that exist), which is the deliberate,
+  # temporary end state of REQ-309.
+  #
+  # One policy key per permission (no `:DefinitionsCreate`/`:DefinitionsUpdate`-
+  # style split collapsing into one permission), so the endpoint_policy_key
+  # names and the permission names are identical — required_permission/1's four
+  # identity clauses below, same shape as `:AttachmentsManage`/`:AttachmentsRead`.
+  def endpoint_policy_key("GET", path)
+      when path in [
+             "/entities/definitions",
+             "/entities/definitions/:id",
+             "/entities/definitions/active/:name",
+             "/entities/definitions/by-name/:name"
+           ],
+      do: :EntitiesDefinitionsRead
+
+  def endpoint_policy_key("POST", "/entities/definitions"), do: :EntitiesDefinitionsWrite
+
+  def endpoint_policy_key("POST", "/entities/definitions/:name/activate"),
+    do: :EntitiesDefinitionsWrite
+
+  def endpoint_policy_key("POST", "/entities/records/:entity_type"), do: :EntitiesRecordsWrite
+
+  def endpoint_policy_key("PUT", "/entities/records/:entity_type/:record_id"),
+    do: :EntitiesRecordsWrite
+
+  def endpoint_policy_key("DELETE", "/entities/records/:entity_type/:record_id"),
+    do: :EntitiesRecordsWrite
+
+  # Non-mutating read declared on POST because the query DSL's request shape
+  # needs a body (design §4), so :EntitiesQuery is classified read (design §3)
+  # despite gating a POST. NOTE: an earlier draft of this comment cited POST
+  # /definitions/:id/validate as precedent for a POST carrying a read
+  # permission. That is wrong and was corrected here — that route has no
+  # endpoint_policy_key/2 clause at all and resolves to :Unknown (asserted in
+  # authorization_test.exs). This clause is the first POST-with-read-permission
+  # in this module, justified on design §4's own reasoning, not on precedent.
+  def endpoint_policy_key("POST", "/entities/query"), do: :EntitiesQuery
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -485,6 +580,12 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:AttachmentsManage), do: :AttachmentsManage
   def required_permission(:AttachmentsRead), do: :AttachmentsRead
 
+  # REQ-309 — identity clauses (policy-key name == permission name), design §3.
+  def required_permission(:EntitiesDefinitionsRead), do: :EntitiesDefinitionsRead
+  def required_permission(:EntitiesDefinitionsWrite), do: :EntitiesDefinitionsWrite
+  def required_permission(:EntitiesRecordsWrite), do: :EntitiesRecordsWrite
+  def required_permission(:EntitiesQuery), do: :EntitiesQuery
+
   def required_permission(:Unknown), do: :MetricsRead
 
   @doc "Ports `hasPermission/2` (L171-176) exactly."
@@ -514,7 +615,14 @@ defmodule Letflow.Api.Authorization do
         :InstancesRead,
         :TasksRead,
         :RolesManage,
-        :AttachmentsRead
+        :AttachmentsRead,
+        # REQ-309 (design §3 role matrix): schema authoring tracks this role's
+        # existing :DefinitionsWrite ("author a definition"); record authoring
+        # (:EntitiesRecordsWrite) deliberately does NOT — that is
+        # PROCESS_OPERATOR's "operate on live tenant data" class.
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesQuery
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -533,7 +641,14 @@ defmodule Letflow.Api.Authorization do
         :WebhooksManage,
         :AttachmentsManage,
         :AttachmentsRead,
-        :InstancesAdvanceTimer
+        :InstancesAdvanceTimer,
+        # REQ-309 (design §3 role matrix): record authoring tracks this role's
+        # existing InstancesStart/InstancesCancel/AttachmentsManage grants;
+        # schema authoring (:EntitiesDefinitionsWrite) is deliberately withheld
+        # — that is PROCESS_DESIGNER's class.
+        :EntitiesDefinitionsRead,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery
       ]
 
   def role_allows?(:TASK_WORKER, permission),
@@ -543,7 +658,12 @@ defmodule Letflow.Api.Authorization do
         :InstancesRead,
         :TasksRead,
         :TasksComplete,
-        :AttachmentsRead
+        :AttachmentsRead,
+        # REQ-309 (design §3 role matrix): read-only in this subsystem — every
+        # role that can read anything here also holds :EntitiesQuery, mirroring
+        # how every role holding :InstancesRead also holds :AttachmentsRead.
+        :EntitiesDefinitionsRead,
+        :EntitiesQuery
       ]
 
   def role_allows?(:AGENT_RUNNER, _permission), do: false

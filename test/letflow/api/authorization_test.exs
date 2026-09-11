@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, and ISS-0389's :InstancesAdvanceTimer" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, and REQ-309's four Entities* permissions" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -49,7 +49,11 @@ defmodule Letflow.Api.AuthorizationTest do
                :RolesManage,
                :AttachmentsManage,
                :AttachmentsRead,
-               :InstancesAdvanceTimer
+               :InstancesAdvanceTimer,
+               :EntitiesDefinitionsRead,
+               :EntitiesDefinitionsWrite,
+               :EntitiesRecordsWrite,
+               :EntitiesQuery
              ]
     end
   end
@@ -311,6 +315,525 @@ defmodule Letflow.Api.AuthorizationTest do
       assert moduledoc =~ "INV-5"
       assert moduledoc =~ "404"
       assert moduledoc =~ "Deny403"
+    end
+  end
+
+  # ==========================================================================
+  # REQ-309 — the four entity-subsystem permissions
+  # (design lib/letflow/design/req308-entity-http-surface.md §1 route table,
+  # §3 permission vocabulary + role matrix).
+  # ==========================================================================
+
+  @req309_permissions [
+    :EntitiesDefinitionsRead,
+    :EntitiesDefinitionsWrite,
+    :EntitiesRecordsWrite,
+    :EntitiesQuery
+  ]
+
+  describe "REQ-309 AC1 — permissions/0 contains the four new atoms and the @doc count is computed, not hardcoded" do
+    test "permissions/0 contains all four new atoms" do
+      for permission <- @req309_permissions do
+        assert permission in Authorization.permissions(),
+               "expected permissions/0 to contain #{inspect(permission)}"
+      end
+    end
+
+    test "the permissions/0 @doc's stated count equals length(permissions()) exactly" do
+      # The count is DERIVED from the live list and then spelled out in English,
+      # then looked for in the real @doc string. Nothing here hardcodes 23: add
+      # or remove a permission without touching the @doc and this fails.
+      {:docs_v1, _anno, _lang, _fmt, _moduledoc, _meta, fn_docs} =
+        Code.fetch_docs(Letflow.Api.Authorization)
+
+      permissions_doc =
+        Enum.find_value(fn_docs, fn
+          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          _ -> nil
+        end)
+
+      assert is_binary(permissions_doc),
+             "expected permissions/0 to carry a @doc string"
+
+      actual_count = length(Authorization.permissions())
+
+      spelled =
+        %{
+          14 => "fourteen",
+          15 => "fifteen",
+          16 => "sixteen",
+          17 => "seventeen",
+          18 => "eighteen",
+          19 => "nineteen",
+          20 => "twenty",
+          21 => "twenty-one",
+          22 => "twenty-two",
+          23 => "twenty-three",
+          24 => "twenty-four",
+          25 => "twenty-five",
+          26 => "twenty-six"
+        }
+        |> Map.get(actual_count)
+
+      assert is_binary(spelled),
+             "permissions/0 now returns #{actual_count} entries, outside this test's " <>
+               "number-word table -- extend the table (and the @doc) rather than deleting " <>
+               "this assertion"
+
+      assert permissions_doc =~ "All #{spelled} `Permission` values",
+             """
+             permissions/0's @doc does not state the live count.
+             permissions/0 currently returns #{actual_count} entries, so the @doc must \
+             open with "All #{spelled} `Permission` values". Actual @doc:
+
+             #{permissions_doc}
+             """
+    end
+
+    test "permissions/0 has no duplicate entries" do
+      permissions = Authorization.permissions()
+      assert permissions == Enum.uniq(permissions)
+    end
+
+    test "there is deliberately no :EntitiesRecordsRead atom (design §3 — record reads happen only via :EntitiesQuery)" do
+      refute :EntitiesRecordsRead in Authorization.permissions()
+    end
+  end
+
+  describe "REQ-309 AC2 — endpoint_policy_key/2 for all ten routes in design §1's route table" do
+    # Full external paths, i.e. as seen after the /api/v1 prefix is stripped --
+    # `Letflow.Routers.Entities` is mounted at /entities (design §2), so these
+    # are the mount prefix "/entities" <> each router-local match pattern, the
+    # same composition authorization_enforcement_test.exs's own full_path/2
+    # helper performs.
+    test "1/10 — POST /entities/definitions -> :EntitiesDefinitionsWrite" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/definitions") ==
+               :EntitiesDefinitionsWrite
+    end
+
+    test "2/10 — GET /entities/definitions -> :EntitiesDefinitionsRead" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/definitions") ==
+               :EntitiesDefinitionsRead
+    end
+
+    test "3/10 — GET /entities/definitions/active/:name -> :EntitiesDefinitionsRead" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/definitions/active/:name") ==
+               :EntitiesDefinitionsRead
+    end
+
+    test "4/10 — GET /entities/definitions/by-name/:name -> :EntitiesDefinitionsRead" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/definitions/by-name/:name") ==
+               :EntitiesDefinitionsRead
+    end
+
+    test "5/10 — GET /entities/definitions/:id -> :EntitiesDefinitionsRead" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/definitions/:id") ==
+               :EntitiesDefinitionsRead
+    end
+
+    test "6/10 — POST /entities/definitions/:name/activate -> :EntitiesDefinitionsWrite" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/definitions/:name/activate") ==
+               :EntitiesDefinitionsWrite
+    end
+
+    test "7/10 — POST /entities/records/:entity_type -> :EntitiesRecordsWrite" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/records/:entity_type") ==
+               :EntitiesRecordsWrite
+    end
+
+    test "8/10 — PUT /entities/records/:entity_type/:record_id -> :EntitiesRecordsWrite" do
+      assert Authorization.endpoint_policy_key("PUT", "/entities/records/:entity_type/:record_id") ==
+               :EntitiesRecordsWrite
+    end
+
+    test "9/10 — DELETE /entities/records/:entity_type/:record_id -> :EntitiesRecordsWrite" do
+      assert Authorization.endpoint_policy_key(
+               "DELETE",
+               "/entities/records/:entity_type/:record_id"
+             ) == :EntitiesRecordsWrite
+    end
+
+    test "10/10 — POST /entities/query -> :EntitiesQuery" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/query") == :EntitiesQuery
+    end
+
+    test "none of the ten routes resolves to :Unknown" do
+      routes = [
+        {"POST", "/entities/definitions"},
+        {"GET", "/entities/definitions"},
+        {"GET", "/entities/definitions/active/:name"},
+        {"GET", "/entities/definitions/by-name/:name"},
+        {"GET", "/entities/definitions/:id"},
+        {"POST", "/entities/definitions/:name/activate"},
+        {"POST", "/entities/records/:entity_type"},
+        {"PUT", "/entities/records/:entity_type/:record_id"},
+        {"DELETE", "/entities/records/:entity_type/:record_id"},
+        {"POST", "/entities/query"}
+      ]
+
+      assert length(routes) == 10
+
+      for {method, path} <- routes do
+        key = Authorization.endpoint_policy_key(method, path)
+
+        refute key == :Unknown,
+               "#{method} #{path} resolved to :Unknown -- a route declaring its policy key " <>
+                 "would fail authorization_enforcement_test.exs"
+      end
+    end
+
+    test "the new clauses did not widen /entities matching -- an undeclared /entities path is still :Unknown" do
+      assert Authorization.endpoint_policy_key("GET", "/entities") == :Unknown
+      assert Authorization.endpoint_policy_key("GET", "/entities/query") == :Unknown
+      assert Authorization.endpoint_policy_key("DELETE", "/entities/definitions/:id") == :Unknown
+
+      assert Authorization.endpoint_policy_key("GET", "/entities/records/:entity_type") ==
+               :Unknown
+    end
+  end
+
+  describe "REQ-309 AC3 — required_permission/1 identity mapping for the four new policy keys" do
+    for permission <- [
+          :EntitiesDefinitionsRead,
+          :EntitiesDefinitionsWrite,
+          :EntitiesRecordsWrite,
+          :EntitiesQuery
+        ] do
+      @permission permission
+
+      test "required_permission(#{inspect(permission)}) == #{inspect(permission)}" do
+        assert Authorization.required_permission(@permission) == @permission
+      end
+    end
+  end
+
+  describe "REQ-309 AC4 — the exact 4-permission x 5-role grid from design §3's role-matrix table" do
+    # Written out literally, exactly as design §3's table reads. Twenty pairs.
+    @new_permission_grid %{
+      PLATFORM_ADMIN: %{
+        EntitiesDefinitionsRead: true,
+        EntitiesDefinitionsWrite: true,
+        EntitiesRecordsWrite: true,
+        EntitiesQuery: true
+      },
+      PROCESS_DESIGNER: %{
+        EntitiesDefinitionsRead: true,
+        EntitiesDefinitionsWrite: true,
+        EntitiesRecordsWrite: false,
+        EntitiesQuery: true
+      },
+      PROCESS_OPERATOR: %{
+        EntitiesDefinitionsRead: true,
+        EntitiesDefinitionsWrite: false,
+        EntitiesRecordsWrite: true,
+        EntitiesQuery: true
+      },
+      TASK_WORKER: %{
+        EntitiesDefinitionsRead: true,
+        EntitiesDefinitionsWrite: false,
+        EntitiesRecordsWrite: false,
+        EntitiesQuery: true
+      },
+      AGENT_RUNNER: %{
+        EntitiesDefinitionsRead: false,
+        EntitiesDefinitionsWrite: false,
+        EntitiesRecordsWrite: false,
+        EntitiesQuery: false
+      }
+    }
+
+    test "the grid covers every role x every new permission -- 20 pairs, none missing" do
+      assert Map.keys(@new_permission_grid) |> Enum.sort() ==
+               Authorization.roles() |> Enum.sort()
+
+      pairs =
+        for {_role, by_permission} <- @new_permission_grid,
+            {permission, _} <- by_permission,
+            do: permission
+
+      assert length(pairs) == 20
+
+      for {role, by_permission} <- @new_permission_grid do
+        assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req309_permissions),
+               "grid row for #{role} does not name exactly the four new permissions"
+      end
+    end
+
+    test "role_allows?/2 matches the grid for all 20 role/permission pairs" do
+      for {role, by_permission} <- @new_permission_grid,
+          {permission, expected} <- by_permission do
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "role_allows?(#{inspect(role)}, #{inspect(permission)}) returned " <>
+                 "#{inspect(actual)}, design §3's role matrix says #{inspect(expected)}"
+      end
+    end
+
+    test "evaluate_access/2 agrees with the grid end-to-end (policy key -> permission -> role)" do
+      # Guards against the four new permissions being right in role_allows?/2 but
+      # unreachable through evaluate_access/2 (e.g. a missing
+      # required_permission/1 clause), which is the path Letflow.Plugs.Authorize
+      # actually takes at request time.
+      for {role, by_permission} <- @new_permission_grid,
+          {policy_key, expected_allowed} <- by_permission do
+        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        decision = Authorization.evaluate_access(ctx, policy_key)
+        expected_kind = if expected_allowed, do: :Allow, else: :Deny403
+
+        assert decision.kind == expected_kind,
+               "evaluate_access(roles: [#{inspect(role)}], #{inspect(policy_key)}) returned " <>
+                 "#{inspect(decision.kind)}, expected #{inspect(expected_kind)}"
+      end
+    end
+  end
+
+  describe "REQ-309 AC5 — regression grid: no PRE-EXISTING role/permission pair changed" do
+    # THE POINT OF THIS BLOCK. Every one of the nineteen permissions that
+    # existed before REQ-309, crossed with all five roles: 95 pairs, each
+    # expected value transcribed by hand from `lib/letflow/api/authorization.ex`
+    # as it stood at commit 09b77692 (before this change). It is deliberately
+    # NOT derived from the module under test in any way -- not from
+    # Authorization.permissions(), not from role_allows?/2, not by filtering the
+    # live list. If an existing permission were added to or removed from any
+    # role's list by this change, the corresponding cell here disagrees and the
+    # test fails.
+    @pre_req309_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer
+    ]
+
+    # role => the EXACT set of pre-REQ-309 permissions that role was allowed
+    # before this change. PLATFORM_ADMIN: all nineteen (catch-all `do: true`).
+    # AGENT_RUNNER: none (catch-all `do: false`). The other three are the
+    # literal `permission in [...]` lists as they read before REQ-309 appended
+    # to them.
+    @pre_req309_allowed %{
+      PLATFORM_ADMIN: @pre_req309_permissions,
+      PROCESS_DESIGNER: [
+        :DefinitionsWrite,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesRead,
+        :TasksRead,
+        :RolesManage,
+        :AttachmentsRead
+      ],
+      PROCESS_OPERATOR: [
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :TasksAssign,
+        :AuditRead,
+        :DlqOperate,
+        :MetricsRead,
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :InstancesAdvanceTimer
+      ],
+      TASK_WORKER: [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead
+      ],
+      AGENT_RUNNER: []
+    }
+
+    test "the regression grid is complete: 5 roles x 19 pre-existing permissions = 95 pairs" do
+      assert length(@pre_req309_permissions) == 19
+      assert Enum.sort(Map.keys(@pre_req309_allowed)) == Enum.sort(Authorization.roles())
+
+      # Every expectation named is a real permission, and no pre-existing
+      # permission was dropped from the module's own list by this change.
+      live = Authorization.permissions()
+
+      for permission <- @pre_req309_permissions do
+        assert permission in live,
+               "#{inspect(permission)} existed before REQ-309 but is no longer in " <>
+                 "permissions/0 -- a permission was REMOVED, not added"
+      end
+
+      # The live list is exactly the pre-existing nineteen plus REQ-309's four,
+      # in that order: proves the change was purely an append.
+      assert live == @pre_req309_permissions ++ @req309_permissions
+
+      pair_count = length(Authorization.roles()) * length(@pre_req309_permissions)
+      assert pair_count == 95
+    end
+
+    test "all 95 pre-existing role/permission pairs return exactly what they returned before REQ-309" do
+      for role <- [
+            :PLATFORM_ADMIN,
+            :PROCESS_DESIGNER,
+            :PROCESS_OPERATOR,
+            :TASK_WORKER,
+            :AGENT_RUNNER
+          ],
+          permission <- @pre_req309_permissions do
+        expected = permission in Map.fetch!(@pre_req309_allowed, role)
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "REGRESSION: role_allows?(#{inspect(role)}, #{inspect(permission)}) is now " <>
+                 "#{inspect(actual)} but was #{inspect(expected)} before REQ-309. This " <>
+                 "change must be purely additive -- no existing role/permission pair may " <>
+                 "change hands."
+      end
+    end
+
+    test "required_permission/1 still returns exactly what it returned before REQ-309 for every pre-existing policy key" do
+      # The second half of "no existing behaviour changed": a new clause
+      # inserted in the wrong place could shadow an existing one. Every
+      # pre-existing endpoint_policy_key -> permission mapping, transcribed from
+      # the module as it stood before this change.
+      expected = [
+        {:DefinitionsCreate, :DefinitionsWrite},
+        {:DefinitionsUpdate, :DefinitionsWrite},
+        {:DefinitionsPatch, :DefinitionsWrite},
+        {:DefinitionsActivate, :DefinitionsWrite},
+        {:DefinitionsDeprecate, :DefinitionsWrite},
+        {:DefinitionsArchive, :DefinitionsWrite},
+        {:DefinitionsDelete, :DefinitionsWrite},
+        {:DefinitionsImport, :DefinitionsWrite},
+        {:DefinitionsRead, :DefinitionsRead},
+        {:InstancesStart, :InstancesStart},
+        {:InstancesCancel, :InstancesCancel},
+        {:InstancesRead, :InstancesRead},
+        {:InstancesAdvanceTimer, :InstancesAdvanceTimer},
+        {:TasksList, :TasksRead},
+        {:TasksGetById, :TasksRead},
+        {:TasksComplete, :TasksComplete},
+        {:TasksAssign, :TasksAssign},
+        {:TasksReassign, :TasksAssign},
+        {:UsersManage, :UsersGroupsRolesManage},
+        {:GroupsManage, :UsersGroupsRolesManage},
+        {:TokensManage, :TokensManage},
+        {:AuditRead, :AuditRead},
+        {:DlqReadRetryDiscard, :DlqOperate},
+        {:MetricsRead, :MetricsRead},
+        {:WebhookSubscriptionsManage, :WebhooksManage},
+        {:ServicesRead, :DefinitionsRead},
+        {:AdminServicesManage, :UsersGroupsRolesManage},
+        {:AdminServicesRead, :UsersGroupsRolesManage},
+        {:TenantsManage, :TenantsManage},
+        {:RolesManage, :RolesManage},
+        {:AttachmentsManage, :AttachmentsManage},
+        {:AttachmentsRead, :AttachmentsRead},
+        {:Unknown, :MetricsRead}
+      ]
+
+      for {key, permission} <- expected do
+        assert Authorization.required_permission(key) == permission,
+               "REGRESSION: required_permission(#{inspect(key)}) changed"
+      end
+    end
+
+    test "endpoint_policy_key/2 still returns exactly what it returned before REQ-309 for a representative route from every existing family" do
+      # One route per pre-existing clause family: a mis-ordered new clause (e.g.
+      # a too-greedy "/entities" <> _rest pattern placed above these) would
+      # shadow one of them and flip it to a different key or :Unknown.
+      expected = [
+        {"POST", "/definitions", :DefinitionsCreate},
+        {"PUT", "/definitions/:id", :DefinitionsUpdate},
+        {"PATCH", "/definitions/:id", :DefinitionsPatch},
+        {"POST", "/definitions/:id/activate", :DefinitionsActivate},
+        {"POST", "/definitions/:id/deprecate", :DefinitionsDeprecate},
+        {"POST", "/definitions/:id/archive", :DefinitionsArchive},
+        {"DELETE", "/definitions/:id", :DefinitionsDelete},
+        {"POST", "/definitions/import", :DefinitionsImport},
+        {"GET", "/definitions", :DefinitionsRead},
+        {"GET", "/definitions/:id", :DefinitionsRead},
+        {"GET", "/definitions/active/:name", :DefinitionsRead},
+        {"GET", "/definitions/search", :DefinitionsRead},
+        {"GET", "/definitions/:id/export", :DefinitionsRead},
+        {"GET", "/definitions/delta", :DefinitionsRead},
+        {"POST", "/instances", :InstancesStart},
+        {"POST", "/instances/:id/cancel", :InstancesCancel},
+        {"POST", "/instances/:id/advance-timer", :InstancesAdvanceTimer},
+        {"GET", "/instances", :InstancesRead},
+        {"GET", "/instances/:id", :InstancesRead},
+        {"GET", "/instances/:id/history", :InstancesRead},
+        {"GET", "/instances/:id/timeline", :InstancesRead},
+        {"GET", "/instances/:id/pins", :InstancesRead},
+        {"GET", "/tasks", :TasksList},
+        {"GET", "/tasks/inbox", :TasksList},
+        {"GET", "/tasks/:id", :TasksGetById},
+        {"POST", "/tasks/:id/complete", :TasksComplete},
+        {"POST", "/tasks/:id/claim", :TasksComplete},
+        {"POST", "/tasks/:id/assign", :TasksAssign},
+        {"POST", "/tasks/:id/reassign", :TasksReassign},
+        {"POST", "/users", :UsersManage},
+        {"GET", "/users", :UsersManage},
+        {"GET", "/users/:id", :UsersManage},
+        {"PATCH", "/users/:id", :UsersManage},
+        {"POST", "/users/:id/status", :UsersManage},
+        {"POST", "/groups", :GroupsManage},
+        {"GET", "/groups", :GroupsManage},
+        {"DELETE", "/groups/:id", :GroupsManage},
+        {"POST", "/tokens", :TokensManage},
+        {"GET", "/tokens", :TokensManage},
+        {"DELETE", "/tokens/:id", :TokensManage},
+        {"GET", "/audit", :AuditRead},
+        {"GET", "/dlq", :DlqReadRetryDiscard},
+        {"POST", "/dlq/:id/retry", :DlqReadRetryDiscard},
+        {"GET", "/metrics", :MetricsRead},
+        {"POST", "/webhooks/subscriptions", :WebhookSubscriptionsManage},
+        {"GET", "/webhooks/subscriptions", :WebhookSubscriptionsManage},
+        {"PATCH", "/webhooks/subscriptions/:id", :WebhookSubscriptionsManage},
+        {"DELETE", "/webhooks/subscriptions/:id", :WebhookSubscriptionsManage},
+        {"GET", "/webhooks/subscriptions/:id/deliveries", :WebhookSubscriptionsManage},
+        {"GET", "/services", :ServicesRead},
+        {"GET", "/admin/services", :AdminServicesRead},
+        {"POST", "/admin/services", :AdminServicesManage},
+        {"PATCH", "/admin/services/:id", :AdminServicesManage},
+        {"DELETE", "/admin/services/:id", :AdminServicesManage},
+        {"POST", "/tenants", :TenantsManage},
+        {"GET", "/tenants", :TenantsManage},
+        {"GET", "/tenants/:slug", :TenantsManage},
+        {"PATCH", "/tenants/:slug", :TenantsManage},
+        {"POST", "/tenants/:slug/deactivate", :TenantsManage},
+        {"POST", "/tenants/:slug/reactivate", :TenantsManage},
+        {"POST", "/onboarding", :TenantsManage},
+        {"GET", "/onboarding", :TenantsManage},
+        {"GET", "/onboarding/:id", :TenantsManage},
+        {"GET", "/roles", :RolesManage},
+        {"POST", "/roles", :RolesManage},
+        {"POST", "/instances/:id/attachments", :AttachmentsManage},
+        {"DELETE", "/instances/:id/attachments/:attachment_id", :AttachmentsManage},
+        {"GET", "/instances/:id/attachments", :AttachmentsRead},
+        {"GET", "/instances/:id/attachments/:attachment_id", :AttachmentsRead},
+        {"POST", "/definitions/:id/validate", :Unknown},
+        {"POST", "/instances/:id/rebind-pins", :Unknown},
+        {"GET", "/nope", :Unknown}
+      ]
+
+      for {method, path, key} <- expected do
+        assert Authorization.endpoint_policy_key(method, path) == key,
+               "REGRESSION: endpoint_policy_key(#{inspect(method)}, #{inspect(path)}) changed"
+      end
     end
   end
 end

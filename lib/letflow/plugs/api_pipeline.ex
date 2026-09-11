@@ -151,6 +151,7 @@ defmodule Letflow.Plugs.ApiPipeline do
   forward("/webhooks", to: Letflow.Routers.Webhooks)
   forward("/services", to: Letflow.Routers.Services)
   forward("/admin/services", to: Letflow.Routers.AdminServices)
+  forward("/entities", to: Letflow.Routers.Entities)
 
   match _ do
     Letflow.Api.Response.not_found(conn)

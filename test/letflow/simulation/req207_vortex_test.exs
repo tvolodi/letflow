@@ -908,7 +908,9 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # design questions -- 0023 forbids filing any implementation requirement
       # against it until its DDL-execution open question is answered and gated).
       # None of them mounts Letflow.Routers.Entities or Letflow.Routers.EntityQuery
-      # -- that HTTP surface is S10's own gap 1, which is still unowned and unfiled.
+      # -- that HTTP surface is S10's own gap 1. (That gap was unowned and unfiled
+      # when this block was written on 2026-09-09; it is owned by REQ-308 as of
+      # 2026-09-11 -- see the third UPDATE below. Still unmounted either way.)
       # Signal 3 below remains the real gate, and it was re-verified live rather
       # than assumed when this allowlist was extended: neither context module
       # exists, and both router rows are still in the reserved/unbuilt table.
@@ -922,6 +924,25 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # lib/letflow/entities.ex, no lib/letflow/entity_query.ex, no entity
       # router module under lib/letflow/routers/, and Letflow.Routers.Entities
       # still present only as a reserved/unbuilt row in router.ex.
+      #
+      # UPDATE (S10 gap 1, 2026-09-11): REQ-308 joins the allowlist. It is the
+      # first requirement to actually OWN gap 1 -- the entity HTTP surface the
+      # 2026-09-09 block above called "still unowned and unfiled" (that sentence
+      # was true when written and is corrected in place above). REQ-308 is a
+      # DESIGN requirement and nothing more: owner CODE-DESIGNER, its sole
+      # artefact is a design document under lib/letflow/design/, and its own
+      # description scopes it "exactly as REQ-295 and REQ-303 were: a design
+      # artefact under lib/letflow/design/, no lib/ implementation, no route
+      # mounted, no test". A design artefact mounts no route and builds no
+      # context module, so the disposition is unaffected -- deciding the shape
+      # of a surface is not the same as serving it. The requirement that
+      # implements REQ-308's design is the one that will flip this scenario,
+      # and it is not filed yet. Signal 3 was re-verified live here rather than
+      # assumed, for the third time: no lib/letflow/entities.ex, no
+      # lib/letflow/entity_query.ex, no entity router module among the sixteen
+      # files under lib/letflow/routers/, both Entities/EntityQuery still only
+      # reserved/unbuilt rows in router.ex, and api_pipeline.ex's forward list
+      # still has no entities entry.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -949,7 +970,8 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-299",
           "REQ-300",
           "REQ-302",
-          "REQ-304"
+          "REQ-304",
+          "REQ-308"
         ])
 
       refute Enum.empty?(entity_title_matches),
@@ -992,7 +1014,7 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
         evidence: [
           "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), or the REQ-295..302 entity-storage batch (decision 0023) -- none of which build the subsystem",
+          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), the REQ-295..302 entity-storage batch (decision 0023), REQ-304 (solution packs CARRY an entity definition -- delivery, not runtime), or REQ-308 (a CODE-DESIGNER design artefact for S10 gap 1's entity HTTP surface) -- none of which mount a route or build the subsystem",
           "no lib/letflow/entities.ex or entity_query.ex context module exists"
         ],
         steps_executed: 0

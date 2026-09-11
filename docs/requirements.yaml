@@ -19771,3 +19771,226 @@ requirements:
       - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2 (naming the joined branch explicitly and confirming redact_joined_page/2 is wired for join-bearing requests), INV-5 and INV-7 by name, having read the handler itself rather than this requirement's text"
       - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
     depends_on: [REQ-310]
+
+  - id: REQ-312
+    title: Design decision record for the SolutionPack service_catalog_entries install policy -- permitted or not, install-time scope, install authorization, audit path, and conflict handling
+    owner: CODE-DESIGNER
+    impl_order: 605  # letflow-queue task id; depends_on [] so no translation needed
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. This is a generic pack-format and install-policy question:
+      any vertical shipping a pack faces it identically, and nothing here
+      names a domain vocabulary, per 0022's rule 1. S10 gaps 4 and 5 are
+      cited by NUMBER ONLY as the motivation -- the record and the design
+      artefact must not name what those gaps are about either.
+
+      Re-verify at the start rather than trusting this description. All of
+      the following is stated here as the current tree's behaviour and must
+      be independently confirmed before anything is decided against it:
+
+      - lib/letflow/definitions/solution_pack.ex's
+      check_unsupported_sections/1 (around line 886) is a two-clause,
+      pure, pre-transaction check: %{service_catalog_entries: []} -> :ok,
+      anything else -> {:error, :unsupported_pack_section}. The long
+      comment immediately above it (around lines 864-885) states that the
+      install-time visibility policy a packed entry would need is
+      currently UNOWNED -- that the earlier deferral to REQ-192 is stale
+      because REQ-192 is done and landed the service-catalog route surface
+      without lifting the restriction. That comment, and the moduledoc's
+      own service_catalog_entries bullet (around line 44), are the exact
+      text this requirement exists to make obsolete by DECIDING the
+      policy. Export always emits [].
+      - lib/letflow/service_catalog.ex in full. A catalog entry is a row
+      keyed by service_id (the table's primary key) carrying endpoint_url,
+      request_schema/response_schema, required_auth, timeout_ms,
+      retry_policy, scope and owner_tenant_id. register/1 stamps
+      timestamps, confirms the named tenant exists for a :tenant-scoped
+      entry, and maps a primary-key collision to
+      {:error, :duplicate_service_id}. get_for_tenant/2 implements SVC-01's
+      three-way visibility rule (global visible to all; tenant-scoped
+      visible only to its owner; another tenant's entry returns the same
+      :not_found atom as a genuinely missing one). update_scope/2 widens
+      freely and narrows only past a referential guard.
+      - ⛔ THE STRUCTURAL FACT THAT MAKES THIS A SECURITY QUESTION AND NOT
+      A FORMATTING ONE, stated in that module's own moduledoc (lines
+      24-60): service_catalog is a GLOBAL table in the default schema,
+      deliberately NOT schema-per-tenant per decision 0003 Decision B,
+      precisely because service_id is unique across ALL tenants regardless
+      of scope and because a scope: :global row is by definition
+      referenceable by every tenant. A packed entry therefore writes to a
+      cross-tenant table from inside a tenant-scoped document, and a
+      packed entry with :global scope is a cross-tenant capability grant
+      arriving via a tenant-level artefact. Every other write install/3
+      performs runs under opts[:prefix] and cannot reach another tenant's
+      data at all (that module's "Tenant scoping (INV-1)" moduledoc
+      section); this one section would be the sole exception. That
+      asymmetry is the sharp edge this record must confront head-on, not
+      note in passing.
+      - lib/letflow/engine/service_task_dispatcher.ex -- how an entry is
+      actually invoked. A SERVICE_TASK node with route_kind:
+      :catalog_service resolves a service_id through
+      catalog_lookup_stub/2 (today an unconditional
+      {:error, :not_registered}); route_kind: :inline_url goes through
+      http_transport/3, the module's single :httpc.request/4 call site,
+      immediately preceded by Letflow.Webhooks.UrlValidator.validate/2.
+      A catalog entry carries an endpoint_url, so INV-9
+      (docs/agents/instructions/security-invariants.md, "Tenant-controlled
+      outbound URL validation", BLOCKER severity) is directly in play:
+      a packed entry is a tenant-supplied outbound URL arriving by a new
+      path.
+      - The authorization asymmetry, which must be confirmed rather than
+      assumed: lib/letflow/routers/solution_packs.ex gates
+      POST /install on :DefinitionsCreate, whereas
+      lib/letflow/api/authorization.ex maps the service-catalog write
+      surface (REQ-192, SVC-04) to :AdminServicesManage. If a packed entry
+      were permitted with no further gate, pack install would become a
+      path by which a :DefinitionsCreate holder performs a write that the
+      HTTP surface reserves for :AdminServicesManage. Verify both
+      permission names in the current tree before reasoning from them.
+
+      WHAT THIS REQUIREMENT PRODUCES: a new decision record,
+      docs/migration/decisions/0027-<slug>.md (CODE-DESIGNER chooses the
+      slug; it must name what the record decides, e.g. something naming
+      the solution-pack service-catalog install policy, not restate
+      "0027"), following 0026's shape
+      (docs/migration/decisions/0026-solution-pack-entity-definitions-section.md)
+      -- Question / Decision / Reasoning / Consequences / What this record
+      does not decide / SECURITY-REVIEWER sign-off / REVIEWER sign-off, in
+      that order. PLUS, only if the answer to sub-question 1 is yes, a
+      design artefact under lib/letflow/design/ giving ELIXIR-DEV a
+      concrete mechanism (function signatures, @specs, parsed-section
+      shape, error atoms, and where in install/3's existing step order the
+      new work sits) to build a later requirement against without
+      re-deriving any of it. If the answer is no, no design artefact is
+      produced and the record says so explicitly.
+
+      ⛔ THE QUESTION IS OPEN. THIS REQUIREMENT DOES NOT PRESUPPOSE AN
+      ANSWER. "No, a pack may not carry service_catalog_entries, the
+      restriction stands permanently, and entries are provisioned
+      out-of-band through the existing REQ-192 admin route" is a fully
+      legitimate outcome -- docs/migration/stage-10-bilimbaga-vertical.md's
+      "Open questions" section already names shipping those entries
+      out-of-band as the alternative S10 may take. Choose on the merits.
+
+      THE RECORD MUST SETTLE ALL SIX OF THE FOLLOWING, EACH WITH A
+      CONCRETE NAMED ANSWER AND ITS REASONING, NOT A RESTATEMENT OF THE
+      QUESTION AND NOT A LIST OF OPTIONS LEFT OPEN:
+
+      1. IS A PACKED CATALOG ENTRY PERMITTED AT ALL? Yes or no, stated in
+      one unambiguous sentence near the top of the Decision section. If
+      no: state what the out-of-band provisioning path is instead (which
+      existing route, which permission), and state that
+      check_unsupported_sections/1's rejection becomes the permanent,
+      documented stance rather than an interim one -- which also means
+      updating that function's stale surrounding comment and the
+      moduledoc's bullet is the only follow-on work, owned by its own
+      later requirement, not done here.
+
+      2. IF YES: WHAT SCOPE MAY A PACKED ENTRY HAVE? Answer for both
+      values of the scope column. Is :tenant-scoped-to-the-installing-
+      tenant the only permitted value (consistent with every other
+      install/3 write, with owner_tenant_id derived from the resolved
+      prefix exactly the way the solution_pack_installs row's tenant_id
+      already is -- never read from pack content)? May a packed entry ever
+      be :global, and if so under what additional gate? State explicitly
+      whether the pack document's own content is ever allowed to CARRY a
+      scope or owner_tenant_id field at all, or whether both are always
+      derived at install time and any such field in the document is
+      ignored or rejected.
+
+      3. WHO MAY INSTALL A PACK THAT REGISTERS AN OUTBOUND CAPABILITY?
+      Name the role/permission concretely, from the vocabulary already in
+      lib/letflow/api/authorization.ex -- do not invent a new permission
+      name without saying so and justifying it. State explicitly whether
+      this differs from installing a pack carrying only definitions, and
+      if it does, state the mechanism: does install/3 gain a caller-
+      supplied capability argument, does the route perform a second
+      permission check when the parsed document's section is non-empty,
+      or something else. Note that install/3 today takes no authorization
+      input of any kind and that lib/letflow/service_catalog.ex's own
+      moduledoc states plainly that the context module "has never enforced
+      authorization" -- so whatever is chosen, say which LAYER enforces it
+      and why that layer and not another.
+
+      4. AUDIT PATH. Does a packed entry pass through the same audit path
+      as Letflow.Engine.LuaScriptAudit
+      (lib/letflow/engine/lua_script_audit.ex), need its own, or need
+      none? The stage file's Open questions section raises the same shape
+      of question for pack-supplied script content; decide whether a
+      catalog entry carries the same class of concern (durable,
+      tenant-supplied content that causes later outbound execution) or a
+      materially different one. Read lua_script_audit.ex before answering
+      -- note its moduledoc states it is a deliberately narrow
+      audit-persistence path against an injected executor, NOT the general
+      script-execution handler, so "reuse it" and "model a new record on
+      it" are different answers and the record must pick one by name. If
+      the answer is that the existing solution_pack_installs row plus the
+      service_catalog row's own created_at/updated_at are sufficient
+      audit, say that and say why, rather than leaving audit unaddressed.
+
+      5. INSTALL CONFLICT. What happens when a packed service_id already
+      exists? Answer BOTH cases, because SVC-01 makes them different:
+      (a) a row already owned by the installing tenant, and (b) a row that
+      exists globally or under ANOTHER tenant -- which register/1 surfaces
+      identically, as {:error, :duplicate_service_id}, since service_id is
+      the primary key across all tenants. Case (b) is the interesting one:
+      reconcile the chosen behaviour against install/3's documented
+      all-or-nothing, no-upsert, no-skip stance (that module's moduledoc)
+      AND against INV-5's not-found/forbidden indistinguishability rule --
+      a conflict error that reveals another tenant registered a given
+      service_id is a cross-tenant existence oracle, and the record must
+      state whether the chosen error shape discloses that and, if so, why
+      that is acceptable or what shape avoids it.
+
+      6. MIGRATION OR PURE POLICY? State whether lifting the restriction
+      would require any migration or schema change -- to service_catalog,
+      to solution_pack_installs, or to anything else -- or whether it is
+      purely an install-path policy plus parsing/validation code. Justify
+      from the actual schema as it exists (lib/letflow/service_catalog/
+      entry.ex and the service_catalog migration), not from expectation.
+
+      The record must ALSO state explicitly which option it did NOT take
+      and why, in 0026's style -- a named alternative with its own
+      reasoning for rejection, not a generic "other approaches were
+      considered". If the answer to 1 is no, the rejected option is the
+      permissive design and the record must describe it concretely enough
+      that a later requirement could adopt it if circumstances change; if
+      the answer is yes, the rejected option is the permanent restriction,
+      described with equal concreteness.
+
+      ⛔ SCOPE FENCE -- DESIGN ONLY, scoped exactly like REQ-295, REQ-302
+      and REQ-303 were. This requirement writes
+      docs/migration/decisions/0027-*.md and, only if sub-question 1 is
+      answered yes, one design artefact under lib/letflow/design/. It
+      implements NOTHING. It does NOT touch
+      lib/letflow/definitions/solution_pack.ex,
+      lib/letflow/service_catalog.ex, lib/letflow/service_catalog/,
+      lib/letflow/routers/, lib/letflow/api/authorization.ex,
+      priv/repo/migrations/, or any file under test/.
+
+      ⛔ IN PARTICULAR IT DOES NOT RELAX check_unsupported_sections/1.
+      The hard-fail must still reject a non-empty service_catalog_entries
+      array unchanged at the end of this requirement, whatever the record
+      decides. Lifting it -- if the record decides it should be lifted --
+      is a LATER requirement's job, filed against this record's answers.
+      Correcting that function's now-stale surrounding comment and the
+      moduledoc bullet is likewise that later requirement's work, not
+      this one's: this requirement leaves solution_pack.ex byte-identical.
+    acceptance_criteria:
+      - "docs/migration/decisions/0027-*.md exists and is a real decision record in this project's established format, with the sections Question / Decision / Reasoning / Consequences / What this record does not decide / SECURITY-REVIEWER sign-off / REVIEWER sign-off present in that order, matching 0026-solution-pack-entity-definitions-section.md's own section shape (verify by comparing against that file, quoting the comparison)"
+      - "the record answers sub-question 1 -- whether a solution-pack document may carry service_catalog_entries at all -- with an unambiguous yes or no in a single sentence in its Decision section, not distributed across qualifications. A NO is an acceptable and complete answer; if NO, the record names the out-of-band provisioning path (the existing route and its permission) that S10 gaps 4 and 5 use instead"
+      - "the record answers sub-question 2 (install-time scope) concretely: whether :tenant is the only permitted scope, whether :global is ever permitted and under what additional gate, and whether the pack document may carry scope/owner_tenant_id fields at all or whether both are always derived from the resolved prefix. It cites lib/letflow/service_catalog.ex's moduledoc GLOBAL-table section by line and states in its own words why a :global packed entry is a cross-tenant capability grant arriving via a tenant-level document. If sub-question 1 was answered no, this is answered as the rejected permissive design's shape, still concretely"
+      - "the record answers sub-question 3 (install authorization) by naming a concrete permission from lib/letflow/api/authorization.ex, states whether it differs from installing a definitions-only pack, names which LAYER enforces it (route, context function, or elsewhere) and why that layer, and reconciles its answer against the two facts that POST /solution-packs/install is gated on :DefinitionsCreate today and that the service-catalog HTTP write surface is gated on :AdminServicesManage -- both verified against the current tree and cited by file, not assumed from this requirement's text"
+      - "the record answers sub-question 4 (audit) by name: reuse Letflow.Engine.LuaScriptAudit's path, a new audit record modelled on it, the existing solution_pack_installs row plus the service_catalog row's own timestamps, or none -- exactly one chosen, with reasoning, having read lib/letflow/engine/lua_script_audit.ex and citing its own moduledoc's statement of its deliberately narrow scope"
+      - "the record answers sub-question 5 (install conflict) for BOTH cases separately -- a service_id already owned by the installing tenant, and a service_id owned globally or by another tenant -- reconciled explicitly against install/3's documented all-or-nothing/no-upsert/no-skip stance (quoted from the moduledoc) AND against INV-5, stating whether the chosen error shape discloses another tenant's registration and, if so, why that is acceptable or what shape avoids it"
+      - "the record answers sub-question 6: whether lifting the restriction needs a migration or schema change, or is purely install-path policy and validation code -- justified from lib/letflow/service_catalog/entry.ex and the service_catalog migration as they actually exist, cited by file"
+      - "the record contains an explicit statement of the option it did NOT take and why, naming that option concretely enough that a later requirement could adopt it if circumstances change -- in 0026's style, not a generic acknowledgement that alternatives exist"
+      - "if and only if sub-question 1 is answered yes, a design artefact exists under lib/letflow/design/ giving a later ELIXIR-DEV requirement concrete function signatures, @specs, the parsed-section shape, the typed error atoms, and where in install/3's existing step order the new work sits -- containing no executable implementation code (no def, no case, no pattern-matched function head, no pipeline), matching REQ-303's companion-design-doc precedent. If sub-question 1 is answered no, no design artefact is produced and the record states that explicitly"
+      - "⛔ NO BEHAVIOUR CHANGE TO THE REJECTION: git diff shows NO executable change to lib/letflow/definitions/solution_pack.ex -- check_unsupported_sections/1 and its two clauses are byte-identical, and in fact the file is untouched entirely. Quoted with the command (`git diff -- lib/letflow/definitions/solution_pack.ex`) and its empty output"
+      - "⛔ THE REJECTION IS PROVEN STILL LIVE AT THE END OF THIS REQUIREMENT: `mix test test/letflow/service_catalog_test.exs` is run and the existing test named \"install/3 rejects a non-empty service_catalog_entries array with {:error, :unsupported_pack_section}\" passes -- real command and real output quoted, not described. If the toolchain or database is unavailable in this environment, say so explicitly per core-directives' no-speculation rule rather than asserting a pass"
+      - "SECURITY-REVIEWER records a verdict on this record, addressing by name: INV-9 (a catalog entry carries an endpoint_url, so a packed entry is a new path by which a tenant-supplied outbound URL reaches Letflow -- where validation would have to occur under the chosen policy, at registration time, at dispatch time, or both), INV-1 (whether the chosen policy introduces any caller-supplied tenant identifier or any write reaching outside the installing tenant's prefix), and INV-5 (the conflict-error disclosure question from sub-question 5). The verdict must be reached by reading the record and the cited source, not by restating this requirement's text, and must be recorded in its own section distinct from REVIEWER's"
+      - "REVIEWER records a verdict, distinct from SECURITY-REVIEWER's, on decision-record consistency: that 0027 does not silently re-decide anything 0022 (the bucket rule) or 0026 (the pack-section precedent) already settled, that it is consistent with lib/letflow/definitions/solution_pack.ex's existing all-or-nothing install stance, and that it contains no executable implementation code"
+      - "git diff --name-only shows ONLY docs/migration/decisions/0027-*.md, at most one file under lib/letflow/design/, and docs/requirements.yaml (status bookkeeping on this entry only) -- no file under lib/letflow/definitions/, lib/letflow/service_catalog/, lib/letflow/service_catalog.ex, lib/letflow/routers/, lib/letflow/api/, priv/repo/migrations/, or test/ appears. Quoted with the command"
+      - "0022's rule 1 holds textually: grep both produced documents for single-vertical domain vocabulary and confirm zero hits -- S10 gaps 4 and 5 may be cited by number as motivation, but never by what they are. Quote the grep command and its output"
+    depends_on: []

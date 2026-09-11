@@ -20305,7 +20305,7 @@ requirements:
     title: Create the entity_record_attachments table and Letflow.Repository.EntityAttachments context module (S10 gap 3, part 1)
     owner: ELIXIR-DEV
     impl_order: 607  # letflow-queue task id; depends_on [REQ-313] = queue task 603, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Attachments scoped to an entity record serve any tenant's any

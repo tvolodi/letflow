@@ -19771,3 +19771,367 @@ requirements:
       - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2 (naming the joined branch explicitly and confirming redact_joined_page/2 is wired for join-bearing requests), INV-5 and INV-7 by name, having read the handler itself rather than this requirement's text"
       - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
     depends_on: [REQ-310]
+
+  # ── S10, fourth batch (drafted 2026-09-11) ────────────────────────────────
+  # REQ-312, REQ-313 and REQ-314 are design-only requirements for S10 gaps 2, 3
+  # and 12 respectively -- the three named in REQ-308's design doc §9 ("What
+  # attaches later") as attaching to the now-landed entity HTTP surface
+  # (REQ-309/310/311, all done) without themselves being designed there. Each
+  # is sized and sequenced exactly as REQ-308 was: a design artefact under
+  # lib/letflow/design/, no lib/ implementation, no route mounted, no
+  # migration, no test. Each is independent of the other two -- none
+  # depends_on either of the others -- but all three depend_on REQ-311, since
+  # each attaches to the concrete route surface, permission vocabulary and
+  # response-shaping conventions REQ-309/310/311 actually landed (not the
+  # abstract shape REQ-308 designed against, which could in principle have
+  # been reworked before REQ-311 closed). Implementation requirements for each
+  # gap are deliberately not filed yet -- same reasoning REQ-308's own entry
+  # gave for splitting design from implementation: an implementer should build
+  # a decided surface, not re-derive one.
+  - id: REQ-312
+    title: Design an aggregation/reporting query capability for entity records (S10 gap 2)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. An aggregation surface over entity records serves any
+      tenant's any entity type. Per 0022's rule 1 this requirement's title,
+      description, acceptance criteria and the modules its design names
+      contain no domain-vertical vocabulary of any kind -- if a reviewer can
+      tell from the design which vertical motivated it, rule 1 has been
+      broken and the design fails CODE-DESIGN-VALIDATOR. The design may cite
+      S10's gap numbering (stage bookkeeping) but may not describe the
+      surface in terms of any one vertical's objects (no "exam score",
+      "candidate", "question" or similar anywhere in the artefact).
+
+      THIS IS A DESIGN REQUIREMENT ONLY, scoped exactly as REQ-308 was: a
+      design artefact under lib/letflow/design/, no lib/ implementation, no
+      route mounted, no migration, no test.
+
+      WHAT THE GAP ACTUALLY IS, re-verify before designing rather than
+      trusting this text: read lib/letflow/entities/query/compiler.ex in
+      full. Every `build_filter_dynamic/3`/`build_order_by/3` clause
+      produces a row-level comparison or ordering term; there is no
+      `count`/`sum`/`avg`/`min`/`max`/`group_by` vocabulary anywhere in the
+      module, and `Letflow.Entities.Query.Types`' request shape has no field
+      for one. `/metrics` (`lib/letflow/routers/metrics_exposition.ex`,
+      REQ-194) is Prometheus operational metrics and is unrelated -- confirm
+      it exposes no per-tenant, per-entity-type aggregate before citing it as
+      prior art.
+
+      WHAT IT BUILDS ON. `Letflow.Entities.Query.{Compiler,Allowlist,Cursor,
+      FieldGrants,Types}` (REQ-225..REQ-231, REQ-296..REQ-301) and the now-
+      landed HTTP surface: `Letflow.Routers.Entities` mounts `POST
+      /entities/query` under `:EntitiesQuery` (confirm by grepping
+      `lib/letflow/routers/entities.ex` for `authz_post "/query"`), delegating
+      into the compiler exactly as REQ-311 built it. This design's job is to
+      extend that surface, not replace it.
+
+      WHAT THE DESIGN MUST COVER, each with a concrete answer:
+
+      1. THE AGGREGATION VOCABULARY. A closed enum of supported aggregate
+      functions (at minimum count, sum, avg, min, max) and how a `group_by`
+      clause is expressed against the allowlisted, typed columns
+      `Letflow.Entities.Query.Allowlist.typed_columns/1` already exposes per
+      entity type (REQ-299) -- reuse that allowlist, do not invent a second
+      one. State whether an aggregation request can also carry the existing
+      `filters`/`join` vocabulary (it should be able to filter before
+      aggregating) and how the two compose in one `Ecto.Query.t()`.
+
+      2. THE ROUTE SHAPE. Whether this is a new field on the existing `POST
+      /entities/query` request body or a new sibling route (e.g. `POST
+      /entities/query/aggregate`), justified against
+      `Letflow.Routers.Entities`' existing route table
+      (`lib/letflow/routers/entities.ex`'s moduledoc) and against
+      `Letflow.Entities.Query.Compiler.compile/2`'s existing return-type
+      contract -- state whether `compile/2` itself grows an aggregation
+      branch or a new `compile_aggregate/2`-shaped function is added
+      alongside it, and why.
+
+      3. THE PERMISSION VOCABULARY. State whether the existing
+      `:EntitiesQuery` permission atom (verified present in
+      `lib/letflow/api/authorization.ex`) gates the aggregation route too, or
+      a new atom is needed, with a reason either way.
+
+      4. TENANT SCOPING AND THE SECURITY BOUNDARY. This IS a tenant-data
+      path; SECURITY-REVIEWER is a hard gate. State the design's position
+      against INV-1 (prefix sourced solely from
+      `Letflow.Api.Context.scoped_repo_opts/1`, no caller-supplied tenant
+      identifier), INV-2 (whether/how `FieldGrants` redaction applies to an
+      aggregate value derived from a field the caller may not individually
+      see -- an aggregate can leak a redacted field's information even when
+      no raw row is returned; this is the design's hardest question and must
+      get a concrete answer, not a placeholder), INV-5 (an aggregate over a
+      nonexistent or cross-tenant entity_type produces the same shape as an
+      aggregate over an empty result set, or the same not-found shape as a
+      plain query would -- pick one and state it), and INV-7 (every
+      caller-supplied grouping field/aggregate target resolved through the
+      existing allowlist, never string-built).
+
+      5. RESPONSE SHAPE. State the response envelope for an aggregation
+      result (it is not a paginated page of records, so `Cursor.paginate/5`'s
+      envelope does not directly apply -- state what does), and whether/how
+      it reuses the existing error-shaping module the other routes use.
+
+      6. WHAT REMAINS OUT OF SCOPE. Explicitly state this design does not
+      cover a persisted/materialized reporting layer, a dashboard, or any
+      caching of aggregate results -- it is query-time aggregation only,
+      same execution model as the existing compiler.
+
+      SCOPE FENCE: this requirement writes one design artefact under
+      lib/letflow/design/ (naming convention: req312-<slug>.md). It
+      implements no lib/ code, mounts no route, touches no file under
+      lib/letflow/routers/, lib/letflow/entities/, lib/letflow/api/, or
+      test/, and creates no migration.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ named req312-<slug>.md, states a closed enum of supported aggregate functions, and states how group_by targets are resolved against Letflow.Entities.Query.Allowlist.typed_columns/1 (REQ-299) rather than a new allowlist -- verified by a quoted grep of allowlist.ex confirming typed_columns/1 exists and is the cited reuse point"
+      - "the design states whether aggregation is a new field on POST /entities/query or a new sibling route, justified against lib/letflow/routers/entities.ex's actual route table (quoted) and against Letflow.Entities.Query.Compiler.compile/2's actual @spec (quoted), not paraphrased"
+      - "the design states whether the existing :EntitiesQuery permission atom gates the new surface or a new atom is introduced, with a quoted grep of lib/letflow/api/authorization.ex supporting the claim of what exists today"
+      - "the design gives a concrete, non-placeholder answer to how FieldGrants-style field authorisation applies to an aggregate value derived from a field the caller cannot individually see (INV-2) -- a design that says 'field grants are respected' with no mechanism fails CODE-DESIGN-VALIDATOR"
+      - "the design states the not-found/cross-tenant behaviour for an aggregation request against a nonexistent or another tenant's entity_type (INV-5), and states that every grouping/aggregate target is resolved through the existing allowlist with no string-built SQL (INV-7)"
+      - "SECURITY-REVIEWER has reviewed the design as a tenant-data-path change and its verdict, addressing INV-1, INV-2, INV-5 and INV-7 by name, is recorded in the design artefact or a clearly linked companion section"
+      - "the design states the response envelope for an aggregation result and explicitly states it is not a Cursor.paginate/5-shaped page, with a reason"
+      - "the design explicitly states a materialized/cached reporting layer is out of scope for this design"
+      - "0022's rule 1 holds textually: grep the design artefact, this requirement's title, description and acceptance criteria for single-vertical domain vocabulary and confirm zero hits outside stage-bookkeeping citations -- quote the grep command and its output"
+      - "CODE-DESIGN-VALIDATOR confirms the artefact contains no implementation code and is unambiguous enough for an ELIXIR-DEV requirement to build from without re-deriving the vocabulary or route shape"
+      - "git diff --name-only shows only the new file under lib/letflow/design/ (plus a decision record under docs/migration/decisions/ if CODE-DESIGNER judges one warranted) -- no file under lib/letflow/routers/, lib/letflow/entities/, lib/letflow/api/, priv/repo/migrations/, or test/ touched; quoted with the command"
+    depends_on: [REQ-311]
+
+  - id: REQ-313
+    title: Design attachments on an entity record (S10 gap 3)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Attachments scoped to an entity record (rather than a
+      process instance) serve any tenant's any entity type. Per 0022's rule 1
+      this requirement's title, description, acceptance criteria and the
+      modules its design names contain no domain-vertical vocabulary of any
+      kind -- no "question image", "certificate", "exam" or similar anywhere
+      in the artefact; the design may cite S10's gap numbering as stage
+      bookkeeping only.
+
+      THIS IS A DESIGN REQUIREMENT ONLY, scoped exactly as REQ-308 was: a
+      design artefact under lib/letflow/design/, no lib/ implementation, no
+      route mounted, no migration, no test.
+
+      WHAT THE GAP ACTUALLY IS, re-verify before designing rather than
+      trusting this text: read lib/letflow/repository/attachments.ex in
+      full. `Letflow.Repository.Attachments`' four functions
+      (`upload/2`/`list/2`/`get/2`/`delete/2`, REQ-211/212) operate on the
+      `instance_attachments` table only, keyed by `instance_id` -- confirmed
+      by the module's own moduledoc and by
+      `lib/letflow/routers/instances.ex`'s `/instances/:id/attachments...`
+      routes, which take an `instance_id` path segment, not an
+      `(entity_type, record_id)` pair. There is no attachment mechanism for
+      an entity record today.
+
+      WHAT IT BUILDS ON. `Letflow.Repository.Attachments`' existing shape is
+      the direct precedent -- read it in full, including its `INV-a`/`INV-b`
+      moduledoc sections on `content_type` trust and `byte_size` measurement,
+      the `repository_artifacts` content-hash dedup table it shares with
+      other repository consumers (Decision B,
+      docs/migration/decisions/0003-ecto-schema-strategy.md), and REQ-212's
+      route shape (`lib/letflow/routers/instances.ex` around its
+      `authz_post "/:id/attachments"` block) for the route-table convention.
+      Also read the now-landed entity HTTP surface,
+      `lib/letflow/routers/entities.ex`, for the `/entities/records/:entity_type/:record_id`
+      path shape a record-scoped attachment route nests under.
+
+      WHAT THE DESIGN MUST COVER, each with a concrete answer:
+
+      1. THE SCHEMA. Whether entity-record attachments get their own table
+      (e.g. `entity_record_attachments`, keyed by `(entity_type, record_id)`
+      or the record's internal id -- state which, and why, given REQ-296's
+      per-entity-type table shape) or reuse/extend `instance_attachments`
+      with a nullable/polymorphic owner column, and why. State the migration
+      this implies (columns, indexes, foreign-key or soft-reference shape
+      given records live in per-entity-type tables, not one shared table).
+
+      2. THE CONTEXT MODULE. Name it (e.g.
+      `Letflow.Repository.EntityAttachments` or a generalised sibling) and
+      state its four (or more) functions' signatures, mirroring
+      `Letflow.Repository.Attachments`' `upload/2`/`list/2`/`get/2`/`delete/2`
+      shape unless a concrete reason argues otherwise. State whether
+      `repository_artifacts` content-hash dedup is shared with instance
+      attachments (same table, same tenant-schema scope) or kept separate,
+      and why.
+
+      3. THE ROUTE SHAPE. State the exact route paths nested under
+      `/entities/records/:entity_type/:record_id/attachments...`, mirroring
+      REQ-212's four-route shape (create, list, get-raw-bytes, delete), in
+      the same Handler/Method-path/Delegate/Permission/Response table form
+      `lib/letflow/routers/entities.ex`'s moduledoc already uses. State
+      whether this lives in `Letflow.Routers.Entities` itself or a new
+      router module, justified against Plug.Router's one-forward-per-prefix
+      constraint the same way REQ-308 justified its own router-count
+      decision.
+
+      4. THE PERMISSION VOCABULARY. State the new permission atom(s), which
+      routes each gates, and their relationship to the existing
+      `:EntitiesRecordsWrite`/`:EntitiesRecordsRead`-shaped atoms (verify the
+      actual atom names by grepping `lib/letflow/api/authorization.ex`) and
+      to `:AttachmentsManage`/`:AttachmentsRead` (REQ-212's atoms, also
+      verified by grep) -- state whether entity-record attachments reuse
+      those instance-attachment atoms or need their own, and why.
+
+      5. TENANT SCOPING AND THE SECURITY BOUNDARY. This IS a tenant-data
+      path; SECURITY-REVIEWER is a hard gate. State the design's position on
+      INV-1 (prefix sourced solely from
+      `Letflow.Api.Context.scoped_repo_opts/1`), INV-2 (whether attachment
+      metadata/content is subject to `FieldGrants`-style redaction, or
+      whether attachment access is gated purely at the route-permission
+      level -- state which and why), INV-5 (an attachment lookup against
+      another tenant's record, or a nonexistent record, produces the same
+      not-found shape), and INV-7 (no user-supplied string reaches SQL
+      outside parameterisation).
+
+      6. CONTENT-TYPE AND SIZE TRUST. State explicitly whether this design
+      inherits `Letflow.Repository.Attachments`' documented INV-a/INV-b
+      statements (caller-declared `content_type` is untrusted metadata;
+      `byte_size` is independently measured, never caller-trusted) verbatim,
+      or diverges, and why.
+
+      SCOPE FENCE: this requirement writes one design artefact under
+      lib/letflow/design/ (naming convention: req313-<slug>.md). It
+      implements no lib/ code, mounts no route, touches no file under
+      lib/letflow/routers/, lib/letflow/repository/, lib/letflow/api/, or
+      test/, and creates no migration.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ named req313-<slug>.md, states the schema shape (new table vs. extended instance_attachments) with a concrete column/index list, and states the reasoning against REQ-296's per-entity-type table shape -- verified by reading lib/letflow/repository/attachments.ex and lib/letflow/entities/ (per-entity-type tables) and citing them"
+      - "the design names the context module and its function signatures, mirroring Letflow.Repository.Attachments' upload/2, list/2, get/2, delete/2 shape or stating a concrete reason for diverging"
+      - "the design contains a route table in the same Handler/Method-path/Delegate/Permission/Response column form lib/letflow/routers/entities.ex and lib/letflow/routers/instances.ex already use, with all four routes nested under /entities/records/:entity_type/:record_id/attachments"
+      - "the design states the new permission atom(s), which routes each gates, and its relationship to both the EntitiesRecords* atoms and REQ-212's AttachmentsManage/AttachmentsRead atoms, with a quoted grep of lib/letflow/api/authorization.ex confirming the atoms cited actually exist under those names today"
+      - "the design addresses INV-1, INV-2, INV-5 and INV-7 by name with a concrete mechanism for each, and SECURITY-REVIEWER's verdict addressing all four is recorded in the design artefact or a clearly linked companion section"
+      - "the design explicitly states whether it inherits Letflow.Repository.Attachments' INV-a (content_type untrusted) and INV-b (byte_size independently measured) statements verbatim or diverges, with a reason if it diverges"
+      - "0022's rule 1 holds textually: grep the design artefact, this requirement's title, description and acceptance criteria for single-vertical domain vocabulary and confirm zero hits outside stage-bookkeeping citations -- quote the grep command and its output"
+      - "CODE-DESIGN-VALIDATOR confirms the artefact contains no implementation code and is unambiguous enough for an ELIXIR-DEV requirement to build from without re-deriving the schema or route shape"
+      - "git diff --name-only shows only the new file under lib/letflow/design/ (plus a decision record under docs/migration/decisions/ if CODE-DESIGNER judges one warranted) -- no file under lib/letflow/routers/, lib/letflow/repository/, lib/letflow/api/, priv/repo/migrations/, or test/ touched; quoted with the command"
+    depends_on: [REQ-311]
+
+  - id: REQ-314
+    title: Design bulk import/export of entity records (S10 gap 12)
+    owner: CODE-DESIGNER
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. Bulk import/export of entity records serves any tenant's
+      any entity type. Per 0022's rule 1 this requirement's title,
+      description, acceptance criteria and the modules its design names
+      contain no domain-vertical vocabulary of any kind -- the design may
+      cite S10's gap numbering as stage bookkeeping only.
+
+      THIS IS A DESIGN REQUIREMENT ONLY, scoped exactly as REQ-308 was: a
+      design artefact under lib/letflow/design/, no lib/ implementation, no
+      route mounted, no migration, no test.
+
+      WHAT THE GAP ACTUALLY IS, re-verify before designing rather than
+      trusting this text: read lib/letflow/definitions/export_import.ex in
+      full. `Letflow.Definitions.ExportImport` exports/imports one
+      `process_definitions` row via `export/2`/`import/3`, always creating a
+      brand-new draft through `Letflow.Definitions.create/2` -- it moves
+      process *definitions*, not entity *records* (data). REQ-303..REQ-306's
+      solution-pack extension separately moves entity *definitions*
+      (schemas) via the pack's `entity_definitions` section -- also not
+      records. Read `Letflow.Entities.Definitions`' and
+      `Letflow.Entities.Records`' moduledocs and confirm neither names a
+      bulk/batch record-level export or import operation. There is no bulk
+      record-level export/import mechanism today, singular- or batch-record.
+
+      WHAT IT BUILDS ON. `Letflow.Definitions.ExportImport`'s
+      `ExportDocument` struct and its schema-version gate
+      (`@export_schema_version`, checked first in `import/3` before any
+      database touch) are the direct structural precedent -- read the full
+      module. The now-landed entity HTTP surface
+      (`lib/letflow/routers/entities.ex`) and its `POST /entities/query`
+      route (REQ-311) is the natural mechanism for the export side's
+      selection of which records to export (reuse the existing query DSL
+      rather than inventing a second selection language). REQ-225..REQ-231's
+      `Letflow.Entities.Records.create_record/2` (event-sourced write path)
+      is the mechanism the import side must go through -- state whether it
+      reuses `create_record/2` unchanged (no bypass), matching
+      `ExportImport`'s own "no independent validation" precedent (its
+      moduledoc's "No independent validation" section).
+
+      WHAT THE DESIGN MUST COVER, each with a concrete answer:
+
+      1. THE EXPORT DOCUMENT SHAPE. A schema-versioned document format
+      (its own `@export_schema_version`, independent of
+      `Letflow.Definitions.ExportImport`'s "bpm/definition/v1") covering one
+      entity type's records -- state whether one export call handles one
+      record, a caller-specified set (e.g. the result of a query), or an
+      entire entity type's table, and why, given `pg_trgm`-backed bulk
+      export/import is BilimBaga's reference precedent per the stage file
+      (cited as scale/shape context only, not as a design constraint this
+      requirement copies verbatim).
+
+      2. THE SELECTION MECHANISM FOR EXPORT. State how records-to-export are
+      selected -- reusing `Letflow.Entities.Query.Types.query_request/0`
+      (filters/sort/join) via the existing `POST /entities/query` route
+      internals, or a new mechanism, and justify against "reuse the existing
+      query DSL rather than inventing a second selection language."
+
+      3. THE IMPORT WRITE PATH AND VALIDATION. State that import goes
+      through `Letflow.Entities.Records.create_record/2` (or the equivalent
+      current write path -- verify its actual name/arity by reading
+      `lib/letflow/entities/records.ex`) with no independent/parallel
+      validation, matching `ExportImport`'s own "No independent validation"
+      precedent. State the per-record failure semantics for a bulk import:
+      whole-batch atomicity (all-or-nothing) vs. per-record partial success
+      with a per-record result list -- pick one and justify it against
+      `Letflow.Entities.Records.create_record/2`'s actual transactional
+      shape.
+
+      4. THE ROUTE SHAPE. State the route paths (e.g.
+      `/entities/records/:entity_type/export`,
+      `/entities/records/:entity_type/import`), mirroring
+      `Letflow.Definitions.ExportImport`'s
+      `GET /definitions/:id/export`/`POST /definitions/import` route-table
+      convention (`lib/letflow/routers/definitions.ex`'s moduledoc), in the
+      same table form used by `lib/letflow/routers/entities.ex`.
+
+      5. THE PERMISSION VOCABULARY. State the new permission atom(s) (or
+      reuse of `:EntitiesRecordsRead`/`:EntitiesRecordsWrite`, verified by
+      grep against `lib/letflow/api/authorization.ex`), matching or
+      diverging from `Letflow.Definitions.ExportImport`'s own
+      `DefinitionsRead`/`DefinitionsWrite`(`DefinitionsImport`) split
+      (`lib/letflow/routers/definitions.ex`'s moduledoc names the REQ-082
+      divergence -- read it and state whether entity records need an
+      analogous dedicated import atom).
+
+      6. TENANT SCOPING AND THE SECURITY BOUNDARY. This IS a tenant-data
+      path; SECURITY-REVIEWER is a hard gate. State the design's position on
+      INV-1 (prefix sourced solely from
+      `Letflow.Api.Context.scoped_repo_opts/1`, no caller-supplied tenant
+      identifier or cross-tenant record reference accepted in the import
+      document), INV-2 (whether export applies `FieldGrants`-style
+      redaction, or whether export is a privileged/whole-record operation
+      distinct from a query read -- state which and why), INV-5 (export of a
+      nonexistent or cross-tenant entity_type/record produces the same
+      not-found shape), and INV-7 (no user-supplied string reaches SQL
+      outside the existing allowlist/parameterisation, including any
+      selection filters reused from the query DSL).
+
+      7. SIZE/RESOURCE LIMITS. State whether the design imposes an explicit
+      cap on records per export/import call (given this is a bulk
+      operation over HTTP, not a background job) and what happens past it --
+      a design silent on this fails on the first real-scale tenant.
+
+      SCOPE FENCE: this requirement writes one design artefact under
+      lib/letflow/design/ (naming convention: req314-<slug>.md). It
+      implements no lib/ code, mounts no route, touches no file under
+      lib/letflow/routers/, lib/letflow/entities/, lib/letflow/definitions/,
+      lib/letflow/api/, or test/, and creates no migration.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ named req314-<slug>.md, states its own schema-versioned export document format independent of Letflow.Definitions.ExportImport's bpm/definition/v1, and states the export granularity (single record, query-selected set, or whole entity type) with a reason"
+      - "the design states the selection mechanism for export reuses Letflow.Entities.Query.Types.query_request/0 (filters/sort/join) rather than inventing a second selection language, or states a concrete reason it does not"
+      - "the design states import goes through Letflow.Entities.Records' actual current record-write function (name and arity verified by reading lib/letflow/entities/records.ex and quoted) with no independent/parallel validation, matching Letflow.Definitions.ExportImport's own 'No independent validation' precedent -- quoted from that module's moduledoc"
+      - "the design states an explicit per-batch failure-semantics choice (whole-batch atomicity vs. per-record partial success with a per-record result list) and justifies it against the write path's actual transactional shape"
+      - "the design contains a route table in the same Handler/Method-path/Delegate/Permission/Response column form lib/letflow/routers/definitions.ex and lib/letflow/routers/entities.ex already use, covering export and import routes"
+      - "the design states the permission atom(s) used, with a quoted grep of lib/letflow/api/authorization.ex confirming what exists today, and states whether entity-record import needs a dedicated atom analogous to REQ-082's DefinitionsImport divergence (cited from lib/letflow/routers/definitions.ex's moduledoc)"
+      - "the design addresses INV-1, INV-2, INV-5 and INV-7 by name with a concrete mechanism for each, and SECURITY-REVIEWER's verdict addressing all four is recorded in the design artefact or a clearly linked companion section"
+      - "the design states an explicit size/record-count limit per export or import call and the behaviour past it (rejection with a stated status code, or an explicitly designed chunking/pagination mechanism) -- a design silent on this fails CODE-DESIGN-VALIDATOR"
+      - "0022's rule 1 holds textually: grep the design artefact, this requirement's title, description and acceptance criteria for single-vertical domain vocabulary and confirm zero hits outside stage-bookkeeping citations -- quote the grep command and its output"
+      - "CODE-DESIGN-VALIDATOR confirms the artefact contains no implementation code and is unambiguous enough for an ELIXIR-DEV requirement to build from without re-deriving the document format or route shape"
+      - "git diff --name-only shows only the new file under lib/letflow/design/ (plus a decision record under docs/migration/decisions/ if CODE-DESIGNER judges one warranted) -- no file under lib/letflow/routers/, lib/letflow/entities/, lib/letflow/definitions/, lib/letflow/api/, priv/repo/migrations/, or test/ touched; quoted with the command"
+    depends_on: [REQ-311]

@@ -1,0 +1,47 @@
+id: ISS-0592
+title: CI has no paths filter -- docs-only changes run the full Elixir suite and Postgres service
+discovered_by: ORCH
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T02:50:00Z"
+severity: MAJOR
+description: >
+  .github/workflows/ci.yml has no `paths:` / `paths-ignore:` filter, so
+  a PR touching only documentation runs the full `mix letflow.check`
+  backend gate -- ~8-9 minutes, live postgres:16 service, full
+  migrations -- plus the frontend gate.
+
+  Observed live on PR #1209, whose entire diff was
+  docs/requirements.yaml, two docs/issues/*.yaml records and one test
+  file. It ran the complete backend gate across five rounds.
+
+  The second-order cost is the one that actually hurts. main's branch
+  protection is `strict: true` (head must be up to date with base
+  before merging) and this repo has auto-merge DISABLED -- `gh pr merge
+  --auto` is rejected with "Auto merge is not allowed for this
+  repository (enablePullRequestAutoMerge)". With concurrent agent
+  sessions landing commits, every 9-minute CI round is a fresh window
+  for main to move ahead of the branch. PR #1209 lost that race three
+  times and needed three separate merge-main-and-rerun cycles to land
+  a documentation change.
+
+  THE FIX IS NOT A BARE `paths:` FILTER, and this is the whole reason
+  the issue needs a design pass rather than a quick edit. Both job
+  `name:` strings are REQUIRED status-check contexts (decision 0018;
+  verified live 2026-09-11, contexts = ["Backend gate (mix
+  letflow.check)", "Frontend gate (npm run check)"]). A path-filtered
+  job that does not run reports its context as MISSING, not passing,
+  and GitHub then blocks the PR forever -- strictly worse than the
+  slow-but-working state today.
+
+  The correct shape is the standard required-checks-with-path-filters
+  pattern: a path filter plus a same-named skip-shim job that claims
+  the identical context name and exits 0 when only non-code paths
+  changed. Alternatively, split the gate so the expensive suite is
+  conditional while a fast always-runs job owns the required context.
+
+  Best sequenced with ISS-0591 (duplicate runs), since both are edits
+  to the same `on:`/jobs structure and both must preserve the same
+  required contexts.
+affected_files:
+  - .github/workflows/ci.yml
+queue_ref: Q-592

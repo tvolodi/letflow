@@ -1082,6 +1082,24 @@ history:
       supervision-tree file, not a tenant-data path, no test's expected
       value changes). Renamed the example to "item_tags". mix compile
       --warnings-as-errors and mix format both clean.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T02:06:46Z"
+    note: >
+      ISS-0588 (GH#1210, queue task 588) -- decision
+      0022-bilimbaga-vertical.md's Consequences bullet said "twelve
+      platform gaps" while the record's own reasoning section 5 and
+      docs/migration/stage-10-bilimbaga-vertical.md both say thirteen --
+      gap 13 (SolutionPack's entity_definitions section, added by
+      decision 0023's follow-on review) was never reflected there.
+      Discovered by REQ-VALIDATOR while validating REQ-307/REQ-308.
+      Documentation only, no behaviour change, the authoritative gap
+      table itself unaffected -- direct ORCH action per
+      ORCHESTRATOR.md Sec.10's sizing rule (single file, no new public
+      function/@spec, no migration, no supervision-tree file, not a
+      tenant-data path, no test's expected value changes). Corrected
+      "Twelve" -> "Thirteen".
   - req: REQ-307
     event: done
     agent: ORCH

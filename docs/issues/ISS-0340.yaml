@@ -43,6 +43,44 @@ reopen_note: >
   status determination. Not blocking WF02-REQ155-20260827's own PASS
   verdict -- structurally cleared for that run per core-directives.md's
   attribution rule.
+mechanism_note: >
+  REVIEWER, run WF02-REQ309-20260911 (2026-09-11): reproduced at directory
+  scope, not just full-suite scope, and identified the mechanism this
+  issue's first acceptance criterion asks for.
+
+  REPRODUCTION: `mix test test/letflow/api/` (not the whole suite) on
+  feature/WF02-REQ309-20260911 failed 2 of 13 runs; the same directory at
+  the same merge-base with REQ-309's diff stashed passed 15 of 15. The
+  REQ-309 diff touches only lib/letflow/api/authorization.ex and
+  test/letflow/api/authorization_test.exs and has no reference to
+  Letflow.Api.Context -- it perturbs the flake's rate by adding 27 tests
+  (181 -> 208) to the same directory, i.e. by changing scheduling, not by
+  changing behaviour. Standalone `mix test test/letflow/api/context_test.exs`
+  passed 6 of 6, matching this issue's earlier standalone observations.
+
+  MECHANISM: the failing assertion is
+  `assert function_exported?(Context, :scoped_repo_opts, 1)` at
+  test/letflow/api/context_test.exs:104. `function_exported?/3` is
+  documented to return false for a module that is not currently LOADED --
+  it does not trigger code loading. Under Mix's default interactive/lazy
+  code loading, whether Letflow.Api.Context happens to already be loaded
+  when this pure-introspection test runs depends on whether some earlier
+  test in the same scheduling window already called into it. The test
+  was deliberately moved OUT of the provisioning describe block by
+  ISS-0340's own WF03-ISS0340-20260826 fix (commit 5b9b2b58) so that the
+  tenant-provisioning setup would not run for it -- which also removed the
+  very setup that had been incidentally forcing the module to load. That
+  fix therefore made the assertion's outcome depend purely on ordering
+  luck, which is consistent with this issue being reopened the next day.
+
+  SUGGESTED FIX (for ISSUE-FIXER/ELIXIR-DEV, not applied here -- outside
+  REQ-309's scope fence): force the module to load before asking, e.g.
+  `Code.ensure_loaded!(Context)` as the test's first line, then assert.
+  That makes the assertion test the real invariant (the arity of the
+  function) rather than the incidental load state of the VM. The two
+  `refute function_exported?(..., 2/3/4)` lines are vacuously true on an
+  unloaded module and should sit after the same ensure_loaded! call, or
+  they are not testing anything either.
 acceptance_criteria:
   - >
     a reproducing mechanism for the intermittent failure is identified

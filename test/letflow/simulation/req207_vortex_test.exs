@@ -526,6 +526,29 @@ defmodule Letflow.Simulation.Req207VortexTest do
 
   defp nearest_preceding_id_line(_title_lines, idx) when idx < 0, do: nil
 
+  # Returns the `status:` value of the requirement whose entry starts at the
+  # `- id: <req_id>` line, as a string ("pending", "done", ...), or nil if the
+  # id or its status key is not found. Scans forward from the id line only to
+  # the NEXT `- id:` line, so a malformed/missing status never silently picks
+  # up the following requirement's status.
+  defp requirement_status(lines, req_id) do
+    lines
+    |> Enum.drop_while(fn line ->
+      not Regex.match?(
+        ~r/^\s*-\s+id:\s*#{Regex.escape(req_id)}\s*$/,
+        String.trim_trailing(line, "\r")
+      )
+    end)
+    |> Enum.drop(1)
+    |> Enum.take_while(fn line -> not Regex.match?(~r/^\s*-\s+id:\s*REQ-/, line) end)
+    |> Enum.find_value(fn line ->
+      case Regex.run(~r/^\s*status:\s*(\S+)\s*$/, String.trim_trailing(line, "\r")) do
+        [_, status] -> status
+        nil -> nil
+      end
+    end)
+  end
+
   # ─── AC1: vortex-production-order-above-threshold ───────────────────────
 
   describe "vortex-production-order-above-threshold" do
@@ -943,6 +966,95 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # files under lib/letflow/routers/, both Entities/EntityQuery still only
       # reserved/unbuilt rows in router.ex, and api_pipeline.ex's forward list
       # still has no entities entry.
+      #
+      # UPDATE (S10 gap 1, 2026-09-11, second block of the same day): REQ-309
+      # joins the allowlist, and this block additionally records a DATED WARNING
+      # about REQ-310, which is the requirement that finally flips this test.
+      #
+      # REQ-309 first. It is the first implementation requirement built from
+      # REQ-308's design (lib/letflow/design/req308-entity-http-surface.md §3),
+      # and it is deliberately the vocabulary half of that design and nothing
+      # more: it adds four permission atoms (:EntitiesDefinitionsRead,
+      # :EntitiesDefinitionsWrite, :EntitiesRecordsWrite, :EntitiesQuery), the
+      # matching endpoint_policy_key/2 clauses and the role_allows?/2 matrix
+      # arms, all inside lib/letflow/api/authorization.ex. Its own scope fence
+      # says it in as many words: "It creates no router, mounts no route,
+      # touches no file under lib/letflow/routers/, does not edit
+      # lib/letflow/router.ex or lib/letflow/plugs/api_pipeline.ex". A policy
+      # key with no route consuming it is unreachable over HTTP -- the same
+      # "ported ahead of its consuming route" state :DlqOperate and
+      # :WebhooksManage already sat in. So the disposition is unaffected:
+      # naming the permission that WOULD gate a surface is not serving that
+      # surface. All three signals were re-verified live here rather than
+      # assumed, for the fourth time: router.ex lines 82-83 still carry
+      # `Letflow.Routers.Entities` / entities.zig and
+      # `Letflow.Routers.EntityQuery` / entity_query.zig as rows in the
+      # "## Deferred routes (not yet mounted -- added by owning stage)" table
+      # and nowhere else; no lib/letflow/entities.ex; no
+      # lib/letflow/entity_query.ex; no entity router among the sixteen files
+      # under lib/letflow/routers/; and api_pipeline.ex's forward list (lines
+      # 141-153) still forwards only identity, tenants, instances, definitions,
+      # tasks, promotions, onboarding, solution-packs, audit, dlq, webhooks,
+      # services and admin/services -- no /entities.
+      #
+      # ⛔⛔ NOW THE WARNING. READ THIS BEFORE TOUCHING THE ALLOWLIST AGAIN. ⛔⛔
+      #
+      # REQ-310 ("Create Letflow.Routers.Entities with the nine definition and
+      # record routes, mount it at /entities, and retire the two deferred-routes
+      # rows" -- filed, status pending, letflow-queue task 597) IS THE
+      # REQUIREMENT THAT FLIPS THIS TEST. Its description, points 1, 5 and 7,
+      # commits to exactly the three things this scenario's disposition rests on
+      # being absent:
+      #
+      #   * point 1 creates lib/letflow/routers/entities.ex -> Signal 3 goes
+      #     false (the context/router surface exists);
+      #   * point 5 adds `forward("/entities", to: Letflow.Routers.Entities)` to
+      #     lib/letflow/plugs/api_pipeline.ex -> the subsystem becomes reachable
+      #     over HTTP;
+      #   * point 7 DELETES both the `Letflow.Routers.Entities` and
+      #     `Letflow.Routers.EntityQuery` rows from router.ex's deferred-routes
+      #     table outright ("REMOVED outright, not annotated") -> Signal 1 goes
+      #     false, and this test's two `router_content =~ ...` assertions above
+      #     will fail on their own.
+      #
+      # WHEN REQ-310 LANDS, THIS SCENARIO'S BLOCKED_ON_DEPENDENCY DISPOSITION
+      # BECOMES FACTUALLY WRONG. The entity list/filter/page surface the vortex
+      # scenario exercises will be live, so the scenario should actually RUN --
+      # Runner.run/1 against entity-list-filter-and-page.yaml, its six :gui
+      # steps executed and asserted -- rather than be recorded as blocked with
+      # steps_executed == 0.
+      #
+      # ⛔ DO NOT "FIX" THE REQ-310 FAILURE BY ADDING "REQ-310" TO allowed_ids.
+      # That is the wrong reflex and it is precisely the failure mode this
+      # tripwire exists to prevent. The allowlist triages a requirement whose
+      # TITLE mentions entities but which does not BUILD the subsystem; REQ-310
+      # builds it. Admitting it to the allowlist would silence the title
+      # assertion while leaving Signals 1 and 3 to fail anyway, and anyone who
+      # then also "fixed" those would be left with a green test asserting a
+      # disposition that is false -- a test actively certifying that a shipped,
+      # mounted, HTTP-reachable subsystem is missing. That is worse than no test.
+      #
+      # WHOEVER IMPLEMENTS REQ-310 MUST RE-EVALUATE THIS SCENARIO'S DISPOSITION
+      # ITSELF: re-derive it against the three signals as they then stand (all
+      # false), replace this whole describe block's blocked-on-dependency
+      # bookkeeping with a real execution of the scenario, and update
+      # lib/letflow/design/ §4.1/§4.3's disposition table to match. Route it
+      # through TEST-DESIGNER rather than patching it inline: the change is a
+      # new test, not an allowlist edit.
+      #
+      # NOTE ON WHY REQ-310 AND REQ-311 APPEAR BELOW ANYWAY. Both are already
+      # FILED in docs/requirements.yaml (pending, queue tasks 597 and 598), and
+      # both carry entity titles, so this tripwire fires on them TODAY -- on the
+      # mere filing, years before the code lands. Filing builds nothing, so the
+      # disposition is still correct and they must be admitted. But admitting
+      # them flatly would burn the warning above: the test would then stay green
+      # straight through REQ-310 landing, and the only thing standing between a
+      # mounted /entities and a test asserting it does not exist would be
+      # whether someone read this comment. So they are admitted CONDITIONALLY,
+      # in a second list the test checks against their live `status:` -- pending
+      # passes, anything else fails loudly with these instructions. REQ-311
+      # ("POST /entities/query", which REQ-310's §SCOPE explicitly defers to it)
+      # is armed the same way and for the same reason.
       requirements_content =
         File.read!(Path.expand("../../../docs/requirements.yaml", __DIR__))
 
@@ -971,8 +1083,31 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-300",
           "REQ-302",
           "REQ-304",
-          "REQ-308"
+          "REQ-308",
+          "REQ-309"
         ])
+
+      # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
+      #
+      # Every id in allowed_ids above is `status: done`: each was triaged by
+      # reading what it actually shipped and confirming it did not build the
+      # subsystem. REQ-310 and REQ-311 cannot be triaged that way, because they
+      # are the requirements that DO build it -- they are simply not built yet.
+      # Filing a requirement changes nothing about what is reachable over HTTP,
+      # so a pending REQ-310 leaves the disposition correct; a done REQ-310
+      # makes it false.
+      #
+      # Rather than record that in a comment and trust the next reader, this
+      # list is conditional and the test enforces the condition: the moment
+      # either id's status flips to done, the assertion below fails with an
+      # explicit instruction. That is why admitting them here is not the
+      # "wrong reflex" the ⛔ block warns about -- they are not being waved
+      # through, they are being armed.
+      #
+      # ⛔ THE FIX WHEN THIS FIRES IS NOT TO MOVE THE ID INTO allowed_ids ABOVE.
+      # It is to re-derive this scenario's disposition against Signals 1 and 3
+      # as they then stand, and to make the scenario RUN. See the ⛔ block above.
+      pending_only_ids = ["REQ-310", "REQ-311"]
 
       refute Enum.empty?(entity_title_matches),
              "Expected at least 1 title: match for word-bounded entity/entities (REQ-207's own), got none"
@@ -983,9 +1118,34 @@ defmodule Letflow.Simulation.Req207VortexTest do
         end)
 
       Enum.each(matched_ids, fn preceding_line ->
-        assert Enum.any?(allowed_ids, &(preceding_line =~ "id: #{&1}")),
-               "Expected the line preceding each entity title: match to carry one of " <>
-                 "#{inspect(MapSet.to_list(allowed_ids))}, got: #{inspect(preceding_line)}"
+        pending_only_id =
+          Enum.find(pending_only_ids, &(preceding_line =~ "id: #{&1}"))
+
+        cond do
+          Enum.any?(allowed_ids, &(preceding_line =~ "id: #{&1}")) ->
+            :ok
+
+          pending_only_id != nil ->
+            assert requirement_status(title_lines, pending_only_id) == "pending",
+                   "#{pending_only_id} is allowed to carry an entity title ONLY while it is " <>
+                     "status: pending -- filing it builds nothing, so the " <>
+                     "BLOCKED_ON_DEPENDENCY disposition survives. Its status is now " <>
+                     "#{inspect(requirement_status(title_lines, pending_only_id))}, which means " <>
+                     "the entity HTTP surface has been BUILT and this scenario's disposition is " <>
+                     "now FALSE. Do NOT silence this by moving #{pending_only_id} into " <>
+                     "allowed_ids -- that would leave a green test asserting a subsystem is " <>
+                     "missing when it is mounted and serving. Re-derive the disposition against " <>
+                     "Signals 1 and 3 and make this scenario actually RUN (Runner.run/1 over " <>
+                     "entity-list-filter-and-page.yaml's six :gui steps). See the block above " <>
+                     "the allowlist."
+
+          true ->
+            flunk(
+              "Expected the line preceding each entity title: match to carry one of " <>
+                "#{inspect(MapSet.to_list(allowed_ids))} (unconditional) or " <>
+                "#{inspect(pending_only_ids)} (only while pending), got: #{inspect(preceding_line)}"
+            )
+        end
       end)
 
       # Signal 3: no context module exists under lib/letflow/ for entities/entity_query.
@@ -1014,9 +1174,16 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
         evidence: [
           "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), the REQ-295..302 entity-storage batch (decision 0023), REQ-304 (solution packs CARRY an entity definition -- delivery, not runtime), or REQ-308 (a CODE-DESIGNER design artefact for S10 gap 1's entity HTTP surface) -- none of which mount a route or build the subsystem",
+          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), the REQ-295..302 entity-storage batch (decision 0023), REQ-304 (solution packs CARRY an entity definition -- delivery, not runtime), REQ-308 (a CODE-DESIGNER design artefact for S10 gap 1's entity HTTP surface), or REQ-309 (permission atoms, endpoint_policy_key/2 clauses and role_allows?/2 arms in lib/letflow/api/authorization.ex only -- a policy vocabulary with no route consuming it, per its own scope fence) -- none of which mount a route or build the subsystem; plus REQ-310 and REQ-311, which WILL build it but are still status: pending, admitted only on that condition and asserted against it",
+          "lib/letflow/plugs/api_pipeline.ex: forward list carries no /entities entry",
           "no lib/letflow/entities.ex or entity_query.ex context module exists"
         ],
+        # NOT a standing fact -- a dated statement about pending work. REQ-310
+        # (queue task 597) mounts /entities and deletes both deferred-routes
+        # rows; when it lands every evidence line above goes false and this
+        # disposition must be re-derived, not re-allowlisted. See the ⛔ block
+        # above the allowlist.
+        flips_when: "REQ-310",
         steps_executed: 0
       }
 

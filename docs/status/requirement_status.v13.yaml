@@ -932,3 +932,18 @@ history:
       not a blocker). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per
       this session's established precedent (fail-first-proven tests,
       REVIEWER independently verified quality).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T01:48:30Z"
+    note: >
+      ISS-0589 (GH#1211, queue task 589) -- lib/letflow/entities/query/types.ex:77
+      used "question_tags" (BilimBaga's vertical vocabulary) as a
+      join_clause doc example inside a bucket-B platform module, violating
+      decision 0022 rule 1's leakage boundary. Discovered by REQ-VALIDATOR
+      while validating REQ-307/REQ-308. Documentation only, no behaviour
+      change -- direct ORCH action per ORCHESTRATOR.md Sec.10's sizing
+      rule (single file, no new public function/@spec, no migration, no
+      supervision-tree file, not a tenant-data path, no test's expected
+      value changes). Renamed the example to "item_tags". mix compile
+      --warnings-as-errors and mix format both clean.

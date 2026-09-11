@@ -375,3 +375,26 @@ history:
       live setting diverged in the first place -- outside this issue's
       scope, and the decision record itself needed no amendment since
       it already correctly describes the intended posture.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T08:01:40Z"
+    note: >
+      ISS-0599 (GH#1240, queue task 599) -- letflow-queue tasks 596/597/598
+      (REQ-309/310/311) were all registered with depends_on: [] due to a
+      shell-pipeline JSON-key parsing bug in the registration script, even
+      though docs/requirements.yaml correctly records the real chain
+      (REQ-310 depends_on [REQ-309], REQ-311 depends_on [REQ-310]).
+      letflow-queue exposes no update endpoint for depends_on, so the
+      documented fix directions were (a) rely on requirements.yaml and
+      accept the exposure, (b) cancel+re-register with new ids, or (c) add
+      an update endpoint (its own decision). At pickup, the residual risk
+      the issue named had ALREADY materialized live: task 596 was locked
+      by orch-session-7ca7f9f6, and task 597 had ALREADY been claimed by
+      tvolodi-orch (a session other than the one executing 596) before
+      596 finished. Left 597's active lock untouched (not a fix target);
+      locked and immediately released task 598 with status: "blocked",
+      closing the remaining get_next_task exposure window. Option (b) not
+      attempted -- 597 genuinely in progress under a live lock, cancelling
+      would be disruptive not corrective. docs/requirements.yaml's own
+      depends_on chain remains authoritative.

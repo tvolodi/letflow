@@ -2909,8 +2909,22 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 24
+    entries: 25
     note: >
+      Recounted to 25 on WF02-REQ315-20260911's Step Final rebase, which
+      conflicted at this file's tail and at
+      docs/status/requirement_status.v14.yaml's tail against
+      WF03-ISS0613-20260911's SCOPE-CHANGE done-event and
+      WF02-REQ316-20260911's own done-event (both landed on main after
+      this run's own Step 00 started-event append). Composed in
+      chronological `at:` order -- REQ-315 started (18:21:41Z), ISS-0613
+      SCOPE-CHANGE done (18:40:34Z), REQ-316 done (20:22:14Z) -- REQ-315's
+      own started-event sorted first and needed no reordering; the other
+      two appended after it in their existing order. Recounted directly
+      from `grep -c "^  - req:" docs/status/requirement_status.v14.yaml`
+      = 25 on-disk entries, rather than carrying forward either side's
+      independently-computed 23/24, per this note's own recount-every-time
+      rule. 878 lines / 51458 bytes, well under the roll ceiling.
       Incremented to 24 by ORCH's own REQ-316 done-event append
       (WF02-REQ316-20260911) -- `grep -c "^  - req:"
       docs/status/requirement_status.v14.yaml` = 24 on-disk entries;

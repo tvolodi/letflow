@@ -20015,7 +20015,7 @@ requirements:
     title: Design bulk import/export of entity records (S10 gap 12)
     owner: CODE-DESIGNER
     impl_order: 604  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Bulk import/export of entity records serves any tenant's

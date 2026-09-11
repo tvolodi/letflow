@@ -1408,7 +1408,21 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # the status check is a BACKSTOP, never the primary detector. The primary
       # detectors are the code-derived signals below -- and Signal 5 in
       # particular, which is this round's new tripwire.
-      pending_only_ids = []
+      # REQ-315..320 (S10 fifth batch, 2026-09-11): the IMPLEMENTATION
+      # requirements for REQ-312/313/314's own designs (aggregation route,
+      # attachments table+context+routes, export/import atoms+routes). Unlike
+      # REQ-312/313/314 themselves, these are owner: ELIXIR-DEV and will land
+      # real code -- REQ-317/319/320 each explicitly add new routes to
+      # Letflow.Routers.Entities, which will invalidate whatever
+      # "exactly ten routes" assertion currently holds elsewhere in this
+      # file. This scenario's OWN disposition is unaffected regardless (the
+      # moduledoc above already established the blocker moved entirely to
+      # S8's :gui-dispatch stub, decoupled from lib/ entity work of any
+      # kind) -- but a route-count assertion is a different signal than this
+      # scenario's disposition, and per this tier's own purpose, landed code
+      # gets re-derived here rather than silently waved into allowed_ids.
+      # All six are `status: pending` at admission time.
+      pending_only_ids = ["REQ-315", "REQ-316", "REQ-317", "REQ-318", "REQ-319", "REQ-320"]
 
       refute Enum.empty?(entity_title_matches),
              "Expected at least 1 title: match for word-bounded entity/entities (REQ-207's own), got none"

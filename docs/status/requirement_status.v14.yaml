@@ -312,3 +312,41 @@ history:
       wording. Branch: design/REQ308-20260911. Dispatching CODE-DESIGNER
       next, gated by CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER (tenant-data
       path per the requirement's own acceptance criteria).
+
+  - req: REQ-308
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-11T06:14:37Z"
+    run: WF02-REQ308-20260911
+    note: >
+      Design-only requirement closed. Artefact:
+      lib/letflow/design/req308-entity-http-surface.md -- specifies the HTTP
+      surface for Letflow.Entities.{Definitions,Records} and the query DSL
+      (S10 gap 1), per 0022 rule-1 vertical-neutral wording. Passed
+      CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER (verdict recorded in the
+      artefact's own §11, PASS on INV-1/INV-2/INV-5/INV-6/INV-7/INV-8;
+      INV-3/INV-4/INV-9 not applicable). Key decisions: one router,
+      Letflow.Routers.Entities at /entities, not two (§2 -- the deferred
+      table's two module names are an R-Co-filename artefact, not two URL
+      prefixes); four new permission atoms
+      (:EntitiesDefinitionsRead/:EntitiesDefinitionsWrite/:EntitiesRecordsWrite/
+      :EntitiesQuery), deliberately not shared with the existing
+      Definitions{Read,Write,Create} atoms (§3); the query DSL transported
+      as a POST /entities/query body, not a GET query string, since
+      query_request() is unboundedly nested (§4); compile/2's and
+      paginate/5's error unions mapped to concrete HTTP statuses; INV-1/2/5/7
+      each addressed by name with the concrete mechanism in §5. No
+      docs/migration/decisions/ record filed -- §10 reasons this is
+      ordinary route-table/permission-matrix design work, not a load-bearing
+      cross-cutting architectural decision, contrasting explicitly with 0024
+      (REQ-295's record). This requirement implemented no lib/ code, mounted
+      no route, and touched no test -- the design artefact is the entire
+      deliverable, per REQ-308's own scope fence. `git diff --name-only
+      main...HEAD` confirms only lib/letflow/design/req308-entity-http-surface.md
+      plus status-bookkeeping files (docs/requirements.yaml,
+      docs/status/requirement_status.index.yaml,
+      docs/status/requirement_status.v14.yaml) touched -- no
+      docs/migration/decisions/ record, matching §10's own conclusion that
+      none was warranted. Commits: 24ee128f (Step 00), 7e257217
+      (CODE-DESIGNER), 439be0b1 (SECURITY-REVIEWER PASS). Branch:
+      design/REQ308-20260911.

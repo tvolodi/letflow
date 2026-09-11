@@ -1015,6 +1015,29 @@ history:
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
+    at: "2026-09-11T00:41:20Z"
+    note: >
+      WF02-REQ293-20260910's Step Final resolution of REQ-294's mechanical
+      staleness gap DOC-UPDATER flagged (Step 6, above): registered REQ-294
+      via register_task (queue task 585, GH#1205) to satisfy
+      mix letflow.check_deferral_staleness's mechanical requirement (its
+      only two outs are register_task or a live blocked-by; "owner is
+      dormant" has no escape it recognizes), then immediately locked and
+      released the queue task with status: "blocked" (not "open") so it
+      stays permanently excluded from get_next_task's eligibility filter
+      (WHERE status = 'open') despite being registered -- confirmed live
+      via both the release response and re-running
+      mix letflow.check_deferral_staleness (0 stale) and
+      mix letflow.check_requirements_registration (276 = 274 registered +
+      2 deferred, REQ-294 no longer counted as a deferral at all).
+      docs/requirements.yaml's REQ-294 entry updated with the real
+      impl_order and an explicit DO-NOT-re-open/re-register note tied to
+      CLAUDE.md's own MOBILE-DEV-dormant roster entry, independent of this
+      registration's purely mechanical purpose.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
     at: "2026-09-11T01:17:21Z"
     note: >
       ISS-0583 (GH#1200, queue task 583) -- reattempted after REQ-292

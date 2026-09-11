@@ -47,3 +47,5 @@ affected_files:
   - test/letflow/service_catalog_test.exs
   - test/specs/REQ-191.md
 queue_ref: Q-594
+github_ref: GH-1222
+status: in_progress

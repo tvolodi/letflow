@@ -169,3 +169,29 @@
 
 
 history:
+
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-11T03:39:58Z"
+    note: >
+      WF03-ISS0594-20260911 started (queue task 594, GH#1222,
+      docs/issues/ISS-0594.yaml). test/letflow/service_catalog_test.exs:588's
+      "SolutionPack's moduledoc names REQ-192 as the owner" test is a bare
+      substring check (module_source =~ "REQ-192") that REQ-307's own
+      moduledoc correction (2026-09-11) has semantically inverted: the
+      corrected text now says the service_catalog_entries install policy
+      is UNOWNED, but the test still passes only because the string
+      "REQ-192" still happens to appear. A latent false-green in the
+      dangerous direction -- removing that string entirely (making the
+      moduledoc MORE correct) would FAIL this test. test/specs/REQ-191.md
+      lines 179-182 carry the same stale wording. Fix direction: assert
+      the actual current property (policy documented as unowned, hard-fail
+      retained) rather than a requirement-id substring. Branch:
+      fix/ISS0594-20260911.
+      NOTE: this entry was originally appended to (the now-closed) volume
+      13, then composed here instead by this run's own Step Final rebase,
+      since volume 13 was independently closed by fix/ISS-0595-20260911
+      before this branch's own Step Final ran -- "one run's started/done
+      land one in each volume across a roll boundary," per this index's
+      own established pattern.

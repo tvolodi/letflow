@@ -2899,8 +2899,15 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 0
+    entries: 1
     note: >
+      Incremented to 1 by ORCH's own WF03-ISS0594-20260911 started-event
+      append (composed here at this branch's own Step Final rebase, since
+      volume 13 was independently closed by fix/ISS-0595-20260911 before
+      this run's own rebase, per the established "one run's started/done
+      land one in each volume across a roll boundary" pattern) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v14.yaml` = 1 on-disk
+      entry; 197 lines / 11492 bytes, well under the roll ceiling.
       Opened by ORCH at fix/ISS-0595-20260911's Step Final rebase,
       successor to volume 13. Created with volume 13's header text
       verbatim (volume number, opening date and predecessor path

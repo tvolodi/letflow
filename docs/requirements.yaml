@@ -19609,7 +19609,7 @@ requirements:
     title: Add POST /entities/query to Letflow.Routers.Entities, wiring both the plain and the join-bearing field-redaction branches
     owner: ELIXIR-DEV
     impl_order: 598  # letflow-queue task id; yaml depends_on [REQ-310] = queue task 597; NOT mirrored as a queue edge, see note
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A query surface over the existing generic query DSL, serving

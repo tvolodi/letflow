@@ -453,3 +453,53 @@ history:
       Letflow.Routers.Entities graduated -- Letflow.Routers.EntityQuery
       never existed as a module and was retired by merge per design
       section 2.
+  - req: REQ-311
+    event: done
+    agent: ORCH
+    at: "2026-09-11T11:36:14Z"
+    note: >
+      POST /entities/query added to Letflow.Routers.Entities, wiring both
+      field-redaction branches. This closes S10 gap 1: the entity
+      subsystem, built since REQ-225 but unreachable over HTTP, is now
+      fully served. SECURITY-REVIEWER PASS and REVIEWER PASS.
+      INCIDENT: the first implementation passed both gates and was then
+      DESTROYED by an unrelated subagent running git checkout on the
+      still-uncommitted file while mutation-testing a different file.
+      Recovery was attempted and proven impossible -- no dangling blob,
+      no stash, and the compiled .beam had already been rebuilt from the
+      reverted source (confirmed by decompiling its abstract_code:
+      redact_plain_page and load_restriction_sets both absent). The test
+      suite survived, so the work was checkpointed immediately as
+      d8e12145 and the handler REBUILT against the design spec plus its
+      own 932 committed test lines -- a green target, not a redesign.
+      Both gates then re-reviewed the rebuilt code from scratch rather
+      than carrying the prior PASS forward, since a pass on destroyed
+      code is not evidence about new code. Lesson recorded: commit
+      before mutating, and never git checkout a file holding uncommitted
+      work.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T11:36:14Z"
+    note: >
+      Two further tripwires re-derived rather than silenced, both
+      falsified by REQ-311 itself. req207_vortex_test.exs fired for the
+      SECOND time exactly as armed; the disposition is still blocked but
+      the blocker has moved out of lib/ entirely and changed owner from
+      S10 to S8 -- the simulation Runner defers every :gui step
+      unconditionally. Its new tripwire asserts on OBSERVED Runner
+      behaviour rather than source text, because mutation proved a text
+      match would stay green through the exact S8 change it must catch.
+      query_cursor_field_grants_test.exs carried REQ-231's AC4 refuting
+      any router referencing Query.Cursor/Query.FieldGrants -- which
+      REQ-311's handler does by design. AC4 was a SCOPE constraint on
+      REQ-231's own commits ("deferred, not forbidden"), not an
+      architectural ban, so it was inverted to "entities.ex is the ONLY
+      such router", keeping the load-bearing half (no second,
+      unredacted query path) and still able to fail.
+      ISS-0600 filed (GH#1245): FieldGrants.redact_page/2 raises
+      FunctionClauseError on the plain-map rows a promoted per-type
+      table produces. Pre-existing since REQ-296/297/298 postdated
+      REQ-231; REQ-311 is its first caller. Worked around router-side
+      with a shape adapter both gates confirmed security-equivalent and
+      fail-loud.

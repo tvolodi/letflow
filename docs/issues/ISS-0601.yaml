@@ -38,4 +38,7 @@ affected_files:
   - lib/letflow/sandbox_pool.ex
 queue_ref: Q-601
 github_ref: GH-1248
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0601-20260911
+resolved_at: "2026-09-11T12:24:38Z"

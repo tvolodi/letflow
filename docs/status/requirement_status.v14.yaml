@@ -249,3 +249,35 @@ history:
       is strictly worse than today's slow-but-working state. Needs the
       standard required-checks-with-path-filters skip-shim pattern, not a
       bare paths: filter. Branch: fix/ISS0592-20260911.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ISSUE-FIXER
+    at: "2026-09-11T05:48:27Z"
+    note: >
+      WF03-ISS0591-ISS0592-20260911 done (queue tasks 591/592, GH#1217/
+      GH#1218, PR #1229). ISS-0591 fix: added a `concurrency:` group on
+      .github/workflows/ci.yml keyed
+      `${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}`
+      with `cancel-in-progress: true`, and narrowed `push:` to
+      `branches: [main]` so PR-branch pushes are covered only by the
+      `pull_request:` event -- eliminates the doubled-run-per-commit
+      pattern (measured 14 runs / 7 commits pre-fix). ISS-0592 fix: added a
+      new non-required `changes` job ("Detect changed paths") that computes
+      backend-/frontend-relevant path changes, with the existing `backend`/
+      `frontend` jobs gated by a fail-open condition
+      (`!cancelled()` and the relevant `changes` output `!= 'false'`) so
+      they still always run and report their required context (never
+      MISSING) but skip the expensive work when only non-code paths
+      changed -- avoids the bare-paths:-filter trap (a skipped job reports
+      MISSING and blocks merges permanently) both issues' own filings
+      warned against. Design passed CODE-DESIGN-VALIDATOR across 3 rounds;
+      ELIXIR-DEV's implementation verified with 6 real dry-run scenarios;
+      REVIEWER independently re-verified the evidence live; TEST-RUNNER
+      confirmed PR #1229 up to date with main with all three required
+      checks green (Backend gate, Detect changed paths, Frontend gate) on
+      head SHA ea588692. Both docs/issues/ISS-0591.yaml and
+      docs/issues/ISS-0592.yaml set to status: resolved. GitHub mirror
+      issues #1217/#1218 closed with evidence comments citing PR #1229.
+      Branch: fix/ISS0592-20260911 (not merged by this step -- ORCH's Step
+      Final does the merge next).

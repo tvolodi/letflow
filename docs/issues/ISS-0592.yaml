@@ -46,4 +46,28 @@ affected_files:
   - .github/workflows/ci.yml
 queue_ref: Q-592
 github_ref: GH-1218
-status: in_progress
+status: resolved
+resolved_in_run: WF03-ISS0591-ISS0592-20260911
+resolved_at: "2026-09-11T05:48:27Z"
+resolution: >
+  Fixed in .github/workflows/ci.yml (PR #1229, branch fix/ISS0592-20260911):
+  added a new `changes` job (not a required status check) that computes
+  whether backend-relevant / frontend-relevant paths changed, and gated the
+  `backend`/`frontend` jobs' expensive work on that output using a fail-open
+  condition (`!cancelled()` combined with the relevant `changes` output
+  `!= 'false'`) so a docs-only PR skips the ~8-9 minute backend suite and the
+  frontend suite while both required status-check contexts ("Backend gate
+  (mix letflow.check)", "Frontend gate (npm run check)") still report
+  (never MISSING) because the job itself always runs and exits fast when
+  skipped, rather than being conditioned out of running at all. This avoids
+  the bare-`paths:`-filter trap the issue's own filing called out (a
+  path-filtered job that never runs reports its required context as
+  MISSING, which blocks merges permanently). Handled together with ISS-0591
+  since both edit the same `on:`/`jobs:` structure. Verified: PR #1229's
+  head SHA (ea588692) shows "Detect changed paths" (the new `changes` job)
+  plus both required contexts all green; design passed
+  CODE-DESIGN-VALIDATOR across 3 rounds; ELIXIR-DEV's implementation was
+  confirmed with 6 real dry-run verification scenarios (including a
+  docs-only-diff scenario exercising the skip path); REVIEWER independently
+  re-verified the evidence live; TEST-RUNNER confirmed the PR is up to date
+  with main with all three required checks green.

@@ -65,7 +65,7 @@ no relations and no queryable localized fields.
 | # | Gap | State on 2026-09-09 | Owner |
 |---|---|---|---|
 | 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Open.** The stage's single largest blocker; its HTTP-surface design is now owned by `REQ-308` (`pending`) | `REQ-308` |
-| 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Open.** Design closed 2026-09-11 -- `REQ-312` `done` (`lib/letflow/design/req312-query-aggregation.md`); implementation filed 2026-09-11, `REQ-315` `pending` | `REQ-315` |
+| 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Closed 2026-09-11** -- `REQ-312` `done` (design, `lib/letflow/design/req312-query-aggregation.md`); `REQ-315` `done` (implementation, `POST /entities/query/aggregate`, PR #1276) | closed |
 | 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Open.** Design closed 2026-09-11 -- `REQ-313` `done` (`lib/letflow/design/req313-entity-record-attachments.md`); implementation filed 2026-09-11, `REQ-316`/`REQ-317` `pending` | `REQ-316`, `REQ-317` |
 | 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
 | 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
@@ -83,12 +83,12 @@ S10 depended on them and said so, and all three are now closed. Gaps 1–6 and
 10–13 are new bucket-B requirements this stage must file first, and of those,
 10, 11 and 13 — the three that make P2's exit condition reachable at all — are
 closed as of 2026-09-11 (`REQ-300`, `REQ-301`, `REQ-303`–`REQ-306`). Gap 1 is
-closed (`REQ-308`–`REQ-311`, all `done`). Gaps 2, 3 and 12 have design
-requirements done (`REQ-312`, `REQ-313`, `REQ-314`) and implementation
-requirements now filed against each — gap 2: `REQ-315`; gap 3: `REQ-316`,
-`REQ-317`; gap 12: `REQ-318`, `REQ-319`, `REQ-320` (all `pending`) — but none of
-the three gaps is closed yet, since the implementation work itself has not
-landed. Gaps 4, 5 and 6 remain unowned and to file.
+closed (`REQ-308`–`REQ-311`, all `done`). Gap 2 is now closed (`REQ-312`
+design, `REQ-315` implementation, both `done`). Gaps 3 and 12 have design
+requirements done (`REQ-313`, `REQ-314`) and implementation requirements
+still `pending` against each — gap 3: `REQ-316` `done`, `REQ-317` `pending`;
+gap 12: `REQ-318`, `REQ-319`, `REQ-320` (all `pending`) — so neither of the
+two is closed yet. Gaps 4, 5 and 6 remain unowned and to file.
 
 Gaps 10 and 11 are consequences of
 [decision 0023](decisions/0023-entity-storage-hybrid.md), and as originally
@@ -107,7 +107,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
-| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-11 gaps 1, 7, 8, 9, 10, 11 and 13 are closed; gaps 2, 3 and 12 have design requirements done (`REQ-312`–`REQ-314`) and implementation requirements filed (`REQ-315`–`REQ-320`, all `pending`) but are not yet closed; gaps 4, 5 and 6 remain unowned |
+| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-11 gaps 1, 2, 7, 8, 9, 10, 11 and 13 are closed; gaps 3 and 12 have design requirements done (`REQ-313`, `REQ-314`) and implementation requirements partly filed/landed (`REQ-316` `done`, `REQ-317`–`REQ-320` `pending`) but are not yet closed; gaps 4, 5 and 6 remain unowned |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |

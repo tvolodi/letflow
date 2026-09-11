@@ -876,3 +876,30 @@ history:
       tests) independently judged comprehensive by REVIEWER. Scope fence
       held -- no route, no permission atom, no router change; REQ-317
       owns those. docs/requirements.yaml flipped pending -> done.
+
+  - req: REQ-315
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-11T22:16:36Z"
+    note: >
+      Run WF02-REQ315-20260911 close-out (close-out step had not been run
+      before merge). Implemented POST /entities/query/aggregate per
+      lib/letflow/design/req312-query-aggregation.md: new
+      :EntitiesAggregate permission atom, new
+      Letflow.Entities.Query.Compiler.compile_aggregate/2 plus a new
+      run_aggregate/2 (the latter added after SECURITY-REVIEWER found the
+      router's direct Repo.all/2 call violated the router's own "never
+      executes its own SQL" discipline), and the design's §4 INV-2
+      field-restriction mechanism (checks aggregate target, group_by AND
+      filters fields, no exemption for either). Two pre-existing tests
+      updated for the new 11th route: a hardcoded route-count assertion
+      and the Req207VortexTest tripwire, the latter re-deriving that this
+      scenario's dispositions are unaffected. SECURITY-REVIEWER PASS
+      (after one structural rework round moving the raw query out of the
+      router into run_aggregate/2), REVIEWER PASS, TEST-RUNNER confirmed
+      green CI (3938/3938 backend tests, frontend and path-detection gates
+      all green) on PR #1276 (merged, commit ba4ce5aa). This close-out run
+      flips docs/requirements.yaml's REQ-315 status pending -> done,
+      appends this event, and closes GitHub mirror issue #1263 with an
+      evidence comment citing PR #1276 and the CI results -- no code
+      change, the implementation was already merged separately.

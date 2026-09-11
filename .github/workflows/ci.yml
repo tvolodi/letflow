@@ -132,6 +132,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: this-ref-does-not-exist-scratch-pr-f-iss0591
 
       - name: Compute changed paths
         id: filter

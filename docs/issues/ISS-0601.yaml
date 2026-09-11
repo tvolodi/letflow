@@ -1,0 +1,41 @@
+id: ISS-0601
+title: "SandboxPoolTest RT-6 (ISS-0224/ISS-0590 death-path-c schema-drop) still flakes under full-suite load"
+discovered_by: SECURITY-REVIEWER
+discovered_in_run: fix/ISS-0600-20260911
+discovered_at: "2026-09-11T11:30:00Z"
+severity: MINOR
+description: >
+  During ISS-0600 (GH#1245) verification, test/letflow/sandbox_pool_test.exs
+  RT-6 (death path c, the same test ISS-0590 fixed earlier the same day via
+  a bounded wait_until_schema_dropped/1 poll) failed once in a full
+  `mix letflow.check.test` run (3811-3815 tests) with the exact ISS-0590-era
+  flunk text: "expected schema ... to be dropped ... but it still exists".
+
+  Confirmed by SECURITY-REVIEWER during ISS-0600's review that ISS-0590's
+  own fix (lib/letflow/design/iss0590-sandboxpool-rt6-death-path-c-schema-drop-wait.md,
+  the wait_until_schema_dropped(o_schema) call at sandbox_pool_test.exs:1119)
+  IS present and DID run -- it simply lost the race under heavier
+  contention than whatever run originally validated it.
+
+  Confirmed unrelated to ISS-0600's own diff: zero shared code path,
+  schema, or GenServer between field_grants.ex/query_cursor_field_grants_test.exs
+  and sandbox_pool.ex/sandbox_pool_test.exs.
+
+  Re-ran by REVIEWER moments later in the same session and it did NOT
+  reproduce -- consistent with a genuine, still-live timing flake, not a
+  permanent break.
+
+  Fix direction (not yet designed): the bounded poll deadline (keyed off
+  SandboxPool.release_call_timeout(), 5ms interval) can apparently still
+  be exceeded under full-suite Postgres/DDL-lock contention; consider
+  raising the timeout, or keying completion off a real signal rather than
+  a fixed wall-clock deadline.
+
+  Severity MINOR: test-infrastructure flakiness, not a production defect;
+  failure mode is loud (test failure), not silent.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+  - lib/letflow/sandbox_pool.ex
+queue_ref: Q-601
+github_ref: GH-1248
+status: open

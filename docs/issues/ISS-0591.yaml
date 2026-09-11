@@ -36,3 +36,5 @@ description: >
 affected_files:
   - .github/workflows/ci.yml
 queue_ref: Q-591
+github_ref: GH-1217
+status: in_progress

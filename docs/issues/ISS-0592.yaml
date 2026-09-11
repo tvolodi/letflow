@@ -45,3 +45,5 @@ description: >
 affected_files:
   - .github/workflows/ci.yml
 queue_ref: Q-592
+github_ref: GH-1218
+status: in_progress

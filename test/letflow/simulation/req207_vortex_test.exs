@@ -5,6 +5,22 @@ defmodule Letflow.Simulation.Req207VortexTest do
   EXECUTED/PASS-or-FAIL (production-order-above-threshold, supplier-quality-deviation
   critical/false-positive), BLOCKED_ON_DEPENDENCY (entity-list-filter-and-page).
 
+  ## entity-list-filter-and-page disposition, re-derived 2026-09-11 (REQ-310)
+
+  Still BLOCKED_ON_DEPENDENCY, but on a NARROWER dependency than when REQ-207
+  was written. REQ-310 landed `Letflow.Routers.Entities` with nine routes and
+  mounted it at `/entities`, so the original reason -- "the entity subsystem has
+  no HTTP surface" -- is factually false and is no longer asserted anywhere.
+
+  The scenario remains blocked because all six of its `:gui` steps are record
+  READS (list/filter/sort/page/field-redaction), and record reads happen only
+  through `POST /entities/query`, which is REQ-311's and unbuilt: REQ-310
+  shipped definition CRUD plus record WRITES only. A second, independent
+  blocker is recorded separately -- `Letflow.Simulation.Runner` defers every
+  `:gui` step unconditionally, so S8 harness work is needed on top of REQ-311.
+  Full reasoning and the re-derivation history live in that describe block's own
+  comments; `test/specs/REQ-310.md` states the test cases.
+
   ## SERVICE_TASK limitation (affects all 3 real scenarios, design §0.3/§2)
   `Letflow.Engine` does not yet dispatch SERVICE_TASK nodes. The real
   `process_quality_check.yaml`/`process_work_order.yaml` fixtures have SERVICE_TASKs on
@@ -897,20 +913,76 @@ defmodule Letflow.Simulation.Req207VortexTest do
   # ─── AC4: vortex-entity-list-filter-and-page ─────────────────────────────
 
   describe "vortex-entity-list-filter-and-page" do
-    test "disposition is BLOCKED_ON_DEPENDENCY, re-verified live against real source state (design §4.1)" do
-      # Signal 1: Entities/EntityQuery remain in router.ex's reserved/unbuilt section
-      # (not mounted).
+    test "disposition is BLOCKED_ON_DEPENDENCY on the record-query route (REQ-311), re-derived live after REQ-310 mounted /entities" do
+      # ══════════════════════════════════════════════════════════════════════
+      # DISPOSITION RE-DERIVED 2026-09-11, AFTER REQ-310 LANDED (f6e0ae64).
+      #
+      # The 2026-09-11 ⛔ block preserved below predicted exactly this moment
+      # and instructed that the right response is to re-derive, never to
+      # allowlist REQ-310. That is what happened here. The old disposition --
+      # "the entity subsystem has no HTTP surface" -- is now FACTUALLY FALSE
+      # and has been replaced, not patched:
+      #
+      #   * /entities IS mounted (api_pipeline.ex), Signal 1's old assertion
+      #     inverted accordingly (Signal 1' below asserts the mount POSITIVELY);
+      #   * both deferred-routes rows ARE gone from router.ex (Signal 1'');
+      #   * Letflow.Routers.Entities exists and serves NINE real routes.
+      #
+      # The scenario is nonetheless STILL BLOCKED, for a different and much
+      # narrower reason, and the assertions below are correspondingly sharper
+      # than the ones they replace:
+      #
+      #   ⇒ All six of this scenario's :gui steps are RECORD READS (list,
+      #     filter x2, sort, page, field-level redaction -- see the fixture).
+      #     Record reads happen ONLY through POST /entities/query
+      #     (lib/letflow/design/req308-entity-http-surface.md:182, verbatim:
+      #     "record reads only happen via /entities/query"), and that route is
+      #     REQ-311's, still unbuilt. REQ-310 shipped definition CRUD plus
+      #     record WRITES; there is no record read path anywhere -- not a
+      #     route, and not even a context function to hang one off
+      #     (Letflow.Entities.Records is command-only).
+      #
+      # Signal 3 was ALSO rewritten rather than kept, because REQ-310 made it
+      # a tautology: it asserted lib/letflow/entities.ex and
+      # lib/letflow/entity_query.ex do not exist, and they still do not -- but
+      # the subsystem shipped under lib/letflow/entities/ (a DIRECTORY:
+      # definitions.ex, records.ex, entity_definition.ex, query/) and was never
+      # going to occupy those two flat paths. Asserting their absence proved
+      # the subsystem was unbuilt in 2026-09-09 and proves nothing at all
+      # today. It is replaced by a capability check (Signal 3'): no read
+      # function is exported by Letflow.Entities.Records.
+      #
+      # This test now also RUNS the scenario (Runner.run/1) rather than
+      # recording steps_executed: 0 -- see Signal 4 and the disposition_report
+      # at the bottom.
+      # ══════════════════════════════════════════════════════════════════════
+
+      # ── Signal 1' (INVERTED): /entities IS mounted. ───────────────────────
+      # The old test asserted the opposite. Asserting the mount POSITIVELY
+      # means this file can never silently drift back into certifying that a
+      # serving subsystem is absent.
+      api_pipeline_content =
+        File.read!(Path.expand("../../../lib/letflow/plugs/api_pipeline.ex", __DIR__))
+
+      assert api_pipeline_content =~ ~s|forward("/entities", to: Letflow.Routers.Entities)|,
+             "Expected api_pipeline.ex to mount Letflow.Routers.Entities at /entities " <>
+               "(REQ-310 point 5). If this fails, the mount was reverted and this " <>
+               "scenario's disposition must be re-derived AGAIN -- it would be blocked " <>
+               "on the whole HTTP surface once more, not just on the query route."
+
+      # ── Signal 1'' : the deferred-routes rows are RETIRED from router.ex. ─
+      # REQ-310 point 7 deleted both outright ("REMOVED outright, not
+      # annotated"). Pinning their absence pins that retirement.
       router_content = File.read!(Path.expand("../../../lib/letflow/router.ex", __DIR__))
 
-      assert router_content =~ "Letflow.Routers.Entities",
-             "Expected router.ex to still reference Letflow.Routers.Entities (reserved/unbuilt)"
+      refute router_content =~ "Letflow.Routers.Entities",
+             "Expected router.ex's deferred-routes row for Letflow.Routers.Entities to be " <>
+               "GONE (REQ-310 point 7 removed it outright); a reappearance means the mount " <>
+               "was reverted"
 
-      assert router_content =~ "Letflow.Routers.EntityQuery",
-             "Expected router.ex to still reference Letflow.Routers.EntityQuery (reserved/unbuilt)"
-
-      # A real mount would `forward` or dispatch to these modules by name outside the
-      # reserved-inventory comment/table context. Since no such module exists at all
-      # (signal 3 below), the presence above is necessarily comment/table-only.
+      refute router_content =~ "Letflow.Routers.EntityQuery",
+             "Expected router.ex's deferred-routes row for Letflow.Routers.EntityQuery to be " <>
+               "GONE (REQ-310 point 7 removed it outright)"
 
       # Signal 2: every docs/requirements.yaml title: claiming the entity/entity-query
       # subsystem (word-bounded entity/entities match, not the bare "entit" substring
@@ -1084,7 +1156,10 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-302",
           "REQ-304",
           "REQ-308",
-          "REQ-309"
+          "REQ-309",
+          # Promoted from pending_only_ids on 2026-09-11 -- see the block below
+          # the list for why each promotion is a triage result, not a silencing.
+          "REQ-310"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.
@@ -1107,7 +1182,33 @@ defmodule Letflow.Simulation.Req207VortexTest do
       # ⛔ THE FIX WHEN THIS FIRES IS NOT TO MOVE THE ID INTO allowed_ids ABOVE.
       # It is to re-derive this scenario's disposition against Signals 1 and 3
       # as they then stand, and to make the scenario RUN. See the ⛔ block above.
-      pending_only_ids = ["REQ-310", "REQ-311"]
+      #
+      # ── 2026-09-11, AFTER REQ-310 LANDED: THIS TIER FIRED AS DESIGNED. ────
+      #
+      # It fired via Signal 1 rather than via the status check -- REQ-310's
+      # CODE landed (f6e0ae64) while docs/requirements.yaml still reads
+      # `status: pending`, because DOC-UPDATER had not yet run. Worth recording
+      # plainly, because it is the mechanism's one real blind spot: `status:`
+      # lags the code by one pipeline step, so the status check alone would NOT
+      # have caught REQ-310. Signal 1 caught it. That redundancy is why the
+      # tripwire was built with three independent signals and not just the
+      # status list, and it is why Signal 1' above is now a POSITIVE assertion
+      # on the mount rather than a negative one on the deferred rows.
+      #
+      # REQ-310 was NOT moved into allowed_ids to silence anything -- the ⛔
+      # block above is explicit that doing so is the wrong reflex. It was moved
+      # there only AFTER its disposition consequence was re-derived in full and
+      # this whole describe block was rewritten to assert the new truth. The
+      # pending-only tier's contract ("admitted only while it builds nothing")
+      # no longer describes it: it HAS built something, that something was
+      # triaged, and the triage is what produced the assertions above. REQ-309
+      # moved for the ordinary reason -- it shipped permission vocabulary only,
+      # which its own scope fence confirms builds no route.
+      #
+      # REQ-311 stays here, re-armed. It is now the sole remaining tripwire and
+      # the requirement that will flip this scenario for real: it adds
+      # POST /entities/query, the record-read route all six :gui steps need.
+      pending_only_ids = ["REQ-311"]
 
       refute Enum.empty?(entity_title_matches),
              "Expected at least 1 title: match for word-bounded entity/entities (REQ-207's own), got none"
@@ -1131,13 +1232,21 @@ defmodule Letflow.Simulation.Req207VortexTest do
                      "status: pending -- filing it builds nothing, so the " <>
                      "BLOCKED_ON_DEPENDENCY disposition survives. Its status is now " <>
                      "#{inspect(requirement_status(title_lines, pending_only_id))}, which means " <>
-                     "the entity HTTP surface has been BUILT and this scenario's disposition is " <>
-                     "now FALSE. Do NOT silence this by moving #{pending_only_id} into " <>
-                     "allowed_ids -- that would leave a green test asserting a subsystem is " <>
-                     "missing when it is mounted and serving. Re-derive the disposition against " <>
-                     "Signals 1 and 3 and make this scenario actually RUN (Runner.run/1 over " <>
-                     "entity-list-filter-and-page.yaml's six :gui steps). See the block above " <>
-                     "the allowlist."
+                     "POST /entities/query -- the record-read route ALL SIX of this scenario's " <>
+                     ":gui steps need (list, filter x2, sort, page, field redaction) -- HAS NOW " <>
+                     "BEEN BUILT, and the one remaining reason this scenario is blocked is gone. " <>
+                     "Do NOT silence this by moving #{pending_only_id} into allowed_ids -- that " <>
+                     "would leave a green test asserting a route is missing when it is mounted " <>
+                     "and serving, which is worse than no test. Re-derive the disposition " <>
+                     "against Signals 3' and 4 as they then stand: Records/Query will expose a " <>
+                     "read path and __authz_routes__/0 will carry a tenth {\"POST\", \"/query\", " <>
+                     ":EntitiesQuery} entry. NOTE the remaining independent blocker documented " <>
+                     "at Signal 4: Letflow.Simulation.Runner records EVERY :gui step as " <>
+                     ":deferred_to_s8 and never dispatches one, so even a complete query route " <>
+                     "does not by itself make these six steps execute -- that needs S8's " <>
+                     "harness work. Judge whether the disposition becomes :executed or stays " <>
+                     "blocked on the HARNESS rather than on the route, and say which in the " <>
+                     "disposition_report. Route it through TEST-DESIGNER; see the ⛔ block above."
 
           true ->
             flunk(
@@ -1148,18 +1257,112 @@ defmodule Letflow.Simulation.Req207VortexTest do
         end
       end)
 
-      # Signal 3: no context module exists under lib/letflow/ for entities/entity_query.
-      lib_letflow_dir = Path.expand("../../../lib/letflow", __DIR__)
+      # ── Signal 3' (REPLACES the old Signal 3): no RECORD READ PATH exists. ─
+      #
+      # The old Signal 3 asserted lib/letflow/entities.ex and
+      # lib/letflow/entity_query.ex do not exist. Both still don't -- and that
+      # fact is now WORTHLESS as evidence, because REQ-310's subsystem shipped
+      # under lib/letflow/entities/ (a directory) and was never going to occupy
+      # those two flat paths. A path-absence check that can no longer go false
+      # is a tautology, so it is replaced by a CAPABILITY check against the
+      # real module.
+      #
+      # Letflow.Entities.Records is a COMMAND-ONLY context module by design
+      # (its own moduledoc, and Letflow.Routers.Entities' "No route reads a
+      # record by id, and none lists records"). If no context function can read
+      # a record, no route can serve one -- which is the actual load-bearing
+      # fact behind this scenario's disposition. Checked via the module's real
+      # exports, so a later list_records/2 or get_record/3 trips it.
+      Code.ensure_loaded!(Letflow.Entities.Records)
 
-      refute File.exists?(Path.join(lib_letflow_dir, "entities.ex")),
-             "Expected lib/letflow/entities.ex NOT to exist (entity subsystem confirmed unbuilt)"
+      record_read_exports =
+        Letflow.Entities.Records.__info__(:functions)
+        |> Enum.filter(fn {name, _arity} ->
+          name_string = Atom.to_string(name)
 
-      refute File.exists?(Path.join(lib_letflow_dir, "entity_query.ex")),
-             "Expected lib/letflow/entity_query.ex NOT to exist (entity subsystem confirmed unbuilt)"
+          String.starts_with?(name_string, "list_") or String.starts_with?(name_string, "get_") or
+            String.starts_with?(name_string, "query_") or
+            String.starts_with?(name_string, "fetch_")
+        end)
 
-      # All 3 signals concur -> BLOCKED_ON_DEPENDENCY (design §4.1/§4.3). The scenario
-      # YAML is still authored (structurally complete, ScenarioFixture.load!/1-parseable)
-      # for record-keeping, but Runner.run/1 is never called on it here.
+      assert record_read_exports == [],
+             "Letflow.Entities.Records is command-only by design (create/update/delete and " <>
+               "NO read function) -- record reads belong exclusively to POST /entities/query " <>
+               "(design req308-entity-http-surface.md:182). A read function appearing here " <>
+               "means that rule changed and this scenario's disposition must be re-derived; " <>
+               "observed: #{inspect(record_read_exports)}"
+
+      # ── Signal 3'' : the nine routes, and NO record-read route among them. ─
+      #
+      # This is the sharpest assertion in the block and the one that actually
+      # carries the disposition. Structural (against the router's own compiled
+      # __authz_routes__/0 table), not textual. It proves in one shot that the
+      # router is real and serving, that definition CRUD and record WRITES are
+      # covered, and that nothing reads records.
+      expected_routes =
+        MapSet.new([
+          {"POST", "/definitions", :EntitiesDefinitionsWrite},
+          {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
+          {"GET", "/definitions", :EntitiesDefinitionsRead},
+          {"GET", "/definitions/:id", :EntitiesDefinitionsRead},
+          {"GET", "/definitions/active/:name", :EntitiesDefinitionsRead},
+          {"GET", "/definitions/by-name/:name", :EntitiesDefinitionsRead},
+          {"POST", "/records/:entity_type", :EntitiesRecordsWrite},
+          {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
+          {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite}
+        ])
+
+      actual_routes = MapSet.new(Letflow.Routers.Entities.__authz_routes__())
+
+      assert MapSet.equal?(actual_routes, expected_routes),
+             "Letflow.Routers.Entities must serve exactly REQ-310's nine routes. " <>
+               "Unexpected: #{inspect(MapSet.to_list(MapSet.difference(actual_routes, expected_routes)))}; " <>
+               "missing: #{inspect(MapSet.to_list(MapSet.difference(expected_routes, actual_routes)))}. " <>
+               "A tenth route (REQ-311's POST /query) appearing here means this scenario's " <>
+               "disposition must be re-derived -- see the pending_only_ids block above."
+
+      assert MapSet.size(actual_routes) == 9
+
+      refute Enum.any?(actual_routes, fn {_method, path, _perm} -> path == "/query" end),
+             "POST /entities/query must NOT exist yet -- it is REQ-311's, and it is the one " <>
+               "route this scenario's six :gui steps actually need"
+
+      refute Enum.any?(actual_routes, fn {method, path, _perm} ->
+               method == "GET" and String.starts_with?(path, "/records")
+             end),
+             "No GET route may exist under /records -- record reads are POST /entities/query " <>
+               "only (design §1)"
+
+      refute Enum.any?(actual_routes, fn {_method, _path, perm} -> perm == :EntitiesQuery end),
+             "No route may carry :EntitiesQuery yet -- that permission is REQ-309's vocabulary, " <>
+               "minted ahead of REQ-311's route that will consume it"
+
+      # ── Signal 3''' : the permission exists, but nothing consumes it. ─────
+      #
+      # This is what distinguishes "unspecified" from "specified and
+      # vocabulary-complete but not yet served" -- precisely the state REQ-311
+      # changes. REQ-309 minted :EntitiesQuery and wrote the policy clause; the
+      # refute above proved no route carries it.
+      assert Letflow.Api.Authorization.endpoint_policy_key("POST", "/entities/query") ==
+               :EntitiesQuery,
+             "REQ-309 minted the :EntitiesQuery policy key for a route that does not exist " <>
+               "yet; a policy key with no route behind it is the signature of a surface that " <>
+               "is specified but unserved"
+
+      # ── Signal 4: the scenario now actually RUNS. ─────────────────────────
+      #
+      # The old block never called Runner.run/1 and recorded steps_executed: 0.
+      # It runs now -- and the run itself is the evidence for the SECOND,
+      # INDEPENDENT blocker: Letflow.Simulation.Runner.run_steps/1 matches
+      # step.via == :gui and records :deferred_to_s8 unconditionally
+      # (test/support/simulation/runner.ex), never dispatching a GUI step. So
+      # even a complete POST /entities/query would not by itself make these six
+      # steps execute; that needs S8's harness work.
+      #
+      # Kept as a SEPARATE evidence line from the missing-route blocker, never
+      # conflated with it: the primary blocker is a route REQ-311 clears, this
+      # one is a harness capability S8 clears. Folding them together would let
+      # this test survive REQ-311 landing without anyone re-examining it.
       scenario =
         ScenarioFixture.load!(Path.join(@scenarios_dir, "entity-list-filter-and-page.yaml"))
 
@@ -1167,28 +1370,57 @@ defmodule Letflow.Simulation.Req207VortexTest do
       assert length(scenario.steps) == 6
       assert Enum.all?(scenario.steps, &(&1.via == :gui))
 
+      assert {:ok, run_report} = Runner.run(scenario)
+
+      assert length(run_report.step_results) == 6
+
+      assert Enum.all?(run_report.step_results, &(&1.outcome == :deferred_to_s8)),
+             "Every :gui step must come back :deferred_to_s8 -- the harness does not " <>
+               "dispatch GUI steps (runner.ex run_steps/1). Observed outcomes: " <>
+               inspect(Enum.map(run_report.step_results, & &1.outcome))
+
+      # No step was actually dispatched, so nothing was really exercised: the
+      # disposition below is not contradicted by the fact that run/1 returned.
+      refute Enum.any?(run_report.step_results, &(&1.outcome == :ok)),
+             "No :gui step may report :ok -- none of them is dispatched at all"
+
+      # ── Disposition ──────────────────────────────────────────────────────
+      # Still BLOCKED_ON_DEPENDENCY, on a narrower and fully provable
+      # dependency than before.
       disposition_report = %{
         scenario_id: "vortex-entity-list-filter-and-page",
         disposition: :blocked_on_dependency,
         missing_subsystem:
-          "Letflow.Routers.Entities / Letflow.Routers.EntityQuery (entities.zig / entity_query.zig, S5/S6)",
+          "POST /entities/query (REQ-311) -- the record-read route. NOT the entity HTTP " <>
+            "surface as a whole, which REQ-310 landed and mounted on 2026-09-11.",
         evidence: [
-          "lib/letflow/router.ex: both Entities/EntityQuery rows in reserved/unbuilt section (not mounted)",
-          "docs/requirements.yaml: every title: match for word-bounded entity/entities traces to REQ-207's own self-referential title, the REQ-225..231 scoping requirements (ISS-0438), the REQ-295..302 entity-storage batch (decision 0023), REQ-304 (solution packs CARRY an entity definition -- delivery, not runtime), REQ-308 (a CODE-DESIGNER design artefact for S10 gap 1's entity HTTP surface), or REQ-309 (permission atoms, endpoint_policy_key/2 clauses and role_allows?/2 arms in lib/letflow/api/authorization.ex only -- a policy vocabulary with no route consuming it, per its own scope fence) -- none of which mount a route or build the subsystem; plus REQ-310 and REQ-311, which WILL build it but are still status: pending, admitted only on that condition and asserted against it",
-          "lib/letflow/plugs/api_pipeline.ex: forward list carries no /entities entry",
-          "no lib/letflow/entities.ex or entity_query.ex context module exists"
+          "lib/letflow/plugs/api_pipeline.ex: forward(\"/entities\", to: Letflow.Routers.Entities) IS mounted (REQ-310 point 5) -- the old 'no HTTP surface' evidence line is FALSE and has been replaced",
+          "lib/letflow/router.ex: both deferred-routes rows RETIRED outright (REQ-310 point 7) -- likewise no longer evidence of anything missing",
+          "Letflow.Routers.Entities.__authz_routes__/0 returns exactly 9 routes: 6 definition CRUD + 3 record WRITES (POST/PUT/DELETE). No route reads records; no {_, \"/query\", _} entry exists",
+          "Letflow.Entities.Records exports no list_/get_/query_/fetch_ function -- command-only by design, so no read route could be served even if one were declared",
+          "lib/letflow/design/req308-entity-http-surface.md:182 verbatim: 'record reads only happen via /entities/query' -- and all six of this scenario's :gui steps (list, filter x2, sort, page, field redaction) are record reads",
+          "Letflow.Api.Authorization.endpoint_policy_key(\"POST\", \"/entities/query\") == :EntitiesQuery, yet no route carries that permission -- REQ-309 minted the vocabulary ahead of REQ-311's consuming route",
+          "SECOND, INDEPENDENT BLOCKER: Letflow.Simulation.Runner records every :gui step as :deferred_to_s8 and dispatches none, so all 6 steps are deferred even now (asserted live above via Runner.run/1). Clearing REQ-311 alone does not make these steps execute -- that needs S8's harness work",
+          "docs/requirements.yaml: every word-bounded entity/entities title: traces to REQ-207's own, REQ-225..231 (ISS-0438 scoping), REQ-295..302 (decision 0023 storage), REQ-304 (solution-pack delivery), REQ-308 (design artefact), REQ-309 (permission vocabulary only) or REQ-310 (the nine routes, triaged and acted on by this very rewrite) -- plus REQ-311, still status: pending and admitted only on that condition, asserted against it"
         ],
-        # NOT a standing fact -- a dated statement about pending work. REQ-310
-        # (queue task 597) mounts /entities and deletes both deferred-routes
-        # rows; when it lands every evidence line above goes false and this
-        # disposition must be re-derived, not re-allowlisted. See the ⛔ block
-        # above the allowlist.
-        flips_when: "REQ-310",
-        steps_executed: 0
+        # Dated statement about pending work, not a standing fact. REQ-311
+        # (queue task 598) adds POST /entities/query, the record-read route.
+        # When it lands, the PRIMARY blocker above goes false and this
+        # disposition must be re-derived once more -- at which point the
+        # remaining question is whether the second blocker (the harness's
+        # unconditional :gui deferral) leaves it blocked on S8 instead, or
+        # whether the scenario finally executes. Do not re-allowlist; see the
+        # ⛔ block above.
+        flips_when: "REQ-311",
+        then_gated_on: "S8 simulation-harness GUI-step dispatch (runner.ex run_steps/1)",
+        steps_executed: 0,
+        steps_deferred: 6
       }
 
       assert disposition_report.disposition == :blocked_on_dependency
+      assert disposition_report.flips_when == "REQ-311"
       assert disposition_report.steps_executed == 0
+      assert disposition_report.steps_deferred == length(run_report.step_results)
     end
   end
 end

@@ -565,3 +565,24 @@ history:
       SECURITY-REVIEWER/TEST-DESIGNER/TEST-DESIGN-VALIDATOR correctly
       skipped (test-file-only, no tenant-data path, no new coverage --
       only timing-parameter adjustments to existing tests).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T13:56:56Z"
+    note: >
+      Run WF01-S10gaps-2-3-12-20260911. Filed and registered the next
+      batch of S10 gap requirements after the gap-1 chain (REQ-308..311)
+      closed and the queue drained: REQ-312 (aggregation/reporting
+      queries, S10 gap 2), REQ-313 (attachments on entity records, S10
+      gap 3), REQ-314 (bulk import/export of entity records, S10 gap
+      12). All three design-only, depends_on [REQ-311]. REQ-ANALYST
+      drafted (commit c261ad24), REQ-VALIDATOR PASSed all three
+      (testability, consistency with decisions 0022/0023, premises
+      verified against real code, 0022 rule-1 vocabulary neutrality),
+      PR #1252 merged (commit ce403c7d). Registered in letflow-queue as
+      tasks 602/603/604, each with depends_on: [598] (REQ-311's queue
+      id) correctly resolved -- not repeating ISS-0599's empty-edge
+      mistake. impl_order written back into docs/requirements.yaml.
+      docs/migration/stage-10-bilimbaga-vertical.md's gap table updated
+      to show gaps 2/3/12 as design-owned but not yet closed.

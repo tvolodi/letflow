@@ -19791,6 +19791,7 @@ requirements:
   - id: REQ-312
     title: Design an aggregation/reporting query capability for entity records (S10 gap 2)
     owner: CODE-DESIGNER
+    impl_order: 602  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
     status: pending
     stage: S10
     description: >
@@ -19900,6 +19901,7 @@ requirements:
   - id: REQ-313
     title: Design attachments on an entity record (S10 gap 3)
     owner: CODE-DESIGNER
+    impl_order: 603  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
     status: pending
     stage: S10
     description: >
@@ -20012,6 +20014,7 @@ requirements:
   - id: REQ-314
     title: Design bulk import/export of entity records (S10 gap 12)
     owner: CODE-DESIGNER
+    impl_order: 604  # letflow-queue task id; depends_on [REQ-311] = queue task 598, mirrored
     status: pending
     stage: S10
     description: >

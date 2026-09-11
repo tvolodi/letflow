@@ -44,6 +44,17 @@ export interface TaskFormField {
    * round-tripping reason as `xUiWidget`; ignored by every other widget.
    */
   xUiMask?: string
+
+  /** REQ-293 — x-ui.visible_when, the raw CEL-syntax condition string, or undefined. */
+  visibleWhen?: string
+
+  /** REQ-293 — x-ui.computed, the raw CEL-syntax expression string, or undefined. */
+  computed?: string
+
+  /** REQ-293 — x-ui.cross_field_validation, both sub-keys present together or
+   * absent together (matches the server's own %{"expression"=>_, "message"=>_}
+   * pairing — never one without the other). */
+  crossFieldValidation?: { expression: string; message: string }
 }
 
 export interface ValidationError {

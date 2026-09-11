@@ -37,4 +37,7 @@ affected_files:
   - lib/mix/tasks/letflow.backfill_event_type_versions.ex
 queue_ref: Q-583
 github_ref: GH-1200
-status: open
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0583-20260911
+resolved_at: "2026-09-11T01:35:42Z"

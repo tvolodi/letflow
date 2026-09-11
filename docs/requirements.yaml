@@ -19327,3 +19327,447 @@ requirements:
       - "the design states whether a docs/migration/decisions/ record is also warranted for the one-router-vs-two and permission-vocabulary questions, and either files one or states why the design artefact alone suffices"
       - "git diff --name-only shows only the new file under lib/letflow/design/ (plus a decision record under docs/migration/decisions/ if one was judged warranted) -- no file under lib/letflow/routers/, lib/letflow/router.ex, lib/letflow/plugs/, lib/letflow/api/, lib/letflow/entities/, priv/repo/migrations/, or test/ touched; quoted with the command"
     depends_on: []
+
+  # ── S10, third batch (drafted 2026-09-11) ─────────────────────────────────
+  # REQ-309, REQ-310 and REQ-311 are the implementation of S10 gap 1 against
+  # the design REQ-308 landed at lib/letflow/design/req308-entity-http-surface.md.
+  # That design is the SPEC: its §1 route table, §3 permission vocabulary, §4
+  # query-DSL transport and error mapping, §5 security posture, §6 pagination,
+  # §7 error shaping and §8 deferred-table disposition are settled decisions,
+  # not starting points to re-derive.
+  #
+  # WHY THREE REQUIREMENTS AND NOT ONE. The full gap-1 build is a ten-route
+  # router, four new permission atoms wired across three separate edit sites in
+  # lib/letflow/api/authorization.ex, a forward() mount, two deferred-table row
+  # deletions, a registration in the authorization enforcement test's hardcoded
+  # router list, and tests for all of it. That is not one agent turn. The seams
+  # chosen are:
+  #   REQ-309 is a precondition in the literal compile-time sense -- the
+  #   router's authz_get/authz_post macros take a policy-key atom as a
+  #   compile-time literal and the enforcement test asserts every declared key
+  #   round-trips through Authorization.endpoint_policy_key/2, so the atoms and
+  #   their clauses must exist before any route can declare one.
+  #   REQ-310 and REQ-311 split the router itself at its real complexity seam,
+  #   not at an arbitrary route count. Nine of the ten routes are thin handlers
+  #   over one context-module call each (design §1's own "unlike every other row
+  #   above" note). POST /entities/query is the tenth and is structurally
+  #   different: it composes three modules in sequence, maps a fifteen-member
+  #   compile_error() union plus Cursor.paginate/5's own six-member union to
+  #   HTTP, carries a 400-vs-422 pre-parsing step, and branches between two
+  #   different redaction functions depending on whether the request bears a
+  #   join. Folding it into REQ-310 would make that one requirement larger than
+  #   the other nine routes combined.
+  - id: REQ-309
+    title: Add the four entity permission atoms, endpoint_policy_key/2 clauses and role_allows?/2 matrix arms to Letflow.Api.Authorization
+    owner: ELIXIR-DEV
+    impl_order: 596  # letflow-queue task id; [] -- no translation needed
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. A permission vocabulary over a generic entity-definition and
+      entity-record surface, useful to any tenant and any entity type. Per
+      0022's rule 1 this requirement's title, description, acceptance criteria
+      and the code it produces contain no domain-vertical vocabulary of any
+      kind. "entity type", "entity definition", "entity record", "field",
+      "filter" and "join" are this subsystem's own generic nouns (already used
+      by the modules it fronts), not any one vertical's objects.
+
+      THE SPEC IS lib/letflow/design/req308-entity-http-surface.md §3. Read it
+      in full before writing anything. It names the four atoms, states which
+      routes each gates, states why they deliberately do NOT reuse
+      :DefinitionsRead/:DefinitionsWrite/:DefinitionsCreate, states that
+      Letflow.Identity.RoleRegistry needs no entry, and gives the role-matrix
+      mapping. Do not re-derive any of those; implement them. If implementing
+      reveals the design is wrong about a verifiable fact, report it per
+      docs/agents/protocols/ISSUE_QUEUE.md rather than silently diverging.
+
+      WHY THIS IS ITS OWN REQUIREMENT, SEPARATE FROM THE ROUTER. It is a
+      compile-time precondition, not a stylistic split.
+      Letflow.Api.AuthorizedRouter's authz_get/3, authz_post/3, authz_put/3 and
+      authz_delete/3 macros take the policy-key atom as their second argument
+      and record it into @authz_routes; and
+      test/letflow/api/authorization_enforcement_test.exs asserts for every
+      declared route that Authorization.endpoint_policy_key/2 returns exactly
+      the declared key and that the key is not :Unknown. A router declaring
+      :EntitiesDefinitionsRead before that clause exists fails that test
+      immediately. Read lib/letflow/api/authorized_router.ex in full to confirm
+      this mechanism before starting.
+
+      WHAT TO ADD TO lib/letflow/api/authorization.ex -- four atoms, three edit
+      sites each, all additive, no existing clause modified:
+
+      1. THE @type permission UNION (around lines 72-91) and the @permissions
+      module attribute list (around lines 134-154) both gain
+      :EntitiesDefinitionsRead, :EntitiesDefinitionsWrite, :EntitiesRecordsWrite
+      and :EntitiesQuery. Both must be updated -- permissions/0 returns
+      @permissions and its @doc string states a count ("All eighteen Permission
+      values..."), which must be corrected to the new count rather than left
+      stale.
+
+      2. THE @type endpoint_policy_key UNION (around lines 95-128) gains the
+      same four names. This design uses one policy key per permission (no
+      split like :DefinitionsCreate/:DefinitionsUpdate/... all collapsing to
+      :DefinitionsWrite), so the endpoint_policy_key names and the permission
+      names are identical strings -- required_permission/1 therefore gains four
+      identity clauses, the same shape :AttachmentsManage/:AttachmentsRead
+      already use at lines 485-486.
+
+      3. NEW endpoint_policy_key/2 CLAUSES for all ten routes in design §1's
+      table, declared ABOVE the existing catch-all
+      `def endpoint_policy_key(_method, _path), do: :Unknown` (around line 396).
+      The path templates are the FULL paths as seen after the /api/v1 prefix is
+      stripped -- i.e. "/entities/definitions", "/entities/definitions/:id",
+      "/entities/records/:entity_type/:record_id" and so on, matching how every
+      existing clause in that module writes "/instances/:id/attachments" rather
+      than a router-local "/:id/attachments". Cross-check against the
+      enforcement test's own full_path/2 helper (prefix <> local_path) so the
+      strings agree exactly.
+
+      4. NEW role_allows?/2 MATRIX ARMS per design §3's role-matrix table:
+      PROCESS_DESIGNER gains :EntitiesDefinitionsRead, :EntitiesDefinitionsWrite
+      and :EntitiesQuery; PROCESS_OPERATOR gains :EntitiesDefinitionsRead,
+      :EntitiesRecordsWrite and :EntitiesQuery; TASK_WORKER gains
+      :EntitiesDefinitionsRead and :EntitiesQuery. PLATFORM_ADMIN's catch-all
+      (`role_allows?(:PLATFORM_ADMIN, _permission), do: true`) and
+      AGENT_RUNNER's catch-all (`..., do: false`) are NOT edited -- they already
+      produce the intended answer for a new permission.
+
+      ⛔ NO EXISTING ROLE LOSES A PERMISSION AND NO EXISTING PERMISSION CHANGES
+      HANDS. Every edit here is an addition to a list. A test must prove this
+      rather than a reviewer eyeballing the diff -- see the acceptance criteria.
+
+      SCOPE FENCE: this requirement edits lib/letflow/api/authorization.ex and
+      adds tests under test/. It creates no router, mounts no route, touches no
+      file under lib/letflow/routers/, does not edit lib/letflow/router.ex or
+      lib/letflow/plugs/api_pipeline.ex, and adds nothing to the enforcement
+      test's @routers list (REQ-310 does that, when a router actually exists to
+      add). Adding a permission atom with no route consuming it yet is the
+      deliberate, temporary state this requirement ends in -- the same
+      "ported ahead of its consuming route" state :DlqOperate and
+      :WebhooksManage already sat in, documented in that module's own moduledoc.
+    acceptance_criteria:
+      - "Letflow.Api.Authorization.permissions/0 returns a list containing all four of :EntitiesDefinitionsRead, :EntitiesDefinitionsWrite, :EntitiesRecordsWrite and :EntitiesQuery, and its @doc string's stated count matches length(permissions()) exactly -- asserted by a test that computes the count rather than hardcoding it"
+      - "for each of the ten (method, path) pairs in lib/letflow/design/req308-entity-http-surface.md §1's route table, a test asserts Authorization.endpoint_policy_key/2 returns the specific atom §3 assigns that route, and never :Unknown -- all ten asserted individually, the full path strings written as they appear after the /api/v1 prefix is stripped"
+      - "a test asserts required_permission/1 maps each of the four new endpoint_policy_key values to its identically-named permission atom"
+      - "a test asserts the exact role/permission grid for the four new permissions across all five roles -- twenty assertions or a table-driven equivalent -- matching design §3's role-matrix table exactly: PLATFORM_ADMIN true for all four; PROCESS_DESIGNER true for Read/Write/Query and false for RecordsWrite; PROCESS_OPERATOR true for Read/RecordsWrite/Query and false for DefinitionsWrite; TASK_WORKER true for Read/Query and false for both writes; AGENT_RUNNER false for all four"
+      - "a regression test proves no EXISTING role/permission pair changed: for every role in Authorization.roles() and every permission that existed before this change, role_allows?/2 returns what it returned before -- implemented by asserting against an explicit expected grid written in the test, not by re-reading the module under test"
+      - "mix test for the authorization test file(s) passes in full, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "test/letflow/api/authorization_enforcement_test.exs still passes unchanged -- real output quoted; this requirement adds no router so that test's @routers list is deliberately not modified, and `git diff --name-only` confirms that file is untouched"
+      - "git diff --name-only shows only lib/letflow/api/authorization.ex and file(s) under test/ -- no file under lib/letflow/routers/, lib/letflow/plugs/, lib/letflow/entities/, lib/letflow/router.ex, or priv/repo/migrations/ touched; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: []
+
+  - id: REQ-310
+    title: Create Letflow.Routers.Entities with the nine definition and record routes, mount it at /entities, and retire the two deferred-routes rows
+    owner: ELIXIR-DEV
+    impl_order: 597  # letflow-queue task id; yaml depends_on [REQ-309] = queue task 596; NOT mirrored as a queue edge, see note
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. A route surface over Letflow.Entities.{Definitions,Records}
+      serving any tenant's any entity type. Per 0022's rule 1 this
+      requirement's title, description, acceptance criteria and the module it
+      produces contain no domain-vertical vocabulary of any kind. "entity
+      type", "entity definition", "entity record" and "field" are this
+      subsystem's own generic nouns, not any one vertical's objects.
+
+      THE SPEC IS lib/letflow/design/req308-entity-http-surface.md. Read it in
+      full first. §1 is the route table, §2 settles one-router-not-two, §5 is
+      the security posture, §7 is the error mapping per delegate, §8 is the
+      deferred-table disposition. These are settled decisions. Implement them;
+      do not re-derive them. If implementing reveals the design is wrong about
+      a verifiable fact, report it per docs/agents/protocols/ISSUE_QUEUE.md
+      rather than silently diverging.
+
+      SCOPE: NINE of the ten routes in §1's table -- every /entities/definitions
+      and /entities/records route. POST /entities/query is deliberately NOT in
+      this requirement; REQ-311 owns it, and adds it to the module this
+      requirement creates. Build the module so that adding one more route later
+      is an append, not a restructure.
+
+      WHAT TO BUILD:
+
+      1. lib/letflow/routers/entities.ex, `use Letflow.Api.AuthorizedRouter`
+      (NOT `use Plug.Router` -- read lib/letflow/api/authorized_router.ex in
+      full for what that gives you and why every route must be declared with
+      authz_get/authz_post/authz_put/authz_delete carrying its policy-key atom
+      as a compile-time literal). Every one of the nine routes is
+      authz_*-declared; none uses the plain get/post macros. Its moduledoc
+      carries the route table in the same
+      Handler/Method-path/Delegate/Permission/Response column form
+      lib/letflow/routers/definitions.ex's and lib/letflow/routers/instances.ex's
+      moduledocs use -- read at least one of those in full for the house
+      convention before writing it.
+
+      2. ⛔ ROUTE DECLARATION ORDER IS LOAD-BEARING, NOT COSMETIC. Plug.Router
+      is first-match-wins. `authz_get "/definitions/active/:name"` and
+      `authz_get "/definitions/by-name/:name"` MUST be declared ABOVE
+      `authz_get "/definitions/:id"`. Declared below it, the bare :id route
+      matches first and binds id to the literal string "active" or "by-name",
+      and the intended handler is never reached -- the request then 404s or
+      500s from a UUID cast against a non-UUID, with no compile error and no
+      warning anywhere. This is the same hazard
+      lib/letflow/routers/definitions.ex's own moduledoc documents under "Route
+      ordering" for its /active/:name and /delta routes. It must be proven by a
+      test, not by reading the source -- see the acceptance criteria.
+
+      3. HANDLERS, one thin handler per route, each delegating to exactly one
+      context-module call. The prefix for every delegate comes from
+      conn.assigns.scoped_opts (Letflow.Api.Context.scoped_repo_opts/1's
+      output), read the same way every existing router reads it. An actor id
+      (activate_definition/4's activator_user_id, create_record/2's
+      created_by-equivalent attrs if the delegate takes one) comes from
+      conn.assigns.auth_context.user_id -- never from a body or query field.
+      Read the actual @spec of each delegate in lib/letflow/entities/definitions.ex
+      and lib/letflow/entities/records.ex before writing its handler; do not
+      infer an argument order or an attrs-map shape from this description.
+
+      4. ERROR SHAPING per design §7, reusing Letflow.Api.Response
+      (ok/2, created/2, bad_request/2, unprocessable/2, not_found/1,
+      conflict/2, internal_error/1, send_problem/2) unchanged. No second
+      response convention is invented. Every error union is mapped
+      exhaustively including a catch-all term() -> 500 clause, per INV-8.
+
+      5. THE MOUNT: add `forward("/entities", to: Letflow.Routers.Entities)` to
+      lib/letflow/plugs/api_pipeline.ex's forward list (around lines 141-153).
+
+      6. REGISTER THE ROUTER IN THE ENFORCEMENT TEST. This is the step most
+      likely to be missed and it fails silently if it is:
+      test/letflow/api/authorization_enforcement_test.exs carries a HARDCODED
+      @routers list and a @mount_prefix map (around lines 49-89). A router
+      absent from both is simply never checked -- the test still passes, and
+      the new surface is unverified. Add Letflow.Routers.Entities to @routers
+      and `Letflow.Routers.Entities => "/entities"` to @mount_prefix. No
+      @allowlist entry is needed or permitted: REQ-309 gives every one of these
+      routes a real endpoint_policy_key/2 clause, so each must resolve through
+      the normal path.
+
+      7. RETIRE THE DEFERRED-ROUTES ROWS. lib/letflow/router.ex's
+      deferred-routes table (around lines 82-83) has two rows,
+      `Letflow.Routers.Entities` / entities.zig and
+      `Letflow.Routers.EntityQuery` / entity_query.zig. Per design §8 BOTH are
+      REMOVED outright, not annotated -- §2 merged both into the one module
+      this requirement creates, and a table of "not yet mounted" routes has
+      nothing to say about a router that is now mounted. Confirm both rows are
+      still present before deleting them, and that no other row is touched.
+
+      SECURITY POSTURE, per design §5 -- this IS a tenant-data path and
+      SECURITY-REVIEWER is a hard gate:
+
+      INV-1. No route accepts a caller-supplied tenant id, schema name or slug
+      in its path, query string or body. The one and only source of prefix on
+      every route is conn.assigns.scoped_opts. No route-local Repo.* call of
+      any kind -- every read and write happens inside a context module.
+
+      INV-5. Not-found and cross-tenant folded to the same zero-detail
+      Response.not_found/1. {:error, :not_found} from the three definition
+      getters and {:error, {:definition_not_found, _}}/
+      {:error, {:record_not_found, _}} from Records all take that path. ⛔ NO
+      HANDLER ADDS A CROSS-TENANT EXISTENCE PRE-CHECK to produce a nicer or
+      more specific message -- the prefix-scoped lookup already makes another
+      tenant's row structurally invisible, and a pre-check would reintroduce
+      exactly the "exists but forbidden" signal INV-5 forbids.
+
+      ⛔ NO ROUTE READS A RECORD BY ID, AND NONE LISTS RECORDS.
+      Letflow.Entities.Records exposes create_record/2, update_record/2 and
+      delete_record/2 and NO read function -- verified, not assumed; grep that
+      module before starting. Record reads happen exclusively through POST
+      /entities/query (REQ-311). An implementer must not invent a GET
+      /entities/records/:entity_type/:record_id route, and must not add a read
+      function to Letflow.Entities.Records to support one. If a reviewer finds
+      such a route or such a function in this requirement's diff, it fails
+      outright.
+
+      SCOPE FENCE: this requirement creates lib/letflow/routers/entities.ex,
+      edits lib/letflow/plugs/api_pipeline.ex (one forward line),
+      lib/letflow/router.ex (two deleted table rows),
+      test/letflow/api/authorization_enforcement_test.exs (two list/map
+      additions), and adds router tests under test/. It does not modify
+      lib/letflow/api/authorization.ex (REQ-309 owns that), does not modify
+      anything under lib/letflow/entities/, and creates no migration.
+    acceptance_criteria:
+      - "lib/letflow/routers/entities.ex exists, `use`s Letflow.Api.AuthorizedRouter, and its __authz_routes__/0 returns exactly nine entries whose {method, path, policy_key} triples match lib/letflow/design/req308-entity-http-surface.md §1's table for the nine non-query routes -- asserted by a test that compares the returned list against an explicit expected list"
+      - "⛔ ROUTE ORDER IS PROVEN BY REQUEST, NOT BY READING SOURCE: a test issues GET /api/v1/entities/definitions/active/<name> and asserts the active-by-name handler ran (a definition activated under that name is returned), and a second test issues GET /api/v1/entities/definitions/by-name/<name> and asserts the by-name handler ran -- neither may be served by the /definitions/:id clause. At least one of the two additionally asserts the negative directly: that no lookup by id against the literal string 'active' (or 'by-name') occurred, e.g. by using a name for which an id lookup would return a different status than the observed one"
+      - "every one of the nine routes returns its designed success status against a real request through the full Letflow.Plugs.ApiPipeline stack (not by calling the router module in isolation): 201 for POST /entities/definitions and POST /entities/records/:entity_type; 200 for the three definition getters, the definition list, the activate route, PUT and DELETE on a record -- real test output quoted"
+      - "a request to each of the nine routes by a caller holding NONE of the required permission returns 403, and by a caller holding it returns non-403 -- driven from Letflow.Api.Authorization's role matrix, at least one 403 case asserted per distinct permission atom the nine routes use"
+      - "INV-5: a GET /entities/definitions/:id for an id that exists in a DIFFERENT tenant's schema returns byte-identical response body and status to a GET for an id that exists nowhere -- both compared in one assertion, not merely both asserted to be 404. The same is asserted for PUT and DELETE on a record id belonging to another tenant"
+      - "INV-1: a test sends a tenant id, schema name and slug as body fields AND as query-string parameters on at least one write route and one read route, and asserts the response is identical to the same request without them -- proving no route reads a caller-supplied tenant identifier. Additionally, `grep -n 'Repo\\.' lib/letflow/routers/entities.ex` returns zero hits, quoted with the command"
+      - "⛔ NO RECORD-READ ROUTE EXISTS: __authz_routes__/0 contains no GET route under /records, and `grep -n 'def get_record\\|def fetch_record\\|def list_records\\|def read_record' lib/letflow/entities/records.ex` returns zero hits after this change -- both quoted with their commands"
+      - "lib/letflow/plugs/api_pipeline.ex contains exactly one new line, `forward(\"/entities\", to: Letflow.Routers.Entities)`, and a request to GET /api/v1/entities/definitions reaches the router rather than ApiPipeline's `match _` 404 -- proven by a request-level test, quoted output"
+      - "lib/letflow/router.ex's deferred-routes table no longer contains a `Letflow.Routers.Entities` row or a `Letflow.Routers.EntityQuery` row, and every other row in that table is byte-identical -- proven by quoting `git diff lib/letflow/router.ex` and confirming it shows exactly two deleted lines and zero other changes"
+      - "test/letflow/api/authorization_enforcement_test.exs's @routers list contains Letflow.Routers.Entities and its @mount_prefix map contains Letflow.Routers.Entities => \"/entities\", no @allowlist entry was added, and that test passes -- real output quoted. The test's own per-router assertion (every declared key round-trips through Authorization.endpoint_policy_key/2 and is never :Unknown) is what proves REQ-309's clauses and this router's declarations agree"
+      - "every error branch in design §7's mapping tables for create_definition/2, the three getters, list_definitions/2, activate_definition/4 and Records.command_error() is reachable and returns the designed status -- at minimum one test per distinct status per delegate (404, 409, 422, and the generic 500 catch-all), real output quoted"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-5, INV-7 and INV-8 by name with the concrete mechanism, having read lib/letflow/routers/entities.ex itself rather than this requirement's text"
+      - "git diff --name-only shows only lib/letflow/routers/entities.ex, lib/letflow/plugs/api_pipeline.ex, lib/letflow/router.ex and file(s) under test/ -- no change to lib/letflow/api/authorization.ex, lib/letflow/entities/, or priv/repo/migrations/; quoted with the command"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-309]
+
+  - id: REQ-311
+    title: Add POST /entities/query to Letflow.Routers.Entities, wiring both the plain and the join-bearing field-redaction branches
+    owner: ELIXIR-DEV
+    impl_order: 598  # letflow-queue task id; yaml depends_on [REQ-310] = queue task 597; NOT mirrored as a queue edge, see note
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. A query surface over the existing generic query DSL, serving
+      any tenant's any entity type. Per 0022's rule 1 this requirement's title,
+      description, acceptance criteria and the code it produces contain no
+      domain-vertical vocabulary of any kind. "entity type", "field", "filter"
+      and "join" are this subsystem's own generic nouns.
+
+      THE SPEC IS lib/letflow/design/req308-entity-http-surface.md §4 (transport
+      and error mapping), §5 (security posture, including the joined-read case),
+      §6 (pagination) and §11's recorded SECURITY-REVIEWER verdict. Read all of
+      them in full, plus that verdict's two closing notes for ELIXIR-DEV, which
+      are what acceptance criteria 1 and 2 below exist to enforce. These are
+      settled decisions -- implement them, do not re-derive them.
+
+      SCOPE: exactly one route, POST /entities/query, appended to the
+      Letflow.Routers.Entities module REQ-310 created, declared
+      `authz_post "/query", :EntitiesQuery` (a read permission on a POST route,
+      matching the POST /definitions/:id/validate precedent design §4 cites).
+      It is one route and a separate requirement because it is the only route
+      in §1's table that composes three modules rather than delegating to one,
+      and it carries two error classes, two redaction branches and a
+      twenty-one-member combined error union.
+
+      TRANSPORT (design §4): the request is a POST body, one JSON object
+      carrying entity_type, optional filters, optional sort, optional join, and
+      cursor/page_size as flat top-level siblings. Not a GET query string --
+      §4 states why, and that reasoning is not reopened here.
+
+      ⛔ TRAP 1 -- THE JOIN-BEARING REDACTION BRANCH. This is the single most
+      important thing in this requirement, and SECURITY-REVIEWER's verdict on
+      REQ-308's design flagged it verbatim: "it would be easy to implement only
+      the simpler branch and let it silently under-redact joined reads."
+
+      For a request with NO join clause: one
+      FieldGrants.load_restrictions(user_id, entity_type, prefix) call for the
+      primary entity type, then FieldGrants.redact_page/2 on
+      Cursor.paginate/5's result.
+
+      For a request WITH one or more join clauses: one load_restrictions/3 call
+      per DISTINCT entity type present in the result, assembled into the
+      restriction_sets() map FieldGrants.redact_joined_page/2 expects, then that
+      function applied. The map's keys are exactly the keys a
+      Compiler.joined_row() itself carries -- the atom :primary for the primary
+      entity's own set, and each join_clause().entity_type STRING for that
+      joined entity's own set. ⛔ The `through` entity's own type is NEVER a key
+      -- its row is never exposed in a joined result. Read
+      lib/letflow/entities/query/field_grants.ex in full (it is 203 lines) and
+      confirm this against redact_joined_item/2's actual body before writing
+      the assembly.
+
+      NOTE THE FAILURE MODE, because it decides how this must be tested:
+      redact_joined_item/2 uses Map.fetch!/2, so a MISSING key RAISES rather
+      than silently passing an entity through unredacted. That is a safe
+      failure, and it means a joined request whose restriction_sets map is
+      assembled wrong will 500, not leak. What is NOT protected against is
+      calling redact_page/2 (or no redaction at all) on a joined result -- so
+      the test that matters is one that issues a join-bearing query against a
+      far-side entity type carrying a restricted field, and asserts the FAR-SIDE
+      field comes back as FieldGrants.redacted_sentinel(). A test that only
+      proves the primary side is redacted proves nothing about this branch.
+
+      ⛔ TRAP 2 -- THE 400-vs-422 PRE-PARSING DISTINCTION. Design §4 requires
+      the handler to call Letflow.Entities.Query.Types.parse_filter_op/1 on each
+      filter clause's raw "op" string and Types.parse_sort_dir/1 on each sort
+      clause's raw "dir" string BEFORE constructing the query_request() map
+      handed to Compiler.compile/2, mapping their
+      {:error, {:unknown_operator, raw}}/{:error, {:unknown_sort_dir, raw}}
+      returns to 400 (a malformed literal in the body). Compiler.compile/2's own
+      semantic rejections -- field_not_allowed, value_arity_mismatch,
+      invalid_in_value, operator_not_valid_for_type, entity_table_not_found,
+      too_many_joins, join_depth_exceeded, no_through_relation,
+      ambiguous_through_relation, duplicate_join_target,
+      relation_column_not_found -- map to 422. SECURITY-REVIEWER's verdict notes
+      that skipping the pre-parsing "would not reopen a security gap (the atoms
+      are still closed at compile/2's own boundary) but would violate the
+      design's stated 400-vs-422 error-class distinction." It is not optional
+      and it is not redundant. The full mapping table, including
+      :entity_type_not_found -> 404 and :invalid_schema_name -> 500, is design
+      §4's; implement it exactly.
+
+      ⛔ A CORRECTION TO THE DESIGN, stated here so the implementer is not
+      misled by it. Design §6 justifies the handler re-calling
+      Allowlist.load/2 to obtain Cursor.paginate/5's third argument, describing
+      it as "idempotent and side-effect-free within one request." It IS
+      idempotent. It is NOT free: Allowlist.load/2 reaches
+      fetch_active_definition/2, which calls
+      Definitions.get_active_definition_by_name/2 -- a real database query
+      (lib/letflow/entities/query/allowlist.ex, around lines 395-396; verify
+      this yourself before building on it). So the query path pays a second
+      round-trip to re-fetch a definition compile/2 has already loaded. That
+      trade is ACCEPTED here -- it preserves Compiler's public/private boundary
+      rather than widening compile/2's return to thread the allowlist out, and
+      the alternative is an API change to a module this requirement does not
+      own. Implement it as the design specifies. Do not "optimise" it away by
+      changing Compiler's signature; do not repeat "side-effect-free" in a
+      comment or moduledoc, because it is false. If the second round-trip later
+      proves to matter under load, that is its own requirement with its own
+      design, not an in-flight change here.
+
+      PAGINATION (design §6): the response envelope is
+      {"items": [...], "next_cursor": <string or null>} with NO "count" key --
+      matching Letflow.Routers.Definitions' and Letflow.Routers.Instances'
+      attachments-list shape, deliberately not Instances'
+      render_page_result/3 shape. Cursor.paginate/5's own error union
+      (:page_size_too_large, :invalid_cursor, :wrong_endpoint,
+      :resume_key_arity_mismatch -> 400; :expired -> the dedicated
+      Response.send_problem(conn, Error.cursor_expired()) path every other
+      cursor-consuming route uses; {:field_not_allowed, _} -> 422) maps as §4
+      specifies. Read Cursor.paginate/5's actual five-argument signature in
+      lib/letflow/entities/query/cursor.ex before assembling the call.
+
+      SECURITY POSTURE, per design §5 -- tenant-data path, SECURITY-REVIEWER is
+      a hard gate:
+
+      INV-1. prefix comes only from conn.assigns.scoped_opts. user_id for
+      load_restrictions/3 comes only from conn.assigns.auth_context.user_id --
+      never from a body field, and never from anything a caller can influence.
+      No caller-supplied tenant id, schema name or slug is read from the body,
+      the path or the query string.
+
+      INV-5. {:error, :entity_type_not_found} folds to the same zero-detail
+      Response.not_found/1 a nonexistent entity type produces. No cross-tenant
+      existence pre-check is added to produce a different message.
+
+      INV-2. Redaction happens BEFORE Response.ok/2 builds the body, on every
+      read path, both branches. There is no code path from paginate/5's result
+      to a response that skips FieldGrants.
+
+      SCOPE FENCE: this requirement appends one route and its handler(s) to
+      lib/letflow/routers/entities.ex, updates that module's moduledoc route
+      table with the tenth row, adds one endpoint_policy_key/2-backed entry to
+      the enforcement test's expectations if that test hardcodes a per-router
+      route count (check -- REQ-310 may have written one), and adds tests. It
+      does not modify lib/letflow/api/authorization.ex (REQ-309 added
+      :EntitiesQuery and its clause already), does not modify anything under
+      lib/letflow/entities/ -- not Compiler, not Allowlist, not Cursor, not
+      FieldGrants, not Types -- does not edit lib/letflow/router.ex or
+      lib/letflow/plugs/api_pipeline.ex, and creates no migration. It adds no
+      aggregation, count, sum or group_by vocabulary: design §9 names that as
+      S10 gap 2, explicitly not designed and not in scope here.
+    acceptance_criteria:
+      - "⛔ THE JOIN BRANCH IS PROVEN BY A FAR-SIDE REDACTION TEST: a test issues a POST /entities/query carrying at least one join clause, where the JOINED (far-side) entity type has an entity_field_restrictions row for a field the querying user holds no user_entity_grants row for, and asserts that field comes back as FieldGrants.redacted_sentinel() in the joined result. A companion assertion in the same or an adjacent test confirms an UNrestricted far-side field on the same row comes back with its real value -- so the test cannot pass by redacting everything. Real output quoted"
+      - "a test proves the two branches are actually distinct: a join-bearing request and a non-join request against the same entity type both succeed and both return correctly-redacted results, and the join-bearing one's response contains the joined entity's keys -- proving redact_joined_page/2 was the function that ran, not redact_page/2 on a joined shape"
+      - "a test asserts the restriction_sets map excludes the `through` entity's type: a query with a join declaring a `through` relation succeeds and its result rows carry keys for :primary and the joined entity_type only, never the through entity's type"
+      - "⛔ 400-vs-422 IS PROVEN ON BOTH SIDES: a POST /entities/query whose filter clause carries an unrecognised \"op\" string returns 400, and one whose sort clause carries an unrecognised \"dir\" string returns 400; a POST whose filter names a field absent from the allowlist returns 422, and one whose :in filter's value is not a list returns 422. All four asserted individually with real output quoted -- the first two prove the Types pre-parsing step actually runs before compile/2"
+      - "every member of Compiler.compile/2's compile_error() union that design §4's table maps to a caller-reachable status has a test asserting that status -- at minimum :entity_type_not_found -> 404, {:field_not_allowed, _} -> 422, {:value_arity_mismatch, _} -> 422, {:invalid_in_value, _} -> 422, {:operator_not_valid_for_type, _, _} -> 422, {:too_many_joins, _} -> 422, and {:duplicate_join_target, _} -> 422; real output quoted"
+      - "Cursor.paginate/5's error union is mapped and tested: :page_size_too_large -> 400, :invalid_cursor -> 400, :wrong_endpoint -> 400, and :expired -> the cursor-expired problem response (asserting the problem document's type/status, not merely the status code); real output quoted"
+      - "the success response envelope is exactly {\"items\": [...], \"next_cursor\": ...} with no \"count\" key -- asserted by comparing the decoded response body's key set against an explicit expected set, and a paginated test walks at least two pages using the returned next_cursor and asserts the final page's next_cursor is null"
+      - "INV-1: a test sends tenant_id, schema and slug as body fields in the query request and asserts the response is identical to the same request without them; and a test confirms the user_id used for redaction is the authenticated caller's -- by issuing the SAME query body as two different users with different user_entity_grants rows and asserting they receive differently-redacted results"
+      - "INV-5: a POST /entities/query naming an entity_type that exists only in a DIFFERENT tenant's schema returns a response byte-identical to one naming an entity_type that exists in no tenant -- both compared in one assertion, not merely both asserted to be 404"
+      - "Letflow.Routers.Entities.__authz_routes__/0 now returns ten entries, the tenth being {\"POST\", \"/query\", :EntitiesQuery}, and test/letflow/api/authorization_enforcement_test.exs still passes with no new @allowlist entry -- real output quoted"
+      - "the module's moduledoc route table carries the tenth row for POST /entities/query with its delegate composition, permission and response codes, in the same column form as the other nine"
+      - "no comment, @doc or @moduledoc anywhere in the diff describes Allowlist.load/2 as side-effect-free or free of cost; if the re-load is commented at all, the comment states it performs a second definition fetch -- verified by grepping the diff for 'side-effect-free' and confirming zero hits, quoted with the command"
+      - "git diff --name-only shows only lib/letflow/routers/entities.ex and file(s) under test/ -- no change to any file under lib/letflow/entities/, lib/letflow/api/, lib/letflow/plugs/, lib/letflow/router.ex, or priv/repo/migrations/; quoted with the command"
+      - "the diff contains no aggregation vocabulary (no count, sum, avg, min, max or group_by handling in the request shape or the handler) -- S10 gap 2 is not in scope; verified by a quoted grep"
+      - "mix test passes for the new and modified test files, zero failures, zero skipped -- real command and real output quoted, not described"
+      - "mix compile --warnings-as-errors succeeds -- real quoted output"
+      - "SECURITY-REVIEWER records a verdict on this change addressing INV-1, INV-2 (naming the joined branch explicitly and confirming redact_joined_page/2 is wired for join-bearing requests), INV-5 and INV-7 by name, having read the handler itself rather than this requirement's text"
+      - "0022's rule 1 holds textually: grep the diff for single-vertical domain vocabulary and confirm zero hits -- quote the grep command and its output"
+    depends_on: [REQ-310]

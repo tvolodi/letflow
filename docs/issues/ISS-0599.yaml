@@ -1,0 +1,62 @@
+id: ISS-0599
+title: letflow-queue tasks 597/598 registered with empty depends_on -- queue edges missing for the REQ-309..311 chain
+discovered_by: ORCH
+discovered_in_run: WF01-REQ309-311-20260911
+discovered_at: "2026-09-11T07:05:00Z"
+severity: MINOR
+description: >
+  Queue tasks 596 (REQ-309), 597 (REQ-310) and 598 (REQ-311) were all
+  registered with depends_on: [], but docs/requirements.yaml declares a
+  real chain: REQ-309 -> REQ-310 -> REQ-311. The queue therefore reports
+  all three as immediately eligible, and get_next_task could hand out
+  597 or 598 before 596 is done.
+
+  WHY IT HAPPENED. TASK_QUEUE.md requires depends_on to be integer QUEUE
+  TASK IDS, resolved by registering in dependency order and keeping a
+  REQ -> id map. The registration did run in the correct order, but the
+  shell pipeline meant to capture each returned id used the wrong JSON
+  response key, so the id variables were empty and each subsequent POST
+  sent depends_on: [] instead of the resolved id.
+
+  All three tasks were created successfully -- the failure was in the
+  caller's parsing, not in the service. That is precisely why they were
+  left in place: retrying the registration would have produced
+  DUPLICATE tasks rather than fixing the edges.
+
+  WHY IT CANNOT SIMPLY BE PATCHED. letflow-queue deliberately exposes no
+  generic update operation (TASK_QUEUE.md lines 117-118, "exactly four
+  endpoints, on purpose"). There is no PATCH/PUT for depends_on. The
+  options are: (a) leave the edges missing and rely on
+  docs/requirements.yaml for ordering; (b) cancel and re-register
+  597/598 with correct edges, accepting new ids and a stale impl_order
+  in the yaml; or (c) add an update endpoint to letflow-queue, which
+  changes that service's deliberate design and needs its own decision.
+
+  CURRENT MITIGATION. The ordering IS correctly recorded in
+  docs/requirements.yaml (REQ-310 depends_on [REQ-309], REQ-311
+  depends_on [REQ-310]), and each entry's impl_order comment states
+  explicitly that the queue edge is not mirrored. The session that
+  filed them executes all three sequentially itself, so no ordering
+  violation can occur during that execution.
+
+  RESIDUAL RISK. A later session calling get_next_task could be handed
+  597 while 596 is unfinished. The failure mode is loud, not silent:
+  REQ-310's router would declare policy-key atoms REQ-309 has not yet
+  added, which fails the authorization enforcement test
+  (test/letflow/api/authorization_enforcement_test.exs asserts no
+  declared key resolves to :Unknown) at test time rather than shipping
+  anything broken.
+
+  Severity MINOR for that reason. But it is a real divergence between
+  the queue (the claiming authority) and requirements.yaml (the content
+  authority), and TASK_QUEUE.md's whole premise is that the queue
+  arbitrates ordering across hosts.
+
+  Fix direction: decide between (a), (b) and (c) above. If the chain is
+  still unstarted when this is picked up, (b) is cheap and restores the
+  invariant; once any of the three is done, (a) is already effectively
+  the outcome and the entry should just be closed with that noted.
+affected_files:
+  - docs/requirements.yaml
+  - docs/agents/protocols/TASK_QUEUE.md
+queue_ref: Q-599

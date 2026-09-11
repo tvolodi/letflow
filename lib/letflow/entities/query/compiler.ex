@@ -796,7 +796,8 @@ defmodule Letflow.Entities.Query.Compiler do
     end
   end
 
-  defp build_aggregate_spec(%{fn: fn_} = target, allowlist) when fn_ in [:sum, :avg, :min, :max] do
+  defp build_aggregate_spec(%{fn: fn_} = target, allowlist)
+       when fn_ in [:sum, :avg, :min, :max] do
     case Map.fetch(target, :field) do
       :error ->
         {:error, {:aggregate_field_required, fn_}}

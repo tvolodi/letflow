@@ -1287,7 +1287,9 @@ defmodule Letflow.Routers.Entities do
 
   defp parse_group_by(_other), do: {:error, {:query_field_invalid, "group_by"}}
 
-  defp parse_group_by_clause(%{"field" => field}) when is_binary(field), do: {:ok, %{field: field}}
+  defp parse_group_by_clause(%{"field" => field}) when is_binary(field),
+    do: {:ok, %{field: field}}
+
   defp parse_group_by_clause(_other), do: {:error, {:query_field_invalid, "group_by"}}
 
   # ══ Aggregate response shaping (design §5) ════════════════════════════

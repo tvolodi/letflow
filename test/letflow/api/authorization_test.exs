@@ -1069,7 +1069,9 @@ defmodule Letflow.Api.AuthorizationTest do
 
     test "an undeclared /entities path is still :Unknown, and the new clause did not widen matching" do
       assert Authorization.endpoint_policy_key("GET", "/entities/query/aggregate") == :Unknown
-      assert Authorization.endpoint_policy_key("POST", "/entities/query/aggregate/extra") == :Unknown
+
+      assert Authorization.endpoint_policy_key("POST", "/entities/query/aggregate/extra") ==
+               :Unknown
     end
   end
 end

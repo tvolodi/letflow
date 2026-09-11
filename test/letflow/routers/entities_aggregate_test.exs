@@ -130,7 +130,13 @@ defmodule Letflow.Routers.EntitiesAggregateTest do
         %{name: "title", type: :string, queried: true},
         %{name: "category", type: :string, queried: true},
         %{name: "quantity", type: :integer, queried: true},
-        %{name: "secret_cost", type: :decimal, queried: true, decimal_precision: 10, decimal_scale: 2}
+        %{
+          name: "secret_cost",
+          type: :decimal,
+          queried: true,
+          decimal_precision: 10,
+          decimal_scale: 2
+        }
       ]
     })
   end

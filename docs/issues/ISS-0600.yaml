@@ -58,3 +58,16 @@ affected_files:
   - lib/letflow/routers/entities.ex
   - test/letflow/entities/query_cursor_field_grants_test.exs
 queue_ref: Q-600
+github_ref: GH-1245
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0600-20260911
+resolved_at: "2026-09-11T11:39:46Z"
+resolution_note: >
+  Fixed via PR #1246: added the entity_row() map clause to redact_item/2,
+  widened redact_page/2's @spec, fail-first-proven regression test.
+  REQ-311's own merge (PR #1247) subsequently retired the router-side
+  workaround (redact_plain_page/2) as this fix's own scope fence
+  anticipated. This local record (created independently by the
+  WF02-REQ311-20260911 run around the same time) duplicates the already-
+  resolved ISS-0600 -- no separate fix needed here.

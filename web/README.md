@@ -145,3 +145,5 @@ requirement, not something this migration changed:
   (also live, not dead). Regression-locked by
   `src/__tests__/router.iss-0289.test.tsx`. This entry is kept as a record
   of the drift that existed at migration, not as a live discrepancy.
+
+// scratch comment for ISS-0591/0592 PR C verification (safe to remove)

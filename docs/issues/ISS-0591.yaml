@@ -36,3 +36,22 @@ description: >
 affected_files:
   - .github/workflows/ci.yml
 queue_ref: Q-591
+github_ref: GH-1217
+status: resolved
+resolved_in_run: WF03-ISS0591-ISS0592-20260911
+resolved_at: "2026-09-11T05:48:27Z"
+resolution: >
+  Fixed in .github/workflows/ci.yml (PR #1229, branch fix/ISS0592-20260911):
+  added a `concurrency:` group keyed on
+  `${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}`
+  with `cancel-in-progress: true`, and narrowed the `push:` trigger to
+  `branches: [main]` so a PR branch's own pushes are covered by the
+  `pull_request:` event alone instead of firing both events per commit.
+  Handled together with ISS-0592 since both edit the same `on:`/`jobs:`
+  structure. Verified: both required status-check contexts ("Backend gate
+  (mix letflow.check)", "Frontend gate (npm run check)") still report and
+  are green on PR #1229's head SHA (ea588692); design passed
+  CODE-DESIGN-VALIDATOR across 3 rounds; ELIXIR-DEV's implementation was
+  confirmed with 6 real dry-run verification scenarios; REVIEWER
+  independently re-verified the evidence live; TEST-RUNNER confirmed the PR
+  is up to date with main with all three required checks green.

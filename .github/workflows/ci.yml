@@ -96,11 +96,104 @@
 
 name: CI
 
+# ISS-0591 (duplicate CI runs) + ISS-0592 (no path filter):
+# see lib/letflow/design/iss0591-iss0592-ci-dedup-path-filter.md for the full
+# reasoning. Do not "simplify" any of the following without re-reading that
+# design in full -- several of these choices (job-level `if: ${{ !cancelled() }}`
+# instead of `always()`, step-level rather than job-level path-filter `if:`,
+# fail-open `!= 'false'` step conditions) were deliberately chosen over an
+# obvious-looking alternative that was tried and rejected during that design's
+# review, specifically because the obvious alternative silently breaks
+# 0018's required-status-check contexts.
 on:
   push:
+    branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Not a required status check. Computes whether backend-relevant /
+  # frontend-relevant paths changed so `backend`/`frontend` below can skip
+  # their expensive steps on a docs-only change -- see the design doc §3.
+  # Hand-rolled git diff rather than a third-party paths-filter action, so
+  # every edge case (zero-SHA new branch, non-push/PR triggers, force-push,
+  # the script's own failure) is auditable directly in this file.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend || steps.fallback.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend || steps.fallback.outputs.frontend }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed paths
+        id: filter
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.event.after }}"
+          else
+            BASE_SHA=""
+            HEAD_SHA=""
+          fi
+
+          ZERO_SHA="0000000000000000000000000000000000000000"
+
+          if [ -z "$BASE_SHA" ] || [ -z "$HEAD_SHA" ] || [ "$BASE_SHA" = "$ZERO_SHA" ]; then
+            echo "No usable base SHA for event '${{ github.event_name }}' (base='$BASE_SHA') -- assuming everything changed."
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=50 origin "$BASE_SHA" || true
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "Base SHA $BASE_SHA not reachable even after a targeted fetch (likely a force-push rewrite) -- assuming everything changed."
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files ($BASE_SHA..$HEAD_SHA):"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -qE '^(lib/|priv/repo/migrations/|test/|mix\.exs|mix\.lock|\.tool-versions|config/|\.github/workflows/ci\.yml)'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$CHANGED" | grep -qE '^(web/|\.github/workflows/ci\.yml)'; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail-safe defaults if path detection did not complete cleanly
+        id: fallback
+        if: steps.filter.outcome != 'success'
+        run: |
+          echo "Path-detection step outcome was '${{ steps.filter.outcome }}', not 'success' -- defaulting to running both gates in full rather than risking a silent skip."
+          echo "backend=true" >> "$GITHUB_OUTPUT"
+          echo "frontend=true" >> "$GITHUB_OUTPUT"
+
   # This job's `name:` string is a required-status-check `context` on main's branch
   # protection (docs/migration/decisions/0018-branch-protection-posture.md). Do not
   # rename it without updating that record's `contexts` list and re-running its
@@ -110,6 +203,13 @@ jobs:
   backend:
     name: Backend gate (mix letflow.check)
     runs-on: ubuntu-latest
+    needs: changes
+    # NOT `always()` -- see design doc §4. `!cancelled()` keeps this required
+    # job running when `changes` merely *fails* (so the gate still runs, fail
+    # open), while still letting a genuinely cancelled/superseded run (this
+    # workflow's own `cancel-in-progress`) actually stop instead of running to
+    # completion immune to cancellation.
+    if: ${{ !cancelled() }}
 
     services:
       postgres:
@@ -160,9 +260,11 @@ jobs:
             ${{ runner.os }}-mix-
 
       - name: Install dependencies
+        if: needs.changes.outputs.backend != 'false'
         run: mix deps.get
 
       - name: Run backend gate
+        if: needs.changes.outputs.backend != 'false'
         run: mix letflow.check
         env:
           WASMEX_BUILD: true
@@ -197,6 +299,9 @@ jobs:
     # setup is needed here.
     name: Frontend gate (npm run check)
     runs-on: ubuntu-latest
+    needs: changes
+    # See the matching note on `backend` above -- NOT `always()`.
+    if: ${{ !cancelled() }}
     defaults:
       run:
         working-directory: web
@@ -213,7 +318,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
+        if: needs.changes.outputs.frontend != 'false'
         run: npm ci
 
       - name: Run frontend gate
+        if: needs.changes.outputs.frontend != 'false'
         run: npm run check

@@ -112,6 +112,7 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesDefinitionsWrite
           | :EntitiesRecordsWrite
           | :EntitiesQuery
+          | :EntitiesAggregate
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -152,6 +153,7 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesDefinitionsWrite
           | :EntitiesRecordsWrite
           | :EntitiesQuery
+          | :EntitiesAggregate
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -181,7 +183,8 @@ defmodule Letflow.Api.Authorization do
     :EntitiesDefinitionsRead,
     :EntitiesDefinitionsWrite,
     :EntitiesRecordsWrite,
-    :EntitiesQuery
+    :EntitiesQuery,
+    :EntitiesAggregate
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
@@ -189,12 +192,13 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All twenty-three `Permission` values — R-Co's fourteen, plus REQ-075's
+  All twenty-four `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
   (`:EntitiesDefinitionsRead`, `:EntitiesDefinitionsWrite`,
-  `:EntitiesRecordsWrite`, `:EntitiesQuery`).
+  `:EntitiesRecordsWrite`, `:EntitiesQuery`), plus REQ-315's
+  `:EntitiesAggregate`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -488,6 +492,15 @@ defmodule Letflow.Api.Authorization do
   # in this module, justified on design §4's own reasoning, not on precedent.
   def endpoint_policy_key("POST", "/entities/query"), do: :EntitiesQuery
 
+  # REQ-315 — aggregation/reporting query route (design
+  # lib/letflow/design/req312-query-aggregation.md §3). A distinct atom, not
+  # :EntitiesQuery reused — see that design's §3 for why (an aggregate can
+  # disclose tenant-wide statistical information a row-level, individually
+  # redactable read does not, so the two capabilities stay independently
+  # grantable). Classified read, same POST-with-a-body reasoning as
+  # :EntitiesQuery immediately above.
+  def endpoint_policy_key("POST", "/entities/query/aggregate"), do: :EntitiesAggregate
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -585,6 +598,8 @@ defmodule Letflow.Api.Authorization do
   def required_permission(:EntitiesDefinitionsWrite), do: :EntitiesDefinitionsWrite
   def required_permission(:EntitiesRecordsWrite), do: :EntitiesRecordsWrite
   def required_permission(:EntitiesQuery), do: :EntitiesQuery
+  # REQ-315 — identity clause (policy-key name == permission name), design §3.
+  def required_permission(:EntitiesAggregate), do: :EntitiesAggregate
 
   def required_permission(:Unknown), do: :MetricsRead
 
@@ -622,7 +637,12 @@ defmodule Letflow.Api.Authorization do
         # PROCESS_OPERATOR's "operate on live tenant data" class.
         :EntitiesDefinitionsRead,
         :EntitiesDefinitionsWrite,
-        :EntitiesQuery
+        :EntitiesQuery,
+        # REQ-315 (design §3 role matrix): every role holding :EntitiesQuery
+        # also gets :EntitiesAggregate -- a role already trusted to read
+        # individual rows for an entity type is, at minimum, equally trusted
+        # to read an aggregate over the same rows.
+        :EntitiesAggregate
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -648,7 +668,10 @@ defmodule Letflow.Api.Authorization do
         # — that is PROCESS_DESIGNER's class.
         :EntitiesDefinitionsRead,
         :EntitiesRecordsWrite,
-        :EntitiesQuery
+        :EntitiesQuery,
+        # REQ-315 (design §3 role matrix): mirrors :EntitiesQuery, see the
+        # PROCESS_DESIGNER clause's comment above.
+        :EntitiesAggregate
       ]
 
   def role_allows?(:TASK_WORKER, permission),
@@ -663,7 +686,10 @@ defmodule Letflow.Api.Authorization do
         # role that can read anything here also holds :EntitiesQuery, mirroring
         # how every role holding :InstancesRead also holds :AttachmentsRead.
         :EntitiesDefinitionsRead,
-        :EntitiesQuery
+        :EntitiesQuery,
+        # REQ-315 (design §3 role matrix): mirrors :EntitiesQuery, see the
+        # PROCESS_DESIGNER clause's comment above.
+        :EntitiesAggregate
       ]
 
   def role_allows?(:AGENT_RUNNER, _permission), do: false

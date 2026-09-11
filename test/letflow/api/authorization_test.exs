@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, and REQ-309's four Entities* permissions" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, and REQ-315's :EntitiesAggregate" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -53,7 +53,8 @@ defmodule Letflow.Api.AuthorizationTest do
                :EntitiesDefinitionsRead,
                :EntitiesDefinitionsWrite,
                :EntitiesRecordsWrite,
-               :EntitiesQuery
+               :EntitiesQuery,
+               :EntitiesAggregate
              ]
     end
   end
@@ -677,8 +678,11 @@ defmodule Letflow.Api.AuthorizationTest do
       end
 
       # The live list is exactly the pre-existing nineteen plus REQ-309's four,
-      # in that order: proves the change was purely an append.
-      assert live == @pre_req309_permissions ++ @req309_permissions
+      # in that order, PLUS whatever later requirements have purely appended
+      # since (REQ-315's :EntitiesAggregate) -- this test's own point is that
+      # the pre-REQ-309 prefix and REQ-309's own four are undisturbed, not
+      # that nothing has been appended after them since.
+      assert Enum.take(live, 23) == @pre_req309_permissions ++ @req309_permissions
 
       pair_count = length(Authorization.roles()) * length(@pre_req309_permissions)
       assert pair_count == 95
@@ -834,6 +838,238 @@ defmodule Letflow.Api.AuthorizationTest do
         assert Authorization.endpoint_policy_key(method, path) == key,
                "REGRESSION: endpoint_policy_key(#{inspect(method)}, #{inspect(path)}) changed"
       end
+    end
+  end
+
+  # ==========================================================================
+  # REQ-315 — the aggregation/reporting query route's new permission,
+  # :EntitiesAggregate (design lib/letflow/design/req312-query-aggregation.md
+  # §3's role matrix).
+  # ==========================================================================
+
+  describe "REQ-315 AC1 — permissions/0 contains :EntitiesAggregate, @doc count matches, endpoint_policy_key resolves" do
+    test "permissions/0 contains :EntitiesAggregate" do
+      assert :EntitiesAggregate in Authorization.permissions()
+    end
+
+    test "the permissions/0 @doc's stated count equals length(permissions()) exactly" do
+      {:docs_v1, _anno, _lang, _fmt, _moduledoc, _meta, fn_docs} =
+        Code.fetch_docs(Letflow.Api.Authorization)
+
+      permissions_doc =
+        Enum.find_value(fn_docs, fn
+          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          _ -> nil
+        end)
+
+      actual_count = length(Authorization.permissions())
+
+      spelled =
+        %{
+          20 => "twenty",
+          21 => "twenty-one",
+          22 => "twenty-two",
+          23 => "twenty-three",
+          24 => "twenty-four",
+          25 => "twenty-five",
+          26 => "twenty-six"
+        }
+        |> Map.get(actual_count)
+
+      assert is_binary(spelled),
+             "permissions/0 now returns #{actual_count} entries, outside this test's " <>
+               "number-word table -- extend the table (and the @doc) rather than deleting " <>
+               "this assertion"
+
+      assert permissions_doc =~ "All #{spelled} `Permission` values",
+             """
+             permissions/0's @doc does not state the live count.
+             permissions/0 currently returns #{actual_count} entries, so the @doc must \
+             open with "All #{spelled} `Permission` values". Actual @doc:
+
+             #{permissions_doc}
+             """
+    end
+
+    test "endpoint_policy_key(\"POST\", \"/entities/query/aggregate\") returns :EntitiesAggregate, never :Unknown" do
+      key = Authorization.endpoint_policy_key("POST", "/entities/query/aggregate")
+      assert key == :EntitiesAggregate
+      refute key == :Unknown
+    end
+
+    test "required_permission(:EntitiesAggregate) == :EntitiesAggregate" do
+      assert Authorization.required_permission(:EntitiesAggregate) == :EntitiesAggregate
+    end
+  end
+
+  describe "REQ-315 AC2 — role matrix: PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER gain :EntitiesAggregate, mirroring :EntitiesQuery" do
+    @req315_grid %{
+      PLATFORM_ADMIN: true,
+      PROCESS_DESIGNER: true,
+      PROCESS_OPERATOR: true,
+      TASK_WORKER: true,
+      AGENT_RUNNER: false
+    }
+
+    test "role_allows?/2 matches the grid for all 5 roles" do
+      for {role, expected} <- @req315_grid do
+        actual = Authorization.role_allows?(role, :EntitiesAggregate)
+
+        assert actual == expected,
+               "role_allows?(#{inspect(role)}, :EntitiesAggregate) returned #{inspect(actual)}, " <>
+                 "design §3's role matrix says #{inspect(expected)}"
+      end
+    end
+
+    test "every role holding :EntitiesQuery also holds :EntitiesAggregate, and vice versa" do
+      for role <- Authorization.roles() do
+        assert Authorization.role_allows?(role, :EntitiesQuery) ==
+                 Authorization.role_allows?(role, :EntitiesAggregate),
+               "#{inspect(role)}'s :EntitiesQuery/:EntitiesAggregate grants disagree"
+      end
+    end
+
+    test "evaluate_access/2 agrees with the grid end-to-end" do
+      for {role, expected_allowed} <- @req315_grid do
+        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        decision = Authorization.evaluate_access(ctx, :EntitiesAggregate)
+        expected_kind = if expected_allowed, do: :Allow, else: :Deny403
+
+        assert decision.kind == expected_kind,
+               "evaluate_access(roles: [#{inspect(role)}], :EntitiesAggregate) returned " <>
+                 "#{inspect(decision.kind)}, expected #{inspect(expected_kind)}"
+      end
+    end
+  end
+
+  describe "REQ-315 AC3 — regression grid: no PRE-EXISTING role/permission pair changed" do
+    # Every permission that existed before REQ-315 (the pre-REQ-309 nineteen
+    # plus REQ-309's own four), crossed with all five roles: 115 pairs. Same
+    # discipline as REQ-309's own AC5 above -- transcribed by hand from this
+    # module as it stood immediately before REQ-315, NOT derived from the
+    # module under test.
+    @pre_req315_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer,
+      :EntitiesDefinitionsRead,
+      :EntitiesDefinitionsWrite,
+      :EntitiesRecordsWrite,
+      :EntitiesQuery
+    ]
+
+    @pre_req315_allowed %{
+      PLATFORM_ADMIN: @pre_req315_permissions,
+      PROCESS_DESIGNER: [
+        :DefinitionsWrite,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesRead,
+        :TasksRead,
+        :RolesManage,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesQuery
+      ],
+      PROCESS_OPERATOR: [
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :TasksAssign,
+        :AuditRead,
+        :DlqOperate,
+        :MetricsRead,
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :InstancesAdvanceTimer,
+        :EntitiesDefinitionsRead,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery
+      ],
+      TASK_WORKER: [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesQuery
+      ],
+      AGENT_RUNNER: []
+    }
+
+    test "the regression grid is complete: 5 roles x 23 pre-existing permissions = 115 pairs" do
+      assert length(@pre_req315_permissions) == 23
+      assert Enum.sort(Map.keys(@pre_req315_allowed)) == Enum.sort(Authorization.roles())
+
+      live = Authorization.permissions()
+
+      for permission <- @pre_req315_permissions do
+        assert permission in live,
+               "#{inspect(permission)} existed before REQ-315 but is no longer in " <>
+                 "permissions/0 -- a permission was REMOVED, not added"
+      end
+
+      # The live list is exactly the pre-existing twenty-three plus REQ-315's
+      # one, in that order: proves the change was purely an append.
+      assert live == @pre_req315_permissions ++ [:EntitiesAggregate]
+
+      pair_count = length(Authorization.roles()) * length(@pre_req315_permissions)
+      assert pair_count == 115
+    end
+
+    test "all 115 pre-existing role/permission pairs return exactly what they returned before REQ-315" do
+      for role <- [
+            :PLATFORM_ADMIN,
+            :PROCESS_DESIGNER,
+            :PROCESS_OPERATOR,
+            :TASK_WORKER,
+            :AGENT_RUNNER
+          ],
+          permission <- @pre_req315_permissions do
+        expected = permission in Map.fetch!(@pre_req315_allowed, role)
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "REGRESSION: role_allows?(#{inspect(role)}, #{inspect(permission)}) is now " <>
+                 "#{inspect(actual)} but was #{inspect(expected)} before REQ-315. This " <>
+                 "change must be purely additive -- no existing role/permission pair may " <>
+                 "change hands."
+      end
+    end
+
+    test "required_permission/1 and endpoint_policy_key/2 are unchanged for the pre-existing entity-subsystem routes" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/query") == :EntitiesQuery
+      assert Authorization.required_permission(:EntitiesQuery) == :EntitiesQuery
+
+      assert Authorization.endpoint_policy_key("POST", "/entities/records/:entity_type") ==
+               :EntitiesRecordsWrite
+    end
+
+    test "an undeclared /entities path is still :Unknown, and the new clause did not widen matching" do
+      assert Authorization.endpoint_policy_key("GET", "/entities/query/aggregate") == :Unknown
+      assert Authorization.endpoint_policy_key("POST", "/entities/query/aggregate/extra") == :Unknown
     end
   end
 end

@@ -585,6 +585,289 @@ defmodule Letflow.Entities.Query.Compiler do
     {dir, json_cast_dynamic(type, field_name)}
   end
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # REQ-315 -- compile_aggregate/2, per
+  # lib/letflow/design/req312-query-aggregation.md §1/§2/§4. A NEW function
+  # alongside compile/2, not a fourth branch of it -- compile/2 itself and
+  # its two existing private helpers (compile_plain/5, compile_joined/6)
+  # above this line are byte-for-byte unchanged by this section.
+  #
+  # Reuses check_join_shape/1, Allowlist.load/2, resolve_binding_source/2,
+  # resolve_joins/4, build_all_filter_dynamics/3, binding_ctx/2, combine_filters/1
+  # and add_all_hops/2 UNMODIFIED -- every one of them is defined above this
+  # section, none is touched. Adds exactly two new resolution steps
+  # (resolve_group_by_specs/2, resolve_aggregate_specs/2) and a
+  # group_by/select-building step in place of apply_order_bys/2 -- design §2.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  @typedoc "The closed enum of supported aggregate functions (design §1)."
+  @type aggregate_fn :: :count | :sum | :avg | :min | :max
+
+  @typedoc """
+  One aggregate target in an `aggregate_request()` (design §1). `field` is
+  required for `:sum`/`:avg`/`:min`/`:max`, forbidden for `:count`.
+  """
+  @type aggregate_target :: %{
+          required(:fn) => aggregate_fn(),
+          optional(:field) => String.t()
+        }
+
+  @typedoc "One group-by target in an `aggregate_request()` (design §1)."
+  @type group_by_clause :: %{required(:field) => String.t()}
+
+  @typedoc """
+  The full aggregate request shape (design §1) -- additive, not a mutation
+  of `Types.query_request()`. `aggregates` is required and non-empty
+  (enforced by the caller, e.g. `Letflow.Routers.Entities`'s own request
+  parser, before this request map is ever built).
+  """
+  @type aggregate_request :: %{
+          required(:entity_type) => String.t(),
+          required(:aggregates) => [aggregate_target(), ...],
+          optional(:group_by) => [group_by_clause()],
+          optional(:filters) => [Types.filter_clause()],
+          optional(:join) => [Types.join_clause()]
+        }
+
+  @typedoc "compile_aggregate/2's error union (design §2) -- compile_error() plus three aggregate-specific members with no row-query analogue."
+  @type aggregate_compile_error ::
+          compile_error()
+          | {:error, {:aggregate_field_required, aggregate_fn()}}
+          | {:error, {:aggregate_field_not_allowed, aggregate_fn()}}
+          | {:error, {:aggregate_type_not_valid, aggregate_fn(), Definition.field_type()}}
+
+  @doc """
+  Compiles `request` into a parameterised, not-yet-executed `Ecto.Query.t()`
+  producing one row per distinct `group_by` combination (or exactly one row
+  absent `group_by`), scoped to the tenant schema named by `prefix` (design
+  §1/§2). The caller is responsible for the §4 INV-2 field-restriction check
+  (every `aggregates`/`group_by`/`filters` field against
+  `Letflow.Entities.Query.FieldGrants.load_restrictions/3`) BEFORE calling
+  this function -- this function itself performs no such check, mirroring
+  `compile/2`'s own "resolution only, no grant-awareness" scope.
+  """
+  @spec compile_aggregate(aggregate_request(), prefix :: String.t()) ::
+          {:ok, Ecto.Query.t()} | aggregate_compile_error()
+  def compile_aggregate(%{entity_type: entity_type, aggregates: aggregates} = request, prefix)
+      when is_binary(entity_type) and is_binary(prefix) and is_list(aggregates) do
+    filters = Map.get(request, :filters, [])
+    group_by = Map.get(request, :group_by, [])
+    joins = Map.get(request, :join, [])
+
+    with :ok <- check_join_shape(joins),
+         {:ok, allowlist} <- Allowlist.load(entity_type, prefix),
+         {:ok, primary_source0} <- resolve_binding_source(entity_type, prefix),
+         {:ok, prepared_joins, primary_source} <-
+           resolve_joins(joins, entity_type, primary_source0, prefix) do
+      ctx = binding_ctx(primary_source, entity_type)
+
+      with {:ok, filter_dynamics} <- build_all_filter_dynamics(filters, allowlist, ctx),
+           {:ok, group_by_specs} <- resolve_group_by_specs(group_by, allowlist),
+           {:ok, aggregate_specs} <- resolve_aggregate_specs(aggregates, allowlist) do
+        combined = combine_filters(filter_dynamics)
+
+        base =
+          if prepared_joins == [] do
+            aggregate_base_plain(entity_type, primary_source, combined)
+          else
+            aggregate_base_joined(entity_type, primary_source, prepared_joins, combined)
+          end
+
+        query =
+          base
+          |> apply_group_by(group_by_specs)
+          |> apply_aggregate_select(group_by_specs, aggregate_specs)
+
+        {:ok, query}
+      end
+    end
+  end
+
+  defp aggregate_base_plain(entity_type, primary_source, combined) do
+    case primary_source do
+      :latest ->
+        Latest
+        |> where([r], r.entity_type == ^entity_type)
+        |> where([r], ^combined)
+
+      {:per_type_table, table_name} ->
+        table_name
+        |> from()
+        |> where([r], ^combined)
+    end
+  end
+
+  defp aggregate_base_joined(entity_type, primary_source, prepared_joins, combined) do
+    base =
+      case primary_source do
+        :latest -> from(r in Latest, as: :primary) |> where([r], r.entity_type == ^entity_type)
+        {:per_type_table, table_name} -> from(r in table_name, as: :primary)
+      end
+
+    base
+    |> where([r], ^combined)
+    |> add_all_hops(prepared_joins)
+  end
+
+  # -- group_by resolution (design §1: Allowlist.resolve_field/2, the SAME
+  # call build_one_filter_dynamic/3 already makes for a filter_clause().field).
+
+  # ⛔ `group_dyn` (raw field reference, used ONLY in the group_by/3 clause)
+  # and `dyn` (the SAME field reference wrapped in `max/1`, used ONLY in the
+  # select map built below) are DELIBERATELY two independently-parameterised
+  # copies, not one dynamic reused twice. Postgres's GROUP BY functional-
+  # dependency check compares the SELECT list's expressions against the
+  # GROUP BY list's expressions SYNTACTICALLY, on the parse tree, BEFORE any
+  # bound parameter is substituted -- two `^field_name`-parameterised copies
+  # of the identical Elixir string bind to two DIFFERENT positional
+  # placeholders ($1 vs $3, say) once spliced into two separate query-macro
+  # calls (`group_by/3` here, `select/3`/`select_merge/3` in
+  # `apply_aggregate_select/3`), so Postgres cannot see them as "the same
+  # expression" and rejects a bare (non-aggregated) repeat of the GROUP BY
+  # key in SELECT with `ERROR 42803 grouping_error`. Wrapping the SELECT
+  # copy in `max/1` (reused from the exact `Ecto.Query.API.max/1` this
+  # module already applies to the `:max` aggregate target above) sidesteps
+  # the check entirely -- any aggregate-wrapped expression is always valid
+  # in SELECT regardless of GROUP BY, and every row within one group shares
+  # the same value for its own grouping key by definition, so `max/1` here
+  # is a no-op pass-through, not a real reduction.
+  defp resolve_group_by_specs(group_by, allowlist) do
+    Enum.reduce_while(group_by, {:ok, []}, fn clause, {:ok, acc} ->
+      case Allowlist.resolve_field(allowlist, clause.field) do
+        {:ok, allowlisted_field} ->
+          spec = %{
+            key: "group__" <> clause.field,
+            group_dyn: field_value_dynamic(allowlisted_field),
+            dyn: dynamic([r], max(^field_value_dynamic(allowlisted_field)))
+          }
+
+          {:cont, {:ok, [spec | acc]}}
+
+        {:error, _reason} = error ->
+          {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, specs} -> {:ok, Enum.reverse(specs)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # -- aggregate-target resolution (design §1/§2's arity + field-type checks,
+  # then Allowlist.resolve_field/2 for a field-carrying target).
+
+  defp resolve_aggregate_specs(aggregates, allowlist) do
+    Enum.reduce_while(aggregates, {:ok, []}, fn target, {:ok, acc} ->
+      case build_aggregate_spec(target, allowlist) do
+        {:ok, spec} -> {:cont, {:ok, [spec | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, specs} -> {:ok, Enum.reverse(specs)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp build_aggregate_spec(%{fn: :count} = target, _allowlist) do
+    if Map.has_key?(target, :field) do
+      {:error, {:aggregate_field_not_allowed, :count}}
+    else
+      {:ok, %{key: "agg__count_none", dyn: dynamic([r], count(field(r, :record_id)))}}
+    end
+  end
+
+  defp build_aggregate_spec(%{fn: fn_} = target, allowlist) when fn_ in [:sum, :avg, :min, :max] do
+    case Map.fetch(target, :field) do
+      :error ->
+        {:error, {:aggregate_field_required, fn_}}
+
+      {:ok, field_name} ->
+        with {:ok, allowlisted_field} <- Allowlist.resolve_field(allowlist, field_name),
+             :ok <- check_aggregate_field_type(fn_, allowlisted_field.type) do
+          value_dyn = field_value_dynamic(allowlisted_field)
+          {:ok, %{key: "agg__#{fn_}_#{field_name}", dyn: aggregate_fn_dynamic(fn_, value_dyn)}}
+        end
+    end
+  end
+
+  defp check_aggregate_field_type(fn_, type) when fn_ in [:sum, :avg] do
+    if type in [:integer, :decimal] do
+      :ok
+    else
+      {:error, {:aggregate_type_not_valid, fn_, type}}
+    end
+  end
+
+  defp check_aggregate_field_type(fn_, type) when fn_ in [:min, :max] do
+    if type in [:string, :integer, :decimal, :date, :datetime] do
+      :ok
+    else
+      {:error, {:aggregate_type_not_valid, fn_, type}}
+    end
+  end
+
+  defp aggregate_fn_dynamic(:sum, value_dyn), do: dynamic([r], sum(^value_dyn))
+  defp aggregate_fn_dynamic(:avg, value_dyn), do: dynamic([r], avg(^value_dyn))
+  defp aggregate_fn_dynamic(:min, value_dyn), do: dynamic([r], min(^value_dyn))
+  defp aggregate_fn_dynamic(:max, value_dyn), do: dynamic([r], max(^value_dyn))
+
+  # -- the SAME two existing field-reference idioms compile/2's own
+  # filter/sort building already uses (design §4's INV-7 section): a fixed-7
+  # typed column via `field(r, ^column_atom)` (`column_atom` sourced only
+  # from `Allowlist.typed_columns/0`'s closed table), a promoted/non-fixed-7
+  # typed column via `fragment("?", literal(^field_name))`
+  # (`promoted_column_dynamic/3`'s own idiom), and -- for a JSON field -- the
+  # existing typed `json_cast_dynamic/2`, the same cast `build_filter_dynamic/3`'s
+  # `:json_field` clause already applies. No new fragment-building primitive.
+  defp field_value_dynamic(%{source: :typed_column, name: field_name}) do
+    case Map.fetch(Allowlist.typed_columns(), field_name) do
+      {:ok, {column_atom, _type}} -> dynamic([r], field(r, ^column_atom))
+      :error -> dynamic([r], fragment("?", literal(^field_name)))
+    end
+  end
+
+  defp field_value_dynamic(%{source: :json_field, type: type, name: field_name}) do
+    json_cast_dynamic(type, field_name)
+  end
+
+  # -- group_by clause (Ecto.Query.group_by/3, the same `^list-of-dynamics`
+  # idiom apply_order_bys/2 already uses for order_by/3).
+
+  defp apply_group_by(query, []), do: query
+
+  defp apply_group_by(query, group_by_specs) do
+    group_by(query, [r], ^Enum.map(group_by_specs, & &1.group_dyn))
+  end
+
+  # -- select clause (design §5): a FLAT map, one key per group_by/aggregate
+  # target, prefixed "group__"/"agg__" so the two namespaces can never
+  # collide -- reshaped into the {"group": _, "values": _} response shape by
+  # the caller (Letflow.Routers.Entities), never by this module (design §5
+  # states the response envelope is the router's job, not Compiler's). Built
+  # via select/3 then one select_merge/3 per remaining spec -- the same
+  # "one select, then select_merge in a loop" idiom add_join_selects/2
+  # already uses, each call's own map literal carrying exactly one
+  # `^`-interpolated key (design's own ⛔ note on dynamic-expression
+  # interpolation: only ever ONE fully-built dynamic per select/select_merge
+  # call, never several spliced into one bare map literal).
+  defp apply_aggregate_select(query, group_by_specs, aggregate_specs) do
+    case group_by_specs ++ aggregate_specs do
+      [first | rest] ->
+        query
+        |> select([r], ^one_key_select_dynamic(first))
+        |> then(fn q ->
+          Enum.reduce(rest, q, fn spec, acc ->
+            select_merge(acc, [r], ^one_key_select_dynamic(spec))
+          end)
+        end)
+    end
+  end
+
+  defp one_key_select_dynamic(%{key: key, dyn: value_dyn}) do
+    dynamic([r], %{^key => ^value_dyn})
+  end
+
   # ---------------------------------------------------------------------------------
   # Private: per-clause pipeline + fold/assemble (design §5.1 steps 2-5).
   # ---------------------------------------------------------------------------------

@@ -34,3 +34,8 @@ description: >
 affected_files:
   - lib/letflow/definitions/solution_pack.ex
 queue_ref: Q-595
+github_ref: GH-1223
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0595-20260911
+resolved_at: "2026-09-11T04:22:37Z"

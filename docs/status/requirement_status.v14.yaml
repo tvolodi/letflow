@@ -281,3 +281,34 @@ history:
       issues #1217/#1218 closed with evidence comments citing PR #1229.
       Branch: fix/ISS0592-20260911 (not merged by this step -- ORCH's Step
       Final does the merge next).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T06:01:30Z"
+    run: WF03-ISS0591-ISS0592-20260911
+    note: >
+      Step Final. PR #1229 (fix/ISS0592-20260911 -> main) confirmed CI green
+      on head SHA 849519af (Backend gate 7m30s, Detect changed paths 6s,
+      Frontend gate 1m0s) and mergeStateStatus CLEAN, then squash-merged
+      (commit e6b97ab5) with branch deleted. Verified post-merge:
+      `gh api repos/tvolodi/letflow/branches/main/protection --jq
+      '.required_status_checks.contexts'` still returns exactly
+      ["Backend gate (mix letflow.check)","Frontend gate (npm run check)"]
+      -- unchanged, confirming the fix did not alter what main requires.
+      Queue tasks 591 and 592 locked and released with status: done
+      (agent_id tvolodi-orch); both now open=false/status=done. This closes
+      out ISS-0591 and ISS-0592.
+
+  - req: REQ-308
+    event: started
+    agent: ORCH
+    at: "2026-09-11T06:01:45Z"
+    run: WF02-REQ308-20260911
+    note: >
+      Claimed via get_next_task (queue task 587, GH#1208). Design-only
+      requirement (S10 gap 1): HTTP surface for entity definitions/records
+      including the query DSL over HTTP, per 0022 rule-1 vertical-neutral
+      wording. Branch: design/REQ308-20260911. Dispatching CODE-DESIGNER
+      next, gated by CODE-DESIGN-VALIDATOR and SECURITY-REVIEWER (tenant-data
+      path per the requirement's own acceptance criteria).

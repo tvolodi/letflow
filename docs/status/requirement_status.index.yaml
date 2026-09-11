@@ -2909,8 +2909,14 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 4
+    entries: 6
     note: >
+      Incremented to 6 by ORCH's own Step Final done-event (PR #1229 merged,
+      commit e6b97ab5, queue tasks 591/592 released done) plus REQ-308
+      started-event append (Step 00, WF02-REQ308-20260911) --
+      `grep -c "^  - req:" docs/status/requirement_status.v14.yaml` = 6
+      on-disk entries; 314 lines / 18027 bytes, well under the
+      1200-line/120000-byte roll ceiling, no roll triggered.
       Incremented to 4 by ISSUE-FIXER's own SCOPE-CHANGE done-event append
       (Step 5, WF03-ISS0591-ISS0592-20260911) -- `grep -c "^  - req:"
       docs/status/requirement_status.v14.yaml` = 4 on-disk entries, well

@@ -1,0 +1,36 @@
+id: ISS-0595
+title: solution_pack.ex moduledoc says the pack has four content arrays and Letflow supports two -- stale since entity_definitions landed
+discovered_by: DOC-UPDATER
+discovered_in_run: WF02-REQ307-20260911
+discovered_at: "2026-09-11T03:20:00Z"
+severity: MINOR
+description: >
+  lib/letflow/definitions/solution_pack.ex around line 30 states the
+  pack document "has four content arrays. Letflow supports two."
+
+  Both numbers are stale. REQ-303..REQ-306 (all done, 2026-09-10)
+  added the entity_definitions section, so the module now supports
+  three.
+
+  Mitigating context, and the reason this is MINOR rather than MAJOR:
+  the sentence sits under an explicit "PROVENANCE (historical, not
+  current decision authority)" header describing R-Co's original pack
+  document, so it reads partly as a historical statement. But
+  "Letflow supports two" is a present-tense claim about Letflow's own
+  current behaviour, and that claim is now false.
+
+  Discovered by DOC-UPDATER during REQ-307 and confirmed independently
+  by RELEASE-VALIDATOR. Deliberately NOT fixed there: REQ-307's scope
+  fence names two specific comment sites (the service_catalog_entries
+  moduledoc bullet, and the inline comment above
+  check_unsupported_sections/1), and widening the moduledoc edit
+  beyond the stale-REQ-192-pointer mandate would have been scope creep
+  on a requirement whose entire point was a tightly fenced doc
+  correction.
+
+  Fix is a one-line count correction, ideally alongside a check of
+  whether any other count in that moduledoc drifted when
+  entity_definitions landed.
+affected_files:
+  - lib/letflow/definitions/solution_pack.ex
+queue_ref: Q-595

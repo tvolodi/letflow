@@ -1,6 +1,7 @@
 # Stage 10 — BilimBaga vertical
 
-Status: not started. Depends on: S4, S6, S8. Requirements: none expanded yet.
+Status: P1 in progress. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-308`
+filed (14 as of 2026-09-11); P2 onward not expanded yet.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)
@@ -63,27 +64,35 @@ no relations and no queryable localized fields.
 
 | # | Gap | State on 2026-09-09 | Owner |
 |---|---|---|---|
-| 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Unowned.** The stage's single largest blocker | to file |
+| 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Open.** The stage's single largest blocker; its HTTP-surface design is now owned by `REQ-308` (`pending`) | `REQ-308` |
 | 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Unowned** | to file |
 | 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Unowned** | to file |
 | 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
 | 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
 | 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | to file |
-| 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | Partly closed 2026-09-09 — `REQ-284` `done` (closed vocabulary + `fieldRegistry`); `REQ-291`, `REQ-292`, `REQ-293` (the `Expr` evaluators) still `pending` | filed |
+| 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | **Closed 2026-09-11** — `REQ-284` `done` (closed vocabulary + `fieldRegistry`); `REQ-291`, `REQ-292`, `REQ-293` (the `Expr` evaluators, definition-time / server-side / TypeScript) all `done`. The 2026-09-09 reading that three of them were still `pending` no longer holds | closed |
 | 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | **Closed 2026-09-09** — `REQ-285` `done` (react-intl, decision 0021) | closed |
-| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | Mostly closed 2026-09-09 — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding), `REQ-286` `done` (`form_schema` exposed); only `REQ-283` (SPA theming) still `pending` | filed |
-| 10 | **Relations between entity records.** `Letflow.Entities.Query.Compiler` has no `join`/`preload`; `fk_def`'s `references_entity` is validated for shape and self-reference only, with no referential enforcement. **Now a consequence of [decision 0023](decisions/0023-entity-storage-hybrid.md)**, not separate work — per-entity-type tables with promoted FK columns make joins expressible for the first time. | **Unowned.** Blocks P2; blocked itself by 0023's open question | to file |
-| 11 | **Localized-text field type.** Re-scoped by 0023: entity-content localization is blob-stored (it follows its parent's lifecycle), and becomes searchable via generated columns per locale when `queried: true`. Not a relations problem and not an i18n-layer problem — gap 8 (`REQ-285`, client-side) is a different concern that this does not depend on. | **Unowned.** Blocks P2 | to file |
+| 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | **Closed 2026-09-11** — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding), `REQ-286` `done` (`form_schema` exposed), and `REQ-283` (SPA theming) `done`. The 2026-09-09 reading that `REQ-283` was still outstanding no longer holds | closed |
+| 10 | **Relations between entity records.** `Letflow.Entities.Query.Compiler` has no `join`/`preload`; `fk_def`'s `references_entity` is validated for shape and self-reference only, with no referential enforcement. **Now a consequence of [decision 0023](decisions/0023-entity-storage-hybrid.md)**, not separate work — per-entity-type tables with promoted FK columns make joins expressible for the first time. | **Closed 2026-09-11** — `REQ-300` `done` (joins in `Letflow.Entities.Query.Compiler` over promoted FK columns). 0023's open question, which had blocked filing this at all, was answered by `REQ-295` (`done`) | closed |
+| 11 | **Localized-text field type.** Re-scoped by 0023: entity-content localization is blob-stored (it follows its parent's lifecycle), and becomes searchable via generated columns per locale when `queried: true`. Not a relations problem and not an i18n-layer problem — gap 8 (`REQ-285`, client-side) is a different concern that this does not depend on. | **Closed 2026-09-11** — `REQ-301` `done` (blob-stored localized text, generated column per locale when `queried: true`) | closed |
 | 12 | **Bulk import/export of entity *records*.** `Letflow.Definitions.ExportImport` moves definitions, not records. BilimBaga has `pg_trgm`-backed import/export (`011_pg_trgm_import_export`). | **Unowned** | to file |
-| 13 | **A pack format that can carry entity definitions.** `Letflow.Definitions.SolutionPack`'s `pack_document` has four content sections — `definitions` (process definitions only), `service_catalog_entries` (rejected), `variable_schemas`, and `manifest.required_roles` (read-only, creates no role). There is **no `entity_definitions` section**, and no form-schema section. Bucket A's own delivery vehicle cannot carry two of the four things bucket A consists of. | **Unowned.** Blocks P2 more fundamentally than 10–11 | to file |
+| 13 | **A pack format that can carry entity definitions.** `Letflow.Definitions.SolutionPack`'s `pack_document` has four content sections — `definitions` (process definitions only), `service_catalog_entries` (rejected), `variable_schemas`, and `manifest.required_roles` (read-only, creates no role). There is **no `entity_definitions` section**, and no form-schema section. Bucket A's own delivery vehicle cannot carry two of the four things bucket A consists of. | **Closed 2026-09-11** — the pack document now carries an `entity_definitions` section: `REQ-303` `done` (design record [`0026`](decisions/0026-solution-pack-entity-definitions-section.md), which also confirmed the form-schema half was already closed), `REQ-304` `done` (export), `REQ-305` `done` (install), `REQ-306` `done` (test coverage). `service_catalog_entries` is still rejected and still unowned — see "Open questions" | closed |
 
-Gaps 7–9 are already filed as 0020 follow-on work and are not S10's to re-file;
-S10 depends on them and says so. Gaps 1–6 and 10–13 are new bucket-B requirements
-this stage must file first. Gaps 10, 11 and 13 are the three that make P2's exit
-condition reachable at all — see the phase table's note. Gaps 10 and 11 are now
-consequences of [decision 0023](decisions/0023-entity-storage-hybrid.md), and
-cannot be filed until that record's open question — how a promotion's DDL is
-executed per tenant — is answered and gated.
+Gaps 7–9 were already filed as 0020 follow-on work and were not S10's to re-file;
+S10 depended on them and said so, and all three are now closed. Gaps 1–6 and
+10–13 are new bucket-B requirements this stage must file first, and of those,
+10, 11 and 13 — the three that make P2's exit condition reachable at all — are
+closed as of 2026-09-11 (`REQ-300`, `REQ-301`, `REQ-303`–`REQ-306`). Gaps 1–6
+and 12 remain to file.
+
+Gaps 10 and 11 are consequences of
+[decision 0023](decisions/0023-entity-storage-hybrid.md), and as originally
+written this file recorded that they could not be filed until that record's open
+question — how a promotion's DDL is executed per tenant — was answered and gated.
+**That question has since been answered:** `REQ-295` (`done`) produced
+[`decisions/0024-entity-promotion-ddl-execution.md`](decisions/0024-entity-promotion-ddl-execution.md),
+which settles the DDL mechanism, failure semantics, backfill and rollback. The
+filing block it describes is lifted.
 
 ## Phases
 
@@ -93,8 +102,8 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
-| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed |
-| **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Unreachable until gaps 10, 11 and 13 close — see below |
+| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-11 gaps 7, 8, 9, 10, 11 and 13 are closed; 1–6 and 12 remain |
+| **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
 | **P5** | Parity: BilimBaga's 19 Playwright spec files (168 `test()` blocks) re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
@@ -112,26 +121,40 @@ today: no relations (gap 10) and no queryable localized content (gap 11). Those
 two rows are re-marked **B, then A** in 0022's §1 table.
 
 A follow-on architecture review the same day found the cause underneath both,
-and a third blocker that is more fundamental than either:
+and a third blocker that is more fundamental than either. **Both findings stand
+as stated; both have since been closed.** They are kept here in full, because
+the reasoning is what justifies the shape the platform now has:
 
-- **The storage model itself.** Every entity record of every type shares one
-  `entity_record_latest` table with its data in a JSONB blob and no index on it,
-  so every definition-declared filter is an unindexed sequential scan, and there
-  is no relational structure to join on. [Decision
-  0023](decisions/0023-entity-storage-hybrid.md) resolves this to per-entity-type
-  tables with a hybrid promoted-column/blob shape, and gaps 10 and 11 become
-  consequences of it rather than separate work.
-- **The delivery vehicle.** `SolutionPack` cannot carry entity definitions or
-  form schemas at all (gap 13). Bucket A is defined as definitions installed via
-  `SolutionPack.install/3`; two of the four things bucket A consists of have no
-  section in the pack document.
+- **The storage model itself.** *(Finding, 2026-09-09.)* Every entity record of
+  every type shared one `entity_record_latest` table with its data in a JSONB
+  blob and no index on it, so every definition-declared filter was an unindexed
+  sequential scan, and there was no relational structure to join on. [Decision
+  0023](decisions/0023-entity-storage-hybrid.md) resolved this to per-entity-type
+  tables with a hybrid promoted-column/blob shape, and gaps 10 and 11 became
+  consequences of it rather than separate work. *Closed:* its named open question
+  — how a promotion's DDL is executed per tenant — was answered by `REQ-295`
+  (`done`) in
+  [`decisions/0024-entity-promotion-ddl-execution.md`](decisions/0024-entity-promotion-ddl-execution.md);
+  gap 10 closed by `REQ-300` (joins over promoted FK columns) and gap 11 by
+  `REQ-301` (localized text, generated column per locale when `queried: true`).
+- **The delivery vehicle.** *(Finding, 2026-09-09.)* `SolutionPack` could not
+  carry entity definitions or form schemas at all (gap 13). Bucket A is defined
+  as definitions installed via `SolutionPack.install/3`; two of the four things
+  bucket A consists of had no section in the pack document. *Closed:* `REQ-303`
+  produced [decision
+  0026](decisions/0026-solution-pack-entity-definitions-section.md), which
+  designed an `entity_definitions` section and established that the form-schema
+  half was already closed elsewhere; `REQ-304` landed export, `REQ-305` install,
+  and `REQ-306` its test coverage — all `done`.
 
-**Expanding P2 into bucket-A requirements before gaps 10, 11 and 13 close is
-blocked**, and gaps 10–11 are themselves blocked on 0023's open question. The
-response is to close the platform gaps, not to move the question bank into
-bucket C. If closing them turns out to be disproportionate, *that* is the
-finding worth stopping on, and it belongs in a new decision record rather than
-in a quiet reclassification.
+**Expanding P2 into bucket-A requirements was blocked until gaps 10, 11 and 13
+closed; as of 2026-09-11 all three are closed and that block is lifted.** The
+response chosen was to close the platform gaps rather than move the question
+bank into bucket C, and that is what happened — no reclassification was needed
+and none was made. The original standard still holds for what remains: if
+closing a gap turns out to be disproportionate, *that* is the finding worth
+stopping on, and it belongs in a new decision record rather than in a quiet
+reclassification.
 
 Also flagged there, for P3's scoping: `backend/internal/sessions/` carries
 adaptive question selection (`SelectNextAdaptiveQuestion`, `026_adaptive_exam`)
@@ -198,6 +221,14 @@ extended to gap 13, and refined by
 which makes gaps 10 and 11 consequences of the storage model rather than
 independent work.
 
-No implementation sign-off yet — the stage has not started. No S10 requirement
-exists, no `lib/letflow/exam/` directory exists, and no pack document has been
-authored.
+No implementation sign-off yet. Re-verified 2026-09-11, one clause of the three
+this line originally carried is still true:
+
+- **"No S10 requirement exists" — no longer true.** Fourteen S10 requirements are
+  filed (`REQ-295`–`REQ-308`); all but `REQ-307` and `REQ-308` are `done`.
+- **"No `lib/letflow/exam/` directory exists" — still true**, and
+  `web/src/pages/exam/` does not exist either. The bucket-C inventory above is
+  correspondingly still empty, which is the intended state this early.
+- **"No pack document has been authored" — still true.** The pack *format* now
+  carries entity definitions (`REQ-303`–`REQ-306`), but no BilimBaga pack
+  document has been written against it; that is P2 work.

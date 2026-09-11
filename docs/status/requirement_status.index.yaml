@@ -2588,39 +2588,35 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 28
+    entries: 29
     note: >
-      Recounted to 28 on WF03-ISS0590-20260911's own Step Final rebase
-      onto main (Step 5 commit replay), composing this branch's own
-      ISS-0590 SCOPE-CHANGE done-event append (Step 5, ISSUE-FIXER) with
-      main's own ISS-0588 SCOPE-CHANGE done-event, already folded into
-      the on-disk file by the prior conflict resolution above -- `grep -c
-      "^  - req:" docs/status/requirement_status.v13.yaml` = 28 on-disk
-      entries; 1150 lines / 69430 bytes, well under the roll ceiling.
-      Recounted directly from the composed file rather than carrying
-      forward either side's independently-computed count, per this
-      note's own recount-every-time rule.
-      Recounted to 27 on WF03-ISS0590-20260911's own Step Final rebase
-      onto main (Step 00 commit replay), composing this branch's own
-      ISS-0590 started-event append with main's own ISS-0588 SCOPE-CHANGE
-      done-event, no conflict on requirement_status.v13.yaml itself
-      (auto-merged cleanly) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v13.yaml` = 27 on-disk entries; 1119
-      lines / 67558 bytes, well under the roll ceiling. Recounted directly
-      from the composed file rather than carrying forward either side's
-      independently-computed count, per this note's own recount-every-time
-      rule.
-      Recounted to 25 on WF02-REQ293-20260910's own Step Final rebase onto
-      main (deferral-reconciliation commit replay), composing this
-      branch's own SCOPE-CHANGE done-event append (REQ-294 registered as
-      queue task 585, GH#1205, locked+released as status: "blocked") with
+      Recounted to 29 on WF02-REQ307-20260911's second merge of
+      origin/main. This is the same concurrent-append collision as the
+      previous recount, now three-way: this branch carried REQ-307's
+      done-event (declaring 27 after composing ISS-0588's), while main
+      carried ISS-0590's SCOPE-CHANGE done-event (declaring 28). Each
+      figure was correct against the file its own side could see. All
+      three events are present after composition and the real figure is
+      29.
+
+      Resolved by keeping every event in timestamp order -- 02:26:04Z,
+      03:03:59Z, then REQ-307 at 03:22:38Z -- and recounting from the
+      composed file rather than carrying forward any side's number,
+      which is what this note's recount-every-time rule exists for. No
+      event from either side is dropped;
+      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 29
+      on-disk entries; 1179 lines / 70080 bytes, still under the roll
+      ceiling. The A9 invariant in test/docs/ verifies this figure and
+      is re-run after resolution.
+
+      Prior state, retained as history: 25 on WF02-REQ293-20260910's
+      Step Final rebase onto main (deferral-reconciliation commit
+      replay), composing that branch's own SCOPE-CHANGE done-event
+      append (REQ-294 registered as queue task 585, GH#1205,
+      locked+released as status: "blocked") with
       main's own ISS-0583/ISS-0589 SCOPE-CHANGE done-events, no conflict
       on requirement_status.v13.yaml itself (auto-merged cleanly) --
-      `grep -c "^  - req:" docs/status/requirement_status.v13.yaml` = 25
-      on-disk entries; 1084 lines / 65761 bytes, well under the roll
-      ceiling. Recounted directly from the composed file rather than
-      carrying forward either side's independently-computed count, per
-      this note's own recount-every-time rule.
+      1084 lines / 65761 bytes at that point.
       Recounted to 24 on WF02-REQ293-20260910's own Step Final rebase onto
       main (Step 6 commit replay), composing this branch's own REQ-293
       done-event append (Step 6) with main's own ISS-0583/ISS-0589

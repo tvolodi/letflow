@@ -1100,7 +1100,6 @@ history:
       function/@spec, no migration, no supervision-tree file, not a
       tenant-data path, no test's expected value changes). Corrected
       "Twelve" -> "Thirteen".
-
   - req: SCOPE-CHANGE
     event: started
     agent: ORCH
@@ -1148,3 +1147,33 @@ history:
       mirror issue #1215 closed with an evidence comment. Branch:
       fix/ISS0590-20260911. Step Final (merge) left to a separate run per
       this run's own instructions.
+  - req: REQ-307
+    event: done
+    agent: ORCH
+    at: "2026-09-11T03:22:38Z"
+    note: >
+      Reconciled docs/migration/stage-10-bilimbaga-vertical.md with the
+      state actually on main, and corrected two stale REQ-192 pointers in
+      lib/letflow/definitions/solution_pack.ex. DOC-UPDATER produced;
+      RELEASE-VALIDATOR re-derived all 13 acceptance criteria
+      independently and returned PASS 13/13, re-running the full suite
+      itself (3742/3742 passed, 16 partitions) rather than trusting the
+      producer's report. Gap table rows 7, 9, 10, 11, 13 now name the
+      requirements that closed them; rows 2-6 and 12 untouched and still
+      open; row 1 gained REQ-308 as owner. The P2 expansion block is
+      recorded as lifted, with the original finding preserved as history.
+      Two divergences from the requirement's own description were found
+      and the file won over the description per its explicit instruction:
+      REQ-293 had landed done (so gap 7 is fully closed, per AC 2's
+      anticipation of exactly this), and the true distinct S10
+      requirement count is 14, not the 15 a naive grep returns -- REQ-307's
+      own acceptance-criterion text contains the quoted string "stage: S10".
+      Behaviour unchanged and proven, not asserted: the solution_pack.ex
+      diff contains zero def/defp/guard/return lines, and the existing
+      rejection test was run (1 passed) confirming a non-empty
+      service_catalog_entries array is still rejected with
+      {:error, :unsupported_pack_section}. Two incidental findings filed
+      rather than fixed in scope: ISS-0594 (GH#1222, a latent false-green
+      REQ-192 substring assertion in service_catalog_test.exs) and
+      ISS-0595 (GH#1223, stale content-array counts in solution_pack.ex's
+      moduledoc).

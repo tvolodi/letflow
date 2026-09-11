@@ -2588,8 +2588,13 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 by ORCH's own SCOPE-CHANGE started-event append
+      (Step 00, WF03-ISS0594-20260911) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 29 on-disk entries; 1170
+      lines / 70481 bytes, well under the 1200-line/120000-byte roll
+      ceiling, so no roll triggered.
       Recounted to 28 on WF03-ISS0590-20260911's own Step Final rebase
       onto main (Step 5 commit replay), composing this branch's own
       ISS-0590 SCOPE-CHANGE done-event append (Step 5, ISSUE-FIXER) with

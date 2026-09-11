@@ -586,6 +586,17 @@ history:
       mistake. impl_order written back into docs/requirements.yaml.
       docs/migration/stage-10-bilimbaga-vertical.md's gap table updated
       to show gaps 2/3/12 as design-owned but not yet closed.
+  - req: REQ-313
+    event: started
+    agent: ORCH
+    at: "2026-09-11T14:13:24Z"
+    note: >
+      Run WF02-REQ313-20260911. Claimed via get_next_task (queue task
+      603, GH#1254). Design-only requirement (S10 gap 3): attachments
+      on an entity record. Branch: design/REQ313-20260911. Dispatching
+      CODE-DESIGNER next, gated by CODE-DESIGN-VALIDATOR and
+      SECURITY-REVIEWER (tenant-data path).
+
   - req: REQ-312
     event: done
     agent: ORCH

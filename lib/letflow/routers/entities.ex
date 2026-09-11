@@ -906,7 +906,7 @@ defmodule Letflow.Routers.Entities do
     end
   end
 
-  # ⛔ `run_query/5`'s `with` chain IS the composition design §1 specifies,
+  # ⛔ `run_query/4`'s `with` chain IS the composition design §1 specifies,
   # and test/letflow/entities/query_cursor_field_grants_test.exs extracts
   # exactly this chain (comments stripped) to assert its order. Keep the
   # four steps here, in this order.
@@ -953,7 +953,13 @@ defmodule Letflow.Routers.Entities do
   # section for why (ISS-0600), and delete the workaround when that issue
   # lands.
 
-  @spec redact(Pagination.Page.t(term()), map(), String.t(), String.t()) ::
+  # `request` is typed as the built `Types.query_request()`, not a bare `map()`:
+  # this function's branch selection reads `request.join`, and typing it lets
+  # dialyzer catch a request assembled without that key rather than deferring
+  # the whole class to `Compiler.compile/2`'s runtime rejection (REVIEWER's
+  # type-safety note on the REQ-311 rebuild). `run_query/4`'s own second
+  # argument stays `map()` because it is the RAW caller body, pre-validation.
+  @spec redact(Pagination.Page.t(term()), Types.query_request(), String.t(), String.t()) ::
           {:ok, Pagination.Page.t(term())} | {:error, :invalid_schema_name}
   defp redact(page, %{join: [_ | _] = joins} = request, user_id, prefix) do
     # One load_restrictions/3 per EXPOSED entity type: :primary for the

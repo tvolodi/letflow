@@ -519,7 +519,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   # stage file called gap 1 -- a query subsystem nothing routed to --
   # and REQ-311's POST /entities/query handler composes exactly these
   # modules by design: lib/letflow/routers/entities.ex aliases Compiler,
-  # Cursor and FieldGrants and its run_query/5 chains
+  # Cursor and FieldGrants and its run_query/4 chains
   # Compiler.compile/2 -> Allowlist.load/2 -> Cursor.paginate/5 ->
   # FieldGrants redaction, the sequence specified in
   # lib/letflow/design/req308-entity-http-surface.md §1's route table.
@@ -569,7 +569,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
       assert contents =~ "alias Letflow.Entities.Query.FieldGrants"
 
       # Compiler.compile/2 -> Cursor.paginate/5 -> a redaction step, in that
-      # order, INSIDE run_query/5's with/1 chain.
+      # order, INSIDE run_query/4's with/1 chain.
       #
       # ⛔ Read the CHAIN, not the file. entities.ex documents itself
       # heavily and names `FieldGrants.redact_page/2` in its own @moduledoc
@@ -589,7 +589,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
     end
   end
 
-  # The code (comments stripped) of run_query/5's `with` chain, from the
+  # The code (comments stripped) of run_query/4's `with` chain, from the
   # `with` keyword to its `do`. Fails loudly rather than returning "" --
   # an absent or renamed chain must fail the ordering test, not satisfy it
   # vacuously.
@@ -606,7 +606,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
 
       nil ->
         flunk(
-          "expected lib/letflow/routers/entities.ex to define run_query/5 with a with/1 chain"
+          "expected lib/letflow/routers/entities.ex to define run_query/4 with a with/1 chain"
         )
     end
   end
@@ -617,7 +617,7 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
   defp index_of!(haystack, needle) do
     case :binary.match(haystack, needle) do
       {at, _len} -> at
-      :nomatch -> flunk("expected run_query/5's with chain to contain #{inspect(needle)}")
+      :nomatch -> flunk("expected run_query/4's with chain to contain #{inspect(needle)}")
     end
   end
 end

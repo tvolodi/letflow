@@ -29,6 +29,21 @@ defmodule Letflow.Simulation.Req207VortexTest do
   now evidence of correctness (reads belong exclusively to the query route,
   where `FieldGrants` redaction is enforced) rather than evidence of a gap.
 
+  ## Allowlist triage round, 2026-09-11 (S10 fourth batch: REQ-312/313/314)
+
+  REQ-312 (S10 gap 2, aggregation/reporting query, pending), REQ-313 (S10 gap
+  3, entity-record attachments, done) and REQ-314 (S10 gap 12, bulk
+  import/export, pending) tripped the entity-title tripwire and were admitted
+  to `allowed_ids` unconditionally, not `pending_only_ids` -- all three are
+  design-only, scoped identically to REQ-308's own precedent (design artefact
+  under `lib/letflow/design/`, no route, no context module, no migration, no
+  test), so attaching a future design to the landed HTTP surface is not the
+  same as building on it. REQ-313's `status: done` was independently
+  re-verified against its actual landed commits (not the requirement text)
+  before admission -- see the comment on the allowlist entry for the full
+  verification trail. Disposition unaffected; this scenario's blocker
+  remains the S8 harness (Signal 5), unchanged by this round.
+
   Full reasoning and the complete re-derivation history live in that describe
   block's own comments; `test/specs/REQ-310.md` states the test cases.
 
@@ -1261,30 +1276,50 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # missing has been inverted to assert its presence. It is not being
           # waved through -- it was triaged, and the triage changed the test.
           "REQ-311",
-          # REQ-312 (S10 gap 2, aggregation query design) matches this
-          # module's own word-bounded entity/entities regex via its title
-          # ("...for entity records"). Design-only -- no lib/ implementation,
-          # no route mounted -- so it does not change this disposition;
-          # admitted here per the same triage precedent as REQ-295/296/299/
-          # 300/302/304/308/309/310/311 above.
+          # UPDATE (S10 fourth batch, 2026-09-11): REQ-312, REQ-313 and REQ-314
+          # join the allowlist -- design-only requirements for S10 gaps 2
+          # (aggregation/reporting query), 3 (entity-record attachments) and 12
+          # (bulk import/export), scoped IDENTICALLY to REQ-308's own precedent:
+          # owner CODE-DESIGNER, sole artefact a design document under
+          # lib/letflow/design/, and a scope fence that in as many words
+          # forbids touching lib/letflow/routers/, lib/letflow/entities/,
+          # lib/letflow/api/ (lib/letflow/repository/ too, for REQ-313) or
+          # test/. All three depend_on REQ-311 (they attach to the concrete
+          # route surface REQ-309/310/311 landed) but attaching-to is not
+          # building; none of the three mounts a route or adds a context
+          # module of its own.
+          #
+          # This is NOT the REQ-310 reflex the ⛔ block above warns against.
+          # REQ-310/311 build the HTTP surface itself; these three only design
+          # what might attach to it later, exactly as REQ-308 designed the
+          # surface itself before REQ-309/310/311 built it. Signal 3'/3''
+          # below stay the real gate.
+          #
+          # REQ-312 and REQ-314 are `status: pending` -- filing builds
+          # nothing, so admitting them unconditionally (rather than via
+          # pending_only_ids) is still correct for this class, the same as
+          # REQ-295/296/299/300/302/304/308/309 above: none of those was ever
+          # placed in pending_only_ids either, because pending_only_ids exists
+          # specifically for requirements that DO build the HTTP surface and
+          # simply have not landed yet -- these three never build it, filed or
+          # not, so there is nothing to re-derive once they flip to done.
+          #
+          # REQ-313 is `status: done` -- independently re-verified this
+          # session, not trusted from its requirement text: `git show
+          # --name-only` across all four of its commits (d21b6aea, 75b72172,
+          # d34bb30f, 8891132c) touches only
+          # lib/letflow/design/req313-entity-record-attachments.md plus
+          # docs/requirements.yaml and docs/status/ bookkeeping; `git diff
+          # --name-only main design/REQ313-20260911 -- lib/letflow/routers/
+          # lib/letflow/entities/ lib/letflow/api/
+          # lib/letflow/plugs/api_pipeline.ex lib/letflow/router.ex test/` is
+          # empty; and api_pipeline.ex's forward list still reads exactly
+          # `forward("/entities", to: Letflow.Routers.Entities)` with no
+          # attachments-specific mount added. Signal 3''/the route-equality
+          # assertion below were re-checked live and still hold exactly REQ-
+          # 311's ten routes -- no eleventh route for attachments exists.
           "REQ-312",
-          # REQ-313 (S10 gap 3, "Design attachments on an entity record") also
-          # matches the regex via its title, but is a DIFFERENT exemption
-          # shape than every id above: it is not `status: done` at time of
-          # admission (still `pending`), and unlike REQ-310/REQ-311 it is not
-          # a requirement that builds THIS scenario's subsystem at all --
-          # attachments-on-a-record is an unrelated S10 gap, orthogonal to
-          # the query/record-read route the six :gui steps above depend on.
-          # Its own eventual `status: done` will not change this scenario's
-          # disposition, so it belongs here rather than in the pending_only
-          # tripwire tier below (which exists specifically for requirements
-          # that DO build this subsystem and must be re-derived on landing).
           "REQ-313",
-          # REQ-314 (S10 gap 12, "Design bulk import/export of entity
-          # records") -- same exemption shape and reasoning as REQ-313
-          # immediately above: matches the regex via title only, still
-          # `pending`, and bulk import/export is orthogonal to the
-          # query/record-read route this scenario's six :gui steps track.
           "REQ-314"
         ])
 

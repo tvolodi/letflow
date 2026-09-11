@@ -586,6 +586,17 @@ history:
       mistake. impl_order written back into docs/requirements.yaml.
       docs/migration/stage-10-bilimbaga-vertical.md's gap table updated
       to show gaps 2/3/12 as design-owned but not yet closed.
+  - req: REQ-313
+    event: started
+    agent: ORCH
+    at: "2026-09-11T14:13:24Z"
+    note: >
+      Run WF02-REQ313-20260911. Claimed via get_next_task (queue task
+      603, GH#1254). Design-only requirement (S10 gap 3): attachments
+      on an entity record. Branch: design/REQ313-20260911. Dispatching
+      CODE-DESIGNER next, gated by CODE-DESIGN-VALIDATOR and
+      SECURITY-REVIEWER (tenant-data path).
+
   - req: REQ-312
     event: done
     agent: ORCH
@@ -623,3 +634,61 @@ history:
       touched) both verified. No lib/ implementation, no route mounted,
       no migration, no test, matching this requirement's own scope
       fence. docs/requirements.yaml flipped pending -> done.
+
+  - req: REQ-313
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-11T14:32:29Z"
+    note: >
+      Run WF02-REQ313-20260911. Design-only requirement closed. Artefact:
+      lib/letflow/design/req313-entity-record-attachments.md -- specifies
+      attachments on an entity record (S10 gap 3). Passed
+      CODE-DESIGN-VALIDATOR after 4 rework rounds and SECURITY-REVIEWER
+      (verdict recorded in the artefact's own §10, PASS on
+      INV-1/INV-2/INV-5/INV-6/INV-7/INV-8; INV-3/INV-4/INV-9 not
+      applicable). Notable rework findings: round 2/3 caught a false
+      premise in an earlier draft's schema/FK reasoning (a claim that
+      entity_record_latest's (entity_type, record_id) pair had "no unique
+      index stated in its own schema module" was false -- a real composite
+      unique index exists, re-verified directly against
+      lib/letflow/entities/record/latest.ex and its backing migration),
+      which flipped the FK decision from a soft/app-level reference to a
+      real DB-level composite FK; a later round then caught a missed code
+      path (Letflow.Entities.Record.Projector.write_snapshots/3's
+      delete-then-reinsert backfill path, which a plain immediate FK would
+      crash on), resolved by making the composite FK
+      DEFERRABLE INITIALLY DEFERRED rather than dropping back to a soft
+      reference. Key decisions: new entity_record_attachments table (not
+      an extension of instance_attachments), keyed by (entity_type,
+      record_id) with a DEFERRABLE composite FK to entity_record_latest;
+      new Letflow.Repository.EntityAttachments context module mirroring
+      Letflow.Repository.Attachments' upload/2, list/2, get/2,
+      get_content/2, delete/2 shape; four new routes nested under
+      /entities/records/:entity_type/:record_id/attachments on the
+      existing Letflow.Routers.Entities (not a new router module); two new
+      permission atoms, :EntitiesAttachmentsManage/:EntitiesAttachmentsRead
+      (not reused from :AttachmentsManage/:AttachmentsRead or
+      :EntitiesRecordsWrite), with a concrete default role-grants table
+      (PLATFORM_ADMIN both, PROCESS_DESIGNER Read only, PROCESS_OPERATOR
+      both, TASK_WORKER Read only, AGENT_RUNNER none) flagged for REVIEWER
+      sign-off as a judgment call, not silently decided; INV-a/INV-b
+      (content_type untrusted, byte_size independently measured) inherited
+      verbatim from Letflow.Repository.Attachments. No
+      docs/migration/decisions/ record filed -- §8 reasons this is
+      ordinary route-table/permission-matrix/schema design work following
+      existing precedent (0003/0022/0023), not a new cross-cutting
+      architectural decision. This requirement implemented no lib/ code,
+      mounted no route, created no migration, and touched no test -- the
+      design artefact is the entire deliverable, per REQ-313's own scope
+      fence. `git diff --name-only main...HEAD` confirms only
+      lib/letflow/design/req313-entity-record-attachments.md plus
+      status-bookkeeping files (docs/requirements.yaml,
+      docs/status/requirement_status.index.yaml,
+      docs/status/requirement_status.v14.yaml) touched -- no
+      docs/migration/decisions/ record, matching §8's own conclusion that
+      none was warranted. Also updated
+      docs/migration/stage-10-bilimbaga-vertical.md's gap table row 3 to
+      reflect the design is now closed (implementation not yet filed).
+      Commits: 4d9dc387 (Step 00), d21b6aea (CODE-DESIGNER), 75b72172
+      (CODE-DESIGNER rework, FK premise fix + OQ-2 role grants), d34bb30f
+      (SECURITY-REVIEWER PASS). Branch: design/REQ313-20260911.

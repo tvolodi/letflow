@@ -1,0 +1,37 @@
+id: ISS-0588
+title: Decision 0022's Consequences section says twelve platform gaps where the record and stage file say thirteen
+discovered_by: REQ-VALIDATOR
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T00:45:51Z"
+severity: MINOR
+description: >
+  Found by REQ-VALIDATOR while validating REQ-307 and REQ-308 against
+  decision 0022's bucket rule.
+
+  docs/migration/decisions/0022-bilimbaga-vertical.md's Consequences
+  section reads "Twelve platform gaps become bucket-B requirements",
+  while the same record's reasoning section 5 says "thirteen platform
+  gaps must close", and docs/migration/stage-10-bilimbaga-vertical.md
+  is headed "The thirteen platform gaps" and tables thirteen rows.
+
+  The thirteenth -- gap 13, SolutionPack's pack_document carrying no
+  entity_definitions section -- was added by the follow-on architecture
+  review that also produced decision 0023. The stage file and 0022's
+  own reasoning were updated; the Consequences bullet was not.
+
+  Not a behaviour defect and the authoritative gap table (the stage
+  file's) is correct, so severity is MINOR. It matters because 0022 is
+  load-bearing for every later S10 requirement and its Consequences
+  section is the part an agent reads to size the stage -- reading only
+  that section under-counts the bucket-B work by one gap, and gap 13 is
+  specifically one of the three the stage file names as gating P2.
+
+  Out of REQ-307's scope fence (that requirement is restricted to
+  exactly two files, the stage file and solution_pack.ex), so filed
+  separately rather than folded into it. Fix is a one-line correction
+  to the Consequences bullet, with the same "preserve the finding as
+  history" shape REQ-307 uses -- 0022 is a decision record, so the
+  correction should read as an amendment rather than a silent edit.
+affected_files:
+  - docs/migration/decisions/0022-bilimbaga-vertical.md
+queue_ref: Q-588

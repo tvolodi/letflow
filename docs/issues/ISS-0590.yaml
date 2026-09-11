@@ -1,0 +1,52 @@
+id: ISS-0590
+title: SandboxPoolTest RT-6 death-path-c flakes -- crashed provisioning worker's schema not always dropped before the assertion samples schemata
+discovered_by: ORCH
+discovered_in_run: WF01-REQ307-REQ308-20260911
+discovered_at: "2026-09-11T02:10:00Z"
+severity: MAJOR
+description: >
+  test/letflow/sandbox_pool_test.exs:1085 -- "provisioning does not
+  block the pool's mailbox (ISS-0224 regression) RT-6 (death path c):
+  the provisioning worker Task crashing fails the claim without taking
+  the pool, a slot or a schema with it" -- failed in CI on 2026-09-11
+  with:
+
+    refute MapSet.member?(final, o_schema)
+    Expected false or nil, got true
+    MapSet.new(["sandbox_6bdbfccf43884463a3586475bd641e82"])
+    stacktrace: test/letflow/sandbox_pool_test.exs:1118
+
+  DEMONSTRABLY A FLAKE, not a regression, and the evidence is unusually
+  clean: the IDENTICAL commit (c8f55604, PR #1209) was built twice by
+  CI in parallel. Job 103118542366 PASSED the backend gate (8m44s, full
+  suite green). Job 103118549045 FAILED with this one test alone
+  (1028/1029 passed). Same code, same commit, opposite outcomes.
+
+  The test asserts that when a provisioning worker Task crashes, its
+  half-created sandbox schema does not survive in
+  information_schema.schemata. The observed failure is that the schema
+  was STILL PRESENT when the assertion ran -- cleanup had not completed
+  yet, rather than not happening at all. That points to a timing
+  dependency in where the test samples state, not to the crash path
+  leaking a schema.
+
+  Discovered on PR #1209, a docs-and-test-allowlist PR touching zero
+  sandbox-pool files (changed: docs/requirements.yaml,
+  docs/issues/ISS-0588.yaml, docs/issues/ISS-0589.yaml,
+  test/letflow/simulation/req207_vortex_test.exs).
+
+  Filed rather than left in a transcript because an intermittently red
+  required check erodes the gate itself: decision 0018 deliberately
+  ties --admin overrides to attributable failures, and every unrecorded
+  flake makes the next attribution weaker. An agent that learns to
+  expect a flake here will eventually wave through a real one.
+
+  Suggested fix direction: have the assertion await cleanup completion
+  (bounded poll) rather than sampling schemata at a fixed instant, or
+  synchronise on the pool's own post-crash cleanup signal. Note that
+  ISS-0224's design doc
+  (lib/letflow/design/iss0224-sandbox-pool-async-provisioning.md) is
+  the context for what this test is protecting.
+affected_files:
+  - test/letflow/sandbox_pool_test.exs
+queue_ref: Q-590

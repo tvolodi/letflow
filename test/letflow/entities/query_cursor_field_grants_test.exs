@@ -497,19 +497,122 @@ defmodule Letflow.Entities.QueryCursorFieldGrantsTest do
 
   # ---------------------------------------------------------------------------------
   # AC4 -- no route or controller file added or modified by this
-  # requirement. Structural check: neither this module's own dependencies
-  # nor the codebase's router directory reference Cursor/FieldGrants.
+  # requirement. Structural check, RE-DERIVED 2026-09-11 because the
+  # feature it was waiting for landed.
+  #
+  # As originally written this block asserted the NEGATIVE: that no file
+  # under lib/letflow/routers/ mentions Query.Cursor or Query.FieldGrants
+  # at all. That was never REQ-231's actual acceptance criterion. AC4 reads
+  # "no route or controller file is added or modified, confirmed by
+  # git diff --stat scoped to THIS REQUIREMENT'S COMMITS" -- a scope
+  # constraint on one requirement's own diff, not a standing ban on ever
+  # wiring the query subsystem up. REQ-231's description says the same
+  # thing in prose ("NOT IN THIS REQUIREMENT: ... no route or controller --
+  # same deferral as REQ-230"), and REQ-230 names the reason for the
+  # deferral: the router row "remains deferred per the same 'no consumer
+  # contract' reasoning REQ-225/REQ-226 already state." Deferred, not
+  # forbidden. The tree-wide grep was a convenient point-in-time PROXY for
+  # "the wiring hasn't happened yet," valid only for as long as that
+  # remained true.
+  #
+  # It stopped being true with REQ-311. REQ-309/310/311 close what the S10
+  # stage file called gap 1 -- a query subsystem nothing routed to --
+  # and REQ-311's POST /entities/query handler composes exactly these
+  # modules by design: lib/letflow/routers/entities.ex aliases Compiler,
+  # Cursor and FieldGrants and its run_query/5 chains
+  # Compiler.compile/2 -> Allowlist.load/2 -> Cursor.paginate/5 ->
+  # FieldGrants redaction, the sequence specified in
+  # lib/letflow/design/req308-entity-http-surface.md §1's route table.
+  # Left as-is, the old assertion asserted the ABSENCE of a feature that
+  # had just been correctly built.
+  #
+  # What survives re-derivation is the part of the original intent that is
+  # still load-bearing and still falsifiable: these modules are query
+  # INTERNALS with exactly ONE sanctioned consumer. A second router
+  # reaching into Cursor/FieldGrants directly would be a real regression --
+  # duplicated pagination and, worse, a second redaction path that INV-2
+  # does not cover. So the assertion is inverted rather than deleted: the
+  # set of routers referencing them must be exactly [entities.ex], and
+  # that one must use them in the designed composition.
   # ---------------------------------------------------------------------------------
 
-  describe "AC4 -- no route/controller wiring" do
-    test "Letflow.Entities.Query.Cursor and FieldGrants are not referenced from lib/letflow/routers/" do
+  describe "AC4 -- query internals have exactly one router consumer" do
+    setup do
       router_files =
         Path.wildcard(Path.join([File.cwd!(), "lib", "letflow", "routers", "**/*.ex"]))
 
-      refute Enum.any?(router_files, fn file ->
-               contents = File.read!(file)
-               contents =~ "Query.Cursor" or contents =~ "Query.FieldGrants"
-             end)
+      # Guard the guard: a broken wildcard would make every assertion below
+      # vacuously true.
+      assert length(router_files) > 1
+
+      referencing =
+        router_files
+        |> Enum.filter(fn file ->
+          contents = File.read!(file)
+          contents =~ "Query.Cursor" or contents =~ "Query.FieldGrants"
+        end)
+        |> Enum.map(&Path.relative_to(&1, File.cwd!()))
+        |> Enum.sort()
+
+      %{router_files: router_files, referencing: referencing}
+    end
+
+    test "Letflow.Routers.Entities is the ONLY router referencing Query.Cursor/Query.FieldGrants",
+         %{referencing: referencing} do
+      assert referencing == ["lib/letflow/routers/entities.ex"]
+    end
+
+    test "the one consumer composes them in the order design §1 specifies" do
+      contents = File.read!(Path.join([File.cwd!(), "lib", "letflow", "routers", "entities.ex"]))
+
+      assert contents =~ "alias Letflow.Entities.Query.Cursor"
+      assert contents =~ "alias Letflow.Entities.Query.FieldGrants"
+
+      # Compiler.compile/2 -> Cursor.paginate/5 -> a redaction step, in that
+      # order, INSIDE run_query/5's with/1 chain.
+      #
+      # ⛔ Read the CHAIN, not the file. entities.ex documents itself
+      # heavily and names `FieldGrants.redact_page/2` in its own @moduledoc
+      # (~line 80) hundreds of lines ABOVE the call site -- a first-match
+      # byte-offset comparison over the whole file measures prose order,
+      # not composition order, and fails against correct code. (It did:
+      # that was this test's own first draft.) Comment lines are stripped
+      # for the same reason.
+      chain = run_query_chain!(contents)
+
+      compile_at = index_of!(chain, "Compiler.compile(")
+      paginate_at = index_of!(chain, "Cursor.paginate(")
+      redact_at = index_of!(chain, "redact(")
+
+      assert compile_at < paginate_at
+      assert paginate_at < redact_at
+    end
+  end
+
+  # The code (comments stripped) of run_query/5's `with` chain, from the
+  # `with` keyword to its `do`. Fails loudly rather than returning "" --
+  # an absent or renamed chain must fail the ordering test, not satisfy it
+  # vacuously.
+  defp run_query_chain!(contents) do
+    code =
+      contents
+      |> String.split("\n")
+      |> Enum.reject(&(String.trim_leading(&1) =~ ~r/^#/))
+      |> Enum.join("\n")
+
+    case Regex.run(~r/defp run_query\(.*?\n\s*with (.*?) do\n/s, code, capture: :all_but_first) do
+      [chain] -> chain
+      nil -> flunk("expected lib/letflow/routers/entities.ex to define run_query/5 with a with/1 chain")
+    end
+  end
+
+  # Byte offset of `needle` in `haystack`, failing loudly rather than
+  # returning nil -- an absent call site must fail the ordering test, not
+  # silently compare against nil.
+  defp index_of!(haystack, needle) do
+    case :binary.match(haystack, needle) do
+      {at, _len} -> at
+      :nomatch -> flunk("expected run_query/5's with chain to contain #{inspect(needle)}")
     end
   end
 end

@@ -2909,8 +2909,22 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 27
+    entries: 28
     note: >
+      Incremented to 28 by ORCH's own REQ-317 started-event append
+      (Step 00, WF02-REQ317-20260912)'s Step Final rebase, which found
+      main advanced past WF02-REQ318-20260911's Step Final SECOND rebase
+      (below) in the interim. REQ-317's started-event (22:35:37Z) sorts
+      after both REQ-318's done-event (22:14:49Z) and REQ-315's close-out
+      done-event (22:16:36Z) already present in
+      docs/status/requirement_status.v14.yaml, so it appended cleanly at
+      the file's tail with no reordering needed -- no conflict on that
+      file itself, only this index file's count and narrative needed
+      manual composition. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 28 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      26/27, per this note's own recount-every-time rule. 966 lines /
+      56513 bytes, well under the roll ceiling.
       Recounted to 27 on WF02-REQ318-20260911's Step Final SECOND rebase
       (main moved again during this PR's CI run, landing PR #1278 --
       WF02-REQ315-20260911's own close-out commit -- in the meantime).

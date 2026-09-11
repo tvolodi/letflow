@@ -2909,8 +2909,12 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by ORCH's own ISS-0599 SCOPE-CHANGE done-event
+      append (chore/iss0599-queue-race-mitigation-20260911) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v14.yaml` = 9 on-disk
+      entries; 400 lines, well under the roll ceiling.
       Incremented to 8 by ORCH's own ISS-0593 SCOPE-CHANGE done-event
       append (chore/iss0593-branch-protection-20260911) -- `grep -c
       "^  - req:" docs/status/requirement_status.v14.yaml` = 8 on-disk

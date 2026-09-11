@@ -48,6 +48,21 @@ function parseField(name: string, schema: Record<string, unknown>): TaskFormFiel
   if (xUi) {
     field.xUiWidget = xUi.widget as string | undefined
     field.xUiMask = xUi.mask as string | undefined
+
+    // REQ-293 — visible_when/computed/cross_field_validation, all three
+    // independently optional (lib/letflow/definitions/form_schema_expressions.ex's
+    // confirmed x-ui shape). Additive: does not change any existing x-ui read.
+    field.visibleWhen = xUi.visible_when as string | undefined
+    field.computed = xUi.computed as string | undefined
+    const crossFieldValidation = xUi.cross_field_validation as
+      | { expression?: string; message?: string }
+      | undefined
+    if (crossFieldValidation && crossFieldValidation.expression && crossFieldValidation.message) {
+      field.crossFieldValidation = {
+        expression: crossFieldValidation.expression,
+        message: crossFieldValidation.message,
+      }
+    }
   }
 
   // Type-specific constraints

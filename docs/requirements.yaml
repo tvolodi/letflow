@@ -17342,7 +17342,7 @@ requirements:
       # once REQ-284 (queue task 560), REQ-290 (queue task 572) and REQ-292
       # (queue task 579) all landed done -- no live blocker left. depends_on
       # translated to queue task ids [560, 572, 579].
-    status: pending
+    status: done
     stage: S8
     description: >
       Implements step 10 of
@@ -17463,7 +17463,24 @@ requirements:
   - id: REQ-294
     title: Dart evaluator for the Expr grammar in apps/mobile/, passing the same conformance corpus (0020 D1a step 12, S9, dormant)
     owner: MOBILE-DEV
-    # impl_order: UNREGISTERED -- blocked-by: REQ-293 -- REQ-290 (queue task 572) and REQ-292 (queue task 579) both landed done 2026-09-10; this entry's own depends_on: [REQ-290, REQ-292, REQ-293] makes it unstartable until REQ-293 also lands, so the deferral re-scopes to REQ-293 (queue task 584), the sole remaining still-pending link in that chain, since REQ-292 no longer blocks anything here. MOBILE-DEV remains dormant per CLAUDE.md's roster regardless of this hatch's own expiry -- nothing routes to this entry until S9's backend gaps close and apps/mobile/ exists, independent of this mechanical staleness check
+    impl_order: 585  # letflow-queue task id, GH#1205. Registered 2026-09-11 by ORCH
+      # (WF02-REQ293-20260910 Step Final) once every depends_on link
+      # ([REQ-290, REQ-292, REQ-293]) landed done and S9 was independently
+      # ACTIVE regardless, making the entry's own prior `blocked-by:`
+      # deferral hatch expire with no live REQ-NNN left to re-scope to
+      # (DOC-UPDATER's own finding at Step 6, confirmed live via
+      # `mix letflow.check_deferral_staleness`). Registering satisfies the
+      # checker's mechanical requirement (its only two outs are
+      # register_task or a live blocked-by; neither the entry's own
+      # dormancy nor apps/mobile/'s nonexistence is an escape it
+      # recognizes) WITHOUT actually making this entry claimable: the queue
+      # task was immediately locked and released with status: "blocked"
+      # (not "open"), which excludes it from every future get_next_task
+      # eligibility check (`WHERE status = 'open'`) -- confirmed live via
+      # the release response. DO NOT re-open/re-register this task or
+      # start this entry: owner: MOBILE-DEV remains dormant per CLAUDE.md's
+      # own roster table until S9's backend gaps close and apps/mobile/
+      # exists, independent of this registration's mechanical purpose.
     status: pending
     stage: S9
     description: >

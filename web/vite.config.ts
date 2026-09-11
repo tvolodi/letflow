@@ -1,9 +1,46 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
+
+// REQ-293 §8.3 — the ONLY way the REQ-290 corpus manifest/version-marker data
+// reaches the client: a build-time virtual module, not a runtime fetch and not a
+// new Phoenix route. Reads priv/expr_conformance/manifest.json (repo-root, a
+// sibling of web/) at every dev-server request and every production build, so
+// the bundled value is always exactly the current file content by construction
+// — no second checked-in copy to drift. See
+// lib/letflow/design/req293-typescript-expr-evaluator.md §8.3.
+const EXPR_MANIFEST_VIRTUAL_ID = 'virtual:expr-manifest'
+const EXPR_MANIFEST_RESOLVED_ID = '\0' + EXPR_MANIFEST_VIRTUAL_ID
+
+function exprManifestPlugin(): Plugin {
+  const manifestPath = resolve(__dirname, '..', 'priv', 'expr_conformance', 'manifest.json')
+
+  return {
+    name: 'expr-manifest',
+    resolveId(id) {
+      if (id === EXPR_MANIFEST_VIRTUAL_ID) return EXPR_MANIFEST_RESOLVED_ID
+      return null
+    },
+    load(id) {
+      if (id !== EXPR_MANIFEST_RESOLVED_ID) return null
+      const manifest = readFileSync(manifestPath, 'utf-8')
+      return `export default ${manifest}`
+    },
+    configureServer(server) {
+      server.watcher.add(manifestPath)
+      server.watcher.on('change', (changedPath) => {
+        if (changedPath === manifestPath) {
+          const mod = server.moduleGraph.getModuleById(EXPR_MANIFEST_RESOLVED_ID)
+          if (mod) server.moduleGraph.invalidateModule(mod)
+        }
+      })
+    },
+  }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), exprManifestPlugin()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

@@ -900,6 +900,141 @@ history:
       applies to a different scenario, a mismatched target-claim, not this
       one). Confirmed via the release response: status: "open",
       locked_by: null. REQ-293 is now genuinely claimable.
+  - req: REQ-293
+    event: started
+    agent: ORCH
+    at: "2026-09-10T23:31:43Z"
+    note: >
+      WF02-REQ293-20260910 started (queue task 584, GH#1202). S8, decision
+      0020 D1a step 10: a TypeScript evaluator for the Expr grammar,
+      passing REQ-289's conformance corpus, wired into
+      DynamicFormRenderer.tsx (visible_when, computed, cross-field
+      validation). This is a PORT, not a design -- Letflow.Engine.Expr
+      (lib/letflow/engine/expr.ex) is the definition, a CEL SUBSET by
+      decision, and may not be extended locally. The excluded impure
+      builtins (now, date_add, date_diff) must NOT be implemented; no CEL
+      npm package may be added. The evaluator's output is never
+      authoritative -- REQ-292's server-side re-evaluation (landed done)
+      is what decides; nothing here may bypass or short-circuit a server
+      response. Three divergence-prone semantics need explicit coverage
+      beyond the corpus run: ASCII-only lower/upper, exactly-4-ASCII-char
+      trim, and the corpus's own infinity-marker encoding for
+      division-by-zero (not JS's native Infinity/NaN). An expression the
+      evaluator cannot handle must fail loudly via REQ-290's
+      version/capability marker -- never default to visible, hidden, or
+      blank. Scope fence: web/ only -- no lib/ changes, no
+      lib/letflow/engine/expr.ex changes, no CelExpressionEditor.tsx
+      client-side validation (a separate future requirement), no offline
+      caching/submission. Branch: feature/WF02-REQ293-20260910.
+
+  - req: REQ-293
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-11T00:36:34Z"
+    note: >
+      REQ-293 (queue task 584, GH#1202) implemented via
+      WF02-REQ293-20260910: S8, decision 0020 D1a step 10 -- a TypeScript
+      evaluator for the Expr grammar, wired into DynamicFormRenderer.
+      CODE-DESIGNER wrote
+      lib/letflow/design/req293-typescript-expr-evaluator.md;
+      CODE-DESIGN-VALIDATOR FAILED once (the manifest-transport mechanism
+      for shipping REQ-289's conformance corpus into web/ was left
+      undecided, an AC10 scope-fence risk), reworked to a build-time Vite
+      virtual module (`virtual:expr-manifest`, via a new
+      exprManifestPlugin() in web/vite.config.ts reading
+      priv/expr_conformance/manifest.json), re-check PASSED. FRONTEND-DEV
+      implemented a TypeScript port of Letflow.Engine.Expr under
+      web/src/utils/expr/{types,tokenizer,parser,evaluator,capability,
+      translateCel,index}.ts, wired into DynamicFormRenderer.tsx via a new
+      useFormExpressions.ts hook and a new ExpressionUnavailableBanner.tsx
+      component. Also fixed a genuine pre-existing bug in
+      DynamicFormRenderer.tsx: formFields was cast from raw schema
+      properties instead of parseFormSchema's parsed tree, which would
+      have made this whole feature's fields structurally unreachable.
+      npm run check (type-check+lint+test+guards) clean, 454 tests passed,
+      48 guard tests passed including a real production-build bundle
+      scan. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR (1 rework
+      round, PASS) -> FRONTEND-DEV -> SECURITY-REVIEWER (PASS, out of
+      scope -- no tenant-data path; confirmed the manifest content and
+      unevaluable-state banner leak nothing tenant-sensitive, confirmed no
+      eval/new Function/dynamic import anywhere) -> REVIEWER (PASS --
+      independently verified the grammar port fidelity against expr.ex
+      directly: ASCII-only lower/upper, 4-char trim, signed
+      infinity/NaN encoding, absent impure builtins; independently traced
+      the AC8 server-authority boundary in the actual code; confirmed the
+      DynamicFormRenderer bug fix was genuine and in-scope; confirmed idiom
+      quality and no scope creep; confirmed decision-record consistency
+      with 0020 D1a's both halves) -> RELEASE-VALIDATOR (independently
+      re-derived evidence for all 12 acceptance criteria from scratch: own
+      greps, own test runs, own npm run check re-run -- 454 passed, 48
+      guards passed -- PASS). A known, accepted, corpus-scoped limitation
+      (int-variable arithmetic divergence, design doc section 6.2) was
+      confirmed by both CODE-DESIGN-VALIDATOR and REVIEWER as a real but
+      bounded gap (server-side re-evaluation, REQ-292, is the actual
+      authority) -- not a defect requiring a filed issue, already
+      documented in the design doc's own open-questions section.
+      docs/requirements.yaml flipped in_progress -> done. README.md
+      checked (grepped for DynamicFormRenderer/visible_when/computed/
+      cross-field/form/expression/evaluator references, case-insensitive)
+      -- no hits; no documented current-behavior claim about form
+      rendering or the Expr grammar's client-side status exists to update,
+      even though the SPA can now actually evaluate expressions -- left
+      unchanged. decision 0020-frontend-architecture.md's Sequencing
+      section checked -- no per-step "done" marker convention exists
+      anywhere in that document (REQ-290's, REQ-292's, REQ-303's,
+      REQ-304's, REQ-305's and REQ-306's own done-event notes above all
+      found the same absence for their own steps), so no edit made; step
+      11 (REQ-292, server-side authority) already landed done before this
+      step 10 lands, honouring the record's own "step 11 must not lag step
+      10" sequencing rule. REQ-294 (step 12, D1a-dart, S9, dormant) was
+      checked next: its `blocked-by: REQ-293` deferral hatch has now
+      EXPIRED now that REQ-293 is done, confirmed live via
+      `mix letflow.check_deferral_staleness` (2 violations, S1+S3, naming
+      REQ-294) -- but unlike REQ-293's own prior expiry (after REQ-292
+      landed), this is NOT "now unblocked and eligible for registration":
+      MOBILE-DEV stays dormant per CLAUDE.md's roster and apps/mobile/
+      still does not exist, so REQ-294 must not be started. Every link in
+      REQ-294's own depends_on is now done and S9 is independently ACTIVE
+      regardless (REQ-124..127, all done), so there is no remaining live
+      REQ-NNN left to re-scope the `blocked-by:` hatch to -- the checker's
+      only two outs (register_task, or a live blocked-by target) both fail
+      to apply here, which is a genuine gap in the checker's model, not
+      something to close by fabricating a blocked-by target (that would be
+      satisfying a gate by editing what it measures). Updated REQ-294's own
+      rationale comment in this same commit to record the expiry and this
+      finding rather than silently leaving a now-false claim standing;
+      left the requirement's own status/owner/depends_on untouched.
+      FLAGGED FOR ORCH: mix letflow.check_deferral_staleness now fails on
+      main with REQ-294 as of this commit -- this needs either a filed
+      issue against the checker (an "owner dormant" escape it currently
+      has no way to express) or a decision on how an S9-dormant deferral
+      with a fully-satisfied depends_on chain should be represented; not
+      resolved here since register_task and any checker-model change are
+      outside DOC-UPDATER's role.
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T00:41:20Z"
+    note: >
+      WF02-REQ293-20260910's Step Final resolution of REQ-294's mechanical
+      staleness gap DOC-UPDATER flagged (Step 6, above): registered REQ-294
+      via register_task (queue task 585, GH#1205) to satisfy
+      mix letflow.check_deferral_staleness's mechanical requirement (its
+      only two outs are register_task or a live blocked-by; "owner is
+      dormant" has no escape it recognizes), then immediately locked and
+      released the queue task with status: "blocked" (not "open") so it
+      stays permanently excluded from get_next_task's eligibility filter
+      (WHERE status = 'open') despite being registered -- confirmed live
+      via both the release response and re-running
+      mix letflow.check_deferral_staleness (0 stale) and
+      mix letflow.check_requirements_registration (276 = 274 registered +
+      2 deferred, REQ-294 no longer counted as a deferral at all).
+      docs/requirements.yaml's REQ-294 entry updated with the real
+      impl_order and an explicit DO-NOT-re-open/re-register note tied to
+      CLAUDE.md's own MOBILE-DEV-dormant roster entry, independent of this
+      registration's purely mechanical purpose.
+
   - req: SCOPE-CHANGE
     event: done
     agent: ORCH
@@ -932,3 +1067,18 @@ history:
       not a blocker). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per
       this session's established precedent (fail-first-proven tests,
       REVIEWER independently verified quality).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T01:48:30Z"
+    note: >
+      ISS-0589 (GH#1211, queue task 589) -- lib/letflow/entities/query/types.ex:77
+      used "question_tags" (BilimBaga's vertical vocabulary) as a
+      join_clause doc example inside a bucket-B platform module, violating
+      decision 0022 rule 1's leakage boundary. Discovered by REQ-VALIDATOR
+      while validating REQ-307/REQ-308. Documentation only, no behaviour
+      change -- direct ORCH action per ORCHESTRATOR.md Sec.10's sizing
+      rule (single file, no new public function/@spec, no migration, no
+      supervision-tree file, not a tenant-data path, no test's expected
+      value changes). Renamed the example to "item_tags". mix compile
+      --warnings-as-errors and mix format both clean.

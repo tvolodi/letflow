@@ -2588,8 +2588,18 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 25
+    entries: 26
     note: >
+      Recounted to 26 on ORCH's fix/ISS-0588-20260911 Step Final rebase
+      onto main, appending this branch's own ISS-0588 SCOPE-CHANGE
+      done-event on top of main's already-composed 25 entries
+      (requirement_status.v13.yaml itself auto-merged cleanly by git,
+      no conflict) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v13.yaml` = 26 on-disk entries;
+      1102 lines / 65600 bytes, well under the roll ceiling. Recounted
+      directly from the composed file rather than carrying forward
+      either side's independently-computed count, per this note's own
+      recount-every-time rule.
       Recounted to 25 on WF02-REQ293-20260910's own Step Final rebase onto
       main (deferral-reconciliation commit replay), composing this
       branch's own SCOPE-CHANGE done-event append (REQ-294 registered as

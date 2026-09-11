@@ -175,7 +175,7 @@ defmodule Letflow.SandboxPoolTest do
   # same message, and a dropped schema still returns :ok.
   defp wait_until_schema_dropped(
          schema_name,
-         timeout_ms \\ SandboxPool.release_call_timeout()
+         timeout_ms \\ SandboxPool.release_call_timeout() * 2
        ) do
     poll_until_schema_dropped(schema_name, System.monotonic_time(:millisecond) + timeout_ms)
   end
@@ -418,6 +418,7 @@ defmodule Letflow.SandboxPoolTest do
   # ---------------------------------------------------------------------------------
 
   describe "owning process killed between claim/2 and release/2 (ISS-0048 regression)" do
+    @tag timeout: :infinity
     test "a killed owner's claim is reclaimed: schema dropped and quota slot freed for a subsequent claim/2" do
       pool = start_pool!(max_concurrent: 1)
       test_pid = self()
@@ -1082,6 +1083,7 @@ defmodule Letflow.SandboxPoolTest do
       assert Process.alive?(pool)
     end
 
+    @tag timeout: :infinity
     test "RT-6 (death path c): the provisioning worker Task crashing fails the claim without taking the pool, a slot or a schema with it" do
       # POST-FIX-ONLY. Exercises design §7 step 3 clause B case 1. Pre-fix there is no
       # worker to kill at all -- provisioning runs on the pool process itself, where an

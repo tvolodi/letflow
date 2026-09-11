@@ -585,12 +585,12 @@ defmodule Letflow.ServiceCatalogTest do
   # place, REQ-192 named as owner
   # ---------------------------------------------------------------------------------
 
-  describe "AC10: SolutionPack.service_catalog_entries hard-fail retained, REQ-192 named" do
-    test "SolutionPack's moduledoc names REQ-192 as the owner of the service_catalog_entries decision" do
+  describe "AC10: SolutionPack.service_catalog_entries hard-fail retained, ownership status documented" do
+    test "SolutionPack's moduledoc documents the service_catalog_entries policy as unowned" do
       module_source = File.read!("lib/letflow/definitions/solution_pack.ex")
 
       assert module_source =~ "service_catalog_entries"
-      assert module_source =~ "REQ-192"
+      assert module_source =~ "UNOWNED"
     end
 
     test "export/3 always emits service_catalog_entries: []" do

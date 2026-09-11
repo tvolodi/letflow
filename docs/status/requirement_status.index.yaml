@@ -2588,8 +2588,18 @@ volumes:
     path: docs/status/requirement_status.v13.yaml
     status: current
     opened: 2026-09-10
-    entries: 27
+    entries: 28
     note: >
+      Recounted to 28 on WF03-ISS0590-20260911's own Step Final rebase
+      onto main (Step 5 commit replay), composing this branch's own
+      ISS-0590 SCOPE-CHANGE done-event append (Step 5, ISSUE-FIXER) with
+      main's own ISS-0588 SCOPE-CHANGE done-event, already folded into
+      the on-disk file by the prior conflict resolution above -- `grep -c
+      "^  - req:" docs/status/requirement_status.v13.yaml` = 28 on-disk
+      entries; 1150 lines / 69430 bytes, well under the roll ceiling.
+      Recounted directly from the composed file rather than carrying
+      forward either side's independently-computed count, per this
+      note's own recount-every-time rule.
       Recounted to 27 on WF03-ISS0590-20260911's own Step Final rebase
       onto main (Step 00 commit replay), composing this branch's own
       ISS-0590 started-event append with main's own ISS-0588 SCOPE-CHANGE

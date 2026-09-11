@@ -51,4 +51,21 @@ affected_files:
   - test/letflow/sandbox_pool_test.exs
 queue_ref: Q-590
 github_ref: GH-1215
-status: in_progress
+status: resolved
+resolved_in_run: WF03-ISS0590-20260911
+resolved_at: "2026-09-11T03:03:59Z"
+resolution: >
+  Root cause confirmed as a test-observation-timing gap, not a real leak in
+  lib/letflow/sandbox_pool.ex's crash/cleanup path: the RT-6 death-path-c test
+  sampled information_schema.schemata at a fixed point after the provisioning
+  worker's crash, racing the async schema-drop rather than waiting for it.
+  Fix (ELIXIR-DEV, per CODE-DESIGNER's design in
+  lib/letflow/design/iss0590-sandboxpool-rt6-death-path-c-schema-drop-wait.md):
+  inserted a call to the existing wait_until_schema_dropped(o_schema) helper
+  into RT-6, replacing the fixed-point sample with a real-Postgres wait for
+  the actual schema-drop commit, mirroring an existing precedent test in the
+  same file. Evidence: 5/5 isolated post-fix runs passed, full
+  sandbox_pool_test.exs (23 tests) passed, full parallel suite
+  (TEST_PARALLEL_N=4) 3742/3742 passed with 0 pre-existing flakes surfaced.
+  REVIEWER independently re-traced the crash/cleanup happens-before chain and
+  confirmed the diagnosis and fix.

@@ -27,7 +27,10 @@ defmodule Letflow.Definitions.SolutionPack do
 
   PROVENANCE (historical, not current decision authority):
   R-Co's `SolutionPackDocument` (`src/api/routes/solution_packs.zig:153-351`)
-  has four content arrays. Letflow supports two:
+  has four content arrays. Letflow supports three of them (all but
+  `service_catalog_entries`), plus a fifth section, `entity_definitions`,
+  that R-Co's document never had (REQ-303–306, decision
+  `0026-solution-pack-entity-definitions-section.md`):
 
     * `definitions` — supported (`process_definitions`, REQ-027/030).
     * `variable_schemas` — supported (`variable_schemas`, REQ-109). This is
@@ -60,6 +63,10 @@ defmodule Letflow.Definitions.SolutionPack do
     * `manifest.required_roles` — supported, **read-only**: it produces the
       advisory `role_mapping_checklist` (see `install/3`). No role is created
       and no install is ever rejected because of it.
+    * `entity_definitions` — supported (REQ-304 export, REQ-305 install).
+      Not part of R-Co's original document; carries named
+      `Letflow.Entities.EntityDefinition` records, installed `:inactive`
+      only, per decision 0026.
 
   ## Tenant scoping (INV-1)
 

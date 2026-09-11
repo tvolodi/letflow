@@ -1147,6 +1147,7 @@ history:
       mirror issue #1215 closed with an evidence comment. Branch:
       fix/ISS0590-20260911. Step Final (merge) left to a separate run per
       this run's own instructions.
+
   - req: REQ-307
     event: done
     agent: ORCH
@@ -1177,3 +1178,54 @@ history:
       REQ-192 substring assertion in service_catalog_test.exs) and
       ISS-0595 (GH#1223, stale content-array counts in solution_pack.ex's
       moduledoc).
+
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-11T03:24:55Z"
+    note: >
+      ISS-0595 (GH#1223, queue task 595) -- lib/letflow/definitions/
+      solution_pack.ex's moduledoc claimed "Letflow supports two" of
+      R-Co's four content arrays, stale since before entity_definitions
+      even landed: the bullet list itself already showed three supported
+      (definitions, variable_schemas, manifest.required_roles), only
+      service_catalog_entries unsupported. Discovered by DOC-UPDATER
+      during REQ-307, confirmed by RELEASE-VALIDATOR, deliberately not
+      fixed there (REQ-307's scope fence named two specific other comment
+      sites). Verified service_catalog_entries genuinely still rejects
+      non-empty via check_unsupported_sections/1 -- that part of the
+      moduledoc is accurate. Corrected the count to three, and added the
+      entirely-missing entity_definitions bullet (REQ-303-306, not one
+      of R-Co's original four at all). Documentation only, no behaviour
+      change -- direct ORCH action per ORCHESTRATOR.md Sec.10's sizing
+      rule.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 13 — CLOSED 2026-09-11. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-10 through
+# 2026-09-11 (30 entries, lines 1-1201). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at fix/ISS-0595-20260911's Step
+# Final rebase, which composed this branch's own ISS-0595 done-event append
+# with main's concurrently-merged REQ-307 done-event, bringing this file to
+# 1201 lines -- over its declared roll_rule ceiling (max_lines: 1200) -- confirmed
+# via `wc -l` on the working-tree file per this volume's own "WHEN THIS VOLUME IS
+# FULL" procedure. Reads of this volume are TARGETED reads only -- a line
+# range or a pattern match, never a whole-file read. Use whichever your shell
+# has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v14.yaml
+#
+# Why this file was closed: fix/ISS-0595-20260911's own rebase, composing this
+# branch's ISS-0595 done-event with main's REQ-307 done-event, brought the
+# on-disk count to 30 entries across 1201 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

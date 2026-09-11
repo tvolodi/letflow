@@ -692,3 +692,47 @@ history:
       Commits: 4d9dc387 (Step 00), d21b6aea (CODE-DESIGNER), 75b72172
       (CODE-DESIGNER rework, FK premise fix + OQ-2 role grants), d34bb30f
       (SECURITY-REVIEWER PASS). Branch: design/REQ313-20260911.
+
+  - req: REQ-314
+    event: done
+    agent: ORCH
+    at: "2026-09-11T15:22:51Z"
+    note: >
+      REQ-314 (queue task 604, GH#1255) implemented via
+      feature/WF02-REQ314-20260911: S10 gap 12, a design-only
+      requirement for bulk import/export of entity records, a
+      records-level sibling to Letflow.Definitions.ExportImport. Own
+      schema-versioned document format (entities/record-export/v1),
+      independent of ExportImport's bpm/definition/v1. Export selection
+      reuses Letflow.Entities.Query.Types.query_request/0 via the
+      existing POST /entities/query pipeline. Import goes through
+      Letflow.Entities.Records.create_record/2 exclusively, no
+      independent validation, matching ExportImport's own precedent.
+      Per-record partial-success semantics, justified against
+      create_record/2's own per-call transactional shape. New routes:
+      POST /entities/records/:entity_type/{export,import}. 200-record
+      cap per call. Design artefact:
+      lib/letflow/design/req314-entity-record-bulk-export-import.md.
+      Pipeline: CODE-DESIGNER (3 rework cycles: two narrow self-
+      referential grep-quine citation issues in the doc's own rule-1
+      self-check, then a genuine INV-2 permission-model gap) ->
+      CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS
+      (found the original single-tier "export always bypasses
+      FieldGrants, the permission gate is the safety mechanism"
+      argument was a category error -- no existing capability today
+      lets one identity read every field of arbitrary records
+      regardless of FieldGrants, making unredacted-only export a
+      genuinely new maximum-privilege surface with no analog; fixed
+      with a two-tier scheme mirroring the design's own existing
+      :EntitiesRecordsImport-over-:EntitiesRecordsWrite divergence: the
+      default :EntitiesRecordsExport atom respects FieldGrants,
+      disclosing no more than :EntitiesQuery already would, while a
+      new, explicitly-marked-exceptional
+      :EntitiesRecordsExportUnredacted atom, checked in-handler and
+      failing closed with 403, gates the full-fidelity variant; verdict
+      recorded directly in the design artefact per this requirement's
+      own AC) -> CODE-DESIGN-VALIDATOR final re-check PASS. Rule 1
+      (0022) vocabulary self-check and scope (only the one design file
+      touched) both verified. No lib/ implementation, no route
+      mounted, no migration, no test, matching this requirement's own
+      scope fence. docs/requirements.yaml flipped pending -> done.

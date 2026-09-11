@@ -15,6 +15,11 @@ defmodule Letflow.Routers.Entities do
   around `compile_aggregate/2` plus the query's own execution, added
   specifically so this route stays composition-only, same as every other
   route here — this module executes no query of its own (INV-1, below).
+  REQ-317 appended a twelfth-through-fifteenth set of rows, the four
+  record-attachment routes, per
+  `lib/letflow/design/req313-entity-record-attachments.md` §3 — delegating
+  to `Letflow.Repository.EntityAttachments` (REQ-316), mirroring
+  `Letflow.Routers.Instances`' own REQ-212 instance-attachment routes.
 
   Its permission vocabulary (`:EntitiesDefinitionsRead`,
   `:EntitiesDefinitionsWrite`, `:EntitiesRecordsWrite`, and REQ-311's
@@ -36,6 +41,10 @@ defmodule Letflow.Routers.Entities do
   | delete_record | `DELETE /entities/records/:entity_type/:record_id` | `Letflow.Entities.Records.delete_record/2` | `EntitiesRecordsWrite` | 200 / 404 |
   | query | `POST /entities/query` | `Letflow.Entities.Query.Compiler.compile/2` then `Letflow.Entities.Query.Allowlist.load/2` then `Letflow.Entities.Query.Cursor.paginate/5` then a `Letflow.Entities.Query.FieldGrants` redaction step | `EntitiesQuery` | 200 / 400 / 404 / 422 |
   | query_aggregate | `POST /entities/query/aggregate` | a `Letflow.Entities.Query.FieldGrants.load_restrictions/3` field-restriction check then `Letflow.Entities.Query.Compiler.run_aggregate/2` | `EntitiesAggregate` | 200 / 400 / 403 / 404 / 422 |
+  | create_record_attachment | `POST /entities/records/:entity_type/:record_id/attachments` | `Letflow.Repository.EntityAttachments.upload/2` | `EntitiesAttachmentsManage` | 201 / 404 / 422 |
+  | list_record_attachments | `GET /entities/records/:entity_type/:record_id/attachments` | `Letflow.Repository.EntityAttachments.list/2` | `EntitiesAttachmentsRead` | 200 / 400 / 404 |
+  | get_record_attachment_content | `GET /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.get_content/2` | `EntitiesAttachmentsRead` | 200 (raw bytes) / 404 / 500 |
+  | delete_record_attachment | `DELETE /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.delete/2` | `EntitiesAttachmentsManage` | 204 / 404 |
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -176,6 +185,9 @@ defmodule Letflow.Routers.Entities do
   alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.EventStore.Registry.ValidationFailure
+  alias Letflow.Repository.Artifact
+  alias Letflow.Repository.EntityAttachment
+  alias Letflow.Repository.EntityAttachments
 
   # ── Definition write routes ───────────────────────────────────────────
   #
@@ -258,6 +270,44 @@ defmodule Letflow.Routers.Entities do
 
   authz_post "/query/aggregate", :EntitiesAggregate do
     handle_query_aggregate(conn)
+  end
+
+  # ── Record-attachment routes (REQ-317) ────────────────────────────────
+  #
+  # Nested under the same "/records/:entity_type/:record_id" prefix as the
+  # three record-command routes above, but at a strictly greater path depth
+  # (3+ segments after "/records" vs. 2) -- design §3 "Route ordering"
+  # confirms Plug.Router's position-by-position matching makes an ordering
+  # collision with those routes structurally impossible regardless of
+  # declaration order. Declared after them anyway, for readability, matching
+  # this module's own listing convention.
+
+  authz_post "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage do
+    handle_create_record_attachment(conn, conn.params["entity_type"], conn.params["record_id"])
+  end
+
+  authz_get "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsRead do
+    handle_list_record_attachments(conn, conn.params["entity_type"], conn.params["record_id"])
+  end
+
+  authz_get "/records/:entity_type/:record_id/attachments/:attachment_id",
+            :EntitiesAttachmentsRead do
+    handle_get_record_attachment_content(
+      conn,
+      conn.params["entity_type"],
+      conn.params["record_id"],
+      conn.params["attachment_id"]
+    )
+  end
+
+  authz_delete "/records/:entity_type/:record_id/attachments/:attachment_id",
+               :EntitiesAttachmentsManage do
+    handle_delete_record_attachment(
+      conn,
+      conn.params["entity_type"],
+      conn.params["record_id"],
+      conn.params["attachment_id"]
+    )
   end
 
   match _ do
@@ -910,6 +960,312 @@ defmodule Letflow.Routers.Entities do
   defp render_record_command(conn, {:error, reason}, _status) do
     Logger.warning("entity record command failed: #{inspect(reason)}")
     Response.internal_error(conn)
+  end
+
+  # ══ POST /entities/records/:entity_type/:record_id/attachments (REQ-317) ══
+  #
+  # Multipart upload, same shape as Letflow.Routers.Instances' own
+  # POST /instances/:id/attachments (REQ-212 design §5.4): the file arrives
+  # as a %Plug.Upload{} body part named "file". `uploaded_by` is the
+  # authenticated caller (conn.assigns.auth_context.user_id), never a body
+  # field (design §5 INV-1). `entity_type`/`record_id` come from the path.
+
+  defp handle_create_record_attachment(conn, entity_type, raw_record_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, record_id} <- cast_record_id(raw_record_id),
+         {:ok, attrs} <- record_attachment_upload_attrs_from_conn(conn, entity_type, record_id) do
+      render_create_record_attachment(conn, EntityAttachments.upload(attrs, opts))
+    else
+      # INV-5: a malformed record id folds to the same zero-detail 404 as an
+      # absent (or cross-tenant) one -- matching cast_record_id/1's existing
+      # use on the record-command routes above.
+      {:error, :invalid_record_id} ->
+        Response.not_found(conn)
+
+      {:error, :missing_file} ->
+        Response.unprocessable(conn, "a file part named \"file\" is required")
+    end
+  end
+
+  @spec record_attachment_upload_attrs_from_conn(Plug.Conn.t(), String.t(), Ecto.UUID.t()) ::
+          {:ok, EntityAttachments.upload_attrs()} | {:error, :missing_file}
+  defp record_attachment_upload_attrs_from_conn(conn, entity_type, record_id) do
+    case conn.body_params["file"] do
+      %Plug.Upload{path: path, filename: filename, content_type: content_type} ->
+        attrs = %{
+          entity_type: entity_type,
+          record_id: record_id,
+          raw_bytes: File.read!(path),
+          file_name: filename,
+          content_type: content_type,
+          uploaded_by: conn.assigns.auth_context.user_id,
+          description: record_attachment_description(conn.body_params["description"])
+        }
+
+        {:ok, attrs}
+
+      _missing_or_not_a_file ->
+        {:error, :missing_file}
+    end
+  end
+
+  defp record_attachment_description(value) when is_binary(value) and byte_size(value) > 0,
+    do: value
+
+  defp record_attachment_description(_absent_or_empty), do: nil
+
+  defp render_create_record_attachment(conn, {:ok, attachment}) do
+    Response.created(conn, record_attachment_json(attachment))
+  end
+
+  defp render_create_record_attachment(conn, {:error, :file_too_large}) do
+    Response.payload_too_large(conn, "uploaded file exceeds the maximum allowed size")
+  end
+
+  defp render_create_record_attachment(conn, {:error, :infected, verdict}) do
+    Response.unprocessable(conn, "uploaded file failed a content scan (#{verdict})")
+  end
+
+  defp render_create_record_attachment(conn, {:error, :scan_unavailable}) do
+    Response.service_unavailable(conn, "content scan is temporarily unavailable, please retry")
+  end
+
+  # AC5 (design §7 OQ-1, closed): an (entity_type, record_id) pair with no
+  # matching entity_record_latest row surfaces here as an ordinary
+  # Ecto.Changeset error (EntityAttachment.changeset/2's
+  # foreign_key_constraint/3 clause on :record_id) -- mapped to 404, never a
+  # raised, unhandled Postgres error and never a 422. Any OTHER changeset
+  # error (e.g. file_name over 255 characters) is a genuine validation
+  # failure and stays 422.
+  defp render_create_record_attachment(conn, {:error, %Ecto.Changeset{} = changeset}) do
+    if Keyword.has_key?(changeset.errors, :record_id) do
+      Response.not_found(conn)
+    else
+      Response.unprocessable(conn, "request failed validation")
+    end
+  end
+
+  # ══ GET /entities/records/:entity_type/:record_id/attachments (REQ-317) ══
+  #
+  # Cursor-paginated JSON metadata list, same page-size/cursor contract as
+  # Letflow.Routers.Instances' own GET /instances/:id/attachments (REQ-212
+  # design §5.2). No existence check against entity_record_latest -- a
+  # nonexistent (or cross-tenant) (entity_type, record_id) pair returns an
+  # EMPTY 200 page, matching design §2/§5's own stated INV-5 behavior. A
+  # malformed record id still folds to 404, matching this router's own
+  # cast_record_id/1 convention for the record-command routes.
+
+  defp handle_list_record_attachments(conn, entity_type, raw_record_id) do
+    opts = conn.assigns.scoped_opts
+    conn = fetch_query_params(conn)
+    query = conn.query_params
+
+    with {:ok, record_id} <- cast_record_id(raw_record_id),
+         {:ok, raw_page_size} <- Pagination.parse_page_size_param(Map.get(query, "page_size")),
+         {:ok, page_size} <- Pagination.validate_page_size(raw_page_size) do
+      params = %{
+        entity_type: entity_type,
+        record_id: record_id,
+        cursor: Map.get(query, "cursor"),
+        page_size: page_size
+      }
+
+      render_list_record_attachments(conn, EntityAttachments.list(params, opts))
+    else
+      {:error, :invalid_record_id} ->
+        Response.not_found(conn)
+
+      {:error, :invalid_page_size} ->
+        Response.bad_request(conn, "invalid page_size")
+
+      {:error, :page_size_too_large} ->
+        Response.bad_request(conn, "page_size out of range")
+    end
+  end
+
+  # Deliberately NOT render_page_result/3 -- that shared helper adds a
+  # "count" key this route's own {items, next_cursor} shape (matching
+  # Letflow.Routers.Instances' own list-attachments precedent) must not
+  # carry.
+  defp render_list_record_attachments(conn, {:ok, %{items: items, next_cursor: next_cursor}}) do
+    Response.ok(conn, %{
+      "items" => Enum.map(items, &record_attachment_json/1),
+      "next_cursor" => next_cursor
+    })
+  end
+
+  defp render_list_record_attachments(conn, {:error, reason})
+       when reason in [:invalid_cursor, :wrong_endpoint],
+       do: Response.unprocessable(conn, "cursor is not valid for this endpoint")
+
+  defp render_list_record_attachments(conn, {:error, :expired}),
+    do: Response.send_problem(conn, Error.cursor_expired())
+
+  defp render_list_record_attachments(conn, {:error, :page_size_too_large}),
+    do: Response.bad_request(conn, "page_size out of range")
+
+  # ══ GET /entities/records/:entity_type/:record_id/attachments/:attachment_id
+  # ══ (REQ-317) ══════════════════════════════════════════════════════════
+  #
+  # Raw-bytes response, same INV-RT-1 discipline as Letflow.Routers.Instances'
+  # own GET /instances/:id/attachments/:attachment_id (REQ-212 design §4/§5.3):
+  # neither the byte-content lookup nor this handler's own cross-record 404
+  # check ever issues a direct Ecto Repo call -- both are delegated to (or
+  # folded through) Letflow.Repository.EntityAttachments. Both the
+  # cross-tenant check (structural, via opts[:prefix]) and the
+  # cross-record-same-tenant check (explicit, in-handler, mirroring
+  # Letflow.Routers.Instances' own cross-instance check) fold to the same
+  # {:error, :not_found} -- design §5 INV-5. `Content-Type` is set from the
+  # stored (caller-declared, untrusted per design §6 INV-a) content_type
+  # field -- no MIME-sniffing.
+
+  defp handle_get_record_attachment_content(conn, entity_type, raw_record_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, record_id} <- cast_record_id(raw_record_id),
+         {:ok, attachment, artifact} <-
+           fetch_scoped_record_attachment_content(raw_attachment_id, entity_type, record_id, opts) do
+      send_record_attachment_content(conn, attachment, artifact)
+    else
+      {:error, :invalid_record_id} ->
+        Response.not_found(conn)
+
+      {:error, :not_found} ->
+        Response.not_found(conn)
+
+      {:error, :content_missing} ->
+        Response.internal_error(conn)
+
+      {:error, :not_available} ->
+        Response.conflict(conn, "attachment content is not currently available")
+    end
+  end
+
+  @spec fetch_scoped_record_attachment_content(String.t(), String.t(), Ecto.UUID.t(), keyword()) ::
+          {:ok, EntityAttachment.t(), Artifact.t()}
+          | {:error, :not_found | :content_missing | :not_available}
+  defp fetch_scoped_record_attachment_content(raw_attachment_id, entity_type, record_id, opts) do
+    case EntityAttachments.get_content(raw_attachment_id, opts) do
+      {:ok, %EntityAttachment{entity_type: ^entity_type, record_id: ^record_id} = attachment,
+       artifact} ->
+        {:ok, attachment, artifact}
+
+      {:ok, %EntityAttachment{}, _artifact} ->
+        {:error, :not_found}
+
+      {:error, :invalid_id} ->
+        {:error, :not_found}
+
+      {:error, :not_found} ->
+        {:error, :not_found}
+
+      {:error, :content_missing} ->
+        {:error, :content_missing}
+
+      {:error, :not_available} ->
+        {:error, :not_available}
+    end
+  end
+
+  defp send_record_attachment_content(
+         conn,
+         %EntityAttachment{} = attachment,
+         %Artifact{} = artifact
+       ) do
+    conn
+    |> put_resp_content_type(attachment.content_type)
+    |> put_resp_header(
+      "content-disposition",
+      record_attachment_content_disposition(attachment.file_name)
+    )
+    |> send_resp(200, artifact.content)
+  end
+
+  # Escapes literal `"` and `\` (Content-Disposition's own quoting rules) and
+  # strips CR/LF/other C0 control characters before interpolating a
+  # caller-supplied file_name into a raw HTTP header value, matching
+  # Letflow.Routers.Instances' own content_disposition/1 precedent -- this
+  # never affects the stored/returned file_name value itself, only this
+  # one header's rendering.
+  @spec record_attachment_content_disposition(String.t()) :: String.t()
+  defp record_attachment_content_disposition(file_name) do
+    sanitized =
+      file_name
+      |> String.replace("\\", "\\\\")
+      |> String.replace("\"", "\\\"")
+      |> strip_record_attachment_control_characters()
+
+    "attachment; filename=\"#{sanitized}\""
+  end
+
+  defp strip_record_attachment_control_characters(value) do
+    String.replace(value, ~r/[\x00-\x1F\x7F]/, "")
+  end
+
+  # ══ DELETE /entities/records/:entity_type/:record_id/attachments/:attachment_id
+  # ══ (REQ-317) ══════════════════════════════════════════════════════════
+
+  defp handle_delete_record_attachment(conn, entity_type, raw_record_id, raw_attachment_id) do
+    opts = conn.assigns.scoped_opts
+
+    with {:ok, record_id} <- cast_record_id(raw_record_id),
+         {:ok, _attachment} <-
+           fetch_scoped_record_attachment_metadata(
+             raw_attachment_id,
+             entity_type,
+             record_id,
+             opts
+           ),
+         {:ok, _deleted} <- EntityAttachments.delete(raw_attachment_id, opts) do
+      Response.no_content(conn)
+    else
+      {:error, :invalid_record_id} -> Response.not_found(conn)
+      {:error, :not_found} -> Response.not_found(conn)
+    end
+  end
+
+  # Metadata-only sibling of fetch_scoped_record_attachment_content/4, for
+  # DELETE -- same cross-record/cross-tenant 404 checks, no
+  # repository_artifacts lookup (DELETE never needs the byte content).
+  @spec fetch_scoped_record_attachment_metadata(String.t(), String.t(), Ecto.UUID.t(), keyword()) ::
+          {:ok, EntityAttachment.t()} | {:error, :not_found}
+  defp fetch_scoped_record_attachment_metadata(raw_attachment_id, entity_type, record_id, opts) do
+    case EntityAttachments.get(raw_attachment_id, opts) do
+      {:ok, %EntityAttachment{entity_type: ^entity_type, record_id: ^record_id} = attachment} ->
+        {:ok, attachment}
+
+      {:ok, %EntityAttachment{}} ->
+        {:error, :not_found}
+
+      {:error, :invalid_id} ->
+        {:error, :not_found}
+
+      {:error, :not_found} ->
+        {:error, :not_found}
+    end
+  end
+
+  # ── Response allowlist (INV-2) — shared by create/list (REQ-317) ────────
+  #
+  # Hand-built allowlist, matching Letflow.Routers.Instances' own
+  # attachment_json/1 precedent -- never a raw Jason.Encoder derivation over
+  # %EntityAttachment{}, which would leak __meta__/tenant_id/content_hash.
+  # No FieldGrants redaction step (design §5 INV-2) -- this is a fixed,
+  # code-defined column set, not a tenant-authored field_values document.
+  @spec record_attachment_json(EntityAttachment.t()) :: map()
+  defp record_attachment_json(%EntityAttachment{} = attachment) do
+    %{
+      "id" => attachment.id,
+      "entity_type" => attachment.entity_type,
+      "record_id" => attachment.record_id,
+      "file_name" => attachment.file_name,
+      "content_type" => attachment.content_type,
+      "byte_size" => attachment.byte_size,
+      "uploaded_by" => attachment.uploaded_by,
+      "description" => attachment.description,
+      "created_at" => DateTime.to_iso8601(attachment.created_at)
+    }
   end
 
   # ══ POST /entities/query ══════════════════════════════════════════════

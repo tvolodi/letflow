@@ -256,10 +256,11 @@ defmodule Letflow.Routers.EntitiesTest do
 
   describe "AC1 -- the declared route table matches design §1" do
     # REQ-311 raised this from nine to TEN (POST /query); REQ-315 raises it
-    # from TEN to ELEVEN (POST /query/aggregate). The count is asserted
-    # explicitly so appending a twelfth route without updating design §1's
-    # table fails here rather than silently.
-    test "__authz_routes__/0 returns exactly the eleven designed routes, with their designed policy keys" do
+    # from TEN to ELEVEN (POST /query/aggregate); REQ-317 raises it from
+    # ELEVEN to FIFTEEN (the four record-attachment routes). The count is
+    # asserted explicitly so appending a sixteenth route without updating
+    # design §1's table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the fifteen designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -271,22 +272,39 @@ defmodule Letflow.Routers.EntitiesTest do
         {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"POST", "/query", :EntitiesQuery},
-        {"POST", "/query/aggregate", :EntitiesAggregate}
+        {"POST", "/query/aggregate", :EntitiesAggregate},
+        {"POST", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage},
+        {"GET", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsRead},
+        {"GET", "/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsRead},
+        {"DELETE", "/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsManage}
       ]
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 11
+      assert length(actual) == 15
       assert Enum.sort(actual) == Enum.sort(expected)
       assert {"POST", "/query", :EntitiesQuery} in actual
       assert {"POST", "/query/aggregate", :EntitiesAggregate} in actual
+
+      assert {"POST", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage} in actual
+
+      assert {"DELETE", "/records/:entity_type/:record_id/attachments/:attachment_id",
+              :EntitiesAttachmentsManage} in actual
     end
 
-    test "⛔ no GET route exists under /records -- record reads are POST /entities/query only" do
+    test "⛔ no GET route exists under /records for the record itself -- record reads are POST /entities/query only" do
+      # REQ-317 legitimately added two GET routes under /records/..., but
+      # both are the record's ATTACHMENT sub-resource
+      # (/records/:entity_type/:record_id/attachments...), not the record
+      # itself -- excluded here so this assertion still proves what it always
+      # proved: no GET reads a record's own field_values.
       record_gets =
         Letflow.Routers.Entities.__authz_routes__()
         |> Enum.filter(fn {method, path, _key} ->
-          method == "GET" and String.starts_with?(path, "/records")
+          method == "GET" and String.starts_with?(path, "/records") and
+            not String.contains?(path, "attachments")
         end)
 
       assert record_gets == []

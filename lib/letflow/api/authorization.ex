@@ -117,6 +117,19 @@ defmodule Letflow.Api.Authorization do
   in particular is flagged (design §5) as reserved for a break-glass/
   platform-administrative role, never bundled into an ordinary tenant role's
   default grant set.
+
+  ## `EntitiesAttachmentsManage`/`EntitiesAttachmentsRead` (REQ-317) — genuinely new, not pre-ported
+
+  Added *for* `Letflow.Routers.Entities`'s four
+  `/entities/records/:entity_type/:record_id/attachments...` routes, per
+  design `lib/letflow/design/req313-entity-record-attachments.md` §3/§4. Two
+  NEW atoms, not a reuse of `:AttachmentsManage`/`:AttachmentsRead` (those
+  gate `Letflow.Repository.Attachments`' instance_id-scoped table only) nor
+  of `:EntitiesRecordsWrite` (that gates the record's own `field_values`
+  payload, a different capability). Create/delete (mutation) map to
+  `:EntitiesAttachmentsManage`; list/get-content (read) map to
+  `:EntitiesAttachmentsRead`, matching REQ-212's own manage/read split. See
+  design §7 (OQ-2) for the role matrix.
   """
 
   @type role ::
@@ -154,6 +167,8 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsExport
           | :EntitiesRecordsExportUnredacted
           | :EntitiesRecordsImport
+          | :EntitiesAttachmentsManage
+          | :EntitiesAttachmentsRead
 
   @type access_decision_kind :: :Allow | :Deny403 | :AllowWithRowFilter
 
@@ -198,6 +213,8 @@ defmodule Letflow.Api.Authorization do
           | :EntitiesRecordsExport
           | :EntitiesRecordsExportUnredacted
           | :EntitiesRecordsImport
+          | :EntitiesAttachmentsManage
+          | :EntitiesAttachmentsRead
           | :Unknown
 
   @type task_row_scope :: :all | {:own_user_and_groups, String.t()}
@@ -231,7 +248,9 @@ defmodule Letflow.Api.Authorization do
     :EntitiesAggregate,
     :EntitiesRecordsExport,
     :EntitiesRecordsExportUnredacted,
-    :EntitiesRecordsImport
+    :EntitiesRecordsImport,
+    :EntitiesAttachmentsManage,
+    :EntitiesAttachmentsRead
   ]
 
   @doc "All five `Role` values, R-Co's exact names. See `roles_from_strings/1` for untrusted-input conversion."
@@ -239,7 +258,7 @@ defmodule Letflow.Api.Authorization do
   def roles, do: @roles
 
   @doc """
-  All twenty-seven `Permission` values — R-Co's fourteen, plus REQ-075's
+  All twenty-nine `Permission` values — R-Co's fourteen, plus REQ-075's
   `:TenantsManage`, plus REQ-076's `:RolesManage`, plus REQ-212's
   `:AttachmentsManage`/`:AttachmentsRead`, plus ISS-0389's
   `:InstancesAdvanceTimer`, plus REQ-309's four entity-subsystem permissions
@@ -247,7 +266,8 @@ defmodule Letflow.Api.Authorization do
   `:EntitiesRecordsWrite`, `:EntitiesQuery`), plus REQ-315's
   `:EntitiesAggregate`, plus REQ-318's three entity-record export/import
   permissions (`:EntitiesRecordsExport`, `:EntitiesRecordsExportUnredacted`,
-  `:EntitiesRecordsImport`).
+  `:EntitiesRecordsImport`), plus REQ-317's `:EntitiesAttachmentsManage`/
+  `:EntitiesAttachmentsRead`.
 
   The stated count is asserted against `length(permissions())` by
   `test/letflow/api/authorization_test.exs` (REQ-309 AC1), computed rather than
@@ -562,6 +582,41 @@ defmodule Letflow.Api.Authorization do
   def endpoint_policy_key("POST", "/entities/records/:entity_type/import"),
     do: :EntitiesRecordsImport
 
+  # REQ-317 — record-attachment routes (Letflow.Routers.Entities), per
+  # design `lib/letflow/design/req313-entity-record-attachments.md` §3's
+  # route table and §4's permission vocabulary. Two NEW atoms
+  # (`:EntitiesAttachmentsManage`/`:EntitiesAttachmentsRead`), not a reuse of
+  # `:AttachmentsManage`/`:AttachmentsRead` (those gate
+  # Letflow.Repository.Attachments' instance_id-scoped table only) nor of
+  # `:EntitiesRecordsWrite` (that gates the record's own field_values
+  # payload, a different capability) — see design §4 for the full
+  # not-reused reasoning. Create/delete (mutation) map to
+  # :EntitiesAttachmentsManage; list/get-content (read) map to
+  # :EntitiesAttachmentsRead, matching REQ-212's own manage/read split.
+  def endpoint_policy_key(
+        "POST",
+        "/entities/records/:entity_type/:record_id/attachments"
+      ),
+      do: :EntitiesAttachmentsManage
+
+  def endpoint_policy_key(
+        "GET",
+        "/entities/records/:entity_type/:record_id/attachments"
+      ),
+      do: :EntitiesAttachmentsRead
+
+  def endpoint_policy_key(
+        "GET",
+        "/entities/records/:entity_type/:record_id/attachments/:attachment_id"
+      ),
+      do: :EntitiesAttachmentsRead
+
+  def endpoint_policy_key(
+        "DELETE",
+        "/entities/records/:entity_type/:record_id/attachments/:attachment_id"
+      ),
+      do: :EntitiesAttachmentsManage
+
   def endpoint_policy_key(_method, _path), do: :Unknown
 
   @doc """
@@ -673,6 +728,11 @@ defmodule Letflow.Api.Authorization do
 
   def required_permission(:EntitiesRecordsImport), do: :EntitiesRecordsImport
 
+  # REQ-317 — identity clauses (policy-key name == permission name), design
+  # §4, same shape as :AttachmentsManage/:AttachmentsRead above.
+  def required_permission(:EntitiesAttachmentsManage), do: :EntitiesAttachmentsManage
+  def required_permission(:EntitiesAttachmentsRead), do: :EntitiesAttachmentsRead
+
   def required_permission(:Unknown), do: :MetricsRead
 
   @doc "Ports `hasPermission/2` (L171-176) exactly."
@@ -714,7 +774,12 @@ defmodule Letflow.Api.Authorization do
         # also gets :EntitiesAggregate -- a role already trusted to read
         # individual rows for an entity type is, at minimum, equally trusted
         # to read an aggregate over the same rows.
-        :EntitiesAggregate
+        :EntitiesAggregate,
+        # REQ-317 (design §7 OQ-2 role matrix): read only -- this role holds
+        # :EntitiesQuery/:EntitiesDefinitionsRead/:EntitiesDefinitionsWrite
+        # but not :EntitiesRecordsWrite (a schema-authoring role, not the
+        # "operate on live tenant data" class Manage is reserved for).
+        :EntitiesAttachmentsRead
       ]
 
   def role_allows?(:PROCESS_OPERATOR, permission),
@@ -743,7 +808,14 @@ defmodule Letflow.Api.Authorization do
         :EntitiesQuery,
         # REQ-315 (design §3 role matrix): mirrors :EntitiesQuery, see the
         # PROCESS_DESIGNER clause's comment above.
-        :EntitiesAggregate
+        :EntitiesAggregate,
+        # REQ-317 (design §7 OQ-2 role matrix): both -- this role holds
+        # :EntitiesRecordsWrite and both instance-scoped
+        # :AttachmentsManage/:AttachmentsRead already, tracking the same
+        # "operate on live tenant data" class :EntitiesRecordsWrite itself
+        # was assigned to for this role.
+        :EntitiesAttachmentsManage,
+        :EntitiesAttachmentsRead
       ]
 
   def role_allows?(:TASK_WORKER, permission),
@@ -761,7 +833,11 @@ defmodule Letflow.Api.Authorization do
         :EntitiesQuery,
         # REQ-315 (design §3 role matrix): mirrors :EntitiesQuery, see the
         # PROCESS_DESIGNER clause's comment above.
-        :EntitiesAggregate
+        :EntitiesAggregate,
+        # REQ-317 (design §7 OQ-2 role matrix): read only -- no write-class
+        # entity permission at all is granted to this role, mirroring its
+        # existing instance-scoped :AttachmentsRead-only grant.
+        :EntitiesAttachmentsRead
       ]
 
   def role_allows?(:AGENT_RUNNER, _permission), do: false

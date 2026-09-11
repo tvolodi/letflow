@@ -6233,5 +6233,26 @@
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0583 (queue task 583, GH#1200) -- reattempted after REQ-292 merged (PR #1204), resolving an earlier blocked outcome (2026-09-10T21:54Z) whose precondition (a real TASK_COMPLETED v2 schema) did not yet exist. Extends mix letflow.backfill_event_type_versions (ISS-0332's already-generic mechanism) with a byte-verbatim TASK_COMPLETED v2 seed, backfilling pre-existing tenants stuck at schema_version 1. Pipeline: CODE-DESIGNER (re-verified premise for real; 1 rework for a phantom 'DIRECTIVE T-4' citation) -> CODE-DESIGN-VALIDATOR PASS -> ELIXIR-DEV (fail-first-proven regression test, real AC1 evidence) -> SECURITY-REVIEWER FAIL then PASS (1 rework: caught the new test file reintroducing the exact global Sandbox.mode(:auto) leak ISS-0580 had just closed hours earlier, causing a real ColumnPromotionTest regression in the same run -- fixed via SandboxAutoMode.provision!/2, independently re-verified) -> REVIEWER PASS. TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent."
     }
+,
+    {
+      "run_id": "WF02-REQ312-20260911",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-312",
+      "issue_id": null,
+      "queue_task_id": 602,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1253,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/design"
+      ],
+      "branch_name": "feature/WF02-REQ312-20260911",
+      "started_at": "2026-09-11T14:01:25Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-312 (queue task 602, GH#1253) -- S10 gap 2, design-only requirement for an aggregation/reporting query capability (count/sum/avg/min/max/group_by) over Letflow.Entities.Query.Compiler, extending Letflow.Routers.Entities' POST /entities/query surface with a new sibling route POST /entities/query/aggregate and a new compile_aggregate/2. Design artefact: lib/letflow/design/req312-query-aggregation.md. Pipeline: CODE-DESIGNER (2 rework cycles: a self-contradictory typed_columns/1 arity citation + a misquote, then a genuine security gap) -> CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS (found the design's INV-2 mechanism exempted filters fields, which combined with count/group_by turns a weak single-bit filter oracle into an exact per-group count reconstructing a restricted field's tenant-wide distribution; fixed by extending the restriction check to filters fields, scoped only to the new aggregate route; verdict recorded in the design artefact per this requirement's own AC) -> CODE-DESIGN-VALIDATOR final narrow re-check PASS. No lib/ implementation, no route mounted, no migration, no test."
+    }
   ]
 }

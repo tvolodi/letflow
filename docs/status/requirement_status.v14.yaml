@@ -586,3 +586,40 @@ history:
       mistake. impl_order written back into docs/requirements.yaml.
       docs/migration/stage-10-bilimbaga-vertical.md's gap table updated
       to show gaps 2/3/12 as design-owned but not yet closed.
+  - req: REQ-312
+    event: done
+    agent: ORCH
+    at: "2026-09-11T14:19:36Z"
+    note: >
+      REQ-312 (queue task 602, GH#1253) implemented via
+      feature/WF02-REQ312-20260911: S10 gap 2, a design-only requirement
+      for an aggregation/reporting query capability
+      (count/sum/avg/min/max/group_by) over Letflow.Entities.Query.
+      Compiler's existing infrastructure, extending Letflow.Routers.
+      Entities' now-landed POST /entities/query surface with a new
+      sibling route, POST /entities/query/aggregate, and a new
+      compile_aggregate/2 alongside (not replacing) compile/2. Reuses
+      Allowlist.load/2 + resolve_field/2 for group_by/aggregate-target
+      resolution rather than a second allowlist. New :EntitiesAggregate
+      permission atom. Design artefact:
+      lib/letflow/design/req312-query-aggregation.md. Pipeline:
+      CODE-DESIGNER (2 rework cycles: first a self-contradictory
+      typed_columns/1 arity citation -- that function doesn't exist,
+      only /0 and /2 do -- plus a misquote of metrics_exposition.ex;
+      then a genuine security gap SECURITY-REVIEWER found) ->
+      CODE-DESIGN-VALIDATOR PASS -> SECURITY-REVIEWER FAIL then PASS
+      (found that the design's INV-2 mechanism -- reject aggregate-
+      target/group_by fields the caller can't see -- explicitly
+      exempted filters fields, which combined with count/group_by turns
+      a pre-existing weak single-bit filter oracle into an exact
+      per-group count, letting a caller reconstruct a restricted
+      field's tenant-wide distribution in a handful of requests; fixed
+      by extending the pre-compilation restriction check to filters
+      fields too, scoped only to the new aggregate route, leaving the
+      existing plain query route untouched; verdict recorded directly
+      in the design artefact per this requirement's own AC) ->
+      CODE-DESIGN-VALIDATOR final narrow re-check PASS. Rule 1 (0022)
+      vocabulary self-check and scope (only the one design file
+      touched) both verified. No lib/ implementation, no route mounted,
+      no migration, no test, matching this requirement's own scope
+      fence. docs/requirements.yaml flipped pending -> done.

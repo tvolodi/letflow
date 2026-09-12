@@ -56,3 +56,44 @@ affected_files:
   - priv/packs/bilimbaga/entity_definitions
 queue_ref: Q-623
 github_ref: GH-1308
+status: resolved
+resolved_by: ELIXIR-DEV
+resolved_in_run: issue/ISS-0623-20260913
+resolved_at: "2026-09-13T04:35:05Z"
+resolution_note: >
+  Fixed by adding DDL.index_create_statements/2, which emits one
+  `CREATE [UNIQUE] INDEX <name> ON <table> (<columns>)` per declared
+  index_def, wired into TenantProvisioning.create_and_populate_entity_table/3
+  alongside the existing column/constraint/FK DDL. Design in
+  lib/letflow/design/iss0623-entity-index-ddl-emission.md settled the
+  scope: every declared index is always emitted, including one that
+  overlaps a unique constraint -- no dedup, since Postgres tolerates the
+  redundancy and silently skipping would reintroduce exactly the kind of
+  invisible gap this issue is about. Cross-entity-type index-name
+  collision within one tenant schema is a documented, deliberate
+  follow-on rather than a defect fixed here: it now surfaces loudly as a
+  real Postgres duplicate-index error at promotion time instead of
+  silently doing nothing. Retrofitting indexes onto an entity type that
+  is already promoted is also a named follow-on, out of scope. Fields
+  typed :localized_text are defensively rejected from index_def, since
+  their storage shape (per-locale generated columns) has no single
+  column to index against.
+
+  Two supporting fixes were necessary and made during implementation,
+  not part of the original diagnosis: (1) document_from_persisted/1 was
+  dropping the :indexes key entirely when reconstructing a Definition.t()
+  from a persisted document -- undetected until now because nothing read
+  :indexes downstream, but it would have made the whole DDL-emission fix
+  a no-op against any already-persisted definition; (2)
+  mark_ddl_failed_and_return/3 and run_column_promotion/1 crashed on
+  transaction handling when the underlying connection was genuinely
+  aborted rather than merely erroring, fixed alongside the main change.
+
+  Verified against real Postgres (pg_indexes), not just generated DDL
+  text -- new tests in test/letflow/entities/definition/ddl_test.exs and
+  test/letflow/tenant_provisioning/column_promotion_test.exs. Gated by
+  SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS
+  (69/69 targeted tests), and re-verified by TEST-RUNNER after a rebase
+  onto main: full suite 4053 passed, exit 0. Branch
+  issue/ISS-0623-20260913, commit f169e369. PR: TBD (opened as part of
+  this close-out; see the branch's PR for the merged number).

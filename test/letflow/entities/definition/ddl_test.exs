@@ -739,4 +739,166 @@ defmodule Letflow.Entities.Definition.DDLTest do
       Repo.query!(~s|SET search_path TO public|)
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0623 -- index_create_statements/2 (unit-level, pure, async: true).
+  # See lib/letflow/design/iss0623-entity-index-ddl-emission.md §9.1.
+  # ---------------------------------------------------------------------------
+
+  describe "index_create_statements/2" do
+    test "emits one CREATE INDEX statement per index_def, in declared order" do
+      definition = %{
+        name: "question",
+        display_name: "Question",
+        fields: [%{name: "status", type: :string}, %{name: "category_id", type: :string}],
+        indexes: [
+          %{name: "idx_question_status", fields: ["status"]},
+          %{name: "idx_question_category_id", fields: ["category_id"]}
+        ]
+      }
+
+      assert {:ok,
+              [
+                ~s|CREATE INDEX "idx_question_status" ON "question_table" ("status")|,
+                ~s|CREATE INDEX "idx_question_category_id" ON "question_table" ("category_id")|
+              ]} = DDL.index_create_statements(definition, "question_table")
+    end
+
+    test "emits CREATE UNIQUE INDEX when index_def.unique is true" do
+      definition = %{
+        name: "tag",
+        display_name: "Tag",
+        fields: [%{name: "name", type: :string}],
+        indexes: [%{name: "uq_tag_name_idx", fields: ["name"], unique: true}]
+      }
+
+      assert {:ok, [~s|CREATE UNIQUE INDEX "uq_tag_name_idx" ON "tag_table" ("name")|]} =
+               DDL.index_create_statements(definition, "tag_table")
+    end
+
+    test "preserves multi-field declared order without reordering or deduplicating" do
+      definition = %{
+        name: "question_tag",
+        display_name: "Question tag",
+        fields: [%{name: "tag_id", type: :string}, %{name: "question_id", type: :string}],
+        indexes: [
+          %{name: "idx_pair", fields: ["tag_id", "question_id"]}
+        ]
+      }
+
+      assert {:ok,
+              [~s|CREATE INDEX "idx_pair" ON "question_tag_table" ("tag_id", "question_id")|]} =
+               DDL.index_create_statements(definition, "question_tag_table")
+    end
+
+    test "returns {:ok, []} when :indexes is absent" do
+      assert {:ok, []} =
+               DDL.index_create_statements(%{name: "x", display_name: "X", fields: []}, "x_table")
+    end
+
+    test "returns {:ok, []} when :indexes is []" do
+      assert {:ok, []} =
+               DDL.index_create_statements(
+                 %{name: "x", display_name: "X", fields: [], indexes: []},
+                 "x_table"
+               )
+    end
+
+    test "rejects a malformed index name" do
+      definition = %{
+        name: "x",
+        display_name: "X",
+        fields: [%{name: "a", type: :string}],
+        indexes: [%{name: "Bad Name", fields: ["a"]}]
+      }
+
+      assert {:error, {:invalid_identifier, field: :index_name, value: "Bad Name"}} =
+               DDL.index_create_statements(definition, "x_table")
+    end
+
+    test "rejects a malformed index field name" do
+      definition = %{
+        name: "x",
+        display_name: "X",
+        fields: [%{name: "a", type: :string}],
+        indexes: [%{name: "idx_x", fields: ["Bad Field"]}]
+      }
+
+      assert {:error, {:invalid_identifier, field: :index_field, value: "Bad Field"}} =
+               DDL.index_create_statements(definition, "x_table")
+    end
+
+    test "rejects an index_def naming a :localized_text field" do
+      definition = %{
+        name: "question",
+        display_name: "Question",
+        fields: [%{name: "stem", type: :localized_text, locales: ["en"]}],
+        indexes: [%{name: "idx_stem", fields: ["stem"]}]
+      }
+
+      assert {:error,
+              {:unsupported_index_field_type,
+               index_name: "idx_stem", field: "stem", type: :localized_text}} =
+               DDL.index_create_statements(definition, "question_table")
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0623 -- index_create_statements/2 output runs against a real
+  # ephemeral Postgres schema, asserted via pg_indexes (not DDL text alone).
+  # See lib/letflow/design/iss0623-entity-index-ddl-emission.md §9.2.
+  # ---------------------------------------------------------------------------
+
+  describe "index_create_statements/2 output runs against a real ephemeral Postgres schema" do
+    test "every declared index_def produces a real, matching pg_indexes row" do
+      schema_name =
+        "ddl_idx_test_" <> (:crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower))
+
+      table_name = "widget"
+
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [
+          %{name: "status", type: :string, queried: true},
+          %{name: "code", type: :string, queried: true}
+        ],
+        indexes: [
+          %{name: "idx_widget_status", fields: ["status"]},
+          %{name: "uq_widget_code_idx", fields: ["code"], unique: true}
+        ]
+      }
+
+      on_exit(fn ->
+        Repo.query!(~s|DROP SCHEMA IF EXISTS "#{schema_name}" CASCADE|)
+      end)
+
+      Repo.query!(~s|CREATE SCHEMA "#{schema_name}"|)
+      Repo.query!(~s|SET search_path TO "#{schema_name}"|)
+
+      assert {:ok, create_table_sql} = DDL.generate_table_ddl(definition, table_name)
+      Repo.query!(create_table_sql)
+
+      assert {:ok, index_sqls} = DDL.index_create_statements(definition, table_name)
+      assert length(index_sqls) == 2
+      Enum.each(index_sqls, &Repo.query!(&1))
+
+      pg_indexes_result =
+        Repo.query!(
+          "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2",
+          [schema_name, table_name]
+        )
+
+      indexes_by_name =
+        Map.new(pg_indexes_result.rows, fn [indexname, indexdef] -> {indexname, indexdef} end)
+
+      assert Map.has_key?(indexes_by_name, "idx_widget_status")
+      refute indexes_by_name["idx_widget_status"] =~ "CREATE UNIQUE INDEX"
+
+      assert Map.has_key?(indexes_by_name, "uq_widget_code_idx")
+      assert indexes_by_name["uq_widget_code_idx"] =~ "CREATE UNIQUE INDEX"
+
+      Repo.query!(~s|SET search_path TO public|)
+    end
+  end
 end

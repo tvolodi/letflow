@@ -521,3 +521,53 @@ history:
       gap is invisible to the author, and every future pack inherits it.
       REQ-327's five indexes, ported from the source system's own
       measured CREATE INDEX statements, are currently documentation.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-12T20:26:16Z"
+    note: >
+      Claimed letflow-queue task 623 (WF-03 issue ISS-0623, GitHub
+      #1308): lib/letflow/entities/definition/ddl.ex validates
+      index_def entries (Rule 4, index_shape_violations/1) but never
+      emits CREATE INDEX -- a declared index installs cleanly and does
+      nothing, discovered by REVIEWER while gating REQ-327's five
+      exam-configuration indexes. Dispatching ISSUE-FIXER for
+      root-cause diagnosis per WF-03, though the queue description
+      already contains a strong root-cause analysis from REVIEWER;
+      ISSUE-FIXER will confirm/extend it and route to CODE-DESIGNER +
+      ELIXIR-DEV for the actual fix (emit CREATE INDEX alongside table
+      creation, check for cross-entity index-name collision within a
+      tenant schema, add a pg_indexes-based test, audit whether any
+      other declarative Definition.t() structure is similarly
+      validated-but-never-emitted).
+  - req: SCOPE-CHANGE
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-12T23:39:02Z"
+    note: >
+      Close-out for ISS-0623 (queue task 623, GH#1308), on branch
+      issue/ISS-0623-20260913 (commit f169e369). Added
+      DDL.index_create_statements/2, emitting one `CREATE [UNIQUE] INDEX`
+      per declared index_def, wired into
+      TenantProvisioning.create_and_populate_entity_table/3 alongside the
+      existing column/constraint/FK DDL. Design in
+      lib/letflow/design/iss0623-entity-index-ddl-emission.md settled
+      scope: every declared index is always emitted, including one
+      overlapping a unique constraint, with no dedup; cross-entity-type
+      index-name collision within a tenant schema is a documented
+      follow-on rather than a defect fixed here (it now surfaces loudly
+      as a real Postgres error instead of silently doing nothing);
+      retrofitting indexes onto an already-promoted entity type is
+      likewise a named follow-on; :localized_text-typed fields are
+      defensively rejected from index_def since their storage shape has
+      no single column to index. Two supporting fixes found and made
+      during implementation: document_from_persisted/1 was dropping the
+      :indexes key entirely (would have made the whole fix a no-op
+      against real persisted definitions), and
+      mark_ddl_failed_and_return/3 / run_column_promotion/1 crashed on
+      transaction handling against a genuinely-aborted connection.
+      Verified against real Postgres pg_indexes, not just generated DDL
+      text. Pipeline: SECURITY-REVIEWER PASS, REVIEWER PASS,
+      TEST-DESIGN-VALIDATOR PASS (69/69 targeted tests), TEST-RUNNER
+      re-verification after rebase onto main: full suite 4053 passed,
+      exit 0. docs/issues/ISS-0623.yaml flipped to status: resolved.

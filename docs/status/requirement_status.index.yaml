@@ -3141,8 +3141,29 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 11
+    entries: 13
     note: >
+      Incremented to 13 by DOC-UPDATER's own ISS-0623 close-out
+      done-event append (issue/ISS-0623-20260913, Step 6) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 13
+      on-disk entries; 573 lines / 33641 bytes, well under the roll
+      ceiling. No rebase conflict on this file.
+      Recounted to 12 on issue/ISS-0623-20260913's Step Final rebase
+      onto main, composing REQ-327's own done-event append and the
+      ISS-0623-filed SCOPE-CHANGE done-event append (both landed on
+      main first, at 20:22:08Z) with this run's own ISS-0623
+      started-event append (20:26:16Z) chronologically -- all three
+      are independent appends with no overlapping lines, recounted
+      directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 12 on-disk entries
+      rather than carrying forward either side's independently-computed
+      count, per this note's own recount-every-time rule. 542 lines /
+      31822 bytes, well under the roll ceiling.
+      Incremented to 10 by ORCH's own ISS-0623 started-event append
+      (SCOPE-CHANGE, queue task 623) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 10 on-disk entries;
+      490 lines / 28739 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
       Incremented to 9 by ORCH's own REQ-328 blocked-event append
       (direct-action, dependency REQ-327 not yet done) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 9

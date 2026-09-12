@@ -957,4 +957,137 @@ defmodule Letflow.TenantProvisioning.ColumnPromotionTest do
       assert row.pg_type == "numeric(10, 2)"
     end
   end
+
+  # ---------------------------------------------------------------------------------
+  # ISS-0623 -- `definition.indexes` actually emits CREATE INDEX against the
+  # real per-tenant table, verified via pg_indexes (schema-qualified), not
+  # merely against generated DDL text. See
+  # lib/letflow/design/iss0623-entity-index-ddl-emission.md §9.3.
+  # ---------------------------------------------------------------------------------
+
+  defp fetch_tenant_pg_indexes(schema, table_name) do
+    Repo.query!(
+      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = $1 AND tablename = $2",
+      [schema, table_name]
+    ).rows
+    |> Map.new(fn [indexname, indexdef] -> {indexname, indexdef} end)
+  end
+
+  describe "ISS-0623 -- definition.indexes emits real CREATE INDEX statements in the tenant schema" do
+    test "run_column_promotion/1's table creation emits every declared index_def, unique flag included" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema,
+        fields: [
+          %{name: "amount", type: :string, queried: true},
+          %{name: "code", type: :string, queried: true}
+        ],
+        indexes: [
+          %{name: "idx_invoice_amount", fields: ["amount"]},
+          %{name: "uq_invoice_code_idx", fields: ["code"], unique: true}
+        ]
+      )
+
+      assert {:ok, table_name} = TenantProvisioning.table_name_for_entity_type("invoice")
+      refute TenantProvisioning.entity_table_exists?(schema, table_name)
+
+      assert {:ok, [row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
+               TenantProvisioning.run_column_promotion(row.id)
+
+      assert TenantProvisioning.entity_table_exists?(schema, table_name)
+
+      indexes = fetch_tenant_pg_indexes(schema, table_name)
+
+      assert Map.has_key?(indexes, "idx_invoice_amount")
+      refute indexes["idx_invoice_amount"] =~ "CREATE UNIQUE INDEX"
+
+      assert Map.has_key?(indexes, "uq_invoice_code_idx")
+      assert indexes["uq_invoice_code_idx"] =~ "CREATE UNIQUE INDEX"
+    end
+
+    test "a cross-entity-type index-name collision surfaces as a real, unswallowed ddl_failed error -- never a silent rename or silent success" do
+      %{tenant_id: tenant_id, schema_name: schema} = provisioned_tenant()
+
+      create_active_definition!(schema,
+        fields: [%{name: "amount", type: :string, queried: true}],
+        indexes: [%{name: "idx_shared_name", fields: ["amount"]}]
+      )
+
+      assert {:ok, invoice_table} = TenantProvisioning.table_name_for_entity_type("invoice")
+
+      assert {:ok, [invoice_row]} =
+               TenantProvisioning.register_column_promotion(
+                 "invoice",
+                 "amount",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
+               TenantProvisioning.run_column_promotion(invoice_row.id)
+
+      assert Map.has_key?(fetch_tenant_pg_indexes(schema, invoice_table), "idx_shared_name")
+
+      # A second, distinct entity type in the SAME tenant schema, declaring
+      # an index_def with the identical name.
+      second_definition = %{
+        name: "receipt",
+        display_name: "Receipt",
+        fields: [%{name: "total", type: :string, queried: true}],
+        indexes: [%{name: "idx_shared_name", fields: ["total"]}]
+      }
+
+      assert {:ok, entity_definition} =
+               Definitions.create_definition(
+                 %{definition: second_definition, created_by: Ecto.UUID.generate()},
+                 schema
+               )
+
+      assert {:ok, _activated} =
+               Definitions.activate_definition(
+                 entity_definition.name,
+                 Ecto.UUID.generate(),
+                 "go-live",
+                 schema
+               )
+
+      assert {:ok, receipt_table} = TenantProvisioning.table_name_for_entity_type("receipt")
+      refute TenantProvisioning.entity_table_exists?(schema, receipt_table)
+
+      assert {:ok, [receipt_row]} =
+               TenantProvisioning.register_column_promotion(
+                 "receipt",
+                 "total",
+                 %{pg_type: "text", nullable: true},
+                 [tenant_id]
+               )
+
+      assert {:error, {:ddl_failed, %Postgrex.Error{postgres: %{code: :duplicate_table}}}} =
+               TenantProvisioning.run_column_promotion(receipt_row.id)
+
+      # No partial/renamed table left behind -- the whole transaction
+      # (CREATE TABLE + its indexes) rolled back per the design's §2
+      # atomicity argument.
+      refute TenantProvisioning.entity_table_exists?(schema, receipt_table)
+
+      # The first entity type's index is untouched: still exactly one
+      # pg_indexes row named "idx_shared_name" in this schema, on the
+      # invoice table -- never silently renamed, never silently duplicated.
+      assert Map.has_key?(fetch_tenant_pg_indexes(schema, invoice_table), "idx_shared_name")
+
+      all_schema_indexes =
+        Repo.query!("SELECT indexname FROM pg_indexes WHERE schemaname = $1", [schema]).rows
+        |> List.flatten()
+
+      assert Enum.count(all_schema_indexes, &(&1 == "idx_shared_name")) == 1
+    end
+  end
 end

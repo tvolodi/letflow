@@ -1280,13 +1280,27 @@ defmodule Letflow.TenantProvisioning do
   def run_column_promotion(promotion_id) do
     with {:ok, promotion} <- fetch_column_promotion(promotion_id),
          {:ok, schema_name} <- resolve_schema_name(promotion.tenant_id) do
-      {:ok, outcome} =
-        Repo.transaction(fn ->
-          Repo.query!("SELECT pg_advisory_xact_lock(hashtext($1))", [schema_name])
-          do_run_column_promotion(schema_name, promotion)
-        end)
-
-      outcome
+      # ISS-0623 finding, flagged for REVIEWER: `do_run_column_promotion/2`
+      # returns most of its `{:error, reason}` outcomes as ordinary values
+      # (relying on this transaction's eventual COMMIT to persist
+      # `mark_ddl_failed_and_return/3`'s own status="ddl_failed" write --
+      # by design, that write must survive), but its `mark_ddl_failed_and_return/3`
+      # helper now calls `Repo.rollback/1` directly (not an ordinary
+      # return) for the one sub-case where the connection is already
+      # aborted by a genuine raised Postgres DDL error (see that
+      # function's own comment) -- so `Repo.transaction/1` below can
+      # legitimately return either `{:ok, outcome}` (the ordinary-return
+      # path, `outcome` itself possibly an `{:error, _}` tuple that is
+      # still meant to be committed) or `{:error, reason}` (the explicit
+      # `Repo.rollback/1` path). Both are handled and normalized to this
+      # function's own `@spec` shape.
+      case Repo.transaction(fn ->
+             Repo.query!("SELECT pg_advisory_xact_lock(hashtext($1))", [schema_name])
+             do_run_column_promotion(schema_name, promotion)
+           end) do
+        {:ok, outcome} -> outcome
+        {:error, reason} -> {:error, reason}
+      end
     end
   end
 
@@ -1414,6 +1428,23 @@ defmodule Letflow.TenantProvisioning do
   # explicitly here rather than left an unnarrated catch-all. If it were
   # ever reached anyway, generate_table_ddl/2's own {:error, ddl_error()}
   # return flows straight out of this `with` unchanged.
+  # ISS-0623: `DDL.index_create_statements/2` + `execute_create_indexes/3`
+  # are added here, after the CREATE TABLE step and before
+  # Projector.rebuild_projection/2's call, per the approved design
+  # (lib/letflow/design/iss0623-entity-index-ddl-emission.md §2). No
+  # explicit rollback logic is needed for a mid-way CREATE INDEX failure:
+  # this whole chain runs inside run_column_promotion/1's single
+  # Repo.transaction/1 (line ~1283), and a raised Postgres-level SQL error
+  # aborts that transaction -- execute_create_indexes/3 rescues the
+  # exception into an ordinary {:error, {:ddl_failed, _}} return (never a
+  # re-raise, never Repo.rollback/1), but Postgres itself still refuses
+  # every subsequent statement on that connection and turns the eventual
+  # COMMIT into an implicit ROLLBACK once Repo.transaction/1's function
+  # returns normally. So a failed CREATE INDEX rolls back the CREATE TABLE
+  # too -- all-or-nothing "for free," identical in spirit to
+  # execute_create_table/1's own existing failure handling, just extended
+  # to cover the statements after it in the same transaction.
+  # entity_table_exists?/2 will then correctly see "no table" on any retry.
   defp create_and_populate_entity_table(schema_name, entity_type, table_name) do
     with {:ok, definition} <- Definitions.get_active_definition_by_name(entity_type, schema_name),
          document = document_from_persisted(definition),
@@ -1422,7 +1453,9 @@ defmodule Letflow.TenantProvisioning do
          :ok <-
            execute_create_table(
              qualify_create_table_sql(sql, schema_name, table_name, fk_target_tables)
-           ) do
+           ),
+         {:ok, index_sqls} <- DDL.index_create_statements(document, table_name),
+         :ok <- execute_create_indexes(schema_name, table_name, index_sqls) do
       case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
         {:ok, _result} ->
           :ok
@@ -1444,6 +1477,52 @@ defmodule Letflow.TenantProvisioning do
     :ok
   rescue
     exception -> {:error, {:ddl_failed, exception}}
+  end
+
+  # ISS-0623: issues each `CREATE INDEX`/`CREATE UNIQUE INDEX` statement
+  # DDL.index_create_statements/2 returned, in declared order, against the
+  # tenant schema -- mirrors execute_create_table/1's rescue-into-
+  # {:ddl_failed, exception} shape exactly, so it composes into
+  # create_and_populate_entity_table/3's existing `with`/`else` handling
+  # with no new error shape. Deliberately does NOT pre-check for an
+  # existing index of the same name before issuing CREATE INDEX (unlike
+  # constraint_exists?/3's idempotent-skip) -- per the approved design §4,
+  # a name collision against another entity type's already-created table in
+  # this schema must surface as a real, unswallowed Postgres "already
+  # exists" error via this same {:ddl_failed, exception} path, never a
+  # silent rename and never a silently swallowed success.
+  @spec execute_create_indexes(schema_name :: String.t(), table_name :: String.t(), [
+          String.t()
+        ]) :: :ok | {:error, {:ddl_failed, Exception.t()}}
+  defp execute_create_indexes(schema_name, table_name, index_sqls) do
+    Enum.reduce_while(index_sqls, :ok, fn sql, :ok ->
+      qualified_sql = qualify_index_create_sql(sql, schema_name, table_name)
+
+      try do
+        Repo.query!(qualified_sql)
+        {:cont, :ok}
+      rescue
+        exception -> {:halt, {:error, {:ddl_failed, exception}}}
+      end
+    end)
+  end
+
+  # DDL.index_create_statements/2 is schema-agnostic and returns
+  # `CREATE INDEX "<name>" ON "<table_name>" (...)` unqualified -- same
+  # convention generate_table_ddl/3 already uses. The `ON "<table_name>"`
+  # substring is unique within a single CREATE INDEX statement, so a
+  # substring-replace is unambiguous per-statement (same technique
+  # qualify_create_table_sql/4/qualify_fk_references/3 already use).
+  @spec qualify_index_create_sql(
+          sql :: String.t(),
+          schema_name :: String.t(),
+          table_name :: String.t()
+        ) ::
+          String.t()
+  defp qualify_index_create_sql(sql, schema_name, table_name) do
+    unqualified = ~s|ON "#{table_name}"|
+    qualified = ~s|ON "#{schema_name}"."#{table_name}"|
+    String.replace(sql, unqualified, qualified)
   end
 
   # generate_table_ddl/3 is deliberately schema-agnostic (its own moduledoc)
@@ -1683,6 +1762,42 @@ defmodule Letflow.TenantProvisioning do
       {:ok, _updated} -> {:error, error_reason}
       {:error, changeset} -> {:error, changeset}
     end
+  rescue
+    # ISS-0623 finding, flagged for REVIEWER: a genuine *raised* Postgres-
+    # level DDL error (e.g. a real cross-entity-type index-name collision,
+    # design §4) aborts the enclosing run_column_promotion/1's
+    # Repo.transaction/1 outright -- Postgres then refuses every
+    # subsequent statement on that same connection, including this
+    # function's own UPDATE, with `25P02 in_failed_sql_transaction`. This
+    # is a pre-existing structural gap in this shared helper (reachable by
+    # ANY {:ddl_failed, exception} path whose exception is a genuine
+    # raised Postgres error, not only this fix's new index-collision case)
+    # -- no prior test exercised a real raised-mid-transaction Postgres
+    # exception here, only Elixir-detected conditions
+    # (:column_type_conflict) or ArgumentError raises, neither of which
+    # abort the Postgres transaction. Swallowing this specific failure and
+    # still returning the real underlying `error_reason` is harmless: the
+    # UPDATE this rescues was never going to be persisted anyway, since
+    # run_column_promotion/1's own Repo.transaction/1 turns its eventual
+    # COMMIT on an already-aborted transaction into an implicit ROLLBACK
+    # regardless (design §2's own atomicity argument) -- so the
+    # ColumnPromotion row is left at its prior status (still "pending"),
+    # consistent with "no partial state to reconcile." Calls
+    # `Repo.rollback/1` (this module's own established idiom, e.g.
+    # `provision_tenant_schema/1` line ~328) rather than returning an
+    # ordinary `{:error, error_reason}` value: this function runs nested
+    # several calls deep inside `run_column_promotion/1`'s
+    # `Repo.transaction/1` fun, and an ordinary return here would let that
+    # fun return normally, hitting `Repo.transaction/1`'s own attempted
+    # COMMIT on an already-aborted connection -- which Ecto reports as a
+    # bare `{:error, :rollback}`, discarding `error_reason` entirely and
+    # crashing `run_column_promotion/1`'s own `{:ok, outcome} = ...`
+    # match (confirmed empirically while building this fix). Calling
+    # `Repo.rollback/1` explicitly instead unwinds straight to
+    # `Repo.transaction/1`, which issues a real `ROLLBACK` (valid even on
+    # an already-aborted connection) and preserves `error_reason` via
+    # `{:error, error_reason}` regardless of the connection's abort state.
+    _exception -> Repo.rollback(error_reason)
   end
 
   @doc """
@@ -2267,7 +2382,8 @@ defmodule Letflow.TenantProvisioning do
       display_name: Map.get(json, "display_name"),
       fields: json |> Map.get("fields", []) |> Enum.map(&field_from_persisted/1),
       foreign_keys: json |> Map.get("foreign_keys", []) |> Enum.map(&fk_from_persisted/1),
-      constraints: json |> Map.get("constraints", []) |> Enum.map(&constraint_from_persisted/1)
+      constraints: json |> Map.get("constraints", []) |> Enum.map(&constraint_from_persisted/1),
+      indexes: json |> Map.get("indexes", []) |> Enum.map(&index_from_persisted/1)
     }
   end
 
@@ -2306,6 +2422,22 @@ defmodule Letflow.TenantProvisioning do
       name: Map.fetch!(constraint, "name"),
       type: String.to_existing_atom(Map.fetch!(constraint, "type")),
       fields: Map.fetch!(constraint, "fields")
+    }
+  end
+
+  # ISS-0623: `indexes` (index_def(), REQ-225) was not part of
+  # document_from_persisted/1's round-trip at all before this fix -- the
+  # same gap constraint_from_persisted/1 above was added to close for
+  # REQ-298, now closed for `indexes` too so
+  # DDL.index_create_statements/2 (called on the `document` this function
+  # returns, in create_and_populate_entity_table/3) actually sees the
+  # declared indexes for a definition read back from persistence, not just
+  # for one built by hand in a unit test.
+  defp index_from_persisted(index) do
+    %{
+      name: Map.fetch!(index, "name"),
+      fields: Map.fetch!(index, "fields"),
+      unique: Map.get(index, "unique", false)
     }
   end
 

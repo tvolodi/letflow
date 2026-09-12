@@ -88,9 +88,21 @@ defmodule Letflow.Entities.Definition.DDL do
   @typedoc "Failure reason for `generate_table_ddl/3`."
   @type ddl_error ::
           {:invalid_identifier,
-           field: :table_name | :attribute | :constraint_name | :constraint_field,
+           field:
+             :table_name
+             | :attribute
+             | :constraint_name
+             | :constraint_field
+             | :index_name
+             | :index_field,
            value: String.t()}
           | {:missing_fk_target_table, entity_type: String.t()}
+
+  @typedoc "Failure reason for `index_create_statements/2` (ISS-0623)."
+  @type index_ddl_error ::
+          ddl_error()
+          | {:unsupported_index_field_type,
+             index_name: String.t(), field: String.t(), type: Definition.field_type()}
 
   @identifier_format_regex ~r/^[a-z][a-z0-9_]{0,63}$/
 
@@ -428,6 +440,116 @@ defmodule Letflow.Entities.Definition.DDL do
     |> case do
       {:ok, clauses} -> {:ok, Enum.reverse(clauses)}
       {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
+  Builds one complete, standalone `CREATE INDEX "<name>" ON "<table_name>"
+  (<fields>)` statement (or `CREATE UNIQUE INDEX` when `index_def.unique` is
+  `true`) per entry in `definition.indexes`, in `definition.indexes`'s
+  declared order, over **unqualified** `table_name` -- schema-qualification
+  is the caller's job, same convention `generate_table_ddl/3` already uses
+  (`Letflow.TenantProvisioning.qualify_index_create_sql/3`). Returns
+  `{:ok, []}` when `definition.indexes` is absent or `[]`.
+
+  `CREATE INDEX` cannot be inlined into `CREATE TABLE (...)`'s column/
+  constraint list the way `UNIQUE (...)`/`CHECK (...)` can -- Postgres
+  syntax requires a separate statement -- so this is a sibling function,
+  independent of `generate_table_ddl/3`'s own return value, never folded
+  into it (ISS-0623 design §1: this keeps `generate_table_ddl/3`'s
+  `@spec`/behavior/tests completely unchanged).
+
+  Validates every `index_def.name` and every entry of `index_def.fields` via
+  `valid_identifier?/1` (defence in depth, same posture as
+  `unique_constraint_clause/1`'s own checks), returning
+  `{:error, {:invalid_identifier, field: :index_name | :index_field, value:
+  ...}}` on the first invalid identifier found.
+
+  Also defensively rejects an `index_def` naming a `:localized_text`-typed
+  field (ISS-0623 design §5): such a field never promotes to a single column
+  named `field.name` (it promotes to one generated column per locale, see
+  `localized_text_column_specs/1`), so a naive `CREATE INDEX` referencing
+  `field.name` directly would reference a column that does not exist.
+  Returns `{:error, {:unsupported_index_field_type, index_name: ...,
+  field: ..., type: :localized_text}}` instead of emitting broken SQL.
+
+  Field order within each statement is `index_def.fields`'s declared order
+  -- never reordered or deduplicated (index column order is semantically
+  meaningful for a Postgres index's usefulness on range/prefix queries).
+
+  No de-duplication against `definition.constraints` is performed -- an
+  `index_def{unique: true}` whose fields overlap a `constraint_def`'s fields
+  is emitted verbatim regardless (ISS-0623 design §3: these are two
+  independent, author-controlled declarations).
+  """
+  @spec index_create_statements(Definition.t(), table_name :: String.t()) ::
+          {:ok, [String.t()]} | {:error, index_ddl_error()}
+  def index_create_statements(definition, table_name) do
+    localized_text_field_names =
+      definition
+      |> Map.get(:fields, [])
+      |> Enum.filter(fn field -> Map.get(field, :type) == :localized_text end)
+      |> MapSet.new(&Map.get(&1, :name))
+
+    definition
+    |> Map.get(:indexes, [])
+    |> Enum.reduce_while({:ok, []}, fn index_def, {:ok, acc} ->
+      case index_create_statement(index_def, table_name, localized_text_field_names) do
+        {:ok, statement} -> {:cont, {:ok, [statement | acc]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, statements} -> {:ok, Enum.reverse(statements)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp index_create_statement(
+         %{name: name, fields: fields} = index_def,
+         table_name,
+         localized_text_field_names
+       ) do
+    with :ok <- check_index_name_identifier(name),
+         :ok <- check_index_field_identifiers(fields),
+         :ok <- check_index_field_types(name, fields, localized_text_field_names) do
+      field_list = Enum.map_join(fields, ", ", &~s("#{&1}"))
+
+      keyword =
+        if Map.get(index_def, :unique) == true, do: "CREATE UNIQUE INDEX", else: "CREATE INDEX"
+
+      {:ok, ~s|#{keyword} "#{name}" ON "#{table_name}" (#{field_list})|}
+    end
+  end
+
+  defp check_index_name_identifier(name) do
+    if valid_identifier?(name) do
+      :ok
+    else
+      {:error, {:invalid_identifier, field: :index_name, value: name}}
+    end
+  end
+
+  defp check_index_field_identifiers(fields) do
+    fields
+    |> Enum.find(fn field -> not valid_identifier?(field) end)
+    |> case do
+      nil -> :ok
+      field -> {:error, {:invalid_identifier, field: :index_field, value: field}}
+    end
+  end
+
+  defp check_index_field_types(index_name, fields, localized_text_field_names) do
+    fields
+    |> Enum.find(fn field -> MapSet.member?(localized_text_field_names, field) end)
+    |> case do
+      nil ->
+        :ok
+
+      field ->
+        {:error,
+         {:unsupported_index_field_type,
+          index_name: index_name, field: field, type: :localized_text}}
     end
   end
 

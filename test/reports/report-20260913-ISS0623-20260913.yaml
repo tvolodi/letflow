@@ -1,0 +1,100 @@
+run_id: ISS0623-20260913
+agent: TEST-RUNNER
+workflow: WF-02 Step 4 / WF-04 Step 1 -- Test run
+timestamp_utc: "2026-09-13T00:34:00Z"
+branch: issue/ISS-0623-20260913
+head_commit: 5ac580da260207b5c3d3240b703e9ffdeafcbdec
+
+git_state:
+  clean_tree_before_this_run: false
+  note: >
+    ELIXIR-DEV left the ISS-0623 implementation uncommitted on this branch:
+    lib/letflow/entities/definition/ddl.ex, lib/letflow/tenant_provisioning.ex,
+    and their two test files (test/letflow/entities/definition/ddl_test.exs,
+    test/letflow/tenant_provisioning/column_promotion_test.exs), 559
+    insertions / 10 deletions total. Already passed SECURITY-REVIEWER (PASS),
+    REVIEWER (PASS), and TEST-DESIGN-VALIDATOR (PASS, 69/69 targeted tests).
+    This run's job was to confirm the FULL suite is green, not just the
+    targeted subset, then commit everything on this branch.
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d would be a no-op). No .env LETFLOW_DB_PORT override present; default port 5462 in effect."
+
+full_mix_test:
+  command: "mix test"
+  result: "PASS"
+  output_tail: |
+    Finished in 1639.0 seconds (16.5s async, 1622.4s sync)
+    Result: 4053 passed (6 properties, 4047 tests), 19 excluded
+  exit_code: 0
+  note: "Single serial mix test run (not the parallel partitioned runner) -- zero failures."
+
+mix_letflow_check:
+  command: "mix letflow.check"
+  result: "PASS"
+  exit_code: 0
+  partitioned_backend_suite:
+    partitions: 16
+    combined: "4044 tests, 6 properties, 0 failures (4050/4050 passed)"
+    note: >
+      No occurrence of the previously-flaky ISS-0224 sandbox_pool_test.exs
+      timing race this run -- combined result was clean, 0/4050 failing.
+      Not re-run in isolation since it did not appear; nothing to attribute.
+  other_subchecks:
+    - check: "check_requirements_registration (docs/requirements.yaml)"
+      result: "ran, no blocking findings"
+    - check: "check_req_id_collision"
+      result: "OK -- no REQ-NNN id collision with origin/main."
+    - check: "check_deferral_staleness (docs/requirements.yaml)"
+      result: "ran; one ADVISORY WARN block present (does not affect exit code) -- pre-existing, unrelated to ISS-0623's diff (ddl.ex / tenant_provisioning.ex touch no requirements.yaml entries)."
+    - check: "lint_handoffs"
+      result: "OK -- 0 new violations across 2486 handoff files (25 pre-existing grandfathered, traced to ISS-0190)."
+    - check: "check_async_sandbox_reachability"
+      result: "OK -- 77 async:true test files scanned, 0 reach Sandbox.mode/2, 0 new violations."
+    - check: "wasm_hang isolation reruns"
+      result: "OK -- 5/5 isolated subprocess runs passed clean."
+    - check: "lua_wallclock_race isolation rerun"
+      result: "OK -- isolated run passed clean."
+  verdict: "Overall exit code 0 -- PASS, no flake observed this run."
+
+tripwire_triage:
+  target: "test/letflow/simulation/req207_vortex_test.exs (Letflow.Simulation.Req207VortexTest)"
+  mechanism: >
+    The test scans docs/requirements.yaml (test/letflow/simulation/req207_vortex_test.exs:1311-1319)
+    for any `title:` line matching the word-bounded regex
+    ~r/title:.*\bentit(y|ies)\b/i, and requires every matched requirement id
+    (resolved via the nearest preceding `- id:` line) to be triaged into
+    either `allowed_ids` (builds nothing this scenario needs, or already
+    re-derived) or `pending_only_ids` (builds the HTTP surface, admitted
+    conditionally while status: pending).
+  determination: >
+    ISS-0623 is an issue (GitHub #1308, queue task 623), not a
+    docs/requirements.yaml requirement entry -- it does not add a new
+    REQ-NNN id. Confirmed by `grep -n "ISS-0623" docs/requirements.yaml`:
+    zero matches, no entry exists for it in that file at all. Since the
+    tripwire's regex scans docs/requirements.yaml's own `title:` lines
+    exclusively, and ISS-0623 has no line of any kind in that file, it
+    cannot trip the tripwire -- there is no id for it to resolve to, and
+    no triage decision to make.
+  action_taken: "None. Confirmed by direct inspection, not assumed."
+  verification: "Letflow.Simulation.Req207VortexTest included and passing in both the full mix test run (4053 passed) and mix letflow.check's 16-partition combined run (4050/4050 passed) -- no change made to the file."
+
+verdict: PASS
+verdict_reasoning: >
+  Full serial `mix test`: 4053 passed (6 properties, 4047 tests), 19
+  excluded, exit 0 -- zero failures. `mix letflow.check`: exit 0, its own
+  16-partition backend suite combined to 4050/4050 passed with zero
+  failures (the previously-known ISS-0224 sandbox_pool_test.exs flake did
+  not appear this run), and every other sub-check (requirements
+  registration, REQ id collision, deferral staleness, handoff lint, async
+  sandbox reachability, wasm_hang and lua_wallclock_race isolation reruns)
+  reported OK or an unrelated pre-existing advisory warning that does not
+  affect exit code. Req207VortexTest tripwire confirmed to need no
+  attention for ISS-0623 (it is an issue, not a requirements.yaml entry --
+  grep confirmed zero matches, so it cannot trip the title-scanning
+  regex). ELIXIR-DEV's uncommitted ISS-0623 implementation (ddl.ex,
+  tenant_provisioning.ex, and their tests) plus this report were committed
+  to issue/ISS-0623-20260913.
+next_action: >
+  Report PASS to ORCH along with the commit SHA. RELEASE-VALIDATOR
+  re-runs the suite independently rather than trusting this report.

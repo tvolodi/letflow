@@ -1,0 +1,61 @@
+{
+  "name": "answer_option",
+  "display_name": "Answer Option",
+  "description": "FR-BB22 (roadmap section 2.2) -- ports the answer_options AND answer_translations tables from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\009_questions.up.sql. The same two-tables-into-one collapse as question.json, for the same reason: BilimBaga used a per-locale row table (answer_translations) because its Postgres schema had no other way to hold multilingual text, and REQ-301's :localized_text is exactly that mechanism at the platform layer, so answer_translations has no independent existence in this pack. question_id is :string, queried: true, required: true. sort_order is :integer, queried: true, required: true. is_correct is :boolean, queried: true, required: true (source default FALSE). likert_weight is :decimal with decimal_precision: 5, decimal_scale: 2, queried: false, required: false -- both numbers are ported directly from the source's DECIMAL(5,2), not chosen independently. likert_polarity is :enum with enum_values [\"positive\",\"negative\"], queried: false, required: false, ported from the source CHECK. text is :localized_text (source answer_translations.text) with locales [\"kk\",\"ru\",\"en\"], search_strategy \"plain\", queried: true, required: true. Foreign keys: fk_answer_option_question_id (field \"question_id\", references_entity \"question\"). Indexes: idx_answer_option_question_id over question_id, mirroring the source's idx_answer_options_question_id. is_correct and field-level redaction: is_correct is the field a candidate must never see, and this is exactly what Letflow.Entities.Query.FieldGrants (REQ-231) -- field-level redaction that already exists -- is meant to govern. This pack does not configure a field grant; it only ensures is_correct is a first-class promoted field on its own record, so that redaction is expressible at all, which it would not be if answer options were nested inside the question's blob as a JSON array. This is the reason answer_option is authored as a separate entity type rather than a JSON array on question. No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+  "fields": [
+    {
+      "name": "question_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "is_correct",
+      "type": "boolean",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "likert_weight",
+      "type": "decimal",
+      "decimal_precision": 5,
+      "decimal_scale": 2,
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "likert_polarity",
+      "type": "enum",
+      "enum_values": ["positive", "negative"],
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "text",
+      "type": "localized_text",
+      "locales": ["kk", "ru", "en"],
+      "search_strategy": "plain",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_answer_option_question_id",
+      "field": "question_id",
+      "references_entity": "question"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_answer_option_question_id",
+      "fields": ["question_id"]
+    }
+  ]
+}

@@ -21424,7 +21424,7 @@ requirements:
     title: Lift Definition.Validator Rule 9 so an entity may declare a foreign key to itself, with ON DELETE, cycle, DDL and join-path semantics all settled (S10 gap 14)
     owner: ELIXIR-DEV
     impl_order: 618  # letflow-queue task id, written back at WF-01 Step 3
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A self-referential entity relationship is a generic

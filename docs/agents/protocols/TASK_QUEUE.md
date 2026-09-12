@@ -83,6 +83,24 @@ immediately if this happens by mistake, the same as any other hand-back (2026-08
 ISS-0086/GH#303's own resolution run — this happened for real, see
 `docs/anti-patterns.md`).
 
+**There is no `dry_run` mode, and none should be invented.** `get_next_task` accepts
+exactly `agent_id` (required) and no other query parameter changes its claiming
+behavior — critically, `letflow-queue` **silently ignores unknown query parameters
+instead of rejecting them with 400**, so `GET /tasks/next?agent_id=...&dry_run=true`
+does not error, does not skip the claim, and does not warn — it just claims normally,
+as if `dry_run` had never been sent. This happened for real (2026-09-12, ISS-0616): an
+ORCH session added `dry_run=true` under `agent_id=orch-probe` intending a read-only
+availability check, and the service locked a real task to that throwaway id, which then
+sat unclaimable by any host for 57 minutes until the same session tried to claim it for
+real, got `409`, and had to work out from context which id held the lock. Recovery is
+the same as any accidental probe-claim: `release_lock` under the id that actually holds
+it, back to `open`, then claim properly. **There is currently no read-only way to ask
+"does the queue have eligible work" other than actually claiming something** — REQ-222
+(tracked in `docs/requirements.yaml`, target repo `tvolodi/letflow-queue`) covers adding
+a real read-only listing with computed eligibility; until it lands, do not simulate a
+dry-run by adding invented query parameters, since the service's own silent-ignore
+behavior makes that indistinguishable from a real claim.
+
 ### A human names a specific issue/GH-issue-number directly
 
 Selection is exempt from the Hard Rule (above), but **locking is not** — the task still

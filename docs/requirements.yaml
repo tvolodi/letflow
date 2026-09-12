@@ -21573,7 +21573,7 @@ requirements:
     title: Decision record on whether the solution pack remains the delivery vehicle for scripted rules and role seeding, or whether the twice-recurring section gap means it is not (S10 gaps 16 and 17)
     owner: CODE-DESIGNER
     impl_order: 619  # letflow-queue task id, written back at WF-01 Step 3. NOTE: this requirement was drafted as REQ-326 and renumbered to REQ-325 after a concurrent session's ISS-0617 fix on main made the intervening gap-15 (:localized_text) entry unnecessary -- it was removed rather than filed, so the renumber closes the gap it left.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. The pack document's format and install policy are

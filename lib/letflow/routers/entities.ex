@@ -28,6 +28,16 @@ defmodule Letflow.Routers.Entities do
   clause, so none is on `test/letflow/api/authorization_enforcement_test.exs`'s
   allowlist and none evaluates as `:Unknown`.
 
+  REQ-319 appends a twelfth row, `POST /entities/records/:entity_type/export`
+  — bulk, query-selected-set record export, per
+  `lib/letflow/design/req314-entity-record-bulk-export-import.md` (built to
+  that document's final, SECURITY-REVIEWER-cleared §6 INV-2 mechanism, not its
+  original FAILed pass). Its route-level permission, `:EntitiesRecordsExport`,
+  and its in-handler-only escalation permission,
+  `:EntitiesRecordsExportUnredacted`, were both minted ahead of this router by
+  REQ-318, the same "added ahead of its consuming route" state REQ-309's own
+  four `Entities*` atoms sat in before REQ-310 created this module.
+
   | Handler | Method/path | Delegate | Permission | Response |
   |---|---|---|---|---|
   | create_definition | `POST /entities/definitions` | `Letflow.Entities.Definitions.create_definition/2` | `EntitiesDefinitionsWrite` | 201 / 422 / 409 |
@@ -45,6 +55,27 @@ defmodule Letflow.Routers.Entities do
   | list_record_attachments | `GET /entities/records/:entity_type/:record_id/attachments` | `Letflow.Repository.EntityAttachments.list/2` | `EntitiesAttachmentsRead` | 200 / 400 / 404 |
   | get_record_attachment_content | `GET /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.get_content/2` | `EntitiesAttachmentsRead` | 200 (raw bytes) / 404 / 500 |
   | delete_record_attachment | `DELETE /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.delete/2` | `EntitiesAttachmentsManage` | 204 / 404 |
+  | export_records | `POST /entities/records/:entity_type/export` | the identical `Letflow.Entities.Query.Allowlist.load/2` → `Letflow.Entities.Query.Compiler.compile/2` → `Letflow.Entities.Query.Cursor.paginate/5` sequence `query` uses above, then EITHER a `Letflow.Entities.Query.FieldGrants` redaction step (default) OR a second, in-handler `Letflow.Api.Authorization.evaluate_access/2` check against `:EntitiesRecordsExportUnredacted` that skips redaction entirely on success (`unredacted: true`) | `EntitiesRecordsExport` (route-level); `EntitiesRecordsExportUnredacted` (in-handler only, see below) | 200 / 400 / 403 / 404 / 422 |
+
+  ## `POST .../export`'s two-tier redaction mechanism (REQ-319, design §6 INV-2)
+
+  Default mode (`unredacted` absent or `false` in the request body): the
+  route-level `:EntitiesRecordsExport` check is the ONLY check. The handler
+  then calls `FieldGrants.load_restrictions/3` and redacts exactly as `query`
+  above does — this route's own `redact/4` clauses are reused verbatim, not
+  duplicated — so default-mode export's disclosure strength is identical to
+  `:EntitiesQuery`'s.
+
+  Escalated mode (`unredacted: true`): AFTER the route-level check already
+  passed, the handler calls `Letflow.Api.Authorization.evaluate_access/2` a
+  SECOND time, positionally, against `:EntitiesRecordsExportUnredacted`
+  directly — a request-body-derived permission check no route's
+  `endpoint_policy_key/2` clause could ever express, since it depends on a
+  field inside the body, not the method/path pair. Failing that check is a
+  `403` returned **before the export selection query is even compiled** —
+  never a silent fallback to the redacted default. Succeeding it skips
+  `FieldGrants` entirely for that call. See `check_unredacted_permission/2`
+  and `run_export/5` below for the concrete `with`-chain ordering.
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -168,6 +199,7 @@ defmodule Letflow.Routers.Entities do
 
   require Logger
 
+  alias Letflow.Api.Authorization
   alias Letflow.Api.Error
   alias Letflow.Api.Pagination
   alias Letflow.Api.Response
@@ -308,6 +340,24 @@ defmodule Letflow.Routers.Entities do
       conn.params["record_id"],
       conn.params["attachment_id"]
     )
+  end
+
+  # ── Bulk record export route (REQ-319) ────────────────────────────────
+  #
+  # POST for the same reason `POST /query` above is POST, not GET: an
+  # unboundedly nested filters/sort/join selection body, no flat
+  # query-string encoding in this codebase (design req314 §4). Gated at the
+  # ROUTE level by :EntitiesRecordsExport, the base/default,
+  # FieldGrants-respecting export permission -- a SECOND, in-handler-only
+  # check against :EntitiesRecordsExportUnredacted runs only when the
+  # request body carries `unredacted: true` (moduledoc section above,
+  # design §6 INV-2). `:EntitiesRecordsExportUnredacted` deliberately has no
+  # `endpoint_policy_key/2` clause of its own and could never be declared as
+  # this route's OWN policy key -- it is checked a second time, manually,
+  # from inside the handler.
+
+  authz_post "/records/:entity_type/export", :EntitiesRecordsExport do
+    handle_export_records(conn, conn.params["entity_type"])
   end
 
   match _ do
@@ -1704,6 +1754,216 @@ defmodule Letflow.Routers.Entities do
       )
 
   defp render_aggregate_error(conn, reason), do: render_query_error(conn, reason)
+
+  # ══ POST /entities/records/:entity_type/export (REQ-319) ══════════════
+  #
+  # design req314 §1 (document shape), §2 (selection mechanism), §4 (route
+  # shape), §6 FINAL VERDICT (the two-tier default-redacted/escalated-
+  # unredacted mechanism -- NOT the original FAILed pass earlier in that
+  # document), §7 (size cap).
+  #
+  # INV-1: `prefix` is prefix!/1's output and NOTHING else; `user_id` is
+  # conn.assigns.auth_context.user_id and NOTHING else -- identical
+  # discipline to handle_query/1 above.
+
+  @record_export_schema_version "entities/record-export/v1"
+
+  defp handle_export_records(conn, entity_type) do
+    user_id = conn.assigns.auth_context.user_id
+
+    case object_body(conn) do
+      {:ok, body} ->
+        run_export(conn, body, entity_type, user_id, prefix!(conn))
+
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+    end
+  end
+
+  # ⛔ THE ORDER BELOW IS THE TWO-TIER MECHANISM ITSELF, not incidental:
+  #
+  #   1. path-vs-body entity_type match (422) -- cheapest, most structural
+  #      check first, before anything else runs (mirrors
+  #      ExportImport.import/3's own schema-version-gate-first ordering,
+  #      design §7's citation of it).
+  #   2. parse `unredacted` (400 if present but not a boolean).
+  #   3. IF `unredacted: true`, the second, in-handler
+  #      `:EntitiesRecordsExportUnredacted` permission check -- 403
+  #      immediately, BEFORE `build_export_query_request/2` or ANY of
+  #      Compiler.compile/2, Allowlist.load/2, Cursor.paginate/5 ever runs.
+  #      Never a silent fallback to redacted output.
+  #   4. Only past all of the above does the identical
+  #      Allowlist.load/2 -> Compiler.compile/2 -> Cursor.paginate/5
+  #      sequence handle_query/1's own run_query/4 uses run, unmodified.
+  #   5. `export_redact/5` -- skips `FieldGrants` entirely when `unredacted?`
+  #      is true (already authorized at step 3); otherwise defers to THE
+  #      SAME `redact/4` clauses handle_query/1 already uses, no second
+  #      redaction policy introduced.
+  @spec run_export(Plug.Conn.t(), map(), String.t(), String.t(), String.t()) :: Plug.Conn.t()
+  defp run_export(conn, body, path_entity_type, user_id, prefix) do
+    with :ok <- check_export_entity_type_match(body, path_entity_type),
+         {:ok, unredacted?} <- parse_unredacted_flag(body),
+         :ok <- check_unredacted_permission(conn, unredacted?),
+         {:ok, request} <- build_export_query_request(body, path_entity_type),
+         {:ok, opts} <- build_export_paginate_opts(body),
+         {:ok, compiled} <- Compiler.compile(request, prefix),
+         {:ok, allowlist} <- Allowlist.load(request.entity_type, prefix),
+         {:ok, page} <- Cursor.paginate(request, compiled, allowlist, opts, prefix),
+         {:ok, redacted} <- export_redact(page, request, user_id, prefix, unredacted?) do
+      Response.ok(conn, %{
+        "record_export_schema_version" => @record_export_schema_version,
+        "entity_type" => path_entity_type,
+        "exported_at" => DateTime.to_iso8601(DateTime.utc_now()),
+        "records" => Enum.map(redacted.items, &export_record_map/1),
+        "next_cursor" => redacted.next_cursor
+      })
+    else
+      {:error, reason} -> render_export_error(conn, reason)
+    end
+  end
+
+  # design req314 §4: "the document's own entity_type field must match the
+  # path segment exactly, or the request is rejected 422 before any
+  # create_record/selection call" -- export's own half of that rule. `nil`
+  # (the body omits entity_type entirely) is explicitly NOT a mismatch: §2's
+  # own "entity_type from the route's own path segment rather than
+  # duplicated in the body" phrasing makes the body's copy optional.
+  defp check_export_entity_type_match(body, path_entity_type) do
+    case Map.get(body, "entity_type") do
+      nil -> :ok
+      ^path_entity_type -> :ok
+      other when is_binary(other) -> {:error, {:entity_type_mismatch, other}}
+      _other -> {:error, {:query_field_invalid, "entity_type"}}
+    end
+  end
+
+  # design §2: "one additional, export-specific optional field ...
+  # `unredacted :: boolean()` (default `false`)". A present-but-non-boolean
+  # value is a malformed literal, mapped 400 via the SAME
+  # {:query_field_invalid, _} -> render_query_error/2 clause build_query_request/1
+  # already relies on for its own malformed-literal rejections -- no second
+  # error vocabulary for this route.
+  defp parse_unredacted_flag(body) do
+    case Map.get(body, "unredacted") do
+      nil -> {:ok, false}
+      flag when is_boolean(flag) -> {:ok, flag}
+      _other -> {:error, {:query_field_invalid, "unredacted"}}
+    end
+  end
+
+  defp check_unredacted_permission(_conn, false), do: :ok
+
+  # design §6 INV-2, the escalation check: `evaluate_access/2` is a pure,
+  # two-argument function (`AccessContext.t()`, `endpoint_policy_key()`)
+  # with no dependency on route resolution -- nothing requires the atom
+  # passed here to be the one `endpoint_policy_key/2` itself would resolve
+  # for this route (that atom, `:EntitiesRecordsExport`, was ALREADY checked
+  # by `authz_post`'s own `Letflow.Plugs.Authorize` pass before this handler
+  # ever ran). The `AccessContext` is built exactly as `Letflow.Plugs.Authorize`
+  # itself builds one, from the SAME `conn.assigns.auth_context` -- never a
+  # second, divergent identity source.
+  defp check_unredacted_permission(conn, true) do
+    ctx = %Authorization.AccessContext{
+      user_id: conn.assigns.auth_context.user_id,
+      roles: Authorization.roles_from_strings(conn.assigns.auth_context.roles)
+    }
+
+    case Authorization.evaluate_access(ctx, :EntitiesRecordsExportUnredacted) do
+      %Authorization.AccessDecision{kind: :Deny403} -> {:error, :unredacted_not_authorized}
+      %Authorization.AccessDecision{} -> :ok
+    end
+  end
+
+  # `entity_type` comes from the PATH (already validated against the body's
+  # own copy above) -- never re-read from `body` here, so this function has
+  # no second, potentially-diverging source for it.
+  defp build_export_query_request(body, path_entity_type) do
+    with {:ok, filters} <- parse_filters(Map.get(body, "filters")),
+         {:ok, sort} <- parse_sorts(Map.get(body, "sort")),
+         {:ok, join} <- parse_joins(Map.get(body, "join")) do
+      {:ok, %{entity_type: path_entity_type, filters: filters, sort: sort, join: join}}
+    end
+  end
+
+  # design §2/§7: export is capped at Pagination.max_page_size/0 (200)
+  # PER CALL, the same ceiling Cursor.paginate/5 already enforces for
+  # `POST /query` (a caller-requested `page_size` above it is still rejected
+  # by Cursor.paginate/5 itself, unmodified -- no new cap is introduced
+  # here). Unlike `POST /query` (default 50, design's own read-one-page-at-
+  # a-time shape), an ABSENT `page_size` here defaults to the full 200-record
+  # cap instead -- design §2's "capped ... instead of the caller-chosen
+  # page_size the plain query route accepts": export's own purpose is bulk
+  # transfer, so its default page is the largest single call already permits,
+  # not query's smaller interactive default.
+  defp build_export_paginate_opts(body) do
+    with {:ok, cursor} <- query_cursor(body),
+         {:ok, page_size} <- query_page_size(body) do
+      {:ok, %{cursor: cursor, page_size: page_size || Pagination.max_page_size()}}
+    end
+  end
+
+  # `unredacted? == true` -> FieldGrants is skipped ENTIRELY (already
+  # authorized by check_unredacted_permission/2 above) -- full field_values,
+  # unredacted. `unredacted? == false` -> defers to THE SAME `redact/4`
+  # clauses handle_query/1 already uses (both the join and non-join
+  # branches), so default-mode export's disclosure strength is
+  # STRUCTURALLY identical to :EntitiesQuery's, not a second, possibly-
+  # diverging redaction policy for this route.
+  @spec export_redact(Pagination.Page.t(term()), Types.query_request(), String.t(), String.t(), boolean()) ::
+          {:ok, Pagination.Page.t(term())} | {:error, :invalid_schema_name}
+  defp export_redact(page, _request, _user_id, _prefix, true), do: {:ok, page}
+  defp export_redact(page, request, user_id, prefix, false), do: redact(page, request, user_id, prefix)
+
+  # design §1's export_record_entry(): {record_id, field_values, deleted}
+  # only -- no entity_def_version, no last_event_global_seq (unlike
+  # query_item_map/1's own entity_row_map/1 above). Three item shapes reach
+  # here, same as query_item_map/1: %Latest{} (unpromoted, non-join), a
+  # Compiler.entity_row() map (promoted, non-join), and a
+  # Compiler.joined_row() map keyed :primary + each joined entity_type
+  # (join). A joined row's export entry carries ONLY the primary side's
+  # {record_id, field_values, deleted} -- export_record_entry() (design §1)
+  # has no per-joined-entity-type slot to carry the far side's own fields in,
+  # so a join clause in an export request narrows the selection without
+  # widening what gets exported. This is a deliberate, named scope note for
+  # this requirement, not a silent behaviour: no acceptance criterion for
+  # REQ-319 exercises export with a join, and design req314 nowhere revises
+  # export_record_entry()'s own shape to accommodate one.
+  defp export_record_map(%Latest{} = record) do
+    %{
+      "record_id" => record.record_id,
+      "field_values" => record.field_values,
+      "deleted" => record.deleted
+    }
+  end
+
+  defp export_record_map(%{field_values: _field_values} = entity_row) do
+    %{
+      "record_id" => normalise_record_id(entity_row.record_id),
+      "field_values" => entity_row.field_values,
+      "deleted" => entity_row.deleted
+    }
+  end
+
+  defp export_record_map(joined_row) when is_map(joined_row) do
+    export_record_map(Map.fetch!(joined_row, :primary))
+  end
+
+  # design §6/§7 error mapping: the two NEW error atoms this route
+  # introduces get their own clauses; every compile_error()/Cursor error/
+  # parse-level rejection this route can ALSO produce (identical pipeline to
+  # `POST /query`) falls through to render_query_error/2 UNCHANGED -- no
+  # second copy of that mapping.
+  defp render_export_error(conn, {:entity_type_mismatch, _body_entity_type}),
+    do: Response.unprocessable(conn, "entity_type in the request body does not match the path")
+
+  defp render_export_error(conn, :unredacted_not_authorized),
+    do:
+      Response.forbidden(
+        conn,
+        "unredacted export requires a separate, independently-granted permission"
+      )
+
+  defp render_export_error(conn, reason), do: render_query_error(conn, reason)
 
   # ══ Query error mapping (design §4) ═══════════════════════════════════
   #

@@ -251,16 +251,17 @@ defmodule Letflow.Routers.EntitiesTest do
   defp normalise_problem(conn), do: conn |> body_of() |> Map.delete("trace_id")
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 -- __authz_routes__/0 returns exactly the eleven designed routes.
+  # AC1 -- __authz_routes__/0 returns exactly the sixteen designed routes.
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- the declared route table matches design §1" do
-    # REQ-311 raised this from nine to TEN (POST /query); REQ-315 raises it
-    # from TEN to ELEVEN (POST /query/aggregate); REQ-317 raises it from
-    # ELEVEN to FIFTEEN (the four record-attachment routes). The count is
-    # asserted explicitly so appending a sixteenth route without updating
-    # design §1's table fails here rather than silently.
-    test "__authz_routes__/0 returns exactly the fifteen designed routes, with their designed policy keys" do
+    # REQ-311 raised this from nine to TEN (POST /query); REQ-315 raised it
+    # from TEN to ELEVEN (POST /query/aggregate); REQ-317 raised it from
+    # ELEVEN to FIFTEEN (the four record-attachment routes); REQ-319 raises
+    # it from FIFTEEN to SIXTEEN (POST /records/:entity_type/export). The
+    # count is asserted explicitly so appending a seventeenth route without
+    # updating design §1's table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the sixteen designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -278,12 +279,13 @@ defmodule Letflow.Routers.EntitiesTest do
         {"GET", "/records/:entity_type/:record_id/attachments/:attachment_id",
          :EntitiesAttachmentsRead},
         {"DELETE", "/records/:entity_type/:record_id/attachments/:attachment_id",
-         :EntitiesAttachmentsManage}
+         :EntitiesAttachmentsManage},
+        {"POST", "/records/:entity_type/export", :EntitiesRecordsExport}
       ]
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 15
+      assert length(actual) == 16
       assert Enum.sort(actual) == Enum.sort(expected)
       assert {"POST", "/query", :EntitiesQuery} in actual
       assert {"POST", "/query/aggregate", :EntitiesAggregate} in actual
@@ -292,6 +294,8 @@ defmodule Letflow.Routers.EntitiesTest do
 
       assert {"DELETE", "/records/:entity_type/:record_id/attachments/:attachment_id",
               :EntitiesAttachmentsManage} in actual
+
+      assert {"POST", "/records/:entity_type/export", :EntitiesRecordsExport} in actual
     end
 
     test "⛔ no GET route exists under /records for the record itself -- record reads are POST /entities/query only" do

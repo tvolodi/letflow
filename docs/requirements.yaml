@@ -20989,3 +20989,433 @@ requirements:
       - "git diff --name-only shows ONLY docs/migration/decisions/0027-*.md, at most one file under lib/letflow/design/, and docs/requirements.yaml (status bookkeeping on this entry only) -- no file under lib/letflow/definitions/, lib/letflow/service_catalog/, lib/letflow/service_catalog.ex, lib/letflow/routers/, lib/letflow/api/, priv/repo/migrations/, or test/ appears. Quoted with the command"
       - "0022's rule 1 holds textually: grep both produced documents for single-vertical domain vocabulary and confirm zero hits -- S10 gaps 4 and 5 may be cited by number as motivation, but never by what they are. Quote the grep command and its output"
     depends_on: []
+
+  # ── S10, fifth batch (drafted 2026-09-12) ─────────────────────────────────
+  # REQ-322 is stage-record maintenance in the same shape REQ-307 was: the S10
+  # stage file and two comment sites in solution_pack.ex have gone factually
+  # stale against what landed since. REQ-323 opens the last genuinely unowned
+  # bucket-B gap (gap 6) with a design-only requirement, matching how gaps 1,
+  # 2, 3 and 12 were each opened (REQ-308, REQ-312, REQ-313, REQ-314).
+  - id: REQ-322
+    title: Reconcile the S10 stage file with the landed REQ-307..REQ-321 state, and correct solution_pack.ex's now-stale UNOWNED service_catalog_entries policy text to cite decision 0027
+    owner: DOC-UPDATER
+    impl_order: 614  # letflow-queue task id; depends_on [] so no translation needed
+    status: pending
+    stage: S10
+    description: >
+      bucket: N/A WITH A STATED REASON, recorded here rather than omitted so
+      0022's rule ("every S10 requirement declares exactly one bucket in its
+      description") is satisfied by an explicit declaration and not by a
+      silent skip -- exactly as REQ-307 declared it. This requirement
+      produces no definition (not A), no platform capability in lib/ or web/
+      (not B), and no exam-specific runtime (not C). It is stage-record
+      maintenance: it corrects documentation and two source-comment sites
+      that have gone factually stale, and it ships no behaviour change of
+      any kind.
+
+      WHY THIS IS FILED. REQ-307 performed this same reconciliation on
+      2026-09-11 and it was correct then. Eleven requirements have landed
+      since (REQ-308 through REQ-321) plus decision record 0027, and
+      docs/migration/stage-10-bilimbaga-vertical.md's header count, gap
+      table, phase table and closing prose again describe a state that no
+      longer holds on main. Separately, decision 0027 explicitly names
+      correcting solution_pack.ex's two "UNOWNED" sites as follow-on work it
+      left undone because its own scope fence required that file to stay
+      byte-identical (0027's "Consequences" and "What this record does not
+      decide" sections both say so). A later agent reading either file as
+      written will either re-file an already-closed gap or re-open a policy
+      question that 0027 permanently settled.
+
+      RE-DERIVE EVERY CLAIM BELOW FROM THE SOURCE BEFORE WRITING IT. This
+      description is a pointer to what to check, never the evidence itself
+      (docs/anti-patterns.md: "Inheriting a claim from a record instead of
+      re-deriving it from the source"). For each requirement id named below,
+      read its actual entry in docs/requirements.yaml and confirm its status
+      field with a quoted grep or awk; for each code claim, read the cited
+      file. Line numbers given here are as of 2026-09-12 and are hints for
+      locating text, never a substitute for finding it. If any check
+      contradicts this description, the file wins and the completion report
+      says so.
+
+      WHAT TO RECONCILE IN docs/migration/stage-10-bilimbaga-vertical.md:
+
+      1. THE HEADER COUNT (line 3). It reads: Requirements REQ-295-REQ-320
+      filed (26 as of 2026-09-11). Derive the real count and the real range
+      from docs/requirements.yaml itself rather than from this description --
+      note that a naive `grep -c "stage: S10"` over that file OVERCOUNTS,
+      because at least one requirement's description text mentions another
+      requirement's stage; count distinct `- id: REQ-NNN` entries whose own
+      `stage:` field is S10. Rewrite the header to the derived count, range
+      and date.
+
+      2. THE THIRTEEN-GAP TABLE's State and Owner columns for GAP 1 ONLY.
+      Exactly one row in that table is stale, and this item rewrites exactly
+      that one row. Gap 1's row currently reads "**Open.** The stage's single
+      largest blocker; its HTTP-surface design is now owned by `REQ-308`
+      (`pending`)" with Owner `REQ-308` -- a state that was true when REQ-307
+      wrote it and is false now. Rewrite it to closed, naming REQ-308 as the
+      design requirement and REQ-309, REQ-310 and REQ-311 as the
+      implementation requirements, all four `done`. Verify all four statuses
+      from docs/requirements.yaml before writing the row, and verify the
+      artefact directly: confirm lib/letflow/routers/entities.ex exists,
+      count its routes, and confirm the /entities mount in
+      lib/letflow/router.ex or lib/letflow/plugs/api_pipeline.ex, quoting
+      each check. Also confirm the deferred-routes-table claim inside gap 1's
+      own Gap cell -- the row's text asserts that lib/letflow/router.ex's
+      deferred-routes table lists Letflow.Routers.Entities against "S5/S6"
+      and that "no requirement owns it"; check whether that deferred row was
+      retired when the router was actually mounted, and write the cell to
+      match what the file says now. The rewritten row uses the same
+      "Closed <date> -- REQ-nnn `done` (...)" shape the already-closed rows
+      in that table use.
+
+      GAPS 2, 3 AND 12 ARE ALREADY CORRECTLY RECONCILED ON MAIN AND THEIR
+      ROWS MUST NOT BE ALTERED. This is not a caveat, it is a hard fence.
+      Those three rows were brought current by sibling close-out commits
+      that landed AFTER REQ-307 ran (gap 2: "**Closed 2026-09-11** --
+      REQ-312 `done` ...; REQ-315 `done` ..."; gap 3: "**Closed 2026-09-12**
+      -- REQ-313/316/317 `done` ..."; gap 12: "**Closed 2026-09-12** --
+      REQ-314/318/319/320 `done` ..."). Each already carries its PR numbers
+      and its design-artefact paths. Rewriting them to a prescribed template
+      would DROP that provenance and make the file worse, so do not rewrite
+      them, do not "normalise" their wording, and do not re-derive them.
+      Read them, confirm they already say closed with the right requirement
+      ids, and leave the bytes alone. The same fence applies to every other
+      row in the table: gaps 7, 8, 9, 10, 11 and 13 are closed and untouched,
+      and gaps 4, 5 and 6 are governed by items 3 and 4 below. This is the
+      identical fencing REQ-307 applied to the rows that were current in its
+      day ("their rows must NOT be altered ... verified by a diff of the gap
+      table quoted in the completion report showing no other row's text
+      altered").
+
+      3. GAPS 4 AND 5 MUST BE UPDATED FOR DECISION 0027, AND MUST NOT BE
+      MARKED CLOSED. Read docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md
+      before writing either row. What changed is the MECHANISM question, not
+      the capability: 0027 settles permanently that a solution-pack document
+      may NOT carry service_catalog_entries, and that any such entry is
+      provisioned out-of-band through the existing POST /service-catalog
+      route (gated :AdminServicesManage, resolving to :UsersGroupsRolesManage,
+      PLATFORM_ADMIN-only in the current role matrix). So gaps 4 and 5 are no
+      longer blocked on an unowned policy -- but they remain OPEN as
+      capabilities, because there is still no mailer and no PDF/QR dependency
+      in mix.exs. Verify that absence directly (grep mix.exs) rather than
+      asserting it. Each row must state both halves: mechanism settled by
+      0027 and cited by path; capability still open and still unowned.
+
+      4. GAP 6 remains genuinely open and unowned as a capability. If
+      REQ-323 exists in docs/requirements.yaml at the time this requirement
+      runs, gap 6's Owner column gains REQ-323 (it is filed in the same batch
+      but is deliberately NOT a dependency of this requirement); if it is
+      absent, leave the row unowned and say so in the completion report --
+      the same conditional shape REQ-307 used for REQ-308.
+
+      5. THE PROSE PARAGRAPH BELOW THE GAP TABLE (around lines 81-92) --
+      TWO SENTENCES ONLY. Most of this paragraph is already correct and must
+      be left alone: it already says gap 1 is closed by REQ-308-REQ-311, gap
+      2 closed by REQ-312/REQ-315, and gap 3 closed by REQ-313/REQ-316/
+      REQ-317, and every one of those statements holds. Exactly two spans are
+      stale. (a) The gap-12 sentence, which reads "Gap 12 has its design
+      requirement done (REQ-314) but implementation still pending against it
+      -- REQ-318 done, REQ-319/REQ-320 pending -- so it is not closed yet."
+      REQ-319 and REQ-320 are both done and gap 12's own table row already
+      says closed; rewrite this sentence to say gap 12 is closed, naming
+      REQ-314 design and REQ-318/REQ-319/REQ-320 implementation. (b) The
+      closing sentence "Gaps 4, 5 and 6 remain unowned and to file", which
+      must be rewritten to match what items 3 and 4 above actually establish
+      about gaps 4, 5 and 6 -- mechanism settled by 0027 for 4 and 5,
+      capability still open for all three, and gap 6's ownership conditional
+      on REQ-323. Leave every other sentence in the paragraph byte-identical.
+
+      THE INTERNAL CONTRADICTION THIS RESOLVES, AND WHY THE ROW IS THE STALE
+      SIDE. As the file stands on main right now it contradicts itself about
+      gap 1: this prose paragraph says "Gap 1 is closed (REQ-308-REQ-311, all
+      done)", while gap 1's own table row says "**Open.** ... its HTTP-surface
+      design is now owned by REQ-308 (pending)". Both cannot be true. Item 2
+      resolves the contradiction in favour of the PROSE, and the executor must
+      not resolve it the other way round. The prose is corroborated by three
+      independent facts the row is not: REQ-308 through REQ-311 are all status
+      done in docs/requirements.yaml, Letflow.Routers.Entities exists as real
+      code at lib/letflow/routers/entities.ex, and it is mounted at /entities
+      serving its routes. Re-derive all three rather than taking them from
+      this description. This contradiction is the single strongest piece of
+      evidence that the row, not the prose, is the stale artefact -- and it is
+      why item 2 rewrites one row while this item edits two sentences, rather
+      than the reverse.
+
+      Across items 2, 5 and 6, preserve superseded findings as history rather
+      than deleting them: this file is a build record, so the correct shape is
+      "this was the finding, these requirements closed it", not a deletion.
+
+      6. THE PHASE TABLE's P1 exit-condition cell (around line 111), whose
+      as-of-2026-09-11 enumeration of which gaps are closed and which are
+      pending is now wrong in several places. Rewrite it to state the real
+      current position, derived from item 2.
+
+      7. THE "OPEN QUESTIONS" SECTION's service_catalog_entries bullet
+      (around lines 190-203). That entire bullet is now answered by 0027 and
+      must be rewritten as answered-and-cited rather than left standing as an
+      open question -- including its closing sentence "Correcting the stale
+      REQ-192 pointer in solution_pack.ex is a P1 chore", which this
+      requirement is itself performing. Keep the historical reasoning; change
+      its status.
+
+      8. THE REVIEWER SIGN-OFF SECTION's re-verified three clauses (around
+      lines 230-241), whose first clause still reads "Fourteen S10
+      requirements are filed (REQ-295-REQ-308); all but REQ-307 and REQ-308
+      are done." Re-derive each of the three clauses independently -- the
+      real S10 count and range, a real directory check for lib/letflow/exam/
+      and web/src/pages/exam/, and a real check for whether any pack document
+      has been authored -- and rewrite each to state only what those checks
+      actually found, quoting the command output for each.
+
+      WHAT TO CORRECT IN lib/letflow/definitions/solution_pack.ex. Two sites
+      still state the service_catalog_entries install policy is UNOWNED and
+      neither cites 0027: the moduledoc's service_catalog_entries bullet
+      (around line 47, currently "is currently UNOWNED. No open requirement
+      owns it") and the inline comment above check_unsupported_sections/1
+      (around line 869, currently "the policy is currently UNOWNED -- no open
+      requirement owns it ... Until some requirement owns and decides it,
+      this hard-fail stays"). After 0027 both statements are false: the
+      policy is OWNED and settled as NEVER PERMITTED, permanently. Both sites
+      must be corrected to say exactly that, to cite
+      docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md
+      by path, and to name the out-of-band provisioning path (POST
+      /service-catalog, gated :AdminServicesManage, PLATFORM_ADMIN-only in
+      the current role matrix). Both must also stop describing S10 gaps 4 and
+      5 as "blocked on this policy", since they are not any more. The
+      pre-existing NOTE (ELIXIR-DEV, REQ-305) paragraph inside that inline
+      comment -- the one recording that entity_definitions is NOT gated by
+      this function -- is unrelated to the policy question and must be
+      preserved intact.
+
+      HARD FENCE, BEHAVIOUR MUST NOT CHANGE. This is COMMENT and @moduledoc
+      TEXT ONLY. check_unsupported_sections/1 must keep rejecting a non-empty
+      service_catalog_entries array with {:error, :unsupported_pack_section};
+      its two clause heads, its arity and its return values must be
+      byte-identical afterward. 0027 made that rejection PERMANENT one day
+      before this requirement was filed, so relaxing it now would contradict
+      a decision record that carries both a SECURITY-REVIEWER and a REVIEWER
+      PASS. An agent that "helpfully" relaxes the check while fixing the
+      comment has changed a tenant-facing install policy against a live
+      decision record and fails this requirement outright.
+
+      THE TRAP IN THIS REQUIREMENT -- READ BEFORE EDITING THE MODULEDOC.
+      test/letflow/service_catalog_test.exs carries a test named
+      "SolutionPack's moduledoc documents the service_catalog_entries policy
+      as unowned" (around line 589) which reads solution_pack.ex as a string
+      and asserts `module_source =~ "UNOWNED"`. ISS-0594 changed that
+      assertion to its current form (it previously checked for a "REQ-192"
+      substring). Correcting the moduledoc as this requirement requires WILL
+      break that assertion, and that is expected, not an accident. The
+      executor must update the assertion so it checks the post-0027 property
+      -- that the moduledoc states the CURRENT policy, e.g. by asserting the
+      source contains the 0027 decision-record filename and a phrase stating
+      the permanent rejection -- and must rename the test so its name no
+      longer says "unowned". The executor must NOT delete the test, must NOT
+      weaken it to a tautology (asserting only that the file is non-empty, or
+      only that the string "service_catalog_entries" appears, both of which
+      would pass against any text whatsoever), and must NOT satisfy it by
+      leaving the word UNOWNED in the corrected moduledoc. The property under
+      test is "the moduledoc states the current policy", never "the moduledoc
+      contains the word UNOWNED".
+
+      SCOPE FENCE: this requirement edits exactly three files --
+      docs/migration/stage-10-bilimbaga-vertical.md,
+      lib/letflow/definitions/solution_pack.ex (comment and @moduledoc text
+      only), and test/letflow/service_catalog_test.exs (the one assertion and
+      test name named above, nothing else in that file). It changes no other
+      executable Elixir, no other test, no other doc, and no other
+      requirement's entry in docs/requirements.yaml. It does not flip any
+      requirement's status field other than this one's own close-out
+      bookkeeping. It does not file, expand or re-scope any gap; it only
+      records what already landed.
+    acceptance_criteria:
+      - "the stage file's line-3 header states an S10 requirement count and range derived by counting distinct `- id: REQ-NNN` entries whose own `stage:` field is S10 in docs/requirements.yaml -- the derivation command and its real output are quoted in the completion report, and the report explicitly notes that a bare `grep -c \"stage: S10\"` gives a different, higher number and why"
+      - "the thirteen-gap table's row for GAP 1 -- and only that row -- is rewritten from its current \"**Open.** ... owned by `REQ-308` (`pending`)\" state to a closed state naming REQ-308 (design) and REQ-309, REQ-310, REQ-311 (implementation), and for EACH of those four ids the `status: done` field is verified by a quoted grep or awk over docs/requirements.yaml, not copied from this requirement's description"
+      - "THE OTHER TWELVE GAP ROWS ARE BYTE-IDENTICAL. Gaps 2, 3 and 12 were already correctly reconciled on main before this requirement ran and their rows MUST NOT be altered -- not reworded, not renumbered, not re-templated -- and neither are gaps 7, 8, 9, 10, 11 and 13. Verified by a quoted diff of the gap table showing that no row other than gap 1's (and gaps 4, 5 and 6 per the criteria below) changed at all. The completion report additionally quotes gap 2's, gap 3's and gap 12's rows verbatim from the post-edit file and confirms each still carries the PR numbers and design-artefact paths it carried before"
+      - "gap 1's rewritten row is backed by four quoted code checks: `ls lib/letflow/routers/entities.ex` succeeding, a route count over that file, a grep showing the /entities mount in lib/letflow/router.ex or lib/letflow/plugs/api_pipeline.ex, and a grep over lib/letflow/router.ex's deferred-routes table showing whether the `Letflow.Routers.Entities` deferred row was retired when the router was mounted -- all four commands and their real output quoted, and gap 1's Gap cell written to match what that last check actually found rather than repeating its current \"no requirement owns it\" text"
+      - "gap 3's and gap 12's rows are asserted UNCHANGED rather than re-derived: the completion report quotes `git diff docs/migration/stage-10-bilimbaga-vertical.md` and shows that neither row appears in the diff. No code check is required for them, because this requirement does not restate their claims -- their close-out commits already did"
+      - "gaps 4 and 5 are NOT marked closed; each row states that its MECHANISM is settled by docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md (cited by that path) as out-of-band provisioning via POST /service-catalog gated :AdminServicesManage, and that the CAPABILITY remains open and unowned -- the still-open half proven by a quoted grep over mix.exs showing no mailer/SMTP dependency and no PDF or QR dependency"
+      - "gap 6's row is unchanged except that it gains REQ-323 as owner if and only if REQ-323 exists in docs/requirements.yaml when this requirement runs -- the completion report quotes the grep for REQ-323 and states which branch was taken"
+      - "the prose paragraph below the gap table has exactly two spans changed -- the gap-12 sentence (which no longer says implementation is pending, and names REQ-314 design plus REQ-318/REQ-319/REQ-320 implementation) and the closing \"Gaps 4, 5 and 6 remain unowned and to file\" sentence -- with every other sentence in that paragraph byte-identical, and it preserves the superseded findings as history with the requirement ids that closed them. Before-and-after text for the whole paragraph is quoted in the completion report"
+      - "the file no longer contradicts itself about gap 1: the completion report quotes gap 1's post-edit table row and the post-edit prose sentence about gap 1 side by side and confirms both now say closed. The report also states that the contradiction was resolved in favour of the prose, and cites the three independent facts that decided it -- REQ-308..REQ-311 all `done`, lib/letflow/routers/entities.ex existing, and the /entities mount -- each re-derived, not taken from this requirement's description"
+      - "the phase table's P1 exit-condition cell enumerates the real current closed/open position and contains no as-of-2026-09-11 claim that the gap-table checks contradicted -- quoted from the diff"
+      - "the 'Open questions' section's service_catalog_entries bullet is rewritten as answered, citing 0027 by path and stating the permanent NOT-PERMITTED outcome and the out-of-band route, and no longer describes correcting solution_pack.ex as pending P1 work -- quoted before-and-after text"
+      - "the REVIEWER sign-off section's three re-verified clauses are each independently re-derived and the derivation quoted: the real S10 requirement count and range, a real `ls` or equivalent for lib/letflow/exam/ and web/src/pages/exam/, and a real check for whether any pack document has been authored -- the rewritten clauses assert only what those three checks found"
+      - "lib/letflow/definitions/solution_pack.ex's moduledoc service_catalog_entries bullet and the inline comment above check_unsupported_sections/1 BOTH cite docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md by path, BOTH state the policy is settled as permanently NOT PERMITTED rather than unowned, and BOTH name POST /service-catalog gated :AdminServicesManage as the out-of-band path -- verified by a quoted grep of that file for the 0027 filename returning at least two hits"
+      - "neither of those two sites still contains the word UNOWNED and neither still describes S10 gaps 4 and 5 as blocked on this policy -- verified by a quoted `grep -n UNOWNED lib/letflow/definitions/solution_pack.ex` returning no output"
+      - "the pre-existing NOTE (ELIXIR-DEV, REQ-305) paragraph inside the inline comment above check_unsupported_sections/1 -- the one recording that entity_definitions is NOT gated by that function -- is preserved intact, verified by quoting it from the post-edit file"
+      - "NO BEHAVIOUR CHANGE: `git diff lib/letflow/definitions/solution_pack.ex` shows changes to comment and @moduledoc lines ONLY -- no def or defp clause head, no guard, no return value and no arity is touched anywhere in the file. The full diff of that file is quoted, and the completion report states in one sentence, per hunk, that the hunk is comment/@moduledoc text"
+      - "check_unsupported_sections/1's two clauses are byte-identical before and after -- proven by quoting both clause lines from the post-edit file and confirming they read exactly `defp check_unsupported_sections(%{service_catalog_entries: []}), do: :ok` and `defp check_unsupported_sections(_parsed), do: {:error, :unsupported_pack_section}`"
+      - "THE ISS-0594 ASSERTION IS UPDATED, NOT WEAKENED AND NOT DELETED: test/letflow/service_catalog_test.exs's test currently named \"SolutionPack's moduledoc documents the service_catalog_entries policy as unowned\" (around line 589) still exists, is renamed so its name no longer says unowned, and its `assert module_source =~ \"UNOWNED\"` line is replaced by BOTH of the following: (a) an assertion that the moduledoc contains the 0027 decision-record filename, and (b) a SEPARATE assertion of a multi-word phrase stating the permanent rejection, where that phrase contains a negation of permission -- for example \"NOT PERMITTED\" or \"permanently\" -- and is NOT a bare identifier, decision number or filename. Assertion (a) alone is insufficient and does not satisfy this criterion: a test asserting only the substring \"0027\" is near-vacuous, since that string could appear in any incidental citation without the moduledoc stating the policy at all. The before-and-after of that test block is quoted in full in the completion report, and the report names the exact phrase asserted by (b) and identifies which word in it is the negation of permission"
+      - "that updated assertion is not a tautology: the completion report states explicitly which substrings are asserted and confirms that none of them would pass against a moduledoc that had simply been left unchanged, and that the test does not merely assert the file is non-empty or that the string service_catalog_entries appears"
+      - "`mix test test/letflow/service_catalog_test.exs` is run and passes, with the real command and real output quoted -- including the pass for \"install/3 rejects a non-empty service_catalog_entries array with {:error, :unsupported_pack_section}\" and for the renamed moduledoc test. If the toolchain or database is unavailable in this environment, say so explicitly per core-directives' no-speculation rule rather than asserting a pass"
+      - "`mix compile --warnings-as-errors` succeeds after the solution_pack.ex edit -- real quoted output"
+      - "`git diff --name-only` shows exactly three files changed -- docs/migration/stage-10-bilimbaga-vertical.md, lib/letflow/definitions/solution_pack.ex and test/letflow/service_catalog_test.exs -- quoted with the command; no file under lib/letflow/routers/, lib/letflow/api/, lib/letflow/service_catalog/, priv/repo/migrations/, or docs/migration/decisions/ appears"
+      - "no requirement's status field in docs/requirements.yaml is modified by this requirement other than its own close-out bookkeeping -- proven by a quoted `git diff docs/requirements.yaml` showing changes confined to this entry"
+    depends_on: []
+
+  - id: REQ-323
+    title: Design a pattern for exposing a read-only resource to an unauthenticated caller, with its disclosure boundary and mount point (S10 gap 6)
+    owner: CODE-DESIGNER
+    impl_order: 615  # letflow-queue task id; depends_on [] so no translation needed
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. A pattern for serving a read-only resource to a caller that
+      presents no credential is a generic platform capability -- any vertical
+      with an externally-linkable resource needs the identical shape, and
+      nothing about it is domain-specific. Per 0022's rule 1 this
+      requirement's title, description, acceptance criteria and the artefact
+      it produces contain no domain-vertical vocabulary of any kind: S10's
+      gap 6 may be cited BY NUMBER as the motivation, but never by what the
+      gap is for. If a reviewer can tell from the design which vertical
+      motivated it, rule 1 has been broken and the design fails
+      CODE-DESIGN-VALIDATOR.
+
+      THIS IS A DESIGN REQUIREMENT ONLY, scoped exactly as REQ-295, REQ-303,
+      REQ-308, REQ-312, REQ-313 and REQ-314 were: it produces a design
+      artefact under lib/letflow/design/ (naming convention
+      req323-<slug>.md, matching req308-*/req312-*/req313-*/req314-* already
+      there), and optionally one decision record under
+      docs/migration/decisions/ if the designer judges one warranted. It
+      implements nothing, mounts no route, adds no plug, adds no permission
+      atom, writes no migration and writes no test. The split from
+      implementation is deliberate rather than habitual: this is the one
+      deliberate hole in Letflow's auth pipeline, and settling its shape
+      before any route exists is cheaper than unwinding a wrong one.
+
+      RE-VERIFY THE FOLLOWING BEFORE DESIGNING; every line of it is stated
+      here as of 2026-09-12 and must be confirmed against the current tree
+      rather than trusted:
+
+      - lib/letflow/router.ex has exactly THREE public pre-forward mounts,
+      all declared ahead of `forward("/api/v1", to: Letflow.Plugs.ApiPipeline)`
+      -- /api/tenant-config (REQ-078, Letflow.Routers.TenantConfig),
+      /api/mobile/tenant-config (REQ-124, Letflow.Routers.MobileTenantConfig)
+      and /metrics (REQ-194, Letflow.Routers.MetricsExposition) -- plus
+      `get "/health"`. Count them yourself. That file's own moduledoc carries
+      the auth/scope table for those rows and the deferred-routes table for
+      routers not yet mounted; read both.
+
+      - Letflow.Plugs.ApiPipeline is where Letflow.Plugs.AuthPipeline runs.
+      Read lib/letflow/plugs/auth_pipeline.ex in full and confirm the claim
+      Letflow.Routers.TenantConfig's moduledoc makes about it -- that it has
+      no public-path allowlist, no bypass and no skip option, so every
+      request reaching it without a valid bearer token gets 401. That
+      property is the entire reason a public route must mount OUTSIDE the
+      pipeline rather than opt out of it from inside.
+
+      - lib/letflow/routers/tenant_config.ex IN FULL. It is the precedent,
+      and it is unusually well documented for exactly this reason: it carries
+      sections on why it is mounted on Letflow.Router rather than in
+      ApiPipeline, on the never-error rule and its INV-5/anti-oracle
+      justification, on what the endpoint discloses and what it must never
+      disclose (a hand-built three-key allowlist, never derived from the
+      %Tenant{} struct), on precedence between its two resolution parameters,
+      and on the consequences of mounting outside the pipeline (no
+      Plug.Parsers, no AuthPipeline, no TenantStatus, no trace id). The
+      design must state, point by point, WHAT IT COPIES from this precedent
+      and WHAT IT DELIBERATELY DOES NOT, with a reason for each divergence.
+
+      WHAT THE DESIGN MUST SETTLE, each with a concrete decided answer
+      rather than a menu of options:
+
+      1. WHERE SUCH A ROUTE MOUNTS. Name the mount point and the module
+      shape, justified against the three existing pre-forward mounts and
+      against the AuthPipeline property above. State whether the new route is
+      a fourth sibling forward on Letflow.Router, a sub-path of an existing
+      one, or something else, and why.
+
+      2. THE DISCLOSURE BOUNDARY. THIS IS THE CRUX OF THE REQUIREMENT. An
+      unauthenticated route by definition has no auth_context, so INV-1's
+      usual mechanism -- Letflow.Api.Context.scoped_repo_opts/1 reading
+      conn.assigns.auth_context.tenant_id -- is UNAVAILABLE. Read that
+      function before designing around its absence. The design must state
+      (a) how the tenant, and therefore the schema prefix, is resolved
+      without a token; (b) why that resolution cannot be used to enumerate
+      tenants or to probe for their existence; and (c) INV-5 BY NAME -- an
+      unauthenticated caller must not be able to distinguish "this resource
+      exists but is not visible to you" from "no such resource", and the
+      design must name the concrete mechanism that makes those two cases
+      identical in status code, body shape and number of database
+      round-trips (INV-5's own text calls out the timing/round-trip signal
+      explicitly; see docs/agents/instructions/security-invariants.md).
+      Letflow.Routers.TenantConfig's own never-error rule is the precedent to
+      reason from, including the bounded inference it openly accepts and
+      documents; the design must state what bounded inference, if any, its
+      own shape accepts, rather than claiming none.
+
+      3. RATE LIMITING AND ABUSE POSTURE. Either specify it concretely --
+      what is limited, by what key, where the limiter sits relative to the
+      mount -- or state explicitly that it is out of scope for this design,
+      with the reason and with a named owner or follow-on requirement for it.
+      Silence is not an acceptable answer; an unauthenticated route is by
+      construction reachable by anyone.
+
+      4. WHAT IS SAFE TO RETURN. An unauthenticated response must expose a
+      deliberately minimal, allowlisted projection -- never a full record and
+      never a struct serialised wholesale. State the exact response shape and
+      the RULE that governs adding to it, in the same spirit as
+      Letflow.Routers.TenantConfig's "adding a fourth top-level key to this
+      response, or a fourth sub-key to branding, is a security change, not a
+      feature". State how the projection is built (hand-built map with named
+      keys, versus derived from a schema struct) and why.
+
+      5. GENERIC OR ONE-OFF. Take a position, with reasoning: is this a
+      reusable mount-plus-plug shape that any future public read can adopt,
+      or a one-off whose next instance should be designed again from scratch?
+      Note that the three existing public mounts each hand-rolled their own
+      answer and share no common abstraction -- so "reusable" is a claim the
+      design must justify rather than assume, and "one-off" is a defensible
+      answer if argued.
+
+      6. INTERACTION WITH Letflow.Plugs.AuthPipeline AND
+      Letflow.Plugs.TenantStatus. State precisely what must NOT run for these
+      routes and what still MUST. Read lib/letflow/plugs/tenant_status.ex
+      before answering -- a route that skips the tenant-status check is
+      serving data for tenants whose status may forbid it, and the design
+      must say whether that is acceptable here and why, or what replaces it.
+      Also state the consequences the TenantConfig precedent already
+      documents for mounting outside the pipeline (no Plug.Parsers, no trace
+      id, no problem-document shaping) and whether each is accepted or
+      addressed.
+
+      SECURITY-REVIEWER IS A NAMED HARD GATE ON THIS DESIGN. This is the one
+      deliberate hole in the auth pipeline and the highest-risk design filed
+      in S10 so far. The review must address INV-1, INV-5 and INV-8 BY NAME
+      with the concrete mechanism in each case, not a general pass -- INV-1
+      because the usual prefix-derivation mechanism is unavailable here,
+      INV-5 because an unauthenticated endpoint is the easiest existence
+      oracle in the system to build by accident, and INV-8 because a route
+      reachable by anyone with no credential must not have a realistic input
+      that raises.
+
+      SCOPE FENCE: this requirement writes one design artefact under
+      lib/letflow/design/, plus at most one decision record under
+      docs/migration/decisions/ if the designer judges one warranted. It
+      touches no file under lib/letflow/routers/, lib/letflow/router.ex,
+      lib/letflow/plugs/, lib/letflow/api/, priv/repo/migrations/, or test/,
+      and creates no migration. Whether the mount-point question or the
+      generic-versus-one-off question rises to a decision record rather than
+      a design detail is CODE-DESIGNER's call -- the artefact must state
+      which it concluded and why, either way.
+    acceptance_criteria:
+      - "a design artefact exists under lib/letflow/design/ named req323-<slug>.md, and it contains a route table in the same Handler/Method-path/Delegate/Auth/Response column form used by lib/letflow/routers/tenant_config.ex's moduledoc -- verified by quoting both tables side by side in the completion report"
+      - "the design names the mount point concretely and justifies it against the THREE existing public pre-forward mounts, each cited by its path and its owning requirement id (/api/tenant-config REQ-078, /api/mobile/tenant-config REQ-124, /metrics REQ-194) -- with a quoted grep over lib/letflow/router.ex showing those three forwards and the /api/v1 forward, confirming the count is three and that all three precede it"
+      - "the design states, with the file read in full, what it COPIES from lib/letflow/routers/tenant_config.ex and what it DELIBERATELY DOES NOT, as an explicit two-column or two-list comparison with a stated reason per divergence -- not a general statement that the precedent was consulted"
+      - "the design addresses INV-1 by name and states how the schema prefix is resolved with no auth_context available, explicitly naming Letflow.Api.Context.scoped_repo_opts/1 as the mechanism that is UNAVAILABLE here and what replaces it -- with scoped_repo_opts/1's actual source or @spec quoted from lib/letflow/api/context.ex rather than paraphrased"
+      - "the design states how the tenant resolution it chose cannot be used to enumerate or probe tenants, naming the concrete property that prevents it (for example an unguessable opaque identifier, or a resolution returning an identical response for every unresolved input) rather than asserting that probing is prevented"
+      - "the design addresses INV-5 by name and states the concrete mechanism by which 'exists but not visible' and 'does not exist' are indistinguishable in status code, body shape AND number of database round-trips -- the round-trip/timing half addressed explicitly, since INV-5's own text names an early-short-circuiting existence check as itself a signal"
+      - "the design states what bounded inference, if any, its shape openly accepts -- in the same manner Letflow.Routers.TenantConfig's moduledoc documents the one it accepts -- rather than claiming zero inference"
+      - "the design either specifies rate limiting concretely (what is limited, keyed by what, and where the limiter sits relative to the mount) or states explicitly that it is out of scope with a reason and a named owner or follow-on requirement -- one of the two is present verbatim; a design silent on abuse posture fails this criterion"
+      - "the design states the exact allowlisted response shape as an enumerated list of keys, states that it is hand-built rather than derived from a schema struct (or states and justifies the opposite), and states the rule governing additions to it in the same spirit as tenant_config.ex's 'adding a fourth top-level key is a security change, not a feature' -- the rule sentence quoted in the completion report"
+      - "the design takes an explicit position on whether the pattern is generic (a reusable mount-plus-plug shape) or one-off, with reasoning that accounts for the fact that the three existing public mounts share no common abstraction -- the position stated in one unambiguous sentence, not distributed across qualifications"
+      - "the design states, itemised, what must NOT run for these routes and what still MUST, naming Letflow.Plugs.AuthPipeline and Letflow.Plugs.TenantStatus explicitly, and states for the tenant-status check specifically whether skipping it is acceptable and why, or what replaces it -- with lib/letflow/plugs/tenant_status.ex read and its actual behaviour cited"
+      - "the design states, for each consequence of mounting outside Letflow.Plugs.ApiPipeline that tenant_config.ex's moduledoc already documents (no Plug.Parsers, no trace id / x-trace-id response header, no problem-document shaping), whether this design accepts it or addresses it, and how"
+      - "SECURITY-REVIEWER has reviewed this design as a tenant-data-path change and recorded a verdict in the design artefact or a clearly linked companion section, addressing INV-1, INV-5 and INV-8 BY NAME with the concrete mechanism for each -- a verdict that issues a general pass without naming all three invariants and their mechanisms does not satisfy this criterion"
+      - "CODE-DESIGN-VALIDATOR confirms the artefact contains no implementation code (no module definition with function bodies intended to be copied into lib/, no plug pipeline written as executable Elixir) while being unambiguous enough for a later ELIXIR-DEV requirement to build the route from without re-deriving the mount point, the tenant-resolution mechanism or the response allowlist"
+      - "the design states whether a docs/migration/decisions/ record is also warranted -- for the mount-point question, the generic-versus-one-off question, or the disclosure boundary -- and either files one or states in the artefact why the design artefact alone suffices"
+      - "0022's rule 1 holds textually: grep the design artefact, any decision record it filed, and this requirement's own title, description and acceptance criteria for single-vertical domain vocabulary and confirm zero hits outside a bare 'S10 gap 6' stage-bookkeeping citation -- the grep command and its real output quoted"
+      - "`git diff --name-only` shows only the new file under lib/letflow/design/, plus at most one file under docs/migration/decisions/ if one was judged warranted, plus docs/requirements.yaml for this entry's own status bookkeeping -- no file under lib/letflow/routers/, lib/letflow/router.ex, lib/letflow/plugs/, lib/letflow/api/, lib/letflow/entities/, priv/repo/migrations/ or test/ appears. Quoted with the command"
+    depends_on: []

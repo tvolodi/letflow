@@ -1053,3 +1053,57 @@ history:
       lib/letflow/routers/entities.ex and test/ touched; no
       authorization.ex, entities/query/, or migrations. docs/
       requirements.yaml flipped pending -> done.
+  - req: REQ-321
+    event: done
+    agent: ORCH
+    at: "2026-09-12T02:13:51Z"
+    note: >
+      REQ-321 (queue task 612, GH#1270, no depends_on) implemented via
+      feature/WF02-REQ321-20260912: a design decision record settling
+      S10 gaps 4/5's open question on whether a SolutionPack document
+      may carry service_catalog_entries at install time. Decision: NO
+      -- lib/letflow/definitions/solution_pack.ex's
+      check_unsupported_sections/1 two-clause rejection becomes the
+      PERMANENT stance, not interim; out-of-band provisioning stays via
+      the existing POST /service-catalog route, gated
+      :AdminServicesManage. Also answers scope (of the rejected
+      permissive design: :tenant-only, derived from resolved prefix,
+      :global never permitted), authorization (would need
+      :AdminServicesManage in addition to :DefinitionsCreate, enforced
+      at the route layer), audit (neither LuaScriptAudit's path nor a
+      new record -- existing solution_pack_installs/service_catalog
+      timestamps sufficient), conflict handling (both same-tenant and
+      cross-tenant duplicate_service_id surface identically; INV-5
+      disclosure question confronted and judged acceptable only given
+      the rejected design's own broad-visibility gate), and migration
+      (none needed, pure policy). New file:
+      docs/migration/decisions/0027-solution-pack-service-catalog-
+      install-policy.md. No design artefact under lib/letflow/design/,
+      since sub-question 1 is NO. lib/letflow/definitions/solution_pack.ex
+      verified byte-identical at every review stage. mix test
+      test/letflow/service_catalog_test.exs: 33 passed (run by ORCH,
+      since CODE-DESIGNER's own environment lacked mix on PATH),
+      including the specific unsupported-section rejection test.
+
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS
+      (independently verified every cited file/line -- permission
+      names in authorization.ex, lua_script_audit.ex's own moduledoc
+      framing, service_catalog.ex's GLOBAL-table architecture, the
+      entry.ex schema and migration) -> SECURITY-REVIEWER PASS,
+      addressing INV-9/INV-1/INV-5 by name per this requirement's own
+      acceptance criterion (flagged the existing POST /service-catalog
+      route's own missing outbound-URL validation as a real but
+      correctly out-of-scope residual item for a future requirement) ->
+      REVIEWER PASS, distinct from SECURITY-REVIEWER's, on decision-
+      record consistency (confirmed no silent re-decision of 0022's
+      bucket rule or 0026's pack-section precedent, confirmed
+      consistency with solution_pack.ex's all-or-nothing install
+      stance, confirmed no executable code beyond verbatim citations of
+      the shipped function). Both sign-off sections written directly
+      into the decision record by the respective reviewers, matching
+      0026's own convention. Scope fence held -- only the one decision-
+      record file plus docs/requirements.yaml status bookkeeping;
+      lib/letflow/definitions/, lib/letflow/service_catalog*,
+      lib/letflow/routers/, lib/letflow/api/authorization.ex,
+      priv/repo/migrations/, and test/ all untouched. docs/
+      requirements.yaml flipped pending -> done.

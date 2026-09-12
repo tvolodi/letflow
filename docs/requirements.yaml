@@ -20771,7 +20771,7 @@ requirements:
     title: Design decision record for the SolutionPack service_catalog_entries install policy -- permitted or not, install-time scope, install authorization, audit path, and conflict handling
     owner: CODE-DESIGNER
     impl_order: 612  # letflow-queue task id; depends_on [] so no translation needed. NOTE: this requirement was first drafted as REQ-312 and registered as task 605 before a concurrent session landed its own REQ-312..REQ-314 on main. Renumbered to REQ-321; task 605 carries the stale REQ-312 title and was released status: blocked so nothing claims it (the queue exposes no update endpoint -- see ISS-0613).
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. This is a generic pack-format and install-policy question:

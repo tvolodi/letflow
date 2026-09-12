@@ -6362,6 +6362,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-319 (queue task 610, GH#1267, depends_on [REQ-318]) -- S10 gap 12 part 2: POST /entities/records/:entity_type/export on Letflow.Routers.Entities, the two-tier default-redacted/escalated-unredacted mechanism per lib/letflow/design/req314-entity-record-bulk-export-import.md §1/§2/§4/§6/§7. Reuses the identical Allowlist/Compiler/Cursor pipeline REQ-311's query route uses. Default mode reuses redact/4 verbatim; escalated mode (unredacted: true) makes a second manual evaluate_access/2 call against :EntitiesRecordsExportUnredacted strictly before any selection query is built. Pipeline: no fresh design cycle (REQ-314's PASSed design fully specified scope) -> ELIXIR-DEV (15 tests) -> SECURITY-REVIEWER PASS naming INV-1/INV-2/INV-5/INV-7 by name per explicit AC -> REVIEWER FAIL then PASS (first pass caught a real vortex-tripwire route-count regression; ELIXIR-DEV fixed it, REVIEWER re-confirmed). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent. Rebase onto main hit a real 3-file conflict against concurrently-landed REQ-317 (also added routes to the same router) -- ELIXIR-DEV composed both sides, verified true final route count (16) directly, re-ran the full targeted suite before continuing. No change to authorization.ex, entities/query/, or migrations."
+    },
+    {
+      "run_id": "WF02-REQ321-20260912",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-321",
+      "issue_id": null,
+      "queue_task_id": 612,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1270,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions/"
+      ],
+      "branch_name": "feature/WF02-REQ321-20260912",
+      "started_at": "2026-09-12T02:00:01Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-321 (queue task 612, GH#1270, no depends_on) -- design decision record settling S10 gaps 4/5's open question on whether a SolutionPack document may carry service_catalog_entries at install time. Decision: NO, permanently -- check_unsupported_sections/1's rejection stands, out-of-band provisioning stays via POST /service-catalog gated :AdminServicesManage. New file: docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md. No design artefact (sub-question 1 answered NO). lib/letflow/definitions/solution_pack.ex verified byte-identical throughout. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR PASS (independently verified every cited file/line) -> SECURITY-REVIEWER PASS addressing INV-9/INV-1/INV-5 by name (flagged the existing service-catalog route's own missing outbound-URL validation as a real but out-of-scope residual item) -> REVIEWER PASS on decision-record consistency (no silent re-decision of 0022/0026, consistent with solution_pack.ex's all-or-nothing stance, no executable code beyond verbatim citations). Both sign-offs written directly into the record by the respective reviewers, matching 0026's convention. mix test test/letflow/service_catalog_test.exs: 33 passed (run by ORCH)."
     }
   ]
 }

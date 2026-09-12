@@ -2909,8 +2909,24 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 29
+    entries: 30
     note: >
+      Recounted to 30 on WF02-REQ319-20260911's Step Final SECOND
+      rebase, which conflicted at this file's tail between this run's
+      own already-composed note (previous recount: 29) and
+      WF02-REQ317-20260912's own close-out note (also independently
+      computed as 29, before either side saw the other).
+      docs/status/requirement_status.v14.yaml's own tail required
+      manual composition (REQ-317's close-out done-event, already on
+      main, sorted before REQ-319's done-event by simple concatenation
+      -- REQ-317 done at 00:30:36Z predates REQ-319 done at
+      00:51:40Z). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 30 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      29, per this note's own recount-every-time rule. 1055 lines /
+      60922 bytes -- still under the 1,200-line roll ceiling but close;
+      the NEXT append to this volume should check whether a roll is
+      warranted before appending further.
       Incremented to 29 by DOC-UPDATER's own REQ-317 done-event append
       (Step 6, WF02-REQ317-20260912 close-out) -- `grep -c "^  - req:"
       docs/status/requirement_status.v14.yaml` = 29 on-disk entries, no

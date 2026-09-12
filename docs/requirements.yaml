@@ -20582,7 +20582,7 @@ requirements:
     title: Add POST /entities/records/:entity_type/export, with the two-tier default-redacted/escalated-unredacted mechanism (S10 gap 12, part 2)
     owner: ELIXIR-DEV
     impl_order: 610  # letflow-queue task id; depends_on [REQ-318] = queue task 608, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Per 0022's rule 1 this requirement's title, description,

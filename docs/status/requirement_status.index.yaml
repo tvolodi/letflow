@@ -3141,7 +3141,7 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 9
+    entries: 11
     note: >
       Incremented to 9 by ORCH's own REQ-328 blocked-event append
       (direct-action, dependency REQ-327 not yet done) -- `grep -c

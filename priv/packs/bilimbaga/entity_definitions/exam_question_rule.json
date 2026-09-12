@@ -1,0 +1,84 @@
+{
+  "name": "exam_question_rule",
+  "display_name": "Exam Question Rule",
+  "description": "One question-selection rule for an exam -- either a random pool draw or a manual pin list. Ports FR-BB31 (Exam Configuration Model), source table `exam_question_rules` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. THE tag_ids JSONB COLUMN IS DELIBERATELY REMODELLED, NOT TRANSCRIBED. The source table carries `tag_ids JSONB NOT NULL DEFAULT '[]'::jsonb`, an array of tag references held on the parent row. That column is deliberately NOT ported as a field here. Carrying it forward as a :json field would be exactly the shape docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry records as rejected: unindexed by default and so degrading to a scan, with nowhere to put join attributes, and invisible to Letflow.Entities.Query.FieldGrants (REQ-231), which redacts at field granularity on a record and cannot field-redact values inside an array on another row. The rule-to-tag relationship is instead modelled as an ordinary join entity type, exam_question_rule_tag, in this same directory -- an entity whose promoted columns are two foreign keys with a constraint_def of type \"unique\" over the pair, which is the correct alternative that anti-pattern entry names and the shape Letflow.Entities.Query.Compiler's through join (REQ-300) resolves against. This is a deliberate remodelling of the source schema, not a transcription of it. FIELD-LEVEL NOTES. `difficulty` is :string and deliberately NOT :enum. The source column is a bare nullable TEXT with no CHECK, unlike questions.difficulty, which does carry one; tightening a column the source itself left loose would invent a constraint the port has no evidence for, so the asymmetry between this field and question.difficulty is deliberate rather than an oversight. `section_id` is required false because the source is a nullable FK with ON DELETE SET NULL; `category_id` is likewise a nullable source FK. `mode` is :enum, the direct translation of the source's question_selection_mode Postgres ENUM. `category_id` references the `category` entity type authored by REQ-326. The source's UNIQUE (exam_id, sort_order) is expressible exactly and is declared below. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's CHECK (count > 0) and CHECK (sort_order >= 0) are single-column range checks with no entity-definition expression; both are recorded in README-constraints.md in this directory, along with the fact that relocating them loses database-level enforcement.",
+  "fields": [
+    {
+      "name": "exam_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "section_id",
+      "type": "string",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "mode",
+      "type": "enum",
+      "enum_values": ["manual", "random"],
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "category_id",
+      "type": "string",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "difficulty",
+      "type": "string",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "count",
+      "type": "integer",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_exam_question_rule_exam_id",
+      "fields": ["exam_id"]
+    },
+    {
+      "name": "idx_exam_question_rule_section_id",
+      "fields": ["section_id"]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_exam_question_rule_exam_id",
+      "field": "exam_id",
+      "references_entity": "exam"
+    },
+    {
+      "name": "fk_exam_question_rule_section_id",
+      "field": "section_id",
+      "references_entity": "exam_section"
+    },
+    {
+      "name": "fk_exam_question_rule_category_id",
+      "field": "category_id",
+      "references_entity": "category"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_exam_question_rule_exam_id_sort_order",
+      "type": "unique",
+      "fields": ["exam_id", "sort_order"]
+    }
+  ]
+}

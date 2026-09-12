@@ -1,0 +1,44 @@
+{
+  "name": "exam_question_rule_tag",
+  "display_name": "Exam Question Rule Tag",
+  "description": "Join entity binding one exam question-selection rule to one tag it draws from. THIS ENTITY TYPE HAS NO SOURCE TABLE. It does not port a table from BilimBaga's backend/migrations/012_exams.up.sql; it REPLACES the `tag_ids JSONB NOT NULL DEFAULT '[]'::jsonb` column on that migration's `exam_question_rules` table. It belongs to FR-BB31 (Exam Configuration Model) and corporate_exam_platform_roadmap.md section 3.1 by way of the rule it decomposes. The remodelling is deliberate: an array of references held on the parent row is the shape docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry records as rejected (unindexed by default, nowhere to put join attributes, invisible to Letflow.Entities.Query.FieldGrants), and the correct alternative that entry names is exactly this -- an ordinary entity type whose promoted columns are two foreign keys, with a constraint_def of type \"unique\" over the pair. This is the same join shape REQ-326 authors for question_tag and for the same reason: it is what Letflow.Entities.Query.Compiler's through join (REQ-300) resolves against. `tag_id` references the `tag` entity type authored by REQ-326. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. This entity type carries no CHECK constraint from any source, having no source table.",
+  "fields": [
+    {
+      "name": "rule_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "tag_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_exam_question_rule_tag_tag_id",
+      "fields": ["tag_id"]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_exam_question_rule_tag_rule_id",
+      "field": "rule_id",
+      "references_entity": "exam_question_rule"
+    },
+    {
+      "name": "fk_exam_question_rule_tag_tag_id",
+      "field": "tag_id",
+      "references_entity": "tag"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_exam_question_rule_tag_rule_id_tag_id",
+      "type": "unique",
+      "fields": ["rule_id", "tag_id"]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "exam_manual_question",
+  "display_name": "Exam Manual Question",
+  "description": "The explicit pin list of questions used when an exam question-selection rule's mode is \"manual\". Ports FR-BB31 (Exam Configuration Model), source table `exam_manual_questions` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. FIELD-LEVEL NOTES. `question_id` references the `question` entity type authored by REQ-326. The source table has no surrogate id: its identity is the composite PRIMARY KEY (rule_id, question_id), which is expressible exactly and is declared below as a constraints entry of type \"unique\" over [\"rule_id\", \"question_id\"] -- the platform's own record identity supplies the surrogate key the source did not have. NAMING NOTE: this document's fk on rule_id and its unique over [rule_id, question_id] both start from rule_id, so an unprefixed naming convention would collide -- validator.ex's Rule 2 (duplicate_name_violations/1) concatenates foreign_keys and constraints into ONE shared uniqueness scope. The fk_/uq_ prefixes keep that shared scope collision-free by construction. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINT NOT EXPRESSIBLE HERE: the source's CHECK (sort_order >= 0) is a single-column range check with no entity-definition expression; it is recorded in README-constraints.md in this directory, along with the fact that relocating it loses database-level enforcement.",
+  "fields": [
+    {
+      "name": "rule_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "question_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_exam_manual_question_rule_id",
+      "fields": ["rule_id"]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_exam_manual_question_rule_id",
+      "field": "rule_id",
+      "references_entity": "exam_question_rule"
+    },
+    {
+      "name": "fk_exam_manual_question_question_id",
+      "field": "question_id",
+      "references_entity": "question"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_exam_manual_question_rule_id_question_id",
+      "type": "unique",
+      "fields": ["rule_id", "question_id"]
+    }
+  ]
+}

@@ -992,6 +992,22 @@ history:
       the REQ-317 route/permission half are now done) -- no code change,
       the implementation was already merged separately.
 
+  - req: REQ-320
+    event: started
+    agent: ORCH
+    at: "2026-09-12T00:48:45Z"
+    note: >
+      Run WF02-REQ320-20260912. Claimed via get_next_task (queue task
+      611, GH#1268). Implements lib/letflow/design/req314-entity-
+      record-bulk-export-import.md §1/§3/§4/§6/§7: POST
+      /entities/records/:entity_type/import with a 200-record cap
+      (413, no truncation), schema-version gate, path-vs-body
+      entity_type check, per-entry writes via
+      Letflow.Entities.Records.create_record/2 unchanged, per-record
+      partial-success batch semantics, intra-call-only idempotency.
+      Independent of REQ-319 (export). Branch:
+      feature/WF02-REQ320-20260912. Dispatching ELIXIR-DEV next,
+      gated by SECURITY-REVIEWER (tenant-data path).
   - req: REQ-319
     event: done
     agent: ORCH

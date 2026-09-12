@@ -2909,8 +2909,25 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 31
+    entries: 32
     note: >
+      Recounted to 32 by WF02-REQ320-20260912's Step Final SECOND rebase,
+      which conflicted at this file's tail between this run's own
+      already-composed note (previous recount: 31, composing REQ-320
+      started + REQ-319 done) and WF02-REQ321-20260912 (ORCH)'s own
+      REQ-321 done-event append (independently computed as 31, before
+      either side saw the other). docs/status/requirement_status.v14.yaml
+      itself auto-merged cleanly with no conflict, appending REQ-321's
+      done-event after this branch's already-composed REQ-320
+      started/REQ-319 done entries with no reordering needed -- only this
+      index file's declared count and narrative needed manual
+      composition. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 32 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      31, per this note's own recount-every-time rule. 1125 lines --
+      still under the 1,200-line roll ceiling but close; the NEXT append
+      to this volume should check whether a roll is warranted before
+      appending further.
       Incremented to 31 by ORCH's own REQ-321 done-event append
       (WF02-REQ321-20260912) -- `grep -c "^  - req:"
       docs/status/requirement_status.v14.yaml` = 31 on-disk entries;
@@ -2919,6 +2936,22 @@ volumes:
       count first and roll to v15 before appending if either bound
       would be exceeded, per the roll procedure this file's own header
       documents (see v13's own roll to v14 for the exact steps).
+      Recounted to 31 by WF02-REQ320-20260912's Step Final rebase, which
+      conflicted at this file's tail between this run's own REQ-320
+      started-event append (independently computed as 30 against a
+      stale pre-REQ-319 base) and WF02-REQ319-20260911's own Step Final
+      SECOND-rebase note (also 30, before either side saw the other).
+      docs/status/requirement_status.v14.yaml's own tail required
+      manual composition -- REQ-320 started (00:48:45Z) sorts before
+      REQ-319 done (00:51:40Z), so REQ-320's own started-event entry was
+      reordered ahead of REQ-319's done-event entry rather than appended
+      after it. Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 31 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      30, per this note's own recount-every-time rule. 1071 lines --
+      still under the 1,200-line roll ceiling but close; the NEXT append
+      to this volume should check whether a roll is warranted before
+      appending further.
       Recounted to 30 on WF02-REQ319-20260911's Step Final SECOND
       rebase, which conflicted at this file's tail between this run's
       own already-composed note (previous recount: 29) and

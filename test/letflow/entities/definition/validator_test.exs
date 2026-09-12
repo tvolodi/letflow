@@ -337,8 +337,8 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
     end
   end
 
-  describe "Rule 9 -- self-referential-FK rejection (:self_referential_fk)" do
-    test "an FK whose references_entity equals the definition's own name fails only :self_referential_fk" do
+  describe "Rule 9 (lifted, REQ-324) -- a foreign key MAY reference the definition's own name" do
+    test "an FK whose references_entity equals the definition's own name validates as :ok" do
       definition = %{
         name: "widget",
         display_name: "Widget",
@@ -346,13 +346,18 @@ defmodule Letflow.Entities.Definition.ValidatorTest do
         foreign_keys: [%{name: "fk1", field: "id", references_entity: "widget"}]
       }
 
-      assert {:error,
-              [
-                %Violation{
-                  rule: :self_referential_fk,
-                  path: [:foreign_keys, "fk1", :references_entity]
-                }
-              ]} = Validator.validate(definition)
+      assert Validator.validate(definition) == :ok
+    end
+
+    test "a self-referential FK still enforces its other invariants -- an unknown local field still fails Rule 5 (:fk_field_not_found), not accepted just because the target is self" do
+      definition = %{
+        name: "widget",
+        display_name: "Widget",
+        fields: [%{name: "id", type: :string}],
+        foreign_keys: [%{name: "fk1", field: "does_not_exist", references_entity: "widget"}]
+      }
+
+      assert {:error, [%Violation{rule: :fk_field_not_found}]} = Validator.validate(definition)
     end
   end
 

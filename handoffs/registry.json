@@ -6342,6 +6342,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-318 (queue task 608, GH#1265, depends_on [REQ-314]) -- S10 gap 12 part 1: three new permission atoms on Letflow.Api.Authorization per the already-PASSed design lib/letflow/design/req314-entity-record-bulk-export-import.md §5. :EntitiesRecordsExport and :EntitiesRecordsImport are route-level (real endpoint_policy_key/2 clauses); :EntitiesRecordsExportUnredacted is deliberately NOT route-level -- checked in-handler only by REQ-319's future handler. No new role_allows?/2 clauses for PROCESS_DESIGNER/PROCESS_OPERATOR/TASK_WORKER -- only PLATFORM_ADMIN's catch-all grants the three atoms, matching the :DlqOperate/:WebhooksManage precedent. :EntitiesRecordsImport kept genuinely separate from :EntitiesRecordsWrite. Pipeline: no fresh design cycle (REQ-314's PASSed design fully specified scope) -> ELIXIR-DEV (91 tests) -> SECURITY-REVIEWER PASS (traced role_allows?/2's closed-list fallback to confirm deny-by-default, confirmed :EntitiesRecordsExportUnredacted unreachable via routing, confirmed no privilege-escalation gap) -> REVIEWER PASS (confirmed design conformance/idiom, independently ran the full suite: 3912/3914 passed, only the 2 pre-existing rust-toolchain-environmental failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent -- both hard-gate reviewers independently verified coverage. No route, no router change, no migration -- REQ-319/320 own those."
+    },
+    {
+      "run_id": "WF02-REQ319-20260911",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-319",
+      "issue_id": null,
+      "queue_task_id": 610,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1267,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/routers/entities.ex"
+      ],
+      "branch_name": "feature/WF02-REQ319-20260911",
+      "started_at": "2026-09-11T22:51:05Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-319 (queue task 610, GH#1267, depends_on [REQ-318]) -- S10 gap 12 part 2: POST /entities/records/:entity_type/export on Letflow.Routers.Entities, the two-tier default-redacted/escalated-unredacted mechanism per lib/letflow/design/req314-entity-record-bulk-export-import.md §1/§2/§4/§6/§7. Reuses the identical Allowlist/Compiler/Cursor pipeline REQ-311's query route uses. Default mode reuses redact/4 verbatim; escalated mode (unredacted: true) makes a second manual evaluate_access/2 call against :EntitiesRecordsExportUnredacted strictly before any selection query is built. Pipeline: no fresh design cycle (REQ-314's PASSed design fully specified scope) -> ELIXIR-DEV (15 tests) -> SECURITY-REVIEWER PASS naming INV-1/INV-2/INV-5/INV-7 by name per explicit AC -> REVIEWER FAIL then PASS (first pass caught a real vortex-tripwire route-count regression; ELIXIR-DEV fixed it, REVIEWER re-confirmed). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent. Rebase onto main hit a real 3-file conflict against concurrently-landed REQ-317 (also added routes to the same router) -- ELIXIR-DEV composed both sides, verified true final route count (16) directly, re-ran the full targeted suite before continuing. No change to authorization.ex, entities/query/, or migrations."
     }
   ]
 }

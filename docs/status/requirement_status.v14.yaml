@@ -964,7 +964,6 @@ history:
       Letflow.Repository.EntityAttachments (REQ-316, already merged).
       Branch: feature/WF02-REQ317-20260912. Dispatching ELIXIR-DEV
       next, gated by SECURITY-REVIEWER (tenant-data path).
-
   - req: REQ-317
     event: done
     agent: DOC-UPDATER
@@ -992,3 +991,65 @@ history:
       row to closed (both the REQ-316 migration/context-module half and
       the REQ-317 route/permission half are now done) -- no code change,
       the implementation was already merged separately.
+
+  - req: REQ-319
+    event: done
+    agent: ORCH
+    at: "2026-09-12T00:51:40Z"
+    note: >
+      REQ-319 (queue task 610, GH#1267, depends_on [REQ-318]) implemented
+      via feature/WF02-REQ319-20260911: S10 gap 12 part 2 -- POST
+      /entities/records/:entity_type/export on Letflow.Routers.Entities,
+      implementing the two-tier default-redacted/escalated-unredacted
+      mechanism per lib/letflow/design/req314-entity-record-bulk-export-
+      import.md §1/§2/§4/§6 (final SECURITY-REVIEWER verdict)/§7. Reuses
+      the identical Allowlist.load/2 -> Compiler.compile/2 ->
+      Cursor.paginate/5 sequence REQ-311's POST /entities/query handler
+      already uses, capped at Pagination.max_page_size/0 (200). Default
+      mode reuses the same redact/4 clauses handle_query/1 already calls
+      -- identical disclosure strength to :EntitiesQuery. Escalated mode
+      (unredacted: true) makes a SECOND manual
+      Letflow.Api.Authorization.evaluate_access/2 call against
+      :EntitiesRecordsExportUnredacted, strictly before any selection
+      query is built -- 403 immediately on failure, never a silent
+      fallback to redacted. Export document shape:
+      record_export_schema_version "entities/record-export/v1",
+      entity_type, exported_at, records with
+      record_id/field_values/deleted.
+
+      Pipeline: no fresh CODE-DESIGNER/CODE-DESIGN-VALIDATOR cycle -- the
+      existing PASSed REQ-314 design fully specified this requirement's
+      scope -> ELIXIR-DEV (15 tests: two-caller redaction comparison,
+      403-before-any-selection-query proof against evaluate_access/2
+      directly, both-atoms-unredacted full disclosure, atom independence,
+      >200-record pagination, export_document shape incl. a soft-deleted
+      record, INV-5 byte-identical cross-tenant/nonexistent 404,
+      path-vs-body entity_type mismatch 422) -> SECURITY-REVIEWER PASS
+      naming INV-1/INV-2/INV-5/INV-7 by name per this requirement's
+      explicit acceptance criterion (traced the with-chain to confirm
+      the 403 fires before the selection query is built; assessed and
+      accepted a role-matrix caveat -- today only PLATFORM_ADMIN holds
+      either export atom, so the base-only/not-unredacted fail-closed
+      path is proven directly against evaluate_access/2 rather than via
+      a real HTTP request, judged a legitimate proof substitute given
+      REQ-318's already-reviewed narrow-by-default matrix) -> REVIEWER
+      FAIL then PASS (first pass caught a real regression: the new
+      twelfth route wasn't reflected in
+      test/letflow/simulation/req207_vortex_test.exs's route-count
+      tripwire, the same re-derivation this file has needed after
+      REQ-310/311/315; ELIXIR-DEV fixed it, REVIEWER independently
+      re-ran the targeted test and confirmed the fix was narrow).
+      TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per this project's
+      established precedent -- both hard-gate reviewers independently
+      verified the 15-test coverage as comprehensive. Rebase onto main
+      hit a real 3-file conflict against REQ-317 (landed concurrently,
+      also added routes to the same router) -- ELIXIR-DEV composed both
+      sides (REQ-317's four attachment routes plus REQ-319's export
+      route) across lib/letflow/routers/entities.ex,
+      test/letflow/routers/entities_test.exs, and the vortex tripwire,
+      verified the true final route count (16) directly rather than by
+      arithmetic, re-ran the full targeted suite (103 passed) before
+      ORCH continued the rebase. Scope fence held -- only
+      lib/letflow/routers/entities.ex and test/ touched; no
+      authorization.ex, entities/query/, or migrations. docs/
+      requirements.yaml flipped pending -> done.

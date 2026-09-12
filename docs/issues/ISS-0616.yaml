@@ -1,0 +1,66 @@
+id: ISS-0616
+title: get_next_task silently ignores an unsupported dry_run parameter and takes a real lock -- a read-only probe blocked REQ-323 for 57 minutes
+discovered_by: ORCH
+discovered_in_run: WF02-REQ323-20260912
+discovered_at: "2026-09-12T09:05:00Z"
+severity: MAJOR
+description: >
+  ORCH called GET /tasks/next?agent_id=orch-probe&dry_run=true to check
+  whether the queue had eligible work, intending a read-only probe.
+  letflow-queue does not support a dry_run parameter -- grep of
+  docs/agents/protocols/TASK_QUEUE.md finds zero occurrences of the
+  string. The service silently IGNORED the unknown query parameter and
+  performed a normal claim, locking task 615 (REQ-323) to the fictitious
+  agent id "orch-probe".
+
+  The lock surfaced only 57 minutes later, when the same ORCH tried to
+  claim REQ-323 for real and got HTTP 409 "task is locked by a different
+  agent" -- from itself, under a throwaway id it had invented for a
+  probe. For that whole window get_next_task would have handed the task
+  to no other host either. A sibling did pick up and complete REQ-322 in
+  the same window, so nothing stalled outright, but REQ-323 was
+  unavailable to every host for no reason.
+
+  TWO DEFECTS, the second more serious:
+
+  1. There is no read-only way to ask "does the queue have eligible
+     work?". The only availability signal is get_next_task, which is
+     inherently a mutating claim. An ORCH deciding whether to start work
+     at all must either claim something it may not want, or not ask.
+     That is an API gap, not merely misuse -- the protocol's own
+     decision tree has ORCH check for eligible work before choosing a
+     workflow.
+
+  2. Unknown query parameters are silently ignored rather than
+     rejected. That is what turned a wrong assumption into a stuck
+     lock. A 400 on an unrecognised parameter would have surfaced the
+     mistake in the first second rather than the 57th minute.
+
+  Same failure shape as ISS-0599: the caller believed it had done
+  something it had not, and the queue's deliberate four-endpoint design
+  meant the mistake could not be corrected generically -- recovery
+  required knowing to release under the fictitious agent id.
+
+  RECOVERY TAKEN: released task 615 as agent_id "orch-probe" back to
+  status open, then claimed it properly as orch-session-7ca7f9f6. No
+  work lost.
+
+  Severity MAJOR: no data loss, but a queue task was silently
+  unavailable to every host on the strength of a typo-shaped mistake the
+  service accepted without complaint, and nothing detected it.
+
+  FIX DIRECTIONS:
+  (a) A genuine read-only availability endpoint. NOTE: REQ-222
+      (pending, S6) already covers "letflow-queue: read-only GET /tasks
+      listing endpoint with computed eligibility" -- this may already be
+      its job, and this record should be cross-referenced there rather
+      than duplicating it.
+  (b) Reject unknown query parameters with 400 instead of ignoring them.
+      This is the real fix.
+  (c) At minimum, document in TASK_QUEUE.md that get_next_task ALWAYS
+      claims and that there is no dry-run mode, so no future agent
+      invents one. Nearly free, and prevents recurrence.
+affected_files:
+  - docs/agents/protocols/TASK_QUEUE.md
+queue_ref: Q-616
+github_ref: GH-1289

@@ -95,5 +95,4 @@ resolution_note: >
   SECURITY-REVIEWER PASS, REVIEWER PASS, TEST-DESIGN-VALIDATOR PASS
   (69/69 targeted tests), and re-verified by TEST-RUNNER after a rebase
   onto main: full suite 4053 passed, exit 0. Branch
-  issue/ISS-0623-20260913, commit f169e369. PR: TBD (opened as part of
-  this close-out; see the branch's PR for the merged number).
+  issue/ISS-0623-20260913, commit f169e369. PR #1314.

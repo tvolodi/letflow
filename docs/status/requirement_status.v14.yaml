@@ -1123,3 +1123,38 @@ history:
       lib/letflow/routers/, lib/letflow/api/authorization.ex,
       priv/repo/migrations/, and test/ all untouched. docs/
       requirements.yaml flipped pending -> done.
+
+  - req: REQ-320
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-12T02:45:33Z"
+    note: >
+      Run WF02-REQ320-20260912 close-out (close-out step had not been run
+      before merge). Implemented POST /entities/records/:entity_type/import
+      per lib/letflow/design/req314-entity-record-bulk-export-import.md
+      §1/§3/§4/§6/§7: 200-record cap (413) checked before any entity-type/
+      definition resolution, schema-version gate
+      (record_export_schema_version == "entities/record-export/v1"),
+      path-vs-body entity_type check (422 on mismatch), per-entry writes
+      via Letflow.Entities.Records.create_record/2 unchanged (no
+      independent/parallel validation added), per-record partial-success
+      batch semantics (not whole-batch atomicity), and intra-call-only
+      idempotency keys derived from (import_request_id, entry.record_id)
+      -- explicitly NOT cross-call, verified in both directions by
+      SECURITY-REVIEWER. SECURITY-REVIEWER PASS (INV-1/INV-4/INV-5/INV-6/
+      INV-7/INV-8 satisfied). REVIEWER PASS, with one non-blocking
+      cosmetic nit not requiring rework: import_idempotency_key/2 uses
+      inspect/1 where to_string/1 would be more conventional, flagged for
+      a future touch. TEST-RUNNER confirmed green CI on PR #1282 (merged,
+      commit df47ddf7), after fixing two collateral issues: a mix format
+      gate failure, and the Req207VortexTest tripwire needing to account
+      for the new 16th (later composed to 18th, alongside REQ-319's
+      concurrently-landing export route) route. This close-out run flips
+      docs/requirements.yaml's REQ-320 status pending -> done, appends
+      this event, and closes GitHub mirror issue #1268 with an evidence
+      comment citing PR #1282 and the CI results -- no code change, the
+      implementation was already merged separately. This also closes S10
+      gap 12 in full: REQ-318 (permission atoms), REQ-319 (export route)
+      and REQ-320 (import route) are all now done --
+      docs/migration/stage-10-bilimbaga-vertical.md's gap table row 12
+      updated accordingly in this same commit.

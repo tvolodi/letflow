@@ -6403,6 +6403,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-322 (queue task 614, GH#1285, no depends_on) -- reconciled docs/migration/stage-10-bilimbaga-vertical.md against the state landed by REQ-308..REQ-321 plus decision 0027, resolving a self-contradiction about gap 1 (prose said closed, table row said open) in favor of the prose, backed by independently re-derived checks. Corrected two stale UNOWNED sites in lib/letflow/definitions/solution_pack.ex to cite 0027 and state the policy permanently NOT PERMITTED -- comment/moduledoc text only, check_unsupported_sections/1 byte-identical. Updated test/letflow/service_catalog_test.exs's deliberately-breaking ISS-0594 assertion with two real checks. Pipeline: DOC-UPDATER -> REVIEWER PASS (independently re-ran every derivation/verification command, confirmed zero function-clause changes, confirmed the other twelve gap rows byte-identical, confirmed decision-record consistency). No SECURITY-REVIEWER gate -- pure doc/comment reconciliation, zero behavior change."
+    },
+    {
+      "run_id": "WF03-ISS0617-20260912",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0617",
+      "queue_task_id": 617,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1294,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/entities/record/validator.ex"
+      ],
+      "branch_name": "fix/ISS-0617-20260912",
+      "started_at": "2026-09-12T11:23:20Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0617 (queue task 617, GH#1294) -- Letflow.Entities.Record.Validator.field_subschema/1 was missing a clause for :localized_text (REQ-301 landed DDL/query but never the write-path validator), causing FunctionClauseError on every write of such a field -- an INV-8-shaped crash, blocking S10 P2's exit condition. Fixed by adding the missing clause matching ddl.ex's storage shape, with additionalProperties: false set explicitly at the nested level and partial-locale writes allowed (every generated column is nullable). Fail-first verified via a stash/pop cycle: 7/17 tests crashed pre-fix. Pipeline: ISSUE-FIXER (diagnosis only) -> ELIXIR-DEV -> SECURITY-REVIEWER PASS (INV-8, INV-1 by name) -> REVIEWER PASS (independently verified DDL-shape match, ran the full suite: only known pre-existing/environmental failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent."
     }
   ]
 }

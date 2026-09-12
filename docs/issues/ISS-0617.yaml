@@ -58,3 +58,22 @@ affected_files:
   - test/letflow/entities/record/validator_test.exs
 queue_ref: Q-617
 github_ref: GH-1294
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0617-20260912
+resolved_at: "2026-09-12T12:31:00Z"
+resolution_note: >
+  Fixed via adding the missing field_subschema/1 clause for
+  :localized_text, matching the storage shape
+  lib/letflow/entities/definition/ddl.ex's localized_text_column_specs/1
+  expects (field_values["<name>"]["<locale>"], keyed by declared
+  locale). additionalProperties: false set explicitly at the nested
+  subschema level -- confirmed not inherited from the outer schema.
+  Partial-locale writes allowed (no "required" => locales), justified
+  by every per-locale generated column being nullable: true in ddl.ex.
+  Fail-first verified: reverting the clause reproduces the crash on 7
+  of 17 tests. Cross-checked no other field type shares this
+  half-landed shape. SECURITY-REVIEWER PASS (INV-8, INV-1 by name),
+  REVIEWER PASS (independently verified DDL-shape match and the
+  nullable-columns justification, ran the full suite: only known
+  pre-existing/environmental failures).

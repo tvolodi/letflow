@@ -3141,8 +3141,12 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 3
+    entries: 4
     note: >
+      Incremented to 4 by ORCH's own ISS-0617 SCOPE-CHANGE done-event
+      append (fix/ISS-0617-20260912) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 4 on-disk entries;
+      290 lines / well under the roll ceiling.
       Incremented to 1 by ORCH's own ISS-0616 SCOPE-CHANGE done-event
       append (chore/ISS-0616-20260912, direct-action fix) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 1

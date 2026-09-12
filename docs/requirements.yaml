@@ -21259,7 +21259,7 @@ requirements:
     title: Design a pattern for exposing a read-only resource to an unauthenticated caller, with its disclosure boundary and mount point (S10 gap 6)
     owner: CODE-DESIGNER
     impl_order: 615  # letflow-queue task id; depends_on [] so no translation needed
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. A pattern for serving a read-only resource to a caller that

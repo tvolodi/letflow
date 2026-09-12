@@ -43,6 +43,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
   alias Letflow.Entities.Definitions
   alias Letflow.Entities.EntityDefinition
   alias Letflow.Entities.Query.Compiler
+  alias Letflow.Entities.Record.Latest
   alias Letflow.Entities.Records
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
@@ -275,7 +276,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       #          clauses) and what makes the live dual-write populate the
       #          promoted columns. A target's table must exist before a
       #          referencing table is created -- same DAG, same reason.
-      promote!(tenant_id, "category", "sort_order", "integer")
+      promote!(tenant_id, "category", "sort_order", "bigint")
       promote!(tenant_id, "tag", "name", "text")
       promote!(tenant_id, "exam", "status", "text")
 
@@ -286,7 +287,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       promote!(tenant_id, "question_tag", "tag_id", "uuid", references_entity: "tag")
 
       promote!(tenant_id, "exam_question_rule", "exam_id", "uuid", references_entity: "exam")
-      promote!(tenant_id, "exam_question_rule", "sort_order", "integer")
+      promote!(tenant_id, "exam_question_rule", "sort_order", "bigint")
 
       # ---- 6a. REAL RECORDS: a category, and a question referencing it ---
       category =
@@ -300,7 +301,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           "sort_order" => 1
         })
 
-      assert {:ok, read_category} = Records.get_record("category", category.record_id, schema)
+      assert {:ok, read_category} = Latest.get(category.record_id, "category", schema)
       assert read_category.field_values["track"] == "security"
       assert read_category.field_values["sort_order"] == 1
       assert read_category.field_values["name"]["en"] == "Security Awareness"
@@ -323,7 +324,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           "stem" => stem
         })
 
-      assert {:ok, read_question} = Records.get_record("question", question.record_id, schema)
+      assert {:ok, read_question} = Latest.get(question.record_id, "question", schema)
       assert read_question.field_values["stem"] == stem
       assert read_question.field_values["stem"]["kk"] == stem["kk"]
       assert read_question.field_values["stem"]["ru"] == stem["ru"]
@@ -394,7 +395,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           "tag_id" => other_tag.record_id
         })
 
-      assert {:ok, read_tag} = Records.get_record("tag", tag.record_id, schema)
+      assert {:ok, read_tag} = Latest.get(tag.record_id, "tag", schema)
       assert read_tag.field_values["name"] == "passwords"
 
       # ---- 6e. REQ-300's `through` many-to-many join ---------------------
@@ -436,7 +437,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           "certificate_enabled" => true
         })
 
-      assert {:ok, read_exam} = Records.get_record("exam", exam.record_id, schema)
+      assert {:ok, read_exam} = Latest.get(exam.record_id, "exam", schema)
       assert read_exam.field_values["title"]["en"] == "Security Awareness Exam"
       assert read_exam.field_values["status"] == "draft"
       assert read_exam.field_values["time_limit_minutes"] == 30
@@ -452,7 +453,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           "sort_order" => 0
         })
 
-      assert {:ok, read_rule} = Records.get_record("exam_question_rule", rule.record_id, schema)
+      assert {:ok, read_rule} = Latest.get(rule.record_id, "exam_question_rule", schema)
       assert read_rule.field_values["exam_id"] == exam.record_id
       assert read_rule.field_values["mode"] == "random"
       assert read_rule.field_values["count"] == 5

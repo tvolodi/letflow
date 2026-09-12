@@ -1449,7 +1449,29 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-317",
           "REQ-318",
           "REQ-319",
-          "REQ-320"
+          "REQ-320",
+          # REQ-324, admitted 2026-09-12 -- lifts Definition.Validator Rule 9
+          # (self-referential fk_def) and fixes a Query.Compiler self-join
+          # ambiguity this exposed (main commit 87fb4d6f). Re-derived, not
+          # waved through: `git show --stat 87fb4d6f` touches only
+          # lib/letflow/entities/definition/validator.ex and
+          # lib/letflow/entities/query/compiler.ex plus their tests -- no
+          # file under lib/letflow/routers/ or lib/letflow/api/, no new
+          # permission atom, no route added to or removed from
+          # Letflow.Routers.Entities, so Signal 3''s eleven/fifteen-route
+          # equality assertion is untouched by this commit. The
+          # Query.Compiler change only matters for a self-referential join
+          # (same physical table on both sides of a fk-column condition);
+          # this scenario's fixture (entity-list-filter-and-page.yaml) uses
+          # ordinary, non-self-referential entity types and never exercises
+          # a self-join, so the fix changes nothing this scenario's six
+          # :gui steps read through. Those six remain individual-record
+          # list/filter/sort/page/redaction reads, all served exclusively by
+          # REQ-311's POST /entities/query, unaffected by Rule 9's lift.
+          # Disposition unchanged: still BLOCKED_ON_DEPENDENCY on S8's
+          # :gui-dispatch stub (Signal 5), nothing under lib/ left for this
+          # scenario to wait on.
+          "REQ-324"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

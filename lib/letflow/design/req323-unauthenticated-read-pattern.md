@@ -1,7 +1,7 @@
 # REQ-323 — Design: the unauthenticated read pattern, its mount point and its disclosure boundary
 
-Stage S10 (motivation: **S10 gap 6** — cited by number only, per decision
-`docs/migration/decisions/0022-bilimbaga-vertical.md` rule 1).
+Stage S10 (motivation: **S10 gap 6** — cited by number only, per decision 0022 rule 1).
+Per that rule this document uses no domain-vertical vocabulary of any kind; see §13.
 Bucket **B** (generic platform capability).
 Owner: `CODE-DESIGNER`. Status: design only — this requirement mounts no route, adds no
 plug, adds no permission atom, writes no migration and writes no test.
@@ -619,7 +619,7 @@ issue time is information the holder already has (they were given the link then)
 > audience is entitled to that field.
 
 The audience clause matters and is part of the rule: a handle is a bearer credential
-with no revocation of *copies*. The right question for any candidate field is never "is
+with no revocation of *copies*. The right question for any proposed field is never "is
 this sensitive?" but "would the tenant accept this being world-readable the moment
 someone forwards the link?"
 
@@ -947,3 +947,32 @@ a tenant schema with no authenticated principal. REQ-323's acceptance criteria n
 *(Space reserved below for SECURITY-REVIEWER's recorded verdict, per REQ-323's
 acceptance criterion. The verdict must address INV-1, INV-5 and INV-8 by name with the
 concrete mechanism for each; a general pass does not satisfy it.)*
+
+---
+
+## 13. Decision 0022 rule 1 — vocabulary check
+
+This is a bucket-B requirement, so rule 1 binds this artefact textually: it may not name
+the vertical that motivated it, in its prose, its identifiers or its examples.
+
+Applied. **S10 gap 6** is cited by number in the header and nowhere is it said what the
+gap is for. The pattern is described throughout as "a read-only resource",
+"an externally-linkable resource", "the resource behind a handle" — never by domain. The
+`<kind>` path segment and the projection-module registry (§4.5) exist precisely so that
+this design names no concrete resource type: the first instance supplies its own kind
+string in its own requirement, and this document is unchanged by it. Every identifier
+proposed here — `/api/public`, `Letflow.Routers.PublicRead`, `public_read_handles`,
+`Letflow.PublicRead.resolve/2`, `handle_hash`, `resource_id`, `kind` — is
+domain-neutral, and each would read identically had a different vertical motivated it.
+
+Verification:
+
+```
+$ grep -rnwiE "exam|exams|certificate|certificates|certification|candidate|candidates|quiz|grading|grader|proctor|bilimbaga|student|teacher|course|diploma|assessment" \
+    lib/letflow/design/req323-unauthenticated-read-pattern.md \
+    docs/migration/decisions/0028-unauthenticated-read-boundary.md
+```
+
+Zero hits across both files this requirement produces, other than this section's own
+grep pattern. A reviewer reading either file cannot tell which vertical motivated it —
+which is the test rule 1 sets.

@@ -396,5 +396,49 @@ history:
       (filed via a separate concurrent WF-01 session, title contains
       "entity"). Confirmed via `git diff main --stat` (empty on this
       branch) that the failure predates and is independent of REQ-326;
-      to be filed as its own issue. docs/requirements.yaml flipped
-      pending -> done.
+      to be filed as its own issue (note: TEST-RUNNER already fixed
+      this tripwire as part of REQ-324's own PR #1306, triaging
+      REQ-324/325/326/327/328 across two rounds -- no separate issue
+      needed). docs/requirements.yaml flipped pending -> done.
+
+  - req: REQ-324
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-12T19:54:00Z"
+    note: >
+      Close-out for run WF02-REQ324-20260912 (queue task 618, GH#1297),
+      whose implementation, REVIEWER PASS and TEST-RUNNER green-CI
+      confirmation had already merged to main (PR #1306, commit
+      6d7face1) without the close-out step running. Lifted
+      Letflow.Entities.Definition.Validator's Rule 9
+      (self-referential-FK rejection) per S10 gap 14, following
+      lib/letflow/design/req225-entity-definition-schema-validation.md's
+      own anticipated-follow-up note (numbered open item 4). Four
+      empirical findings: (1) decision 0025 already covers ON DELETE
+      for the self-edge unconditionally, no code change needed; (2)
+      cycle prevention is NOT enforced anywhere in the platform -- a
+      stated, reasoned position, not an oversight; (3) the DDL
+      generator already handles self-references correctly, verified
+      against a real Postgres; (4) the query compiler's self-join path
+      was found genuinely BROKEN (`ERROR 42702 ambiguous_column`) and
+      fixed by qualifying `hop_on_dynamic/1`'s fragments to the binding
+      alias, with a follow-on gap (filter/sort dynamics still
+      unqualified for a self-join) correctly identified and left for a
+      future requirement rather than silently folded in. REVIEWER PASS
+      -- thorough, independently re-verified all four findings against
+      real code and decision text. TEST-RUNNER confirmed green CI on
+      PR #1306 (merged, commit 6d7face1), including triaging
+      REQ-324/325/326/327/328 into the Req207VortexTest tripwire across
+      two rounds as main moved. docs/requirements.yaml flipped
+      pending -> done. Added gap 14 (self-referential entity
+      relationships) as a new row to
+      docs/migration/stage-10-bilimbaga-vertical.md's gap table --
+      that table only listed thirteen gaps and had no row for gap 14 at
+      all, even though REQ-324's own description cited "S10 gap 14" as
+      its motivation; the new row is marked closed, citing REQ-324 and
+      summarizing the four findings above. Closed GitHub mirror issue
+      #1297 with an evidence comment citing PR #1306 and its CI
+      results. Only status-bookkeeping and this one stage-doc file
+      touched in this branch -- confirmed via
+      `git diff --name-only main...HEAD`; the implementation itself was
+      already merged separately and is untouched here.

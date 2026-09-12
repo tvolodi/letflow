@@ -99,4 +99,52 @@ defmodule Letflow.Entities.Record.Validator do
     do: %{"type" => "string", "enum" => enum_values}
 
   defp field_subschema(%{type: :json}), do: %{}
+
+  # ISS-0617 / GH#1294 fix: `:localized_text` (REQ-301) was declarable,
+  # DDL-supported (`Letflow.Entities.Definition.Ddl.localized_text_column_specs/1`),
+  # and queryable, but had no clause here -- a definition with a
+  # `:localized_text` field validated cleanly (Definition.Validator has no
+  # opinion on record-payload shape) yet every record write raised
+  # `FunctionClauseError` out of this function, an INV-8-shaped
+  # crash-on-realistic-input defect in the same family as the
+  # `properties_violations/3` fix at `JsonSchema` ISS-0088/GH#305 (see that
+  # module's comment): realistic, schema-declared input reaching an
+  # unguarded clause set.
+  #
+  # Storage shape (`ddl.ex` `localized_text_column_specs/1`, which reads
+  # `field_values["<name>"]["<locale>"]` via
+  # `field_values->'<name>'->>'<locale>'`) requires the field's value to be
+  # a JSON object keyed by locale code with string values -- hence
+  # `"type" => "object"` with one string-typed property per declared
+  # locale, not a flat scalar like the other seven types.
+  #
+  # `additionalProperties: false` is set here explicitly, not inherited:
+  # the outer schema's own `additionalProperties: false` (`build_record_schema/1`)
+  # only governs top-level field NAMES against `field_values`'s
+  # `"properties"` map (see `JsonSchema.additional_properties_violations/2`,
+  # which reads `schema["additionalProperties"]`/`schema["properties"]` at
+  # whatever level it is called from) -- it does not cascade into a nested
+  # object subschema. Without setting it again here, a payload could smuggle
+  # an undeclared locale key (e.g. `"fr"` on a field declared with only
+  # `["kk", "ru"]`) past validation with no rejection.
+  #
+  # Deliberately no `"required" => locales`: every per-locale generated
+  # column `localized_text_column_specs/1` emits is `nullable: true` (ddl.ex
+  # `localized_text_column_specs/1`'s `column_spec()`), i.e. the DDL layer
+  # already treats a missing/absent locale as a legitimate, queryable state
+  # (`NULL`), not an error condition -- forcing every declared locale to be
+  # present on every write here would reject storage-legitimate partial
+  # writes the DDL was deliberately built to allow (e.g. a record whose
+  # `"ru"` translation is filled in first, `"kk"` added later). Declared,
+  # present locale keys are still constrained to `"type" => "string"`, and
+  # `additionalProperties: false` still rejects any undeclared locale key --
+  # only per-locale *presence* is optional, not the value's type or the
+  # locale-key set itself.
+  defp field_subschema(%{type: :localized_text, locales: locales}) do
+    %{
+      "type" => "object",
+      "properties" => Map.new(locales, &{&1, %{"type" => "string"}}),
+      "additionalProperties" => false
+    }
+  end
 end

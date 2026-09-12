@@ -249,3 +249,42 @@ history:
       query parameters are ignored rather than rejected, which is what
       turned a wrong assumption into a stuck lock. Recovered by releasing
       under the probe's own agent id. No work lost.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-12T12:31:00Z"
+    note: >
+      ISS-0617 (queue task 617, GH#1294, discovered during a P2
+      feasibility probe) -- Letflow.Entities.Record.Validator.
+      field_subschema/1 was missing a clause for the :localized_text
+      field type (REQ-301 landed its DDL and query halves but never
+      the write-path validator), so any record write against a
+      :localized_text field raised FunctionClauseError instead of a
+      clean validation error, an INV-8-shaped defect blocking S10 P2's
+      exit condition. Fixed via fix/ISS-0617-20260912: added the
+      missing clause matching ddl.ex's storage shape
+      (field_values["<name>"]["<locale>"]), with additionalProperties:
+      false set explicitly at the nested level (confirmed not
+      inherited from the outer schema) and partial-locale writes
+      allowed (every per-locale generated column is nullable: true in
+      ddl.ex). Fail-first verified: reverting the clause reproduces the
+      crash on 7 of 17 tests. Cross-checked no other field type shares
+      this half-landed shape.
+
+      Pipeline: ISSUE-FIXER (root-cause diagnosis: confirmed exact
+      field shape, storage shape, additionalProperties scoping, and
+      that no other field type is affected) -> ELIXIR-DEV (7 new
+      tests) -> SECURITY-REVIEWER PASS (INV-8: confirmed no crash path
+      remains including the degenerate empty-locales case, safely
+      excluded upstream by Definition.Validator's Rule 10; INV-1:
+      confirmed the accepted locale set comes from the tenant's own
+      already-validated definition, never from caller-supplied write
+      payload) -> REVIEWER PASS (independently verified the DDL-shape
+      match and the nullable-columns justification for the partial-
+      locale decision, independently ran the full suite: only the
+      known pre-existing rust-toolchain and tenant-provisioning-race
+      failures, none attributable to this diff). TEST-DESIGNER/
+      TEST-DESIGN-VALIDATOR skipped per this project's established
+      precedent -- both hard-gate reviewers independently verified the
+      7-test coverage as comprehensive. docs/issues/ISS-0617.yaml
+      flipped to status: resolved.

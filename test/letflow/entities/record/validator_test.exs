@@ -209,4 +209,112 @@ defmodule Letflow.Entities.Record.ValidatorTest do
              }
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # ISS-0617 / GH#1294 -- `:localized_text` had no `field_subschema/1` clause,
+  # so any record write against a definition with a `:localized_text` field
+  # raised `FunctionClauseError` instead of returning a clean violation list
+  # (an INV-8-shaped crash-on-realistic-input defect). These tests cover the
+  # fix's shape: an object subschema keyed by declared locale, partial-locale
+  # writes accepted (DDL's per-locale generated columns are `nullable: true`
+  # -- see `Letflow.Entities.Definition.Ddl.localized_text_column_specs/1`),
+  # and an undeclared locale key rejected via the subschema's own
+  # `additionalProperties: false` rather than crashing.
+  # ---------------------------------------------------------------------------
+
+  describe "ISS-0617 -- :localized_text field_subschema/1 clause" do
+    @localized_definition %{
+      name: "article",
+      display_name: "Article",
+      fields: [
+        %{name: "title", type: :string, required: true},
+        %{name: "stem", type: :localized_text, locales: ["kk", "ru"]}
+      ]
+    }
+
+    test "build_record_schema/1 emits an object subschema keyed by each declared locale" do
+      assert Validator.build_record_schema(@localized_definition) == %{
+               "type" => "object",
+               "properties" => %{
+                 "title" => %{"type" => "string"},
+                 "stem" => %{
+                   "type" => "object",
+                   "properties" => %{
+                     "kk" => %{"type" => "string"},
+                     "ru" => %{"type" => "string"}
+                   },
+                   "additionalProperties" => false
+                 }
+               },
+               "required" => ["title"],
+               "additionalProperties" => false
+             }
+    end
+
+    test "a write with every declared locale present returns []" do
+      field_values = %{
+        "title" => "Kitap",
+        "stem" => %{"kk" => "мәтін", "ru" => "текст"}
+      }
+
+      assert Validator.validate_record_payload(@localized_definition, field_values) == []
+    end
+
+    test "a write with only some declared locales present (partial-locale write) also returns [] -- no crash, no violation" do
+      field_values = %{
+        "title" => "Kitap",
+        "stem" => %{"kk" => "мәтін"}
+      }
+
+      assert Validator.validate_record_payload(@localized_definition, field_values) == []
+    end
+
+    test "a write with the localized_text field omitted entirely returns [] -- field itself is not required" do
+      field_values = %{"title" => "Kitap"}
+
+      assert Validator.validate_record_payload(@localized_definition, field_values) == []
+    end
+
+    test "a write with an undeclared locale key is rejected cleanly via additionalProperties, not a crash" do
+      field_values = %{
+        "title" => "Kitap",
+        "stem" => %{"kk" => "мәтін", "fr" => "texte"}
+      }
+
+      assert [violation] = Validator.validate_record_payload(@localized_definition, field_values)
+
+      assert %ValidationFailure{
+               field_path: "/stem/fr",
+               constraint: "additionalProperties",
+               actual: "texte"
+             } == violation
+    end
+
+    test "a non-string value for a declared locale is rejected with a type violation, matching other types' failure shape" do
+      field_values = %{
+        "title" => "Kitap",
+        "stem" => %{"kk" => 123}
+      }
+
+      assert [violation] = Validator.validate_record_payload(@localized_definition, field_values)
+
+      assert %ValidationFailure{
+               field_path: "/stem/kk",
+               constraint: "type",
+               actual: 123
+             } == violation
+    end
+
+    test "a non-object value for the localized_text field itself is rejected with a type violation, not a crash" do
+      field_values = %{"title" => "Kitap", "stem" => "not an object"}
+
+      assert [violation] = Validator.validate_record_payload(@localized_definition, field_values)
+
+      assert %ValidationFailure{
+               field_path: "/stem",
+               constraint: "type",
+               actual: "not an object"
+             } == violation
+    end
+  end
 end

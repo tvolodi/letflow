@@ -1471,7 +1471,32 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # Disposition unchanged: still BLOCKED_ON_DEPENDENCY on S8's
           # :gui-dispatch stub (Signal 5), nothing under lib/ left for this
           # scenario to wait on.
-          "REQ-324"
+          "REQ-324",
+          # REQ-326/327/328, admitted 2026-09-13 -- filed on `main`
+          # (chore/WF01-REQ326-328-20260912, commits 4215fd21/bb5080d5,
+          # merged via #1304) and discovered when rebasing
+          # feature/WF02-REQ324-20260912 onto the moved `main`. All three
+          # are bucket A per decision 0022 (each description's own first
+          # line: "AUTHORS PACK CONTENT, NOT PLATFORM CODE"), owner
+          # REQ-ANALYST, `status: pending` at admission time (filing builds
+          # nothing, same basis as REQ-295/296/299/300/302/304/308/309/
+          # 312/314's precedent above). Their own scope fences/acceptance
+          # criteria state the diff lands ONLY under priv/packs/bilimbaga/
+          # and a new test/letflow/packs/ file -- no lib/letflow/routers/,
+          # no lib/letflow/entities/, no lib/letflow/api/, no route added
+          # to or removed from Letflow.Routers.Entities. None of them is
+          # the REQ-310/311 shape: REQ-326/327 author entity_definitions
+          # pack content (question-bank / exam-configuration), REQ-328
+          # authors and installs the pack document via a real
+          # SolutionPack.install/3 -- none mounts, extends or reads through
+          # an HTTP route this scenario's six :gui steps depend on (those
+          # six remain individual-record list/filter/sort/page/redaction
+          # reads, served exclusively by REQ-311's POST /entities/query).
+          # Disposition unaffected either way -- still BLOCKED_ON_DEPENDENCY
+          # on S8's :gui-dispatch stub.
+          "REQ-326",
+          "REQ-327",
+          "REQ-328"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

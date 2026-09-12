@@ -521,3 +521,55 @@ history:
       gap is invisible to the author, and every future pack inherits it.
       REQ-327's five indexes, ported from the source system's own
       measured CREATE INDEX statements, are currently documentation.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-12T22:56:11Z"
+    note: >
+      ISS-0624 (queue task 624, GH#1311, discovered during
+      WF02-REQ328-20260913) -- Letflow.Entities.Records's private
+      field_document/1, which rebuilds a field_def() map from the
+      persisted definition_json on the real create_record/2 write
+      path, dropped `locales` (and every other optional field_def()
+      key except name/type/required/enum_values). This meant ISS-0617's
+      own :localized_text clause in Record.Validator.field_subschema/1
+      could never match end-to-end, so every :localized_text write
+      still raised FunctionClauseError -- the exact crash ISS-0617 was
+      filed to fix, reached via a different call path ISS-0617's own
+      tests never exercised (they called build_record_schema/1
+      directly, never create_record/2). Three of the ten entity types
+      REQ-326/REQ-327 authored (category, question, exam) could not
+      have records written at all until this fix -- discovered live
+      when REQ-328 became the first requirement to exercise the write
+      path end to end.
+
+      Fixed via fix/ISS-0624-20260912: audited field_document/1 against
+      the full field_def() optional-key set and added every gap found
+      -- locales, search_strategy, decimal_precision, decimal_scale,
+      queried -- using safe Map.get/2,3 defaults throughout.
+      decimal_precision/decimal_scale were also dropped but, verified
+      via fail-first testing, not actually crash-causing on this path;
+      added anyway for converter completeness, matching the two
+      sibling converters (Query.Allowlist.field_document/1,
+      TenantProvisioning.field_from_persisted/1) that already carry
+      them correctly. default deliberately left out, matching both
+      siblings -- no consumer reads it. Added 3 new end-to-end tests
+      through the real create_record/2, closing the exact
+      test-coverage gap that let ISS-0617 ship incomplete.
+
+      Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (INV-8:
+      independently reproduced the crash via revert/restore, confirmed
+      neither sibling converter shares this defect; INV-1: confirmed
+      the fix only widens what's read from the tenant's own
+      already-persisted definition) -> REVIEWER PASS (confirmed design
+      conformance against Definition.field_def() and
+      field_subschema/1's actual needs, independently ran the full
+      suite: only known pre-existing/environmental failures, plus one
+      self-documented ISS-0624 canary test in
+      test/letflow/packs/bilimbaga_pack_install_test.exs now failing
+      because the fix works -- flagged as its own non-blocking
+      follow-up, not a regression). TEST-DESIGNER/TEST-DESIGN-VALIDATOR
+      skipped per established precedent -- both hard-gate reviewers
+      independently verified the 3-test end-to-end coverage as
+      comprehensive. docs/issues/ISS-0624.yaml flipped to status:
+      resolved.

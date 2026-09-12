@@ -3141,16 +3141,22 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 6
+    entries: 7
     note: >
-      Incremented to 6 by ORCH's own REQ-324 started-event append
-      (Step 00, WF02-REQ324-20260912), composed chronologically after
-      REQ-325's done-event append (WF02-REQ325-20260912) since REQ-324
-      started at 17:15:28Z, before REQ-325's done at 18:06:01Z -- both
-      appends landed on `main` independently and were reconciled by a
-      rebase of feature/WF02-REQ324-20260912 onto origin/main -- `grep -c
-      "^  - req:" docs/status/requirement_status.v15.yaml` = 6 on-disk
-      entries; well under the roll ceiling.
+      Recounted to 7 on WF02-REQ326-20260912's Step Final rebase, which
+      conflicted at this file's tail between this run's own already-
+      composed note (previous recount: 6) and WF02-REQ324-20260912's
+      own started-event note (also independently computed as 6, before
+      either side saw the other -- REQ-324 started at 17:15:28Z,
+      composed chronologically after REQ-325's done at 18:06:01Z on
+      main, but before REQ-326's own done-event append here).
+      docs/status/requirement_status.v15.yaml's own tail auto-merged
+      cleanly (both sides' entries are independent appends with no
+      overlapping lines). Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 7 on-disk entries,
+      rather than carrying forward either side's independently-computed
+      6, per this note's own recount-every-time rule. 400 lines /
+      23082 bytes, well under the roll ceiling.
       Incremented to 4 by ORCH's own ISS-0617 SCOPE-CHANGE done-event
       append (fix/ISS-0617-20260912) -- `grep -c "^  - req:"
       docs/status/requirement_status.v15.yaml` = 4 on-disk entries;

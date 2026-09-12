@@ -347,3 +347,54 @@ history:
       lib/letflow/definitions/, lib/letflow/identity/,
       lib/letflow/engine/, migrations, test/, or the stage file
       touched. docs/requirements.yaml flipped pending -> done.
+  - req: REQ-326
+    event: done
+    agent: ORCH
+    at: "2026-09-12T19:38:08Z"
+    note: >
+      REQ-326 (queue task 620, GH#1301, no depends_on) implemented via
+      feature/WF02-REQ326-20260912: authored five bucket-A entity-
+      definition documents under priv/packs/bilimbaga/entity_
+      definitions/ (category, tag, question, answer_option,
+      question_tag) plus priv/packs/bilimbaga/README.md and a
+      validator test -- the first pack content authored in S10,
+      unblocking P2's exit condition. Ports the source's two per-locale
+      translation tables into their parent entity's :localized_text
+      field (REQ-301's mechanism); question_tag authored as a join
+      entity type per docs/anti-patterns.md's array-of-references
+      entry and REQ-300's join-entity shape; answer_option kept as a
+      separate entity type so is_correct is a first-class promoted
+      field for FieldGrants redaction (REQ-231). Every indexes/
+      foreign_keys/constraints entry carries a name following the
+      <prefix>_<entity>_<columns> convention. Deliberately omitted, per
+      document: id/created_at/updated_at (record subsystem supplies
+      these); created_by on question (event stream's actor_id answers
+      authorship instead, since an entity fk_def cannot cross into
+      identity.users); parent_id on category and question
+      (Definition.Validator Rule 9 rejects self-referential fk_def
+      today, REQ-324 pending lifts it, no workaround substituted).
+
+      Pipeline: REQ-ANALYST (owner per the requirement's own rationale
+      -- content documents in an already-designed format, no interface
+      or @spec left to design) -> REVIEWER PASS (independently verified
+      every field/type/citation against the requirement's detailed
+      specification field by field, confirmed Rule 2's shared fk+
+      constraint uniqueness-scope claim by reading the validator
+      directly, independently ran the new test: 18 passed). No
+      SECURITY-REVIEWER gate -- static pack content with no route, no
+      migration, no live data path; REQ-328 owns the actual install
+      wiring. 0022's rule 1 does not apply -- bucket A, naming domain
+      vocabulary is the deliverable, not a violation. Scope fence held
+      -- only priv/packs/, the one new test file, and docs/
+      requirements.yaml status bookkeeping; no lib/letflow/, web/,
+      priv/repo/migrations/, or docs/migration/ touched.
+
+      SEPARATE FINDING, not part of this requirement's scope: mix
+      letflow.check's full run surfaced a pre-existing,
+      REQ-326-unrelated failure in Req207VortexTest -- its hardcoded
+      REQ-id allowlist has not been reconciled for REQ-324's entry
+      (filed via a separate concurrent WF-01 session, title contains
+      "entity"). Confirmed via `git diff main --stat` (empty on this
+      branch) that the failure predates and is independent of REQ-326;
+      to be filed as its own issue. docs/requirements.yaml flipped
+      pending -> done.

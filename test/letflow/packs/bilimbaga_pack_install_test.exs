@@ -276,18 +276,33 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       #          clauses) and what makes the live dual-write populate the
       #          promoted columns. A target's table must exist before a
       #          referencing table is created -- same DAG, same reason.
+      # A promotion on entity type E creates E's table carrying E's FULL
+      # promoted-column set -- which includes a REFERENCES clause for EVERY
+      # fk_def E declares, not just the attribute being promoted. So every one
+      # of E's FK TARGET tables must already exist. Verified empirically: with
+      # exam_section unpromoted, promoting exam_question_rule.exam_id emitted
+      # REFERENCES against a missing entity_exam_section and failed as
+      # ERROR 42P01 (undefined_table). Hence one promotion per entity type,
+      # in @activation_order.
       promote!(tenant_id, "category", "sort_order", "bigint")
       promote!(tenant_id, "tag", "name", "text")
       promote!(tenant_id, "exam", "status", "text")
 
       promote!(tenant_id, "question", "category_id", "uuid", references_entity: "category")
       promote!(tenant_id, "question", "difficulty", "text")
+      promote!(tenant_id, "exam_section", "sort_order", "bigint")
 
+      promote!(tenant_id, "answer_option", "sort_order", "bigint")
       promote!(tenant_id, "question_tag", "question_id", "uuid", references_entity: "question")
       promote!(tenant_id, "question_tag", "tag_id", "uuid", references_entity: "tag")
-
       promote!(tenant_id, "exam_question_rule", "exam_id", "uuid", references_entity: "exam")
       promote!(tenant_id, "exam_question_rule", "sort_order", "bigint")
+
+      promote!(tenant_id, "exam_question_rule_tag", "rule_id", "uuid",
+        references_entity: "exam_question_rule"
+      )
+
+      promote!(tenant_id, "exam_manual_question", "sort_order", "bigint")
 
       # ---- 6a. REAL RECORDS: a category, and a question referencing it ---
       category =

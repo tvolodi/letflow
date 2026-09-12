@@ -180,7 +180,7 @@ It performs a real `install/3` against a real provisioned tenant from
 non-activation, activates and promotes in the DAG order above, and proves the
 promoted FKs are real Postgres constraints.
 
-### KNOWN BLOCKER: ISS-0625 — no record with a `:localized_text` field can be written
+### KNOWN BLOCKER: ISS-0624 — no record with a `:localized_text` field can be written
 
 Found by REQ-328's install test; **a platform defect, not pack content.**
 
@@ -202,7 +202,7 @@ directly with a field map that already has `locales`; they never go through
 `Records.create_record/2`.
 
 Consequence for this pack: `category`, `question` and `exam` all carry
-`:localized_text` fields and so cannot have records written until ISS-0625 is
+`:localized_text` fields and so cannot have records written until ISS-0624 is
 fixed. Per REQ-328's finding clause, those documents were NOT weakened by
 dropping their localized fields, and no production module was patched. The
 install test asserts the current failure so that the day it is fixed, that

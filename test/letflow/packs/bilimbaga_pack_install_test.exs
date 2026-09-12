@@ -339,7 +339,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
       # ---- 6a. THE BLOCKER, ASSERTED RATHER THAN NARRATED -----------------
       #
-      # ISS-0625 (raised by this requirement): a record write against ANY
+      # ISS-0624 (raised by this requirement): a record write against ANY
       # definition carrying a `:localized_text` field raises FunctionClauseError
       # out of `Letflow.Entities.Record.Validator.field_subschema/1`.
       #
@@ -392,9 +392,9 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
           exception -> {:raised, exception}
         end
 
-      IO.puts("\n=== REQ-328 ISS-0625 localized_text write blocker (verbatim) ===")
+      IO.puts("\n=== REQ-328 ISS-0624 localized_text write blocker (verbatim) ===")
       IO.puts(inspect(localized_write, pretty: true, limit: :infinity))
-      IO.puts("=== end ISS-0625 blocker ===\n")
+      IO.puts("=== end ISS-0624 blocker ===\n")
 
       assert {:raised,
               %FunctionClauseError{
@@ -403,12 +403,12 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
                 arity: 1
               }} =
                localized_write,
-             "ISS-0625 appears to be FIXED. Re-enable the :localized_text record " <>
+             "ISS-0624 appears to be FIXED. Re-enable the :localized_text record " <>
                "writes in this test (category.name, question.stem with all three " <>
                "of kk/ru/en, exam.title) and delete this assertion -- REQ-328's " <>
                "acceptance criteria require them."
 
-      # ---- 6b. EVERYTHING NOT BLOCKED BY ISS-0625 IS STILL EXERCISED ------
+      # ---- 6b. EVERYTHING NOT BLOCKED BY ISS-0624 IS STILL EXERCISED ------
       # tag, question_tag and exam_question_rule carry no :localized_text
       # field, so the FK proof, the through-join and REQ-327's half all run
       # for real against the installed-and-activated definitions.
@@ -450,7 +450,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
 
       # ---- 6d. REQ-327's half: an exam_question_rule referencing a real
       #          exam. `exam` itself carries :localized_text (title), so its
-      #          own record write is blocked by ISS-0625 -- but the rule's
+      #          own record write is blocked by ISS-0624 -- but the rule's
       #          exam_id FK column and its own write path are not, and the FK
       #          is proven above on the same mechanism.
       #          A rule with a nonexistent exam_id must be rejected too.
@@ -489,7 +489,7 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       # installed definitions' own fk_defs, and the query executes against the
       # real promoted tables. Zero rows is the correct result here: no question
       # record exists, because every question carries a :localized_text stem
-      # and is blocked by ISS-0625. The join SHAPE -- which is what REQ-326
+      # and is blocked by ISS-0624. The join SHAPE -- which is what REQ-326
       # chose over a tag_ids array, and what this criterion is about -- is
       # proven by the compile succeeding and the query executing.
       request = %{

@@ -573,12 +573,50 @@ defmodule Letflow.Entities.Records do
     }
   end
 
+  # ISS-0624 / GH#1311 fix: this conversion only carried `name`/`type`/
+  # `required`/`enum_values`, silently dropping every other optional
+  # `Letflow.Entities.Definition.field_def()` key (`queried`,
+  # `decimal_precision`, `decimal_scale`, `locales`, `search_strategy`) when
+  # rebuilding the field map from the persisted, string-keyed
+  # `definition_json`. `locales` is the one that crashed: a `:localized_text`
+  # field reaches `Record.Validator.field_subschema/1`'s
+  # `%{type: :localized_text, locales: locales}` clause (added by ISS-0617)
+  # with no `locales` key at all, so the clause set has no match and
+  # `create_record/2` raises `FunctionClauseError` on every write -- the same
+  # INV-8 crash-on-realistic-input defect ISS-0617 fixed in
+  # `field_subschema/1` itself, just reached via this converter never
+  # supplying what that clause needs. `search_strategy` is added alongside it
+  # per the same audit, even though no `field_subschema/1` clause currently
+  # reads it, to keep this document a faithful `field_def()` reconstruction
+  # rather than leaving another silent gap for the next clause that needs it
+  # (`decimal_precision`/`decimal_scale` similarly: `field_subschema/1`'s
+  # `:decimal` clause matches on `type` alone today and does not need them,
+  # but they are real `field_def()` keys this converter was dropping).
+  # `default` is the one `field_def()` key deliberately left out: no consumer
+  # in this codebase reads it yet, matching the same omission in this
+  # function's own siblings below. This mirrors
+  # `Letflow.Entities.Query.Allowlist`'s and `Letflow.TenantProvisioning`'s
+  # own `field_document/1`/`field_from_persisted/1` conversions, which
+  # already carry `locales`/`search_strategy` correctly -- this was the one
+  # sibling left behind.
   defp field_document(field) do
     %{
       name: Map.fetch!(field, "name"),
       type: String.to_existing_atom(Map.fetch!(field, "type")),
       required: Map.get(field, "required", false),
-      enum_values: Map.get(field, "enum_values")
+      queried: Map.get(field, "queried", false),
+      enum_values: Map.get(field, "enum_values"),
+      decimal_precision: Map.get(field, "decimal_precision"),
+      decimal_scale: Map.get(field, "decimal_scale"),
+      locales: Map.get(field, "locales"),
+      search_strategy: field |> Map.get("search_strategy") |> search_strategy_atom()
     }
   end
+
+  # Same decode posture as `type`'s `String.to_existing_atom/1` above: both
+  # `:plain` and `:fulltext` are already compiled into this codebase
+  # (`Definition.Validator` Rule 11, `Definition.Ddl`'s own dispatch), so
+  # this is safe.
+  defp search_strategy_atom(nil), do: nil
+  defp search_strategy_atom(value) when is_binary(value), do: String.to_existing_atom(value)
 end

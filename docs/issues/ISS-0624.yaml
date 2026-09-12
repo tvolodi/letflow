@@ -54,3 +54,30 @@ affected_files:
   - test/letflow/entities/record/validator_test.exs
 queue_ref: Q-624
 github_ref: GH-1311
+status: resolved
+resolved_by: ORCH
+resolved_in_run: fix/ISS-0624-20260912
+resolved_at: "2026-09-12T22:56:11Z"
+resolution_note: >
+  Fixed via audit of field_document/1 against Definition.field_def()'s
+  full optional-key set: added locales, search_strategy,
+  decimal_precision, decimal_scale, and queried, using safe
+  Map.get/2,3 defaults throughout. decimal_precision/decimal_scale
+  were also silently dropped but, verified via fail-first testing, not
+  actually crash-causing on this path (field_subschema/1's :decimal
+  clause matches on type alone); added anyway for converter
+  completeness, matching the two sibling converters
+  (Query.Allowlist.field_document/1,
+  TenantProvisioning.field_from_persisted/1) that already carry them
+  correctly. default deliberately left out, matching both siblings --
+  no consumer reads it. Added 3 new end-to-end tests in
+  test/letflow/entities/records_test.exs that go through the real
+  create_record/2, closing the exact test-coverage gap that let
+  ISS-0617 ship incomplete. Fail-first verified independently by both
+  SECURITY-REVIEWER and REVIEWER. SECURITY-REVIEWER PASS (INV-8,
+  INV-1), REVIEWER PASS (independently ran the full suite: only known
+  pre-existing/environmental failures, plus one self-documented
+  ISS-0624 canary test in
+  test/letflow/packs/bilimbaga_pack_install_test.exs now failing
+  because the fix works, not a regression -- filed as its own
+  non-blocking follow-up issue).

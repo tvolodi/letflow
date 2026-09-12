@@ -64,3 +64,25 @@ affected_files:
   - docs/agents/protocols/TASK_QUEUE.md
 queue_ref: Q-616
 github_ref: GH-1289
+status: resolved
+resolved_by: ORCH
+resolved_in_run: chore/ISS-0616-20260912
+resolved_at: "2026-09-12T06:14:00Z"
+resolution_note: >
+  Applied fix direction (c): added a paragraph to
+  docs/agents/protocols/TASK_QUEUE.md's existing "Reachability checks
+  must not have side effects" section, documenting explicitly that
+  get_next_task has no dry_run mode, that letflow-queue silently
+  ignores unknown query parameters rather than rejecting them with
+  400, and cross-referencing REQ-222 (target repo
+  tvolodi/letflow-queue) as fix direction (a)'s eventual real
+  implementation. Fix direction (b) (reject unknown query params with
+  400) is out of scope for this repo -- letflow-queue is a separate
+  repository. Direct-action change per ORCHESTRATOR.md's sizing rule
+  (one file, docs-only, no new function/spec, no migration, no
+  supervision code, no tenant-data path, no test-asserted behaviour
+  change). PR #1290 (commit e0abede3), merged before this local
+  docs/issues/ISS-0616.yaml record existed -- GitHub mirror issue
+  #1289 already closed with its own evidence comment citing PR #1290,
+  and queue task 616 already released status: done. This entry
+  reconciles the local record with that already-completed state.

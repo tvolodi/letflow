@@ -1909,10 +1909,18 @@ defmodule Letflow.Routers.Entities do
   # branches), so default-mode export's disclosure strength is
   # STRUCTURALLY identical to :EntitiesQuery's, not a second, possibly-
   # diverging redaction policy for this route.
-  @spec export_redact(Pagination.Page.t(term()), Types.query_request(), String.t(), String.t(), boolean()) ::
+  @spec export_redact(
+          Pagination.Page.t(term()),
+          Types.query_request(),
+          String.t(),
+          String.t(),
+          boolean()
+        ) ::
           {:ok, Pagination.Page.t(term())} | {:error, :invalid_schema_name}
   defp export_redact(page, _request, _user_id, _prefix, true), do: {:ok, page}
-  defp export_redact(page, request, user_id, prefix, false), do: redact(page, request, user_id, prefix)
+
+  defp export_redact(page, request, user_id, prefix, false),
+    do: redact(page, request, user_id, prefix)
 
   # design §1's export_record_entry(): {record_id, field_values, deleted}
   # only -- no entity_def_version, no last_event_global_seq (unlike

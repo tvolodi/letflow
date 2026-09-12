@@ -482,7 +482,9 @@ defmodule Letflow.Routers.EntitiesExportTest do
       live_entry = Map.fetch!(records_by_id, live.record_id)
       deleted_entry = Map.fetch!(records_by_id, to_delete.record_id)
 
-      assert MapSet.new(Map.keys(live_entry)) == MapSet.new(["record_id", "field_values", "deleted"])
+      assert MapSet.new(Map.keys(live_entry)) ==
+               MapSet.new(["record_id", "field_values", "deleted"])
+
       assert live_entry["deleted"] == false
       assert deleted_entry["deleted"] == true
       # field_values retained unchanged, per Records.delete_record/2's own

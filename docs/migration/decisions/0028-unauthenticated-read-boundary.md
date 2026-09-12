@@ -152,5 +152,13 @@ whether a future non-JSON response body changes the `Referrer-Policy` analysis (
 
 ## Gates
 
-*(Space reserved for `SECURITY-REVIEWER`'s verdict — INV-1, INV-5 and INV-8 by name with
-the concrete mechanism for each — and for `REVIEWER`'s sign-off.)*
+**SECURITY-REVIEWER — 2026-09-12 — PASS.** INV-1, INV-5 (both halves) and INV-8 apply
+and are satisfied; INV-2 and INV-4 also apply and pass; INV-3, INV-7 and INV-9 do not
+apply to a design carrying no executable Elixir. Every source claim in the design and in
+this record was re-derived from the tree rather than trusted, and no inaccurate claim was
+found. The full verdict, with the concrete mechanism for each invariant and the seven
+conditions binding the implementing requirement, is recorded in
+[`lib/letflow/design/req323-unauthenticated-read-pattern.md`](../../../lib/letflow/design/req323-unauthenticated-read-pattern.md)
+§12 rather than duplicated here.
+
+*(Space reserved for `REVIEWER`'s sign-off.)*

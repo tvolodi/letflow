@@ -944,9 +944,114 @@ a tenant schema with no authenticated principal. REQ-323's acceptance criteria n
 - **INV-4** (also engaged) — §4.3: the handle is a bearer credential and is never
   logged in plaintext; §3.5: only its SHA-256 is stored.
 
-*(Space reserved below for SECURITY-REVIEWER's recorded verdict, per REQ-323's
-acceptance criterion. The verdict must address INV-1, INV-5 and INV-8 by name with the
-concrete mechanism for each; a general pass does not satisfy it.)*
+### SECURITY-REVIEWER verdict — 2026-09-12 — **PASS**
+
+Reviewed against `docs/agents/instructions/security-invariants.md` INV-1..INV-9. Every
+source claim this design makes was re-derived from the tree rather than trusted; **no
+inaccurate claim was found in either new file.**
+
+**INV-1 (tenant data isolation) — APPLIES, PASS.** Mechanism: `:handle` → SHA-256 →
+`Repo.get_by(PublicReadHandle, handle_hash:)` on the global `public_read_handles` table →
+that row's `tenant_id` column → `TenantProvisioning.schema_name_for_tenant/1` →
+`Repo.*(..., prefix: schema_name)`. The design's central claim — only the SOURCE of
+`tenant_id` differs, the storage mechanism is unchanged — is verified true against
+`lib/letflow/api/context.ex:217-237` (`scoped_repo_opts/1` reads exactly
+`conn.assigns[:auth_context][:tenant_id]` and is genuinely unavailable here) and
+`lib/letflow/tenant_provisioning.ex:214-216` (the derivation is pure, total, and is the
+identical call `AuthPipeline` and `Admission` already make). **No path exists where a
+caller-influenced value reaches the prefix**: the caller supplies only a handle, and the
+handle→tenant binding is a server-written row. §3.2's four forbidden reintroductions
+(`?tenant=`, a tenant path segment, `X-Tenant-Slug`, `Host`-derivation) are correctly
+enumerated and elevated to standing prohibitions in 0028.
+
+The global `public_read_handles` table does NOT create a cross-tenant surface, and is
+narrower than the precedent already signed off: `Letflow.ServiceCatalog` needs an explicit
+`scope == :global or owner_tenant_id == ^tenant_id` read predicate
+(`service_catalog.ex:274`) because a global table has no prefix to scope into;
+`public_read_handles` needs none, because it is never listed, searched or paginated — only
+exact-matched on a 256-bit key — and it holds a pointer, not tenant business data.
+
+The bearer-capability posture is sound rather than an auth mechanism smuggled in without
+AuthPipeline's protections: revocation (`revoked_at`), expiry (`expires_at`), leak posture
+(`Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`, `X-Robots-Tag:
+noindex, nofollow` — verified NONE is set anywhere in the current response layer, so these
+are genuinely new work), the plaintext-logging prohibition, and SHA-256-only storage
+mirroring `identity.ex:1058` are each addressed. The residual risk — a leaked link is
+readable by its holder and copies cannot be revoked — is stated openly as §4.4's governing
+test, not hidden. Anti-enumeration rests on a named property, not an assurance:
+`:crypto.strong_rand_bytes(32)`, 256 bits stated with the arithmetic shown,
+drawn-and-stored rather than derived, and **no collection/index route exists** (locked at
+record level in 0028, which is the check most likely to be quietly violated later).
+
+**INV-5 (not-found/forbidden indistinguishability) — APPLIES, PASS, both halves.**
+*Body/status:* `Error.serialise/1` does `Map.take([:type, :title, :status, :detail,
+:trace_id])`, so `trace_id` is always one of the five keys — an empty trace id yields
+`"trace_id":""`, not an absent key. A `/api/public` miss is therefore **byte-identical** to
+`Letflow.Router`'s own catch-all (`router.ex:118-120`), both calling `Response.not_found/1`
+with no `conn.assigns[:trace_id]`. `Error.not_found/0` takes no `detail` argument, so the
+body cannot vary by case even by mistake. *Timing:* exactly one round-trip before any
+refusal, two on success; the malformed-handle case is explicitly forbidden from
+short-circuiting ahead of the query (SHA-256 accepts any binary, so the handler hashes
+whatever it received) — this closes by construction the exact signal INV-5's own text
+names; cases 2-5 are decided in memory from the already-fetched row. The 1-vs-2
+round-trip boundary is crossed only by possessing a handle that resolved to a live row,
+i.e. by someone already entitled to the data, and is disclosed rather than claimed away.
+The 429-before-resolution ordering is load-bearing and correct: a limited caller gets 429
+for *every* request, valid handle or not, so the boundary carries no information about any
+handle. An inactive tenant returning 404 rather than `TenantStatus`'s 403
+(`tenant_status.ex:107-118`) is the sharpest call in the design and is right — that 403
+would disclose two facts at once to an anonymous caller.
+
+**INV-8 (no unhandled crashes) — APPLIES, PASS.** Walked each realistic failure: a
+malformed or oversized handle is hashed, never parsed, so nothing raises; a handle for a
+deprovisioned tenant returns `:error` from `Ecto.UUID.cast/1` rather than raising
+(`tenant_provisioning.ex:215-218`); a resolved row whose tenant schema no longer exists
+raises a Postgres error and crashes the request under Bandit's per-request isolation,
+which §7.2's fail-closed posture correctly requires must never be rescued into a 200 or a
+default projection. The design deliberately does NOT copy the precedent's
+always-200-with-defaults rule — serving a default projection for a public resource read
+would be a fabrication.
+
+**INV-2 — APPLIES, PASS.** Hand-built maps with literal named keys, three-key envelope,
+enumerated never-return list. The `issued_at`-not-`updated_at` choice is a genuine catch: a
+resource's `updated_at` tells a handle holder when the tenant last touched the row, which
+publication does not imply consent to.
+
+**INV-4 — APPLIES, PASS.** Handle stored as SHA-256 only, never logged in plaintext;
+heuristic grep over both new files returns zero hits.
+
+**INV-7 — NOT APPLICABLE** (the diff adds no executable Elixir; the design specifies the
+parameterised Ecto query API). **INV-3, INV-9 — NOT APPLICABLE.** **INV-6 — discharged by
+this review.**
+
+Rejecting `assign_trace_id/1` is judged CORRECT. The premise is verified
+(`context.ex:123-131` propagates a caller-supplied `x-trace-id` as-is with no shape
+validation, documented as deliberate): reflecting an attacker-chosen string on a
+world-reachable endpoint is a gratuitous surface, the correlation `assign_trace_id/1`
+exists to provide is meaningless for an anonymous caller, and the correlation that does
+matter is already served by `Letflow.Plugs.HttpMetrics`, confirmed mounted on
+`Letflow.Router:90` and covering `/api/public`. Mounting it on `Letflow.Router` instead was
+correctly ruled out — it would change `GET /health`'s headers, which
+`deploy/redeploy-test.sh` pins.
+
+Nothing in this design is unimplementable as specified, and no security decision is
+improperly deferred. Rate limiting in particular is NOT deferred: §5 specifies it and makes
+it a hard prerequisite of mounting.
+
+**Conditions binding the implementing requirement** (each already stated in this design;
+restated so its gate can check them mechanically): (1) round-trip 1 must be a single joined
+query over `public_read_handles` → `tenants.status`; (2) no syntactic pre-check may
+short-circuit ahead of it; (3) the limiter ships WITH the mount, enforced before
+resolution, keyed on `conn.remote_ip`, never on `X-Forwarded-For` absent a trusted-proxy
+config; (4) the migration lands with its first writer, not ahead of it; (5) every refusal
+goes through `Response.not_found/1` — a hand-rolled 404 would itself fingerprint the
+router; (6) the three cache/referrer/robots headers must be added; (7) no 401, no 403, no
+collection route, ever. One further note for that gate: confirm Bandit's request-line limit
+rejects a pathological path segment before the handler, so the hash is never computed over
+an unbounded input — a DoS-bounding check, not an INV-8 defect.
+
+— SECURITY-REVIEWER
+
 
 ---
 

@@ -21785,7 +21785,7 @@ requirements:
   - id: REQ-326
     title: Author the question-bank entity definitions as committed definition documents under priv/packs/bilimbaga/entity_definitions/ (S10 P2, bucket A)
     owner: REQ-ANALYST
-    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    impl_order: 620  # letflow-queue task id, written back at WF-01 Step 3
     status: pending
     stage: S10
     description: >
@@ -22130,7 +22130,7 @@ requirements:
   - id: REQ-327
     title: Author the exam-configuration entity definitions under priv/packs/bilimbaga/entity_definitions/, with the inexpressible multi-column CHECKs relocated rather than dropped (S10 P2, bucket A)
     owner: REQ-ANALYST
-    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    impl_order: 621  # letflow-queue task id, written back at WF-01 Step 3
     status: pending
     stage: S10
     description: >
@@ -22427,7 +22427,7 @@ requirements:
   - id: REQ-328
     title: Author the pack document that installs the question-bank and exam-configuration definitions into a tenant, and prove it by performing a real SolutionPack.install/3 (S10 P2 exit condition, bucket A)
     owner: REQ-ANALYST
-    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    impl_order: 622  # letflow-queue task id, written back at WF-01 Step 3. yaml depends_on [REQ-326, REQ-327] = queue tasks 620 and 621; NOT mirrored as queue edges (registered before their ids were known, and letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering; taking 622 first fails loudly, since its pack document embeds the ten definition documents 620 and 621 author.
     status: pending
     stage: S10
     description: >

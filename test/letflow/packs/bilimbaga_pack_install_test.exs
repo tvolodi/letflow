@@ -396,7 +396,12 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
       IO.puts(inspect(localized_write, pretty: true, limit: :infinity))
       IO.puts("=== end ISS-0625 blocker ===\n")
 
-      assert {:raised, %FunctionClauseError{module: Letflow.Entities.Record.Validator, function: :field_subschema, arity: 1}} =
+      assert {:raised,
+              %FunctionClauseError{
+                module: Letflow.Entities.Record.Validator,
+                function: :field_subschema,
+                arity: 1
+              }} =
                localized_write,
              "ISS-0625 appears to be FIXED. Re-enable the :localized_text record " <>
                "writes in this test (category.name, question.stem with all three " <>
@@ -525,8 +530,10 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
   defp fk_violation?({:raised, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}}),
     do: true
 
-  defp fk_violation?({:error, {_step, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}}}),
-    do: true
+  defp fk_violation?(
+         {:error, {_step, %Postgrex.Error{postgres: %{code: :foreign_key_violation}}}}
+       ),
+       do: true
 
   defp fk_violation?(_other), do: false
 end

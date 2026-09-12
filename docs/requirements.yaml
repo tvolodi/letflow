@@ -21782,3 +21782,901 @@ requirements:
       - "0022's rule 1 holds textually: grep the decision record, any design artefact it produced, and this requirement's own title, description and acceptance criteria for single-vertical domain vocabulary, confirming zero hits outside bare 'S10 gap 16' / 'S10 gap 17' stage-bookkeeping citations. The grep command and its real output are quoted"
       - "`git diff --name-only` shows only the new file under docs/migration/decisions/, at most one new file under lib/letflow/design/ if one was judged warranted, and docs/requirements.yaml for this entry's own status bookkeeping -- no file under lib/letflow/definitions/, lib/letflow/identity/, lib/letflow/engine/, priv/repo/migrations/ or test/, and not docs/migration/stage-10-bilimbaga-vertical.md. Quoted with the command"
     depends_on: []
+  - id: REQ-326
+    title: Author the question-bank entity definitions as committed definition documents under priv/packs/bilimbaga/entity_definitions/ (S10 P2, bucket A)
+    owner: REQ-ANALYST
+    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: A. THIS REQUIREMENT AUTHORS PACK CONTENT, NOT PLATFORM CODE.
+      It writes no Elixir application code, no TypeScript, no migration and
+      no decision record. Its whole output is definition documents plus one
+      test that runs them through the real validator.
+
+      0022's RULE 1 DOES NOT BIND THIS REQUIREMENT, AND A REVIEWER MUST NOT
+      FLAG IT FOR NAMING THE DOMAIN. Rule 1 says "a bucket-B requirement may
+      not name exams". This is bucket A -- 0022's own bucket table defines
+      bucket A as "pure definitions -- no Elixir, no TypeScript. Entity
+      definitions, process definitions, form schemas, role-registry seeds,
+      Lua grading rules", built by REQ-ANALYST + CODE-DESIGNER and delivered
+      in a solution-pack document. Naming questions, answer options,
+      categories and tags is not a rule-1 violation here; it is the
+      deliverable. The constraint that DOES bind is the inverse: nothing this
+      requirement produces may land under lib/letflow/ or web/.
+
+      OWNER RATIONALE. owner is REQ-ANALYST rather than CODE-DESIGNER
+      because the artefacts are content documents in an already-designed
+      format, not a design of a new mechanism: the entity-definition
+      document shape is fully settled by REQ-225 (Letflow.Entities.Definition
+      and its Validator), REQ-296/REQ-300 (promoted FK columns), REQ-301
+      (:localized_text) and decision 0023. There is no interface, no @spec
+      and no state shape left to design -- the executor transcribes a model
+      this requirement decides below into a settled schema. If the executor
+      finds a genuine modelling question this description does not answer,
+      that is a signal to stop and escalate to CODE-DESIGNER, not to invent
+      an answer.
+
+      WHY P2 NEEDS THIS FIRST. As of 2026-09-12 S10 has produced 31
+      requirements and zero pack content: there is no priv/packs/ directory,
+      no entity-definition document anywhere in the tree, and
+      docs/migration/stage-10-bilimbaga-vertical.md's own REVIEWER
+      re-verification still records "No pack document has been authored --
+      still true". P2's exit condition is "a tenant with a working question
+      bank and exam configuration, and zero exam-specific Elixir", and none
+      of it is reachable until the definitions exist as files. This
+      requirement authors the question-bank half; REQ-327 authors the
+      exam-configuration half; REQ-328 packages both and installs them.
+
+      RE-VERIFY EVERY CLAIM BELOW AGAINST THE CURRENT TREE BEFORE WRITING
+      ANYTHING. All of it was read from main on 2026-09-12 and must be
+      confirmed, not trusted.
+
+      THE PORT SOURCE. c:\Users\tvolo\dev\ai-dala\BilimBaga\ -- note this
+      path, NOT c:\Users\tvolo\dev\BilimBaga\, which is what
+      docs/migration/stage-10-bilimbaga-vertical.md's Scope section still
+      says and which is stale. The two source migrations are
+      backend/migrations/008_categories_tags.up.sql (header "Migration 008:
+      FR-BB21 -- Categories and Tags") and
+      backend/migrations/009_questions.up.sql (header "Migration 009:
+      FR-BB22 -- Question Model"). The product spec is
+      corporate_exam_platform_roadmap.md sections 2.1 (categories and tags)
+      and 2.2 (question model), with 2.3 covering the tag-association
+      endpoints. Read all four before authoring. Per the stage file's
+      citation rule, every definition document authored here carries its
+      FR-BB id in its own description field: FR-BB21 for category and tag,
+      FR-BB22 for question, answer option and the tag join.
+
+      WHERE THE FILES GO -- THIS REQUIREMENT ESTABLISHES THE PATH.
+      priv/packs/ does not exist today (ls priv/ returns expr_conformance/,
+      keycloak/, repo/, wasm_fixtures/). Create
+      priv/packs/bilimbaga/entity_definitions/, one JSON file per entity
+      type, named after the entity: category.json, tag.json, question.json,
+      answer_option.json, question_tag.json -- five files. JSON, not YAML,
+      and the reason is mechanical: Letflow.Definitions.SolutionPack's
+      install path parses a string-keyed definition_json object and
+      translates it through the static whitelist in solution_pack.ex's
+      atomize_definition_json/1 (around lines 655 onward), so a JSON file is
+      the same bytes the pack document will carry in REQ-328 -- no second
+      serialisation format and no conversion step. Each file's top-level
+      object is exactly a Letflow.Entities.Definition.t() document with
+      string keys: name, display_name, an optional description, fields, and
+      the optional indexes, foreign_keys and constraints arrays. Nothing
+      else -- no wrapper object and no metadata envelope; REQ-328 supplies
+      entity_definition_id, logical_shape_version and the rest of the
+      packed-entity-definition wrapper.
+
+      THE FIELD-TYPE VOCABULARY YOU MUST USE, verified in
+      lib/letflow/entities/definition/validator.ex's @field_types:
+      :string :integer :decimal :boolean :date :datetime :enum :json
+      :localized_text -- nine types, no others. In a JSON file these are
+      written as plain strings ("string", "enum", "localized_text"); the
+      install path atomizes them. A :decimal field REQUIRES both
+      decimal_precision and decimal_scale (Rule 7). An :enum field REQUIRES
+      a non-empty, duplicate-free enum_values (Rule 6), and a non-enum field
+      must not carry enum_values at all. A :localized_text field REQUIRES a
+      non-empty, duplicate-free locales list, each entry matching
+      ^[a-z]{2,8}$ (Rule 10), and may carry search_strategy of "plain" or
+      "fulltext" (Rule 11); a non-localized_text field must carry neither
+      key. A :json field may NEVER be queried: true (Rule 3). Every field
+      named in an indexes entry must exist AND be queried: true (Rule 4).
+      Every field named by a foreign_keys entry's field or a constraints
+      entry's fields must exist (Rule 5). A constraints entry accepts
+      type "unique" and nothing else. Rule 1 (^[a-z][a-z0-9_]{0,63}$)
+      governs THE DEFINITION'S OWN name key only -- validator.ex's
+      name_format_violations/1 reads Map.get(definition, :name) and
+      nothing else; it does not check index, fk or constraint names.
+      Those are governed by the required-name rule immediately below.
+
+      EVERY indexes, foreign_keys AND constraints ENTRY CARRIES A
+      REQUIRED STRING name KEY. This is not optional and it is not
+      cosmetic. Letflow.Entities.Definition declares required(:name) =>
+      String.t() on index_def, fk_def and constraint_def, and the
+      validator enforces it as a HARD :malformed PRECONDITION that
+      SHORT-CIRCUITS before any numbered rule runs:
+      index_shape_violations/1, fk_shape_violations/1 and
+      constraint_shape_violations/1 each test is_binary(name) FIRST and
+      emit "index name must be a string" / "fk name must be a string" /
+      "constraint name must be a string". A document that omits these
+      names FAILS validate/1 outright, so transcribing an entry as only
+      field + references_entity, or only type + fields, produces an
+      invalid document.
+
+      THE NAMING CONVENTION TO USE -- <prefix>_<entity>_<columns>, with
+      prefix idx_ for an indexes entry, fk_ for a foreign_keys entry and
+      uq_ for a constraints entry; <entity> is the definition's own name;
+      <columns> is the entry's column or columns joined by _ in the order
+      they appear in the entry. So: idx_question_status,
+      fk_question_category_id, uq_tag_name, fk_question_tag_tag_id,
+      uq_question_tag_question_id_tag_id. This mirrors the source DDL's
+      own idx_<table>_<column> style (idx_questions_status,
+      idx_answer_options_question_id), singularised to match the entity
+      type name. All names produced this way for the five types here fit
+      inside 64 characters -- the longest is 43 -- and are unique.
+
+      WHY THE PREFIX MATTERS RATHER THAN BEING DECORATION: Rule 2
+      (duplicate_name_violations/1) concatenates foreign_keys AND
+      constraints into ONE SHARED uniqueness scope --
+      get_list(definition, :foreign_keys) ++ get_list(definition,
+      :constraints), checked under the single scope :foreign_keys.
+      question_tag carries two fks plus a constraint in that one scope,
+      so an unprefixed convention naming them all after their columns
+      would collide. The fk_/uq_ prefixes make the shared scope
+      collision-free by construction. Indexes are their own separate
+      scope, and fields a third.
+
+      NO PRIMARY-KEY, TIMESTAMP OR TENANT FIELD IS DECLARED. Do not port
+      id UUID PRIMARY KEY, created_at or updated_at from the source DDL, and
+      do not port the set_updated_at() triggers. The record subsystem
+      supplies record identity and lifecycle
+      (Letflow.Entities.Records.create_record/2 mints its own record_id, and
+      the event store carries the audit timeline). Declaring them would
+      duplicate platform-owned state inside tenant content. State this
+      explicitly in each document's description so the omission reads as a
+      decision rather than an oversight.
+
+      THE FIVE ENTITY TYPES AND THEIR CONCRETE MODEL. Author exactly these.
+
+      1. category (source table categories, 008_categories_tags.up.sql,
+      FR-BB21, roadmap 2.1). Fields: name :localized_text, locales
+      ["kk","ru","en"], search_strategy "plain", queried true, required
+      true -- the source column is a bare TEXT, but 2.1's category tree is
+      user-facing in a trilingual product and the platform now supports
+      per-locale generated columns (REQ-301), so this is a deliberate
+      upgrade over the source rather than a transcription; say so in the
+      document's description. track :string, queried true, not required
+      (source is a nullable TEXT; 2.1 names three built-in tracks --
+      security, safety, loyalty -- but the source column is free text with
+      no CHECK, so keep :string rather than promoting it to :enum and
+      hard-coding a vocabulary the source does not enforce; state that
+      reasoning). sort_order :integer, queried true, required true. Indexes:
+      one over track. No constraints -- the source declares no UNIQUE on
+      categories. NO parent_id -- see the self-reference block below.
+
+      2. tag (source table tags, FR-BB21, roadmap 2.1). Fields: name
+      :string, queried true, required true. Constraints: one entry, type
+      "unique", fields ["name"] -- the source is name TEXT UNIQUE NOT NULL,
+      and REQ-298's constraint_def compiles to a real unique index, so this
+      is expressible exactly. Deliberately :string and not :localized_text:
+      a tag is an authoring-side vocabulary token, the source carries no
+      translation table for it, and 2.1 exposes tags through an
+      autocomplete rather than as candidate-facing content -- state that
+      reasoning in the document, because it is the one place this
+      requirement diverges from the "user-visible text is localized"
+      pattern it applies everywhere else.
+
+      3. question (source tables questions AND question_translations,
+      009_questions.up.sql, FR-BB22, roadmap 2.2). The two source tables
+      collapse into ONE entity type -- this is the single most important
+      modelling decision in this requirement, and the document's
+      description must state it and why. BilimBaga used a per-locale row
+      table because its Postgres schema had no other way to hold
+      multilingual text; REQ-301's :localized_text is exactly that
+      mechanism at the platform layer, blob-stored with a generated column
+      per locale when queried: true, so question_translations has no
+      independent existence here. Fields: category_id :string, queried
+      true, required true (it holds a referenced record_id; the fk_def
+      below makes it a real Postgres REFERENCES). difficulty :enum,
+      enum_values ["easy","medium","hard"], queried true, required true
+      (source CHECK, ported exactly). type :enum, enum_values
+      ["single","multiple","truefalse","likert","shorttext"], queried true,
+      required true (source CHECK, ported exactly). default_locale :string,
+      queried false, required true (source default 'kk'). status :enum,
+      enum_values ["draft","review","active","archived"], queried true,
+      required true (source CHECK). version :integer, queried true,
+      required true. stem :localized_text, locales ["kk","ru","en"],
+      search_strategy "fulltext", queried true, required true (source
+      question_translations.stem; fulltext because 2.3's question list is
+      searchable and 2.5's duplicate detection is trigram similarity over
+      stems -- this is the one field where search strategy is load-bearing
+      rather than incidental, so state why it differs from category.name).
+      explanation :localized_text, locales ["kk","ru","en"],
+      search_strategy "plain", queried false, required false (source
+      question_translations.explanation, nullable). Foreign keys: one
+      entry, field "category_id", references_entity "category". Indexes:
+      one over status, one over category_id, one over type -- the source
+      declares idx_questions_status and idx_questions_category_id, and type
+      is added because 2.3's list endpoint filters on it. NO parent_id --
+      see below. NO created_by -- see below.
+
+      4. answer_option (source tables answer_options AND
+      answer_translations, FR-BB22, roadmap 2.2). The same
+      two-tables-into-one collapse, for the same reason, stated again in
+      this document. Fields: question_id :string, queried true, required
+      true. sort_order :integer, queried true, required true. is_correct
+      :boolean, queried true, required true (source default FALSE).
+      likert_weight :decimal, decimal_precision 5, decimal_scale 2, queried
+      false, required false -- those two numbers are ported from the
+      source's DECIMAL(5,2), not chosen. likert_polarity :enum,
+      enum_values ["positive","negative"], queried false, required false
+      (source CHECK). text :localized_text, locales ["kk","ru","en"],
+      search_strategy "plain", queried true, required true (source
+      answer_translations.text). Foreign keys: one entry, field
+      "question_id", references_entity "question". Indexes: one over
+      question_id (the source declares idx_answer_options_question_id).
+
+      NOTE ON is_correct AND FIELD-LEVEL REDACTION: is_correct is the field
+      a candidate must never see, and 0022's reasoning section 1 maps
+      exactly this row to Letflow.Entities.Query.FieldGrants (REQ-231),
+      field-level redaction that already exists. This requirement does NOT
+      configure a field grant -- it only ensures is_correct is a
+      first-class promoted field on its own record, so that redaction is
+      expressible at all, which it would not be if answer options were
+      nested inside the question's blob. State this in the document's
+      description as the reason answer_option is a separate entity type
+      rather than a JSON array on question.
+
+      5. question_tag (source table question_tags, FR-BB22, roadmap 2.3's
+      tag-association endpoints). A join entity type, per
+      docs/anti-patterns.md's entry "Modelling many-to-many as an array of
+      references on the parent record" -- read that entry in full before
+      authoring this file, and do NOT put a tag_ids array on question.
+      Fields: question_id :string, queried true, required true; tag_id
+      :string, queried true, required true. Foreign keys: two entries --
+      field "question_id" references_entity "question", and field "tag_id"
+      references_entity "tag". Constraints: one entry, type "unique",
+      fields ["question_id","tag_id"] -- that is the source's composite
+      PRIMARY KEY, and a unique constraint is how it is expressed here.
+      Indexes: one over tag_id -- the source added exactly this index in
+      010_question_tags_tag_id_index.up.sql, so the reverse lookup is a
+      measured need rather than a guess. This shape is also what
+      Letflow.Entities.Query.Compiler's through many-to-many join (REQ-300)
+      requires: lib/letflow/design/req300-query-joins.md section 4
+      describes a join entity owning foreign keys to both sides as the
+      shape it resolves, so authoring it this way is what makes "list the
+      questions carrying tag X" a compilable query rather than an
+      application-level fetch.
+
+      WHAT IS DELIBERATELY NOT CARRIED OVER, AND WHAT REPLACES IT. Each
+      omission below must be stated in the affected document's own
+      description field, inside the document -- not only here.
+
+      (a) created_by UUID NOT NULL REFERENCES users(id) on questions.
+      DROPPED. An entity definition's fk_def can only reference another
+      entity type in the same tenant's entity subsystem
+      (references_entity is an entity-type name, resolved through the
+      promoted-column tables); identity.users is a different subsystem and
+      no fk_def can span it. WHAT REPLACES IT: authorship is already
+      captured by the event store -- every Letflow.Entities.Records write
+      carries actor_id into the ENTITY_RECORD_CREATED event (see
+      records.ex's create_attrs), so "who authored this question" is
+      answerable from the event stream without a duplicated column. Do NOT
+      add a plain :string created_by field holding an unenforced user id:
+      that is a foreign key the platform cannot enforce, dressed as data.
+
+      (b) id, created_at, updated_at and the set_updated_at() triggers.
+      DROPPED, per the no-primary-key block above.
+
+      (c) The seeded root categories in 008 (Security Awareness, Workplace
+      Safety, Loyalty and Values, with hard-coded UUIDs). NOT authored
+      here. Those are records, not definitions, and REQ-328's install is a
+      definition install. Whether the pack seeds starter records at all is
+      out of scope for all three of these requirements; record it in
+      priv/packs/bilimbaga/README.md as a known open item rather than
+      dropping it silently.
+
+      (d) The permissions and role_permissions INSERTs in 008. NOT ported.
+      Those are role-registry content, governed by manifest.required_roles,
+      and REQ-328 handles that half -- including the fact that
+      required_roles is read-only advisory today.
+
+      THE ONE THING THIS REQUIREMENT CANNOT EXPRESS, STATED EXPLICITLY
+      RATHER THAN OMITTED. Two source columns are self-referential foreign
+      keys: categories.parent_id UUID REFERENCES categories(id) (the
+      category tree, roadmap 2.1) and questions.parent_id UUID REFERENCES
+      questions(id) (version lineage -- 2.2's "parent_id links a new
+      version to its predecessor; only the latest version is active").
+      Letflow rejects both today: validator.ex's Rule 9
+      (self_referential_fk_violations/1, around lines 626-639) emits a
+      violation with rule: :self_referential_fk for any fk whose
+      references_entity equals the definition's own name. REQ-324 (pending,
+      queue task 618) lifts exactly this. THE INSTRUCTION: author category
+      and question WITHOUT those two fields, and in each affected
+      document's own description field state, in as many words, that the
+      field is absent because Rule 9 rejects a self-referential fk_def
+      today, that REQ-324 lifts that restriction, and that a follow-on
+      requirement adds parent_id plus its fk_def once REQ-324 is done. Do
+      NOT work around it -- no unenforced :string parent_id, no separate
+      closure-table entity, no tree nested in a :json blob. An honest,
+      stated gap is the deliverable; a workaround would turn REQ-324's
+      landing into a migration problem instead of an additive one.
+      depends_on is deliberately EMPTY rather than [REQ-324]: this
+      requirement is specified to be completable today, against today's
+      validator, and blocking it on REQ-324 would reproduce exactly the
+      stall this batch exists to correct.
+
+      ALSO DELIVER priv/packs/bilimbaga/README.md -- short, one screen. It
+      states what priv/packs/ holds (authored bucket-A pack content, not
+      Elixir), the one-file-per-entity-type convention, the FR-BB citation
+      rule, the two deferred parent_id fields with their REQ-324 pointer,
+      and the unresolved starter-records question from (c). This is the
+      file a later executor reads before adding a sixth definition.
+    acceptance_criteria:
+      - "priv/packs/bilimbaga/entity_definitions/ exists and contains exactly five files -- category.json, tag.json, question.json, answer_option.json, question_tag.json -- each a single JSON object carrying only the keys name, display_name, description, fields, indexes, foreign_keys and constraints (the last three optional, omitted where empty), with no wrapper or envelope object. The output of `ls priv/packs/bilimbaga/entity_definitions/` is quoted"
+      - "every one of the five documents passes Letflow.Entities.Definition.Validator.validate/1 with :ok. This is proven by a test committed at test/letflow/packs/bilimbaga_entity_definitions_test.exs that reads each file from priv at runtime (via Application.app_dir/2 or :code.priv_dir, never a hard-coded absolute path), JSON-decodes it, translates it to the atom-keyed shape the validator takes, and asserts validate/1 returns :ok. The full `mix test test/letflow/packs/bilimbaga_entity_definitions_test.exs` output is quoted showing zero failures. A definition that has not been through the real validator is not done"
+      - "the same test asserts the relational shape mechanically rather than by eye: question declares exactly one foreign_keys entry (category_id -> category); answer_option exactly one (question_id -> question); question_tag exactly two (question_id -> question and tag_id -> tag); tag carries a constraints entry of type unique over [name]; question_tag carries a constraints entry of type unique over [question_id, tag_id]; and every field named in any indexes entry of any of the five documents is queried: true in that same document"
+      - "EVERY indexes, foreign_keys and constraints entry in all five documents carries a non-empty string name, following the <prefix>_<entity>_<columns> convention with idx_/fk_/uq_ prefixes. The test asserts this mechanically: for each document, every entry in each of the three arrays has a name that is a binary, is non-empty, and matches ^[a-z][a-z0-9_]{0,63}$; and -- because validator.ex's Rule 2 puts foreign_keys and constraints in ONE shared scope -- that the concatenated list of foreign_keys names and constraints names within a single document contains no duplicate. A document whose entries omit name fails validate/1 as :malformed before any numbered rule runs, so this is a precondition of the :ok criterion above, not a style check"
+      - "the localized_text fields are exactly the four named in the description -- category.name, question.stem, question.explanation and answer_option.text -- each with locales [\"kk\",\"ru\",\"en\"] in that order, with search_strategy \"fulltext\" on question.stem and \"plain\" on the other three. The test asserts this field by field, and asserts that tag.name is :string rather than :localized_text"
+      - "NEITHER category.json NOR question.json contains a parent_id field or any substitute for one -- no self-referential fk_def, no unenforced string field named parent_id or parent, no closure-table entity, no tree nested in a :json field. `grep -rn parent priv/packs/bilimbaga/entity_definitions/` is run and its output quoted, showing hits only inside description prose. Both documents' description fields state in as many words that the field is deferred because Definition.Validator Rule 9 rejects a self-referential fk_def today, and name REQ-324 as the requirement that lifts it"
+      - "no document declares an id, created_at, updated_at or created_by field. A grep for those four names across priv/packs/bilimbaga/entity_definitions/ is run and its output quoted, showing hits only inside description prose. question.json's description states that created_by is dropped because an entity fk_def cannot reference identity.users across subsystems, and names the event stream's actor_id as what answers authorship instead"
+      - "every one of the five documents carries its source citation inside its own description field: FR-BB21 for category and tag, FR-BB22 for question, answer_option and question_tag, each naming the source migration it ports from (008_categories_tags.up.sql or 009_questions.up.sql) and the roadmap section (2.1, 2.2 or 2.3). A grep for FR-BB across the five files is quoted"
+      - "question.json's and answer_option.json's descriptions each state that the source's separate per-locale translation table (question_translations, answer_translations) is collapsed into the parent entity's :localized_text field, and why. answer_option.json's description additionally states why answer options are a separate entity type rather than a JSON array on question, naming Letflow.Entities.Query.FieldGrants and the is_correct field"
+      - "question_tag.json's description cites docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry and states that this join shape is what Letflow.Entities.Query.Compiler's through many-to-many join (REQ-300) resolves against. No document in the directory declares a tag_ids field or any other array-of-references field"
+      - "priv/packs/bilimbaga/README.md exists, is at most 80 lines, and covers all five points named in the description: what priv/packs/ holds, the one-file-per-entity-type convention, the FR-BB citation rule, the two deferred parent_id fields with the REQ-324 pointer, and the unresolved question of whether the pack seeds starter category records"
+      - "0022's rule 1 is NOT applicable here and the close-out says so in one sentence citing 0022's bucket table: bucket A is declared in this description's first line, these files are the vertical's own content, and no reviewer finding may be raised against them for naming questions, categories, tags or exams"
+      - "`git diff --name-only` shows only files under priv/packs/bilimbaga/, the one new test file under test/letflow/packs/, and docs/requirements.yaml for this entry's own bookkeeping -- no file under lib/letflow/, web/, priv/repo/migrations/ or docs/migration/. Quoted with the command"
+      - "`mix letflow.check` is run in full and its final result quoted verbatim. If the toolchain or its dependencies are unavailable in the executing environment, that is stated explicitly with the actual error text, per core-directives' no-speculation rule -- never reported as expected to pass"
+    depends_on: []
+  - id: REQ-327
+    title: Author the exam-configuration entity definitions under priv/packs/bilimbaga/entity_definitions/, with the inexpressible multi-column CHECKs relocated rather than dropped (S10 P2, bucket A)
+    owner: REQ-ANALYST
+    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: A. THIS REQUIREMENT AUTHORS PACK CONTENT, NOT PLATFORM CODE.
+      Same shape as REQ-326: definition documents plus one test that runs
+      them through the real validator. No Elixir application code, no
+      TypeScript, no migration, no decision record.
+
+      0022's RULE 1 DOES NOT BIND THIS REQUIREMENT, AND A REVIEWER MUST NOT
+      FLAG IT FOR NAMING THE DOMAIN. Rule 1 constrains bucket B. This is
+      bucket A -- 0022's bucket table defines bucket A as pure definitions
+      authored by REQ-ANALYST and CODE-DESIGNER and delivered in a
+      solution-pack document, and naming exams, sections and question
+      selection rules is the deliverable, not a leak. The binding constraint
+      is the inverse: nothing produced here may land under lib/letflow/ or
+      web/.
+
+      OWNER RATIONALE. owner is REQ-ANALYST for the same reason as REQ-326:
+      the document format is settled (REQ-225, REQ-296, REQ-298, REQ-300,
+      REQ-301, decision 0023) and the executor transcribes a model this
+      description decides. The ONE part of this requirement that is closer
+      to design work is the relocation of the three multi-column CHECK
+      constraints (below); that is deliberately scoped to "state where they
+      move and record it", not "design the validation mechanism", which
+      keeps it within an analyst turn. If the executor concludes the
+      relocation cannot be recorded without designing the mechanism, stop
+      and escalate to CODE-DESIGNER rather than designing it inline.
+
+      RE-VERIFY EVERY CLAIM BELOW AGAINST THE CURRENT TREE BEFORE WRITING
+      ANYTHING. All of it was read from main on 2026-09-12.
+
+      THE PORT SOURCE. c:\Users\tvolo\dev\ai-dala\BilimBaga\ -- NOT
+      c:\Users\tvolo\dev\BilimBaga\, which is the stale path in
+      docs/migration/stage-10-bilimbaga-vertical.md's Scope section. The two
+      source migrations are backend/migrations/012_exams.up.sql (header
+      "FR-BB31: Exam Configuration Model") and
+      backend/migrations/013_exam_assignments.up.sql (header "FR-BB33: Exam
+      Assignment"). The product spec is corporate_exam_platform_roadmap.md
+      sections 3.1 (exam configuration model), 3.2 (the configuration API
+      whose filters tell you which fields must be queried) and 3.3 (exam
+      assignment). Read all four before authoring. Every document authored
+      here cites FR-BB31 or FR-BB33 in its own description field, plus the
+      roadmap section.
+
+      WHERE THE FILES GO. The same directory REQ-326 establishes,
+      priv/packs/bilimbaga/entity_definitions/, one JSON file per entity
+      type, same top-level shape (name, display_name, description, fields,
+      and the optional indexes, foreign_keys, constraints), same
+      no-wrapper-object rule, same JSON-not-YAML reason
+      (Letflow.Definitions.SolutionPack parses a string-keyed
+      definition_json through solution_pack.ex's atomize_definition_json/1).
+      If REQ-326 has not run yet, create the directory; the two
+      requirements are independent by design and either may go first.
+      depends_on is deliberately EMPTY for that reason -- but note that
+      exam_manual_question below declares a foreign key to the entity type
+      REQ-326 authors, so REQ-328's install will need both sets present.
+      That coupling belongs to REQ-328, not here.
+
+      THE FIELD-TYPE VOCABULARY AND VALIDATOR RULES are identical to
+      REQ-326's and are not restated in full: nine types
+      (:string :integer :decimal :boolean :date :datetime :enum :json
+      :localized_text) per validator.ex's @field_types; :decimal needs
+      decimal_precision and decimal_scale; :enum needs a non-empty
+      duplicate-free enum_values and no other type may carry it;
+      :localized_text needs a non-empty duplicate-free locales list matching
+      ^[a-z]{2,8}$ and may carry search_strategy "plain" or "fulltext"; a
+      :json field may never be queried: true; every field named in an
+      indexes entry must exist and be queried: true; a constraints entry
+      accepts type "unique" only.
+
+      ONE RULE IS RESTATED IN FULL BECAUSE OMITTING IT INVALIDATES EVERY
+      DOCUMENT: every indexes, foreign_keys and constraints entry carries
+      a REQUIRED STRING name key. Letflow.Entities.Definition declares
+      required(:name) => String.t() on index_def, fk_def and
+      constraint_def, and validator.ex's index_shape_violations/1,
+      fk_shape_violations/1 and constraint_shape_violations/1 each test
+      is_binary(name) FIRST, as a hard :malformed precondition that
+      SHORT-CIRCUITS before any numbered rule runs ("index name must be a
+      string", "fk name must be a string", "constraint name must be a
+      string"). Note also that Rule 1's ^[a-z][a-z0-9_]{0,63}$ check
+      applies to the DEFINITION'S OWN name only, not to these -- so these
+      names are required by the precondition, not by Rule 1.
+
+      USE THE SAME CONVENTION REQ-326 ESTABLISHES:
+      <prefix>_<entity>_<columns>, prefix idx_ for indexes, fk_ for
+      foreign_keys, uq_ for constraints; <entity> is the definition's own
+      name; <columns> are the entry's columns joined by _ in entry order.
+      So idx_exam_status, fk_exam_section_exam_id,
+      uq_exam_section_exam_id_sort_order, fk_exam_question_rule_category_id,
+      uq_exam_manual_question_rule_id_question_id. Every name this
+      convention produces for the five types here fits in 64 characters --
+      the longest, uq_exam_manual_question_rule_id_question_id, is 43.
+
+      THE PREFIXES ARE LOAD-BEARING HERE MORE THAN IN REQ-326: Rule 2
+      (duplicate_name_violations/1) concatenates foreign_keys AND
+      constraints into ONE shared uniqueness scope (get_list(:foreign_keys)
+      ++ get_list(:constraints), checked under the single :foreign_keys
+      scope). exam_question_rule carries three fks plus a constraint in
+      that one scope, and exam_question_rule_tag and exam_manual_question
+      each carry two fks plus a constraint -- an unprefixed convention
+      naming entries after their columns would collide outright
+      (exam_manual_question's fk on rule_id and its unique over
+      [rule_id, question_id] both start from rule_id). The idx_/fk_/uq_
+      prefixes make the shared scope collision-free by construction.
+      Indexes are a separate scope, and fields a third.
+
+      No id, created_at or updated_at field is
+      declared, for the same reason as REQ-326 -- the record subsystem owns
+      record identity and the event store owns the timeline. State that
+      omission in each document's description.
+
+      THE FIVE ENTITY TYPES AND THEIR CONCRETE MODEL. Author exactly these.
+
+      1. exam (source table exams, 012_exams.up.sql, FR-BB31, roadmap 3.1).
+      Fields: title :localized_text, locales ["kk","ru","en"],
+      search_strategy "plain", queried true, required true -- the source is
+      a bare TEXT with no translation table, and this is a deliberate
+      upgrade for a trilingual product, exactly as REQ-326 upgraded
+      category.name; state that. description :localized_text, locales
+      ["kk","ru","en"], search_strategy "plain", queried false, required
+      false (source nullable TEXT). Do not confuse this content field with
+      the definition document's own description key; they are different
+      things and the document should say so in one clause. status :enum,
+      enum_values ["draft","active","archived"], queried true, required
+      true (source exam_status ENUM -- a Postgres ENUM type becomes a
+      Letflow :enum field, which is the direct translation).
+      time_limit_minutes :integer, queried false, required true (source
+      CHECK time_limit_minutes > 0 -- a single-column CHECK, see the
+      relocation block). passing_score_pct :decimal, decimal_precision 5,
+      decimal_scale 2, queried false, required true -- both numbers ported
+      from the source's DECIMAL(5,2), not chosen. max_attempts :integer,
+      queried false, required true (source default 1, CHECK > 0).
+      available_from :datetime, queried true, required false;
+      available_until :datetime, queried true, required false -- both
+      queried because 3.4's portal listing filters on the availability
+      window. shuffle_questions :boolean, queried false, required true;
+      shuffle_options :boolean, queried false, required true (source
+      defaults FALSE). show_answers :enum, enum_values
+      ["never","after_completion","after_all_attempts"], queried false,
+      required true (source show_answers_policy ENUM). on_tab_switch :enum,
+      enum_values ["log","warn","submit"], queried false, required true
+      (source tab_switch_action ENUM). certificate_enabled :boolean,
+      queried false, required true. Indexes: one over status (the source
+      declares idx_exams_status). No foreign_keys. No constraints. NO
+      created_by -- see the omissions block.
+
+      2. exam_section (source table exam_sections, FR-BB31, roadmap 3.1).
+      Fields: exam_id :string, queried true, required true. title
+      :localized_text, locales ["kk","ru","en"], search_strategy "plain",
+      queried false, required false (source nullable TEXT). sort_order
+      :integer, queried true, required true. Foreign keys: one entry, field
+      "exam_id", references_entity "exam". Constraints: one entry, type
+      "unique", fields ["exam_id","sort_order"] -- this is the source's
+      UNIQUE (exam_id, sort_order), expressible exactly. Indexes: one over
+      exam_id (source idx_exam_sections_exam_id). The source's
+      CHECK (sort_order >= 0) is a single-column CHECK -- see relocation.
+
+      3. exam_question_rule (source table exam_question_rules, FR-BB31,
+      roadmap 3.1). Fields: exam_id :string, queried true, required true.
+      section_id :string, queried true, required false (source is a
+      nullable FK with ON DELETE SET NULL). mode :enum, enum_values
+      ["manual","random"], queried true, required true (source
+      question_selection_mode ENUM). category_id :string, queried true,
+      required false (source nullable FK). difficulty :string, queried
+      true, required false -- deliberately :string and NOT :enum, because
+      the source column is a bare nullable TEXT with no CHECK, unlike
+      questions.difficulty which does carry one; do not tighten a source
+      column the source itself left loose, and state that in the document
+      so the asymmetry with question.difficulty reads as deliberate. count
+      :integer, queried false, required true. sort_order :integer, queried
+      true, required true. Foreign keys: three entries -- field "exam_id"
+      references_entity "exam", field "section_id" references_entity
+      "exam_section", field "category_id" references_entity "category" (the
+      entity type REQ-326 authors). Constraints: one entry, type "unique",
+      fields ["exam_id","sort_order"] (source UNIQUE). Indexes: one over
+      exam_id, one over section_id (source
+      idx_exam_question_rules_exam_id and _section_id).
+
+      THE tag_ids JSONB COLUMN IS NOT PORTED AS A FIELD. The source has
+      tag_ids JSONB NOT NULL DEFAULT '[]'. Carrying that forward as a :json
+      field would be precisely the shape docs/anti-patterns.md's
+      "Modelling many-to-many as an array of references on the parent
+      record" entry records as rejected -- unindexed, no home for join
+      attributes, and invisible to Letflow.Entities.Query.FieldGrants.
+      Read that entry in full. INSTEAD author a sixth file (below),
+      exam_question_rule_tag, as an ordinary join entity type. Note the
+      difference from the source in exam_question_rule's own description:
+      this is a deliberate remodelling, not a transcription, and it is the
+      second-most consequential decision in this requirement after the
+      CHECK relocation.
+
+      4. exam_question_rule_tag (no source table -- it replaces
+      exam_question_rules.tag_ids, FR-BB31, roadmap 3.1). Fields: rule_id
+      :string, queried true, required true; tag_id :string, queried true,
+      required true. Foreign keys: two entries -- "rule_id" ->
+      exam_question_rule, "tag_id" -> tag (REQ-326's entity type).
+      Constraints: one entry, type "unique", fields ["rule_id","tag_id"].
+      Indexes: one over tag_id. Same join shape as REQ-326's question_tag,
+      and for the same reason: it is what
+      Letflow.Entities.Query.Compiler's through join (REQ-300) resolves
+      against.
+
+      5. exam_manual_question (source table exam_manual_questions,
+      FR-BB31, roadmap 3.1 -- the explicit pin list used when a rule's mode
+      is manual). Fields: rule_id :string, queried true, required true;
+      question_id :string, queried true, required true; sort_order
+      :integer, queried true, required true. Foreign keys: two entries --
+      "rule_id" -> exam_question_rule, "question_id" -> question (REQ-326's
+      entity type). Constraints: one entry, type "unique", fields
+      ["rule_id","question_id"] -- the source's composite PRIMARY KEY.
+      Indexes: one over rule_id (source idx_exam_manual_questions_rule_id).
+
+      THE THREE MULTI-COLUMN CHECKS THAT CANNOT BE EXPRESSED, AND WHERE
+      THEY GO INSTEAD. Letflow's constraint_def supports type :unique and
+      nothing else -- validator.ex's constraint_shape_violations/1 rejects
+      any constraint whose type is not :unique, and there is no check_def
+      of any kind. So the following source constraints have no
+      entity-definition expression, and this requirement's job is to
+      RELOCATE them explicitly, never to drop them silently:
+
+      (i) exams_availability_check: CHECK (available_from IS NULL OR
+      available_until IS NULL OR available_from < available_until).
+      Two-column comparison. RELOCATES TO: the exam's authoring form
+      schema, as an Expr predicate evaluated by the Expr evaluators
+      REQ-291/REQ-292/REQ-293 landed (definition-time, server-side and
+      TypeScript respectively -- gap 7, closed). This requirement does NOT
+      author the form schema; it records the relocation.
+
+      (ii) CHECK (passing_score_pct BETWEEN 0 AND 100), plus the
+      single-column CHECKs time_limit_minutes > 0, max_attempts > 0, count
+      > 0 and the three sort_order >= 0 checks. Range predicates on one
+      column each. RELOCATE TO: the same form-schema/Expr layer as (i).
+      Note honestly in the record that these single-column range checks
+      are, unlike (i), a LOSS relative to the source's database-level
+      enforcement -- an entity definition has no min/max attribute on a
+      numeric field today, so nothing in the storage layer will reject a
+      negative time limit written through the record API directly. Say
+      that plainly; do not present the form-schema relocation as
+      equivalent enforcement when it is not.
+
+      (iii) exam_assignments_id_required: CHECK (assignee_type = 'all' OR
+      assignee_id IS NOT NULL). A conditional-requiredness rule across two
+      columns. This one is doubly moot here, because exam_assignment
+      itself is NOT authored by this requirement -- see the scope fence.
+
+      HOW THE RELOCATION IS RECORDED. Not in a decision record -- this
+      requirement writes none. It is recorded in
+      priv/packs/bilimbaga/entity_definitions/README-constraints.md, a
+      short file in the same directory, listing each source CHECK verbatim
+      with its source file and line context, the entity type and field it
+      constrained, where it relocates to, and for the (ii) group an
+      explicit statement that database-level enforcement is lost and only
+      form-layer validation remains. This file is what a later executor
+      authoring the form schemas works from, and what a reviewer checks
+      against to confirm nothing was dropped.
+
+      SCOPE FENCE -- WHAT THIS REQUIREMENT DOES NOT AUTHOR. exam_assignment
+      (source table exam_assignments, 013_exam_assignments.up.sql, FR-BB33)
+      is NOT authored here, and the reason is substantive rather than
+      sizing: its assignee_id column is a polymorphic reference whose
+      target depends on assignee_type -- a user id, a department id, or
+      nothing at all when the type is 'all'. No fk_def can express that
+      (references_entity names exactly one entity type), and two of the
+      three targets live in the identity subsystem, which an entity fk_def
+      cannot reach at all -- the same boundary that drops created_by in
+      REQ-326. Whether assignment is modelled as an entity type with an
+      unenforced reference, as a process-definition concern (0022's
+      reasoning section 1 maps "exam lifecycle: assign -> notify -> take
+      -> grade -> certify -> expire" to a process definition on
+      Letflow.Engine, bucket A), or as something else, is a real open
+      question and NOT one this requirement may settle by picking a shape.
+      Record it in README-constraints.md as an open item naming FR-BB33
+      and roadmap 3.3, and leave it for a decision-record requirement or
+      the process-definition requirement that follows. Also not authored
+      here: created_by and assigned_by on any table (same cross-subsystem
+      reason as REQ-326's created_by, with the same event-stream actor_id
+      answer -- state it in exam.json's description).
+    acceptance_criteria:
+      - "priv/packs/bilimbaga/entity_definitions/ contains these five new files -- exam.json, exam_section.json, exam_question_rule.json, exam_question_rule_tag.json, exam_manual_question.json -- each a single JSON object carrying only the keys name, display_name, description, fields, indexes, foreign_keys and constraints (the last three optional), with no wrapper object. `ls priv/packs/bilimbaga/entity_definitions/` output is quoted"
+      - "every one of the five documents passes Letflow.Entities.Definition.Validator.validate/1 with :ok, proven by a test committed at test/letflow/packs/bilimbaga_exam_definitions_test.exs that reads each file from priv at runtime (Application.app_dir/2 or :code.priv_dir, never a hard-coded absolute path), JSON-decodes it, translates it to the atom-keyed shape, and asserts :ok. The full `mix test test/letflow/packs/bilimbaga_exam_definitions_test.exs` output is quoted showing zero failures. Authored content that has not been through the real validator is not done"
+      - "the same test asserts the relational shape mechanically: exam declares zero foreign_keys; exam_section exactly one (exam_id -> exam) and a unique constraint over [exam_id, sort_order]; exam_question_rule exactly three (exam_id -> exam, section_id -> exam_section, category_id -> category) and a unique constraint over [exam_id, sort_order]; exam_question_rule_tag exactly two (rule_id -> exam_question_rule, tag_id -> tag) and a unique constraint over [rule_id, tag_id]; exam_manual_question exactly two (rule_id -> exam_question_rule, question_id -> question) and a unique constraint over [rule_id, question_id]. It also asserts that every field named in any indexes entry is queried: true in that same document"
+      - "EVERY indexes, foreign_keys and constraints entry in all five documents carries a non-empty string name following the <prefix>_<entity>_<columns> convention with idx_/fk_/uq_ prefixes. The test asserts mechanically that, for each document, every entry in each of the three arrays has a name that is a binary, is non-empty, and matches ^[a-z][a-z0-9_]{0,63}$; and -- because validator.ex's Rule 2 puts foreign_keys and constraints in ONE shared scope -- that the concatenated foreign_keys and constraints names within a single document contain no duplicate. This matters most for exam_question_rule (three fks plus a constraint in that one scope), exam_question_rule_tag and exam_manual_question (two fks plus a constraint each). Missing names fail validate/1 as :malformed before any numbered rule runs, so this is a precondition of the :ok criterion above, not a style check"
+      - "NO document declares a tag_ids field or any other array-of-references field, and exam_question_rule.json's description states in as many words that the source's tag_ids JSONB column is deliberately remodelled as the exam_question_rule_tag join entity, citing docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry. A grep for tag_ids across priv/packs/bilimbaga/ is run and its output quoted, showing hits only inside description prose"
+      - "priv/packs/bilimbaga/entity_definitions/README-constraints.md exists and lists EVERY multi-column and single-column CHECK constraint in 012_exams.up.sql and 013_exam_assignments.up.sql -- at minimum exams_availability_check, passing_score_pct BETWEEN 0 AND 100, time_limit_minutes > 0, max_attempts > 0, count > 0, the three sort_order >= 0 checks, and exam_assignments_id_required -- each quoted verbatim from its source file, with the entity type and field it constrained and where it relocates to. Nothing in that source list is missing from the file; the executor confirms this by grepping CHECK in both migrations and quoting the output alongside the file"
+      - "README-constraints.md states explicitly that Letflow's constraint_def supports type :unique only, citing lib/letflow/entities/definition/validator.ex's constraint_shape_violations/1 as the enforcing code, and states for the single-column range checks that relocating them to the form-schema/Expr layer LOSES database-level enforcement rather than preserving it -- in those terms, not softened. It names REQ-291, REQ-292 and REQ-293 as the Expr evaluators the form layer would use"
+      - "README-constraints.md records exam_assignment (FR-BB33, 013_exam_assignments.up.sql, roadmap 3.3) as deliberately NOT authored, and gives the reason concretely: assignee_id is polymorphic on assignee_type across user, department and none, no fk_def can express a reference whose target varies, and two of the three targets are in the identity subsystem that an entity fk_def cannot reach. It records this as an open question for a later decision record or process-definition requirement, and does not pick a shape"
+      - "no document declares an id, created_at, updated_at, created_by or assigned_by field. A grep for those five names across the five new files is run and its output quoted, showing hits only inside description prose. exam.json's description states that created_by is dropped for the same cross-subsystem reason REQ-326 records, and names the event stream's actor_id as what answers authorship"
+      - "every one of the five documents carries FR-BB31 and its roadmap section (3.1) in its own description field, and each names the source table it ports from. exam_question_rule_tag.json, which has no source table, says so explicitly and states that it replaces exam_question_rules.tag_ids. A grep for FR-BB across the five files is quoted"
+      - "exam.json's title and description fields are :localized_text with locales [\"kk\",\"ru\",\"en\"], exam_section.json's title likewise, and exam_question_rule.json's difficulty is :string and NOT :enum -- with that document's description stating that the source column carries no CHECK, unlike questions.difficulty, and that the asymmetry is deliberate. The test asserts each of these"
+      - "0022's rule 1 is NOT applicable here and the close-out says so in one sentence citing 0022's bucket table: bucket A is declared in this description's first line, these are the vertical's own content documents, and no reviewer finding may be raised against them for naming exams, sections or questions"
+      - "`git diff --name-only` shows only files under priv/packs/bilimbaga/, the one new test file under test/letflow/packs/, and docs/requirements.yaml for this entry's own bookkeeping -- no file under lib/letflow/, web/, priv/repo/migrations/ or docs/migration/. Quoted with the command"
+      - "`mix letflow.check` is run in full and its final result quoted verbatim. If the toolchain or its dependencies are unavailable in the executing environment, that is stated explicitly with the actual error text, per core-directives' no-speculation rule -- never reported as expected to pass"
+    depends_on: []
+  - id: REQ-328
+    title: Author the pack document that installs the question-bank and exam-configuration definitions into a tenant, and prove it by performing a real SolutionPack.install/3 (S10 P2 exit condition, bucket A)
+    owner: REQ-ANALYST
+    impl_order: TBD  # letflow-queue task id, written back at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: A. THIS REQUIREMENT AUTHORS PACK CONTENT AND THEN RUNS IT.
+      Its output is one pack document plus one test that installs it through
+      the real Letflow.Definitions.SolutionPack.install/3 against a real
+      provisioned tenant and writes a real record. No Elixir application
+      code, no TypeScript, no migration, no decision record, no change to
+      lib/letflow/definitions/solution_pack.ex.
+
+      0022's RULE 1 DOES NOT BIND THIS REQUIREMENT, AND A REVIEWER MUST NOT
+      FLAG IT FOR NAMING THE DOMAIN. Rule 1 constrains bucket B. This is
+      bucket A -- 0022's bucket table defines bucket A as pure definitions
+      delivered in a solution-pack document installed via
+      SolutionPack.install/3, which is literally what this requirement
+      produces. Naming a question bank is the deliverable.
+
+      OWNER RATIONALE. owner is REQ-ANALYST rather than ELIXIR-DEV even
+      though this requirement runs code, because the code it writes is a
+      test that exercises an existing, already-gated install path
+      (REQ-303 through REQ-306) against authored content -- it changes no
+      production module and designs no mechanism. If the install turns out
+      to need a platform change to succeed, that is a finding to report and
+      escalate, not something to implement inside this requirement. See the
+      finding clause at the end.
+
+      WHY THIS IS THE ONE THAT MAKES P2 TESTABLE. P2's exit condition in
+      docs/migration/stage-10-bilimbaga-vertical.md is "a tenant with a
+      working question bank and exam configuration, and zero exam-specific
+      Elixir". REQ-326 and REQ-327 author definition documents; a document
+      on disk is not a tenant with a working question bank. This
+      requirement is what turns authored content into an installed,
+      exercised tenant state, and it is deliberately specified so that the
+      install RESULT MUST BE QUOTED, never asserted -- per core-directives'
+      no-speculation rule, "the pack installs cleanly" is not a finding,
+      the actual {:ok, install_result} map is.
+
+      RE-VERIFY EVERY CLAIM BELOW AGAINST THE CURRENT TREE BEFORE WRITING
+      ANYTHING. All of it was read from main on 2026-09-12.
+
+      WHAT TO AUTHOR. One file,
+      priv/packs/bilimbaga/pack.json, a single JSON object matching
+      Letflow.Definitions.SolutionPack's pack_document type
+      (lib/letflow/definitions/solution_pack.ex, around lines 222-233).
+      Read parse_document/1 (around lines 525-550) before authoring; do
+      not infer the shape from the typespec alone. It fetches exactly
+      eight keys -- pack_id, version, bpm_export_schema_version,
+      definitions, variable_schemas, service_catalog_entries,
+      entity_definitions and manifest -- and rejects a document missing
+      any of those with {:error, :invalid_pack_document}. exported_at is
+      the one exception, called out where it is listed below: author every
+      key in the list:
+
+      - pack_id: a stable string identifying this pack. Choose one and
+        never change it across versions.
+      - version: a version string for this pack's content.
+      - bpm_export_schema_version: MUST equal
+        Letflow.Definitions.ExportImport.export_schema_version() exactly.
+        check_schema_version/1 rejects anything else with
+        {:error, {:unknown_schema_version, actual}}. Read the constant from
+        the module and quote it; do not guess the string.
+      - exported_at: an ISO 8601 timestamp string. Carried for symmetry
+        with export/3's output, which emits it, NOT because the install
+        validates it -- parse_document/1 never reads this key, so a
+        document omitting it still parses. Author it anyway so a packed
+        document and an exported one have the same shape; just do not
+        record it as a parse requirement.
+      - definitions: [] for now. Process definitions are the next P2
+        deliverable and are not this requirement's; an empty array is
+        valid and honest.
+      - service_catalog_entries: MUST be []. A non-empty array is rejected
+        by check_unsupported_sections/1 with
+        {:error, :unsupported_pack_section}, and decision 0027 settles that
+        rejection as PERMANENT, not interim. Do not attempt to carry one.
+      - variable_schemas: [] for now, same reasoning as definitions.
+      - entity_definitions: the ten packed entity definitions -- REQ-326's
+        five (category, tag, question, answer_option, question_tag) and
+        REQ-327's five (exam, exam_section, exam_question_rule,
+        exam_question_rule_tag, exam_manual_question).
+      - manifest: an object with a required_roles array -- see the
+        required_roles block below.
+
+      THE PACKED-ENTITY-DEFINITION WRAPPER. Each entry in
+      entity_definitions is NOT a bare definition document; it is the
+      wrapper parse_entity_definition/1 (around lines 614-632) requires,
+      with these four string keys plus the nested document:
+      entity_definition_id (a string), name, display_name,
+      logical_shape_version (a LOWERCASE hex string --
+      decode_logical_shape_version/1 calls Base.decode16(hex, case: :lower)
+      and rejects odd length, non-hex characters, or uppercase), and
+      definition_json (the object REQ-326/REQ-327 authored, verbatim). name
+      and display_name are duplicated at the wrapper level and inside
+      definition_json; they must agree. Read atomize_definition_json/1
+      (around line 655 onward) to confirm every key your definition
+      documents use is on its static whitelist -- a key not on that
+      whitelist is REJECTED outright, never silently dropped (0026 section
+      4), so an unrecognised key fails the install rather than degrading it.
+
+      HOW pack.json RELATES TO THE TEN AUTHORED FILES. Do not fork the
+      content. pack.json is either (a) generated from the ten files by a
+      committed script under priv/packs/bilimbaga/ that reads each
+      entity_definitions/*.json and emits pack.json, or (b) assembled at
+      test time from the ten files, with pack.json itself not committed.
+      CHOOSE (a) OR (b) EXPLICITLY AND SAY WHICH IN
+      priv/packs/bilimbaga/README.md, with the reason. What is NOT
+      acceptable is a committed pack.json holding a second, hand-copied
+      copy of ten definition documents that can drift from the files
+      REQ-326 and REQ-327 authored -- if you commit pack.json, the test
+      must assert that its ten embedded definition_json objects are byte-
+      or structure-equal to the ten source files, so drift fails the suite.
+
+      manifest.required_roles -- WHAT IT DOES TODAY, STATED HONESTLY.
+      solution_pack.ex's moduledoc states required_roles is supported
+      READ-ONLY: "it produces the advisory role_mapping_checklist (see
+      install/3). No role is created and no install is ever rejected
+      because of it." role_mapping_checklist/1 (around lines 1122-1130)
+      builds each entry as %{role_name: name, bound: bound} where bound is
+      MapSet.member? against Letflow.Api.Authorization.roles(), whose @roles
+      list is exactly [:PLATFORM_ADMIN, :PROCESS_DESIGNER,
+      :PROCESS_OPERATOR, :TASK_WORKER, :AGENT_RUNNER]. THE CONSEQUENCE YOU
+      MUST NOT MISREPORT: the roles this pack needs -- the source's
+      super_admin, examiner and department_admin, from
+      008_categories_tags.up.sql's role_permissions INSERTs and roadmap 2.1
+      and 3.2's "examiner and above" gating -- are NONE of those five, so
+      every checklist entry will come back bound: false. That is the
+      CORRECT AND EXPECTED result today, not a failure and not something to
+      work around by renaming the roles to platform role names. Declare
+      required_roles as ["super_admin", "examiner", "department_admin"] (or
+      whatever the source's actual role names are -- re-read 008 and
+      confirm), let the checklist report them all unbound, and QUOTE THAT
+      OUTPUT. REQ-325 (pending) is deciding whether a pack seeds roles at
+      all; this requirement must work with today's behaviour and say so
+      explicitly in both README.md and the close-out. Do not add
+      depends_on: [REQ-325] -- whichever way 0029 lands, this install works
+      today, and blocking on it would reproduce the stall this batch
+      corrects.
+
+      INSTALLED DEFINITIONS ARE :inactive -- AND THAT IS WHY THE RECORD
+      WRITE NEEDS AN EXTRA STEP. Per decision 0026 and solution_pack.ex's
+      moduledoc, entity definitions install :inactive only.
+      Letflow.Entities.Records.create_record/2 resolves the entity type's
+      current ACTIVE definition and returns {:error, {:definition_not_found,
+      entity_type}} when there is none (see records.ex's
+      fetch_active_definition). So a write immediately after install WILL
+      fail, and that is correct behaviour, not a bug. The test must
+      therefore: install, prove the definitions are not yet active, then
+      call Letflow.Entities.Definitions.activate_definition/4 for the
+      entity types it is about to write, then write.
+
+      DO NOT ASSERT THE STRING "inactive" ON THE INSTALL RESULT -- IT IS
+      NEVER THERE, AND ASSERTING IT WOULD MANUFACTURE A FALSE BLOCKER ON
+      THE REQUIREMENT WHOSE PURPOSE IS TO UNBLOCK P2. Two different
+      things live in two different places and must not be conflated.
+      (1) The install_result map: solution_pack.ex's
+      installed_entity_definition_maps/1 HARDCODES status: "installed" in
+      every entry it builds -- the literal string, unconditionally, for
+      all ten. That is what result.installed_entity_definitions carries,
+      so the assertion on the map is status == "installed".
+      (2) The PERSISTED row: Letflow.Entities.EntityDefinition's status is
+      an Ecto.Enum over [:active, :inactive], and it is the persisted
+      definition that installs :inactive per decision 0026 and
+      solution_pack.ex's moduledoc. Prove THAT separately -- by the
+      pre-activation create_record/2 call returning
+      {:error, {:definition_not_found, _}}, which is the cheapest real
+      proof and is required below anyway, and optionally by querying the
+      persisted EntityDefinition row's status for :inactive. The install
+      result's "installed" string is a report that the install step ran;
+      it says nothing about activation state.
+
+      THE PROOF THE TENANT ACTUALLY WORKS. A committed test at
+      test/letflow/packs/bilimbaga_pack_install_test.exs that, against a
+      real provisioned tenant from test/support/tenant_fixture.ex's
+      provisioned_tenant!/1 (do not hand-roll a schema):
+
+      1. Builds or reads the pack document and calls
+      Letflow.Definitions.SolutionPack.install/3 with the fixture's prefix.
+      2. Asserts {:ok, result} and that
+      result.installed_entity_definitions has ten entries, one per
+      authored entity type, each with status "installed" -- the literal
+      string installed_entity_definition_maps/1 hardcodes. Not
+      "inactive"; see the block above on why the two must not be
+      conflated.
+      3. Asserts result.role_mapping_checklist reports each declared role
+      with bound: false, per the block above.
+      4. Asserts a create_record/2 call before activation returns
+      {:error, {:definition_not_found, _}}.
+      5. Activates the entity types needed for step 6 via
+      Letflow.Entities.Definitions.activate_definition/4.
+      6. WRITES REAL RECORDS AND READS THEM BACK, exercising the three
+      capabilities that make this a "working question bank" rather than
+      ten rows in a definitions table:
+      (a) one category record and one question record referencing it,
+      proving the promoted FK is a real Postgres REFERENCES (REQ-298) --
+      and additionally proving the constraint bites, by asserting that a
+      question record naming a nonexistent category_id is REJECTED;
+      (b) the question's stem written as a per-locale object
+      %{"kk" => ..., "ru" => ..., "en" => ...} and read back, proving the
+      :localized_text write path works -- this is exactly the path ISS-0617
+      fixed in lib/letflow/entities/record/validator.ex's
+      field_subschema/1, and this test is its first real-content exercise;
+      (c) one tag, one question_tag join record, and a
+      Letflow.Entities.Query.Compiler query that joins question to tag
+      through question_tag (REQ-300's through many-to-many), returning that
+      question -- proving the join shape REQ-326 chose over a tag_ids array
+      actually resolves.
+      7. Also writes one exam record and one exam_question_rule referencing
+      it, proving REQ-327's half installed and is writable too.
+
+      QUOTE THE OUTPUT, DO NOT SUMMARISE IT. The close-out must contain the
+      verbatim mix test output and the actual install_result map as
+      returned (inspect it in the test and capture it, or assert on it and
+      quote the assertion values). "Ten definitions installed successfully"
+      is not acceptable evidence; the map is.
+
+      IF THE INSTALL FAILS, THAT IS THE FINDING -- REPORT IT, DO NOT ROUTE
+      AROUND IT. The stage file says of P2: "If the question bank, exam
+      configuration and assignment lifecycle cannot be expressed as
+      definitions, the premise of 0022 reasoning section 1 is wrong, and
+      that is a finding worth stopping on rather than routing around by
+      moving the work into bucket C." If install/3 rejects the document, or
+      a record write fails for a reason the authored content cannot fix,
+      STOP: quote the exact error, state which platform behaviour caused
+      it, and escalate to ORCH for a bucket-B requirement or a decision
+      record. Do NOT edit lib/letflow/definitions/solution_pack.ex, do NOT
+      edit the validator, and do NOT weaken the authored definitions to
+      make the install pass -- a definition bent to fit is worse than a
+      documented rejection, because it hides the platform gap this
+      requirement exists to detect.
+
+      ALSO UPDATE priv/packs/bilimbaga/README.md (created by REQ-326) with:
+      the pack.json generation choice (a) or (b) and why, the
+      required_roles-are-advisory statement with its REQ-325 pointer, the
+      install-is-inactive-then-activate sequence, and how to re-run the
+      install test. Do not create a second README.
+    acceptance_criteria:
+      - "a pack document exists for this pack and its provenance is unambiguous: either priv/packs/bilimbaga/pack.json is committed alongside a committed generator script under priv/packs/bilimbaga/, or the document is assembled at test time from the ten entity_definitions/*.json files and pack.json is not committed. Whichever was chosen is stated in priv/packs/bilimbaga/README.md with its reason. If pack.json IS committed, the test asserts its ten embedded definition_json objects are structurally equal to the ten source files, so drift fails the suite"
+      - "the pack document carries all eight keys parse_document/1 actually fetches -- pack_id, version, bpm_export_schema_version, definitions, service_catalog_entries, variable_schemas, entity_definitions, manifest -- plus exported_at, which parse_document/1 never reads and which is carried for symmetry with export/3's output rather than because the install requires it, with service_catalog_entries an empty array (decision 0027 makes a non-empty one permanently rejected) and bpm_export_schema_version equal to Letflow.Definitions.ExportImport.export_schema_version(). The executor quotes that constant's actual value read from the module rather than a remembered string"
+      - "entity_definitions carries exactly ten entries -- category, tag, question, answer_option, question_tag, exam, exam_section, exam_question_rule, exam_question_rule_tag, exam_manual_question -- each wrapped with entity_definition_id, name, display_name, a lowercase-hex logical_shape_version, and definition_json, with wrapper name/display_name agreeing with the nested document's own"
+      - "A REAL INSTALL WAS PERFORMED AND ITS RESULT IS QUOTED, NOT ASSERTED IN PROSE. test/letflow/packs/bilimbaga_pack_install_test.exs calls Letflow.Definitions.SolutionPack.install/3 against a tenant from test/support/tenant_fixture.ex's provisioned_tenant!/1, and the close-out quotes the actual install_result map as returned -- install_id, the ten installed_entity_definitions entries with their status values, variable_schemas_written, role_mapping_checklist and warnings. A summary sentence in place of the map does not satisfy this criterion"
+      - "the test asserts all ten installed_entity_definitions entries came back with status \"installed\" -- the literal string solution_pack.ex's installed_entity_definition_maps/1 hardcodes into every entry. It must NOT assert \"inactive\" on that map: the string is never there, and asserting it would fail the test against correct platform behaviour. SEPARATELY, and in addition, the test proves the installed definitions are not yet ACTIVE, by asserting that a Letflow.Entities.Records.create_record/2 call made BEFORE activation returns {:error, {:definition_not_found, _}} -- the cheapest real proof -- and optionally by querying the persisted Letflow.Entities.EntityDefinition row and asserting its status is the atom :inactive. It then activates via Letflow.Entities.Definitions.activate_definition/4 before any successful write. The close-out states in one sentence that the install-result string and the persisted definition status are two different things in two different places, so the criterion is not read as a contradiction"
+      - "role_mapping_checklist is asserted to report every declared required_role with bound: false, and the close-out states in one sentence that this is today's correct behaviour because manifest.required_roles is read-only advisory (quoting solution_pack.ex's moduledoc line that no role is created) and because Letflow.Api.Authorization.roles() contains only the five platform roles. REQ-325 is named as the pending decision on whether that changes. No role name was altered to a platform role name to make the checklist report bound: true"
+      - "REAL RECORDS WERE WRITTEN AND READ BACK. The test writes at minimum: one category record; one question record referencing it; one tag; one question_tag join record; one exam record; one exam_question_rule referencing that exam -- and reads each back asserting the stored field values. The mix test output is quoted in full showing zero failures"
+      - "the promoted foreign key is proven to be a real Postgres REFERENCES and not advisory: the test asserts that creating a question record whose category_id names a nonexistent category is REJECTED, and the close-out quotes the actual error returned"
+      - "the :localized_text write path is exercised with real content: the question record's stem is written as a per-locale object with all three of kk, ru and en, and read back with all three values intact. The close-out notes that this is the path ISS-0617 fixed in lib/letflow/entities/record/validator.ex's field_subschema/1"
+      - "the many-to-many join resolves: the test runs a Letflow.Entities.Query.Compiler query joining question to tag through question_tag (REQ-300's `through`) and asserts the tagged question is returned. The query request used and the rows returned are quoted"
+      - "no production module was modified to make any of this pass. `git diff --name-only` shows only files under priv/packs/bilimbaga/, the one new test file under test/letflow/packs/, and docs/requirements.yaml for this entry's own bookkeeping -- and specifically NOT lib/letflow/definitions/solution_pack.ex, lib/letflow/entities/**, or priv/repo/migrations/. Quoted with the command. If the install could not be made to pass without such a change, the requirement is reported BLOCKED with the exact error quoted and escalated to ORCH, per the finding clause -- a weakened definition or a patched validator is a FAIL of this criterion, not a pass"
+      - "priv/packs/bilimbaga/README.md (the one REQ-326 created, updated in place, not duplicated) records the pack.json provenance choice, the advisory-required_roles behaviour with its REQ-325 pointer, the install-inactive-then-activate sequence, and the command that re-runs the install test"
+      - "0022's rule 1 is NOT applicable here and the close-out says so in one sentence citing 0022's bucket table: bucket A is declared in this description's first line, this pack is the vertical's own content, and no reviewer finding may be raised against it for naming a question bank or an exam"
+      - "`mix letflow.check` is run in full and its final result quoted verbatim. If the toolchain, the database or its dependencies are unavailable in the executing environment, that is stated explicitly with the actual error text and the requirement is reported BLOCKED -- an install that could not be run is never reported as an install that succeeded, per core-directives' no-speculation rule"
+    depends_on:
+      - REQ-326
+      - REQ-327

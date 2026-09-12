@@ -56,6 +56,7 @@ defmodule Letflow.Routers.Entities do
   | get_record_attachment_content | `GET /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.get_content/2` | `EntitiesAttachmentsRead` | 200 (raw bytes) / 404 / 500 |
   | delete_record_attachment | `DELETE /entities/records/:entity_type/:record_id/attachments/:attachment_id` | `Letflow.Repository.EntityAttachments.delete/2` | `EntitiesAttachmentsManage` | 204 / 404 |
   | export_records | `POST /entities/records/:entity_type/export` | the identical `Letflow.Entities.Query.Allowlist.load/2` → `Letflow.Entities.Query.Compiler.compile/2` → `Letflow.Entities.Query.Cursor.paginate/5` sequence `query` uses above, then EITHER a `Letflow.Entities.Query.FieldGrants` redaction step (default) OR a second, in-handler `Letflow.Api.Authorization.evaluate_access/2` check against `:EntitiesRecordsExportUnredacted` that skips redaction entirely on success (`unredacted: true`) | `EntitiesRecordsExport` (route-level); `EntitiesRecordsExportUnredacted` (in-handler only, see below) | 200 / 400 / 403 / 404 / 422 |
+  | import_records | `POST /entities/records/:entity_type/import` | `Letflow.Entities.Records.create_record/2` per entry (REQ-320) | `EntitiesRecordsImport` | 200 / 404 / 413 / 422 |
 
   ## `POST .../export`'s two-tier redaction mechanism (REQ-319, design §6 INV-2)
 
@@ -76,6 +77,18 @@ defmodule Letflow.Routers.Entities do
   never a silent fallback to the redacted default. Succeeding it skips
   `FieldGrants` entirely for that call. See `check_unredacted_permission/2`
   and `run_export/5` below for the concrete `with`-chain ordering.
+
+  REQ-320 appended `import_records`, per
+  `lib/letflow/design/req314-entity-record-bulk-export-import.md` §3/§4/§6/§7
+  — the import half of that document's export/import pair (the export half,
+  §2/§4, is REQ-319's own separate requirement and is not implemented by this
+  route). Per-record partial-success batch semantics (§3): each entry in the
+  request's `records` list is imported independently via
+  `Letflow.Entities.Records.create_record/2`, unmodified, and the response
+  carries a per-entry result rather than an all-or-nothing outcome. See
+  `handle_import_records/2`'s own comment for the exact check ordering (the
+  200-record cap, then the schema-version gate, then the path/body
+  `entity_type` match, all three before any `create_record/2` call).
 
   ## Route ordering — load-bearing, not cosmetic (design §1)
 
@@ -273,6 +286,19 @@ defmodule Letflow.Routers.Entities do
 
   authz_delete "/records/:entity_type/:record_id", :EntitiesRecordsWrite do
     handle_delete_record(conn, conn.params["entity_type"], conn.params["record_id"])
+  end
+
+  # ── Record import route (REQ-320) ─────────────────────────────────────
+  #
+  # Sibling of the three record-command routes above, at the same path
+  # depth as `POST /records/:entity_type` -- declared after them for
+  # readability, matching this module's own listing convention (no ordering
+  # hazard: `Plug.Router` position-by-position matching cannot confuse a
+  # 3-segment "/records/:entity_type/import" path with the 2-segment
+  # "/records/:entity_type" route above it).
+
+  authz_post "/records/:entity_type/import", :EntitiesRecordsImport do
+    handle_import_records(conn, conn.params["entity_type"])
   end
 
   # ── Query route ───────────────────────────────────────────────────────
@@ -952,6 +978,216 @@ defmodule Letflow.Routers.Entities do
       key when is_binary(key) -> key
       nil -> Ecto.UUID.generate()
     end
+  end
+
+  # ══ POST /entities/records/:entity_type/import (REQ-320) ═════════════
+  #
+  # Design doc: req314-entity-record-bulk-export-import.md §3 (write path
+  # and per-batch failure semantics), §4 (route shape), §6/INV-5 (tenant
+  # scoping, not-found folding), §7 (the 200-record cap and its 413).
+  #
+  # ⛔ Check ordering is load-bearing, not cosmetic (§7's own "cheapest,
+  # most structural check first" discipline):
+  #
+  #   1. the 200-record cap (§7) -- before entity-type/definition resolution
+  #      or ANY per-entry validation, never a silent truncation;
+  #   2. the `record_export_schema_version` gate (§1/§3) -- before tenant
+  #      resolution or any database touch, a distinct 422 from a generic
+  #      validation failure;
+  #   3. the `entity_type` path-vs-body match (§4) -- before any
+  #      `create_record/2` call.
+  #
+  # Only after all three pass does any entry reach `create_record/2`.
+  @record_export_schema_version "entities/record-export/v1"
+
+  defp handle_import_records(conn, entity_type) do
+    prefix = prefix!(conn)
+    actor_id = conn.assigns.auth_context.user_id
+
+    with {:ok, body} <- object_body(conn),
+         {:ok, records} <- records_within_cap(body),
+         :ok <- check_record_export_schema_version(body),
+         :ok <- check_import_entity_type_match(body, entity_type) do
+      import_request_id = Ecto.UUID.generate()
+
+      case run_import(records, entity_type, actor_id, import_request_id, prefix) do
+        {:ok, results} ->
+          Response.ok(conn, %{"results" => Enum.map(results, &import_entry_result_json/1)})
+
+        # §6/INV-5, AC: a definition_not_found from the FIRST entry -- the
+        # only entry this handler ever inspects for this outcome, since
+        # entity_type/tenant are constant across the whole batch -- folds
+        # to the SAME 404 create_record/2's own single-write path already
+        # produces. No cross-tenant-specific pre-check is added here.
+        {:error, {:definition_not_found, _entity_type}} ->
+          Response.not_found(conn)
+      end
+    else
+      {:error, :malformed_json} ->
+        Response.bad_request(conn, "request body must be a JSON object")
+
+      {:error, :records_not_an_array} ->
+        Response.unprocessable(conn, "records must be an array")
+
+      {:error, :too_many_records, count} ->
+        Response.payload_too_large(
+          conn,
+          "import batch of #{count} records exceeds the 200-record cap"
+        )
+
+      {:error, :unknown_record_export_schema_version, actual} ->
+        Response.unprocessable(
+          conn,
+          "unknown record_export_schema_version: #{inspect(actual)}"
+        )
+
+      {:error, :import_entity_type_mismatch} ->
+        Response.unprocessable(
+          conn,
+          "entity_type in the request body does not match the route's :entity_type path segment"
+        )
+    end
+  end
+
+  # §7: rejects the WHOLE request past the 200-record cap, before entity-
+  # type/definition resolution or any per-entry validation -- never a
+  # silent truncation to the first 200.
+  @import_record_cap 200
+
+  defp records_within_cap(body) do
+    case Map.get(body, "records") do
+      records when is_list(records) ->
+        count = length(records)
+
+        if count > @import_record_cap do
+          {:error, :too_many_records, count}
+        else
+          {:ok, records}
+        end
+
+      _not_a_list ->
+        {:error, :records_not_an_array}
+    end
+  end
+
+  # §1/§3's ExportImport precedent: checked before tenant resolution or any
+  # database touch, a distinct, NAMED error -- never conflated with a
+  # generic validation failure.
+  defp check_record_export_schema_version(body) do
+    case Map.get(body, "record_export_schema_version") do
+      @record_export_schema_version -> :ok
+      other -> {:error, :unknown_record_export_schema_version, other}
+    end
+  end
+
+  # §4: the document's own `entity_type` must match the route's
+  # `:entity_type` path segment exactly, or 422 before any create_record/2
+  # call.
+  defp check_import_entity_type_match(body, entity_type) do
+    case Map.get(body, "entity_type") do
+      ^entity_type -> :ok
+      _mismatch -> {:error, :import_entity_type_mismatch}
+    end
+  end
+
+  # §3: per-record partial success, not whole-batch atomicity --
+  # create_record/2 commits its own transaction per call and is never
+  # composed into an outer Multi here. The FIRST entry is inspected
+  # specially only for the definition_not_found short-circuit (see
+  # handle_import_records/2's comment); every entry (first included) still
+  # contributes its own result to the accumulated list on every other
+  # outcome.
+  defp run_import([], _entity_type, _actor_id, _import_request_id, _prefix), do: {:ok, []}
+
+  defp run_import([first | rest], entity_type, actor_id, import_request_id, prefix) do
+    case import_one_entry(first, entity_type, actor_id, import_request_id, prefix) do
+      {:error, _source_record_id, {:error, {:definition_not_found, _} = reason}} ->
+        {:error, reason}
+
+      first_result ->
+        rest_results =
+          Enum.map(rest, &import_one_entry(&1, entity_type, actor_id, import_request_id, prefix))
+
+        {:ok, [first_result | rest_results]}
+    end
+  end
+
+  # §3: `entry.record_id` is NEVER used to address/update an existing row --
+  # create_record/2 always mints its own fresh record_id; `source_record_id`
+  # is carried through purely for the caller's own reconciliation.
+  # `deleted: true` on an entry is imported as a live create, identically to
+  # a non-deleted one -- no create-then-delete reproduction (§3's explicit
+  # scope cut). `idempotency_key` is derived from `(import_request_id,
+  # source_record_id)` -- `import_request_id` is minted once per HTTP call
+  # in handle_import_records/2, NEVER read from the document or the entry --
+  # so two entries sharing a `record_id` WITHIN one call collide onto the
+  # same key (intra-call dedup, via create_record/2's own duplicate-key
+  # contract), while two separate calls -- even a byte-identical re-POST --
+  # each mint their own import_request_id and share no relationship at all.
+  defp import_one_entry(entry, entity_type, actor_id, import_request_id, prefix) do
+    source_record_id = Map.get(entry, "record_id")
+    field_values = Map.get(entry, "field_values", %{})
+    idempotency_key = import_idempotency_key(import_request_id, source_record_id)
+
+    command_attrs = %{
+      entity_type: entity_type,
+      field_values: field_values,
+      actor_id: actor_id,
+      idempotency_key: idempotency_key
+    }
+
+    case Records.create_record(command_attrs, prefix) do
+      {:ok, %{record: %Latest{record_id: record_id}}} ->
+        {:ok, %{record_id: record_id, source_record_id: source_record_id}}
+
+      {:error, _reason} = error ->
+        {:error, source_record_id, error}
+    end
+  end
+
+  defp import_idempotency_key(import_request_id, source_record_id) do
+    "entities-record-import:#{import_request_id}:#{inspect(source_record_id)}"
+  end
+
+  defp import_entry_result_json(
+         {:ok, %{record_id: record_id, source_record_id: source_record_id}}
+       ) do
+    %{"status" => "ok", "record_id" => record_id, "source_record_id" => source_record_id}
+  end
+
+  defp import_entry_result_json({:error, source_record_id, {:error, reason}}) do
+    %{
+      "status" => "error",
+      "source_record_id" => source_record_id,
+      "reason" => import_reason_json(reason)
+    }
+  end
+
+  # Mirrors render_record_command/3's own Records.command_error() mapping
+  # (unmodified reasons, just JSON-shaped instead of turned into an HTTP
+  # status) -- so a failing entry's "reason" carries the same information a
+  # standalone POST /entities/records/:entity_type call for that same entry
+  # would surface.
+  defp import_reason_json({:record_payload_invalid, violations}) do
+    %{"type" => "record_payload_invalid", "violations" => Enum.map(violations, &violation_map/1)}
+  end
+
+  defp import_reason_json({:definition_not_found, entity_type}) do
+    %{"type" => "definition_not_found", "entity_type" => entity_type}
+  end
+
+  defp import_reason_json({:payload_validation_failed, _errors}) do
+    %{"type" => "payload_validation_failed"}
+  end
+
+  defp import_reason_json(reason)
+       when reason in [:tenant_not_provisioned, :invalid_schema_name] do
+    %{"type" => Atom.to_string(reason)}
+  end
+
+  defp import_reason_json(other) do
+    Logger.warning("entity record import entry failed: #{inspect(other)}")
+    %{"type" => "internal_error"}
   end
 
   # design §7, Records.command_error(), mapped exhaustively:

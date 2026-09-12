@@ -1714,7 +1714,18 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # POST /entities/query above. Included here so this equality
           # assertion reflects the router's real, live surface; its
           # DEPARTURE would fire this tripwire same as any other row's.
-          {"POST", "/records/:entity_type/export", :EntitiesRecordsExport}
+          {"POST", "/records/:entity_type/export", :EntitiesRecordsExport},
+          # REQ-320's seventeenth row (2026-09-12, landed concurrently with
+          # REQ-319 above) -- the per-record-type batch IMPORT route, gated
+          # by its own DISTINCT :EntitiesRecordsImport permission (not
+          # :EntitiesRecordsWrite). Re-derived (moduledoc above) and found to
+          # close no gap this scenario's six :gui steps were waiting on --
+          # none of them import anything; all six read a record's
+          # field_values through POST /entities/query above. Included here
+          # so this equality assertion reflects the router's real, live
+          # surface; its DEPARTURE would fire this tripwire same as any
+          # other row's.
+          {"POST", "/records/:entity_type/import", :EntitiesRecordsImport}
         ])
 
       actual_routes = MapSet.new(Letflow.Routers.Entities.__authz_routes__())
@@ -1722,16 +1733,17 @@ defmodule Letflow.Simulation.Req207VortexTest do
       assert MapSet.equal?(actual_routes, expected_routes),
              "Letflow.Routers.Entities must serve exactly REQ-310's nine routes plus " <>
                "REQ-311's POST /query, REQ-315's POST /query/aggregate, REQ-317's four " <>
-               "record-attachment routes, and REQ-319's POST /records/:entity_type/export. " <>
+               "record-attachment routes, REQ-319's POST /records/:entity_type/export, " <>
+               "and REQ-320's POST /records/:entity_type/import. " <>
                "Unexpected: #{inspect(MapSet.to_list(MapSet.difference(actual_routes, expected_routes)))}; " <>
                "missing: #{inspect(MapSet.to_list(MapSet.difference(expected_routes, actual_routes)))}. " <>
-               "A SEVENTEENTH route, or a MISSING one, means this router's surface changed " <>
+               "An EIGHTEENTH route, or a MISSING one, means this router's surface changed " <>
                "again and this scenario's disposition must be re-derived once more -- " <>
                "see the banner at the top of this test. In particular, {\"POST\", \"/query\", " <>
                ":EntitiesQuery} going MISSING would mean the record read path was reverted, " <>
                "which would move the blocker back to S10 from S8."
 
-      assert MapSet.size(actual_routes) == 16
+      assert MapSet.size(actual_routes) == 17
 
       # POSITIVE now, where the previous round refuted it. The record read
       # route exists, and it carries the read permission REQ-309 minted for it.

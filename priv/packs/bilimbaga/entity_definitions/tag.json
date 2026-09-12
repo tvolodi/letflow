@@ -1,0 +1,20 @@
+{
+  "name": "tag",
+  "display_name": "Tag",
+  "description": "FR-BB21 (roadmap section 2.1) -- ports the tags table from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\008_categories_tags.up.sql. name is :string, queried: true, required: true, and constraints declares one entry (uq_tag_name, type \"unique\", fields [\"name\"]) matching the source's name TEXT UNIQUE NOT NULL -- REQ-298's constraint_def compiles to a real unique index, so this is expressible exactly. name is deliberately :string rather than :localized_text: a tag is an authoring-side vocabulary token, the source carries no translation table for it, and roadmap 2.1 exposes tags through an autocomplete rather than as candidate-facing content. This is the one place in this pack that diverges from the \"user-visible text is localized\" pattern applied everywhere else (category.name, question.stem, question.explanation, answer_option.text). No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_tag_name",
+      "type": "unique",
+      "fields": ["name"]
+    }
+  ]
+}

@@ -21786,7 +21786,7 @@ requirements:
     title: Author the question-bank entity definitions as committed definition documents under priv/packs/bilimbaga/entity_definitions/ (S10 P2, bucket A)
     owner: REQ-ANALYST
     impl_order: 620  # letflow-queue task id, written back at WF-01 Step 3
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: A. THIS REQUIREMENT AUTHORS PACK CONTENT, NOT PLATFORM CODE.

@@ -1158,3 +1158,83 @@ history:
       and REQ-320 (import route) are all now done --
       docs/migration/stage-10-bilimbaga-vertical.md's gap table row 12
       updated accordingly in this same commit.
+  - req: REQ-322
+    event: done
+    agent: ORCH
+    at: "2026-09-12T05:00:02Z"
+    note: >
+      REQ-322 (queue task 614, GH#1285, no depends_on) implemented via
+      feature/WF02-REQ322-20260912: reconciled
+      docs/migration/stage-10-bilimbaga-vertical.md against the state
+      landed by REQ-308..REQ-321 plus decision 0027, and corrected two
+      now-stale UNOWNED sites in lib/letflow/definitions/solution_pack.ex.
+      The stage file had gone self-contradictory about gap 1 (prose said
+      closed, its own table row said open) -- resolved in favor of the
+      prose, backed by four independently re-derived checks: REQ-308/
+      309/310/311 all status: done, lib/letflow/routers/entities.ex
+      exists with 17 routes, mounted at /entities in api_pipeline.ex,
+      and its deferred-routes-table entry retired. Header count
+      re-derived to 29 S10 requirements (REQ-295-REQ-323), correctly
+      distinguishing from grep -c "stage: S10"'s overcounted 32. Gaps
+      4/5 updated to state 0027's settled mechanism (out-of-band via
+      POST /service-catalog, :AdminServicesManage) while remaining open
+      as capabilities (verified no mailer/PDF/QR dependency in
+      mix.exs). Gap 6 gained REQ-323 as owner. Gaps 2/3/7/8/9/10/11/13
+      rows left byte-identical -- already correctly reconciled by their
+      own close-out commits. solution_pack.ex's moduledoc bullet and
+      inline comment above check_unsupported_sections/1 now cite 0027
+      by path and state the policy permanently NOT PERMITTED, naming
+      the out-of-band route -- comment/moduledoc text only,
+      check_unsupported_sections/1's two clauses byte-identical, the
+      pre-existing NOTE (ELIXIR-DEV, REQ-305) paragraph preserved
+      verbatim. test/letflow/service_catalog_test.exs's ISS-0594
+      assertion (asserting the moduledoc said "UNOWNED") was a
+      deliberate trap set to break once the moduledoc was corrected --
+      renamed the test and replaced the assertion with two real checks
+      (the 0027 filename, and the phrase "permanently NOT PERMITTED"),
+      verified against main that neither the old assertion would pass
+      against the new text nor the new assertions against the old.
+
+      Pipeline: DOC-UPDATER -> REVIEWER PASS (independently re-ran
+      every derivation and verification command -- S10 count, gap 1's
+      four statuses, the route count and mount, the byte-identical
+      claim on the other twelve gap rows and on
+      check_unsupported_sections/1's two clauses, the NOTE paragraph's
+      verbatim preservation, and that the new test assertions are
+      genuinely non-tautological; independently ran mix test
+      test/letflow/service_catalog_test.exs: 33 passed, and mix compile
+      --warnings-as-errors: clean; confirmed decision-record
+      consistency with 0022/0027). No SECURITY-REVIEWER gate -- pure
+      documentation/comment reconciliation, zero behavior change,
+      confirmed by REVIEWER's own def/defp diff check. Scope fence held
+      -- exactly the three named files; no other requirement's status
+      field touched by DOC-UPDATER's own work (REQ-322's own flip to
+      done is ORCH's separate close-out bookkeeping). docs/
+      requirements.yaml flipped pending -> done.
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUME 14 — CLOSED 2026-09-12. DO NOT APPEND TO THIS FILE.
+# This volume holds the complete requirement run history from 2026-09-11 through
+# 2026-09-12 (34 entries, lines 1-1213). It is frozen: every line above this
+# comment is preserved byte-for-byte. Closed at feature/WF02-REQ322-20260912's
+# own bookkeeping append, which brought this file to 1213 lines -- over its
+# declared roll_rule ceiling (max_lines: 1200) -- confirmed via `wc -l` on the
+# working-tree file per this volume's own "WHEN THIS VOLUME IS FULL" procedure.
+# Reads of this volume are TARGETED reads only -- a line range or a pattern
+# match, never a whole-file read. Use whichever your shell has:
+#   Read tool with offset/limit (works everywhere), or
+#   Bash:       grep -n PATTERN FILE   /   sed -n 'START,ENDp' FILE
+#   PowerShell: Select-String -Path FILE -Pattern PATTERN
+#               (Get-Content FILE)[START..END]
+#
+# NEW ENTRIES GO TO THE CURRENT VOLUME. Find it in:
+#   docs/status/requirement_status.index.yaml
+# which, as of this closure, names:
+#   docs/status/requirement_status.v15.yaml
+#
+# Why this file was closed: ORCH's own REQ-322 done-event append brought the
+# on-disk count to 34 entries across 1213 lines -- over the roll ceiling. No
+# entry above this footer was moved, edited or deleted.
+#
+# KNOWN ANOMALIES IN THIS VOLUME: none declared beyond what volumes 1-3 already
+# declare against themselves.
+# ─────────────────────────────────────────────────────────────────────────────

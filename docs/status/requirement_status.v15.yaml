@@ -623,3 +623,31 @@ history:
       TEST-DESIGN-VALIDATOR PASS (69/69 targeted tests), TEST-RUNNER
       re-verification after rebase onto main: full suite 4053 passed,
       exit 0. docs/issues/ISS-0623.yaml flipped to status: resolved.
+  - req: REQ-328
+    event: revised
+    agent: ORCH
+    at: "2026-09-12T23:50:31Z"
+    note: >
+      Addendum to WF03-ISS0624-20260912 (queue task 624), on the same
+      branch fix/ISS-0624-20260912: test/letflow/packs/
+      bilimbaga_pack_install_test.exs (REQ-328's install-proof test,
+      already merged) carried a self-documented canary asserting
+      ISS-0624's crash as a workaround, with a comment naming exactly
+      what to re-enable once the bug was fixed. Now that ISS-0624 is
+      fixed on this same branch, completed REQ-328's originally-
+      deferred acceptance criteria per that comment's own instructions:
+      real category/question/exam record writes with their
+      :localized_text fields (name/stem/title) round-tripping all
+      three of kk/ru/en; a new test proving question's own FK to
+      category bites (distinct from the pre-existing question_tag->tag
+      proof); a real exam_question_rule referencing a real exam; and
+      the many-to-many join rewired to assert it returns the actual
+      tagged question rather than a placeholder is_list(rows) check.
+      Pre-existing orphan-FK-violation tests preserved unchanged. Test-
+      only, no production code touched, matching REQ-328's own scope
+      fence. SECURITY-REVIEWER PASS (INV-1, INV-8), REVIEWER PASS
+      (confirmed conformance against REQ-328's actual acceptance
+      criteria, independently ran the full suite: only known
+      pre-existing/environmental failures). No status-field change to
+      REQ-328 itself -- it was already done; this only completes its
+      test's deferred coverage.

@@ -6483,6 +6483,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0624 (queue task 624, GH#1311) -- Records.field_document/1 dropped locales (and other optional field_def() keys), so ISS-0617's own :localized_text validator clause could never match on the real create_record/2 write path, reached via a call path ISS-0617's own tests never exercised. Fixed by auditing field_document/1 against the full field_def() key set and adding locales/search_strategy/decimal_precision/decimal_scale/queried with safe defaults, matching two sibling converters that already had this right. Added 3 end-to-end tests through the real create_record/2. Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (independently reproduced the crash via revert/restore) -> REVIEWER PASS (ran the full suite: only pre-existing failures plus one self-documented canary test now failing because the fix works, filed as its own follow-up)."
+    },
+    {
+      "run_id": "WF03-ISS0624-20260912-addendum",
+      "workflow_id": "WF-03",
+      "requirement_id": "REQ-328",
+      "issue_id": "ISS-0624",
+      "queue_task_id": 624,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1311,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "test/letflow/packs/bilimbaga_pack_install_test.exs"
+      ],
+      "branch_name": "fix/ISS-0624-20260912",
+      "started_at": "2026-09-12T22:56:11Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "Addendum to WF03-ISS0624-20260912 on the same branch: REQ-328's install-proof test carried a self-documented canary asserting ISS-0624's crash. Now that the bug is fixed, completed REQ-328's deferred acceptance criteria per the canary's own instructions -- real category/question/exam :localized_text writes round-tripping kk/ru/en, a new question->category FK-violation test, a real exam_question_rule against a real exam, and the many-to-many join rewired to assert it returns the actual tagged question. Test-only, no production code. SECURITY-REVIEWER PASS (INV-1, INV-8), REVIEWER PASS (independently ran the full suite: only known pre-existing/environmental failures)."
     }
   ]
 }

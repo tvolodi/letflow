@@ -2187,7 +2187,11 @@ defmodule Letflow.Routers.EntitiesTest do
       repeated_id = Ecto.UUID.generate()
 
       records = [
-        %{"record_id" => repeated_id, "field_values" => %{"title" => "first"}, "deleted" => false},
+        %{
+          "record_id" => repeated_id,
+          "field_values" => %{"title" => "first"},
+          "deleted" => false
+        },
         %{"record_id" => repeated_id, "field_values" => %{"title" => "first"}, "deleted" => false}
       ]
 
@@ -2215,7 +2219,11 @@ defmodule Letflow.Routers.EntitiesTest do
 
       body =
         import_document("widget", [
-          %{"record_id" => record_id, "field_values" => %{"title" => "repeat"}, "deleted" => false}
+          %{
+            "record_id" => record_id,
+            "field_values" => %{"title" => "repeat"},
+            "deleted" => false
+          }
         ])
 
       resp1 = import_records(ctx, "widget", body)
@@ -2245,7 +2253,11 @@ defmodule Letflow.Routers.EntitiesTest do
       record_id = Ecto.UUID.generate()
 
       records = [
-        %{"record_id" => record_id, "field_values" => %{"title" => "was deleted"}, "deleted" => true}
+        %{
+          "record_id" => record_id,
+          "field_values" => %{"title" => "was deleted"},
+          "deleted" => true
+        }
       ]
 
       resp = import_records(ctx, "widget", import_document("widget", records))

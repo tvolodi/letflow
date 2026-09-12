@@ -1149,7 +1149,9 @@ defmodule Letflow.Routers.Entities do
     "entities-record-import:#{import_request_id}:#{inspect(source_record_id)}"
   end
 
-  defp import_entry_result_json({:ok, %{record_id: record_id, source_record_id: source_record_id}}) do
+  defp import_entry_result_json(
+         {:ok, %{record_id: record_id, source_record_id: source_record_id}}
+       ) do
     %{"status" => "ok", "record_id" => record_id, "source_record_id" => source_record_id}
   end
 
@@ -1178,7 +1180,8 @@ defmodule Letflow.Routers.Entities do
     %{"type" => "payload_validation_failed"}
   end
 
-  defp import_reason_json(reason) when reason in [:tenant_not_provisioned, :invalid_schema_name] do
+  defp import_reason_json(reason)
+       when reason in [:tenant_not_provisioned, :invalid_schema_name] do
     %{"type" => Atom.to_string(reason)}
   end
 

@@ -2909,8 +2909,12 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 28
+    entries: 29
     note: >
+      Incremented to 29 by DOC-UPDATER's own REQ-317 done-event append
+      (Step 6, WF02-REQ317-20260912 close-out) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 29 on-disk entries, no
+      rebase conflict on this file.
       Incremented to 28 by ORCH's own REQ-317 started-event append
       (Step 00, WF02-REQ317-20260912)'s Step Final rebase, which found
       main advanced past WF02-REQ318-20260911's Step Final SECOND rebase

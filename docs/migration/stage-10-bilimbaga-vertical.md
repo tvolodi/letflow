@@ -66,7 +66,7 @@ no relations and no queryable localized fields.
 |---|---|---|---|
 | 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Open.** The stage's single largest blocker; its HTTP-surface design is now owned by `REQ-308` (`pending`) | `REQ-308` |
 | 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Closed 2026-09-11** -- `REQ-312` `done` (design, `lib/letflow/design/req312-query-aggregation.md`); `REQ-315` `done` (implementation, `POST /entities/query/aggregate`, PR #1276) | closed |
-| 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Open.** Design closed 2026-09-11 -- `REQ-313` `done` (`lib/letflow/design/req313-entity-record-attachments.md`); implementation filed 2026-09-11, `REQ-316`/`REQ-317` `pending` | `REQ-316`, `REQ-317` |
+| 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Closed 2026-09-12** -- `REQ-313` `done` (design, `lib/letflow/design/req313-entity-record-attachments.md`); `REQ-316` `done` (migration + context module, PR #1264) and `REQ-317` `done` (permission atoms + four routes, PR #1279) | closed |
 | 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
 | 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
 | 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | to file |
@@ -84,11 +84,12 @@ S10 depended on them and said so, and all three are now closed. Gaps 1–6 and
 10, 11 and 13 — the three that make P2's exit condition reachable at all — are
 closed as of 2026-09-11 (`REQ-300`, `REQ-301`, `REQ-303`–`REQ-306`). Gap 1 is
 closed (`REQ-308`–`REQ-311`, all `done`). Gap 2 is now closed (`REQ-312`
-design, `REQ-315` implementation, both `done`). Gaps 3 and 12 have design
-requirements done (`REQ-313`, `REQ-314`) and implementation requirements
-still `pending` against each — gap 3: `REQ-316` `done`, `REQ-317` `pending`;
-gap 12: `REQ-318`, `REQ-319`, `REQ-320` (all `pending`) — so neither of the
-two is closed yet. Gaps 4, 5 and 6 remain unowned and to file.
+design, `REQ-315` implementation, both `done`). Gap 3 is now closed
+(`REQ-313` design, `REQ-316` migration/context module, `REQ-317`
+permission atoms/routes, all `done`). Gap 12 has its design requirement
+done (`REQ-314`) but implementation still `pending` against it — `REQ-318`
+`done`, `REQ-319`/`REQ-320` `pending` — so it is not closed yet. Gaps 4, 5
+and 6 remain unowned and to file.
 
 Gaps 10 and 11 are consequences of
 [decision 0023](decisions/0023-entity-storage-hybrid.md), and as originally

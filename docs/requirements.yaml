@@ -20413,7 +20413,7 @@ requirements:
     title: Add the entity-attachment permission atoms and the four record-attachment routes to Letflow.Routers.Entities (S10 gap 3, part 2)
     owner: ELIXIR-DEV
     impl_order: 609  # letflow-queue task id; depends_on [REQ-316] = queue task 607, mirrored
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. Per 0022's rule 1 this requirement's title, description,

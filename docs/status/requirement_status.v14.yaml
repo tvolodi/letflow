@@ -964,3 +964,31 @@ history:
       Letflow.Repository.EntityAttachments (REQ-316, already merged).
       Branch: feature/WF02-REQ317-20260912. Dispatching ELIXIR-DEV
       next, gated by SECURITY-REVIEWER (tenant-data path).
+
+  - req: REQ-317
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-12T00:30:36Z"
+    note: >
+      Run WF02-REQ317-20260912 close-out (close-out step had not been run
+      before merge). Implemented lib/letflow/design/req313-entity-record-
+      attachments.md's §3/§4/§5: two new permission atoms
+      (:EntitiesAttachmentsManage, :EntitiesAttachmentsRead) with role-
+      matrix arms per §7 OQ-2, and four new routes (create/list/get-
+      content/delete record attachments) on Letflow.Routers.Entities
+      delegating to Letflow.Repository.EntityAttachments (REQ-316).
+      SECURITY-REVIEWER PASS (INV-1/2/5/7 all satisfied, no rework
+      needed), REVIEWER PASS, TEST-RUNNER confirmed green CI (3985/3985
+      backend tests, frontend and path-detection gates green) on PR #1279
+      (merged, commit 9724d248). Collateral fixes: Req207VortexTest's
+      tripwire re-derived for the now-15-route surface, and a merge
+      conflict with concurrently-landing REQ-318 in authorization.ex/
+      authorization_test.exs (both requirements independently added
+      permission atoms) resolved by composing both sets of additions.
+      This close-out run flips docs/requirements.yaml's REQ-317 status
+      pending -> done, appends this event, closes GitHub mirror issue
+      #1266 with an evidence comment citing PR #1279 and the CI results,
+      and updates docs/migration/stage-10-bilimbaga-vertical.md's gap 3
+      row to closed (both the REQ-316 migration/context-module half and
+      the REQ-317 route/permission half are now done) -- no code change,
+      the implementation was already merged separately.

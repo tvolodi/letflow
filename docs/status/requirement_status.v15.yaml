@@ -521,3 +521,22 @@ history:
       gap is invisible to the author, and every future pack inherits it.
       REQ-327's five indexes, ported from the source system's own
       measured CREATE INDEX statements, are currently documentation.
+  - req: SCOPE-CHANGE
+    event: started
+    agent: ORCH
+    at: "2026-09-12T20:26:16Z"
+    note: >
+      Claimed letflow-queue task 623 (WF-03 issue ISS-0623, GitHub
+      #1308): lib/letflow/entities/definition/ddl.ex validates
+      index_def entries (Rule 4, index_shape_violations/1) but never
+      emits CREATE INDEX -- a declared index installs cleanly and does
+      nothing, discovered by REVIEWER while gating REQ-327's five
+      exam-configuration indexes. Dispatching ISSUE-FIXER for
+      root-cause diagnosis per WF-03, though the queue description
+      already contains a strong root-cause analysis from REVIEWER;
+      ISSUE-FIXER will confirm/extend it and route to CODE-DESIGNER +
+      ELIXIR-DEV for the actual fix (emit CREATE INDEX alongside table
+      creation, check for cross-entity index-name collision within a
+      tenant schema, add a pg_indexes-based test, audit whether any
+      other declarative Definition.t() structure is similarly
+      validated-but-never-emitted).

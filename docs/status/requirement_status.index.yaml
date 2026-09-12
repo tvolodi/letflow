@@ -3141,8 +3141,13 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 8
+    entries: 9
     note: >
+      Incremented to 9 by ORCH's own REQ-328 blocked-event append
+      (direct-action, dependency REQ-327 not yet done) -- `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 9
+      on-disk entries; 471 lines / 27712 bytes, well under the roll
+      ceiling. No rebase conflict on this file.
       Recounted to 8 on docs/close-REQ324-20260913's Step Final rebase
       onto main, composing REQ-326's own done-event append (landed on
       main first, at 19:38:08Z) with this run's own REQ-324 close-out

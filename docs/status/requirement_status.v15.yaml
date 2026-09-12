@@ -442,3 +442,30 @@ history:
       touched in this branch -- confirmed via
       `git diff --name-only main...HEAD`; the implementation itself was
       already merged separately and is untouched here.
+  - req: REQ-328
+    event: blocked
+    agent: ORCH
+    at: "2026-09-12T20:22:06Z"
+    note: >
+      Claimed letflow-queue task 622 via get_next_task, dispatched to
+      ELIXIR-DEV on branch feature/WF02-REQ328-20260913. ELIXIR-DEV
+      correctly stopped before writing anything: REQ-328 depends_on
+      [REQ-326, REQ-327] (docs/requirements.yaml line ~22430's own
+      impl_order comment: "taking 622 first fails loudly, since its
+      pack document embeds the ten definition documents 620 and 621
+      author"), and REQ-327 (queue task 621, exam-configuration entity
+      definitions) is still status: pending -- only REQ-326's five
+      entity_definitions/*.json files exist on disk, none of
+      REQ-327's five exam-configuration ones. Confirmed via
+      get_next_task/orch-probe: task 621 is not offered (locked by
+      another host, presumably a sibling session already working
+      REQ-327), so it is in flight, not merely unclaimed. No code
+      changes made -- ELIXIR-DEV's git status was clean. Released
+      queue task 622 back to status: open (not "blocked", since
+      release-blocked is a permanent exclusion per TASK_QUEUE.md and
+      this is a temporary ordering gap, not a permanent defect).
+      Discarded the local feature/WF02-REQ328-20260913 branch (never
+      pushed, contained only a since-superseded started-event commit,
+      no implementation work). Deferring REQ-328 until REQ-327 reaches
+      done; will re-poll the queue rather than re-claim 622 again in
+      the meantime.

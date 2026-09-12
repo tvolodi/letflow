@@ -169,6 +169,31 @@
 
 
 history:
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-12T06:05:23Z"
+    note: >
+      ISS-0616 (queue task 616, GH#1289): get_next_task silently
+      ignoring an unsupported dry_run parameter and taking a real lock
+      -- self-filed by a prior ORCH run after hitting exactly this,
+      with recovery already taken (released the fictitious
+      orch-probe lock, claimed properly). Direct-action fix per
+      ORCHESTRATOR.md sizing rule (one file, docs-only, no new
+      function/spec, no migration, no supervision code, no tenant-
+      data path, no test-asserted behaviour change): added a
+      paragraph to docs/agents/protocols/TASK_QUEUE.md's existing
+      "Reachability checks must not have side effects" section
+      stating explicitly that no dry_run mode exists, that
+      letflow-queue silently ignores unknown query parameters rather
+      than rejecting them with 400, and cross-referencing REQ-222
+      (target repo tvolodi/letflow-queue) as the eventual real fix
+      (a genuine read-only eligibility listing) rather than inventing
+      a client-side simulation of one. Fix directions (a) and (b) from
+      the issue are out of scope for this repo (letflow-queue is a
+      separate repo); this closes fix direction (c), the
+      near-free-and-prevents-recurrence one. Flipped ISS-0616's
+      status to resolved and closed GH#1289 with an evidence comment.
   - req: REQ-323
     event: done
     agent: ORCH

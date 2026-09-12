@@ -1,0 +1,56 @@
+id: ISS-0624
+title: Records.field_document/1 drops `locales`, so :localized_text records still cannot be written -- ISS-0617 fixed the validator but not the path that reaches it
+discovered_by: REQ-ANALYST
+discovered_in_run: WF02-REQ328-20260913
+discovered_at: "2026-09-13T02:40:00Z"
+severity: MAJOR
+description: >
+  lib/letflow/entities/records.ex:576-583's field_document/1 rebuilds
+  each field from the persisted definition_json carrying exactly four
+  keys -- name, type, required, enum_values. It DROPS `locales`.
+
+  ISS-0617 added the :localized_text clause to
+  Record.Validator.field_subschema/1, and that clause matches on
+  `%{type: :localized_text, locales: locales}`. Because field_document/1
+  never supplies `locales`, the clause can never match when the write
+  goes through create_record/2, and the call raises FunctionClauseError
+  -- exactly the crash ISS-0617 was filed to fix, on a different path.
+
+  ISS-0617's tests missed it because they call build_record_schema/1
+  DIRECTLY with a map that already contains `locales`. They never
+  exercise create_record/2. So the fix is real, its tests are real, and
+  the end-to-end path was never covered. REQ-328 is the first
+  requirement to exercise it end to end, which is how this surfaced.
+
+  NOT PACK CONTENT. Reproduced with a minimal hand-built definition
+  carrying one %{type: :localized_text, locales: ["en"]} field --
+  identical failure. The persisted definition_json DOES carry locales;
+  the defect is purely in the converter.
+
+  CONSEQUENCE FOR S10 P2: three of the ten entity types authored by
+  REQ-326/REQ-327 -- category, question, exam -- declare
+  :localized_text fields and therefore CANNOT HAVE RECORDS WRITTEN AT
+  ALL. P2's exit condition is "a tenant with a working question bank",
+  and a question bank whose questions cannot be created does not meet
+  it. REQ-328's install, activation, promotion, FK enforcement and
+  through-join all work; the record-write half is blocked on this.
+
+  Severity MAJOR: no data loss and no security exposure -- it fails
+  closed, loudly -- but a first-class field type is unusable for writes
+  through the public API, and it blocks S10 P2's exit condition.
+
+  FIX DIRECTION: add `locales` to field_document/1, and check
+  `search_strategy` at the same time (ddl.ex reads it for
+  :localized_text generated columns, and the same converter drops it).
+  Then add an END-TO-END test through create_record/2 rather than
+  through build_record_schema/1 -- the absence of exactly that test is
+  why ISS-0617 shipped incomplete. Also audit field_document/1 against
+  the full field_def optional-key set (required, queried, enum_values,
+  decimal_precision, decimal_scale, default, locales, search_strategy)
+  for any OTHER key silently dropped; decimal_precision and
+  decimal_scale are the obvious next candidates.
+affected_files:
+  - lib/letflow/entities/records.ex
+  - test/letflow/entities/record/validator_test.exs
+queue_ref: Q-624
+github_ref: GH-1311

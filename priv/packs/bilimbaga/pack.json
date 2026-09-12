@@ -1,0 +1,746 @@
+{
+  "bpm_export_schema_version": "bpm/definition/v1",
+  "definitions": [],
+  "entity_definitions": [
+    {
+      "definition_json": {
+        "description": "FR-BB21 (roadmap section 2.1) -- ports the categories table from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\008_categories_tags.up.sql. name is :localized_text with locales [\"kk\",\"ru\",\"en\"] and search_strategy \"plain\", queried: true, required: true -- the source column is a bare TEXT, but the category tree is user-facing in a trilingual product and the platform now supports per-locale generated columns (REQ-301), so this is a deliberate upgrade over the source rather than a plain transcription. track is :string, queried: true, not required -- the source column is a nullable TEXT with no CHECK; roadmap 2.1 names three built-in tracks (security, safety, loyalty) but since the source enforces no vocabulary, track stays :string rather than being promoted to :enum with a hard-coded vocabulary the source does not enforce. sort_order is :integer, queried: true, required: true, ported directly. Indexes: idx_category_track over track. No constraints -- the source declares no UNIQUE on categories. No id, created_at, updated_at or created_by field is declared: the record subsystem (Letflow.Entities.Records) mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content. No parent_id field is declared: the source's categories.parent_id UUID REFERENCES categories(id) (the category tree) is a self-referential foreign key, and Letflow.Entities.Definition.Validator's Rule 9 (self_referential_fk_violations/1) rejects any fk_def whose references_entity equals the definition's own name today. REQ-324 (pending) lifts that restriction; a follow-on requirement will add parent_id plus its fk_def once REQ-324 lands. This is stated as an honest, deliberate gap -- no unenforced string parent_id, no closure-table entity, and no tree nested in a :json field are used as a workaround.",
+        "display_name": "Category",
+        "fields": [
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "name",
+            "queried": true,
+            "required": true,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          },
+          {
+            "name": "track",
+            "queried": true,
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "sort_order",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "track"
+            ],
+            "name": "idx_category_track"
+          }
+        ],
+        "name": "category"
+      },
+      "display_name": "Category",
+      "entity_definition_id": "3c81a200-d456-00ce-89ac-2e4f71cf773f",
+      "logical_shape_version": "ae9c0686a6a4ed42f2e25cf7f5f0e26fa57cbc985dbd510ef42c37312e7347e4",
+      "name": "category"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "name"
+            ],
+            "name": "uq_tag_name",
+            "type": "unique"
+          }
+        ],
+        "description": "FR-BB21 (roadmap section 2.1) -- ports the tags table from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\008_categories_tags.up.sql. name is :string, queried: true, required: true, and constraints declares one entry (uq_tag_name, type \"unique\", fields [\"name\"]) matching the source's name TEXT UNIQUE NOT NULL -- REQ-298's constraint_def compiles to a real unique index, so this is expressible exactly. name is deliberately :string rather than :localized_text: a tag is an authoring-side vocabulary token, the source carries no translation table for it, and roadmap 2.1 exposes tags through an autocomplete rather than as candidate-facing content. This is the one place in this pack that diverges from the \"user-visible text is localized\" pattern applied everywhere else (category.name, question.stem, question.explanation, answer_option.text). No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+        "display_name": "Tag",
+        "fields": [
+          {
+            "name": "name",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "name": "tag"
+      },
+      "display_name": "Tag",
+      "entity_definition_id": "bf1b5c3e-bc73-7d0a-8ae2-f21ce03e68a3",
+      "logical_shape_version": "73d8e3f750bb2d284a59fac95608e4f38a04506c40095a785da452bcc8fd9343",
+      "name": "tag"
+    },
+    {
+      "definition_json": {
+        "description": "Core exam configuration. Ports FR-BB31 (Exam Configuration Model), source table `exams` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1, with the configuration API filters in 3.2 and the portal availability filter in 3.4 deciding which fields are queried. NOTE ON TWO DIFFERENT `description`s: this key is the definition document's own prose about the entity type; the `description` entry in `fields` below is a separate content field holding an exam's own localized description text. They are different things. FIELD-LEVEL NOTES. `title` and the `description` content field are :localized_text over [\"kk\",\"ru\",\"en\"] with search_strategy \"plain\": the source columns are bare TEXT with no translation table, and promoting them is a deliberate upgrade for a trilingual product, the same upgrade REQ-326 applies to category.name -- not a transcription of the source. `status`, `show_answers` and `on_tab_switch` are :enum, the direct translation of the source's Postgres ENUM types exam_status, show_answers_policy and tab_switch_action. `passing_score_pct` carries decimal_precision 5 and decimal_scale 2 ported verbatim from the source's DECIMAL(5, 2), not chosen here. `available_from` and `available_until` are queried because roadmap 3.4's portal listing filters on the availability window. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline, so declaring them here would duplicate state the platform already holds. No `created_by` field is declared either, for the same cross-subsystem reason REQ-326 records for its own documents -- created_by references the identity subsystem's users table, which an entity fk_def cannot reach (references_entity names an entity type, not an identity-subsystem table), so an unenforced string reference would be the only option. Authorship is answered instead by the event stream's actor_id on the record's creation event. The source's idx_exams_created_by index is dropped with the column. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's CHECK (time_limit_minutes > 0), CHECK (passing_score_pct BETWEEN 0 AND 100), CHECK (max_attempts > 0) and CONSTRAINT exams_availability_check are recorded in README-constraints.md in this directory, together with what is lost by relocating them.",
+        "display_name": "Exam",
+        "fields": [
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "title",
+            "queried": true,
+            "required": true,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          },
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "description",
+            "queried": false,
+            "required": false,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          },
+          {
+            "enum_values": [
+              "draft",
+              "active",
+              "archived"
+            ],
+            "name": "status",
+            "queried": true,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "name": "time_limit_minutes",
+            "queried": false,
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "decimal_precision": 5,
+            "decimal_scale": 2,
+            "name": "passing_score_pct",
+            "queried": false,
+            "required": true,
+            "type": "decimal"
+          },
+          {
+            "name": "max_attempts",
+            "queried": false,
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "available_from",
+            "queried": true,
+            "required": false,
+            "type": "datetime"
+          },
+          {
+            "name": "available_until",
+            "queried": true,
+            "required": false,
+            "type": "datetime"
+          },
+          {
+            "name": "shuffle_questions",
+            "queried": false,
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "name": "shuffle_options",
+            "queried": false,
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "enum_values": [
+              "never",
+              "after_completion",
+              "after_all_attempts"
+            ],
+            "name": "show_answers",
+            "queried": false,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "enum_values": [
+              "log",
+              "warn",
+              "submit"
+            ],
+            "name": "on_tab_switch",
+            "queried": false,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "name": "certificate_enabled",
+            "queried": false,
+            "required": true,
+            "type": "boolean"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "status"
+            ],
+            "name": "idx_exam_status"
+          }
+        ],
+        "name": "exam"
+      },
+      "display_name": "Exam",
+      "entity_definition_id": "d7513595-7ca4-e493-80c2-587cdd6042a8",
+      "logical_shape_version": "2a9a4f31e10fe61a62cca43f56f457d8a1b79ec234ed7171c3c67a15211f7b55",
+      "name": "exam"
+    },
+    {
+      "definition_json": {
+        "description": "FR-BB22 (roadmap section 2.2) -- ports the questions AND question_translations tables from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\009_questions.up.sql. The two source tables collapse into this ONE entity type, which is the single most important modelling decision here: BilimBaga used a per-locale row table (question_translations) because its Postgres schema had no other way to hold multilingual text, and REQ-301's :localized_text is exactly that mechanism at the platform layer -- blob-stored with a generated column per locale when queried: true -- so question_translations has no independent existence in this pack. category_id is :string, queried: true, required: true, holding a referenced record_id; the foreign_keys entry below (fk_question_category_id) makes it a real Postgres REFERENCES. difficulty is :enum with enum_values [\"easy\",\"medium\",\"hard\"], queried: true, required: true, ported exactly from the source CHECK. type is :enum with enum_values [\"single\",\"multiple\",\"truefalse\",\"likert\",\"shorttext\"], queried: true, required: true, ported exactly from the source CHECK. default_locale is :string, queried: false, required: true (source default 'kk'). status is :enum with enum_values [\"draft\",\"review\",\"active\",\"archived\"], queried: true, required: true, ported exactly from the source CHECK. version is :integer, queried: true, required: true. stem is :localized_text (source question_translations.stem) with locales [\"kk\",\"ru\",\"en\"], search_strategy \"fulltext\", queried: true, required: true -- fulltext because roadmap 2.3's question list is searchable and 2.5's duplicate detection is trigram similarity over stems; this is the one field in this pack where search strategy is load-bearing rather than incidental, which is why it differs from category.name's \"plain\" strategy. explanation is :localized_text (source question_translations.explanation, nullable) with locales [\"kk\",\"ru\",\"en\"], search_strategy \"plain\", queried: false, required: false. Foreign keys: fk_question_category_id (field \"category_id\", references_entity \"category\"). Indexes: idx_question_status over status and idx_question_category_id over category_id (mirroring the source's idx_questions_status and idx_questions_category_id), plus idx_question_type over type because roadmap 2.3's list endpoint filters on it. No id, created_at, updated_at field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content. created_by UUID NOT NULL REFERENCES users(id) is DROPPED: an entity definition's fk_def can only reference another entity type in the same tenant's entity subsystem (references_entity is resolved through the promoted-column tables), and identity.users is a different subsystem that no fk_def can span. What replaces it: authorship is already captured by the event store -- every Letflow.Entities.Records write carries actor_id into the ENTITY_RECORD_CREATED event -- so \"who authored this question\" is answerable from the event stream without a duplicated, unenforceable column; no plain :string created_by field holding an unenforced user id is declared. No parent_id field is declared: the source's questions.parent_id UUID REFERENCES questions(id) (version lineage -- \"parent_id links a new version to its predecessor; only the latest version is active\") is a self-referential foreign key, and Letflow.Entities.Definition.Validator's Rule 9 (self_referential_fk_violations/1) rejects any fk_def whose references_entity equals the definition's own name today. REQ-324 (pending) lifts that restriction; a follow-on requirement will add parent_id plus its fk_def once REQ-324 lands. This is stated as an honest, deliberate gap -- no unenforced string parent_id, no closure-table entity, and no tree nested in a :json field are used as a workaround.",
+        "display_name": "Question",
+        "fields": [
+          {
+            "name": "category_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "enum_values": [
+              "easy",
+              "medium",
+              "hard"
+            ],
+            "name": "difficulty",
+            "queried": true,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "enum_values": [
+              "single",
+              "multiple",
+              "truefalse",
+              "likert",
+              "shorttext"
+            ],
+            "name": "type",
+            "queried": true,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "name": "default_locale",
+            "queried": false,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "enum_values": [
+              "draft",
+              "review",
+              "active",
+              "archived"
+            ],
+            "name": "status",
+            "queried": true,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "name": "version",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "stem",
+            "queried": true,
+            "required": true,
+            "search_strategy": "fulltext",
+            "type": "localized_text"
+          },
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "explanation",
+            "queried": false,
+            "required": false,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "category_id",
+            "name": "fk_question_category_id",
+            "references_entity": "category"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "status"
+            ],
+            "name": "idx_question_status"
+          },
+          {
+            "fields": [
+              "category_id"
+            ],
+            "name": "idx_question_category_id"
+          },
+          {
+            "fields": [
+              "type"
+            ],
+            "name": "idx_question_type"
+          }
+        ],
+        "name": "question"
+      },
+      "display_name": "Question",
+      "entity_definition_id": "501fcd25-f326-ff8c-1623-bc0c39d7c745",
+      "logical_shape_version": "eee629bf166b8d4879962d3f8da41319af8558a2e29c3b48ad0865b19b93c148",
+      "name": "question"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "exam_id",
+              "sort_order"
+            ],
+            "name": "uq_exam_section_exam_id_sort_order",
+            "type": "unique"
+          }
+        ],
+        "description": "Optional grouping of question-selection rules within an exam. Ports FR-BB31 (Exam Configuration Model), source table `exam_sections` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. FIELD-LEVEL NOTES. `title` is :localized_text over [\"kk\",\"ru\",\"en\"] with search_strategy \"plain\", required false because the source column is a nullable TEXT -- the localization is the same deliberate trilingual upgrade exam.title makes, while the nullability is transcribed from the source. `exam_id` is :string and carries the foreign key to `exam`; the source's UNIQUE (exam_id, sort_order) is expressible exactly and is declared below as a constraints entry of type \"unique\". OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINT NOT EXPRESSIBLE HERE: the source's CHECK (sort_order >= 0) is a single-column range check with no entity-definition expression; it is recorded in README-constraints.md in this directory, along with the fact that relocating it loses database-level enforcement.",
+        "display_name": "Exam Section",
+        "fields": [
+          {
+            "name": "exam_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "title",
+            "queried": false,
+            "required": false,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          },
+          {
+            "name": "sort_order",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "exam_id",
+            "name": "fk_exam_section_exam_id",
+            "references_entity": "exam"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "exam_id"
+            ],
+            "name": "idx_exam_section_exam_id"
+          }
+        ],
+        "name": "exam_section"
+      },
+      "display_name": "Exam Section",
+      "entity_definition_id": "19556530-7b10-949b-cd64-2699d9230943",
+      "logical_shape_version": "e2ca22a470d1e0e0a9c6a6d4b0c8f05ddc0b40de7d8a517149cf2df23f39dbd4",
+      "name": "exam_section"
+    },
+    {
+      "definition_json": {
+        "description": "FR-BB22 (roadmap section 2.2) -- ports the answer_options AND answer_translations tables from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\009_questions.up.sql. The same two-tables-into-one collapse as question.json, for the same reason: BilimBaga used a per-locale row table (answer_translations) because its Postgres schema had no other way to hold multilingual text, and REQ-301's :localized_text is exactly that mechanism at the platform layer, so answer_translations has no independent existence in this pack. question_id is :string, queried: true, required: true. sort_order is :integer, queried: true, required: true. is_correct is :boolean, queried: true, required: true (source default FALSE). likert_weight is :decimal with decimal_precision: 5, decimal_scale: 2, queried: false, required: false -- both numbers are ported directly from the source's DECIMAL(5,2), not chosen independently. likert_polarity is :enum with enum_values [\"positive\",\"negative\"], queried: false, required: false, ported from the source CHECK. text is :localized_text (source answer_translations.text) with locales [\"kk\",\"ru\",\"en\"], search_strategy \"plain\", queried: true, required: true. Foreign keys: fk_answer_option_question_id (field \"question_id\", references_entity \"question\"). Indexes: idx_answer_option_question_id over question_id, mirroring the source's idx_answer_options_question_id. is_correct and field-level redaction: is_correct is the field a candidate must never see, and this is exactly what Letflow.Entities.Query.FieldGrants (REQ-231) -- field-level redaction that already exists -- is meant to govern. This pack does not configure a field grant; it only ensures is_correct is a first-class promoted field on its own record, so that redaction is expressible at all, which it would not be if answer options were nested inside the question's blob as a JSON array. This is the reason answer_option is authored as a separate entity type rather than a JSON array on question. No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+        "display_name": "Answer Option",
+        "fields": [
+          {
+            "name": "question_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sort_order",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "is_correct",
+            "queried": true,
+            "required": true,
+            "type": "boolean"
+          },
+          {
+            "decimal_precision": 5,
+            "decimal_scale": 2,
+            "name": "likert_weight",
+            "queried": false,
+            "required": false,
+            "type": "decimal"
+          },
+          {
+            "enum_values": [
+              "positive",
+              "negative"
+            ],
+            "name": "likert_polarity",
+            "queried": false,
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "locales": [
+              "kk",
+              "ru",
+              "en"
+            ],
+            "name": "text",
+            "queried": true,
+            "required": true,
+            "search_strategy": "plain",
+            "type": "localized_text"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "question_id",
+            "name": "fk_answer_option_question_id",
+            "references_entity": "question"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "question_id"
+            ],
+            "name": "idx_answer_option_question_id"
+          }
+        ],
+        "name": "answer_option"
+      },
+      "display_name": "Answer Option",
+      "entity_definition_id": "72ea0f42-0f11-caab-b056-5465d6e59b4d",
+      "logical_shape_version": "42576bb40b4dbf4a17d1acf4e5495fc2f9919cbcebff0e7f4bc70a114b998f4a",
+      "name": "answer_option"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "question_id",
+              "tag_id"
+            ],
+            "name": "uq_question_tag_question_id_tag_id",
+            "type": "unique"
+          }
+        ],
+        "description": "FR-BB22 (roadmap section 2.3, the tag-association endpoints) -- ports the question_tags table from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\009_questions.up.sql. This is authored as a join entity type, per docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry: an earlier draft giving question a tag_ids array was rejected because it is unindexed by default without an explicit GIN index, has nowhere to put join attributes, and is invisible to Letflow.Entities.Query.FieldGrants, which redacts at field granularity on a record and cannot see values inside an array on someone else's row. No tag_ids field or any other array-of-references field is declared anywhere in this pack. Instead question_tag is an ordinary entity type whose promoted columns are two foreign keys: question_id :string, queried: true, required: true, and tag_id :string, queried: true, required: true. Foreign keys: fk_question_tag_question_id (field \"question_id\", references_entity \"question\") and fk_question_tag_tag_id (field \"tag_id\", references_entity \"tag\"). Constraints: uq_question_tag_question_id_tag_id, type \"unique\", fields [\"question_id\",\"tag_id\"] -- this expresses the source's composite PRIMARY KEY on (question_id, tag_id). Indexes: idx_question_tag_tag_id over tag_id, mirroring the source's 010_question_tags_tag_id_index.up.sql reverse-lookup index. This shape is also what Letflow.Entities.Query.Compiler's through many-to-many join (REQ-300) requires: lib/letflow/design/req300-query-joins.md section 4 describes a join entity owning foreign keys to both sides as the shape it resolves, so authoring question_tag this way is what makes \"list the questions carrying tag X\" a compilable query rather than an application-level fetch. No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+        "display_name": "Question Tag",
+        "fields": [
+          {
+            "name": "question_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tag_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "question_id",
+            "name": "fk_question_tag_question_id",
+            "references_entity": "question"
+          },
+          {
+            "field": "tag_id",
+            "name": "fk_question_tag_tag_id",
+            "references_entity": "tag"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "tag_id"
+            ],
+            "name": "idx_question_tag_tag_id"
+          }
+        ],
+        "name": "question_tag"
+      },
+      "display_name": "Question Tag",
+      "entity_definition_id": "88d191d0-9470-6a13-cfc8-dacfbba1dacc",
+      "logical_shape_version": "d7d973a67d1e178efeb4939bbc7795521ec11593c72c0c3444b30dc672dc349e",
+      "name": "question_tag"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "exam_id",
+              "sort_order"
+            ],
+            "name": "uq_exam_question_rule_exam_id_sort_order",
+            "type": "unique"
+          }
+        ],
+        "description": "One question-selection rule for an exam -- either a random pool draw or a manual pin list. Ports FR-BB31 (Exam Configuration Model), source table `exam_question_rules` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. THE tag_ids JSONB COLUMN IS DELIBERATELY REMODELLED, NOT TRANSCRIBED. The source table carries `tag_ids JSONB NOT NULL DEFAULT '[]'::jsonb`, an array of tag references held on the parent row. That column is deliberately NOT ported as a field here. Carrying it forward as a :json field would be exactly the shape docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry records as rejected: unindexed by default and so degrading to a scan, with nowhere to put join attributes, and invisible to Letflow.Entities.Query.FieldGrants (REQ-231), which redacts at field granularity on a record and cannot field-redact values inside an array on another row. The rule-to-tag relationship is instead modelled as an ordinary join entity type, exam_question_rule_tag, in this same directory -- an entity whose promoted columns are two foreign keys with a constraint_def of type \"unique\" over the pair, which is the correct alternative that anti-pattern entry names and the shape Letflow.Entities.Query.Compiler's through join (REQ-300) resolves against. This is a deliberate remodelling of the source schema, not a transcription of it. FIELD-LEVEL NOTES. `difficulty` is :string and deliberately NOT :enum. The source column is a bare nullable TEXT with no CHECK, unlike questions.difficulty, which does carry one; tightening a column the source itself left loose would invent a constraint the port has no evidence for, so the asymmetry between this field and question.difficulty is deliberate rather than an oversight. `section_id` is required false because the source is a nullable FK with ON DELETE SET NULL; `category_id` is likewise a nullable source FK. `mode` is :enum, the direct translation of the source's question_selection_mode Postgres ENUM. `category_id` references the `category` entity type authored by REQ-326. The source's UNIQUE (exam_id, sort_order) is expressible exactly and is declared below. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's CHECK (count > 0) and CHECK (sort_order >= 0) are single-column range checks with no entity-definition expression; both are recorded in README-constraints.md in this directory, along with the fact that relocating them loses database-level enforcement.",
+        "display_name": "Exam Question Rule",
+        "fields": [
+          {
+            "name": "exam_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "section_id",
+            "queried": true,
+            "required": false,
+            "type": "string"
+          },
+          {
+            "enum_values": [
+              "manual",
+              "random"
+            ],
+            "name": "mode",
+            "queried": true,
+            "required": true,
+            "type": "enum"
+          },
+          {
+            "name": "category_id",
+            "queried": true,
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "difficulty",
+            "queried": true,
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "count",
+            "queried": false,
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "sort_order",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "exam_id",
+            "name": "fk_exam_question_rule_exam_id",
+            "references_entity": "exam"
+          },
+          {
+            "field": "section_id",
+            "name": "fk_exam_question_rule_section_id",
+            "references_entity": "exam_section"
+          },
+          {
+            "field": "category_id",
+            "name": "fk_exam_question_rule_category_id",
+            "references_entity": "category"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "exam_id"
+            ],
+            "name": "idx_exam_question_rule_exam_id"
+          },
+          {
+            "fields": [
+              "section_id"
+            ],
+            "name": "idx_exam_question_rule_section_id"
+          }
+        ],
+        "name": "exam_question_rule"
+      },
+      "display_name": "Exam Question Rule",
+      "entity_definition_id": "6d8a83f8-084d-f263-6e94-fbae55350896",
+      "logical_shape_version": "adee63dfabdef290275df9caf6407480bbd1146dc420897f90d7cf1c16c247e0",
+      "name": "exam_question_rule"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "rule_id",
+              "tag_id"
+            ],
+            "name": "uq_exam_question_rule_tag_rule_id_tag_id",
+            "type": "unique"
+          }
+        ],
+        "description": "Join entity binding one exam question-selection rule to one tag it draws from. THIS ENTITY TYPE HAS NO SOURCE TABLE. It does not port a table from BilimBaga's backend/migrations/012_exams.up.sql; it REPLACES the `tag_ids JSONB NOT NULL DEFAULT '[]'::jsonb` column on that migration's `exam_question_rules` table. It belongs to FR-BB31 (Exam Configuration Model) and corporate_exam_platform_roadmap.md section 3.1 by way of the rule it decomposes. The remodelling is deliberate: an array of references held on the parent row is the shape docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry records as rejected (unindexed by default, nowhere to put join attributes, invisible to Letflow.Entities.Query.FieldGrants), and the correct alternative that entry names is exactly this -- an ordinary entity type whose promoted columns are two foreign keys, with a constraint_def of type \"unique\" over the pair. This is the same join shape REQ-326 authors for question_tag and for the same reason: it is what Letflow.Entities.Query.Compiler's through join (REQ-300) resolves against. `tag_id` references the `tag` entity type authored by REQ-326. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. This entity type carries no CHECK constraint from any source, having no source table.",
+        "display_name": "Exam Question Rule Tag",
+        "fields": [
+          {
+            "name": "rule_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tag_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "rule_id",
+            "name": "fk_exam_question_rule_tag_rule_id",
+            "references_entity": "exam_question_rule"
+          },
+          {
+            "field": "tag_id",
+            "name": "fk_exam_question_rule_tag_tag_id",
+            "references_entity": "tag"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "tag_id"
+            ],
+            "name": "idx_exam_question_rule_tag_tag_id"
+          }
+        ],
+        "name": "exam_question_rule_tag"
+      },
+      "display_name": "Exam Question Rule Tag",
+      "entity_definition_id": "6052c4df-f71a-efc3-236d-342cb2ad2c34",
+      "logical_shape_version": "c5158c9a59cb61345ace7e3fb5bfbdb5451d7130359c7f0ee9e18f8dc9b8d4e1",
+      "name": "exam_question_rule_tag"
+    },
+    {
+      "definition_json": {
+        "constraints": [
+          {
+            "fields": [
+              "rule_id",
+              "question_id"
+            ],
+            "name": "uq_exam_manual_question_rule_id_question_id",
+            "type": "unique"
+          }
+        ],
+        "description": "The explicit pin list of questions used when an exam question-selection rule's mode is \"manual\". Ports FR-BB31 (Exam Configuration Model), source table `exam_manual_questions` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. FIELD-LEVEL NOTES. `question_id` references the `question` entity type authored by REQ-326. The source table has no surrogate id: its identity is the composite PRIMARY KEY (rule_id, question_id), which is expressible exactly and is declared below as a constraints entry of type \"unique\" over [\"rule_id\", \"question_id\"] -- the platform's own record identity supplies the surrogate key the source did not have. NAMING NOTE: this document's fk on rule_id and its unique over [rule_id, question_id] both start from rule_id, so an unprefixed naming convention would collide -- validator.ex's Rule 2 (duplicate_name_violations/1) concatenates foreign_keys and constraints into ONE shared uniqueness scope. The fk_/uq_ prefixes keep that shared scope collision-free by construction. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINT NOT EXPRESSIBLE HERE: the source's CHECK (sort_order >= 0) is a single-column range check with no entity-definition expression; it is recorded in README-constraints.md in this directory, along with the fact that relocating it loses database-level enforcement.",
+        "display_name": "Exam Manual Question",
+        "fields": [
+          {
+            "name": "rule_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "question_id",
+            "queried": true,
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "sort_order",
+            "queried": true,
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "foreign_keys": [
+          {
+            "field": "rule_id",
+            "name": "fk_exam_manual_question_rule_id",
+            "references_entity": "exam_question_rule"
+          },
+          {
+            "field": "question_id",
+            "name": "fk_exam_manual_question_question_id",
+            "references_entity": "question"
+          }
+        ],
+        "indexes": [
+          {
+            "fields": [
+              "rule_id"
+            ],
+            "name": "idx_exam_manual_question_rule_id"
+          }
+        ],
+        "name": "exam_manual_question"
+      },
+      "display_name": "Exam Manual Question",
+      "entity_definition_id": "6744fe12-fa72-5b90-208c-4ab605fcfcdd",
+      "logical_shape_version": "8d7f6c7fd0f5a7d66cdcd86e941bce05e2b9d129169a58a9a88e610b380d69b5",
+      "name": "exam_manual_question"
+    }
+  ],
+  "exported_at": "2026-09-13T00:00:00Z",
+  "manifest": {
+    "required_roles": [
+      "super_admin",
+      "examiner",
+      "department_admin"
+    ]
+  },
+  "pack_id": "bilimbaga-question-bank",
+  "service_catalog_entries": [],
+  "variable_schemas": [],
+  "version": "1.0.0"
+}

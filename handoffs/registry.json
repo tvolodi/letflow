@@ -6463,6 +6463,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-326 (queue task 620, GH#1301, no depends_on) -- authored five bucket-A entity-definition documents under priv/packs/bilimbaga/entity_definitions/ (category, tag, question, answer_option, question_tag) plus README and a validator test -- the first pack content authored in S10, unblocking P2's exit condition. Ports the source's per-locale translation tables into :localized_text (REQ-301); question_tag is a join entity type (docs/anti-patterns.md, REQ-300); answer_option kept separate for FieldGrants redaction on is_correct (REQ-231). parent_id deferred on category/question (Rule 9, REQ-324 pending lifts it). Pipeline: REQ-ANALYST (owner per requirement's own rationale) -> REVIEWER PASS (verified every field against spec, ran the test: 18 passed). No SECURITY-REVIEWER gate -- static content, no route/migration. Separate finding filed as its own issue: Req207VortexTest's REQ-id allowlist is stale for REQ-324's entry, pre-existing on main, unrelated to this branch."
+    },
+    {
+      "run_id": "WF03-ISS0624-20260912",
+      "workflow_id": "WF-03",
+      "requirement_id": null,
+      "issue_id": "ISS-0624",
+      "queue_task_id": 624,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1311,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/entities/records.ex"
+      ],
+      "branch_name": "fix/ISS-0624-20260912",
+      "started_at": "2026-09-12T21:41:25Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "ISS-0624 (queue task 624, GH#1311) -- Records.field_document/1 dropped locales (and other optional field_def() keys), so ISS-0617's own :localized_text validator clause could never match on the real create_record/2 write path, reached via a call path ISS-0617's own tests never exercised. Fixed by auditing field_document/1 against the full field_def() key set and adding locales/search_strategy/decimal_precision/decimal_scale/queried with safe defaults, matching two sibling converters that already had this right. Added 3 end-to-end tests through the real create_record/2. Pipeline: ELIXIR-DEV -> SECURITY-REVIEWER PASS (independently reproduced the crash via revert/restore) -> REVIEWER PASS (ran the full suite: only pre-existing failures plus one self-documented canary test now failing because the fix works, filed as its own follow-up)."
     }
   ]
 }

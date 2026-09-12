@@ -1,0 +1,58 @@
+id: ISS-0623
+title: Entity-definition `indexes` are inert metadata -- the validator enforces their shape but no CREATE INDEX is ever emitted
+discovered_by: REVIEWER
+discovered_in_run: WF02-REQ327-20260913
+discovered_at: "2026-09-13T01:30:00Z"
+severity: MAJOR
+description: >
+  lib/letflow/entities/definition/ddl.ex contains ZERO occurrences of
+  "CREATE INDEX" and zero references to :indexes -- verified by grep over
+  lib/letflow/entities/. So an index_def declared in an entity definition
+  is validated (Rule 4 requires every indexed field to be queried:true,
+  and index_shape_violations/1 requires a string name) and then silently
+  dropped. The promoted per-type table is created with its columns and
+  its FK and unique constraints, but none of its declared indexes.
+
+  This is not a validation gap; it is a DDL-emission gap. The
+  declaration is accepted, structurally checked, persisted in the
+  definition document, and does nothing.
+
+  DISCOVERED by REVIEWER while gating REQ-327, the first requirement to
+  author real pack content. Its five exam-configuration definitions
+  declare five indexes ported from the source system's own CREATE INDEX
+  statements. All five are currently inert. The source created them
+  because it measured a need; on Letflow they are documentation.
+
+  WHY IT MATTERS BEYOND ONE REQUIREMENT. Every future pack inherits it.
+  A vertical author reads the definition schema, sees indexes are a
+  first-class part of it, declares what their workload needs, watches
+  the definition validate and install cleanly, and gets a table with
+  none of them. The failure is silent and surfaces only as unexplained
+  query latency at scale -- the hardest class of problem to attribute
+  back to its cause. REQ-327's own exam_question_rule_tag join is the
+  concrete case: an unindexed join column on a table intended to be
+  queried through.
+
+  Related but distinct from constraint emission, which DOES work:
+  unique_constraint_clause/1 emits CONSTRAINT "<name>" UNIQUE (...), and
+  REQ-298 activated fk_def as real REFERENCES. The DDL generator handles
+  two of the three declarative structures and silently skips the third.
+
+  Severity MAJOR: no data loss, no security exposure, nothing crashes --
+  but a documented, validated, first-class part of the entity-definition
+  schema does nothing at all, and the gap is invisible to the author.
+
+  FIX DIRECTION: emit CREATE INDEX from ddl.ex alongside table creation,
+  using the declared index name (@identifier_format_regex already gates
+  it). Note Postgres index names are SCHEMA-scoped, so cross-entity
+  collision within one tenant schema is possible and must be checked --
+  REQ-327's convention happens to avoid it, but the platform does not
+  enforce it. Skip or dedupe where a unique constraint already provides
+  the index. Add a test asserting a declared index actually exists in
+  pg_indexes after promotion. Also audit whether any OTHER declarative
+  structure in Definition.t() is validated but never emitted.
+affected_files:
+  - lib/letflow/entities/definition/ddl.ex
+  - priv/packs/bilimbaga/entity_definitions
+queue_ref: Q-623
+github_ref: GH-1308

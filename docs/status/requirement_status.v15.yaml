@@ -288,6 +288,24 @@ history:
       precedent -- both hard-gate reviewers independently verified the
       7-test coverage as comprehensive. docs/issues/ISS-0617.yaml
       flipped to status: resolved.
+  - req: REQ-324
+    event: started
+    agent: ORCH
+    at: "2026-09-12T17:15:28Z"
+    note: >
+      Run WF02-REQ324-20260912. Claimed via get_next_task (queue task
+      618, GH#1297). Lifts Letflow.Entities.Definition.Validator's
+      Rule 9 (self-referential-FK rejection) per S10 gap 14, per
+      lib/letflow/design/req225-entity-definition-schema-validation.md's
+      own numbered open item 4, which anticipated this as follow-up
+      work. Must settle ON DELETE semantics for the self-edge (per
+      decision 0025), cycle prevention, the DDL generator's
+      self-reference handling (empirically verified against real
+      Postgres), and the query compiler's self-join path. Branch:
+      feature/WF02-REQ324-20260912. Dispatching ELIXIR-DEV next,
+      gated by REVIEWER (not a tenant-facing new route, but touches
+      the validator/DDL/compiler core, so SECURITY-REVIEWER's scope
+      test will decide whether it applies).
   - req: REQ-325
     event: done
     agent: ORCH

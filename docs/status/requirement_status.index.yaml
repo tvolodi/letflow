@@ -3141,12 +3141,16 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 5
+    entries: 6
     note: >
-      Incremented to 5 by ORCH's own REQ-325 done-event append
-      (WF02-REQ325-20260912) -- `grep -c "^  - req:"
-      docs/status/requirement_status.v15.yaml` = 5 on-disk entries;
-      331 lines, well under the roll ceiling.
+      Incremented to 6 by ORCH's own REQ-324 started-event append
+      (Step 00, WF02-REQ324-20260912), composed chronologically after
+      REQ-325's done-event append (WF02-REQ325-20260912) since REQ-324
+      started at 17:15:28Z, before REQ-325's done at 18:06:01Z -- both
+      appends landed on `main` independently and were reconciled by a
+      rebase of feature/WF02-REQ324-20260912 onto origin/main -- `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 6 on-disk
+      entries; well under the roll ceiling.
       Incremented to 4 by ORCH's own ISS-0617 SCOPE-CHANGE done-event
       append (fix/ISS-0617-20260912) -- `grep -c "^  - req:"
       docs/status/requirement_status.v15.yaml` = 4 on-disk entries;

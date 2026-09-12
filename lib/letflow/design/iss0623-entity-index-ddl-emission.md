@@ -1,10 +1,11 @@
 # ISS-0623 design — emit `CREATE INDEX` for `Definition.t()`'s `:indexes`
 
 GitHub #1308 / letflow-queue task 623. Fix for the root cause ISSUE-FIXER
-diagnosed (see handoff, reproduced in full at the bottom of this doc's
-"Provenance" section) and re-verified against the current tree while writing
-this design (2026-09-13, branch `issue/ISS-0623-20260913`, based on `main`
-at `d2b61548`):
+diagnosed (see the ORCH-supplied ISSUE-FIXER handoff for this branch — not
+reproduced verbatim in this doc; the citations below are this design's own
+re-verification of that handoff's claims against the current tree) and
+re-verified against the current tree while writing this design (2026-09-13,
+branch `issue/ISS-0623-20260913`, based on `main` at `d2b61548`):
 
 - `Letflow.Entities.Definition.DDL.generate_table_ddl/3`
   (`lib/letflow/entities/definition/ddl.ex:140-153`) never reads
@@ -96,13 +97,15 @@ value (e.g. to a map or 3-tuple):**
   separate calls**, in order, regardless of what shape carries them.
 - Given that, widening `generate_table_ddl/3`'s own return value (to
   `{:ok, {create_table_sql, index_sqls}}` or `{:ok, %{create_table: ..,
-  create_indexes: ..}}`) would silently break every one of the ~18 existing
-  call sites in `test/letflow/entities/definition/ddl_test.exs` that do
-  `assert {:ok, sql} = DDL.generate_table_ddl(...)` then `sql =~
-  "..."` — `sql` would stop being a bare string, and every such assertion
-  would need rewriting for a change that is, at its core, additive (a new
-  DDL statement kind), not a change to what `generate_table_ddl/3` already
-  correctly does for `CREATE TABLE`.
+  create_indexes: ..}}`) would silently break every one of the **16**
+  existing `DDL.generate_table_ddl(...)` call sites in
+  `test/letflow/entities/definition/ddl_test.exs` that do `assert {:ok,
+  sql} = DDL.generate_table_ddl(...)` then assert against `sql` (across
+  **31** `sql =~ "..."` content assertions in that file) — `sql` would stop
+  being a bare string, and every such assertion would need rewriting for a
+  change that is, at its core, additive (a new DDL statement kind), not a
+  change to what `generate_table_ddl/3` already correctly does for `CREATE
+  TABLE`.
 - `unique_constraint_clauses/1` (`ddl.ex:417-432`) is the direct precedent
   for exactly this shape: a sibling public function, independent of
   `generate_table_ddl/3`'s own return value, that both the fresh-`CREATE
@@ -117,7 +120,8 @@ value (e.g. to a map or 3-tuple):**
   keep compiling and passing unchanged. TEST-DESIGNER adds a new
   `describe "index_create_statements/2"` block plus the real-Postgres
   `pg_indexes` assertion (§7) — it does not have to touch any of the
-  ~18 existing `{:ok, sql}` assertions.
+  16 existing `DDL.generate_table_ddl(...)` call sites or their 31
+  `sql =~ "..."` assertions.
 
 ### Identifier validation (mirrors `unique_constraint_clause/1`'s posture)
 

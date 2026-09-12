@@ -586,11 +586,12 @@ defmodule Letflow.ServiceCatalogTest do
   # ---------------------------------------------------------------------------------
 
   describe "AC10: SolutionPack.service_catalog_entries hard-fail retained, ownership status documented" do
-    test "SolutionPack's moduledoc documents the service_catalog_entries policy as unowned" do
+    test "SolutionPack's moduledoc documents the service_catalog_entries policy as settled by 0027" do
       module_source = File.read!("lib/letflow/definitions/solution_pack.ex")
 
       assert module_source =~ "service_catalog_entries"
-      assert module_source =~ "UNOWNED"
+      assert module_source =~ "0027-solution-pack-service-catalog-install-policy.md"
+      assert module_source =~ "permanently NOT PERMITTED"
     end
 
     test "export/3 always emits service_catalog_entries: []" do

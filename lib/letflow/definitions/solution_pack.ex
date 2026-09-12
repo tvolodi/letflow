@@ -38,23 +38,29 @@ defmodule Letflow.Definitions.SolutionPack do
       that must populate that table, and without it the table ships empty and
       REQ-061's variable-schema rejection branch stays unreachable
       (ISS-0063 / GH#212).
-    * `service_catalog_entries` — **still not supported.** A
+    * `service_catalog_entries` — **still not supported, and now settled as
+      permanently NOT PERMITTED**, not merely unowned. A
       `Letflow.ServiceCatalog` now exists (REQ-191), but which
       tenant-visibility policy a packed catalog entry should install under
       — tenant-scoped-to-the-installer only (consistent with every other
       `install/3` write) or a `scope: :global`, cross-tenant-visible entry
       (which no other `install/3` write does, and which raises its own
-      write-authorization question) — **is currently UNOWNED. No open
-      requirement owns it.** This bullet previously deferred the decision to
-      REQ-192, on the reasoning that resolving `service_catalog_entries`
-      alongside the catalog's HTTP write-authorization policy (SVC-04:
-      `:AdminServicesManage`) would avoid inventing a second, possibly
-      inconsistent authorization stance later. That deferral is stale:
-      REQ-192 is `done` and landed the service-catalog route surface
-      *without* lifting this pack restriction, so nothing is pending that
-      would decide it. S10's gaps 4 (email) and 5 (PDF + QR rendering) both
-      want a packed catalog entry and are therefore blocked on this policy —
-      see `docs/migration/stage-10-bilimbaga-vertical.md`'s "Open questions"
+      write-authorization question) — is decided by
+      `docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md`:
+      the rejection is permanent, and any needed service-catalog entry is
+      provisioned out-of-band, through the existing `POST /service-catalog`
+      route (gated `:AdminServicesManage`, PLATFORM_ADMIN-only in the current
+      role matrix), not through a pack. This bullet previously deferred the
+      decision to REQ-192, on the reasoning that resolving
+      `service_catalog_entries` alongside the catalog's HTTP
+      write-authorization policy (SVC-04: `:AdminServicesManage`) would
+      avoid inventing a second, possibly inconsistent authorization stance
+      later. That deferral was stale: REQ-192 is `done` and landed the
+      service-catalog route surface *without* lifting this pack restriction.
+      0027 closes that gap permanently rather than reopening it. S10's gaps
+      4 (email) and 5 (PDF + QR rendering) are no longer blocked on this
+      policy — see
+      `docs/migration/stage-10-bilimbaga-vertical.md`'s "Open questions"
       section, which records the same thing. Export still always emits `[]`;
       install still **rejects** a non-empty array with
       `{:error, :unsupported_pack_section}` rather than silently discarding
@@ -866,11 +872,15 @@ defmodule Letflow.Definitions.SolutionPack do
   # comment previously named REQ-192 as the owning follow-up for deciding
   # the install-time visibility policy a packed entry would need; that is
   # stale. REQ-192 is done and landed the service-catalog route surface
-  # WITHOUT lifting this restriction, so the policy is currently UNOWNED --
-  # no open requirement owns it. S10's gaps 4 and 5 both want a packed
-  # catalog entry and are blocked on it (see
-  # docs/migration/stage-10-bilimbaga-vertical.md, "Open questions").
-  # Until some requirement owns and decides it, this hard-fail stays.
+  # WITHOUT lifting this restriction. That gap is now closed, permanently, by
+  # docs/migration/decisions/0027-solution-pack-service-catalog-install-policy.md:
+  # the policy is settled as permanently NOT PERMITTED, not unowned. Any
+  # needed service-catalog entry is provisioned out-of-band, through the
+  # existing POST /service-catalog route (gated :AdminServicesManage,
+  # PLATFORM_ADMIN-only in the current role matrix), not through a pack.
+  # S10's gaps 4 and 5 are no longer blocked on this policy (see
+  # docs/migration/stage-10-bilimbaga-vertical.md, "Open questions"). This
+  # hard-fail stays permanently, per 0027.
   # NOTE (ELIXIR-DEV, REQ-305): the design doc's §3 literally specifies a
   # joint `%{service_catalog_entries: [], entity_definitions: []}` passing
   # clause -- i.e. requiring entity_definitions to ALSO be empty. Implemented

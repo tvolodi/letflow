@@ -2907,10 +2907,24 @@ volumes:
 
   - volume: 14
     path: docs/status/requirement_status.v14.yaml
-    status: current
+    status: closed
     opened: 2026-09-11
-    entries: 33
+    closed: 2026-09-12
+    entries: 34
+    lines: 1240
+    bytes_working_tree: 72197
+    frozen_prefix_lines: 1213
+    frozen_prefix_sha256: "c322b1c39988d54d942574dd40841bd71d7ce05c9424f6d9ca5a28c180e0e622"
     note: >
+      Closed by ORCH at feature/WF02-REQ322-20260912's Step Final: REQ-322's
+      own done-event append (34th entry) brought the file to 1213
+      frozen-prefix lines -- over the 1,200-line roll ceiling. Closure
+      footer appended per the roll rule; `frozen_prefix_sha256` computed via
+      `sha256sum` BEFORE the footer was appended, over exactly the 1213
+      frozen-prefix lines. Successor: docs/status/requirement_status.v15.yaml,
+      created with this volume's own header text verbatim (volume number,
+      opening date and predecessor path updated only -- diffed against this
+      volume's original header to confirm).
       Incremented to 33 by WF02-REQ320-20260912 (DOC-UPDATER)'s own REQ-320
       close-out done-event append (Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v14.yaml` = 33 on-disk entries, no
@@ -3122,6 +3136,20 @@ volumes:
       updated) and an empty `history:` list, per this index's
       `roll_rule.on_exceed` procedure. `entries:` will be incremented
       per HOW-TO-APPEND step 6 as real appends land.
+
+  - volume: 15
+    path: docs/status/requirement_status.v15.yaml
+    status: current
+    opened: 2026-09-12
+    entries: 0
+    note: >
+      Opened by ORCH at feature/WF02-REQ322-20260912's Step Final,
+      successor to volume 14. Created with volume 14's header text
+      verbatim (volume number, opening date and predecessor path
+      updated) and an empty `history:` list, per this index's
+      `roll_rule.on_exceed` procedure -- diffed against volume 14's
+      original header to confirm only those fields changed. `entries:`
+      will be incremented per HOW-TO-APPEND step 6 as real appends land.
 
 
 known_anomalies:

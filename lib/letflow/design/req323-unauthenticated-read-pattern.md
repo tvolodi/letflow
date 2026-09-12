@@ -246,7 +246,7 @@ Rejected alternatives, with reasons:
 |---|---|
 | A sub-path *inside* `Letflow.Plugs.ApiPipeline` (i.e. under `/api/v1`) | `AuthPipeline` offers no seam (§0.2). Every credential-free request is 401'd and halted before `:dispatch`. This is precisely REQ-070's mistake that REQ-078 had to undo (`lib/letflow/plugs/api_pipeline.ex:75-80`). Non-starter, not a preference. |
 | Adding a public-path allowlist to `AuthPipeline` so a public route can live under `/api/v1` | Turns one plug that is trivially auditable ("no request without a valid bearer token gets past this") into one whose correctness depends on a path list staying right forever. The property in §0.2 is worth more than URL tidiness. A path-allowlist bug is silent and total. |
-| A sub-path of an existing public mount (e.g. `/api/tenant-config/...`) | Those three routers each answer one narrow question (login bootstrap, mobile login bootstrap, scrape target). Hanging an unrelated resource read off one of them would couple its never-error posture (§0.9 of the precedent / §6 here) to a route class that must *not* be never-error. |
+| A sub-path of an existing public mount (e.g. `/api/tenant-config/...`) | Those three routers each answer one narrow question (login bootstrap, mobile login bootstrap, scrape target). Hanging an unrelated resource read off one of them would couple its never-error posture (`lib/letflow/routers/tenant_config.ex:44-51`, and §9.2 D-1 here) to a route class that must *not* be never-error. |
 | A separate Bandit endpoint on its own port | Real isolation, but it changes the deployment surface (`deploy/`, compose, health checks) for a capability that has no instance yet. Disproportionate. Revisit only if the first instances prove to need independent resource limits. |
 | One new top-level forward per concrete public resource | Would repeat `/api/tenant-config`, `/api/mobile/tenant-config`, `/metrics`'s pattern of one bespoke top-level path per capability. Fine at three; not fine as a growth rule. `/api/public` is one mount that absorbs every future instance as a `<kind>` segment. |
 
@@ -270,10 +270,25 @@ Justification against the three existing mounts, each cited:
 HTTP surface Letflow serves is under `/api`; `/metrics` is outside it only because
 Prometheus scrape targets conventionally are. A resource read is an API read.
 
-**Module shape:** one `use Plug.Router` module, `Letflow.Routers.PublicRead`, with
-`plug(:match)` / `plug(:dispatch)` and no other plug in its own chain — identical in
-shape to `Letflow.Routers.TenantConfig` (`lib/letflow/routers/tenant_config.ex:150,
-183-192`). It fetches whatever it needs off the conn itself (`fetch_query_params/1` if
+**Module shape:** one `use Plug.Router` module, `Letflow.Routers.PublicRead`, whose own
+chain is §5's rate limiter, then `plug(:match)`, then `plug(:dispatch)`.
+
+Its *routing* shape — a `use Plug.Router` sub-router reached by a top-level `forward/2`,
+with one `get` clause and a `match _` catch-all — follows
+`Letflow.Routers.TenantConfig` (`lib/letflow/routers/tenant_config.ex:183-192`). Its
+*plug-chain* shape does not, and the difference is worth stating plainly rather than
+glossing: **no public mount in the tree has a leading plug today.** All three are a bare
+`plug(:match)` / `plug(:dispatch)` pair and nothing else —
+`tenant_config.ex:183-184`, `metrics_exposition.ex:94-95`,
+`mobile_tenant_config.ex:161-162`. The shape precedent for a router that runs plugs ahead
+of its own `plug(:match)` is `Letflow.Plugs.ApiPipeline`
+(`lib/letflow/plugs/api_pipeline.ex:88-138`), which runs five — `Admission(:global)`,
+`Plug.Parsers`, `:assign_trace_id`, `AuthPipeline`, `:release_global_admission`,
+`Admission(:tenant)`, `TenantStatus` — before `plug(:match)` at `:138`. That is the
+construction §5 reuses, at a different mount and with a different plug; it is ordinary
+`Plug.Router` usage, not a new mechanism.
+
+The router fetches whatever else it needs off the conn itself (`fetch_query_params/1` if
 a future instance needs query params; none is needed for the pattern as designed, which
 takes its only input from the path).
 
@@ -580,13 +595,54 @@ means an out-of-allowlist field *could not surface even if a write-time enforcem
 elsewhere were bypassed*. Allowlist-by-construction, not allowlist-by-filter.
 
 The projection *contract* — every `<kind>` implements this shape, and the router knows
-only this shape:
+only this shape. It is the one genuinely reusable interface this design creates, so it is
+specified as a behaviour rather than as prose:
 
-- **input:** the tenant-scoped resource struct, already fetched inside the correct
-  prefix, plus the handle row's own metadata;
-- **output:** `{:ok, map()}` — a map with string keys, or `:skip`, meaning "this
-  resource is not publishable in its current state," which the router turns into the
-  standard 404 (case 7).
+```elixir
+defmodule Letflow.PublicRead.Projection do
+  @typedoc "The tenant-scoped row a handle points at, fetched inside the derived prefix."
+  @type resource :: struct()
+
+  @typedoc """
+  The subset of the handle row a projection may see. Deliberately narrow: it carries
+  `issued_at` (which the envelope needs) and nothing a projection could leak — no
+  `tenant_id`, no `handle_hash`, no `resource_id`.
+  """
+  @type handle_meta :: %{issued_at: DateTime.t(), kind: String.t()}
+
+  @doc """
+  The Ecto schema module this kind's resource lives in. The router uses it for
+  round-trip 2 (`Repo.get(schema(), resource_id, prefix: derived_prefix)`), which is why
+  the projection module never issues a query of its own.
+  """
+  @callback schema() :: module()
+
+  @doc """
+  Builds the `"data"` value of the response envelope, or declines to publish.
+
+  MUST be pure: no `Repo` call, no `Application` read, no clock read, no process
+  dictionary. A projection that queries would break §4.3's round-trip count, which is an
+  INV-5 property, not a performance one.
+
+  Returns `{:ok, map}` with **literal string keys, hand-written in this function**, or
+  `:skip` when the resource is not publishable in its current state (§4.2 case 7), which
+  the router turns into the standard 404 — never into a distinguishable response.
+  """
+  @callback project(resource(), handle_meta()) :: {:ok, %{optional(String.t()) => term()}} | :skip
+end
+```
+
+The router's own side of the contract, for the same reason:
+
+```elixir
+@spec resolve(kind :: String.t(), handle :: binary()) ::
+        {:ok, %{optional(String.t()) => term()}} | :not_found
+```
+
+`:not_found` is a bare atom with no reason payload **by construction**: giving it a
+`{:not_found, reason}` shape would invite a caller to vary the response by reason, which
+is exactly what §4.2 forbids. The ten cases of §4.2 are indistinguishable at the type
+level, not merely by convention downstream.
 
 The **pattern-level** response envelope is exactly three top-level keys, and no
 projection may add a fourth:
@@ -625,9 +681,13 @@ someone forwards the link?"
 
 ### 4.5 Registration, so the router stays generic
 
-Kinds register a `{kind_string, projection_module}` pair — a compile-time list read from
-application config, in the same style `Letflow.Oidc.ClaimMappingConfig`/`JitProvisioningConfig`
-are consulted per-realm (`lib/letflow/plugs/auth_pipeline.ex:288, :301`). An unregistered
+Kinds register a `{kind_string, projection_module}` pair in application config, read at
+request time via `Application.fetch_env!/2` — the same style
+`Letflow.Oidc.ClaimMappingConfig` is consulted per-realm (`for_realm/1` at
+`lib/letflow/oidc/claim_mapping_config.ex:58-59` is exactly an `Application.fetch_env!(:letflow,
+:oidc_claim_mapping)` read, called from `lib/letflow/plugs/auth_pipeline.ex:291`).
+A runtime config read, not a compile-time one — so a kind can be enabled per environment
+without recompiling. An unregistered
 `<kind>` falls to the catch-all 404 with zero round-trips (case 8). The router contains
 no kind-specific branch, and adding a kind touches config plus one new projection module,
 never `Letflow.Routers.PublicRead` itself.
@@ -646,7 +706,7 @@ already in the tree to inherit.
 | **What is limited** | Every request reaching the `/api/public` forward, counted before dispatch and before any database work. |
 | **Keyed by** | The client IP, as resolved from the connection peer (`conn.remote_ip`), **not** from an `X-Forwarded-For` header unless a trusted-proxy configuration explicitly authorises it — an attacker-settable header as a limiter key is a bypass, not a key. Deliberately **not** keyed by handle: keying by handle would give each guessed handle its own bucket, which is the opposite of what a brute-force limiter is for. |
 | **Second key** | A separate, much tighter global bucket for `/api/public` as a whole, so a distributed source cannot bypass the per-IP bucket by spreading across addresses. |
-| **Where it sits** | As the first plug **inside** `Letflow.Routers.PublicRead`'s own chain, ahead of `plug(:match)` — i.e. after the forward, so it covers this route class and only this route class. Explicitly **not** on `Letflow.Router`, which would put it in front of `GET /health` (whose contract `deploy/redeploy-test.sh` pins, `lib/letflow/router.ex:17-19`) and `GET /metrics` (whose scrape must not be throttled). |
+| **Where it sits** | As the first plug **inside** `Letflow.Routers.PublicRead`'s own chain, ahead of `plug(:match)` — i.e. after the forward, so it covers this route class and only this route class. This makes `PublicRead` the first public sub-router in the tree with a leading plug (§2); the construction precedent is `Letflow.Plugs.ApiPipeline`, which runs five plugs ahead of its own `plug(:match)` (`lib/letflow/plugs/api_pipeline.ex:88-138`), not the three bare-`plug(:match)` public routers. Explicitly **not** on `Letflow.Router`, which would put it in front of `GET /health` (whose contract `deploy/redeploy-test.sh` pins, `lib/letflow/router.ex:17-19`) and `GET /metrics` (whose scrape must not be throttled). |
 | **Algorithm** | Token bucket over ETS, one process-local table, same hand-rolled-over-a-dependency posture `Letflow.Metrics.Registry` already established for this codebase. Single-node semantics, and that limitation is disclosed rather than hidden: with multiple nodes each enforces its own bucket, so the effective global limit multiplies by node count. Acceptable for a first instance; a distributed limiter is a separate requirement if and when Letflow runs multi-node. |
 | **Response when limited** | `429` via `Letflow.Api.Response.rate_limited/2` (`lib/letflow/api/response.ex:173`), which already exists. **This is the one permitted departure from §4.2's single-response rule**, and it is safe precisely because it is *input-independent*: a limited caller gets 429 for **every** request, valid handle or not, so the 429/404 boundary carries no information about any handle. It must be enforced before resolution so that this stays true. |
 | **Owner** | The requirement that mounts the first `/api/public` instance. This design makes the limiter a **hard prerequisite of that mount**: the route class must not be mounted with the limiter deferred. Stated here so a later reader cannot read "deferred plug, S4, to port" (`lib/letflow/plugs/api_pipeline.ex:59`) as licence to ship without one. |
@@ -773,7 +833,7 @@ Three points, each deliberate:
   failure crash rather than fail open (`:38-48`). This route class inherits that posture
   in a form appropriate to it: a database error during round-trip 1 must **not** be
   rescued into a 200 or into a "default" projection. It produces the same 404 as every
-  other refusal (never-error is the precedent's rule, and §9 explains why this design
+  other refusal (never-error is the precedent's rule, and §9.2 D-1 explains why this design
   does *not* copy it wholesale) — or, if unrescued, crashes the request process under
   Bandit's existing isolation. What it must never do is serve content.
 
@@ -799,7 +859,47 @@ the protection is comparable in placement even though the algorithm differs.
 
 ---
 
-## 9. Generic or one-off
+## 9. The `TenantConfig` precedent: what this design copies and what it does not
+
+`lib/letflow/routers/tenant_config.ex` (REQ-078/REQ-281) is the closest existing thing to
+this pattern — the only router in the tree that reads a database from an unauthenticated
+mount. It was read in full and used as the working precedent. This section is the
+itemised account of that use: what was taken, and what was deliberately left, with a
+reason for each divergence. The analysis behind each row lives in the section cited; this
+table is where the two lists are set against each other.
+
+### 9.1 COPIED from `Letflow.Routers.TenantConfig`
+
+| # | What is copied | Where it lands here |
+|---|---|---|
+| C-1 | **The mount tier itself** — a top-level `forward/2` on `Letflow.Router` declared *ahead* of the `/api/v1` forward, because `AuthPipeline` offers no bypass and there is nothing to opt out of (`router.ex:99-101`). | §2. Same tier, same reason. |
+| C-2 | **The route-table-in-the-moduledoc form** — Handler / Method-path / Delegate / Auth / Response columns (`tenant_config.ex:8-10`). | §1, deliberately in the same five columns so the two are comparable side by side. |
+| C-3 | **Hand-built response maps with literal named keys** — never `Map.from_struct/1`, never a filter over a full record, never a merge (`config_map/2` at `:253-259`, `branding_from_settings/1` at `:271-288`). Allowlist-by-construction, so an out-of-allowlist field could not surface even if a write-time check elsewhere were bypassed (`:266-270`). | §4.4, copied verbatim as the rule, and extended into the `project/2` callback so every future kind inherits it. |
+| C-4 | **"Adding a field is a security change, not a feature"** as a standing rule attached to the response shape rather than left to reviewer memory. | §4.4's governing rule, plus a clause the precedent has no need for (the bearer-link audience test). |
+| C-5 | **Stating the bounded inference the endpoint accepts, instead of claiming there is none** (`:53-56`, `:74-77`). | §6, three inferences, each with why it is tolerable. |
+| C-6 | **Refusing to add a `Host`→tenant binding.** The precedent records that Letflow has no such binding and that adding one without an owning requirement is forbidden (`:93-96`). | §3.2's forbidden list; that finding was re-verified as still true, not inherited. |
+| C-7 | **The REQ-056 "table with no producer" failure mode** (`:99-106`). | §3.5 and OQ-1: `public_read_handles` must land with its first writer. |
+| C-8 | **Mounting no `Plug.Parsers` and no trace-id plug**, and treating that as a consequence to decide rather than a gap to fill (`:127-139`). | §8, all three consequences itemised and decided. |
+
+### 9.2 NOT copied, with the reason for each divergence
+
+| # | What is **not** copied | Reason for the divergence |
+|---|---|---|
+| **D-1** | **The never-error rule — copied in spirit, INVERTED in form.** The precedent's central posture is *always 200, with a default body*: an unresolvable `?realm=` yields the same 200 and the same key set as a resolved one (`:44-51`), and it emits no problem document, ever (`:137`). This design is the mirror image — **always 404**, never a default body, on every one of §4.2's ten cases. | The *principle* is identical and is copied: the response must not vary by whether the input resolved. Only the constant differs, and it must differ because the two endpoints serve different things. The precedent serves **configuration for a login page that must always render** — a browser with an unknown realm still needs an OIDC authority and a brand colour, so a default body is a legitimate answer and withholding it would break the login flow. This design serves **a tenant's actual resource content**, for which there is no such thing as a default: serving a placeholder projection for a handle that resolved to nothing would be fabricating tenant data and handing it to an anonymous caller. So the invariant response is the refusal, not a default. §7.2's last row and §8's third row carry the same point where it bears on fail-closed behaviour and on problem documents. |
+| **D-2** | **The enumerable `?realm=<slug>` input — deliberately rejected.** The precedent's sole input is a human-chosen, guessable tenant slug in a query parameter. This design accepts no query parameter at all, and its sole input is a 256-bit CSPRNG handle in the path (§3.3). | The precedent can afford an enumerable input *only* because of D-1: a wordlist of slugs is harmless against an endpoint whose status and body never vary, so the enumerability is neutralised downstream. That defence does not transfer. Here the response necessarily varies — a resolved handle returns content and an unresolved one cannot — so an enumerable input would be an oracle by construction, and no amount of response discipline would close it. The two designs therefore reach the same place from opposite ends: the precedent makes the *response* invariant and tolerates a guessable input; this design makes the *input* unguessable **and** keeps the response invariant, because the two failure modes are different and neither alone suffices (§3.3's closing paragraph). A further consequence: `?realm=` names a tenant, and a caller-supplied tenant hint on a route that reaches inside a tenant schema is an INV-1 violation regardless of the oracle question — which is why §3.2 elevates it from "not copied" to "forbidden". |
+| **D-3** | **The bare `plug(:match)`/`plug(:dispatch)` chain.** The precedent's router runs no plug of its own (`:183-184`), as do `metrics_exposition.ex:94-95` and `mobile_tenant_config.ex:161-162`. `PublicRead` runs §5's rate limiter first. | The three existing public mounts are cheap and bounded: two read one row of the global `tenants` table, one reads process-local ETS. This route class reaches inside a tenant schema on every hit and is reachable by anyone, so an unbounded request rate is a real exposure rather than a theoretical one. §5 makes the limiter a hard precondition of mounting. The construction precedent for a leading plug is `Letflow.Plugs.ApiPipeline` (`api_pipeline.ex:88-138`), not any public router — stated plainly in §2 because it means `PublicRead` will be the first public mount in the tree with one. |
+| **D-4** | **Reading only the global `tenants` table.** The precedent touches no tenant schema and derives no prefix, and says so (`:141-147`). | This is the whole reason the requirement exists. Reaching inside a tenant schema with no token is the problem the precedent never had, and it is what forces the handle registry (§3.2), the prefix derivation (§3.2 step 3), and the INV-1 argument in §3 — none of which the precedent needed a single line for. |
+| **D-5** | **Emitting no problem document.** The precedent states it emits none, ever (`:137`), and lists "no problem-document shaping" as a consequence of mounting outside the pipeline (`:127-139`). | Superseded by a verified fact rather than by preference: `Response.send_problem/2` works correctly outside the pipeline, because `effective_trace_id/2` falls back to `conn.assigns[:trace_id] \|\| ""` (`response.ex:196`). The precedent could list it as a consequence only because it never needed one. This design needs one on every refusal, and needs it to come from `Response.not_found/1` specifically — a hand-rolled 404 body would fingerprint the router against `Letflow.Router`'s own catch-all, which is §4.2's mechanism. Full argument in §8, row 3. |
+| **D-6** | **`fetch_query_params/1`.** The precedent calls it (`:139`, `:200`). | Nothing to fetch. The pattern takes its only input from a path segment and §3.2 forbids adding a query parameter, so calling it would be dead code that also suggests a query input exists. §8, row 1. |
+| **D-7** | **Serving a default on a lookup failure.** The precedent's fail-open default body is correct for it (D-1). | §7.2's last row: a database error during round-trip 1 must never be rescued into a 200 or a default projection. It produces the standard 404, or crashes the request under Bandit's per-request isolation. Fail-closed, in the posture `TenantStatus` already takes (`tenant_status.ex:38-48`). |
+
+Neither list is "the precedent was consulted": C-1..C-8 are things this design would have
+had to invent had `tenant_config.ex` not existed, and D-1..D-7 are places where following
+it would have produced a wrong design.
+
+---
+
+## 9.3 Generic or one-off
 
 **Position, in one sentence: this is a generic, reusable mount-plus-plug shape — one
 `/api/public` forward, one `Letflow.Routers.PublicRead` router, one handle registry, one
@@ -883,9 +983,21 @@ decision 0024). Applying that same test here gives the opposite answer, on three
    route class at all, and why does it look like this" is exactly the question decision
    records exist to answer once.
 
-The record is short and states the decision and its standing prohibitions; this design
-doc remains the place for the full mechanism, the way `0024` is short and REQ-295's
-design carries the detail.
+**The division of labour between the two files, stated on its own merits.** The record is
+short — it carries the decision, the standing prohibitions, and the accepted bounded
+inference; this design doc carries the derivation, the round-trip analysis, the
+source-line citations and the rejected alternatives. The reason for splitting it that way
+is not that some earlier pair did: it is that the two files have different audiences and
+different lifetimes. A future requirement touching `/api/public` must read the
+prohibitions — all of them, reliably — and a 164-line record is read to the end where a
+1000-line one is skimmed. The derivation, by contrast, is read once, by whoever builds the
+first instance, and re-read only if someone wants to reopen the decision.
+
+No precedent is claimed for that split, because the tree does not support one. The pairing
+this design originally cited runs the *other* way: `0024-entity-promotion-ddl-execution.md`
+is 616 lines and `req295-entity-promotion-ddl-execution.md` is 205 — the record is the long
+half there, the inverse of the division chosen here. Recorded rather than deleted, so the
+comparison is not made again by someone else reasoning from memory.
 
 ---
 
@@ -1078,6 +1190,12 @@ $ grep -rnwiE "exam|exams|certificate|certificates|certification|candidate|candi
     docs/migration/decisions/0028-unauthenticated-read-boundary.md
 ```
 
-Zero hits across both files this requirement produces, other than this section's own
-grep pattern. A reviewer reading either file cannot tell which vertical motivated it —
-which is the test rule 1 sets.
+Re-run after rework round 1 (2026-09-12), over both artefacts as they now stand: **one
+hit, and it is this section's own grep-pattern literal on the command line above.** Zero
+hits in the prose, identifiers or examples of either file. A reviewer reading either file
+cannot tell which vertical motivated it — which is the test rule 1 sets.
+
+The interfaces added in §4.4 during that rework were checked against the same rule:
+`Letflow.PublicRead.Projection`, `schema/0`, `project/2`, `resource`, `handle_meta`,
+`resolve/2` and `:not_found` are all domain-neutral and would read identically had a
+different vertical motivated this requirement.

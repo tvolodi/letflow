@@ -7,7 +7,11 @@ Status: decided (2026-09-12, `CODE-DESIGNER`, REQ-323), pending its own
 Full mechanism: `lib/letflow/design/req323-unauthenticated-read-pattern.md`. This
 record is deliberately short — it carries the decision and the prohibitions that bind
 future requirements; the design doc carries the derivation, the round-trip analysis and
-the source citations. Same division as `0024` and REQ-295's design.
+the source citations. That split is chosen on its own merits, not by precedent: the
+prohibitions below must be read to the end by every future requirement touching
+`/api/public`, and a short record is read where a long one is skimmed. (Records in this
+tree vary — `0024` is the long half of its own pair — so there is no house division to
+follow here.)
 
 ## Question
 

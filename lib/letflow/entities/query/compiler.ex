@@ -1051,6 +1051,36 @@ defmodule Letflow.Entities.Query.Compiler do
   # "ON condition: joined table's <fk column> (promoted-name path, §3.4)")
   # -- an fk_def().field is never one of the fixed 7 in any of this
   # requirement's worked examples.
+  #
+  # REQ-324 (S10 gap 14, open question 4): the fk-column side used to be
+  # `fragment("?", literal(^fk_field))` -- Ecto's `literal/1` fragment
+  # helper, which quotes a runtime string as a SQL identifier but never
+  # qualifies it with a table/binding prefix. That was unambiguous for
+  # every non-self join this design was originally built against (each
+  # hop's two sides are always two DIFFERENT physical tables, so Postgres
+  # resolves the bare column name with no qualifier needed), but a
+  # self-referential fk_def joins the SAME physical table to itself under
+  # two different Ecto bindings (`:primary` and a `@join_alias_pool`
+  # alias) -- both bindings carry a column of that name, and the
+  # unqualified fragment raised Postgres `ambiguous_column` (confirmed
+  # empirically against a self-join before this fix: see
+  # `test/letflow/entities/query_self_join_test.exs`).
+  #
+  # Fixed by using `field(as(^alias), ^fk_field)` instead of the bare
+  # fragment. Ecto's `field/2` accepts a runtime STRING (not just an
+  # atom) as its column-name argument when the source is a named binding
+  # (`as(^alias)`) -- `Ecto.Query.Builder.atom_or_string!/2` (the runtime
+  # check Ecto's own macro expansion compiles `field(as(^b), ^x)` down to)
+  # returns a binary unchanged, never converting it to an atom. This is
+  # exactly this module's own existing invariant restated elsewhere in this
+  # file ("`column_atom` sourced only from `Allowlist.typed_columns/0`'s
+  # own fixed, closed table -- never `String.to_atom/1` on caller input");
+  # `field/2`'s string form gets us a properly alias-qualified,
+  # injection-safe reference (the SQL adapter quotes it the same way
+  # `literal/1` did) with zero new atoms created and zero reliance on
+  # guessing Ecto's internally-generated positional alias text (`e0`,
+  # `e1`, ...), which is NOT the same string as the `as:` binding name and
+  # cannot be reproduced from outside Ecto's own query-compilation step.
   defp hop_on_dynamic(%{
          from_alias: from_alias,
          from_source: from_source,
@@ -1063,9 +1093,9 @@ defmodule Letflow.Entities.Query.Compiler do
        }) do
     eq =
       if from_owns_fk do
-        dynamic([], fragment("?", literal(^fk_field)) == field(as(^to_alias), :record_id))
+        dynamic([], field(as(^from_alias), ^fk_field) == field(as(^to_alias), :record_id))
       else
-        dynamic([], field(as(^from_alias), :record_id) == fragment("?", literal(^fk_field)))
+        dynamic([], field(as(^from_alias), :record_id) == field(as(^to_alias), ^fk_field))
       end
 
     eq

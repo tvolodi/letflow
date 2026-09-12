@@ -1,0 +1,148 @@
+run_id: WF02-REQ324-20260912
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-13T00:20:00Z"
+branch: feature/WF02-REQ324-20260912
+head_commit: 4e6980fc
+prior_commit: 87fb4d6f
+
+git_state:
+  clean_tree: true
+  note: >
+    REQ-324's own implementation (87fb4d6f) touched
+    lib/letflow/entities/definition/validator.ex,
+    lib/letflow/entities/query/compiler.ex, and their tests. Already
+    passed REVIEWER. Before this run, ELIXIR-DEV's own local
+    mix letflow.check reported 2 pre-existing/unrelated failures
+    (Letflow.Scheduler.PollerTest, and Letflow.Simulation.Req207VortexTest
+    tripped by REQ-324/REQ-325's mere presence in docs/requirements.yaml).
+  diff_scope_this_run: >
+    One additional commit made in this run, 4e6980fc, admitting REQ-324
+    into the Req207VortexTest entity-title allowlist (test-only, no lib/
+    change). See "tripwire_triage" below for the full determination.
+
+tripwire_triage:
+  mechanism: >
+    test/letflow/simulation/req207_vortex_test.exs asserts
+    Letflow.Routers.Entities' route set by equality (Signal 3'') and
+    scans docs/requirements.yaml for any `title:` line matching
+    /entit(y|ies)/i, requiring every matched requirement id to be
+    explicitly triaged into `allowed_ids` (builds nothing this scenario
+    needs, or already re-derived) or `pending_only_ids` (builds the HTTP
+    surface, admitted conditionally while status: pending).
+  requirements_checked:
+    - id: REQ-324
+      title_matches_regex: true
+      title: "Lift Definition.Validator Rule 9 so an entity may declare a foreign key to itself, with ON DELETE, cycle, DDL and join-path semantics all settled (S10 gap 14)"
+      determination: >
+        Design-only-shape does not apply (owner is ELIXIR-DEV and it did
+        land real code), but it is NOT the REQ-310/311 shape either.
+        `git show --stat 87fb4d6f` touches only
+        lib/letflow/entities/definition/validator.ex,
+        lib/letflow/entities/query/compiler.ex, and their tests -- no
+        file under lib/letflow/routers/ or lib/letflow/api/, no new
+        permission atom, no route added to or removed from
+        Letflow.Routers.Entities. Signal 3'' (route-set equality) is
+        untouched. The Query.Compiler fix (hop_on_dynamic/1 qualifying
+        the fk-column side of a join's ON condition) only changes
+        behaviour for a self-referential fk_def joining the same
+        physical table to itself; entity-list-filter-and-page.yaml's
+        fixture uses ordinary, non-self-referential entity types and
+        never exercises a self-join. This scenario's six :gui steps
+        (individual-record list/filter/sort/page/redaction) are served
+        exclusively by REQ-311's POST /entities/query and are unaffected.
+        Admitted to `allowed_ids` unconditionally.
+      action_taken: "Added to allowed_ids in commit 4e6980fc, with a full re-derivation comment matching the file's established precedent (REQ-310/311/315/317 style)."
+    - id: REQ-325
+      title_matches_regex: false
+      title: "Decision record on whether the solution pack remains the delivery vehicle for scripted rules and role seeding, or whether the twice-recurring section gap means it is not (S10 gaps 16 and 17)"
+      determination: "Title contains no word-bounded 'entity'/'entities' -- does not trip the tripwire. No action needed."
+  verification: "mix test test/letflow/simulation/req207_vortex_test.exs run standalone after the fix: Result: 4 passed (0 failures)."
+
+environment:
+  docker_compose: "letflow-postgres-1 and letflow-keycloak-1 already running (docker compose up -d, no-op). No .env LETFLOW_DB_PORT override present; default port 5462 in effect."
+
+backend_suite:
+  command: "scripts/test_parallel.sh"
+  partitions: 16
+  parallelism_source: "N=16 (source: nproc)"
+  result: "PASS (3 of 4021 failing, all confirmed pre-existing parallel-load flakes, none touching REQ-324's diff)"
+  output: |
+    test_parallel: N=16 (source: nproc)
+    test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+    test_parallel: TEST_POOL_SIZE=5 (computed: N=16, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+    test_parallel: seeding 16 per-partition build paths from _build/test (sequential)
+    partition 1: 308 tests, 0 properties, 0 failures, exit 0
+    partition 2: 300 tests, 0 properties, 1 failures, exit 2
+    partition 3: 337 tests, 2 properties, 0 failures, exit 0
+    partition 4: 255 tests, 0 properties, 0 failures, exit 0
+    partition 5: 237 tests, 0 properties, 1 failures, exit 2
+    partition 6: 225 tests, 0 properties, 0 failures, exit 0
+    partition 7: 305 tests, 0 properties, 0 failures, exit 0
+    partition 8: 211 tests, 1 property, 1 failures, exit 2
+    partition 9: 189 tests, 0 properties, 0 failures, exit 0
+    partition 10: 253 tests, 0 properties, 0 failures, exit 0
+    partition 11: 212 tests, 1 property, 0 failures, exit 0
+    partition 12: 177 tests, 0 properties, 0 failures, exit 0
+    partition 13: 389 tests, 0 properties, 0 failures, exit 0
+    partition 14: 212 tests, 0 properties, 0 failures, exit 0
+    partition 15: 202 tests, 0 properties, 0 failures, exit 0
+    partition 16: 203 tests, 2 properties, 0 failures, exit 0
+    ---
+    combined: 4015 tests, 6 properties, 3 failures (4018/4021 passed)
+  failures:
+    - test: "the template itself is faithful to a genuine migration build two concurrent reference-schema builds do not collide"
+      module: "Letflow.Test.TenantTemplateTest"
+      file: "test/support/tenant_template_test.exs:108"
+      assertion_output: |
+        ** (exit) exited in: Task.await_many(..., 30000)
+            ** (EXIT) time out
+        code: |> Task.await_many(30_000)
+        stacktrace:
+          test/support/tenant_template_test.exs:116: (test)
+      isolation_rerun: "mix test test/support/tenant_template_test.exs -> Result: 7 passed. Passes clean alone."
+      attribution: "Concurrency/timeout flake under 16-way partition load contending for Postgres connections/CPU; unrelated file, not touched by this branch's diff (validator.ex, query/compiler.ex)."
+    - test: "REQ-218 AC3 (per-schema clause): a rejected schema's other ops still proceed -- the same schema's retention sweep still runs after its own poll_and_fire was rejected, in the same tick"
+      module: "Letflow.Scheduler.PollerTest"
+      file: "not captured in this excerpt (see partition-5.log:14198)"
+      isolation_rerun: "Not re-run standalone this pass -- explicitly named in the task briefing as a known, previously-confirmed timing flake under parallel load that passes alone; signature matches exactly."
+      attribution: "Known pre-existing flake, named in briefing. Unrelated to REQ-324's diff."
+    - test: "scoped_repo_opts/1 API shape scoped_repo_opts/1 is 1-arity -- no tenant/schema/prefix parameter exists to pass"
+      module: "Letflow.Api.ContextTest"
+      file: "test/letflow/api/context_test.exs:103-104"
+      assertion_output: |
+        Expected truthy, got false
+        code: assert function_exported?(Context, :scoped_repo_opts, 1)
+      isolation_rerun: "mix test test/letflow/api/context_test.exs -> Result: 11 passed. Passes clean alone."
+      attribution: >
+        function_exported?/3 raced module loading under 16-way parallel
+        load; lib/letflow/api/context.ex does define scoped_repo_opts/1
+        (confirmed by grep -n, line 219) and this file is untouched by
+        REQ-324's diff. Same flake class named in an earlier session's
+        report (report-20260911-WF02-REQ306-20260910.yaml) as
+        "Letflow.Api.ContextTest scoped_repo_opts/1 race".
+
+req324_specific_checks:
+  - check: "test/letflow/entities/definition/validator_test.exs (Rule 9 rejection test updated/removed)"
+    result: "Included in partition run, no failures attributed to this file."
+  - check: "test/letflow/entities/query_self_join_test.exs (new REQ-324 self-join coverage)"
+    result: "Included in partition run, no failures attributed to this file."
+  - check: "Letflow.Simulation.Req207VortexTest (the tripwire this run's briefing specifically asked to triage)"
+    result: "PASS, 4/4, after admitting REQ-324 to allowed_ids in commit 4e6980fc (see tripwire_triage above)."
+
+verdict: PASS
+verdict_reasoning: >
+  4018/4021 tests passed across a clean single 16-partition run. All 3
+  failures were individually re-run in isolation (or, for PollerTest,
+  matched exactly against this run's own briefing naming it a
+  previously-confirmed flake) and confirmed to pass standalone -- none
+  touch REQ-324's diff (lib/letflow/entities/definition/validator.ex,
+  lib/letflow/entities/query/compiler.ex). The one real action this run
+  took was triaging the Req207VortexTest entity-title tripwire for
+  REQ-324 (admitted to allowed_ids, full re-derivation recorded in
+  commit 4e6980fc) and REQ-325 (does not trip the tripwire -- title has
+  no word-bounded "entity"/"entities"). Post-triage, Req207VortexTest
+  passes 4/4 standalone.
+next_action: >
+  Report PASS to ORCH. RELEASE-VALIDATOR re-runs the suite independently
+  rather than trusting this report.

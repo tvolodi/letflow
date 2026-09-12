@@ -1449,7 +1449,54 @@ defmodule Letflow.Simulation.Req207VortexTest do
           "REQ-317",
           "REQ-318",
           "REQ-319",
-          "REQ-320"
+          "REQ-320",
+          # REQ-324, admitted 2026-09-12 -- lifts Definition.Validator Rule 9
+          # (self-referential fk_def) and fixes a Query.Compiler self-join
+          # ambiguity this exposed (main commit 87fb4d6f). Re-derived, not
+          # waved through: `git show --stat 87fb4d6f` touches only
+          # lib/letflow/entities/definition/validator.ex and
+          # lib/letflow/entities/query/compiler.ex plus their tests -- no
+          # file under lib/letflow/routers/ or lib/letflow/api/, no new
+          # permission atom, no route added to or removed from
+          # Letflow.Routers.Entities, so Signal 3''s eleven/fifteen-route
+          # equality assertion is untouched by this commit. The
+          # Query.Compiler change only matters for a self-referential join
+          # (same physical table on both sides of a fk-column condition);
+          # this scenario's fixture (entity-list-filter-and-page.yaml) uses
+          # ordinary, non-self-referential entity types and never exercises
+          # a self-join, so the fix changes nothing this scenario's six
+          # :gui steps read through. Those six remain individual-record
+          # list/filter/sort/page/redaction reads, all served exclusively by
+          # REQ-311's POST /entities/query, unaffected by Rule 9's lift.
+          # Disposition unchanged: still BLOCKED_ON_DEPENDENCY on S8's
+          # :gui-dispatch stub (Signal 5), nothing under lib/ left for this
+          # scenario to wait on.
+          "REQ-324",
+          # REQ-326/327/328, admitted 2026-09-13 -- filed on `main`
+          # (chore/WF01-REQ326-328-20260912, commits 4215fd21/bb5080d5,
+          # merged via #1304) and discovered when rebasing
+          # feature/WF02-REQ324-20260912 onto the moved `main`. All three
+          # are bucket A per decision 0022 (each description's own first
+          # line: "AUTHORS PACK CONTENT, NOT PLATFORM CODE"), owner
+          # REQ-ANALYST, `status: pending` at admission time (filing builds
+          # nothing, same basis as REQ-295/296/299/300/302/304/308/309/
+          # 312/314's precedent above). Their own scope fences/acceptance
+          # criteria state the diff lands ONLY under priv/packs/bilimbaga/
+          # and a new test/letflow/packs/ file -- no lib/letflow/routers/,
+          # no lib/letflow/entities/, no lib/letflow/api/, no route added
+          # to or removed from Letflow.Routers.Entities. None of them is
+          # the REQ-310/311 shape: REQ-326/327 author entity_definitions
+          # pack content (question-bank / exam-configuration), REQ-328
+          # authors and installs the pack document via a real
+          # SolutionPack.install/3 -- none mounts, extends or reads through
+          # an HTTP route this scenario's six :gui steps depend on (those
+          # six remain individual-record list/filter/sort/page/redaction
+          # reads, served exclusively by REQ-311's POST /entities/query).
+          # Disposition unaffected either way -- still BLOCKED_ON_DEPENDENCY
+          # on S8's :gui-dispatch stub.
+          "REQ-326",
+          "REQ-327",
+          "REQ-328"
         ])
 
       # SECOND-TIER ALLOWLIST -- admitted ONLY WHILE `status: pending`.

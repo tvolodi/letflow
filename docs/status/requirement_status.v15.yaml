@@ -288,6 +288,24 @@ history:
       precedent -- both hard-gate reviewers independently verified the
       7-test coverage as comprehensive. docs/issues/ISS-0617.yaml
       flipped to status: resolved.
+  - req: REQ-324
+    event: started
+    agent: ORCH
+    at: "2026-09-12T17:15:28Z"
+    note: >
+      Run WF02-REQ324-20260912. Claimed via get_next_task (queue task
+      618, GH#1297). Lifts Letflow.Entities.Definition.Validator's
+      Rule 9 (self-referential-FK rejection) per S10 gap 14, per
+      lib/letflow/design/req225-entity-definition-schema-validation.md's
+      own numbered open item 4, which anticipated this as follow-up
+      work. Must settle ON DELETE semantics for the self-edge (per
+      decision 0025), cycle prevention, the DDL generator's
+      self-reference handling (empirically verified against real
+      Postgres), and the query compiler's self-join path. Branch:
+      feature/WF02-REQ324-20260912. Dispatching ELIXIR-DEV next,
+      gated by REVIEWER (not a tenant-facing new route, but touches
+      the validator/DDL/compiler core, so SECURITY-REVIEWER's scope
+      test will decide whether it applies).
   - req: REQ-325
     event: done
     agent: ORCH
@@ -329,6 +347,128 @@ history:
       lib/letflow/definitions/, lib/letflow/identity/,
       lib/letflow/engine/, migrations, test/, or the stage file
       touched. docs/requirements.yaml flipped pending -> done.
+  - req: REQ-326
+    event: done
+    agent: ORCH
+    at: "2026-09-12T19:38:08Z"
+    note: >
+      REQ-326 (queue task 620, GH#1301, no depends_on) implemented via
+      feature/WF02-REQ326-20260912: authored five bucket-A entity-
+      definition documents under priv/packs/bilimbaga/entity_
+      definitions/ (category, tag, question, answer_option,
+      question_tag) plus priv/packs/bilimbaga/README.md and a
+      validator test -- the first pack content authored in S10,
+      unblocking P2's exit condition. Ports the source's two per-locale
+      translation tables into their parent entity's :localized_text
+      field (REQ-301's mechanism); question_tag authored as a join
+      entity type per docs/anti-patterns.md's array-of-references
+      entry and REQ-300's join-entity shape; answer_option kept as a
+      separate entity type so is_correct is a first-class promoted
+      field for FieldGrants redaction (REQ-231). Every indexes/
+      foreign_keys/constraints entry carries a name following the
+      <prefix>_<entity>_<columns> convention. Deliberately omitted, per
+      document: id/created_at/updated_at (record subsystem supplies
+      these); created_by on question (event stream's actor_id answers
+      authorship instead, since an entity fk_def cannot cross into
+      identity.users); parent_id on category and question
+      (Definition.Validator Rule 9 rejects self-referential fk_def
+      today, REQ-324 pending lifts it, no workaround substituted).
+
+      Pipeline: REQ-ANALYST (owner per the requirement's own rationale
+      -- content documents in an already-designed format, no interface
+      or @spec left to design) -> REVIEWER PASS (independently verified
+      every field/type/citation against the requirement's detailed
+      specification field by field, confirmed Rule 2's shared fk+
+      constraint uniqueness-scope claim by reading the validator
+      directly, independently ran the new test: 18 passed). No
+      SECURITY-REVIEWER gate -- static pack content with no route, no
+      migration, no live data path; REQ-328 owns the actual install
+      wiring. 0022's rule 1 does not apply -- bucket A, naming domain
+      vocabulary is the deliverable, not a violation. Scope fence held
+      -- only priv/packs/, the one new test file, and docs/
+      requirements.yaml status bookkeeping; no lib/letflow/, web/,
+      priv/repo/migrations/, or docs/migration/ touched.
+
+      SEPARATE FINDING, not part of this requirement's scope: mix
+      letflow.check's full run surfaced a pre-existing,
+      REQ-326-unrelated failure in Req207VortexTest -- its hardcoded
+      REQ-id allowlist has not been reconciled for REQ-324's entry
+      (filed via a separate concurrent WF-01 session, title contains
+      "entity"). Confirmed via `git diff main --stat` (empty on this
+      branch) that the failure predates and is independent of REQ-326;
+      to be filed as its own issue (note: TEST-RUNNER already fixed
+      this tripwire as part of REQ-324's own PR #1306, triaging
+      REQ-324/325/326/327/328 across two rounds -- no separate issue
+      needed). docs/requirements.yaml flipped pending -> done.
+
+  - req: REQ-324
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-12T19:54:00Z"
+    note: >
+      Close-out for run WF02-REQ324-20260912 (queue task 618, GH#1297),
+      whose implementation, REVIEWER PASS and TEST-RUNNER green-CI
+      confirmation had already merged to main (PR #1306, commit
+      6d7face1) without the close-out step running. Lifted
+      Letflow.Entities.Definition.Validator's Rule 9
+      (self-referential-FK rejection) per S10 gap 14, following
+      lib/letflow/design/req225-entity-definition-schema-validation.md's
+      own anticipated-follow-up note (numbered open item 4). Four
+      empirical findings: (1) decision 0025 already covers ON DELETE
+      for the self-edge unconditionally, no code change needed; (2)
+      cycle prevention is NOT enforced anywhere in the platform -- a
+      stated, reasoned position, not an oversight; (3) the DDL
+      generator already handles self-references correctly, verified
+      against a real Postgres; (4) the query compiler's self-join path
+      was found genuinely BROKEN (`ERROR 42702 ambiguous_column`) and
+      fixed by qualifying `hop_on_dynamic/1`'s fragments to the binding
+      alias, with a follow-on gap (filter/sort dynamics still
+      unqualified for a self-join) correctly identified and left for a
+      future requirement rather than silently folded in. REVIEWER PASS
+      -- thorough, independently re-verified all four findings against
+      real code and decision text. TEST-RUNNER confirmed green CI on
+      PR #1306 (merged, commit 6d7face1), including triaging
+      REQ-324/325/326/327/328 into the Req207VortexTest tripwire across
+      two rounds as main moved. docs/requirements.yaml flipped
+      pending -> done. Added gap 14 (self-referential entity
+      relationships) as a new row to
+      docs/migration/stage-10-bilimbaga-vertical.md's gap table --
+      that table only listed thirteen gaps and had no row for gap 14 at
+      all, even though REQ-324's own description cited "S10 gap 14" as
+      its motivation; the new row is marked closed, citing REQ-324 and
+      summarizing the four findings above. Closed GitHub mirror issue
+      #1297 with an evidence comment citing PR #1306 and its CI
+      results. Only status-bookkeeping and this one stage-doc file
+      touched in this branch -- confirmed via
+      `git diff --name-only main...HEAD`; the implementation itself was
+      already merged separately and is untouched here.
+  - req: REQ-328
+    event: blocked
+    agent: ORCH
+    at: "2026-09-12T20:22:06Z"
+    note: >
+      Claimed letflow-queue task 622 via get_next_task, dispatched to
+      ELIXIR-DEV on branch feature/WF02-REQ328-20260913. ELIXIR-DEV
+      correctly stopped before writing anything: REQ-328 depends_on
+      [REQ-326, REQ-327] (docs/requirements.yaml line ~22430's own
+      impl_order comment: "taking 622 first fails loudly, since its
+      pack document embeds the ten definition documents 620 and 621
+      author"), and REQ-327 (queue task 621, exam-configuration entity
+      definitions) is still status: pending -- only REQ-326's five
+      entity_definitions/*.json files exist on disk, none of
+      REQ-327's five exam-configuration ones. Confirmed via
+      get_next_task/orch-probe: task 621 is not offered (locked by
+      another host, presumably a sibling session already working
+      REQ-327), so it is in flight, not merely unclaimed. No code
+      changes made -- ELIXIR-DEV's git status was clean. Released
+      queue task 622 back to status: open (not "blocked", since
+      release-blocked is a permanent exclusion per TASK_QUEUE.md and
+      this is a temporary ordering gap, not a permanent defect).
+      Discarded the local feature/WF02-REQ328-20260913 branch (never
+      pushed, contained only a since-superseded started-event commit,
+      no implementation work). Deferring REQ-328 until REQ-327 reaches
+      done; will re-poll the queue rather than re-claim 622 again in
+      the meantime.
   - req: REQ-327
     event: done
     agent: ORCH

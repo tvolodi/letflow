@@ -84,8 +84,7 @@ defmodule Letflow.Entities.Definition.Validator do
             decimal_violations(definition) ++
             localized_text_violations(definition) ++
             search_strategy_violations(definition) ++
-            cardinality_violations(definition) ++
-            self_referential_fk_violations(definition)
+            cardinality_violations(definition)
 
         case violations do
           [] -> :ok
@@ -621,20 +620,21 @@ defmodule Letflow.Entities.Definition.Validator do
   defp maybe_prepend(list, true, item), do: [item | list]
   defp maybe_prepend(list, false, _item), do: list
 
-  # --- Rule 9 -- self-referential-FK rejection (:self_referential_fk) ---------
-
-  defp self_referential_fk_violations(definition) do
-    own_name = Map.get(definition, :name)
-
-    definition
-    |> get_list(:foreign_keys)
-    |> Enum.filter(fn fk -> Map.get(fk, :references_entity) == own_name end)
-    |> Enum.map(fn fk ->
-      %Violation{
-        rule: :self_referential_fk,
-        path: [:foreign_keys, Map.get(fk, :name), :references_entity],
-        message: "an entity cannot declare a foreign key to itself"
-      }
-    end)
-  end
+  # --- Rule 9 -- lifted (REQ-324) -----------------------------------------
+  #
+  # This rule used to reject any foreign key whose references_entity equaled
+  # the definition's own name (:self_referential_fk). REQ-225's own design
+  # doc (lib/letflow/design/req225-entity-definition-schema-validation.md,
+  # numbered open item 4) named that outright reject a deliberate, narrow
+  # choice made only because REQ-225's own description named
+  # "self-referential-FK rejection" as one of its rule categories -- not
+  # because a self-referential relationship is itself invalid -- and said
+  # explicitly: "If a real tenant need for self-referential entity
+  # hierarchies surfaces later, that is a follow-up requirement revising
+  # this rule, not something this slice should quietly special-case now."
+  # REQ-324 (S10 gap 14) is that follow-up: a self-referential fk_def is now
+  # a legal document shape. Every OTHER Rule 5 (fk_field_coverage) /
+  # Rule 9-adjacent invariant still applies to a self-referential fk exactly
+  # as it does to any other fk -- lifting this rule removes only the
+  # self-target check, nothing else.
 end

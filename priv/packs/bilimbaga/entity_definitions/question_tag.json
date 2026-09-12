@@ -1,0 +1,44 @@
+{
+  "name": "question_tag",
+  "display_name": "Question Tag",
+  "description": "FR-BB22 (roadmap section 2.3, the tag-association endpoints) -- ports the question_tags table from c:\\Users\\tvolo\\dev\\ai-dala\\BilimBaga\\backend\\migrations\\009_questions.up.sql. This is authored as a join entity type, per docs/anti-patterns.md's \"Modelling many-to-many as an array of references on the parent record\" entry: an earlier draft giving question a tag_ids array was rejected because it is unindexed by default without an explicit GIN index, has nowhere to put join attributes, and is invisible to Letflow.Entities.Query.FieldGrants, which redacts at field granularity on a record and cannot see values inside an array on someone else's row. No tag_ids field or any other array-of-references field is declared anywhere in this pack. Instead question_tag is an ordinary entity type whose promoted columns are two foreign keys: question_id :string, queried: true, required: true, and tag_id :string, queried: true, required: true. Foreign keys: fk_question_tag_question_id (field \"question_id\", references_entity \"question\") and fk_question_tag_tag_id (field \"tag_id\", references_entity \"tag\"). Constraints: uq_question_tag_question_id_tag_id, type \"unique\", fields [\"question_id\",\"tag_id\"] -- this expresses the source's composite PRIMARY KEY on (question_id, tag_id). Indexes: idx_question_tag_tag_id over tag_id, mirroring the source's 010_question_tags_tag_id_index.up.sql reverse-lookup index. This shape is also what Letflow.Entities.Query.Compiler's through many-to-many join (REQ-300) requires: lib/letflow/design/req300-query-joins.md section 4 describes a join entity owning foreign keys to both sides as the shape it resolves, so authoring question_tag this way is what makes \"list the questions carrying tag X\" a compilable query rather than an application-level fetch. No id, created_at, updated_at or created_by field is declared: the record subsystem mints record identity and the event store carries the audit timeline, so declaring these here would duplicate platform-owned state inside tenant content.",
+  "fields": [
+    {
+      "name": "question_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "tag_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_question_tag_question_id",
+      "field": "question_id",
+      "references_entity": "question"
+    },
+    {
+      "name": "fk_question_tag_tag_id",
+      "field": "tag_id",
+      "references_entity": "tag"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_question_tag_question_id_tag_id",
+      "type": "unique",
+      "fields": ["question_id", "tag_id"]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_question_tag_tag_id",
+      "fields": ["tag_id"]
+    }
+  ]
+}

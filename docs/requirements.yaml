@@ -21000,7 +21000,7 @@ requirements:
     title: Reconcile the S10 stage file with the landed REQ-307..REQ-321 state, and correct solution_pack.ex's now-stale UNOWNED service_catalog_entries policy text to cite decision 0027
     owner: DOC-UPDATER
     impl_order: 614  # letflow-queue task id; depends_on [] so no translation needed
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: N/A WITH A STATED REASON, recorded here rather than omitted so

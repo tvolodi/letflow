@@ -1,7 +1,7 @@
 # Stage 10 — BilimBaga vertical
 
-Status: P1 in progress. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-320`
-filed (26 as of 2026-09-11); P2 onward not expanded yet.
+Status: P1 in progress. Depends on: S4, S6, S8. Requirements: `REQ-295`–`REQ-323`
+filed (29 as of 2026-09-12); P2 onward not expanded yet.
 
 Created 2026-09-09. See
 [`decisions/0022-bilimbaga-vertical.md`](decisions/0022-bilimbaga-vertical.md)
@@ -64,12 +64,12 @@ no relations and no queryable localized fields.
 
 | # | Gap | State on 2026-09-09 | Owner |
 |---|---|---|---|
-| 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table lists `Letflow.Routers.Entities` against "S5/S6", but no requirement owns it. | **Open.** The stage's single largest blocker; its HTTP-surface design is now owned by `REQ-308` (`pending`) | `REQ-308` |
+| 1 | **Entity-records HTTP surface.** `Letflow.Entities.{Definitions,Records}` and the query DSL exist (`REQ-225`–`REQ-231`); nothing routes to them. `lib/letflow/router.ex`'s deferred-routes table no longer lists `Letflow.Routers.Entities` — that row was retired once the router was mounted. | **Closed 2026-09-12** -- `REQ-308` `done` (design, `lib/letflow/design/req308-entity-http-surface.md`); `REQ-309`, `REQ-310`, `REQ-311` `done` (implementation: permission atoms, `lib/letflow/routers/entities.ex` with seventeen routes, mounted at `/entities` by `Letflow.Plugs.ApiPipeline`) | closed |
 | 2 | **Aggregation / reporting queries.** `Letflow.Entities.Query.Compiler` compiles allowlisted filter/sort into an `Ecto.Query`; it has no `count`/`sum`/`group_by`. `/metrics` is Prometheus *ops* metrics (`REQ-194`), not a BI surface. BilimBaga's analytics dashboard has nothing to sit on. | **Closed 2026-09-11** -- `REQ-312` `done` (design, `lib/letflow/design/req312-query-aggregation.md`); `REQ-315` `done` (implementation, `POST /entities/query/aggregate`, PR #1276) | closed |
 | 3 | **Attachments beyond instances.** `Letflow.Repository.Attachments` covers `instance_attachments` only. Question images and bulk import need attachments on an *entity record*. | **Closed 2026-09-12** -- `REQ-313` `done` (design, `lib/letflow/design/req313-entity-record-attachments.md`); `REQ-316` `done` (migration + context module, PR #1264) and `REQ-317` `done` (permission atoms + four routes, PR #1279) | closed |
-| 4 | **Email.** No mailer, no SMTP dependency in `mix.exs`. Recommendation (not yet decided — see 0022) is a `service_catalog` entry via `Letflow.Engine.ServiceTaskDispatcher`. | **Unowned** | to file |
-| 5 | **PDF + QR rendering** for certificates. Absent; same recommended mechanism as gap 4. | **Unowned** | to file |
-| 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | to file |
+| 4 | **Email.** No mailer, no SMTP dependency in `mix.exs` (still absent, re-verified 2026-09-12). Mechanism settled by [decision 0027](decisions/0027-solution-pack-service-catalog-install-policy.md): any needed `service_catalog` entry is provisioned out-of-band, via `POST /service-catalog` (gated `:AdminServicesManage`), not through a pack. The capability itself remains open and unowned. | **Open (capability).** Mechanism settled by 0027; still no mailer/SMTP dependency | to file |
+| 5 | **PDF + QR rendering** for certificates. Absent (re-verified 2026-09-12: no PDF or QR dependency in `mix.exs`); same out-of-band mechanism as gap 4, settled by [decision 0027](decisions/0027-solution-pack-service-catalog-install-policy.md). The capability itself remains open and unowned. | **Open (capability).** Mechanism settled by 0027; still no PDF/QR dependency | to file |
+| 6 | **A public, unauthenticated route pattern** for certificate verification. Only the `/api/tenant-config` precedent exists (mounted on `Letflow.Router`, ahead of the `/api/v1` forward, with its own disclosure boundary). Needs its own design and `SECURITY-REVIEWER` gate. | **Unowned** | `REQ-323` |
 | 7 | **`x-ui` widget vocabulary + `Expr` evaluators.** Without these, every admin CRUD screen is hand-written React instead of generated from an entity definition. | **Closed 2026-09-11** — `REQ-284` `done` (closed vocabulary + `fieldRegistry`); `REQ-291`, `REQ-292`, `REQ-293` (the `Expr` evaluators, definition-time / server-side / TypeScript) all `done`. The 2026-09-09 reading that three of them were still `pending` no longer holds | closed |
 | 8 | **i18n in `web/`.** BilimBaga is trilingual (kk/ru/en). Non-negotiable. | **Closed 2026-09-09** — `REQ-285` `done` (react-intl, decision 0021) | closed |
 | 9 | **Tenant branding**, and `form_schema` exposed on the task-detail response. | **Closed 2026-09-11** — `REQ-281`, `REQ-282` `done` (both tenant-config endpoints serve branding), `REQ-286` `done` (`form_schema` exposed), and `REQ-283` (SPA theming) `done`. The 2026-09-09 reading that `REQ-283` was still outstanding no longer holds | closed |
@@ -86,10 +86,12 @@ closed as of 2026-09-11 (`REQ-300`, `REQ-301`, `REQ-303`–`REQ-306`). Gap 1 is
 closed (`REQ-308`–`REQ-311`, all `done`). Gap 2 is now closed (`REQ-312`
 design, `REQ-315` implementation, both `done`). Gap 3 is now closed
 (`REQ-313` design, `REQ-316` migration/context module, `REQ-317`
-permission atoms/routes, all `done`). Gap 12 has its design requirement
-done (`REQ-314`) but implementation still `pending` against it — `REQ-318`
-`done`, `REQ-319`/`REQ-320` `pending` — so it is not closed yet. Gaps 4, 5
-and 6 remain unowned and to file.
+permission atoms/routes, all `done`). Gap 12 is now closed
+(`REQ-314` design, `REQ-318`/`REQ-319`/`REQ-320` implementation, all
+`done`). Gaps 4 and 5 have their mechanism settled by decision 0027
+(out-of-band provisioning via `POST /service-catalog`) but remain open as
+capabilities, still unowned; gap 6 remains open and unowned as a
+capability, with `REQ-323` now filed against it.
 
 Gaps 10 and 11 are consequences of
 [decision 0023](decisions/0023-entity-storage-hybrid.md), and as originally
@@ -108,7 +110,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | Phase | Deliverable | Bucket | Exit condition |
 |---|---|---|---|
 | **P0** | This stage file, decision 0022, an `FR-BB` index reconstructed from its actual citation sites, and the `FR-BB` → `REQ-xxx` translation with a bucket declared on each | — | every S10 requirement is filed and `REQ-VALIDATOR`-passed |
-| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-11 gaps 1, 2, 7, 8, 9, 10, 11 and 13 are closed; gaps 3 and 12 have design requirements done (`REQ-313`, `REQ-314`) and implementation requirements partly filed/landed (`REQ-316` `done`, `REQ-317`–`REQ-320` `pending`) but are not yet closed; gaps 4, 5 and 6 remain unowned |
+| **P1** | Close gaps 1–6 and 10–13; land 7–9 | B | `mix letflow.check` and `web/`'s `npm run check` green with all thirteen closed. As of 2026-09-12 gaps 1, 2, 3, 7, 8, 9, 10, 11, 12 and 13 are closed; gaps 4 and 5 have their mechanism settled by decision 0027 but remain open as capabilities (no mailer/SMTP, no PDF/QR dependency); gap 6 remains open and unowned as a capability, with `REQ-323` now filed against it |
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
@@ -188,19 +190,25 @@ metric.
   through the same audit path, or need their own, is a P2 design question with a
   `SECURITY-REVIEWER` interest.
 - **Whether `service_catalog_entries` in a pack document unblocks here — and who
-  now owns that policy.** `Letflow.Definitions.SolutionPack` currently **rejects**
-  a non-empty `service_catalog_entries` array
+  now owns that policy. ANSWERED by
+  [decision 0027](decisions/0027-solution-pack-service-catalog-install-policy.md).**
+  `Letflow.Definitions.SolutionPack` still **rejects** a non-empty
+  `service_catalog_entries` array
   (`lib/letflow/definitions/solution_pack.ex`'s `check_unsupported_sections/1` →
-  `{:error, :unsupported_pack_section}`). That module's moduledoc and its inline
-  comment defer the policy to `REQ-192` — but **`REQ-192` is already `done`**
-  (S6, "Port services.zig's route surface onto the service catalog"), and it
-  landed the route surface *without* lifting the pack restriction. So the
-  deferral is stale: no open requirement owns packed catalog entries, and waiting
-  on `REQ-192` is not an option S10 has.
+  `{:error, :unsupported_pack_section}`), and 0027 settles that rejection as
+  PERMANENT, not merely interim. The module's moduledoc and its inline comment
+  previously deferred the policy to `REQ-192` — but `REQ-192` was already `done`
+  (S6, "Port services.zig's route surface onto the service catalog") without
+  lifting the pack restriction, so that deferral was stale. 0027 closes the
+  question outright: a solution-pack document may never carry
+  `service_catalog_entries`; any such entry is provisioned out-of-band through
+  the existing `POST /service-catalog` route (gated `:AdminServicesManage`,
+  PLATFORM_ADMIN-only in the current role matrix).
 
-  Gaps 4 and 5 both want a packed catalog entry. S10 must therefore either file
-  the policy requirement itself as bucket B, or ship those entries out-of-band.
-  Correcting the stale `REQ-192` pointer in `solution_pack.ex` is a P1 chore.
+  Gaps 4 and 5 both want a packed catalog entry; both now proceed via that
+  out-of-band route rather than through the pack. Correcting the stale
+  `REQ-192` pointer in `solution_pack.ex` to cite 0027 instead is this
+  requirement's (REQ-322's) own work, not pending P1 work.
 - **AI-assisted authoring (BilimBaga phase 7).** Deliberately not phased above. It
   is the least load-bearing feature in the product and the most likely to be
   redesigned; it gets a phase when parity (P5) is real.
@@ -230,11 +238,16 @@ independent work.
 No implementation sign-off yet. Re-verified 2026-09-11, one clause of the three
 this line originally carried is still true:
 
-- **"No S10 requirement exists" — no longer true.** Fourteen S10 requirements are
-  filed (`REQ-295`–`REQ-308`); all but `REQ-307` and `REQ-308` are `done`.
+- **"No S10 requirement exists" — no longer true.** Twenty-nine S10 requirements
+  are filed (`REQ-295`–`REQ-323`, counting distinct `- id: REQ-NNN` entries whose
+  own `stage:` field is S10); `REQ-322` (this requirement) and `REQ-323` are
+  `pending`, the rest are `done`.
 - **"No `lib/letflow/exam/` directory exists" — still true**, and
-  `web/src/pages/exam/` does not exist either. The bucket-C inventory above is
-  correspondingly still empty, which is the intended state this early.
+  `web/src/pages/exam/` does not exist either (`ls lib/letflow/exam/` and
+  `ls web/src/pages/exam/` both fail with "No such file or directory"). The
+  bucket-C inventory above is correspondingly still empty, which is the intended
+  state this early.
 - **"No pack document has been authored" — still true.** The pack *format* now
   carries entity definitions (`REQ-303`–`REQ-306`), but no BilimBaga pack
-  document has been written against it; that is P2 work.
+  document has been written against it (no such file exists under `lib/` or
+  elsewhere in the tree); that is P2 work.

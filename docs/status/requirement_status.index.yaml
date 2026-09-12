@@ -3141,7 +3141,7 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 0
+    entries: 2
     note: >
       Opened by ORCH at feature/WF02-REQ322-20260912's Step Final,
       successor to volume 14. Created with volume 14's header text

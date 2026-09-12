@@ -169,3 +169,58 @@
 
 
 history:
+  - req: REQ-323
+    event: done
+    agent: ORCH
+    at: "2026-09-12T06:14:03Z"
+    note: >
+      S10 gap 6 designed -- a pattern for exposing a read-only resource to
+      an unauthenticated caller, the last unowned bucket-B gap and the one
+      deliberate hole in Letflow's auth pipeline. Design-only; produced
+      lib/letflow/design/req323-unauthenticated-read-pattern.md and
+      decision record 0028. SECURITY-REVIEWER PASS, REVIEWER PASS after one
+      rework round.
+      The crux: with no token there is no auth_context, so INV-1's usual
+      mechanism (Api.Context.scoped_repo_opts/1) is unavailable. The design
+      resolves tenant via a 256-bit CSPRNG capability handle stored as
+      SHA-256 in a global registry, whose row's tenant_id then feeds the
+      SAME TenantProvisioning.schema_name_for_tenant/1 derivation -- only
+      the source of tenant_id differs, the storage mechanism is unchanged.
+      Anti-enumeration rests on a named property (drawn-and-stored, never
+      derived; no collection or index route exists) rather than an
+      assurance. INV-5 is held on both halves including timing: exactly one
+      round-trip before any refusal, with a syntactic short-circuit on a
+      malformed handle explicitly forbidden because it is precisely the
+      signal INV-5 names.
+      Two judgement calls worth recording. Mounting TenantStatus was
+      REJECTED as worse than useless -- with no auth context it is a silent
+      no-op (tenant_status.ex:71-81) that would look like protection; the
+      design folds tenants.status into the existing round-trip and returns
+      404, never that plug's 403, which would disclose two facts at once.
+      And assign_trace_id/1 was rejected because it reflects a
+      caller-supplied x-trace-id verbatim with no validation, which is a
+      surface a world-reachable endpoint should not have.
+      REVIEWER's round-1 FAIL caught the design justifying its own
+      structure by citing decision 0024 as precedent for a short record
+      with a long design -- 0024 is 616 lines to REQ-295's 205, the exact
+      reverse. Re-checking that, CODE-DESIGNER found and corrected a fourth
+      inherited claim of its own (ClaimMappingConfig is a runtime
+      Application.fetch_env!/2, not a compile-time read). Both gates
+      verified every source quotation independently; no inaccurate claim
+      survived.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-12T06:14:03Z"
+    note: >
+      ISS-0616 filed (GH#1289): get_next_task silently ignores an
+      unsupported dry_run parameter and takes a real lock. ORCH's own
+      read-only availability probe locked task 615 (REQ-323) to the
+      fictitious agent id "orch-probe" for 57 minutes, discovered only when
+      the same ORCH hit HTTP 409 claiming REQ-323 for real -- blocked by
+      itself. Two defects: there is no read-only way to ask whether the
+      queue has eligible work (REQ-222 may already cover this, and the
+      record cross-references it rather than duplicating), and unknown
+      query parameters are ignored rather than rejected, which is what
+      turned a wrong assumption into a stuck lock. Recovered by releasing
+      under the probe's own agent id. No work lost.

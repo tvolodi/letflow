@@ -165,4 +165,31 @@ conditions binding the implementing requirement, is recorded in
 [`lib/letflow/design/req323-unauthenticated-read-pattern.md`](../../../lib/letflow/design/req323-unauthenticated-read-pattern.md)
 §12 rather than duplicated here.
 
-*(Space reserved for `REVIEWER`'s sign-off.)*
+**REVIEWER — 2026-09-12 — PASS** (after one rework round). Round 1 returned FAIL on
+three defects, all now fixed and re-verified: AC-3's missing COPIES / DOES-NOT-COPY
+comparison of the `tenant_config.ex` precedent (now the design's §9, two tables with a
+stated reason per divergence); a false precedent claim that this record's short-record /
+long-design split mirrored 0024 and REQ-295 (it is the reverse -- 0024 is 616 lines to
+req295's 205 -- so the split is now justified on its own merits and the false comparison
+is recorded so it is not re-derived); and two citation errors, the leading-plug shape
+precedent being `Letflow.Plugs.ApiPipeline` rather than `TenantConfig` (which has a bare
+`:match`/`:dispatch` chain, as does every other public mount), plus a dangling section
+reference.
+
+While re-checking, CODE-DESIGNER found and corrected a fourth inherited claim of its own:
+the kind registry was described as a compile-time config read in the style of
+`ClaimMappingConfig`, which is in fact a runtime `Application.fetch_env!/2`. REVIEWER
+confirmed that correction and its consequence -- a kind can be enabled per environment
+without recompiling.
+
+Also adopted on REVIEWER's recommendation: the projection contract is now a behaviour
+(`@callback schema/0`, `@callback project/2`, `@spec resolve/2`) rather than prose.
+`handle_meta` is deliberately narrow so a projection cannot leak `tenant_id`,
+`handle_hash` or `resource_id` -- unrepresentable rather than forbidden -- and `resolve/2`
+returns a bare `:not_found` so the design's ten refusal cases are indistinguishable at the
+type level rather than by downstream convention.
+
+No regression: the decision-record judgement, disclosure boundary, mount point,
+generic-pattern position, scope fence and all five open questions are unchanged, and the
+SECURITY-REVIEWER verdict above plus the standing prohibitions were confirmed
+byte-identical by hash across the rework.

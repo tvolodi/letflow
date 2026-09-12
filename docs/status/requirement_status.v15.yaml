@@ -329,3 +329,55 @@ history:
       lib/letflow/definitions/, lib/letflow/identity/,
       lib/letflow/engine/, migrations, test/, or the stage file
       touched. docs/requirements.yaml flipped pending -> done.
+  - req: REQ-327
+    event: done
+    agent: ORCH
+    at: "2026-09-12T20:22:08Z"
+    note: >
+      The FIRST actual pack content S10 has produced. Five
+      exam-configuration entity-definition documents authored under
+      priv/packs/bilimbaga/entity_definitions/ -- exam, exam_section,
+      exam_question_rule, exam_question_rule_tag, exam_manual_question --
+      plus README-constraints.md and a validator test. All five pass
+      Letflow.Entities.Definition.Validator.validate/1; 48 tests pass,
+      re-run independently by ORCH.
+      Context: S10 had produced 31 requirements and ZERO pack content,
+      ten of them design-or-decision-record only. The user called out
+      that the pipeline was designing requirements to design
+      requirements rather than expressing the domain. This is the
+      correction, and it is bucket A -- 0022 rule 1 binds bucket B only,
+      so naming exams and questions here is the deliverable.
+      REVIEWER PASS with an unusually thorough gate: all 33 source
+      columns accounted for (carried or dropped with a stated reason,
+      none silently missing), enum values verbatim including order,
+      DECIMAL precisions matched, and nullability checked across all 26
+      carried fields -- a check nobody asked for. It also diffed the
+      test's mirror of solution_pack.ex's private
+      atomize_definition_json/1 character-by-character and confirmed all
+      seven whitelists identical, which is what makes the 48 assertions
+      meaningful rather than self-referential.
+      Three modelling calls held: tag_ids JSONB is remodelled as a join
+      entity (the array-of-references shape is anti-patterns.md:2775) and
+      declared as a remodelling rather than a transcription; the nine
+      CHECK constraints have no storage-layer equivalent and the loss is
+      stated bluntly rather than presented as an equivalent relocation;
+      exam_assignment is NOT authored because assignee_id is polymorphic
+      across user/department/all, recorded as an open question with three
+      candidate shapes and no preference expressed.
+  - req: SCOPE-CHANGE
+    event: done
+    agent: ORCH
+    at: "2026-09-12T20:22:08Z"
+    note: >
+      ISS-0623 filed (GH#1308): entity-definition `indexes` are inert
+      metadata. ddl.ex has zero occurrences of CREATE INDEX and zero
+      references to :indexes, so a declared index is validated by Rule 4,
+      persisted in the definition document, and then silently dropped --
+      while constraints and FKs DO emit. The DDL generator handles two of
+      the three declarative structures and skips the third.
+      Found by REVIEWER while gating REQ-327 and verified independently
+      by ORCH. Severity MAJOR: nothing crashes and nothing leaks, but a
+      first-class part of the entity-definition schema does nothing, the
+      gap is invisible to the author, and every future pack inherits it.
+      REQ-327's five indexes, ported from the source system's own
+      measured CREATE INDEX statements, are currently documentation.

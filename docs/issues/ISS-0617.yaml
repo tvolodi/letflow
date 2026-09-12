@@ -1,0 +1,60 @@
+id: ISS-0617
+title: REQ-301's :localized_text landed DDL and query but NOT record writes -- Record.Validator.field_subschema/1 has no clause, so every write of a localized field raises FunctionClauseError
+discovered_by: CODE-DESIGNER
+discovered_in_run: P2-feasibility-probe-20260912
+discovered_at: "2026-09-12T07:40:00Z"
+severity: MAJOR
+description: >
+  lib/letflow/entities/record/validator.ex:91-101 defines
+  field_subschema/1 with exactly EIGHT clauses -- :string, :integer,
+  :decimal, :boolean, :date, :datetime, :enum, :json. There is NO
+  :localized_text clause.
+
+  But :localized_text is a fully declarable field type:
+  lib/letflow/entities/definition.ex includes it in field_type(), the
+  definition validator accepts it (Rule 10, :invalid_localized_text),
+  and definition/ddl.ex emits per-locale generated columns for it when
+  queried: true.
+
+  So a definition carrying a :localized_text field VALIDATES and gets a
+  real table -- and then cannot accept a single record.
+  validate_record_payload/2 is on the live write path
+  (lib/letflow/entities/records.ex, called on every record create and
+  update), and with no matching clause it raises FunctionClauseError
+  rather than returning a tagged error. That is an INV-8-shaped defect:
+  an unhandled crash on a realistic, fully-supported input, surfacing as
+  a 500 rather than a validation error.
+
+  REQ-301 is marked done. It landed the DDL half (generated columns per
+  locale) and the query half (Allowlist and Compiler can filter and sort
+  on those columns), and REQ-311's POST /entities/query can read such
+  rows. The WRITE half was never landed, and no test covers it -- grep
+  localized_text over test/letflow/entities/record/validator_test.exs
+  returns zero hits, which is why it shipped green.
+
+  DISCOVERED during a P2 feasibility probe, and it is a hard blocker on
+  S10 P2's exit condition: the BilimBaga question bank's whole point is
+  a multilingual question stem, which is exactly what :localized_text
+  exists to model. P2 cannot author its entity definitions until this is
+  fixed. It is equally a blocker for any other vertical wanting a
+  localized field.
+
+  Severity MAJOR: a documented, validated, DDL-supported field type is
+  unusable for writes, and the failure mode is a crash rather than a
+  clean rejection. No data loss and no security exposure -- it fails
+  closed, loudly -- but REQ-301 is not actually complete despite being
+  marked done.
+
+  FIX DIRECTION: add the :localized_text clause to field_subschema/1
+  emitting the {locale => text} object subschema; enforce the declared
+  locale set from field_def.locales (an unknown locale key should be a
+  clean validation error, and note the surrounding schema sets
+  additionalProperties: false, so the subschema shape matters); add the
+  missing record-validator tests including a fail-first proof; and check
+  whether any OTHER field type added since REQ-231 has the same
+  half-landed shape.
+affected_files:
+  - lib/letflow/entities/record/validator.ex
+  - test/letflow/entities/record/validator_test.exs
+queue_ref: Q-617
+github_ref: GH-1294

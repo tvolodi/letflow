@@ -251,17 +251,19 @@ defmodule Letflow.Routers.EntitiesTest do
   defp normalise_problem(conn), do: conn |> body_of() |> Map.delete("trace_id")
 
   # ═══════════════════════════════════════════════════════════════════════
-  # AC1 -- __authz_routes__/0 returns exactly the sixteen designed routes.
+  # AC1 -- __authz_routes__/0 returns exactly the seventeen designed routes.
   # ═══════════════════════════════════════════════════════════════════════
 
   describe "AC1 -- the declared route table matches design §1" do
     # REQ-311 raised this from nine to TEN (POST /query); REQ-315 raised it
     # from TEN to ELEVEN (POST /query/aggregate); REQ-317 raised it from
-    # ELEVEN to FIFTEEN (the four record-attachment routes); REQ-319 raises
-    # it from FIFTEEN to SIXTEEN (POST /records/:entity_type/export). The
-    # count is asserted explicitly so appending a seventeenth route without
-    # updating design §1's table fails here rather than silently.
-    test "__authz_routes__/0 returns exactly the sixteen designed routes, with their designed policy keys" do
+    # ELEVEN to FIFTEEN (the four record-attachment routes); REQ-319 and
+    # REQ-320 -- the export/import pair, landed concurrently -- together
+    # raise it from FIFTEEN to SEVENTEEN (POST /records/:entity_type/export
+    # and POST /records/:entity_type/import). The count is asserted
+    # explicitly so appending an eighteenth route without updating design
+    # §1's table fails here rather than silently.
+    test "__authz_routes__/0 returns exactly the seventeen designed routes, with their designed policy keys" do
       expected = [
         {"POST", "/definitions/:name/activate", :EntitiesDefinitionsWrite},
         {"POST", "/definitions", :EntitiesDefinitionsWrite},
@@ -272,6 +274,7 @@ defmodule Letflow.Routers.EntitiesTest do
         {"POST", "/records/:entity_type", :EntitiesRecordsWrite},
         {"PUT", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
         {"DELETE", "/records/:entity_type/:record_id", :EntitiesRecordsWrite},
+        {"POST", "/records/:entity_type/import", :EntitiesRecordsImport},
         {"POST", "/query", :EntitiesQuery},
         {"POST", "/query/aggregate", :EntitiesAggregate},
         {"POST", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage},
@@ -285,8 +288,9 @@ defmodule Letflow.Routers.EntitiesTest do
 
       actual = Letflow.Routers.Entities.__authz_routes__()
 
-      assert length(actual) == 16
+      assert length(actual) == 17
       assert Enum.sort(actual) == Enum.sort(expected)
+      assert {"POST", "/records/:entity_type/import", :EntitiesRecordsImport} in actual
       assert {"POST", "/query", :EntitiesQuery} in actual
       assert {"POST", "/query/aggregate", :EntitiesAggregate} in actual
 
@@ -2013,6 +2017,291 @@ defmodule Letflow.Routers.EntitiesTest do
 
       assert query(denied, %{"entity_type" => "widget"}).status == 403
       assert query(allowed, %{"entity_type" => "widget"}).status == 200
+    end
+  end
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # REQ-320 -- POST /entities/records/:entity_type/import
+  # ═══════════════════════════════════════════════════════════════════════
+
+  defp import_records(ctx, entity_type, body, opts \\ []),
+    do: request(:post, "/api/v1/entities/records/#{entity_type}/import", ctx, body, opts)
+
+  defp import_document(entity_type, records, overrides \\ %{}) do
+    Map.merge(
+      %{
+        "record_export_schema_version" => "entities/record-export/v1",
+        "entity_type" => entity_type,
+        "exported_at" => "2026-09-12T00:00:00Z",
+        "records" => records
+      },
+      overrides
+    )
+  end
+
+  defp record_count(ctx, entity_type) do
+    Repo.aggregate(
+      from(l in Letflow.Entities.Record.Latest, where: l.entity_type == ^entity_type),
+      :count,
+      prefix: ctx.schema_name
+    )
+  end
+
+  describe "REQ-320 AC -- the 200-record cap is checked FIRST, before any create_record/2 call" do
+    test "413, and zero records are created, for a batch of 201 entries" do
+      ctx = tenant_ctx("req320-cap")
+      seed_active_definition!(ctx)
+
+      records =
+        for _ <- 1..201 do
+          %{
+            "record_id" => Ecto.UUID.generate(),
+            "field_values" => %{"title" => "cap test"},
+            "deleted" => false
+          }
+        end
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 413
+      assert record_count(ctx, "widget") == 0
+    end
+
+    test "a batch of exactly 200 entries is NOT rejected by the cap" do
+      ctx = tenant_ctx("req320-cap-boundary")
+      seed_active_definition!(ctx)
+
+      records =
+        for _ <- 1..200 do
+          %{
+            "record_id" => Ecto.UUID.generate(),
+            "field_values" => %{"title" => "boundary"},
+            "deleted" => false
+          }
+        end
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 200
+      assert record_count(ctx, "widget") == 200
+    end
+  end
+
+  describe "REQ-320 AC -- the record_export_schema_version gate is checked before tenant resolution/DB touch, as its own distinct error" do
+    test "a mismatched schema version is rejected 422 before any database touch" do
+      ctx = tenant_ctx("req320-schema-version")
+      seed_active_definition!(ctx)
+
+      records = [%{"record_id" => Ecto.UUID.generate(), "field_values" => %{"title" => "x"}}]
+
+      body =
+        import_document("widget", records, %{
+          "record_export_schema_version" => "entities/record-export/v99"
+        })
+
+      resp = import_records(ctx, "widget", body)
+
+      assert resp.status == 422
+      body = body_of(resp)
+      assert body["detail"] =~ "record_export_schema_version"
+      assert record_count(ctx, "widget") == 0
+    end
+  end
+
+  describe "REQ-320 AC -- entity_type path-vs-body mismatch is rejected 422 before any create_record/2 call" do
+    test "the document's entity_type must match the route's :entity_type path segment" do
+      ctx = tenant_ctx("req320-entity-type-mismatch")
+      seed_active_definition!(ctx, "widget")
+      seed_active_definition!(ctx, "gadget")
+
+      records = [%{"record_id" => Ecto.UUID.generate(), "field_values" => %{"title" => "x"}}]
+
+      resp = import_records(ctx, "widget", import_document("gadget", records))
+
+      assert resp.status == 422
+      assert record_count(ctx, "widget") == 0
+      assert record_count(ctx, "gadget") == 0
+    end
+  end
+
+  describe "REQ-320 AC -- per-batch partial-success semantics, not whole-batch atomicity" do
+    test "a batch with one valid and one invalid entry returns 200 carrying both a success and a failure result" do
+      ctx = tenant_ctx("req320-partial")
+      seed_active_definition!(ctx)
+
+      valid_id = Ecto.UUID.generate()
+      invalid_id = Ecto.UUID.generate()
+
+      records = [
+        %{"record_id" => valid_id, "field_values" => %{"title" => "ok"}, "deleted" => false},
+        # "title" is required -- omitting it reproduces create_record/2's own
+        # standalone {:error, {:record_payload_invalid, _}} rejection.
+        %{"record_id" => invalid_id, "field_values" => %{"quantity" => 1}, "deleted" => false}
+      ]
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 200
+      results = body_of(resp)["results"]
+      assert length(results) == 2
+
+      [success, failure] = results
+
+      assert success["status"] == "ok"
+      assert success["source_record_id"] == valid_id
+      assert is_binary(success["record_id"])
+      assert success["record_id"] != success["source_record_id"]
+
+      assert failure["status"] == "error"
+      assert failure["source_record_id"] == invalid_id
+      assert failure["reason"]["type"] == "record_payload_invalid"
+
+      # Proves this is NOT whole-batch rollback: the valid entry's record
+      # really was committed despite the other entry's failure.
+      assert record_count(ctx, "widget") == 1
+
+      # The same command_error() create_record/2 would return for that
+      # entry submitted alone, standalone -- same violation shape.
+      assert {:error, {:record_payload_invalid, standalone_violations}} =
+               Records.create_record(
+                 %{
+                   entity_type: "widget",
+                   field_values: %{"quantity" => 1},
+                   actor_id: ctx.user_id,
+                   idempotency_key: Ecto.UUID.generate()
+                 },
+                 ctx.schema_name
+               )
+
+      standalone_codes = Enum.map(standalone_violations, & &1.constraint)
+      batch_codes = Enum.map(failure["reason"]["violations"], & &1["code"])
+      assert batch_codes == standalone_codes
+    end
+  end
+
+  describe "REQ-320 AC -- idempotency is INTRA-CALL ONLY, never cross-call" do
+    test "within one call, a repeated entry.record_id dedupes to exactly one created record" do
+      ctx = tenant_ctx("req320-intra-call-dedup")
+      seed_active_definition!(ctx)
+
+      repeated_id = Ecto.UUID.generate()
+
+      records = [
+        %{"record_id" => repeated_id, "field_values" => %{"title" => "first"}, "deleted" => false},
+        %{"record_id" => repeated_id, "field_values" => %{"title" => "first"}, "deleted" => false}
+      ]
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 200
+      results = body_of(resp)["results"]
+      assert length(results) == 2
+      assert Enum.all?(results, &(&1["status"] == "ok"))
+
+      [first, second] = results
+      # Same import_request_id -> same derived idempotency_key for the
+      # second occurrence -> create_record/2's own duplicate-key contract
+      # returns the ORIGINAL record, not a second one.
+      assert first["record_id"] == second["record_id"]
+
+      assert record_count(ctx, "widget") == 1
+    end
+
+    test "two separate calls -- even a byte-identical re-POST -- each create their own independent record(s), with NO cross-call dedup" do
+      ctx = tenant_ctx("req320-cross-call-no-dedup")
+      seed_active_definition!(ctx)
+
+      record_id = Ecto.UUID.generate()
+
+      body =
+        import_document("widget", [
+          %{"record_id" => record_id, "field_values" => %{"title" => "repeat"}, "deleted" => false}
+        ])
+
+      resp1 = import_records(ctx, "widget", body)
+      assert resp1.status == 200
+      assert record_count(ctx, "widget") == 1
+
+      # A literal byte-identical re-POST of the same body.
+      resp2 = import_records(ctx, "widget", body)
+      assert resp2.status == 200
+
+      [result1] = body_of(resp1)["results"]
+      [result2] = body_of(resp2)["results"]
+
+      # Each call mints its OWN import_request_id, so each creates its OWN
+      # independent record for the same source_record_id -- proven by the
+      # COUNT increasing, not by the second call being a no-op.
+      assert result1["record_id"] != result2["record_id"]
+      assert record_count(ctx, "widget") == 2
+    end
+  end
+
+  describe "REQ-320 AC -- a deleted: true entry imports as a live, non-deleted record" do
+    test "the created record is not marked deleted, and create_record/2 was called exactly as for a non-deleted entry" do
+      ctx = tenant_ctx("req320-deleted-entry")
+      seed_active_definition!(ctx)
+
+      record_id = Ecto.UUID.generate()
+
+      records = [
+        %{"record_id" => record_id, "field_values" => %{"title" => "was deleted"}, "deleted" => true}
+      ]
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 200
+      [result] = body_of(resp)["results"]
+      assert result["status"] == "ok"
+
+      imported =
+        Repo.get_by!(Letflow.Entities.Record.Latest, [record_id: result["record_id"]],
+          prefix: ctx.schema_name
+        )
+
+      refute imported.deleted
+    end
+  end
+
+  describe "REQ-320 AC -- an entity_type with no active definition folds to the same 404 create_record/2's single-write path produces" do
+    test "returns 404 with the same shape a standalone write against an undefined entity_type produces" do
+      ctx = tenant_ctx("req320-no-definition")
+
+      records = [%{"record_id" => Ecto.UUID.generate(), "field_values" => %{"title" => "x"}}]
+
+      resp = import_records(ctx, "nonexistent_type", import_document("nonexistent_type", records))
+
+      standalone_resp =
+        request(:post, "/api/v1/entities/records/nonexistent_type", ctx, %{
+          "field_values" => %{"title" => "x"}
+        })
+
+      assert resp.status == 404
+      assert resp.status == standalone_resp.status
+      assert record_count(ctx, "nonexistent_type") == 0
+    end
+  end
+
+  describe "REQ-320 AC -- a success entry never reuses entry.record_id as the created row's own id" do
+    test "record_id differs from source_record_id in every success case" do
+      ctx = tenant_ctx("req320-fresh-record-id")
+      seed_active_definition!(ctx)
+
+      records =
+        for _ <- 1..3 do
+          %{"record_id" => Ecto.UUID.generate(), "field_values" => %{"title" => "fresh"}}
+        end
+
+      resp = import_records(ctx, "widget", import_document("widget", records))
+
+      assert resp.status == 200
+      results = body_of(resp)["results"]
+      assert length(results) == 3
+
+      for result <- results do
+        assert result["status"] == "ok"
+        assert result["record_id"] != result["source_record_id"]
+      end
     end
   end
 

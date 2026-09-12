@@ -1,0 +1,100 @@
+{
+  "name": "exam",
+  "display_name": "Exam",
+  "description": "Core exam configuration. Ports FR-BB31 (Exam Configuration Model), source table `exams` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1, with the configuration API filters in 3.2 and the portal availability filter in 3.4 deciding which fields are queried. NOTE ON TWO DIFFERENT `description`s: this key is the definition document's own prose about the entity type; the `description` entry in `fields` below is a separate content field holding an exam's own localized description text. They are different things. FIELD-LEVEL NOTES. `title` and the `description` content field are :localized_text over [\"kk\",\"ru\",\"en\"] with search_strategy \"plain\": the source columns are bare TEXT with no translation table, and promoting them is a deliberate upgrade for a trilingual product, the same upgrade REQ-326 applies to category.name -- not a transcription of the source. `status`, `show_answers` and `on_tab_switch` are :enum, the direct translation of the source's Postgres ENUM types exam_status, show_answers_policy and tab_switch_action. `passing_score_pct` carries decimal_precision 5 and decimal_scale 2 ported verbatim from the source's DECIMAL(5, 2), not chosen here. `available_from` and `available_until` are queried because roadmap 3.4's portal listing filters on the availability window. OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline, so declaring them here would duplicate state the platform already holds. No `created_by` field is declared either, for the same cross-subsystem reason REQ-326 records for its own documents -- created_by references the identity subsystem's users table, which an entity fk_def cannot reach (references_entity names an entity type, not an identity-subsystem table), so an unenforced string reference would be the only option. Authorship is answered instead by the event stream's actor_id on the record's creation event. The source's idx_exams_created_by index is dropped with the column. CONSTRAINTS NOT EXPRESSIBLE HERE: the source's CHECK (time_limit_minutes > 0), CHECK (passing_score_pct BETWEEN 0 AND 100), CHECK (max_attempts > 0) and CONSTRAINT exams_availability_check are recorded in README-constraints.md in this directory, together with what is lost by relocating them.",
+  "fields": [
+    {
+      "name": "title",
+      "type": "localized_text",
+      "locales": ["kk", "ru", "en"],
+      "search_strategy": "plain",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "description",
+      "type": "localized_text",
+      "locales": ["kk", "ru", "en"],
+      "search_strategy": "plain",
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "status",
+      "type": "enum",
+      "enum_values": ["draft", "active", "archived"],
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "time_limit_minutes",
+      "type": "integer",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "passing_score_pct",
+      "type": "decimal",
+      "decimal_precision": 5,
+      "decimal_scale": 2,
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "max_attempts",
+      "type": "integer",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "available_from",
+      "type": "datetime",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "available_until",
+      "type": "datetime",
+      "queried": true,
+      "required": false
+    },
+    {
+      "name": "shuffle_questions",
+      "type": "boolean",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "shuffle_options",
+      "type": "boolean",
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "show_answers",
+      "type": "enum",
+      "enum_values": ["never", "after_completion", "after_all_attempts"],
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "on_tab_switch",
+      "type": "enum",
+      "enum_values": ["log", "warn", "submit"],
+      "queried": false,
+      "required": true
+    },
+    {
+      "name": "certificate_enabled",
+      "type": "boolean",
+      "queried": false,
+      "required": true
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_exam_status",
+      "fields": ["status"]
+    }
+  ]
+}

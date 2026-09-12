@@ -1,0 +1,47 @@
+{
+  "name": "exam_section",
+  "display_name": "Exam Section",
+  "description": "Optional grouping of question-selection rules within an exam. Ports FR-BB31 (Exam Configuration Model), source table `exam_sections` in BilimBaga's backend/migrations/012_exams.up.sql; product spec is corporate_exam_platform_roadmap.md section 3.1. FIELD-LEVEL NOTES. `title` is :localized_text over [\"kk\",\"ru\",\"en\"] with search_strategy \"plain\", required false because the source column is a nullable TEXT -- the localization is the same deliberate trilingual upgrade exam.title makes, while the nullability is transcribed from the source. `exam_id` is :string and carries the foreign key to `exam`; the source's UNIQUE (exam_id, sort_order) is expressible exactly and is declared below as a constraints entry of type \"unique\". OMISSIONS. No `id`, `created_at` or `updated_at` field is declared: the record subsystem owns record identity and the event store owns the timeline. CONSTRAINT NOT EXPRESSIBLE HERE: the source's CHECK (sort_order >= 0) is a single-column range check with no entity-definition expression; it is recorded in README-constraints.md in this directory, along with the fact that relocating it loses database-level enforcement.",
+  "fields": [
+    {
+      "name": "exam_id",
+      "type": "string",
+      "queried": true,
+      "required": true
+    },
+    {
+      "name": "title",
+      "type": "localized_text",
+      "locales": ["kk", "ru", "en"],
+      "search_strategy": "plain",
+      "queried": false,
+      "required": false
+    },
+    {
+      "name": "sort_order",
+      "type": "integer",
+      "queried": true,
+      "required": true
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_exam_section_exam_id",
+      "fields": ["exam_id"]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "name": "fk_exam_section_exam_id",
+      "field": "exam_id",
+      "references_entity": "exam"
+    }
+  ],
+  "constraints": [
+    {
+      "name": "uq_exam_section_exam_id_sort_order",
+      "type": "unique",
+      "fields": ["exam_id", "sort_order"]
+    }
+  ]
+}

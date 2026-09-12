@@ -2909,8 +2909,16 @@ volumes:
     path: docs/status/requirement_status.v14.yaml
     status: current
     opened: 2026-09-11
-    entries: 30
+    entries: 31
     note: >
+      Incremented to 31 by ORCH's own REQ-321 done-event append
+      (WF02-REQ321-20260912) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v14.yaml` = 31 on-disk entries;
+      1109 lines / 64185 bytes. ⛔ CLOSE TO THE 1,200-LINE ROLL CEILING
+      -- the NEXT agent appending to this volume MUST check line/byte
+      count first and roll to v15 before appending if either bound
+      would be exceeded, per the roll procedure this file's own header
+      documents (see v13's own roll to v14 for the exact steps).
       Recounted to 30 on WF02-REQ319-20260911's Step Final SECOND
       rebase, which conflicted at this file's tail between this run's
       own already-composed note (previous recount: 29) and

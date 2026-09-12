@@ -21419,3 +21419,366 @@ requirements:
       - "0022's rule 1 holds textually: grep the design artefact, any decision record it filed, and this requirement's own title, description and acceptance criteria for single-vertical domain vocabulary and confirm zero hits outside a bare 'S10 gap 6' stage-bookkeeping citation -- the grep command and its real output quoted"
       - "`git diff --name-only` shows only the new file under lib/letflow/design/, plus at most one file under docs/migration/decisions/ if one was judged warranted, plus docs/requirements.yaml for this entry's own status bookkeeping -- no file under lib/letflow/routers/, lib/letflow/router.ex, lib/letflow/plugs/, lib/letflow/api/, lib/letflow/entities/, priv/repo/migrations/ or test/ appears. Quoted with the command"
     depends_on: []
+
+  - id: REQ-324
+    title: Lift Definition.Validator Rule 9 so an entity may declare a foreign key to itself, with ON DELETE, cycle, DDL and join-path semantics all settled (S10 gap 14)
+    owner: ELIXIR-DEV
+    impl_order: 618  # letflow-queue task id, written back at WF-01 Step 3
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. A self-referential entity relationship is a generic
+      platform capability -- a parent/child tree and a version-lineage
+      pointer are shapes any tenant's data model can need, and nothing
+      about either is domain-specific. Per 0022's rule 1 this
+      requirement's title, description, acceptance criteria and every
+      artefact it produces contain no domain-vertical vocabulary of any
+      kind: S10's gap 14 may be cited BY NUMBER as the motivation, never
+      by what the gap is for. If a reviewer can tell from the diff which
+      vertical motivated it, rule 1 has been broken.
+
+      RE-VERIFY EVERY LINE BELOW AGAINST THE CURRENT TREE BEFORE CHANGING
+      ANYTHING. All of it is stated as of 2026-09-12 and must be
+      confirmed, not trusted -- this file's descriptions go stale as main
+      moves, and at least one S10 gap has already been closed by an
+      unrelated commit between a probe and its requirement being filed.
+
+      THE CURRENT REJECTION.
+      lib/letflow/entities/definition/validator.ex's Rule 9
+      (self_referential_fk_violations/1, around lines 626-639) filters
+      the definition's foreign_keys for any fk whose references_entity
+      equals the definition's own name and emits a Violation with
+      rule: :self_referential_fk and message "an entity cannot declare a
+      foreign key to itself". A test asserts that rejection --
+      test/letflow/entities/definition/validator_test.exs, the
+      describe block "Rule 9 -- self-referential-FK rejection
+      (:self_referential_fk)" around lines 340-352, which asserts the
+      shape {:error, [%Violation{rule: :self_referential_fk, path:
+      [:foreign_keys, "fk1", :references_entity]}]} for a definition
+      named "widget" with an fk referencing "widget". That test must be
+      changed or replaced by this requirement, not left to fail.
+
+      REQ-298 activated fk_def as a real REFERENCES constraint but never
+      touched Rule 9, so the rule has outlived the declarative-only
+      framing it was written under.
+
+      THIS WAS ANTICIPATED AS FOLLOW-UP WORK, NOT AN OVERSIGHT. Read
+      lib/letflow/design/req225-entity-definition-schema-validation.md
+      around lines 632-638 before designing: its numbered open item 4
+      records that Rule 9 was made an outright reject only because
+      REQ-225's own description named "self-referential-FK rejection" as
+      one of its rule categories, that a genuinely self-referential
+      hierarchy is "a real, legitimate BPM pattern this design cannot
+      rule out a tenant needing", and that "if a real tenant need for
+      self-referential entity hierarchies surfaces later, that is a
+      follow-up requirement revising this rule, not something this slice
+      should quietly special-case now." This requirement IS that
+      follow-up, and must cite that passage.
+
+      TWO REAL CONSUMERS, both in the scope of the phase that raised gap
+      14: a version-lineage self-reference (a record pointing at the
+      record it was derived from) and a hierarchical parent/child tree (a
+      record pointing at its parent in the same entity type). Both are
+      described generically on purpose; neither may be named otherwise.
+
+      LIFTING RULE 9 IS NOT DELETING IT. Deleting the rule and its test
+      would make the validator accept the shape while leaving four
+      questions unanswered, each of which can produce a wrong or
+      unsafe result at a different layer. This requirement must answer
+      all four, in the implementation and in its completion report, and
+      must not treat "the validator now accepts it" as the finish line:
+
+      1. ON DELETE SEMANTICS FOR THE SELF-EDGE. Every promoted-FK
+      REFERENCES clause lib/letflow/entities/definition/ddl.ex emits
+      today carries ON DELETE RESTRICT (see that module's moduledoc
+      around lines 59-64 and column_sql_line/2 around line 553).
+      docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md
+      governs promoted-FK ON DELETE generally. READ 0025 IN FULL and
+      state, in the completion report, ONE of exactly two findings: (a)
+      0025's existing answer already covers the self-edge case, quoting
+      the passage that does and explaining why a self-edge is not a
+      distinguishable case under it; or (b) 0025 does not reach the
+      self-edge, in which case say so explicitly and treat the choice as
+      an open question for a decision record rather than settling it in
+      code -- flag it, name the record that would own it, and pick the
+      most conservative behaviour available in the meantime, saying that
+      is what was done and why. Do not silently pick a policy.
+
+      2. CYCLE PREVENTION. A self-referential FK admits A -> B -> A, and
+      a longer ring. State concretely whether that is prevented, and
+      where: in the database (and if so by what -- a plain REFERENCES
+      constraint does not prevent it), in the record write-path
+      validator (lib/letflow/entities/record/validator.ex, or
+      lib/letflow/entities/records.ex's write path), or not at all. "Not
+      at all" is a legitimate answer -- a cycle in a lineage or parent
+      pointer may be a tenant's own data problem rather than a platform
+      invariant -- but it is only legitimate if it is STATED with a
+      reason and with the consequence named (what breaks, or does not
+      break, for a consumer that walks the edge). An unstated answer
+      fails this requirement.
+
+      3. THE DDL GENERATOR. Determine whether
+      lib/letflow/entities/definition/ddl.ex already emits a correct
+      self-referencing REFERENCES clause or needs work. The specific
+      hazard: fk target table resolution goes through the
+      fk_target_tables map (REQ-298), which maps each references_entity
+      value to a table name via
+      Letflow.TenantProvisioning.table_name_for_entity_type/1 (see
+      ddl.ex's moduledoc around lines 113-126, and column_sql_line/2's
+      Map.fetch(fk_target_tables, entity_type) around line 551, whose
+      miss branch returns an error rather than omitting the clause or
+      guessing). For a self-reference the target table is the very table
+      being created by the same CREATE TABLE statement. Establish
+      empirically -- against a real Postgres, not by reading alone --
+      whether a REFERENCES clause naming the table under creation is
+      valid in that statement, and whether the caller that builds
+      fk_target_tables populates an entry for the definition's own name
+      at all. If it does not, that miss branch turns a self-reference
+      into a DDL generation error, and fixing it is in scope here.
+
+      4. THE QUERY COMPILER'S JOIN PATH. REQ-300 added joins over
+      promoted FK columns to Letflow.Entities.Query.Compiler. Determine
+      whether that join path can express a self-join (the same table on
+      both sides, requiring distinct binding names) or whether it
+      breaks, silently or loudly. State the finding with the code cited.
+      If it cannot, state explicitly whether fixing it is in scope for
+      this requirement or belongs to a named follow-on requirement --
+      either answer is acceptable, but the completion report must pick
+      one and say which, and a follow-on must be described concretely
+      enough for REQ-ANALYST to file it without re-deriving the problem.
+
+      SCOPE FENCE. This requirement changes
+      lib/letflow/entities/definition/validator.ex, its test file, and
+      whatever of lib/letflow/entities/definition/ddl.ex and
+      lib/letflow/entities/query/ the four answers above require, plus
+      their tests. It writes no decision record itself -- if answer 1 or
+      2 turns out to need one, flag it and name it rather than writing
+      it. It adds no domain-vertical fixture names, no new field type,
+      and no migration unless answer 3 requires one, in which case the
+      completion report justifies it explicitly.
+    acceptance_criteria:
+      - "lib/letflow/entities/definition/validator.ex no longer rejects a foreign key whose references_entity equals the definition's own name: a fail-first test proves it. The test is written and run BEFORE the change, its failure output quoted in the completion report, then run after and quoted passing -- both quotations present, with the actual mix test output, not a description of it"
+      - "the previously-passing Rule 9 rejection test in test/letflow/entities/definition/validator_test.exs (describe block \"Rule 9 -- self-referential-FK rejection (:self_referential_fk)\", around lines 340-352) is deliberately updated or removed rather than left broken, and the completion report states which and why -- a diff of that describe block is quoted"
+      - "Rule 9's siblings are proven intact: a test asserts that a foreign key which is genuinely invalid for a reason OTHER than self-reference is still rejected with its own distinct rule atom, and mix test output for the whole file test/letflow/entities/definition/validator_test.exs is quoted showing every other rule's tests still pass. Lifting Rule 9 must not weaken any other rule"
+      - "the completion report states ONE of exactly two findings about ON DELETE for the self-edge, having read docs/migration/decisions/0025-promoted-fk-ondelete-and-localized-text-search-strategy.md in full: either that 0025 already answers the self-edge case -- with the governing passage quoted verbatim from that record and an explanation of why a self-edge is not a distinguishable case under it -- or that 0025 does not reach it, in which case the report says so, names the decision record that would own the choice, states the conservative interim behaviour actually implemented, and flags it as an open question rather than settling it"
+      - "the completion report states concretely whether a cycle (A -> B -> A, or longer) is prevented and WHERE -- database, validator, or not at all -- with the enforcing code cited by file and line if it is prevented, or with an explicit reason and a named consequence for a consumer that walks the edge if it is not. A report that does not state a position on cycles fails this criterion"
+      - "the completion report states whether lib/letflow/entities/definition/ddl.ex emits a correct self-referencing REFERENCES clause, established empirically against a real Postgres rather than by reading alone: the generated CREATE TABLE statement for a definition with a self-referential fk_def is quoted in full, along with the actual result of executing it (success, or the real error text). The report also states whether the fk_target_tables map is populated with an entry for the definition's own name, citing the caller that builds it, and whether Map.fetch(fk_target_tables, entity_type)'s miss branch in column_sql_line/2 was reachable for a self-reference before this change"
+      - "the completion report states whether Letflow.Entities.Query.Compiler's REQ-300 join path can express a self-join, with the relevant code cited by file and line and with the actual behaviour demonstrated (a passing test, or a quoted failure), and explicitly declares either that fixing it is in scope and was done, or that it is a follow-on -- in which case the follow-on is described concretely enough to be filed without re-deriving the problem"
+      - "0022's rule 1 holds textually: grep this requirement's own title, description and acceptance criteria, the full diff, and every test fixture name introduced, for single-vertical domain vocabulary, and confirm zero hits outside a bare 'S10 gap 14' stage-bookkeeping citation. The grep command and its real output are quoted"
+      - "the completion report cites lib/letflow/design/req225-entity-definition-schema-validation.md's numbered open item 4 (around lines 632-638) by file and line and quotes the sentence naming a later revision of Rule 9 as follow-up work, establishing that this change executes an anticipated follow-up rather than reversing a settled decision"
+      - "mix letflow.check is run and its real output quoted; any failure is either fixed or shown to be a known pre-existing/environmental failure by demonstrating it on an unmodified checkout of the same commit"
+    depends_on: []
+
+  - id: REQ-325
+    title: Decision record on whether the solution pack remains the delivery vehicle for scripted rules and role seeding, or whether the twice-recurring section gap means it is not (S10 gaps 16 and 17)
+    owner: CODE-DESIGNER
+    impl_order: 619  # letflow-queue task id, written back at WF-01 Step 3. NOTE: this requirement was drafted as REQ-326 and renumbered to REQ-325 after a concurrent session's ISS-0617 fix on main made the intervening gap-15 (:localized_text) entry unnecessary -- it was removed rather than filed, so the renumber closes the gap it left.
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. The pack document's format and install policy are
+      generic platform concerns -- any vertical's pack travels through
+      the same sections. Per 0022's rule 1 this requirement's title,
+      description, acceptance criteria and every artefact it produces
+      contain no domain-vertical vocabulary of any kind: S10's gaps 16
+      and 17 are cited BY NUMBER only, and the phase whose deliverables
+      are at issue is referred to as "the pack phase" or by its phase
+      label, never by what it is for. If a reviewer can tell from the
+      decision record which vertical motivated it, rule 1 has been
+      broken and the record fails CODE-DESIGN-VALIDATOR.
+
+      THIS IS A DESIGN AND DECISION-RECORD REQUIREMENT ONLY, scoped
+      exactly as REQ-295, REQ-303, REQ-321 and REQ-323 were. It produces
+      docs/migration/decisions/0029-<slug>.md (CODE-DESIGNER chooses the
+      slug; it must name what the record decides, not restate "0029"),
+      plus a design artefact under lib/letflow/design/ ONLY if the
+      answers reached actually require one -- the record must state
+      which it concluded and why. It implements no lib/ code, adds no
+      pack section, adds no permission atom, writes no migration and
+      writes no test.
+
+      RE-VERIFY EVERY LINE BELOW BEFORE DECIDING ANYTHING. All of it is
+      stated as of 2026-09-12 and main moves quickly.
+
+      THE PACK'S SECTIONS TODAY.
+      Letflow.Definitions.SolutionPack's pack_document type
+      (lib/letflow/definitions/solution_pack.ex, around lines 222-232)
+      has five content sections: definitions, service_catalog_entries
+      (permanently empty and rejected non-empty, settled by decision
+      0027), variable_schemas, entity_definitions (added by REQ-303's
+      record 0026 and built by REQ-304/REQ-305), and
+      manifest.required_roles.
+
+      GAP 16 -- NO PACK SECTION FOR SCRIPTED RULES. grep -i lua over
+      lib/letflow/definitions/solution_pack.ex returns zero hits.
+      packed_definition carries definition_id, process_key, name,
+      version and graph, with no script payload of any kind.
+
+      DO NOT MISSTATE THE OBSTACLE HERE, AND DO NOT ASSUME IT IS A SHAPE
+      MISMATCH -- IT IS NOT. The audit path that exists for scripts,
+      Letflow.Engine.LuaScriptAudit, declares `@type script_ref ::
+      term()` (lib/letflow/engine/lua_script_audit.ex around line 97),
+      and its typedoc immediately above (around lines 90-95) says the
+      type is DELIBERATELY OPAQUE, because "pinning a concrete type here
+      would constrain a decision that belongs to the Executor module".
+      The concrete %{manifest: Manifest.t(), script_source: binary()}
+      shape belongs to a DIFFERENT module --
+      lib/letflow/engine/lua/executor.ex around line 258, where
+      script_ref is `binary() | %{manifest: ..., script_source: ...}`.
+      So LuaScriptAudit accepting a pack-shaped script term is NOT the
+      problem; it accepts any term by construction.
+
+      The two real obstacles are (a) there is no pack-side script
+      payload at all for anything to be passed -- see the grep and
+      packed_definition above; and (b) LuaScriptAudit is fenced off from
+      normal flow by its own moduledoc (around lines 10-14): it is "NOT
+      the SERVICE_TASK script-execution handler and must not be called
+      from processServiceTaskRuntimeInTx or any other normal
+      process-execution flow", and its "No caller yet" section (around
+      lines 38-41) records that nothing in the codebase calls
+      execute_script_for_audit/6 at all. So a pack cannot today carry a
+      scripted rule, and the audit path that exists is not a path a pack
+      install could simply call.
+
+      GAP 17 -- manifest.required_roles IS READ-ONLY BY DESIGN, NOT
+      MERELY UNIMPLEMENTED. solution_pack.ex's moduledoc around lines
+      69-71 states plainly that the section is "supported, read-only:
+      it produces the advisory role_mapping_checklist... No role is
+      created and no install is ever rejected because of it", and its
+      "Known gap" section around lines 167-171 states it is always []
+      on export.
+
+      BE PRECISE ABOUT WHAT IS ABSENT HERE.
+      Letflow.Identity.RoleRegistry.upsert_role/2 is NOT uncalled -- a
+      grep over lib/ returns real call sites, and the live one is
+      lib/letflow/routers/identity.ex, whose `authz_post "/roles",
+      :RolesManage` (around line 208) dispatches handle_upsert_role/1,
+      documented in that router's own moduledoc (around line 35) as
+      `POST /roles -> Letflow.Identity.RoleRegistry.upsert_role/2
+      (REQ-076)`. What is absent is narrower and must be stated as such:
+      no PACK INSTALL path calls it. The consequence to state plainly:
+      the pack phase's "role-registry seed" deliverable is, today, a
+      checklist and not a seed.
+
+      AND NOTE WHAT THAT LIVE ROUTE IMPLIES, because it is the strongest
+      argument for a NO on sub-question 2 and must not be omitted: POST
+      /roles is an existing, authenticated, out-of-band
+      role-provisioning route. That is the direct structural analogue of
+      the POST /service-catalog route on which decision 0027 grounded
+      its PERMANENT no for service_catalog_entries -- "an authenticated
+      route already provisions this out-of-band, so the pack does not
+      carry it". The record must confront that analogy head-on rather
+      than reasoning as though no provisioning path existed.
+
+      WHY THIS IS A DECISION RECORD AND NOT AN IMPLEMENTATION TICKET,
+      AND WHY IT MUST NOT BE ANSWERED BY REFLEX. Gap 13 was exactly this
+      shape -- "bucket A's own delivery vehicle cannot carry two of the
+      four things bucket A consists of" -- and it was closed by adding a
+      section (0026, REQ-303 through REQ-306). That pattern has now
+      recurred twice more. The reflexive answer is to add a third and a
+      fourth section. This requirement exists to test that answer rather
+      than execute it: the recurrence may instead indicate that the pack
+      is the wrong vehicle for some of this. And because 0022's bucket
+      rule DEFINES bucket A as "definitions installed via
+      Letflow.Definitions.SolutionPack.install/3", changing what the
+      pack carries -- or declining to -- changes what bucket A means.
+      That is a decision-record question, not an implementation one.
+
+      THE RECORD MUST SETTLE THE FOLLOWING, EACH WITH A CONCRETE NAMED
+      ANSWER RATHER THAN A RESTATEMENT OR A LIST OF OPTIONS:
+
+      1. DOES A PACK CARRY SCRIPTED RULES AT ALL? A NO IS A FULLY
+      LEGITIMATE ANSWER and must not be presupposed against: decision
+      0027 reached exactly that answer for service_catalog_entries,
+      settling that they are provisioned out-of-band through an existing
+      authenticated route rather than through a pack, and settling it as
+      PERMANENT rather than interim. Read 0027 before answering. If the
+      answer is no, name the provisioning path that carries scripted
+      rules instead, concretely, and state whether that path exists
+      today or must be built and by whom. Note the asymmetry with
+      sub-question 2 and address it: for scripted rules there is no
+      out-of-band route at all today (nothing calls
+      execute_script_for_audit/6, and LuaScriptAudit is fenced off from
+      normal flow), so 0027's "an authenticated route already does this"
+      reasoning is not available here unmodified -- say whether that
+      absence changes the answer or not.
+
+      2. DOES A PACK SEED ROLES, OR IS THE READ-ONLY CHECKLIST THE
+      PERMANENT, DOCUMENTED STANCE? Again a NO is fully legitimate. But
+      if the answer is no, the pack phase's "role-registry seed"
+      deliverable is misstated in
+      docs/migration/stage-10-bilimbaga-vertical.md's phase table and
+      the record must SAY SO explicitly and give the corrected wording,
+      so the phase row can be fixed by whoever owns that file. Note that
+      the current text is not an accident of implementation order: the
+      moduledoc says no role is created, and a decision to keep it that
+      way is as much a decision as changing it. The record MUST take a
+      position, in as many words, on whether POST /roles (the
+      authenticated :RolesManage route in
+      lib/letflow/routers/identity.ex that calls upsert_role/2) is the
+      out-of-band analogue of the POST /service-catalog route on which
+      0027 grounded its permanent no -- and therefore whether 0027's
+      reasoning transfers here directly. That is the live argument FOR a
+      no on this sub-question; a record that reaches YES without
+      confronting it, or reaches NO without naming it as the ground,
+      fails CODE-DESIGN-VALIDATOR.
+
+      3. IF EITHER ANSWER IS YES, THE AUDIT QUESTION. The stage file's
+      "Open questions" section already asks where a pack's scripted
+      rules are audited, and records it as carrying a SECURITY-REVIEWER
+      interest. Letflow.Engine.LuaScriptAudit's own moduledoc states it
+      is a MINIMAL, deliberately narrow engine-side audit-PERSISTENCE
+      path against an INJECTED executor, that it is NOT the general
+      script-execution handler, and that it "must not be called from
+      processServiceTaskRuntimeInTx or any other normal
+      process-execution flow" -- read it in full. Therefore "reuse
+      LuaScriptAudit" and "model a new audit record on LuaScriptAudit"
+      are DIFFERENT ANSWERS with different consequences, and the record
+      must pick one BY NAME and justify it against that moduledoc's own
+      words, quoted. The security framing to state explicitly:
+      pack-supplied script content is durable, tenant-supplied content
+      that CAUSES LATER EXECUTION -- it is not inert data, and the
+      threat model differs from that of a definition graph.
+
+      4. IS THE TWICE-RECURRENCE ITSELF A STRUCTURAL PROBLEM?
+      pack_document is a closed struct-shaped type; every new kind of
+      packable content has so far required editing that type,
+      parse_document/1, the export helper and the install path
+      together. Take an explicit position on whether sections should
+      instead be an open registry, and if the position is "keep it
+      closed", say what makes a closed set right despite three sections
+      having been wanted in quick succession. A position stated in one
+      unambiguous sentence, not distributed across qualifications.
+
+      5. RESTATE THE PACK PHASE'S DELIVERABLES GIVEN THE ANSWERS. The
+      phase currently lists four. After answers 1 and 2, some may not be
+      pack deliverables at all. State the corrected list explicitly so
+      the phase row in
+      docs/migration/stage-10-bilimbaga-vertical.md can be updated by
+      its owner -- this requirement states the correction, it does not
+      make the edit.
+
+      SCOPE FENCE. This requirement writes
+      docs/migration/decisions/0029-*.md and, only if warranted, one
+      design artefact under lib/letflow/design/. It touches no file
+      under lib/letflow/definitions/, lib/letflow/identity/,
+      lib/letflow/engine/, priv/repo/migrations/ or test/, and does not
+      edit docs/migration/stage-10-bilimbaga-vertical.md -- the
+      corrections it identifies are stated in the record for that file's
+      owner to apply.
+    acceptance_criteria:
+      - "docs/migration/decisions/0029-*.md exists and is a real decision record in this project's established format (Question / Decision / Reasoning / Consequences / What this record does not decide / sign-off sections, matching 0022's, 0026's and 0027's own shape), and answers all five numbered questions in this requirement's description with a concrete named answer for each -- not a restatement of the question and not a list of options left open"
+      - "the record answers sub-question 1 with an explicit YES or NO on whether a pack carries scripted rules, and the record shows a NO was genuinely available rather than argued away: it cites decision 0027 by file and quotes the passage settling service_catalog_entries as permanently out-of-band, and states in one sentence why the same reasoning does or does not apply here. If the answer is NO, the record names the alternative provisioning path concretely and states whether it exists today or must be built and by whom"
+      - "the record answers sub-question 2 with an explicit YES or NO on whether a pack seeds roles, quoting solution_pack.ex's own moduledoc line stating that no role is created (around lines 69-71) and its Known-gap statement that required_roles is always [] on export (around lines 167-171). If the answer is NO, the record states explicitly that the pack phase's role-seed deliverable is misstated and gives the corrected wording verbatim"
+      - "the record establishes the caller situation for Letflow.Identity.RoleRegistry.upsert_role/2 by evidence, not assertion: it runs `grep -rn upsert_role lib/`, quotes the FULL output verbatim (the output is non-empty -- hits are expected, and a record claiming the function is uncalled is wrong), and then walks every .ex call site in that output -- .md design files may be dismissed in one line as non-executing -- stating for each whether it lies on a pack install path, concluding that none does. lib/letflow/routers/identity.ex must appear in that walk and be identified as the live POST /roles :RolesManage route, off the pack install path"
+      - "the record takes an explicit position, in as many words, on whether POST /roles is the out-of-band role-provisioning analogue of the POST /service-catalog route on which decision 0027 grounded its permanent no for service_catalog_entries -- and therefore whether 0027's reasoning transfers to sub-question 2 directly. A YES on sub-question 2 that does not confront this analogy, or a NO that does not name it as the ground, fails this criterion"
+      - "the record states plainly that a NO answer was legitimate for BOTH sub-question 1 and sub-question 2, and is not a failure or a deferral -- with 0027 cited as the standing precedent for a permanent no"
+      - "if either answer is YES, the record picks BY NAME between reusing Letflow.Engine.LuaScriptAudit and modelling a new audit record on it, quotes that module's moduledoc statements that it is a deliberately narrow audit-persistence path against an injected executor and NOT the general handler, and justifies the pick against those words. The record states explicitly that pack-supplied script content is durable tenant-supplied content that causes later execution. If both answers are NO, the record states that sub-question 3 does not arise and why"
+      - "the record takes an explicit position on sub-question 4 -- whether pack_document's sections should be an open registry or stay a closed struct -- in ONE unambiguous sentence, and supports it by naming every section added or wanted since the type was first written and what each required changing"
+      - "the record restates the pack phase's deliverables as a corrected explicit list given the answers reached, in a form that can be copied into docs/migration/stage-10-bilimbaga-vertical.md's phase table by that file's owner -- and the record states that it does not itself make that edit"
+      - "SECURITY-REVIEWER IS A NAMED HARD GATE ON THIS RECORD and has recorded a verdict in a section of its own, addressing pack-supplied executable content specifically: whether the answers reached admit durable tenant-supplied content that causes later execution, and if so, by what audit and what boundary. A general pass that does not address pack-supplied executable content by name does not satisfy this criterion. The verdict is recorded distinctly from any REVIEWER verdict"
+      - "REVIEWER has reviewed the record for decision-record consistency with 0022 (whose bucket-A definition is 'definitions installed via SolutionPack.install/3', and which the answers here may narrow or confirm), 0026 and 0027, and its verdict is recorded distinctly from SECURITY-REVIEWER's. The record states explicitly whether its answers change what bucket A means under 0022, and if they do, says so in those terms rather than leaving the reader to infer it"
+      - "the record states whether a design artefact under lib/letflow/design/ was also warranted, and either produces one or states in the record why the decision record alone suffices"
+      - "0022's rule 1 holds textually: grep the decision record, any design artefact it produced, and this requirement's own title, description and acceptance criteria for single-vertical domain vocabulary, confirming zero hits outside bare 'S10 gap 16' / 'S10 gap 17' stage-bookkeeping citations. The grep command and its real output are quoted"
+      - "`git diff --name-only` shows only the new file under docs/migration/decisions/, at most one new file under lib/letflow/design/ if one was judged warranted, and docs/requirements.yaml for this entry's own status bookkeeping -- no file under lib/letflow/definitions/, lib/letflow/identity/, lib/letflow/engine/, priv/repo/migrations/ or test/, and not docs/migration/stage-10-bilimbaga-vertical.md. Quoted with the command"
+    depends_on: []

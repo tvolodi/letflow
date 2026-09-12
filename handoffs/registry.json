@@ -6423,6 +6423,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "ISS-0617 (queue task 617, GH#1294) -- Letflow.Entities.Record.Validator.field_subschema/1 was missing a clause for :localized_text (REQ-301 landed DDL/query but never the write-path validator), causing FunctionClauseError on every write of such a field -- an INV-8-shaped crash, blocking S10 P2's exit condition. Fixed by adding the missing clause matching ddl.ex's storage shape, with additionalProperties: false set explicitly at the nested level and partial-locale writes allowed (every generated column is nullable). Fail-first verified via a stash/pop cycle: 7/17 tests crashed pre-fix. Pipeline: ISSUE-FIXER (diagnosis only) -> ELIXIR-DEV -> SECURITY-REVIEWER PASS (INV-8, INV-1 by name) -> REVIEWER PASS (independently verified DDL-shape match, ran the full suite: only known pre-existing/environmental failures). TEST-DESIGNER/TEST-DESIGN-VALIDATOR skipped per established precedent."
+    },
+    {
+      "run_id": "WF02-REQ325-20260912",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-325",
+      "issue_id": null,
+      "queue_task_id": 619,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1298,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "docs/migration/decisions/"
+      ],
+      "branch_name": "feature/WF02-REQ325-20260912",
+      "started_at": "2026-09-12T17:49:24Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-325 (queue task 619, GH#1298, no depends_on) -- decision record settling S10 gaps 16/17 (third/fourth recurrence of a new packable-content-type wanting to extend pack_document's closed struct type). Answers: pack does NOT carry scripted rules (no existing out-of-band route today, but the NO is the more conservative posture); pack does NOT seed roles (POST /roles confirmed as the direct out-of-band analogue of 0027's POST /service-catalog grounding, established by full upsert_role caller-walk evidence); audit question does not arise; pack_document stays closed; corrected pack-phase deliverables stated for the stage file's owner. Bucket A's meaning under 0022 unchanged. New file: docs/migration/decisions/0029-solution-pack-scripted-rules-and-role-seeding-scope.md. No design artefact -- both answers NO. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR FAIL then PASS (caught a dangling forward-reference to missing evidence, fixed and reconfirmed) -> SECURITY-REVIEWER PASS naming pack-supplied executable content by name -> REVIEWER PASS on decision-record consistency with 0022/0026/0027, independently re-verified the caller walk a third time."
     }
   ]
 }

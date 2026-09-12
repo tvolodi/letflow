@@ -288,3 +288,44 @@ history:
       precedent -- both hard-gate reviewers independently verified the
       7-test coverage as comprehensive. docs/issues/ISS-0617.yaml
       flipped to status: resolved.
+  - req: REQ-325
+    event: done
+    agent: ORCH
+    at: "2026-09-12T18:06:01Z"
+    note: >
+      REQ-325 (queue task 619, GH#1298, no depends_on) implemented via
+      feature/WF02-REQ325-20260912: a decision record settling S10
+      gaps 16 and 17 -- the third and fourth recurrence of "a new
+      packable-content-type wants to extend pack_document's closed
+      struct type" (after decision 0026's entity_definitions and
+      decision 0027's rejection of service_catalog_entries). Answers:
+      (1) a pack does NOT carry scripted rules -- unlike 0027's
+      precedent, no existing out-of-band route exists today for
+      scripts, but the NO holds even more conservatively (closes the
+      surface entirely, nothing to eventually replace); (2) a pack
+      does NOT seed roles -- the read-only role-mapping checklist
+      stays permanent, POST /roles confirmed as the direct analogue of
+      0027's POST /service-catalog grounding, established by evidence
+      (full grep -rn upsert_role lib/ output quoted and every .ex hit
+      walked); (3) audit question does not arise, both prior answers
+      NO; (4) pack_document stays a closed struct type; (5) corrected
+      pack-phase deliverables stated for the stage file's owner to
+      apply later. Bucket A's meaning under decision 0022 is
+      unchanged. No design artefact produced -- both sub-question-1
+      answers NO, none warranted.
+
+      Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR FAIL then PASS
+      (first pass caught a dangling forward-reference to a promised
+      but never-written "Caller walk" evidence subsection; CODE-
+      DESIGNER added the real evidence, CODE-DESIGN-VALIDATOR
+      independently re-ran the grep and confirmed the walk) ->
+      SECURITY-REVIEWER PASS naming pack-supplied executable content
+      by name per this requirement's explicit acceptance criterion ->
+      REVIEWER PASS, distinct from SECURITY-REVIEWER's, on decision-
+      record consistency (confirmed no silent re-decision of
+      0022/0026/0027, independently re-verified the upsert_role caller
+      walk a third time). Scope fence held -- only the one decision-
+      record file plus docs/requirements.yaml status bookkeeping; no
+      lib/letflow/definitions/, lib/letflow/identity/,
+      lib/letflow/engine/, migrations, test/, or the stage file
+      touched. docs/requirements.yaml flipped pending -> done.

@@ -949,3 +949,18 @@ history:
       appends this event, and closes GitHub mirror issue #1263 with an
       evidence comment citing PR #1276 and the CI results -- no code
       change, the implementation was already merged separately.
+
+  - req: REQ-317
+    event: started
+    agent: ORCH
+    at: "2026-09-11T22:35:37Z"
+    note: >
+      Run WF02-REQ317-20260912. Claimed via get_next_task (queue task
+      609, GH#1266). Implements lib/letflow/design/req313-entity-
+      record-attachments.md §3/§4/§5: two new permission atoms
+      (:EntitiesAttachmentsManage, :EntitiesAttachmentsRead) with
+      role-matrix arms per §7 OQ-2, and four new routes on
+      Letflow.Routers.Entities delegating to
+      Letflow.Repository.EntityAttachments (REQ-316, already merged).
+      Branch: feature/WF02-REQ317-20260912. Dispatching ELIXIR-DEV
+      next, gated by SECURITY-REVIEWER (tenant-data path).

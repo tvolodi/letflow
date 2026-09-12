@@ -29,7 +29,7 @@ defmodule Letflow.Api.AuthorizationTest do
              ]
     end
 
-    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, and REQ-318's three entity-record export/import permissions" do
+    test "permissions/0 returns exactly R-Co's fourteen Permission values plus REQ-075's :TenantsManage, REQ-076's :RolesManage, REQ-212's :AttachmentsManage/:AttachmentsRead, ISS-0389's :InstancesAdvanceTimer, REQ-309's four Entities* permissions, REQ-315's :EntitiesAggregate, REQ-318's three entity-record export/import permissions, and REQ-317's :EntitiesAttachmentsManage/:EntitiesAttachmentsRead" do
       assert Authorization.permissions() == [
                :DefinitionsWrite,
                :DefinitionsRead,
@@ -57,7 +57,9 @@ defmodule Letflow.Api.AuthorizationTest do
                :EntitiesAggregate,
                :EntitiesRecordsExport,
                :EntitiesRecordsExportUnredacted,
-               :EntitiesRecordsImport
+               :EntitiesRecordsImport,
+               :EntitiesAttachmentsManage,
+               :EntitiesAttachmentsRead
              ]
     end
   end
@@ -376,7 +378,9 @@ defmodule Letflow.Api.AuthorizationTest do
           24 => "twenty-four",
           25 => "twenty-five",
           26 => "twenty-six",
-          27 => "twenty-seven"
+          27 => "twenty-seven",
+          28 => "twenty-eight",
+          29 => "twenty-nine"
         }
         |> Map.get(actual_count)
 
@@ -880,7 +884,9 @@ defmodule Letflow.Api.AuthorizationTest do
           24 => "twenty-four",
           25 => "twenty-five",
           26 => "twenty-six",
-          27 => "twenty-seven"
+          27 => "twenty-seven",
+          28 => "twenty-eight",
+          29 => "twenty-nine"
         }
         |> Map.get(actual_count)
 
@@ -1041,9 +1047,10 @@ defmodule Letflow.Api.AuthorizationTest do
 
       # The live list STARTS WITH the pre-existing twenty-three plus REQ-315's
       # one, in that order: proves REQ-315's own change was purely an append.
-      # A prefix check (not exact equality) is deliberate here -- REQ-318 (a
-      # later requirement) appends three more permissions after these, and
-      # this test asserts only what REQ-315 itself is responsible for.
+      # A prefix check (not exact equality) is deliberate here -- REQ-318 and
+      # REQ-317 (both later requirements) each append more permissions after
+      # these, and this test asserts only what REQ-315 itself is responsible
+      # for.
       expected_prefix = @pre_req315_permissions ++ [:EntitiesAggregate]
       assert Enum.take(live, length(expected_prefix)) == expected_prefix
 
@@ -1100,6 +1107,14 @@ defmodule Letflow.Api.AuthorizationTest do
     :EntitiesRecordsExportUnredacted,
     :EntitiesRecordsImport
   ]
+
+  # REQ-317 — the two record-attachment permissions, :EntitiesAttachmentsManage
+  # / :EntitiesAttachmentsRead (design
+  # lib/letflow/design/req313-entity-record-attachments.md §4's permission
+  # vocabulary, §7 OQ-2's role-matrix proposal). Landed on main after REQ-318
+  # (see this module's own moduledoc for the append order), so this atom pair
+  # sits at the tail of permissions/0, after REQ-318's three.
+  @req317_permissions [:EntitiesAttachmentsManage, :EntitiesAttachmentsRead]
 
   describe "REQ-318 AC1 — permissions/0 includes all three new atoms" do
     test "permissions/0 contains :EntitiesRecordsExport, :EntitiesRecordsExportUnredacted and :EntitiesRecordsImport" do
@@ -1294,6 +1309,134 @@ defmodule Letflow.Api.AuthorizationTest do
     end
   end
 
+  describe "REQ-317 AC1 — permissions/0 contains the two new atoms, @doc count matches, endpoint_policy_key resolves all four routes" do
+    test "permissions/0 contains both new atoms" do
+      for permission <- @req317_permissions do
+        assert permission in Authorization.permissions(),
+               "expected permissions/0 to contain #{inspect(permission)}"
+      end
+    end
+
+    test "the permissions/0 @doc's stated count equals length(permissions()) exactly" do
+      {:docs_v1, _anno, _lang, _fmt, _moduledoc, _meta, fn_docs} =
+        Code.fetch_docs(Letflow.Api.Authorization)
+
+      permissions_doc =
+        Enum.find_value(fn_docs, fn
+          {{:function, :permissions, 0}, _anno, _sig, %{"en" => doc}, _meta} -> doc
+          _ -> nil
+        end)
+
+      actual_count = length(Authorization.permissions())
+
+      spelled =
+        %{
+          24 => "twenty-four",
+          25 => "twenty-five",
+          26 => "twenty-six",
+          27 => "twenty-seven",
+          28 => "twenty-eight",
+          29 => "twenty-nine"
+        }
+        |> Map.get(actual_count)
+
+      assert is_binary(spelled),
+             "permissions/0 now returns #{actual_count} entries, outside this test's " <>
+               "number-word table -- extend the table (and the @doc) rather than deleting " <>
+               "this assertion"
+
+      assert permissions_doc =~ "All #{spelled} `Permission` values",
+             """
+             permissions/0's @doc does not state the live count.
+             permissions/0 currently returns #{actual_count} entries, so the @doc must \
+             open with "All #{spelled} `Permission` values". Actual @doc:
+
+             #{permissions_doc}
+             """
+    end
+
+    test "endpoint_policy_key/2 resolves the four new routes, never :Unknown" do
+      cases = [
+        {"POST", "/entities/records/:entity_type/:record_id/attachments",
+         :EntitiesAttachmentsManage},
+        {"GET", "/entities/records/:entity_type/:record_id/attachments",
+         :EntitiesAttachmentsRead},
+        {"GET", "/entities/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsRead},
+        {"DELETE", "/entities/records/:entity_type/:record_id/attachments/:attachment_id",
+         :EntitiesAttachmentsManage}
+      ]
+
+      for {method, path, expected} <- cases do
+        key = Authorization.endpoint_policy_key(method, path)
+
+        assert key == expected,
+               "endpoint_policy_key(#{inspect(method)}, #{inspect(path)}) returned " <>
+                 "#{inspect(key)}, expected #{inspect(expected)}"
+
+        refute key == :Unknown
+      end
+    end
+
+    test "required_permission/1 identity mapping for both new atoms" do
+      assert Authorization.required_permission(:EntitiesAttachmentsManage) ==
+               :EntitiesAttachmentsManage
+
+      assert Authorization.required_permission(:EntitiesAttachmentsRead) ==
+               :EntitiesAttachmentsRead
+    end
+  end
+
+  describe "REQ-317 AC2 — exact 2-permission x 5-role grid from design §7 OQ-2's table" do
+    @req317_grid %{
+      PLATFORM_ADMIN: %{EntitiesAttachmentsManage: true, EntitiesAttachmentsRead: true},
+      PROCESS_DESIGNER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: true},
+      PROCESS_OPERATOR: %{EntitiesAttachmentsManage: true, EntitiesAttachmentsRead: true},
+      TASK_WORKER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: true},
+      AGENT_RUNNER: %{EntitiesAttachmentsManage: false, EntitiesAttachmentsRead: false}
+    }
+
+    test "the grid covers every role x both new permissions -- 10 pairs, none missing" do
+      assert Map.keys(@req317_grid) |> Enum.sort() == Authorization.roles() |> Enum.sort()
+
+      pairs =
+        for {_role, by_permission} <- @req317_grid,
+            {permission, _} <- by_permission,
+            do: permission
+
+      assert length(pairs) == 10
+
+      for {role, by_permission} <- @req317_grid do
+        assert Enum.sort(Map.keys(by_permission)) == Enum.sort(@req317_permissions),
+               "grid row for #{role} does not name exactly the two new permissions"
+      end
+    end
+
+    test "role_allows?/2 matches the grid for all 10 role/permission pairs" do
+      for {role, by_permission} <- @req317_grid,
+          {permission, expected} <- by_permission do
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "role_allows?(#{inspect(role)}, #{inspect(permission)}) returned " <>
+                 "#{inspect(actual)}, design §7 OQ-2's role matrix says #{inspect(expected)}"
+      end
+    end
+
+    test "evaluate_access/2 agrees with the grid end-to-end" do
+      for {role, by_permission} <- @req317_grid,
+          {policy_key, expected_allowed} <- by_permission do
+        ctx = %AccessContext{user_id: "u-#{role}", roles: [role]}
+        decision = Authorization.evaluate_access(ctx, policy_key)
+        expected_kind = if expected_allowed, do: :Allow, else: :Deny403
+
+        assert decision.kind == expected_kind,
+               "evaluate_access(roles: [#{inspect(role)}], #{inspect(policy_key)}) returned " <>
+                 "#{inspect(decision.kind)}, expected #{inspect(expected_kind)}"
+      end
+    end
+  end
+
   describe "REQ-318 AC6 — regression: no EXISTING role/permission pair changed, and only PLATFORM_ADMIN's catch-all grants the three new atoms" do
     # Snapshot of every permission that existed before REQ-318 (the 23
     # REQ-309-era permissions plus REQ-315's :EntitiesAggregate, which merged
@@ -1376,9 +1519,15 @@ defmodule Letflow.Api.AuthorizationTest do
       AGENT_RUNNER: []
     }
 
-    test "the live permissions/0 list is exactly the pre-existing twenty-four plus REQ-318's three, in that order" do
+    test "the live permissions/0 list's first twenty-seven entries are exactly the pre-existing twenty-four plus REQ-318's three, in that order" do
+      # A prefix check (not exact equality) is deliberate here -- REQ-317 (a
+      # later requirement, landed after REQ-318) appends two more permissions
+      # after these, and this test asserts only what REQ-318 itself is
+      # responsible for.
       assert length(@pre_req318_permissions) == 24
-      assert Authorization.permissions() == @pre_req318_permissions ++ @req318_permissions
+      expected_prefix = @pre_req318_permissions ++ @req318_permissions
+      live = Authorization.permissions()
+      assert Enum.take(live, length(expected_prefix)) == expected_prefix
     end
 
     test "all 120 pre-existing role/permission pairs return exactly what they returned before REQ-318" do
@@ -1423,6 +1572,166 @@ defmodule Letflow.Api.AuthorizationTest do
         refute Authorization.role_allows?(:AGENT_RUNNER, permission),
                "expected AGENT_RUNNER to be denied #{inspect(permission)}"
       end
+    end
+  end
+
+  describe "REQ-317 AC3 — regression grid: no PRE-EXISTING role/permission pair changed" do
+    # Every permission that existed before REQ-317 (the pre-REQ-315 twenty-
+    # three plus REQ-315's own :EntitiesAggregate), crossed with all five
+    # roles: 120 pairs. Same discipline as REQ-309's AC5 / REQ-315's AC3 /
+    # REQ-318's AC6 above -- transcribed by hand from this module as it stood
+    # immediately before REQ-317, NOT derived from the module under test. By
+    # the time this branch rebased, REQ-318 had already landed on main ahead
+    # of REQ-317, so this baseline (24 entries, ending in :EntitiesAggregate)
+    # predates REQ-318's three atoms too -- see the prefix-check test below,
+    # which accounts for that.
+    @pre_req317_permissions [
+      :DefinitionsWrite,
+      :DefinitionsRead,
+      :InstancesStart,
+      :InstancesCancel,
+      :InstancesRead,
+      :TasksRead,
+      :TasksComplete,
+      :TasksAssign,
+      :UsersGroupsRolesManage,
+      :TokensManage,
+      :AuditRead,
+      :DlqOperate,
+      :MetricsRead,
+      :WebhooksManage,
+      :TenantsManage,
+      :RolesManage,
+      :AttachmentsManage,
+      :AttachmentsRead,
+      :InstancesAdvanceTimer,
+      :EntitiesDefinitionsRead,
+      :EntitiesDefinitionsWrite,
+      :EntitiesRecordsWrite,
+      :EntitiesQuery,
+      :EntitiesAggregate
+    ]
+
+    @pre_req317_allowed %{
+      PLATFORM_ADMIN: @pre_req317_permissions,
+      PROCESS_DESIGNER: [
+        :DefinitionsWrite,
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesRead,
+        :TasksRead,
+        :RolesManage,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesDefinitionsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      PROCESS_OPERATOR: [
+        :DefinitionsRead,
+        :InstancesStart,
+        :InstancesCancel,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :TasksAssign,
+        :AuditRead,
+        :DlqOperate,
+        :MetricsRead,
+        :WebhooksManage,
+        :AttachmentsManage,
+        :AttachmentsRead,
+        :InstancesAdvanceTimer,
+        :EntitiesDefinitionsRead,
+        :EntitiesRecordsWrite,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      TASK_WORKER: [
+        :DefinitionsRead,
+        :InstancesRead,
+        :TasksRead,
+        :TasksComplete,
+        :AttachmentsRead,
+        :EntitiesDefinitionsRead,
+        :EntitiesQuery,
+        :EntitiesAggregate
+      ],
+      AGENT_RUNNER: []
+    }
+
+    test "the regression grid is complete: 5 roles x 24 pre-existing permissions = 120 pairs" do
+      assert length(@pre_req317_permissions) == 24
+      assert Enum.sort(Map.keys(@pre_req317_allowed)) == Enum.sort(Authorization.roles())
+
+      live = Authorization.permissions()
+
+      for permission <- @pre_req317_permissions do
+        assert permission in live,
+               "#{inspect(permission)} existed before REQ-317 but is no longer in " <>
+                 "permissions/0 -- a permission was REMOVED, not added"
+      end
+
+      # The live list STARTS WITH the pre-existing twenty-four, in that
+      # order: proves nothing before REQ-317 was disturbed. A prefix check
+      # (not exact equality with `@pre_req317_permissions ++ @req317_permissions`)
+      # is deliberate -- REQ-318 landed on main ahead of this branch's own
+      # rebase and inserted its own three atoms between this baseline and
+      # REQ-317's two, so REQ-317's own atoms are checked separately below
+      # (this file's "REQ-317 AC1" describe block already confirms both are
+      # present in permissions/0).
+      assert Enum.take(live, length(@pre_req317_permissions)) == @pre_req317_permissions
+
+      pair_count = length(Authorization.roles()) * length(@pre_req317_permissions)
+      assert pair_count == 120
+    end
+
+    test "all 120 pre-existing role/permission pairs return exactly what they returned before REQ-317" do
+      for role <- [
+            :PLATFORM_ADMIN,
+            :PROCESS_DESIGNER,
+            :PROCESS_OPERATOR,
+            :TASK_WORKER,
+            :AGENT_RUNNER
+          ],
+          permission <- @pre_req317_permissions do
+        expected = permission in Map.fetch!(@pre_req317_allowed, role)
+        actual = Authorization.role_allows?(role, permission)
+
+        assert actual == expected,
+               "REGRESSION: role_allows?(#{inspect(role)}, #{inspect(permission)}) is now " <>
+                 "#{inspect(actual)} but was #{inspect(expected)} before REQ-317. This " <>
+                 "change must be purely additive -- no existing role/permission pair may " <>
+                 "change hands."
+      end
+    end
+
+    test "required_permission/1 and endpoint_policy_key/2 are unchanged for the pre-existing entity-subsystem routes" do
+      assert Authorization.endpoint_policy_key("POST", "/entities/query") == :EntitiesQuery
+      assert Authorization.required_permission(:EntitiesQuery) == :EntitiesQuery
+
+      assert Authorization.endpoint_policy_key("POST", "/entities/records/:entity_type") ==
+               :EntitiesRecordsWrite
+
+      assert Authorization.endpoint_policy_key("POST", "/entities/query/aggregate") ==
+               :EntitiesAggregate
+    end
+
+    test "an undeclared /entities/records/.../attachments path is still :Unknown, and the new clauses did not widen matching" do
+      assert Authorization.endpoint_policy_key(
+               "GET",
+               "/entities/records/:entity_type/attachments"
+             ) == :Unknown
+
+      assert Authorization.endpoint_policy_key(
+               "PATCH",
+               "/entities/records/:entity_type/:record_id/attachments"
+             ) == :Unknown
+
+      assert Authorization.endpoint_policy_key(
+               "GET",
+               "/entities/records/:entity_type/:record_id/attachments/:attachment_id/extra"
+             ) == :Unknown
     end
   end
 end

@@ -92,6 +92,31 @@ defmodule Letflow.Simulation.Req207VortexTest do
   router's route set by equality, so their eventual landing is caught
   structurally regardless of this allowlist's state.
 
+  ## REQ-317 lands, 2026-09-12 (fifteenth route -- re-derived, not waved through)
+
+  REQ-317 ("Add the entity-attachment permission atoms and the four record-
+  attachment routes to Letflow.Routers.Entities (S10 gap 3, part 2)") lands
+  real code on `Letflow.Routers.Entities`: two new
+  `Letflow.Api.Authorization` permission atoms
+  (`:EntitiesAttachmentsManage`/`:EntitiesAttachmentsRead`) and four new
+  routes -- `POST`/`GET /records/:entity_type/:record_id/attachments` and
+  `GET`/`DELETE /records/:entity_type/:record_id/attachments/:attachment_id`
+  -- confirmed live via `__authz_routes__/0`, not trusted from the
+  requirement text. Re-derived the same way REQ-315 was: this scenario's six
+  `:gui` steps are list/filter x2/sort/page/field-redaction reads over
+  individual entity records' `field_values`, all exclusively through
+  `POST /entities/query` (REQ-311's route) -- none of them uploads, lists,
+  downloads, or deletes a binary file attached to a record. The four new
+  routes are a DIFFERENT capability (record-attachment lifecycle, gated by
+  the DISTINCT `:EntitiesAttachmentsManage`/`:EntitiesAttachmentsRead`
+  permissions, per design req313-entity-record-attachments.md §3/§4) that
+  this scenario's fixture never calls and has no reason to. So, like REQ-315
+  (and unlike REQ-310/311), REQ-317 closes no gap this scenario was waiting
+  on. Signal 3'' below was updated to assert the real, now-fifteen-route set
+  by equality, and the disposition itself is UNCHANGED: still
+  `BLOCKED_ON_DEPENDENCY`, still on S8's GUI-step harness (Signal 5), still
+  nothing under `lib/` left for this scenario to wait on.
+
   Full reasoning and the complete re-derivation history live in that describe
   block's own comments; `test/specs/REQ-310.md` states the test cases.
 
@@ -1663,23 +1688,40 @@ defmodule Letflow.Simulation.Req207VortexTest do
           # through POST /entities/query above. Included here so this
           # equality assertion reflects the router's real, live surface;
           # its DEPARTURE would fire this tripwire same as any other row's.
-          {"POST", "/query/aggregate", :EntitiesAggregate}
+          {"POST", "/query/aggregate", :EntitiesAggregate},
+          # REQ-317's twelfth through fifteenth rows (2026-09-12) -- the
+          # record-attachment lifecycle routes, gated by the two DISTINCT
+          # :EntitiesAttachmentsManage/:EntitiesAttachmentsRead permissions.
+          # Re-derived (moduledoc above) and found to close no gap this
+          # scenario's six :gui steps were waiting on -- none of them
+          # uploads, lists, downloads, or deletes a record's attachment;
+          # all six read a record's field_values through POST
+          # /entities/query above. Included here so this equality assertion
+          # reflects the router's real, live surface; their DEPARTURE would
+          # fire this tripwire same as any other row's.
+          {"POST", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsManage},
+          {"GET", "/records/:entity_type/:record_id/attachments", :EntitiesAttachmentsRead},
+          {"GET", "/records/:entity_type/:record_id/attachments/:attachment_id",
+           :EntitiesAttachmentsRead},
+          {"DELETE", "/records/:entity_type/:record_id/attachments/:attachment_id",
+           :EntitiesAttachmentsManage}
         ])
 
       actual_routes = MapSet.new(Letflow.Routers.Entities.__authz_routes__())
 
       assert MapSet.equal?(actual_routes, expected_routes),
              "Letflow.Routers.Entities must serve exactly REQ-310's nine routes plus " <>
-               "REQ-311's POST /query and REQ-315's POST /query/aggregate. " <>
+               "REQ-311's POST /query, REQ-315's POST /query/aggregate, and REQ-317's four " <>
+               "record-attachment routes. " <>
                "Unexpected: #{inspect(MapSet.to_list(MapSet.difference(actual_routes, expected_routes)))}; " <>
                "missing: #{inspect(MapSet.to_list(MapSet.difference(expected_routes, actual_routes)))}. " <>
-               "A TWELFTH route, or a MISSING one, means this router's surface changed " <>
+               "A SIXTEENTH route, or a MISSING one, means this router's surface changed " <>
                "again and this scenario's disposition must be re-derived once more -- " <>
                "see the banner at the top of this test. In particular, {\"POST\", \"/query\", " <>
                ":EntitiesQuery} going MISSING would mean the record read path was reverted, " <>
                "which would move the blocker back to S10 from S8."
 
-      assert MapSet.size(actual_routes) == 11
+      assert MapSet.size(actual_routes) == 15
 
       # POSITIVE now, where the previous round refuted it. The record read
       # route exists, and it carries the read permission REQ-309 minted for it.
@@ -1690,14 +1732,20 @@ defmodule Letflow.Simulation.Req207VortexTest do
                "Its absence would move this scenario's blocker back to the missing route"
 
       # UNCHANGED from the previous round, and still a refute: the query route
-      # being the read path is exactly why no GET may appear under /records.
-      # This is design §1's rule, not a statement about what is unbuilt.
+      # being the read path is exactly why no GET may appear under /records
+      # FOR THE RECORD ITSELF. This is design §1's rule, not a statement
+      # about what is unbuilt. REQ-317 legitimately added two GET routes
+      # under /records/..., but both are the record's ATTACHMENT
+      # sub-resource (/records/:entity_type/:record_id/attachments...), not
+      # the record's own field_values -- excluded here so this assertion
+      # still proves what it always proved.
       refute Enum.any?(actual_routes, fn {method, path, _perm} ->
-               method == "GET" and String.starts_with?(path, "/records")
+               method == "GET" and String.starts_with?(path, "/records") and
+                 not String.contains?(path, "attachments")
              end),
-             "No GET route may exist under /records -- record reads are POST /entities/query " <>
-               "only (design §1). A GET here would be a second read path bypassing the " <>
-               "query route's FieldGrants redaction"
+             "No GET route may exist under /records for the record itself -- record reads " <>
+               "are POST /entities/query only (design §1). A GET here would be a second read " <>
+               "path bypassing the query route's FieldGrants redaction"
 
       # ── Signal 3''' (INVERTED 2026-09-11): the permission is CONSUMED. ────
       #

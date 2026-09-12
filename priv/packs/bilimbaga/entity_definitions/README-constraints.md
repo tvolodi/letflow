@@ -86,7 +86,7 @@ Source: `012_exams.up.sql` lines 31–33, on table `exams`, verbatim:
 
 ## Group (ii) — single-column range checks
 
-All six of these are range predicates on one column. Each relocates to the same
+All seven of these are range predicates on one column. Each relocates to the same
 form-schema / `Expr` layer named above (REQ-291 / REQ-292 / REQ-293).
 
 | Source line | Verbatim | Entity type | Field |

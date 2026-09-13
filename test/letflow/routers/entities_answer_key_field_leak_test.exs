@@ -55,7 +55,7 @@ defmodule Letflow.Routers.EntitiesAnswerKeyFieldLeakTest do
 
   defp dispatch(conn), do: Letflow.Router.call(conn, Letflow.Router.init([]))
 
-  defp request(method, path, ctx, body \\ nil) do
+  defp request(method, path, ctx, body) do
     conn =
       case body do
         nil ->

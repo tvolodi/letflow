@@ -692,3 +692,25 @@ history:
       lib/letflow/entities/**, and priv/repo/migrations/ throughout
       both the original PR and the addendum). docs/requirements.yaml
       flipped pending -> done.
+  - req: REQ-329
+    event: started
+    agent: ORCH
+    at: "2026-09-13T03:42:20Z"
+    note: >
+      Claimed letflow-queue task 625 (S10 P3, bucket A). Author five
+      live-session entity definitions (session, session_question,
+      session_answer, session_event, session_question_score) under
+      priv/packs/bilimbaga/entity_definitions/, porting BilimBaga's
+      014/015/016 migrations and model.go structs, following REQ-326/
+      REQ-327's established conventions (no id/timestamps/created_by,
+      composite natural keys as unique constraints not primary keys,
+      relocated CHECK constraints in README-constraints.md). Notably:
+      session_event is a deliberate addition (event_type field) beyond
+      its tab_switch_events source, which the source itself validates
+      then discards; and all five ON DELETE divergences (Letflow's
+      fixed RESTRICT vs. the source's CASCADE on most FKs) must be
+      tabulated. No pack installation, no Elixir -- that is a later
+      requirement (REQ-334 per this entry's own description).
+      Dispatching to ELIXIR-DEV given the real validator-execution
+      work involved, despite the nominal REQ-ANALYST owner field,
+      matching the REQ-326/327/328 precedent.

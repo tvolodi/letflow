@@ -1108,6 +1108,76 @@ defmodule Letflow.Routers.EntitiesTest do
       assert body["errors"] != []
     end
 
+    # REVIEWER finding (re-verifying REQ-336 AC4 after ISS-0648): a genuine
+    # duplicate-value write to a promoted-column entity type's own table
+    # (e.g. two "tag" records with the same name, now that ISS-0648 makes
+    # `uq_tag_name` a real Postgres UNIQUE constraint) used to raise a raw
+    # %Postgrex.Error{} that fell through `render_record_command/3`'s own
+    # INV-8 catch-all as a bare, detail-free 500 -- this is the missing
+    # empirical, end-to-end proof that it now surfaces as a real 422 with a
+    # field-level violation instead, exactly like every other
+    # `{:record_payload_invalid, _}` case above.
+    test "Records.command_error(): a real promoted-column UNIQUE violation -> 422, not a bare 500" do
+      ctx = tenant_ctx("req336-ac4-dup-unique-422")
+
+      {:ok, definition} =
+        Definitions.create_definition(
+          %{
+            definition: %{
+              name: "tag",
+              display_name: "Tag",
+              fields: [%{name: "name", type: :string, queried: true, required: true}],
+              constraints: [%{name: "uq_tag_name", type: :unique, fields: ["name"]}]
+            },
+            created_by: ctx.user_id
+          },
+          ctx.schema_name
+        )
+
+      # Activation runs the real ISS-0648 column-promotion trigger
+      # synchronously (Definitions.activate_definition/4 ->
+      # ensure_column_promotions/2 -> TenantProvisioning.run_column_promotion/1),
+      # so the "tag" entity table and its real UNIQUE(name) constraint exist
+      # by the time the first POST below runs.
+      {:ok, _activated} =
+        Definitions.activate_definition(
+          definition.name,
+          ctx.user_id,
+          "req336 go-live",
+          ctx.schema_name
+        )
+
+      on_exit(fn ->
+        Repo.delete_all(
+          from(cp in TenantProvisioning.ColumnPromotion,
+            where: cp.tenant_id == ^ctx.tenant_id and cp.entity_type == "tag"
+          )
+        )
+      end)
+
+      first =
+        request(:post, "/api/v1/entities/records/tag", ctx, %{
+          "field_values" => %{"name" => "duplicate-tag"}
+        })
+
+      assert first.status == 201
+
+      second =
+        request(:post, "/api/v1/entities/records/tag", ctx, %{
+          "field_values" => %{"name" => "duplicate-tag"}
+        })
+
+      assert second.status == 422
+
+      body = body_of(second)
+      assert is_list(body["errors"])
+
+      assert Enum.any?(body["errors"], fn error ->
+               error["code"] == "unique" and error["path"] == ["name"]
+             end),
+             "expected a unique violation naming the \"name\" field, got: #{inspect(body["errors"])}"
+    end
+
     test "Records.command_error(): {:record_not_found, _} -> 404 on update and delete" do
       ctx = tenant_ctx("req310-err-rec-404")
       seed_active_definition!(ctx)

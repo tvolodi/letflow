@@ -202,6 +202,132 @@ export interface AppendEventRequest {
   metadata?: Record<string, string>
 }
 
+// ── Entities (S10 P4, REQ-336) ─────────────────────────────────────────────────
+//
+// Mirrors lib/letflow/entities/definition.ex's `field_def()`/`t()` document
+// shape and lib/letflow/routers/entities.ex's response maps (`definition_map/1`,
+// `record_map/1`, `entity_row_map/1`) exactly -- these are wire shapes, not
+// aspirational ones. There is deliberately no "list"/"get by id" response type:
+// the router exposes neither route (see entities.ts's own moduledoc-mirroring
+// comment).
+
+/** The closed field-type vocabulary `Letflow.Entities.Definition.field_type()`
+ *  declares. Kept as a plain string union (not re-derived from TaskFormField's
+ *  own type union) because the two vocabularies are different documents that
+ *  happen to overlap -- entityFieldToFormField() is the explicit bridge. */
+export type EntityFieldType =
+  | 'string'
+  | 'integer'
+  | 'decimal'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'enum'
+  | 'json'
+  | 'localized_text'
+
+export interface EntityFieldDef {
+  name: string
+  type: EntityFieldType
+  required?: boolean
+  queried?: boolean
+  enum_values?: string[]
+  decimal_precision?: number
+  decimal_scale?: number
+  default?: unknown
+  locales?: string[]
+  search_strategy?: 'plain' | 'fulltext'
+}
+
+export interface EntityIndexDef {
+  name: string
+  fields: string[]
+  unique?: boolean
+}
+
+export interface EntityFkDef {
+  name: string
+  field: string
+  references_entity: string
+  references_field?: string
+}
+
+export interface EntityConstraintDef {
+  name: string
+  type: 'unique'
+  fields: string[]
+}
+
+/** The raw `entity_definition()` document -- `definition_map/1`'s `"definition"` key. */
+export interface EntityDefinitionDocument {
+  name: string
+  display_name: string
+  description?: string
+  fields: EntityFieldDef[]
+  indexes?: EntityIndexDef[]
+  foreign_keys?: EntityFkDef[]
+  constraints?: EntityConstraintDef[]
+}
+
+/** `GET /entities/definitions/active/:name`'s response body (`definition_map/1`). */
+export interface EntityDefinition {
+  id: string
+  name: string
+  display_name: string
+  definition: EntityDefinitionDocument
+  content_hash: string
+  logical_shape_version: string
+  artifact_version_id: string
+  status: string
+  inserted_at: string
+}
+
+/** One record as returned by `POST /entities/query` (`entity_row_map/1`) or by
+ *  create/update/delete (`record_map/1`). The two shapes differ only in
+ *  whether `entity_type` is present (record_map includes it, entity_row_map
+ *  does not, since the query request already names the type) -- both keep
+ *  `record_id`/`field_values`/`deleted`/`entity_def_version`/
+ *  `last_event_global_seq`, so this one interface covers both call sites. */
+export interface EntityRecord {
+  record_id: string
+  entity_type?: string
+  field_values: Record<string, unknown>
+  deleted: boolean
+  entity_def_version: string
+  last_event_global_seq: number
+}
+
+/** `POST /entities/query`'s response body. Deliberately NOT `CursorPage<T>`:
+ *  that shape's `has_more` field does not exist on this route's response
+ *  (`run_query/4` sends exactly `{"items", "next_cursor"}`) -- reusing
+ *  `CursorPage<T>` here would silently claim a field the API never sends. */
+export interface EntityRecordsPage<T = EntityRecord> {
+  items: T[]
+  next_cursor: string | null
+}
+
+export interface EntityQueryFilterClause {
+  field: string
+  op: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte' | 'in' | 'not_in' | 'contains' | 'is_null' | 'is_not_null'
+  value?: unknown
+}
+
+export interface EntityQuerySortClause {
+  field: string
+  dir: 'asc' | 'desc'
+}
+
+/** `POST /entities/query`'s request body. `join` is deliberately omitted --
+ *  this pilot (REQ-336) queries the `tag` entity type only, which has no
+ *  foreign keys; join support is a later requirement's concern. */
+export interface EntityQueryRequest {
+  entity_type: string
+  filters?: EntityQueryFilterClause[]
+  sort?: EntityQuerySortClause[]
+  cursor?: string
+  page_size?: number
+}
+
 // ── Identity (Stage 4/5) ──────────────────────────────────────────────────────
 
 // ── Auth (Stage F1) ───────────────────────────────────────────────────────────

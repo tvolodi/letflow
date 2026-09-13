@@ -3433,8 +3433,13 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 6
+    entries: 7
     note: >
+      Incremented to 7 by DOC-UPDATER's own REQ-336 done-event append
+      (Step 6) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 7 on-disk entries; 515
+      lines / 30180 bytes, well under the roll ceiling. No rebase
+      conflict on this file at the time it was written.
       Incremented to 6 by DOC-UPDATER's own REQ-338 done-event append
       (WF02-REQ338-20260914, Step 6) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 6 on-disk entries; 471

@@ -469,3 +469,47 @@ history:
       independently confirmed every acceptance criterion satisfied.
 
       docs/requirements.yaml flipped pending -> done.
+  - req: REQ-336
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T20:55:45Z"
+    note: >
+      REQ-336 (generic admin-CRUD screen engine in web/, S10 P4 bucket C
+      client, proven against the tag pilot entity) completed after
+      resuming from the ISS-0648 block recorded above. Full pipeline:
+      FRONTEND-DEV implementation (web/src/api/entities.ts,
+      web/src/utils/entityFieldToFormField.ts,
+      web/src/components/entities/, web/src/pages/entities/,
+      web/src/i18n/entitiesMessages.ts,
+      web/src/i18n/EntitiesIntlProvider.tsx, plus the entities-only
+      hunks in web/src/api/client.ts (putWithHeaders, for If-Match
+      optimistic-concurrency updates), web/src/types/api.ts and
+      web/src/api/queryKeys.ts's `entities` key group) -> blocked on a
+      real BLOCKER-severity backend gap found while checking this
+      requirement's own AC4 (pack-installed unique constraints, tag's
+      uq_tag_name included, were never enforced because column
+      promotion never ran at pack-install time) -> ISS-0648 fixed and
+      merged separately, unblocking this requirement -> resumed, and a
+      SECOND backend gap surfaced in the same AC4 path: even after
+      ISS-0648's fix, a unique-violation write was still surfacing to
+      the client as a bare 500 instead of a real 409/422, because
+      lib/letflow/entities/records.ex had no translation for Postgres's
+      unique_violation error class. ELIXIR-DEV root-caused and fixed
+      this in lib/letflow/entities/records.ex, with new end-to-end
+      coverage in test/letflow/routers/entities_test.exs and
+      test/letflow/entities/iss0648_column_promotion_trigger_test.exs
+      proving a real duplicate-tag POST against a real pack-installed
+      constraint now returns the documented error shape rather than a
+      500. Pipeline continued: SECURITY-REVIEWER PASS, REVIEWER PASS,
+      TEST-DESIGNER (no coverage gaps found), TEST-DESIGN-VALIDATOR
+      PASS, TEST-RUNNER (full `mix letflow.check`: 4221/4221; full
+      `npm run check` inside web/: 550/550), RELEASE-VALIDATOR PASS
+      (independently re-verified every acceptance criterion).
+
+      AC8 close-out ("no BilimBaga file copied"): confirmed by naming
+      the actual web/ design-system components the generic engine
+      composes rather than any copied BilimBaga-specific screen code --
+      PageLayout, Button, DataTable, PaginationControls, ConfirmDialog,
+      and QueryStateBoundary.
+
+      docs/requirements.yaml flipped pending -> done.

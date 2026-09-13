@@ -847,6 +847,25 @@ history:
       domain words (exam, session, question, candidate, submit, grade).
       INV-1 applies; SECURITY-REVIEWER gates it. Dispatching to
       ELIXIR-DEV.
+  - req: REQ-332
+    event: started
+    agent: ORCH
+    at: "2026-09-13T05:50:35Z"
+    note: >
+      Claimed letflow-queue task 628 (GH#1319, S10 P3, bucket C). Build
+      the live-session runtime under lib/letflow/exam/ -- start,
+      autosave, submit, score -- limited to exactly the three modules
+      REQ-330's rule-2 table authorises for this requirement:
+      Letflow.Exam.Session, Letflow.Exam.QuestionSetResolver,
+      Letflow.Exam.Scoring (Letflow.Exam.AntiCheat is REQ-333's scope).
+      No migration, no Ecto schema -- all five session entity types
+      (REQ-329) read/written exclusively through Letflow.Entities.Records
+      and Letflow.Entities.Query. Autosave write path is whatever
+      REQ-330 concluded (confirmed bucket C, ordinary path, no fast
+      path) -- REQ-332's own conditional resolves to the "ordinary
+      path" branch, not the "different write path" branch. No
+      gen_statem/GenServer/process-per-session (REQ-045/decision 0022
+      non-negotiable). Dispatching to ELIXIR-DEV.
   - req: REQ-331
     event: done
     agent: DOC-UPDATER

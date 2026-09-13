@@ -825,3 +825,76 @@ history:
       gap, not a permanent defect, matching the REQ-328/REQ-327
       precedent). Deferring REQ-331 until REQ-330 reaches done; will
       re-poll the queue rather than re-claim 627 in the meantime.
+  - req: REQ-331
+    event: started
+    agent: ORCH
+    at: "2026-09-13T05:39:39Z"
+    note: >
+      Re-claimed letflow-queue task 627 -- REQ-330 (design record) is
+      now status: done, merged via PR #1323 (commit afcea13b).
+      Confirmed REQ-330's own verdict on this behaviour BEFORE
+      dispatching, per this requirement's own acceptance criterion:
+      lib/letflow/design/req330-exam-live-session.md section 2, "Verdict:
+      bucket B -- CONFIRMED, not overturned." Build an eighth per-tenant
+      sweep on the existing lib/letflow/scheduler/poller.ex (no new
+      GenServer/supervisor child/ticker), matching the existing seven
+      sweeps' conventions (fresh config read per tick,
+      Admission.global_cap/0 read live, per-tenant failure isolation via
+      try/rescue), with FOR UPDATE SKIP LOCKED concurrency, per-record
+      transaction isolation, and the completion timestamp set to the
+      deadline value (not sweep time) -- porting BilimBaga's
+      autojob.go/FR-BB310 behaviour without any of the six forbidden
+      domain words (exam, session, question, candidate, submit, grade).
+      INV-1 applies; SECURITY-REVIEWER gates it. Dispatching to
+      ELIXIR-DEV.
+  - req: REQ-331
+    event: done
+    agent: DOC-UPDATER
+    at: "2026-09-13T06:46:53Z"
+    note: >
+      Close-out for run WF02-REQ331-20260913 (queue task 627, GH#1318),
+      branch feature/WF02-REQ331-20260913 (commit 20b1c5e3). REQ-330's
+      verdict quoted per REQ-331's own acceptance criterion:
+      lib/letflow/design/req330-exam-live-session.md section 2, "Verdict:
+      bucket B -- CONFIRMED, not overturned" -- REQ-331 was built exactly
+      as filed, not re-scoped.
+
+      New module lib/letflow/scheduler/record_deadline_sweep.ex (plain
+      functional module, not a process) added as an eighth per-tenant
+      sweep inside the existing lib/letflow/scheduler/poller.ex GenServer's
+      tick pipeline -- no new GenServer/supervisor child/ticker, matching
+      REQ-330's reuse-Poller verdict and the existing seven sweeps'
+      conventions (fresh config read per tick, live
+      Admission.global_cap/0 read inline, per-tenant try/rescue
+      isolation). Config-driven rule declaration
+      (Application.get_env(:letflow, :deadline_sweep, ...),
+      platform-operator/deploy-time only, no HTTP route or tenant-facing
+      path reaches it, no new permission atom needed) -- reasoning stated
+      explicitly in the moduledoc per its own acceptance criterion.
+
+      Real Postgres FOR UPDATE SKIP LOCKED concurrency (empirically
+      validated by ELIXIR-DEV: removing the lock clause caused 5/5
+      failures in a race test, restoring it passed 3/3), per-record
+      transaction isolation (a genuine unmocked schema-evolution
+      validation failure proven not to block sibling records), exact
+      completion-timestamp-equals-deadline assertion (not a range), and
+      an explicit INV-1 cross-tenant isolation test -- all four
+      independently re-verified by SECURITY-REVIEWER and REVIEWER, not
+      merely trusted from ELIXIR-DEV's report. Zero forbidden domain
+      vocabulary (exam/session/question/candidate/submit/grade) in any
+      new artefact, per a mechanical grep re-run independently three
+      times (ELIXIR-DEV, SECURITY-REVIEWER, REVIEWER) -- one sanctioned
+      bare-path FR-BB310 citation is the only exception, exactly per the
+      requirement's own escape clause.
+
+      Also: the Req207VortexTest tripwire triage for REQ-331 was already
+      handled in an earlier, separate PR (#1325, commit 67b861ad) during
+      the same session, before REQ-330 unblocked this requirement -- no
+      new tripwire work needed here.
+
+      Gated PASS by SECURITY-REVIEWER (INV-1 tenant isolation confirmed),
+      REVIEWER (idiom/convention/decision-record consistency confirmed),
+      and TEST-DESIGN-VALIDATOR (full acceptance-criteria-to-test mapping
+      confirmed). TEST-RUNNER verified a full green suite (4124/4124
+      passed) plus a clean `mix letflow.check` on this branch.
+      docs/requirements.yaml flipped pending -> done.

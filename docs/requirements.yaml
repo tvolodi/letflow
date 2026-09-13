@@ -23081,7 +23081,7 @@ requirements:
     title: A generic deadline-driven record transition sweep on the existing Scheduler.Poller -- configured entity type, datetime field and status transition, with no domain vocabulary anywhere in it
     owner: ELIXIR-DEV
     impl_order: 627  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: B. THIS IS A P3 BEHAVIOUR THAT TURNED OUT NOT TO BE

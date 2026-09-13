@@ -165,6 +165,24 @@ defmodule Letflow.Scheduler.Poller do
       tenant's schema corrupted or mid-migration) is caught per-schema in
       `count_active_for_schema/1` -- that schema contributes `0` to the sum and every
       other schema, plus the timer poll-and-fire loop, is unaffected.
+
+  ## REQ-331 addition -- generic deadline-driven record transition sweep
+  (`lib/letflow/scheduler/record_deadline_sweep.ex`)
+
+  An EIGHTH per-tenant sweep, added on this same supervised process -- no new
+  `GenServer`, no new supervisor child, no second ticker. Rules are read fresh
+  every tick from `Application.get_env(:letflow, :deadline_sweep, [])`, never
+  cached in `state`, exactly like every other config-gated sweep here
+  (`:ordering`, `:alert_hooks`). Each configured rule runs as its own
+  `run_sweep/4` call, bounded by the same live `Admission.global_cap/0` value
+  read inside `maybe_run_deadline_sweep/1` on every call, and wrapped in
+  `with_admission/3` plus an inline `try/rescue -> :ok`, matching
+  `maybe_run_ordering_cycle/1`'s exact shape -- one tenant raising does not
+  stop the sweep for the others. This module carries no vertical-specific
+  vocabulary anywhere (0022 rule 1) -- see
+  `Letflow.Scheduler.RecordDeadlineSweep`'s own moduledoc for the full design
+  reasoning (rule declaration/authorization, INV-1, the SKIP LOCKED and
+  per-record isolation mechanisms).
   """
 
   use GenServer
@@ -176,6 +194,7 @@ defmodule Letflow.Scheduler.Poller do
   alias Letflow.Metrics.Registry, as: MetricsRegistry
   alias Letflow.Obs.Alerts
   alias Letflow.Scheduler
+  alias Letflow.Scheduler.RecordDeadlineSweep
   alias Letflow.TenantProvisioning.Registration
 
   import Ecto.Query
@@ -242,6 +261,7 @@ defmodule Letflow.Scheduler.Poller do
           maybe_run_ordering_cycle(schemas)
           maybe_run_ordering_sweeper(schemas)
           maybe_run_ordering_metrics(schemas)
+          maybe_run_deadline_sweep(schemas)
           Map.put(retention_state, :last_tick_started_at, now)
 
         :error ->
@@ -371,6 +391,28 @@ defmodule Letflow.Scheduler.Poller do
         end)
       end)
     end
+  end
+
+  # REQ-331: config (`:deadline_sweep`, a list of rules) read fresh on every
+  # tick, never cached in state. One run_sweep/4 call per configured rule --
+  # matches maybe_run_ordering_cycle/1's exact with_admission + inline
+  # try/rescue shape, so one tenant raising for one rule does not stop the
+  # sweep for the remaining tenants or the remaining rules.
+  defp maybe_run_deadline_sweep(schemas) do
+    cfg = Application.get_env(:letflow, :deadline_sweep, [])
+    rules = Keyword.get(cfg, :rules, [])
+
+    Enum.each(rules, fn rule ->
+      run_sweep(schemas, :deadline_sweep, Admission.global_cap(), fn schema_name ->
+        with_admission(schema_name, :deadline_sweep, fn ->
+          try do
+            RecordDeadlineSweep.run(schema_name, rule)
+          rescue
+            _ -> :ok
+          end
+        end)
+      end)
+    end)
   end
 
   defp tenant_schemas do

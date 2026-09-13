@@ -3141,8 +3141,13 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 20
+    entries: 22
     note: >
+      Incremented to 22 by DOC-UPDATER's own REQ-331 done-event append
+      (close-out for WF02-REQ331-20260913) --
+      `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =
+      22 on-disk entries; 900 lines / 52588 bytes, well under the roll
+      ceiling. No rebase conflict on this file.
       Recounted to 20 at feature/WF02-REQ330-20260913's Step Final
       SECOND rebase, which conflicted at this file's tail between
       main's own ORCH-direct REQ-331 blocked-event append (independently

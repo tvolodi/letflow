@@ -3141,8 +3141,39 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 23
+    entries: 25
     note: >
+      Recounted to 25 at feature/WF02-REQ332-20260913's Step Final
+      SECOND rebase, which conflicted at this file's tail between
+      main's own already-composed 24-count note (from the first
+      conflict, above) and this branch's own REQ-332 done-event append
+      (independently computed as 22 against a base that predated the
+      REQ-333 blocked-event). Both appends land at the SAME tail
+      position in v15.yaml with no overlapping lines -- the composed
+      resolution there is REQ-331 done, REQ-333 blocked, REQ-332 done,
+      in that chronological `at:` order (06:46:53Z, 06:59:26Z,
+      07:02:32Z) -- so only this index file's declared count and
+      narrative needed manual composition. Recounted directly from
+      `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =
+      25 rather than carrying forward either side's
+      independently-computed 22/24, per this note's own
+      recount-every-time rule. 1005 lines / 57831 bytes, well under
+      the roll ceiling.
+      Recounted to 24 at feature/WF02-REQ332-20260913's Step Final
+      rebase, which conflicted at this file's tail between main's own
+      REQ-331 done-event/REQ-333 blocked-event pair (independently
+      computed as 23) and this branch's own REQ-332 started-event
+      append (independently computed as 21 against a stale
+      pre-REQ-331-done base). Composed in chronological `at:` order --
+      REQ-332 started (2026-09-13T05:50:35Z) sorts between REQ-331's
+      own started (05:39:39Z) and done (06:46:53Z) events, so it was
+      reordered into that position rather than appended after both of
+      main's entries; REQ-333's blocked-event (06:59:26Z) sorts last
+      and needed no reordering. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 24 rather
+      than carrying forward either side's independently-computed
+      21/23, per this note's own recount-every-time rule. 944 lines /
+      54188 bytes, well under the roll ceiling.
       Incremented to 23 by ORCH's own REQ-333 blocked-event append
       (direct-action, dependency REQ-332 not yet done) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 23
@@ -3153,6 +3184,16 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =
       22 on-disk entries; 900 lines / 52588 bytes, well under the roll
       ceiling. No rebase conflict on this file.
+      Incremented to 22 by ORCH's own REQ-332 done-event append (Step
+      Final, WF02-REQ332-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 22 on-disk entries;
+      907 lines / 52325 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
+      Incremented to 21 by ORCH's own REQ-332 started-event append
+      (Step 00, WF02-REQ332-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 21 on-disk entries;
+      846 lines / well under the roll ceiling. No rebase conflict on
+      this file.
       Recounted to 20 at feature/WF02-REQ330-20260913's Step Final
       SECOND rebase, which conflicted at this file's tail between
       main's own ORCH-direct REQ-331 blocked-event append (independently

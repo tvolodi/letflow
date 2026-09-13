@@ -1,0 +1,121 @@
+run_id: WF02-REQ332-20260913
+agent: TEST-RUNNER
+workflow: WF-02 (Requirement Implementation), Step 4 -- Test run
+timestamp_utc: "2026-09-13T07:01:16Z"
+branch: feature/WF02-REQ332-20260913
+head_commit: 2d35a29b
+prior_commit: 7a7216f1
+
+git_state:
+  clean_tree_before_run: true
+  note: >
+    Branch already fully implemented, passed SECURITY-REVIEWER and
+    REVIEWER (2d35a29b signs off lib/letflow/design/req330-exam-live-session.md
+    section 7 for the three lib/letflow/exam/ modules: Session,
+    QuestionSetResolver, Scoring). This run made no code changes -- pure
+    verification.
+
+environment:
+  toolchain: "Elixir 1.20.3 (compiled with Erlang/OTP 29), OTP 29.0.5 -- matches .tool-versions exactly (letflow.check_toolchain reported both Elixir and OTP as 'matches'; only Rust is off-pin, see rust_pin_note below)."
+  docker_compose: "sudo docker compose up -d (docker.sock not group-accessible to this shell's user, sudo required) -- letflow-1-postgres-1 and letflow-1-keycloak-1 already Running, no-op. .env sets LETFLOW_DB_PORT=5463, matching the running postgres container's published port (0.0.0.0:5463->5432/tcp)."
+  deps: "deps/ already fetched (mix.lock present, deps/ populated) -- no network access needed this run."
+
+commands_run:
+  - "mix compile -- clean, 0 warnings, 0 errors."
+  - "mix format --check-formatted -- exit 0, no output (fully formatted)."
+  - "mix letflow.check -- full repository, all steps (see below)."
+
+letflow_check:
+  command: "mix letflow.check"
+  exit_code: 1
+  steps_before_test:
+    - "letflow.check_toolchain: Elixir matches, OTP matches, Rust NOT FOUND (rustc not installed) -- reported as WARNING only, never changes exit code."
+    - "letflow.check_requirements_registration: OK -- 304 entries = 302 registered + 2 deferred (REQ-223/224, pre-existing, unrelated) + 0 unclassified."
+    - "letflow.check_req_id_collision: OK -- no REQ-NNN id collision with origin/main."
+    - "letflow.check_deferral_staleness: OK (advisory stage-activity report only, no gate failure)."
+    - "letflow.lint_handoffs: OK -- 0 new violations across 2486 handoff files (25 pre-existing grandfathered)."
+    - "letflow.check_async_sandbox_reachability: OK -- 80 async:true test files scanned, 0 violations."
+    - "letflow.check_issue_refs: OK -- 327 files under docs/issues/, every cross-reference well-formed."
+    - "format --check-formatted: passed silently (no diff output; confirmed independently, see commands_run above)."
+    - "compile --warnings-as-errors: passed silently (no warnings emitted, no compile errors)."
+  test_step:
+    command: "letflow.check.test -> scripts/test_parallel.sh (8-way, N=8 from nproc)"
+    partitions: 8
+    output: |
+      test_parallel: N=8 (source: nproc)
+      test_parallel: pre-compiling MIX_ENV=test (single compile, before any partition launches)
+      test_parallel: TEST_POOL_SIZE=10 (computed: N=8, max_connections=100, superuser_reserved=3, headroom=10, nonpool_reserve=5)
+      test_parallel: seeding 8 per-partition build paths from _build/test (sequential)
+      test_parallel: partition logs in /tmp/letflow_test_parallel.hhqvkN
+      partition 1: 490 tests, 1 property, 2 failures, exit 2
+      partition 2: 491 tests, 0 properties, 0 failures, exit 0
+      partition 3: 594 tests, 0 properties, 0 failures, exit 0
+      partition 4: 444 tests, 0 properties, 0 failures, exit 0
+      partition 5: 663 tests, 0 properties, 0 failures, exit 0
+      partition 6: 410 tests, 4 properties, 0 failures, exit 0
+      partition 7: 573 tests, 0 properties, 0 failures, exit 0
+      partition 8: 495 tests, 1 property, 0 failures, exit 0
+      ---
+      combined: 4160 tests, 6 properties, 2 failures (4164/4166 passed)
+    failures:
+      - test: "test rust pin (REQ-165) a matching rust pin reports OK with no mismatch (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:274"
+        error: "** (ErlangError) Erlang error: :enoent -- System.cmd(\"rustc\", [\"--version\"], ...) at lib/system.ex:1141, via running_rust_raw/0 (line 69) / running_rust_version/0 (line 76)"
+        classification: "PRE-EXISTING, environment-only -- rustc is not installed in this sandbox at all (confirmed separately: `which rustc` finds nothing). Unrelated to REQ-332/exam code."
+      - test: "test rust pin (REQ-165) a mismatched rust pin reports a MISMATCH row naming expected and running (Mix.Tasks.Letflow.CheckToolchainTest)"
+        location: "test/mix/tasks/letflow_check_toolchain_test.exs:289"
+        error: "** (ErlangError) Erlang error: :enoent -- same System.cmd(\"rustc\", [\"--version\"], ...) call, same root cause."
+        classification: "PRE-EXISTING, environment-only -- same as above."
+    ac1_flake_check: >
+      Letflow.TenantProvisioning.ColumnPromotionTest's "AC1" flake named in
+      the briefing did NOT recur in this run -- partitions 2-8 all show 0
+      failures, and no ColumnPromotionTest failure appears anywhere in any
+      of the 8 partition logs. Confirmed by grep across all 8
+      partition-*.log files under /tmp/letflow_test_parallel.hhqvkN/;
+      absent, not just unlisted.
+    exam_code_check: >
+      Zero failures anywhere under test/letflow/exam/, and no failure
+      touching tenant isolation, entities, or the scheduler. Confirmed by
+      grepping every partition log for "exam", "ColumnPromotionTest",
+      "TenantProvisioning" module names in a failure context -- none
+      found outside the two rust-pin failures above.
+    wasm_hang_and_lua_wallclock: >
+      Not reached -- letflow.check.test's own ordering rule raises as soon
+      as the main-suite step (scripts/test_parallel.sh) reports a nonzero
+      exit, before running the isolated :wasm_hang or
+      :lua_wallclock_race subprocess steps. This is expected behavior of
+      the task, not a separate failure.
+
+comparison_to_known_baseline: >
+  The briefing described exactly 3 pre-existing, unrelated failures on a
+  sibling branch earlier today: 2x Mix.Tasks.Letflow.CheckToolchainTest
+  "rust pin" (:enoent, rustc not installed) and 1x
+  Letflow.TenantProvisioning.ColumnPromotionTest "AC1" (test-isolation
+  flake under parallel load). This run reproduced exactly the 2 rust-pin
+  failures and did NOT hit the ColumnPromotionTest flake (flakes are not
+  expected to reproduce every run by definition). No failure outside
+  that known set appeared. This branch's own exam-runtime code
+  (lib/letflow/exam/{session,question_set_resolver,scoring}.ex and its
+  tests) introduces zero new failures.
+
+verdict: PASS -- no new failures introduced by this branch
+verdict_reasoning: >
+  4164/4166 backend tests passed; both failures are the same
+  known-environmental "rust pin" CheckToolchainTest failures the briefing
+  pre-classified as unrelated (rustc genuinely absent from this sandbox,
+  independently confirmed), not new to this branch. mix format
+  --check-formatted passes cleanly (exit 0, no diffs). mix compile emits
+  zero warnings. All static/lint gates in mix letflow.check (requirements
+  registration, req-id collision, deferral staleness, handoff lint, async
+  sandbox reachability, issue-ref format) pass. mix letflow.check's own
+  exit code is 1 solely because of the two pre-existing rust-pin
+  failures, which are an environment limitation (no rustc installed),
+  not a code defect. Nothing under test/letflow/exam/ or touching
+  tenant isolation/entities/scheduler failed.
+next_action: >
+  Report PASS-with-known-environmental-failures to ORCH/RELEASE-VALIDATOR.
+  This branch does not need to go back to ELIXIR-DEV. RELEASE-VALIDATOR
+  should independently re-run the suite per its own charter rather than
+  trusting this report, and can expect to see the same 2 rust-pin
+  failures (or possibly also the ColumnPromotionTest AC1 flake, which is
+  known to be intermittent) as the only pre-existing noise.

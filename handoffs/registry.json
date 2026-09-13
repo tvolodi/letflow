@@ -6542,6 +6542,26 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "REQ-330 (queue task 626, GH#1317, no depends_on) -- design record classifying S10 P3's five live-exam-session behaviours: deadline enforcement (storage=A, enforcement=C), auto-submission (bucket B via Letflow.Scheduler.Poller), autosave (bucket C, measured write-amplification finding flagged for REQ-332), per-question scoring (bucket C, on a newly-found basis that decision 0022's Lua-grading claim isn't realized today -- recorded as a decision-record finding, 0022 left byte-identical), anti-cheat (storage=A via session_event records, policy=C, answering the stage file's open question). Proposes 4 modules under lib/letflow/exam/ with rule-2 justification rows. No implementation code. Pipeline: CODE-DESIGNER -> CODE-DESIGN-VALIDATOR FAIL then PASS (node-type miscount + missing citation, fixed) -> SECURITY-REVIEWER PASS (flagged autosave capacity gap and anti-cheat debounce status as follow-ups) -> REVIEWER PASS (confirmed no silent re-decision of 0022, independently re-examined the QuestionSetResolver bucket-C call)."
+    },
+    {
+      "run_id": "WF02-REQ332-20260913",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-332",
+      "issue_id": null,
+      "queue_task_id": 628,
+      "queue_agent_id": "ai-dala-orch",
+      "github_issue_number": 1319,
+      "status": "COMPLETED",
+      "owned_modules": [
+        "lib/letflow/exam/"
+      ],
+      "branch_name": "feature/WF02-REQ332-20260913",
+      "started_at": "2026-09-13T05:50:35Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "REQ-332 (queue task 628, GH#1319) -- implemented the live-session runtime under lib/letflow/exam/: Letflow.Exam.Session, Letflow.Exam.QuestionSetResolver, Letflow.Exam.Scoring, exactly the three modules REQ-330's rule-2 table authorised (Letflow.Exam.AntiCheat is REQ-333's scope). 1,249 lines total. No migration, no Ecto schema -- all reads/writes through Letflow.Entities.Records/Query against REQ-329's five session entity types. Autosave uses the ordinary write path per REQ-330's confirmed bucket-C conclusion. No gen_statem/GenServer/Registry anywhere (grep confirmed empty, verified independently by both ELIXIR-DEV and REVIEWER). Pipeline: ELIXIR-DEV (45 tests: seeded reproducibility, session-snapshot isolation, eligibility checks, server-side deadline enforcement, answer-shape validation, scoring arithmetic incl. no-correct-option error and short-text grading_pending, submit idempotency+concurrency) -> SECURITY-REVIEWER PASS (verified INV-1 via real cross-tenant/cross-candidate tests, flagged the :not_assigned no-op and an unlocked concurrent create/3 race as non-blocking follow-ups) -> REVIEWER FAIL then PASS (the concurrent create/3 race SECURITY-REVIEWER flagged was undocumented, unlike the honestly-recorded :not_assigned finding; ELIXIR-DEV fixed it with a real lock_exam_row/2 FOR-UPDATE lock plus a new test; REVIEWER empirically confirmed the test fails when the lock is removed, then signed off req330-exam-live-session.md Section 7's table for all three modules) -> TEST-RUNNER confirmed a full mix letflow.check run clean except two pre-existing environment-only rust-toolchain failures. Two non-blocking follow-ups carried forward for a later requirement: (1) :not_assigned eligibility gap pending an exam_assignment entity; (2) create/3's exam-level lock granularity is a possible throughput bottleneck at scale."
     }
   ]
 }

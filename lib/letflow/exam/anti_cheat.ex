@@ -294,7 +294,7 @@ defmodule Letflow.Exam.AntiCheat do
   # Shared plumbing (same idiom as `Letflow.Exam.Session`)
   # =======================================================================
 
-  defp fv(%Latest{field_values: field_values}, key), do: Map.get(field_values, key)
+  defp fv(%{field_values: field_values}, key), do: Map.get(field_values, key)
 
   defp eq(field, value), do: %{field: field, op: :eq, value: value}
 

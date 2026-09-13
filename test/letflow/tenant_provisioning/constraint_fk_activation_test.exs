@@ -111,14 +111,39 @@ defmodule Letflow.TenantProvisioning.ConstraintFkActivationTest do
   # very first promotion, backfilling) its per-entity-type table -- the
   # exact REQ-297 mechanism this requirement extends, never a hand-rolled
   # CREATE TABLE.
+  # ISS-0648 fix note: `Letflow.Entities.Definitions.activate_definition/4`
+  # now auto-registers+runs column promotion (landing at "ddl_applied") for
+  # every attribute named by a `constraint_def.fields` entry, as part of
+  # `create_active_definition!/2` above -- so for an entity type declaring a
+  # `constraints` entry, a `ColumnPromotion` row for one of its constrained
+  # attributes may already exist (and already be "ddl_applied") by the time
+  # a test calls this helper. Reuses the existing row instead of assuming a
+  # fresh `register_column_promotion/4` call always succeeds (it would hit
+  # the `entity_column_promotions` unique index otherwise) -- same
+  # idempotent-lookup-then-run shape
+  # `Letflow.Entities.Definitions.ensure_column_promotions/2` itself now
+  # uses.
   defp promote_and_create_table!(schema, tenant_id, entity_type, attribute, pg_type) do
-    assert {:ok, [row]} =
-             TenantProvisioning.register_column_promotion(
-               entity_type,
-               attribute,
-               %{pg_type: pg_type, nullable: true},
-               [tenant_id]
-             )
+    row =
+      case Repo.get_by(ColumnPromotion,
+             tenant_id: tenant_id,
+             entity_type: entity_type,
+             attribute: attribute
+           ) do
+        nil ->
+          assert {:ok, [row]} =
+                   TenantProvisioning.register_column_promotion(
+                     entity_type,
+                     attribute,
+                     %{pg_type: pg_type, nullable: true},
+                     [tenant_id]
+                   )
+
+          row
+
+        %ColumnPromotion{} = existing ->
+          existing
+      end
 
     assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
              TenantProvisioning.run_column_promotion(row.id)

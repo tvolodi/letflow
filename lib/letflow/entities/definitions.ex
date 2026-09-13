@@ -48,7 +48,10 @@ defmodule Letflow.Entities.Definitions do
 
   import Ecto.Query
 
+  require Logger
+
   alias Letflow.Entities.Definition
+  alias Letflow.Entities.Definition.DDL
   alias Letflow.Entities.Definition.Shape
   alias Letflow.Entities.Definition.Validator
   alias Letflow.Entities.EntityDefinition
@@ -419,8 +422,10 @@ defmodule Letflow.Entities.Definitions do
              activator_user_id,
              rationale,
              prefix
-           ) do
-      promote_and_demote_siblings(entity_definition, prefix)
+           ),
+         {:ok, promoted} <- promote_and_demote_siblings(entity_definition, prefix) do
+      ensure_column_promotions(promoted, prefix)
+      {:ok, promoted}
     end
   end
 
@@ -451,6 +456,135 @@ defmodule Letflow.Entities.Definitions do
     |> case do
       {:ok, %{promote: promoted}} -> {:ok, promoted}
       {:error, :promote, changeset, _changes} -> {:error, {:persistence, changeset}}
+    end
+  end
+
+  # ISS-0648 fix (lib/letflow/design/iss0648-pack-install-column-promotion-trigger.md
+  # §2): triggers column promotion, AFTER `activate_definition/4`'s own
+  # activation transaction has already committed (never nested inside it --
+  # §2.1's own retry-boundary reasoning), for every attribute that appears
+  # in at least one of `promoted`'s declared `constraint_def.fields` entries
+  # -- closing the gap where a `constraints: [{type: unique, ...}]` entry
+  # compiled into real DDL (REQ-298) but nothing ever ran that DDL, so the
+  # constraint it documents was never actually enforced (ISS-0648's own
+  # empirical repro).
+  #
+  # Always returns `:ok` -- this function's own result NEVER changes
+  # `activate_definition/4`'s `{:ok, promoted}` into an error. This is
+  # deliberate, not an oversight (design §2.3): a promotion stuck at
+  # "pending"/"ddl_failed" is a named, expected, retryable state (0024 §2),
+  # and failing activation over it would make an entity type permanently
+  # unwritable (only `:active` definitions accept writes) over a condition
+  # 0024 already treats as normal degraded operation. Every failure is
+  # still logged loudly (`Logger.error/2`) so it is discoverable via the
+  # `entity_column_promotions` table's own `status`/`last_error` columns.
+  @spec ensure_column_promotions(promoted :: EntityDefinition.t(), prefix :: String.t()) :: :ok
+  defp ensure_column_promotions(%EntityDefinition{} = promoted, prefix) do
+    document = TenantProvisioning.document_from_persisted(promoted)
+
+    case Map.get(document, :constraints, []) do
+      [] ->
+        :ok
+
+      constraints ->
+        trigger_column_promotions_for_constraints(promoted, document, constraints, prefix)
+    end
+  end
+
+  defp trigger_column_promotions_for_constraints(promoted, document, constraints, prefix) do
+    case TenantProvisioning.tenant_id_for_schema_name(prefix) do
+      {:error, :invalid_schema_name} ->
+        # Realistically unreachable -- `prefix` already resolved successfully
+        # one line above in `activate_definition/4` -- but this function's
+        # own contract (§2.3) is "never raise, always :ok," so this is
+        # handled as a loud no-op rather than assumed impossible.
+        Logger.error(
+          "ensure_column_promotions/2: invalid_schema_name resolving tenant_id " <>
+            "for prefix=#{inspect(prefix)} entity_type=#{inspect(promoted.name)} -- " <>
+            "constraint enforcement was not (re-)triggered by this activation"
+        )
+
+        :ok
+
+      {:ok, tenant_id} ->
+        constrained_field_names =
+          constraints |> Enum.flat_map(&Map.get(&1, :fields, [])) |> MapSet.new()
+
+        document
+        |> DDL.promoted_columns()
+        |> Enum.filter(&MapSet.member?(constrained_field_names, Map.get(&1, :name)))
+        |> Enum.each(&ensure_one_column_promotion(promoted.name, &1, tenant_id))
+
+        :ok
+    end
+  end
+
+  # Per-attribute (design §2.2): `register_column_promotion/4` is keyed by
+  # `(tenant_id, entity_type, attribute)`, not by constraint, so each
+  # constrained column is registered independently. Idempotent (design
+  # §2.4): if a `ColumnPromotion` row already exists for this exact key
+  # (a re-activation of the same entity type/version, or of a later
+  # version that still declares the same constrained field), this skips
+  # straight to `:ok` rather than attempting a second
+  # `register_column_promotion/4` insert, which would otherwise hit the
+  # `entity_column_promotions` unique index.
+  defp ensure_one_column_promotion(entity_type, column, tenant_id) do
+    attribute = Map.get(column, :name)
+
+    if TenantProvisioning.column_promotion_registered?(tenant_id, entity_type, attribute) do
+      :ok
+    else
+      register_and_run_column_promotion(entity_type, attribute, column, tenant_id)
+    end
+  end
+
+  defp register_and_run_column_promotion(entity_type, attribute, column, tenant_id) do
+    column_spec = %{
+      pg_type: Map.fetch!(column, :pg_type),
+      nullable: true,
+      references_entity: Map.get(column, :references_entity),
+      generated_as: Map.get(column, :generated_as)
+    }
+
+    case TenantProvisioning.register_column_promotion(entity_type, attribute, column_spec, [
+           tenant_id
+         ]) do
+      {:ok, [row]} ->
+        run_registered_column_promotion(row, entity_type, attribute, tenant_id)
+
+      {:error, reason} ->
+        Logger.error(
+          "ensure_column_promotions/2: register_column_promotion/4 failed " <>
+            "entity_type=#{inspect(entity_type)} attribute=#{inspect(attribute)} " <>
+            "tenant_id=#{inspect(tenant_id)} reason=#{inspect(reason)}"
+        )
+
+        :ok
+    end
+  end
+
+  # Design §2.2 step 7 / §2.2's own "why `run_column_promotion/1` only"
+  # reasoning: never `backfill_column_promotion/1`/`activate_column_promotion/1`.
+  # `run_column_promotion/1` alone (CREATE TABLE + first-population backfill,
+  # landing at "ddl_applied") is already sufficient for every future
+  # create/update to be checked against the real Postgres UNIQUE constraint
+  # via `Records.dual_write_promoted_columns/3` -- see design §2.2 for why
+  # driving further, to "active", would be strictly worse for this fix's
+  # purpose (ISS-0649).
+  defp run_registered_column_promotion(row, entity_type, attribute, tenant_id) do
+    case TenantProvisioning.run_column_promotion(row.id) do
+      {:ok, %TenantProvisioning.ColumnPromotion{}} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "ensure_column_promotions/2: run_column_promotion/1 failed " <>
+            "entity_type=#{inspect(entity_type)} attribute=#{inspect(attribute)} " <>
+            "tenant_id=#{inspect(tenant_id)} promotion_id=#{inspect(row.id)} " <>
+            "reason=#{inspect(reason)}"
+        )
+
+        :ok
     end
   end
 end

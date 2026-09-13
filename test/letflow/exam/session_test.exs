@@ -591,7 +591,13 @@ defmodule Letflow.Exam.SessionTest do
       # A question with NO option marked is_correct -- a broken bank entry.
       broken_question = create_question!(schema, category_id)
       create_option!(schema, broken_question.record_id, 0, false)
-      create_rule!(schema, exam.record_id, category_id, 1)
+      # ISS-0648 fix note: build_minimal_exam!/2 already registered a rule at
+      # sort_order 0 for this exam; uq_exam_question_rule_exam_id_sort_order
+      # is now genuinely enforced (this fix's own point), so this second
+      # rule needs a distinct sort_order to avoid colliding with it -- a
+      # pre-existing test-fixture gap this fix's own enforcement newly
+      # surfaces, not a production bug.
+      create_rule!(schema, exam.record_id, category_id, 1, 1)
 
       candidate_id = Ecto.UUID.generate()
       assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
@@ -605,7 +611,9 @@ defmodule Letflow.Exam.SessionTest do
       %{exam: exam} = build_minimal_exam!(schema, exam_attrs: %{"max_attempts" => 5})
       category_id = Ecto.UUID.generate()
       short_text_question = create_question!(schema, category_id, %{"type" => "shorttext"})
-      create_rule!(schema, exam.record_id, category_id, 1)
+      # See the "no-correct-option" test above for why sort_order 1 (not the
+      # default 0, which build_minimal_exam!/2 already used).
+      create_rule!(schema, exam.record_id, category_id, 1, 1)
 
       candidate_id = Ecto.UUID.generate()
       assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
@@ -853,6 +861,73 @@ defmodule Letflow.Exam.SessionTest do
 
       refute source =~ "to_existing_atom"
       refute source =~ "to_atom("
+    end
+  end
+
+  # ---------------------------------------------------------------------
+  # ISS-0648 design doc §2.2.1 / acceptance criterion 12 -- regression:
+  # once `session_question` (a real §4 blast-radius entity type, declaring
+  # `uq_session_question_session_id_question_id`) is activated, ISS-0648's
+  # own fix (`Definitions.ensure_column_promotions/2`) now auto-promotes it
+  # to a real per-entity-type table at "ddl_applied" -- which flips
+  # `Letflow.Entities.Query.Compiler`'s read path (REQ-300, already shipped)
+  # to project plain maps, not `%Letflow.Entities.Record.Latest{}` structs.
+  # Before this file's own `fv/2` relaxation (session.ex:1041, from
+  # `defp fv(%Latest{field_values: field_values}, key)` to
+  # `defp fv(%{field_values: field_values}, key)`), every read of a
+  # `session_question` row through `fv/2` -- reached via this module's own
+  # `query_all/3` inside `get_session_state_for_user/3` -- raised
+  # `FunctionClauseError`. `Letflow.ExamFixtures.provisioned_tenant_with_exam_definitions/1`
+  # activates `session_question` with its real, undropped `constraints`
+  # entry (only `foreign_keys` are stripped, deliberately, by that fixture --
+  # see its own moduledoc -- so no real Postgres FK target table is needed
+  # for this promotion to succeed), so this test's tenant setup alone is
+  # what triggers the exact regression REVIEWER found empirically (42
+  # failures in `test/letflow/exam/`), with no hand-rolled entity definition
+  # needed.
+  # ---------------------------------------------------------------------
+
+  describe "ISS-0648 AC12 -- fv/2 reads a promoted session_question row correctly" do
+    test "session_question is genuinely promoted (ddl_applied) and get_session_state_for_user/3 reads both rows via fv/2, not a raised FunctionClauseError" do
+      %{tenant_id: tenant_id, schema_name: schema} = tenant("iss0648-ac12-session-question")
+
+      %{exam: exam} = build_minimal_exam!(schema, pool_size: 2, count: 2)
+      candidate_id = Ecto.UUID.generate()
+
+      assert {:ok, session_view} = Session.create(candidate_id, exam.record_id, schema)
+
+      # Proves this is a genuine per-type-table promotion (the actual ISS-0648
+      # blast radius), not merely a JSONB read -- if this assertion itself
+      # ever regresses (e.g. `session_question` stops promoting on
+      # activation), this test would silently stop proving anything, so it
+      # is asserted explicitly rather than assumed.
+      assert %Letflow.TenantProvisioning.ColumnPromotion{status: "ddl_applied"} =
+               Repo.get_by(Letflow.TenantProvisioning.ColumnPromotion,
+                 tenant_id: tenant_id,
+                 entity_type: "session_question",
+                 attribute: "session_id"
+               )
+
+      # Before the fv/2 fix: FunctionClauseError, because Compiler routes
+      # session_question reads through {:per_type_table, _} ->
+      # select_entity_row/1's plain-map projection once promoted, and the
+      # old fv/2 clause only matched %Latest{}.
+      assert {:ok, state} =
+               Session.get_session_state_for_user(session_view.id, candidate_id, schema)
+
+      assert length(state.questions) == 2
+
+      for question_state <- state.questions do
+        assert is_binary(question_state.question_id)
+        assert is_integer(question_state.sort_order)
+        assert question_state.type == :single
+        assert length(question_state.options) == 2
+      end
+
+      # sort_order values are distinct across the two materialised rows --
+      # real field_values read back correctly through fv/2 for each row, not
+      # a single row's data duplicated by accident.
+      assert state.questions |> Enum.map(& &1.sort_order) |> Enum.uniq() |> length() == 2
     end
   end
 end

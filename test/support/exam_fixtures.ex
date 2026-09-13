@@ -25,6 +25,7 @@ defmodule Letflow.ExamFixtures do
   alias Letflow.Identity.Tenant
   alias Letflow.Repo
   alias Letflow.TenantProvisioning
+  alias Letflow.TenantProvisioning.ColumnPromotion
   alias Letflow.TenantProvisioning.Registration
 
   @definitions_dir Path.join([File.cwd!(), "priv", "packs", "bilimbaga", "entity_definitions"])
@@ -58,6 +59,21 @@ defmodule Letflow.ExamFixtures do
       end
 
       Repo.delete_all(from(r in Registration, where: r.tenant_id == ^tenant.id))
+
+      # ISS-0648 fix note: `session_question` (and any other entity type in
+      # this fixture's list that declares a `constraints` entry) is now
+      # auto-promoted on activation, which inserts a real
+      # `entity_column_promotions` row -- a GLOBAL table with an FK to
+      # `tenants` (same class of cleanup gap
+      # `test/letflow/entities/iss0648_column_promotion_trigger_test.exs`'s
+      # own `provisioned_tenant/0` and
+      # `test/letflow/packs/bilimbaga_pack_install_test.exs`'s own tenant
+      # fixture already guard against). Without this, deleting the `tenants`
+      # row below raises a `foreign_key_violation` in `on_exit` for every
+      # test using this fixture, once any of its entity types has a
+      # constraint.
+      Repo.delete_all(from(cp in ColumnPromotion, where: cp.tenant_id == ^tenant.id))
+
       Repo.delete_all(from(t in Tenant, where: t.id == ^tenant.id))
     end)
 

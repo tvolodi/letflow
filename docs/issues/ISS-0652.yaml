@@ -1,0 +1,52 @@
+id: ISS-0652
+title: Query.Compiler.select_entity_row/1 returns record_id as a raw 16-byte UUID binary, contradicting its own entity_row() type promise -- fixed locally in two call sites, not centralized
+discovered_by: ELIXIR-DEV
+discovered_in_run: WF03-ISS0648-20260913
+discovered_at: "2026-09-13T17:45:00Z"
+severity: MINOR
+description: >
+  Found by ELIXIR-DEV while implementing ISS-0648's fv/2 companion fix and
+  proving its AC12 regression test. Letflow.Entities.Query.Compiler.
+  select_entity_row/1 returns record_id as a raw, uncast 16-byte UUID
+  binary for a per-type-table row (unlike entity_record_latest's
+  schema-typed reads, which Ecto casts automatically) -- contradicting
+  Compiler.entity_row()'s own @type declaration, which promises
+  record_id: String.t().
+
+  This is the same underlying defect class as ISS-0649 and ISS-0651: a
+  REQ-300 (already-shipped) row-shape assumption that breaks once a
+  per-type promoted table exists, discovered piecemeal at each new
+  consumer that happens to exercise the promoted path.
+
+  lib/letflow/routers/entities.ex already has a fix for this at its own
+  two call sites (normalise_record_id/1, lines 2185/2353/2361-2362:
+  pattern-matches a 16-byte binary and Ecto.UUID.load!/1's it, passes
+  through an already-string id otherwise) -- REQ-300/ISS-0600's own
+  precedent. ELIXIR-DEV found the identical exposure in
+  Letflow.Exam.Session.upsert_answer/5 (a raw binary record_id from a
+  promoted session_answer row crashed Jason.encode!/2 downstream) and
+  applied the SAME fix locally as a private normalize_record_id/1 in
+  session.ex (lines 1060-1063), rather than centralizing it in
+  Compiler.select_entity_row/1 itself, since a central fix was out of
+  ISS-0648's own scope. anti_cheat.ex was checked and confirmed NOT
+  exposed (it only ever reads session.record_id, never a promoted entity
+  type's row directly).
+
+  This is now the SECOND independent call site with its own copy-pasted
+  fix for what is really one root-cause defect in
+  Compiler.select_entity_row/1 itself.
+
+  FIX DIRECTION: centralize the fix in Query.Compiler.select_entity_row/1
+  itself (cast record_id to a string there, at the source, matching its
+  own @type entity_row's promise), then remove both now-redundant local
+  normalise_record_id/1 (entities.ex) and normalize_record_id/1
+  (session.ex) helpers, so future consumers of Compiler's output don't
+  need to rediscover and re-patch this same defect a third time (as
+  ISS-0649/ISS-0651 already predict for other row-shape assumptions).
+affected_files:
+  - lib/letflow/entities/query/compiler.ex
+  - lib/letflow/routers/entities.ex
+  - lib/letflow/exam/session.ex
+queue_ref: Q-652
+github_ref: GH-1360
+status: open

@@ -118,6 +118,19 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
   # promoted-column set, FK REFERENCES clauses included) and what makes the live
   # `Records.create_record/2` dual-write populate that column. Activation alone
   # creates no table. See README.md's install -> activate -> promote sequence.
+  # ISS-0648 fix note: `Letflow.Entities.Definitions.activate_definition/4`
+  # now auto-registers+runs column promotion (landing at "ddl_applied") for
+  # every attribute named by a `constraint_def.fields` entry, as part of
+  # step 5's activation loop above -- so for an entity type declaring a
+  # `constraints` entry (tag, question_tag, exam_question_rule,
+  # exam_question_rule_tag), a `ColumnPromotion` row for one of its
+  # constrained attributes may already exist (and already be "ddl_applied")
+  # by the time this helper runs. Reuses the existing row instead of
+  # assuming a fresh `register_column_promotion/4` call always succeeds (it
+  # would hit the `entity_column_promotions` unique index otherwise) -- same
+  # idempotent-lookup-then-run shape
+  # `Letflow.Entities.Definitions.ensure_column_promotions/2` itself now
+  # uses.
   defp promote!(tenant_id, entity_type, attribute, pg_type, opts \\ []) do
     spec =
       case Keyword.get(opts, :references_entity) do
@@ -125,10 +138,23 @@ defmodule Letflow.Packs.BilimbagaPackInstallTest do
         target -> %{pg_type: pg_type, nullable: true, references_entity: target}
       end
 
-    assert {:ok, [row]} =
-             TenantProvisioning.register_column_promotion(entity_type, attribute, spec, [
-               tenant_id
-             ])
+    row =
+      case Repo.get_by(ColumnPromotion,
+             tenant_id: tenant_id,
+             entity_type: entity_type,
+             attribute: attribute
+           ) do
+        nil ->
+          assert {:ok, [row]} =
+                   TenantProvisioning.register_column_promotion(entity_type, attribute, spec, [
+                     tenant_id
+                   ])
+
+          row
+
+        %ColumnPromotion{} = existing ->
+          existing
+      end
 
     assert {:ok, %ColumnPromotion{status: "ddl_applied"}} =
              TenantProvisioning.run_column_promotion(row.id)

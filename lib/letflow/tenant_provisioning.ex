@@ -1456,20 +1456,43 @@ defmodule Letflow.TenantProvisioning do
            ),
          {:ok, index_sqls} <- DDL.index_create_statements(document, table_name),
          :ok <- execute_create_indexes(schema_name, table_name, index_sqls) do
-      case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
-        {:ok, _result} ->
-          :ok
-
-        # A brand-new entity type with zero records yet has no
-        # entity_type_instances row -- nothing to backfill, not a real
-        # failure. The freshly-created table is simply left empty.
-        {:error, :entity_type_not_found} ->
-          :ok
-
-        {:error, _reason} = error ->
-          error
-      end
+      rebuild_projection_for_new_table(schema_name, entity_type)
     end
+  end
+
+  # ISS-0648 companion fix (design doc §6): `Projector.rebuild_projection/2`'s
+  # own backfill write issues each row via `Repo.query!/2` (the raising
+  # variant), inside its own NESTED `Repo.transaction/1` (this function
+  # already runs inside `run_column_promotion/1`'s own outer
+  # `Repo.transaction/1`) -- so a raised `Postgrex.Error` (e.g. a genuine
+  # unique-violation replaying pre-existing duplicate data, ISS-0648's own
+  # empirical trigger) is caught by Ecto's nested-transaction/SAVEPOINT
+  # handling (the enclosing connection is not left aborted) and then
+  # re-raised out of `Projector.rebuild_projection/2` itself -- never a
+  # `Repo.rollback/1`, and never an ordinary `{:error, reason}` return.
+  # Rescued here into the same `{:error, {:ddl_failed, exception}}` shape
+  # `execute_create_table/1`/`execute_create_indexes/3` immediately above
+  # already use, so `do_run_column_promotion/2`'s existing `else` clause
+  # (which already calls `mark_ddl_failed_and_return/3` for that shape)
+  # covers this failure too, instead of the exception escaping
+  # `run_column_promotion/1` (and, transitively, `ensure_column_promotions/2`
+  # / `Letflow.Entities.Definitions.activate_definition/4`) unhandled.
+  defp rebuild_projection_for_new_table(schema_name, entity_type) do
+    case Projector.rebuild_projection(schema_name, entity_type: entity_type) do
+      {:ok, _result} ->
+        :ok
+
+      # A brand-new entity type with zero records yet has no
+      # entity_type_instances row -- nothing to backfill, not a real
+      # failure. The freshly-created table is simply left empty.
+      {:error, :entity_type_not_found} ->
+        :ok
+
+      {:error, _reason} = error ->
+        error
+    end
+  rescue
+    exception -> {:error, {:ddl_failed, exception}}
   end
 
   defp execute_create_table(sql) do
@@ -2269,6 +2292,26 @@ defmodule Letflow.TenantProvisioning do
       )
 
     Repo.all(query)
+  end
+
+  # ISS-0648 fix (design doc §2.4): whether a `ColumnPromotion` row already
+  # exists for `(tenant_id, entity_type, attribute)`, regardless of its
+  # `status`. A trivial wrapper around the same natural-key lookup
+  # `column_promotion_query_eligible?/3`/`column_promotion_dual_write?/3`
+  # already use, exposed as a public-but-`@doc false` accessor the same way
+  # `entity_table_exists?/2` above is -- so
+  # `Letflow.Entities.Definitions.ensure_column_promotions/2` can check for
+  # an existing row before calling `register_column_promotion/4` again for
+  # an entity type being re-activated, instead of relying on the
+  # `entity_column_promotions` unique index to reject the duplicate insert.
+  @doc false
+  @spec column_promotion_registered?(
+          tenant_id :: Ecto.UUID.t(),
+          entity_type :: String.t(),
+          attribute :: String.t()
+        ) :: boolean()
+  def column_promotion_registered?(tenant_id, entity_type, attribute) do
+    not is_nil(fetch_column_promotion_by_natural_key(tenant_id, entity_type, attribute))
   end
 
   @doc """

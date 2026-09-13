@@ -23514,7 +23514,7 @@ requirements:
     title: HTTP route surface for the candidate-facing exam session API -- start, autosave, submit, anti-cheat signal -- the surface REQ-332 and REQ-333 explicitly left unbuilt (S10 P4, bucket C)
     owner: ELIXIR-DEV
     impl_order: 632  # letflow-queue task id, written back at WF-01 Step 3; depends_on mirrored as real queue edges
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C. Names session/exam vocabulary throughout by necessity (0022

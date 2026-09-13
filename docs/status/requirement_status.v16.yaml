@@ -196,3 +196,71 @@ history:
       the manual grading-queue admin workflow, adaptive selection, and
       cross-session history views -- none of their runtimes exist.
       Dispatching to ELIXIR-DEV.
+  - req: REQ-335
+    event: done
+    agent: ORCH
+    at: "2026-09-13T15:37:08Z"
+    note: >
+      REQ-335 (queue task 632, GH#1336) implemented via
+      feature/WF02-REQ335-20260913 (commits 262ed233/bd814b11). Built
+      Letflow.Routers.ExamSessions, the first HTTP route surface for
+      the candidate-facing exam session API, delegating to REQ-332's
+      Letflow.Exam.Session and REQ-333's Letflow.Exam.AntiCheat: POST
+      /exam-sessions (start), GET /exam-sessions/:id (state read, new
+      get_session_state_for_user/3), PUT
+      /exam-sessions/:id/answers/:question_id (autosave -- path
+      corrected from the requirement's own inferred POST to the real
+      PUT, verified against backend/internal/sessions/handler.go's
+      actual routing registration), POST /exam-sessions/:id/submit,
+      POST /exam-sessions/:id/events (anti-cheat signal). Mounted at
+      the normal authenticated /api/v1 forward, not decision 0028's
+      unauthenticated pattern. Five new permission atoms
+      (ExamSessionStart/Read/Save/Submit/ReportEvent) minted following
+      the :Entities* precedent, granted to TASK_WORKER (this
+      codebase's only non-privileged tenant-user role).
+
+      The is_correct/answer-key redaction open question this
+      requirement explicitly flagged was resolved as hand-assembly,
+      not FieldGrants: no single Query.Compiler page spans the four
+      joined entity types this read composes, and the pack has no
+      entity_field_restrictions row for is_correct today, so a
+      FieldGrants-based route would currently leak it outright.
+      SECURITY-REVIEWER independently traced every field back to its
+      source and confirmed the redaction is structurally safe (named
+      map-literal keys, no passthrough of any entity's full
+      field_values, so a future schema field cannot silently leak
+      through) rather than merely incidentally safe.
+
+      Pipeline: ELIXIR-DEV (comprehensive route/authorization/
+      ownership/redaction tests) -> SECURITY-REVIEWER PASS
+      (independently verified INV-1 tenant isolation, the 404-not-403
+      ownership property, the redaction mechanism by tracing the code
+      rather than accepting the reasoning, permission-atom wiring, and
+      spot-checked the SaveAnswer path correction against the
+      reference source directly; surfaced a genuine pre-existing,
+      independent finding -- TASK_WORKER's existing EntitiesQuery
+      grant might already expose is_correct via the generic
+      entities-query route -- filed separately as ISS-0647 rather than
+      expanding this requirement's scope) -> REVIEWER PASS (confirmed
+      router idiom matches Letflow.Routers.Entities' precedent,
+      confirmed no expansion of REQ-332's/REQ-333's own scope fences,
+      gave an explicit standing sign-off that ELIXIR-DEV -- not
+      FRONTEND-DEV, P4's stated default -- is the correct owner here
+      since the entire deliverable is lib/letflow/routers/ +
+      lib/letflow/api/authorization.ex + tenant-scoped lib/letflow/exam/
+      calls with nothing under web/) -> TEST-RUNNER found one real,
+      fixable defect (an unused default arg on a private test helper
+      tripping the ISS-0069-class compiler-warning gate, unrelated to
+      REQ-335's actual behavior -- all 4199 real tests passed both
+      times TEST-RUNNER ran the suite) -- fixed directly, re-verified
+      clean.
+
+      Also fixed, on this branch, a live CI-blocking tripwire in
+      test/letflow/simulation/req207_vortex_test.exs: a batch of six
+      new S10 P4 requirements (REQ-336, REQ-338-340, REQ-342, REQ-343)
+      landed on main mid-run, all FRONTEND-DEV client-side work or
+      DOC-UPDATER bookkeeping, none touching the entities HTTP route
+      surface -- admitted to the unconditional allowlist,
+      REVIEWER-confirmed.
+
+      docs/requirements.yaml flipped pending -> done.

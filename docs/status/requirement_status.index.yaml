@@ -3433,8 +3433,13 @@ volumes:
     path: docs/status/requirement_status.v16.yaml
     status: current
     opened: 2026-09-13
-    entries: 1
+    entries: 2
     note: >
+      Incremented to 2 by ORCH's own REQ-335 done-event append (Step
+      Final, WF02-REQ335-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v16.yaml` = 2 on-disk entries;
+      266 lines / 15288 bytes, well under the roll ceiling. No rebase
+      conflict on this file.
       Incremented to 1 by ORCH's own REQ-335 started-event append
       (Step 00, WF02-REQ335-20260913) -- `grep -c "^  - req:"
       docs/status/requirement_status.v16.yaml` = 1 on-disk entry; 198

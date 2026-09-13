@@ -124,7 +124,7 @@ at the normal one-agent-turn sizing when it becomes the active phase.
 | **P2** | The pack: entity definitions, process definitions, role-registry seed, Lua grading rules | A | a tenant with a working question bank and exam configuration, and **zero exam-specific Elixir**. Reachable as of 2026-09-11: gaps 10, 11 and 13 are closed — see below |
 | **P3** | `lib/letflow/exam/`: live session (deadline, autosave, per-question scoring, anti-cheat), certificate issuance | C | each module carries its `REVIEWER` bucket-C sign-off — met as of 2026-09-13 (see bucket-C inventory above). **This row's bucket (C) and deliverable list were a prediction, not the full outcome: P3 also produced bucket-A work (`REQ-329`, five session entity definitions) and bucket-B work (`REQ-331`, the deadline sweep on `Letflow.Scheduler.Poller`) — see "Bucket-C inventory" above. Certificate issuance was NOT delivered by P3: it needs PDF and QR rendering, `mix.exs` carries no such dependency, and gaps 4 and 5 (above) have their mechanism settled by decision `0027` but their capabilities remain open and unowned. A later reader should not read P3's completion as covering certificates.** |
 | **P4** | `web/`: admin CRUD generated from `x-ui`, plus the hand-written candidate exam-taking UI | C (client) | screens use `web/`'s design system, not BilimBaga's component layer |
-| **P5** | Parity: BilimBaga's 19 Playwright spec files (168 `test()` blocks) re-pointed at the Letflow build | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
+| **P5** | Parity: BilimBaga's 19 Playwright spec files (**286** `test()` blocks, measured 2026-09-13 — the 168 previously recorded here was wrong) ported to the Letflow build. Not "re-pointed": the two corpora are disjoint (zero filename overlap with `web/tests/e2e/`'s 38 specs) and BilimBaga's selectors are `getByRole`/`getByText`-dominated (314/137/66 uses vs **one** `data-testid`), so they bind to its rendered DOM and accessible names rather than to portable hooks. **Blocked on P4** — these specs drive screens that do not exist yet. | — | `RELEASE-VALIDATOR` re-derives the pass, `UAT-RUNNER` runs them against a live instance |
 | **P6** | *Conditional* — importer from BilimBaga's PostgreSQL into entity records | B | built only if a deployment holds real data; otherwise never built |
 
 P2 is the stage's real test. If the question bank, exam configuration and
@@ -336,7 +336,8 @@ remain:
   modules — `session.ex`, `question_set_resolver.ex`, `scoring.ex`,
   `anti_cheat.ex` — each carrying its rule-2 justifications and a `REVIEWER`
   bucket-C sign-off in the inventory above, which is correspondingly no longer
-  empty. `web/src/pages/exam/` *is* still absent: that is P4, unexpanded.
+  empty. `web/src/pages/exam/` *is* still absent: that is P4, which is now
+  expanded (seven pending requirements) but not yet built.
 - **"No pack document has been authored" — no longer true.**
   `priv/packs/bilimbaga/pack.json` exists and has been installed for real
   against a provisioned tenant (`REQ-328`), carrying the fifteen entity

@@ -22680,3 +22680,832 @@ requirements:
     depends_on:
       - REQ-326
       - REQ-327
+
+  - id: REQ-329
+    title: Author the five live-session entity definitions (session, session_question, session_answer, session_event, session_question_score) under priv/packs/bilimbaga/entity_definitions/ (S10 P3, bucket A)
+    owner: REQ-ANALYST
+    impl_order: 625  # letflow-queue task id, written back at WF-01 Step 3.
+    status: pending
+    stage: S10
+    description: >
+      bucket: A. BUCKET TEST PERFORMED, AND THIS IS THE FINDING THAT MATTERS
+      MOST IN P3. All five of BilimBaga's session tables are ORDINARY
+      TENANT-SCOPED ROWS with scalar columns, and every one of them is
+      expressible as a Letflow entity definition today. Nothing here goes in
+      lib/letflow/exam/. 0022 rule 3 makes growth in the bucket-C inventory
+      the stage's primary health metric, so the correct first act of P3 is to
+      move the DATA out of bucket C entirely and leave only the behaviour to
+      be argued about.
+      .
+      WHY A AND NOT B: these five definitions name exams, questions and
+      candidates in every field; 0022 rule 1 forbids a bucket-B artefact from
+      naming an exam, so they cannot be platform capabilities. They are pack
+      content, which is exactly what bucket A is for.
+      .
+      WHY A AND NOT C: the entity subsystem gained everything these need
+      during P1. Promoted FK columns with real Postgres REFERENCES (REQ-298,
+      REQ-300) express session -> exam and session_question -> question.
+      :localized_text is not needed here (session rows carry no prose).
+      Per-entity-type tables (decision 0023) mean each of these gets its own
+      indexable table rather than a shared JSONB blob, so the source's
+      partial index on (expires_at, status) has a real counterpart. The
+      composite primary keys the source uses -- session_questions
+      (session_id, question_id), session_question_scores the same -- are
+      expressed as a `constraints` entry of type :unique over the two fields,
+      NOT as a primary key: the record subsystem owns record identity
+      (REQ-326 and REQ-327 already established this convention and their
+      README records it), so a declared composite PK would duplicate state
+      the platform already holds.
+      .
+      SOURCE. Port from
+      c:\Users\tvolo\dev\ai-dala\BilimBaga\backend/migrations/014_exam_sessions.up.sql
+      (FR-BB35, exam_sessions and session_questions),
+      backend/migrations/015_session_tables.up.sql (FR-BB36, session_answers
+      and tab_switch_events, plus the ALTERs that reshape session_questions
+      and widen session_status), and
+      backend/migrations/016_session_question_scores.up.sql (FR-BB311,
+      session_question_scores). Product spec is
+      corporate_exam_platform_roadmap.md section 3.6. Field semantics come
+      from backend/internal/sessions/model.go's Session, SessionQuestion,
+      SessionAnswer, TabSwitchEvent and SessionQuestionScore structs.
+      NOTE THE PATH: the port source is under dev/ai-dala/BilimBaga, not
+      dev/BilimBaga, despite what some older stage text says.
+      .
+      FOLLOW REQ-326 AND REQ-327's ESTABLISHED CONVENTIONS EXACTLY. Read both
+      requirement entries and the ten committed documents under
+      priv/packs/bilimbaga/entity_definitions/ before writing anything. In
+      particular: no id, created_at or updated_at field is declared; no
+      created_by field is declared (fk_def's references_entity names an
+      entity type, not an identity-subsystem table -- authorship is answered
+      by the event stream's actor_id); every document's own `description`
+      key carries the FR-BB citation, the field-level notes, and an
+      OMISSIONS paragraph; a constraint the entity subsystem cannot express
+      is relocated into
+      priv/packs/bilimbaga/entity_definitions/README-constraints.md rather
+      than dropped.
+      .
+      THE FIVE DOCUMENTS, and the decisions each must record in its own
+      `description`:
+      .
+      session.json -- ports exam_sessions. Fields: exam_id (string, queried,
+      fk to exam), user_id (string, queried -- NO fk_def, because users live
+      in the identity subsystem and references_entity cannot reach it; the
+      document must say so in one sentence, same reasoning REQ-326 recorded
+      for created_by), status (enum, queried, values in_progress / submitted
+      / auto_submitted / grading_pending -- note that grading_pending was
+      added by 015's ALTER TYPE, so the enum has FOUR values, not 014's
+      three), seed (integer, not queried -- Postgres BIGINT; state in the
+      document that the seed's purpose is reproducibility of the shuffled
+      question set, per roadmap 3.5), started_at (datetime), expires_at
+      (datetime, QUERIED -- the source's partial index
+      idx_exam_sessions_expires_status exists solely so the auto-submit sweep
+      can find expired sessions, and REQ-331's sweep depends on this field
+      being queryable), submitted_at (datetime, not required), score_pct
+      (decimal, precision 5 scale 2 ported verbatim from DECIMAL(5,2), not
+      required), passed (boolean, required). Indexes: on (exam_id, user_id),
+      on (user_id, exam_id, status), on (expires_at, status). RELOCATED
+      CONSTRAINTS: the source's exam_sessions_score_range CHECK (score_pct
+      BETWEEN 0 AND 100) and exam_sessions_expires_after_start CHECK
+      (expires_at > started_at) are both CHECKs the entity subsystem cannot
+      express; both go in README-constraints.md with a note on what is lost.
+      .
+      session_question.json -- ports session_questions AS RESHAPED BY 015.
+      Fields: session_id (string, queried, fk to session), question_id
+      (string, queried, fk to question), sort_order (integer), options_order
+      (json, NOT queried -- an ordered array of option UUIDs; Rule 3 forbids
+      a :json field being queried and nothing needs to filter on it),
+      question_version_id (string, not required). Constraint: unique over
+      (session_id, question_id), which is 015's composite PK expressed the
+      convention-compliant way. THE DOCUMENT MUST RECORD, in one sentence
+      each: (a) that options_order materialises a RESOLVED, SHUFFLED question
+      set at session creation, which is what makes a session reproducible
+      from its seed; (b) that 015 deliberately changed question_id's FK from
+      ON DELETE CASCADE to RESTRICT so a sat exam cannot be silently
+      rewritten by deleting a question, and that Letflow reaches the same
+      behaviour for free -- see the ON DELETE paragraph below, which applies
+      to all five documents.
+      .
+      ON DELETE, ACROSS ALL FIVE DOCUMENTS -- AND THE DIRECTION OF THIS
+      PROBLEM IS THE OPPOSITE OF WHAT IT LOOKS LIKE. Letflow's fk_def
+      (lib/letflow/entities/definition.ex) has NO on_delete key at all: its
+      keys are name, field, references_entity and optional references_field.
+      lib/letflow/entities/definition/ddl.ex:675 emits a fixed,
+      unconditional `ON DELETE RESTRICT` on every promoted FK column, per
+      decision 0025 sub-question 1. So RESTRICT is not something Letflow
+      might fail to express -- it is the ONLY thing Letflow expresses, and
+      the question for each FK is which source behaviour it thereby
+      diverges from. THREE FKs MATCH (session_question.question_id,
+      session_answer.question_id, session_question_score.question_id, all
+      RESTRICT in the source). FIVE DIVERGE, every one of them CASCADE in
+      the source: session.exam_id, session_question.session_id,
+      session_answer.session_id, session_event.session_id,
+      session_question_score.session_id. That divergence is real and
+      user-visible -- deleting an exam CASCADED its whole session history
+      away in the source and will be REFUSED by Postgres in Letflow while
+      any session references it. Record it in README-constraints.md as a
+      behavioural divergence, following the register REQ-327 established
+      there for the CHECK constraints. session.user_id carries no fk_def at
+      all (identity subsystem), so it has no Letflow FK to diverge -- note
+      it in the table for completeness rather than omitting it.
+      .
+      TIMESTAMPTZ, ACROSS ALL FIVE DOCUMENTS. Every datetime column in the
+      three source migrations is TIMESTAMPTZ; ddl.ex:318 maps Letflow's
+      :datetime to `timestamp(6) without time zone`. The offset is dropped
+      on all six of them. Record this in README-constraints.md as a new
+      entry -- there is nothing there to inherit -- and single out
+      expires_at, where it is not cosmetic: REQ-331's sweep compares
+      expires_at against now across tenants, so a naive column carrying
+      mixed offsets would expire timed exams at the wrong moment. Name the
+      invariant that replaces the type's guarantee: datetimes are
+      normalised to UTC on write and the sweep's now is UTC.
+      .
+      session_answer.json -- ports session_answers (FR-BB36 AC-5). Fields:
+      session_id (string, queried, fk to session), question_id (string,
+      queried, fk to question), selected_option_ids (json, not queried),
+      text_answer (string, not required -- source TEXT; note in the document
+      that this is a candidate's free-text answer, NOT localized content, so
+      :string and not :localized_text is correct), saved_at (datetime),
+      time_spent_seconds (integer). Constraint: unique over (session_id,
+      question_id) -- this is the upsert key SaveAnswer relies on. The
+      source's CHECK (time_spent_seconds >= 0) goes in README-constraints.md.
+      .
+      session_event.json -- ports tab_switch_events (FR-BB36 AC-4). READ THIS
+      PARAGRAPH IN FULL BEFORE AUTHORING IT: one of its four fields is a
+      DELIBERATE ADDITION, not a port, and the document must say so.
+      .
+      WHAT THE SOURCE TABLE ACTUALLY IS. tab_switch_events has exactly FOUR
+      columns and event_type is NOT among them --
+      015_session_tables.up.sql's AC-4 block, verbatim: id UUID PRIMARY KEY
+      DEFAULT gen_random_uuid(), session_id UUID NOT NULL REFERENCES
+      exam_sessions(id) ON DELETE CASCADE, occurred_at TIMESTAMPTZ NOT NULL
+      DEFAULT NOW(), action_taken TEXT NOT NULL. The signal type is
+      VALIDATED AND THEN DISCARDED by the source: service.go:523's
+      validEventTypes admits tab_switch, blur and fullscreen_exit and
+      service.go:530 rejects anything else, but repository.go:705's
+      InsertTabSwitchEvent accepts eventType as a parameter and never binds
+      it -- its INSERT is `INSERT INTO tab_switch_events (session_id,
+      occurred_at, action_taken) VALUES ($1, NOW(), $2)`, passing only
+      sessionID and actionTaken. The parameter is dead. After a session ends
+      the source cannot tell an alt-tab from a fullscreen exit.
+      .
+      Fields: session_id (string, queried, fk to session), occurred_at
+      (datetime, queried), action_taken (enum, values log / warn / submit)
+      -- those three are the port -- PLUS event_type (enum, values
+      tab_switch / blur / fullscreen_exit), WHICH IS AN ADDITION TO THE
+      SOURCE SCHEMA AND MUST BE LABELLED AS ONE. The document must state, in
+      an ADDITIONS paragraph beside its OMISSIONS paragraph, all of: that
+      tab_switch_events has no event_type column; that the source validates
+      the value at service.go:530 and discards it at repository.go:705-709;
+      and why persisting it is nonetheless the right call -- the three
+      signal types carry different evidentiary weight in a proctoring
+      dispute, an integrity record that cannot say WHAT the candidate did is
+      close to useless for the purpose the table exists to serve, and the
+      column costs one enum on a row that is already being written.
+      Reproducing the source's bug is not fidelity.
+      .
+      NAMED session_event, NOT tab_switch_event, and the document must give
+      the honest reason in one sentence: THE ENTITY records all three signal
+      types service.go accepts, only one of which is a tab switch, so
+      tab_switch_event would be narrower than the entity's own contents. THE
+      NAME RESTS ON THE ADDED event_type FIELD, NOT ON ANY CLAIM ABOUT WHAT
+      THE SOURCE TABLE STORES. Do not write, and do not let the document
+      imply, that tab_switch_events stores the three signal types -- it
+      stores none of them.
+      .
+      The document must also record that action_taken is DERIVED FROM THE
+      EXAM'S on_tab_switch CONFIG AND NEVER FROM THE REQUEST BODY
+      (service.go's ReportEvent, AC-10) -- that is a REQ-333 enforcement
+      obligation, stated here so the definition is not read as permitting a
+      client-supplied value.
+      .
+      session_question_score.json -- ports session_question_scores (FR-BB311).
+      Fields: session_id (string, queried, fk to session), question_id
+      (string, queried, fk to question), score (decimal, precision 6 scale 4,
+      ported verbatim from DECIMAL(6,4)), max_score (decimal, precision 6
+      scale 4), grading_status (enum, queried, values graded / pending_manual
+      / ai_graded). Constraint: unique over (session_id, question_id).
+      Index on (session_id, grading_status) standing in for the source's
+      partial index WHERE grading_status = 'pending_manual' -- the document
+      must state that Letflow's index_def has no WHERE clause, so the partial
+      index becomes a full composite index, and note the difference rather
+      than pretending it is the same thing.
+      .
+      DO NOT AUTHOR A PACK DOCUMENT and do not modify
+      priv/packs/bilimbaga/pack.json or whatever REQ-328 settled as the
+      pack's provenance mechanism -- installing these five is a later
+      requirement's job, and REQ-334 records where it landed. DO NOT write
+      any Elixir. DO NOT create lib/letflow/exam/.
+    acceptance_criteria:
+      - "five new files exist -- priv/packs/bilimbaga/entity_definitions/{session,session_question,session_answer,session_event,session_question_score}.json -- and `git diff --name-only` shows changes ONLY under priv/packs/bilimbaga/ and docs/requirements.yaml, and specifically no file under lib/, web/ or priv/repo/migrations/. Quoted with the command"
+      - "every one of the five parses as JSON and is ACCEPTED by the real validator: a test or an iex session runs each document through Letflow.Entities.Definition.Validator (the same entry point REQ-326's and REQ-327's documents pass through) and the close-out quotes the actual :ok return for each of the five by name. A document that only 'looks valid' does not satisfy this criterion"
+      - "each of the five carries a `description` naming its source migration file by path and its FR-BB id -- FR-BB35 for session and session_question, FR-BB36 for session_answer and session_event, FR-BB311 for session_question_score -- plus roadmap section 3.6. The close-out lists the five id-to-file pairs"
+      - "session.status declares exactly four enum values in_progress, submitted, auto_submitted, grading_pending, and the document states in one sentence that the fourth came from 015's ALTER TYPE and is absent from 014"
+      - "session.expires_at is queried: true, and the document states in one sentence that REQ-331's expired-record sweep depends on it. A definition where expires_at is not queried FAILS this criterion, because the sweep would then have no indexed predicate to run against"
+      - "no document declares an id, created_at, updated_at or created_by field, and session.json states in one sentence why user_id carries no fk_def (references_entity names an entity type, not the identity subsystem's users table) -- the same reasoning REQ-326 recorded for created_by"
+      - "session_question, session_answer and session_question_score each declare a `constraints` entry of type unique over their two-field natural key, and each document states in one sentence that this expresses the source's composite PRIMARY KEY without declaring a primary key, because the record subsystem owns record identity"
+      - "every source CHECK constraint that the entity subsystem cannot express is written into priv/packs/bilimbaga/entity_definitions/README-constraints.md (updated in place, not duplicated) with what is lost by relocating it: exam_sessions_score_range, exam_sessions_expires_after_start, and session_answers' time_spent_seconds >= 0 at minimum. The close-out quotes the added rows"
+      - "EVERY ONE OF THE SEVEN FOREIGN KEYS ACROSS THE FIVE DOCUMENTS IS ACCOUNTED FOR AGAINST ITS SOURCE ON DELETE BEHAVIOUR, not just the one that happens to match. Letflow's fk_def type (lib/letflow/entities/definition.ex, keys name / field / references_entity / optional references_field) HAS NO on_delete KEY, and lib/letflow/entities/definition/ddl.ex:675 emits a fixed unconditional `ON DELETE RESTRICT` per decision 0025 sub-question 1 -- so RESTRICT is the only behaviour Letflow can produce, and the question is never whether it CAN express RESTRICT but which source FKs it thereby diverges from. The close-out must present a seven-row table, one row per FK, each stating source behaviour and whether Letflow's fixed RESTRICT matches or diverges: session.exam_id (source CASCADE -> DIVERGES), session.user_id (source CASCADE, but NO fk_def is authored at all because users live in the identity subsystem, so no Letflow FK exists -- row present and marked as such), session_question.session_id (source CASCADE -> DIVERGES), session_question.question_id (source RESTRICT, per 015's deliberate CASCADE-to-RESTRICT change -> MATCHES), session_answer.session_id (source CASCADE -> DIVERGES), session_answer.question_id (source RESTRICT -> MATCHES), session_event.session_id (source CASCADE -> DIVERGES), session_question_score.session_id (source CASCADE -> DIVERGES), session_question_score.question_id (source RESTRICT -> MATCHES). A close-out that raises ON DELETE only for session_question.question_id FAILS this criterion"
+      - "THE FIVE SOURCE-CASCADE DIVERGENCES ARE RECORDED AS A BEHAVIOURAL LOSS IN priv/packs/bilimbaga/entity_definitions/README-constraints.md, in the same plain register REQ-327 used for the CHECK constraints -- which set the precedent this criterion follows. The text must state the concrete consequence rather than only the mechanism: in the source, deleting an exam cascaded its sessions, their questions, answers, events and scores away; in Letflow the delete is REFUSED by Postgres while any session row references the exam, and any tenant-facing exam-deletion path must therefore delete dependents itself or the operation fails. Naming decision 0025 without naming that consequence does not satisfy this criterion"
+      - "THE TIMESTAMPTZ-TO-NAIVE-TIMESTAMP DIVERGENCE IS RECORDED IN README-constraints.md, naming expires_at specifically. All six datetime columns across the five source tables are TIMESTAMPTZ (exam_sessions.started_at, expires_at, submitted_at, created_at; session_answers.saved_at; tab_switch_events.occurred_at) and ddl.ex:318 maps :datetime to `timestamp(6) without time zone`, so the offset is dropped on every one. There is no existing note in README-constraints.md to inherit -- this is a new entry. It must single out expires_at as the one where the loss is not cosmetic: REQ-331's sweep compares it against a notion of now ACROSS TENANTS, and a naive column whose values were written in mixed offsets would expire timed exams early or late, which is a correctness bug in the deadline, not a display nit. The entry must state the rule that keeps the comparison correct -- that every datetime is normalised to UTC on write and the sweep's now is UTC -- and name it as an invariant the runtime must hold, since the column type no longer holds it"
+      - "session_event is named session_event and not tab_switch_event, AND ITS DOCUMENT'S STATED REASON IS THE ADDED event_type FIELD, not a claim about what tab_switch_events stores. The close-out quotes the document's naming sentence. A document asserting that the source table stores tab_switch, blur and fullscreen_exit FAILS this criterion -- the source table has four columns and none of them is the event type"
+      - "session_event.json DECLARES event_type AS A DELIBERATE ADDITION, NOT A PORT, and the close-out quotes the document's ADDITIONS paragraph. That paragraph must contain all three elements: that tab_switch_events has no event_type column (four columns: id, session_id, occurred_at, action_taken); that the source validates the value at service.go:530 against validEventTypes and then discards it, its INSERT at repository.go:707 binding only session_id and action_taken while the eventType parameter goes unused; and the justification for persisting it anyway. A document that presents event_type as ported from the source FAILS this criterion, and so does one that adds the field silently"
+      - "session_event's document states that action_taken is derived from the exam's on_tab_switch configuration and never from the request body, citing service.go's ReportEvent AC-10"
+      - "session_question_score's index is documented as a FULL composite index standing in for the source's partial index, with the difference named -- not described as equivalent"
+      - "0022's rule 1 is not applicable and the close-out says so in one sentence citing 0022's bucket table: bucket A is declared in this description's first line, these five documents are the vertical's own pack content, and no finding may be raised against them for naming exams or questions"
+    depends_on: []
+
+  - id: REQ-330
+    title: Design record for the live exam session -- which of the five behaviours are bucket B and which are bucket C, and the two one-sentence rule-2 justifications for each C module before any of it is built (S10 P3)
+    owner: CODE-DESIGNER
+    impl_order: 626  # letflow-queue task id, written back at WF-01 Step 3.
+    status: pending
+    stage: S10
+    description: >
+      bucket: C (this is the design artefact that JUSTIFIES the bucket-C
+      modules; it produces a design doc and a decision record, no runtime
+      code). THIS REQUIREMENT EXISTS BECAUSE 0022 RULE 2 DEMANDS IT AND RULE
+      3 MEASURES IT. Rule 2: bucket C requires REVIEWER sign-off stating, in
+      one sentence each, why the behaviour is not expressible as a definition
+      and not generalisable as a platform capability. Rule 3: the bucket-C
+      inventory in docs/migration/stage-10-bilimbaga-vertical.md is currently
+      "(none yet)", and P3 is what first populates it. Writing those
+      justifications AFTER the modules exist would make the gate ceremonial.
+      This requirement writes them first, and the modules REQ-332 and
+      REQ-333 build are gated against what it concludes.
+      .
+      REQ-ANALYST's own analysis is recorded below as the STARTING POSITION,
+      not as the answer. CODE-DESIGNER must re-derive each verdict from the
+      code and may overturn any of them; overturning one in the direction of
+      A or B is a BETTER outcome than confirming C, and the design must say
+      so plainly if it happens.
+      .
+      THE FIVE BEHAVIOURS AND THE STARTING POSITION.
+      .
+      (1) DEADLINE ENFORCEMENT -- starting position: SPLIT. The storage half
+      is bucket A (session.expires_at, a plain datetime field, REQ-329) and
+      the request-time half is a comparison inside whatever module owns the
+      write. THE TIMER-NODE HYPOTHESIS WAS TESTED AND FAILS, and the design
+      must reproduce this test rather than take it on trust. Letflow does
+      have a :TIMER node type (lib/letflow/definitions/graph.ex, in the
+      node_type union, in @node_type_map, and CHK-12 validating
+      duration_iso8601) and a real scheduler (lib/letflow/scheduler/timer.ex,
+      lib/letflow/scheduler/poller.ex). But
+      Letflow.Scheduler.Timer.arm_changeset/2 validate_requireds instance_id,
+      and the only caller is Letflow.Engine / engine/transition.ex arming a
+      timer for a token parked on a :TIMER node of a running process
+      instance. Decision 0022's "What this record does not decide" states
+      outright that THE EXAM SESSION IS NOT A PROCESS INSTANCE and that any
+      S10 design proposing a process per candidate session is rejected at the
+      CODE-DESIGN-VALIDATOR gate. So a TIMER node cannot carry a session
+      deadline without contradicting 0022 -- not because the platform lacks
+      timers, but because this platform's timers are instance-scoped by
+      schema and the session deliberately is not an instance. The reference
+      implementation agrees: BilimBaga stores expires_at as a column and
+      compares it, and 0022's own REVIEWER sign-off already made exactly this
+      point ("the deadline is a stored expires_at column, not a live timer").
+      THE DESIGN MUST EITHER CONFIRM THIS FROM THE CODE OR OVERTURN IT.
+      .
+      (2) AUTO-SUBMISSION OF EXPIRED SESSIONS -- starting position: BUCKET B,
+      and this is the most valuable reclassification in P3. BilimBaga runs a
+      60-second time.Ticker goroutine (backend/internal/sessions/autojob.go,
+      FR-BB310, roadmap 3.10) that selects rows whose deadline has passed FOR
+      UPDATE SKIP LOCKED and transitions each in its own transaction.
+      Letflow.Scheduler.Poller ALREADY IS that shape -- a supervised GenServer
+      ticker that sweeps every tenant schema per tick, with bounded
+      per-tenant concurrency and per-tenant failure isolation. "Find records
+      of a configured entity type whose configured datetime field is in the
+      past and whose configured status field has a configured value, and
+      apply a configured transition" can be stated WITHOUT THE WORD EXAM,
+      which is 0022 rule 1's own test for bucket B. Every vertical with an
+      SLA, an expiring quote, a lapsing approval or a hold period wants it.
+      REQ-331 is filed against this verdict; if the design overturns it to C,
+      REQ-331 must be re-scoped and the design must say so explicitly.
+      .
+      (3) AUTOSAVE -- starting position: BUCKET C, and the reason is
+      MEASURED, not asserted. The design must verify this claim against the
+      code and quote what it finds. Every Letflow.Entities.Records write
+      appends an EventStore event; Letflow.Entities.EntityTypeInstance's
+      moduledoc states there is ONE synthetic instance row PER ENTITY TYPE
+      per tenant, never one per record; and Letflow.EventStore's
+      lock_and_increment_sequence takes lock("FOR UPDATE") on that one
+      instance_sequence row. So every autosave by every candidate in every
+      concurrent exam in a tenant would serialise on a single Postgres row
+      lock for the session_answer type, and the contention scales with
+      tenant-wide concurrency rather than per-session concurrency. THE DESIGN
+      MUST EITHER CONFIRM THIS BY READING THE CODE AND QUOTING IT, OR REFUTE
+      IT. If it is confirmed, note that the finding is not "the entity
+      subsystem is wrong" -- event-sourced records are correct for authored
+      content -- but that a high-frequency candidate-owned scratch write is a
+      different access pattern. IF THE DESIGN CONCLUDES THIS IS A GENERIC
+      PROBLEM (any vertical with a draft-autosave surface hits it), THEN IT
+      IS BUCKET B, NOT C, AND SAYING SO IS THE BETTER OUTCOME -- file it as a
+      bucket-B gap and re-scope REQ-332 accordingly rather than writing an
+      exam-specific fast path.
+      .
+      (4) PER-QUESTION SCORING -- starting position: BUCKET C, with one
+      unresolved sub-question the design must settle. The scoring rules
+      themselves (backend/internal/sessions/grading.go, FR-BB311, roadmap
+      3.11) are arithmetic over answer options: single/true-false is 1 or 0;
+      multiple-choice is max(0, correct_selected - incorrect_selected) /
+      total_correct clamped to [0,1]; Likert is a weighted polarity
+      normalisation; short-text yields pending_manual and contributes 0.
+      0022's bucket table lists "Lua grading rules" as bucket A, shipping in
+      the pack. THE DESIGN MUST TEST THAT CLAIM AND IT LOOKS FALSE TODAY:
+      lib/letflow/engine/lua/ exists (executor, sandbox, manifest,
+      capabilities, platform) but the ONLY caller of the executor is
+      Letflow.Engine.LuaScriptAudit.execute_script_for_audit/6, and no node
+      dispatch path in lib/letflow/engine/transition.ex reaches it -- so
+      there is no way today for a pack-supplied Lua script to be executed as
+      part of anything. If the design confirms that, it has found a
+      previously unrecorded gap between 0022's bucket table and the platform,
+      and MUST say so and file it, because it means "Lua grading rules ship
+      in the pack" is aspirational. The design then decides whether P3 waits
+      for that bucket-B capability or writes the grading arithmetic as
+      bucket-C Elixir now, and JUSTIFIES the choice rather than defaulting to
+      the second. Also settle where pack-supplied grading scripts would be
+      audited -- the stage file's own open question, with a
+      SECURITY-REVIEWER interest.
+      .
+      (5) ANTI-CHEAT SIGNAL CAPTURE -- starting position: BUCKET A for
+      storage (session_event, REQ-329) plus a thin bucket-C policy
+      evaluation. THE STAGE FILE RECORDS THIS AS AN EXPLICIT OPEN QUESTION
+      ("whether these are entity-record events, Letflow.EventStore events, or
+      neither is a P3 design question") AND THIS REQUIREMENT IS WHERE IT GETS
+      ANSWERED -- do not leave it open a second time. Weigh at minimum: an
+      entity record per signal costs one EventStore append each and hits the
+      same single-sequence-row lock as (3), and a candidate deliberately
+      flipping tabs can generate them at will, so it is an unmetered
+      tenant-wide write amplifier; a raw EventStore event has the same cost
+      and additionally puts candidate telemetry into the audit timeline;
+      "neither" (an aggregate counter on the session record) loses the
+      per-event occurred_at the source stores and the product spec's warn
+      threshold arguably needs. The behaviour that is NOT storage -- read the
+      exam's on_tab_switch policy and, when it is 'submit', auto-submit the
+      session -- is a policy branch over exam configuration and is bucket C
+      unless the design can generalise it. Whatever is decided, RECORD IT IN
+      THE STAGE FILE'S OPEN-QUESTIONS SECTION AS ANSWERED, with a pointer.
+      .
+      OUTPUT. A design doc at lib/letflow/design/req330-exam-live-session.md,
+      and -- because two of these verdicts contradict or extend text in a
+      standing decision record (0022's bucket table lists Lua grading rules
+      as A; the stage file carries the anti-cheat open question) -- a
+      decision record under docs/migration/decisions/ with the next free
+      number. Do NOT silently resolve either in the design doc alone; that is
+      exactly what core-directives forbids.
+      .
+      THE DELIVERABLE RULE 2 ACTUALLY DEMANDS. For every module the design
+      proposes under lib/letflow/exam/, the doc carries a table row with the
+      module's name, ONE SENTENCE on why the behaviour is not expressible as
+      a definition, and ONE SENTENCE on why it is not generalisable as a
+      platform capability -- in the exact column shape of the stage file's
+      bucket-C inventory table, so REQ-334 can paste it in. A module with no
+      such row is not authorised to be built.
+      .
+      NO IMPLEMENTATION CODE. Interfaces, @specs, schema and state shapes
+      only, per CODE-DESIGNER's own scope. Do NOT create lib/letflow/exam/.
+    acceptance_criteria:
+      - "lib/letflow/design/req330-exam-live-session.md exists and reaches an explicit A, B or C verdict for each of the five named behaviours -- deadline enforcement, auto-submission of expired sessions, autosave, per-question scoring, anti-cheat signal capture -- with each verdict stated as the literal word bucket A, bucket B or bucket C. A behaviour discussed without a verdict FAILS this criterion"
+      - "the TIMER-node hypothesis is tested against the code and the result quoted, not asserted: the doc quotes Letflow.Scheduler.Timer.arm_changeset/2's validate_required list showing instance_id is mandatory, names the only caller that arms a timer, and quotes decision 0022's 'the exam session is not a process instance' paragraph. The conclusion may be either that a TIMER node can carry the deadline or that it cannot -- but it is reached from those three pieces of evidence"
+      - "the autosave cost claim is verified against the code and the verification quoted: the doc quotes Letflow.Entities.EntityTypeInstance's one-instance-per-entity-TYPE statement and Letflow.EventStore's lock(\"FOR UPDATE\") on the instance_sequence row, and states in one sentence what that implies for N concurrent candidates autosaving in one tenant. If the reading is wrong, the doc says so and the autosave verdict changes accordingly"
+      - "the Lua claim is tested and the finding recorded: the doc states whether any node-dispatch path in lib/letflow/engine/transition.ex can execute a pack-supplied Lua script today, quoting the actual call sites of Letflow.Engine.Lua.Executor. If the answer is no, the doc states in one sentence that 0022's bucket table listing Lua grading rules as bucket A is not currently realisable, and that finding appears in the decision record -- not only in the design doc"
+      - "the anti-cheat open question recorded in docs/migration/stage-10-bilimbaga-vertical.md's 'Open questions' section is ANSWERED, with the three candidate shapes (entity-record events, EventStore events, neither) each weighed on cost and on what it loses, and one chosen with a reason. Leaving it open, or restating it, FAILS this criterion"
+      - "a decision record exists under docs/migration/decisions/ with the next free number, and it carries at minimum the Lua finding and the anti-cheat answer -- the two items that extend or contradict standing recorded text. The close-out quotes the file path and its Status line"
+      - "for EVERY module the design proposes under lib/letflow/exam/, the doc carries a row with the module name, exactly one sentence on why the behaviour is not expressible as a definition, and exactly one sentence on why it is not generalisable as a platform capability, in the same four-column shape as the stage file's bucket-C inventory table (Module | Why not A | Why not B | REVIEWER sign-off). A proposed module with no such row FAILS this criterion, and the doc states in one sentence that a module absent from this table is not authorised to be built"
+      - "the doc states the total count of modules it proposes under lib/letflow/exam/ as a single number, and gives one sentence on why that number is as small as it can be -- 0022 rule 3 makes this the stage's primary health metric, so the count is reported, not left to be counted by a reader"
+      - "any verdict that lands on A or B rather than C is called out PROMINENTLY in the doc's own summary, with the requirement it affects named (REQ-331 for auto-submission, REQ-332 for autosave and scoring). If the design overturns REQ-331's or REQ-332's premise, it says so explicitly and states what those requirements must become"
+      - "the doc contains NO implementation code -- interfaces, @specs, schema and state shapes only. `git diff --name-only` shows no file under lib/letflow/exam/ and no .ex file added anywhere. Quoted with the command"
+      - "every one of the five behaviours cites its source: FR-BB35 or FR-BB36 or FR-BB310 or FR-BB311, or a roadmap section (3.5 through 3.11), by the id or section number and the file path it was read from"
+    depends_on: []
+
+  - id: REQ-331
+    title: A generic deadline-driven record transition sweep on the existing Scheduler.Poller -- configured entity type, datetime field and status transition, with no domain vocabulary anywhere in it
+    owner: ELIXIR-DEV
+    impl_order: 627  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
+    status: pending
+    stage: S10
+    description: >
+      bucket: B. THIS IS A P3 BEHAVIOUR THAT TURNED OUT NOT TO BE
+      EXAM-SPECIFIC, WHICH IS THE POINT. 0022 rule 3 makes growth in
+      lib/letflow/exam/ the stage's health metric; the healthiest possible
+      outcome for a P3 behaviour is to leave the bucket entirely, and
+      auto-submission of expired sessions does.
+      .
+      WHY B AND NOT C -- 0022 RULE 1 IS THE TEST AND THIS PASSES IT. Rule 1:
+      if a capability cannot be stated without saying "question" or "exam",
+      it is C. This one can. The capability is: given a configured entity
+      type, a configured datetime field on it, and a configured status field
+      and value, find records whose datetime is in the past and whose status
+      matches, and apply a configured status transition to each, one
+      transaction per record, per tenant schema. No exam, no question, no
+      candidate. An SLA breach, an expiring quote, a lapsing approval, a hold
+      period that ends -- every vertical with a deadline wants this, and
+      BilimBaga's own version (backend/internal/sessions/autojob.go,
+      FR-BB310, roadmap 3.10) is a hand-rolled instance of it.
+      ACCORDINGLY, AND THIS IS A HARD CONSTRAINT ON THIS REQUIREMENT: no
+      module, function, config key, permission atom, log message, error atom,
+      test name or comment produced here may contain the words exam, session,
+      question, candidate, submit or grade. A reviewer finding one is a
+      correct rule-1 finding and the requirement is reworked, not argued.
+      .
+      WHY B AND NOT A. A definition can declare the datetime field and the
+      status enum -- REQ-329 does exactly that -- but a definition is
+      declarative data with no execution context; nothing in the entity
+      subsystem runs on a clock. A sweep needs a supervised ticker, which is
+      code, not a document.
+      .
+      THE PLATFORM ALREADY HAS THE SHAPE, SO REUSE IT RATHER THAN BUILDING A
+      SECOND TICKER. lib/letflow/scheduler/poller.ex is a supervised GenServer
+      that already runs seven per-tenant sweeps per tick, iterates tenant
+      schemas with bounded concurrency via Task.async_stream/3 under
+      Letflow.Admission.global_cap/0, guards each tenant's call with
+      try/rescue so one tenant's failure does not stop the others, and
+      schedules its first tick with zero delay so a restart catches up. ADD
+      AN ADDITIONAL SWEEP THERE -- do not introduce a new GenServer, a new
+      supervisor child, or a second ticker. Follow the existing sweeps'
+      conventions exactly: config read fresh every tick, the live
+      Admission.global_cap/0 value read inside the sweep rather than hoisted
+      or hardcoded, and per-tenant isolation preserved.
+      .
+      CONCURRENCY. The reference implementation uses FOR UPDATE SKIP LOCKED
+      so two application instances never process the same row twice
+      (autojob.go's queryExpiredSessions, AC-9). Letflow has the same
+      multi-node exposure. Match that guarantee, and match the reference's
+      per-row transaction boundary (one transaction per record, a failure on
+      one record does not abort the others) -- autojob.go's
+      processOneExpiredSession, AC-8. Where the transition writes through
+      Letflow.Entities.Records, respect that module's own transactional
+      contract rather than writing to the record table directly.
+      .
+      A DETAIL THE REFERENCE GOT RIGHT AND THAT IS EASY TO GET WRONG: the
+      transitioned record's completion timestamp is set to the DEADLINE
+      value, not to now (autojob.go AC-3, submitted_at = expires_at). A
+      record that expired at 14:00 and was swept at 14:00:47 completed at
+      14:00. Preserve that, and make it a test.
+      .
+      CONFIGURATION AND AUTHORIZATION are design decisions this requirement
+      must settle rather than assume: where a sweep rule is declared (a
+      config key, an entity definition attribute, a new table), who may
+      declare one, and whether a new permission atom is needed. Whatever is
+      chosen, a tenant cannot configure a sweep over another tenant's data --
+      INV-1 applies to every read and write here and SECURITY-REVIEWER gates
+      it.
+      .
+      GATED ON REQ-330. If REQ-330's design overturns the bucket-B verdict,
+      this requirement is re-scoped before it is built, not built anyway.
+    acceptance_criteria:
+      - "no artefact produced by this requirement contains the words exam, session, question, candidate, submit or grade in any module name, function name, config key, permission atom, log message, error atom, test name, moduledoc or comment. Proven mechanically: a case-insensitive grep for each of the six words across every file this requirement adds or modifies returns no hit, and the command and its empty output are quoted. This is 0022 rule 1 and a single hit is a FAIL"
+      - "the sweep is an additional per-tenant sweep inside the existing lib/letflow/scheduler/poller.ex. `git diff --name-only` shows no new GenServer module, no new supervisor child, and no second ticker. Quoted with the command"
+      - "the new sweep follows the existing sweeps' conventions, each proven by a quoted line of the diff: config is read fresh inside the tick rather than cached in state; the concurrency bound reads Letflow.Admission.global_cap/0 live inside the sweep rather than hoisting or hardcoding it; and one tenant raising does not prevent the remaining tenants being swept"
+      - "a test proves SKIP-LOCKED behaviour rather than asserting it: two concurrent sweeps over the same due record result in exactly one transition, and the test fails if the locking clause is removed. The test and its output are quoted"
+      - "a test proves per-record transaction isolation: with several due records where one transition fails, the others still transition and the failure is logged. Quoted output"
+      - "a test proves the completion timestamp is set to the record's deadline value and NOT to the sweep time -- a record due at T swept at T plus a measurable delay records T. This is autojob.go's AC-3 and the test asserts the exact value, not a range that would pass either way"
+      - "INV-1 holds: every read and write in the new sweep passes an explicit prefix derived from the tenant schema being swept, and a test proves a sweep rule configured in one tenant does not transition a record in another. SECURITY-REVIEWER signs off"
+      - "where the sweep rule is declared, who may declare one, and whether a new permission atom was needed are all stated explicitly in the moduledoc, with the reason for the choice -- not left implicit in the code"
+      - "the moduledoc cites FR-BB310 and backend/internal/sessions/autojob.go as the behavioural reference WITHOUT naming the domain -- the citation is a provenance pointer and does not make the module exam-specific, and the moduledoc says so in one sentence. If the citation cannot be written without the forbidden words, it is written as a path plus an FR-BB id and nothing else"
+      - "`mix letflow.check` runs in full and its final result is quoted verbatim. If the toolchain or database is unavailable, that is stated with the actual error text and the requirement is reported BLOCKED rather than assumed passing"
+      - "REQ-330's verdict on this behaviour is quoted at the top of the close-out. If REQ-330 concluded bucket C rather than bucket B, this requirement was re-scoped before implementation and the close-out says how"
+    depends_on:
+      - REQ-330
+
+  - id: REQ-332
+    title: Implement the live-session runtime under lib/letflow/exam/ -- start, autosave, submit and score -- with each module carrying the rule-2 justification REQ-330 authorised for it
+    owner: ELIXIR-DEV
+    impl_order: 628  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
+    status: pending
+    stage: S10
+    description: >
+      bucket: C. THIS IS THE FIRST CODE EVER TO LAND IN lib/letflow/exam/,
+      and the stage file records that the directory does not exist and the
+      bucket-C inventory is "(none yet)". 0022 rule 3 makes growth here the
+      stage's primary health metric, so this requirement is written to add as
+      little as the behaviour genuinely requires and to prove that each piece
+      earned its place.
+      .
+      HARD PRECONDITION -- NO MODULE WITHOUT AN AUTHORISED ROW. Build ONLY
+      the modules that appear in REQ-330's rule-2 justification table, and
+      only with the responsibilities that table gives them. A module not in
+      that table is not authorised. If implementation reveals a genuinely
+      needed module the design did not anticipate, STOP and go back to
+      REQ-330 for a row -- do not add it and write the justification
+      afterwards, because that is precisely the ceremonial-gate failure rule
+      2 exists to prevent.
+      .
+      WHAT THIS COVERS, and what it does not. Covered: session start (resolve
+      the question set, materialise it, persist), autosave of a single
+      answer, explicit submission, and per-question plus total scoring. NOT
+      covered here: auto-submission of expired sessions (REQ-331, bucket B),
+      anti-cheat signal capture and policy (REQ-333), any HTTP route or web/
+      screen (P4 and a separate requirement), certificate issuance
+      (deliberately unexpanded -- see below), adaptive question selection and
+      short-text AI autograding (flagged in 0022's REVIEWER sign-off as
+      bucket C but NOT in P3's row; they get their own requirement rather
+      than being folded in silently).
+      .
+      DATA LIVES IN BUCKET A. All five session tables are entity definitions
+      (REQ-329). This runtime does not add a migration and does not create a
+      table. Every read and write goes through Letflow.Entities.Records and
+      Letflow.Entities.Query. IF THAT TURNS OUT TO BE IMPOSSIBLE FOR THE
+      AUTOSAVE PATH, THAT IS THE FINDING, NOT A LICENCE: report it with the
+      exact evidence and escalate to ORCH for a bucket-B requirement, per the
+      same standard the stage file sets for P2 ("a finding worth stopping on
+      rather than routing around"). Do not hand-roll an Ecto schema over a
+      table the pack owns.
+      .
+      SESSION START -- port from backend/internal/sessions/service.go's
+      CreateSession (FR-BB35, roadmap 3.5). The eligibility checks it runs in
+      order: assignment, exam status active (archived is a distinct error),
+      availability window, attempt limit against finished sessions, and no
+      already-open session for this exam and candidate. Then the part that
+      matters most: A SEED IS DRAWN AND STORED, and the question set is
+      resolved through it -- rules are evaluated, pools shuffled with the
+      seeded PRNG, questions truncated to the rule's count, question order
+      shuffled if configured, option order shuffled per question if
+      configured -- and the RESULT is materialised as session_question rows
+      carrying options_order. The session is a snapshot, not a live view of
+      the question bank; that is why a question deleted mid-sitting cannot
+      change what the candidate sees. Reproducibility from the seed is a real
+      property of the source and the implementation must preserve it. NOTE
+      that Go's math/rand and Erlang's :rand are different generators, so
+      byte-identical output across the two is NOT the goal and must not be
+      asserted -- the goal is that the SAME seed in THIS implementation
+      yields the same set twice.
+      .
+      AUTOSAVE -- port from service.go's SaveAnswer (FR-BB37, roadmap 3.7).
+      Validation in order: non-negative time-spent; session belongs to the
+      calling candidate; status is in progress; DEADLINE CHECKED
+      SERVER-SIDE, never trusted from the client; question belongs to this
+      session; answer shape matches the question type (a short-text question
+      rejects selected options, a single-choice question rejects more than
+      one); every selected option id belongs to that question. Then upsert on
+      (session_id, question_id). THE RESPONSE CARRIES REMAINING SECONDS,
+      CLAMPED AT ZERO, ON EVERY SAVE -- the roadmap states the reason
+      explicitly: the client clock stays server-authoritative. Preserve that;
+      it is a security property, not a convenience.
+      .
+      IMPLEMENT WHATEVER REQ-330 CONCLUDED ABOUT AUTOSAVE COST, AND NOTHING
+      ELSE. REQ-330 tests whether the per-entity-type single instance_sequence
+      row under lock("FOR UPDATE") makes one write per save untenable at
+      sitting-scale concurrency. If it concluded that a different write path
+      is needed, build the one it specified. If it concluded the ordinary
+      path is fine, use the ordinary path. Do not invent a third answer at
+      implementation time.
+      .
+      SUBMISSION AND SCORING -- port from service.go's SubmitSession and
+      backend/internal/sessions/grading.go (FR-BB39 and FR-BB311, roadmap 3.9
+      and 3.11). Submission is idempotent: an already-submitted session
+      returns the recorded outcome rather than re-scoring. Scoring writes one
+      session_question_score row per question and then the session total. The
+      arithmetic, ported exactly: single and true-false score 1 when exactly
+      one option is selected and it is correct, else 0; multiple choice
+      scores max(0, correct_selected - incorrect_selected) divided by
+      total_correct, clamped to [0,1]; Likert uses the weighted polarity
+      normalisation grading.go's gradeLikert implements; short-text scores 0
+      and marks the row pending_manual. An unanswered question is graded as
+      wrong, not skipped -- grading.go LEFT JOINs answers precisely so that
+      an absent answer becomes an empty selection. Total is sum(score) over
+      sum(max_score) as a percentage, and passed compares it to the exam's
+      passing threshold. A question with NO correct option is an ERROR, not a
+      zero (grading.go AC-10) -- it means the question bank is broken and
+      silently scoring zero would hide that. If any question in the session
+      is short-text, the session lands in grading_pending rather than
+      submitted (autojob.go AC-4 and roadmap 3.9).
+      .
+      CONCURRENCY. REQ-045 and Letflow.Engine's "Process-vs-row decision"
+      settled the running-instance shape as a plain transactional context
+      module with Postgres row locks, and 0022 states that a live timed
+      session strengthens rather than reopens that conclusion. NO gen_statem,
+      NO supervised process per session, NO registry of live sessions. Any
+      design proposing one is rejected at the CODE-DESIGN-VALIDATOR gate
+      against that paragraph. Two concurrent submits of the same session must
+      produce one scored outcome, and that must be a test.
+      .
+      TENANT ISOLATION. Every function takes an explicit prefix, INV-1
+      applies to every read and write, and a candidate may only touch their
+      own session -- ownership is checked server-side on every call, exactly
+      as service.go's GetSessionForUser does.
+      .
+      CERTIFICATE ISSUANCE IS NOT IN SCOPE and is not merely deferred within
+      this requirement -- it is unexpanded for the whole of P3. It needs PDF
+      and QR rendering, mix.exs carries no such dependency, and gaps 4 and 5
+      in the stage file have their MECHANISM settled by decision 0027
+      (out-of-band via POST /service-catalog) while the CAPABILITIES remain
+      open and unowned. Do not add a rendering dependency, do not stub a
+      certificate module, and do not write a placeholder.
+    acceptance_criteria:
+      - "every module created under lib/letflow/exam/ appears by name in REQ-330's rule-2 justification table, and the close-out lists the modules created alongside that table's rows to show the two sets are identical. A module with no row FAILS this criterion regardless of how well it works"
+      - "each module's moduledoc carries the two rule-2 sentences verbatim from REQ-330's table -- one on why the behaviour is not expressible as a definition, one on why it is not generalisable as a platform capability -- plus a pointer to REQ-330's design doc. 0022 rule 2 requires the justification to exist where the code is, not only in a design file"
+      - "the close-out reports the NUMBER of modules added under lib/letflow/exam/ and the total line count, as plain numbers. 0022 rule 3 makes this the stage's measured health metric and REQ-334 copies these figures into the stage file"
+      - "no migration is added and no table is created: `git diff --name-only` shows nothing under priv/repo/migrations/, and no Ecto schema module is defined over any of the five session entity types. All session data is read and written through Letflow.Entities.Records and Letflow.Entities.Query. Quoted with the command"
+      - "a test proves seeded reproducibility: creating two sessions with the same stored seed and the same exam configuration yields the same resolved question set in the same order with the same option order. The test does NOT assert equivalence with Go's math/rand, and the close-out states in one sentence why that would be wrong"
+      - "a test proves the session is a snapshot: after a session is created, deleting or modifying a question in the bank does not change what that session's materialised session_question rows return"
+      - "every eligibility check CreateSession performs has a test that fails when it is removed -- not assigned, exam archived, exam not active, outside the availability window, attempts exhausted, and an already-open session -- each returning a distinct error. Six tests, quoted output"
+      - "a test proves the deadline is enforced SERVER-SIDE on autosave: a save attempted after the session's stored deadline is rejected even though the request contains no timing information the server trusts. A test that passes a client-supplied timestamp does not satisfy this"
+      - "a test proves every autosave response carries remaining seconds clamped at zero and never negative, and the close-out states in one sentence that this is what keeps the client clock server-authoritative, citing roadmap 3.7"
+      - "answer-shape validation is tested per question type: a short-text question rejects selected option ids, a single-choice question rejects more than one selected option, and an option id belonging to a different question is rejected. Three tests"
+      - "the autosave write path is exactly the one REQ-330 specified, and the close-out quotes REQ-330's conclusion alongside the path implemented. If REQ-330 required a different write path and it was not built, or the ordinary path was replaced without REQ-330 calling for it, that is a FAIL"
+      - "scoring is tested against each rule with its own case: single correct, single incorrect, true-false, multiple-choice with partial credit exercising max(0, correct - incorrect) / total_correct at a value strictly between 0 and 1, multiple-choice clamped at 0 when incorrect selections exceed correct ones, Likert on both polarities, and short-text yielding 0 with pending_manual"
+      - "a test proves an UNANSWERED question is graded as wrong rather than skipped, and the close-out states in one sentence that this is why grading.go LEFT JOINs the answers table"
+      - "a test proves a question with no correct option raises an ERROR rather than scoring zero, quoting grading.go's AC-10 as the source of that behaviour"
+      - "a test proves a session containing any short-text question lands in grading_pending rather than submitted"
+      - "a test proves submission is idempotent: a second submit of the same session returns the recorded outcome and does not re-score, and a test proves two CONCURRENT submits produce exactly one scored outcome. The concurrency test fails if row locking is removed"
+      - "no gen_statem, no supervised process per session, and no process registry of live sessions: a grep for gen_statem, GenServer and Registry across lib/letflow/exam/ returns nothing, quoted with the command. This is REQ-045 and decision 0022's explicit non-negotiable"
+      - "INV-1 holds: every public function takes an explicit prefix, a test proves a candidate cannot read or write another candidate's session, and a test proves a session in one tenant is invisible in another. SECURITY-REVIEWER signs off"
+      - "NOTHING about certificates was added: no PDF or QR dependency appears in mix.exs (`git diff mix.exs` quoted, and it is empty or unrelated), no module under lib/letflow/exam/ mentions a certificate, and no placeholder or stub was written. The close-out states in one sentence that certificate issuance is deliberately unexpanded because gaps 4 and 5 have their mechanism settled by decision 0027 but their capabilities remain open and unowned"
+      - "adaptive question selection and short-text AI autograding were NOT implemented, and the close-out says so in one sentence naming 0022's REVIEWER sign-off as where they are flagged and stating that they need their own requirement"
+      - "`mix letflow.check` runs in full and its final result is quoted verbatim. If the toolchain or database is unavailable, that is stated with the actual error text and the requirement is reported BLOCKED rather than assumed passing"
+      - "REVIEWER gives an explicit bucket-C sign-off naming each module added, which is P3's own exit condition in the stage file's phase table -- 'each module carries its REVIEWER bucket-C sign-off'. The close-out quotes it"
+    depends_on:
+      - REQ-329
+      - REQ-330
+
+  - id: REQ-333
+    title: Implement anti-cheat signal capture and the on-tab-switch policy branch, in the storage shape REQ-330's answer to the stage file's open question settled
+    owner: ELIXIR-DEV
+    impl_order: 629  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
+    status: pending
+    stage: S10
+    description: >
+      bucket: C for the policy branch; the STORAGE half may be bucket A
+      (session_event, REQ-329) or something else entirely, and REQ-330 is
+      what decides. Filed separately from REQ-332 for one reason: this is the
+      only piece of P3 whose shape is an OPEN QUESTION ON RECORD in
+      docs/migration/stage-10-bilimbaga-vertical.md ("Anti-cheat scope...
+      Whether these are entity-record events, Letflow.EventStore events, or
+      neither is a P3 design question"). Building it inside REQ-332 would
+      mean answering that question in passing while implementing something
+      else. It gets its own entry so the answer is visible.
+      .
+      WHY THE POLICY BRANCH IS C AND NOT A. The behaviour is: on receiving a
+      focus-loss signal, read the exam's on_tab_switch configuration and
+      branch -- log silently, return a warning with the running count, or
+      auto-submit the session immediately. The branch reads a value from one
+      entity record (the exam's configuration) to decide what to do to a
+      different entity record (the candidate's session) and, in one branch,
+      to trigger scoring. An entity definition is declarative field
+      structure; it has no conditional and no side effect, so it cannot
+      express this. A process definition's exclusive gateway could express a
+      branch, but 0022 forbids the session being a process instance, so there
+      is no token to route.
+      .
+      WHY THE POLICY BRANCH IS C AND NOT B. Stating it generically requires
+      naming what the signals are and what the terminal action is, and both
+      are exam vocabulary -- 0022 rule 1's own test. A generic
+      "signal-triggered record transition" abstraction is possible in
+      principle but would be built for exactly one caller and would be a
+      platform capability invented speculatively, which is the failure mode
+      0022 was written to prevent in the opposite direction. IF REQ-330
+      CONCLUDES OTHERWISE AND FINDS AN HONEST GENERIC SHAPE, THAT IS A BETTER
+      OUTCOME AND THIS REQUIREMENT IS RE-SCOPED TO BUILD IT.
+      .
+      SOURCE. backend/internal/sessions/service.go's ReportEvent, FR-BB38,
+      roadmap 3.8. Storage is tab_switch_events from
+      backend/migrations/015_session_tables.up.sql, FR-BB36 AC-4.
+      .
+      THE BEHAVIOUR, PORTED. The accepted signal types are exactly three --
+      tab_switch, blur, fullscreen_exit -- and anything else is rejected
+      (service.go:523's validEventTypes, enforced at service.go:530). BE
+      PRECISE ABOUT WHAT THE SOURCE DOES WITH THE TYPE ONCE IT HAS
+      VALIDATED IT: NOTHING. tab_switch_events has four columns -- id,
+      session_id, occurred_at, action_taken -- and no event_type among
+      them; repository.go:705's InsertTabSwitchEvent takes eventType as a
+      parameter and never binds it, inserting only session_id and
+      action_taken. The source validates the signal type and throws it
+      away. REQ-329 therefore ADDS event_type to session_event rather than
+      porting it, and that addition -- not any property of the source
+      table -- is why the entity is named session_event and not
+      tab_switch_event. Do not restate this as "the source table stores all
+      three signal types"; it stores none of them. The session must belong
+      to the caller, be in
+      progress, and not be past its deadline, all checked server-side.
+      ACTION_TAKEN IS DERIVED FROM THE EXAM'S CONFIGURATION AND NEVER FROM
+      THE REQUEST BODY -- service.go records this as AC-10 and it is the
+      security-relevant part of the whole feature: a candidate who could
+      supply action_taken could tell the server to merely log an event the
+      exam configured to auto-submit. Then branch on the exam's
+      on_tab_switch: 'submit' auto-submits and scores the session and returns
+      the outcome; 'warn' returns a warning flag with the running event
+      count; 'log' records silently and returns the count.
+      .
+      THE WRITE-AMPLIFICATION PROBLEM IS REAL AND REQ-330 MUST HAVE ADDRESSED
+      IT. Focus signals are CANDIDATE-CONTROLLED and unmetered -- a candidate
+      can alt-tab in a loop. If each signal costs one EventStore append
+      against the single per-entity-type instance_sequence row under
+      lock("FOR UPDATE"), one candidate can serialise writes for that entity
+      type across the whole tenant. Implement whatever REQ-330 settled -- the
+      entity-record shape, an aggregate counter, rate limiting, or something
+      else -- and do not decide it here.
+      .
+      NO HTTP ROUTE. This requirement produces the runtime function only. The
+      route surface for the candidate-facing session API is its own
+      requirement and P4 owns the screen.
+    acceptance_criteria:
+      - "the storage shape implemented is the one REQ-330's decision record settled, and the close-out quotes REQ-330's conclusion verbatim before describing what was built. Implementing a different shape, or choosing one because the design was ambiguous, is a FAIL -- the correct action on an ambiguous design is to return to REQ-330"
+      - "THE AMBIGUITY ESCAPE IS ENFORCED, NOT ADVISORY, so that the criterion above is falsifiable rather than resting on a document that does not yet exist. Before implementing, the executor asks one question of REQ-330's decision record: does it name the storage shape -- which store, which entity type or event type, which write path -- specifically enough to build without interpretation? If YES, the close-out quotes the naming passage and proceeds. If NO -- the record is silent on storage, offers alternatives without choosing, or names a shape whose meaning depends on a reading the executor had to supply -- THE REQUIREMENT IS REPORTED BLOCKED AND RETURNED TO REQ-330 WITH NO CODE WRITTEN, and the close-out quotes the ambiguous passage verbatim alongside a one-sentence statement of what it fails to determine. Both outcomes satisfy this criterion; only implementing through an ambiguity fails it"
+      - "every module added under lib/letflow/exam/ appears in REQ-330's rule-2 justification table and carries both rule-2 sentences in its moduledoc, and the close-out reports the number of modules and lines added so REQ-334 can update the bucket-C inventory"
+      - "exactly three signal types are accepted -- tab_switch, blur, fullscreen_exit -- and a test proves a fourth value is rejected with a distinct error, citing service.go's validEventTypes"
+      - "A TEST PROVES ACTION_TAKEN CANNOT BE SUPPLIED BY THE CALLER: a call whose input contains an action_taken value contradicting the exam's on_tab_switch configuration records the CONFIGURED action, not the supplied one. This is service.go's AC-10 and it is the security-relevant behaviour of the feature. SECURITY-REVIEWER signs off on this specifically"
+      - "all three on_tab_switch branches are tested end to end: 'log' records the signal and returns the running count with no warning; 'warn' returns the warning flag with the count; 'submit' auto-submits AND SCORES the session and returns the outcome, with the session's stored status proving it actually transitioned"
+      - "server-side guards are each tested: a signal on a session belonging to another candidate is rejected, a signal on a session that is not in progress is rejected, and a signal on a session past its deadline is rejected. Three tests with distinct errors"
+      - "the write-amplification mitigation REQ-330 specified is implemented and PROVEN by a test that exercises repeated signals from one session and demonstrates the mitigation holds -- whatever it is. A test that merely records one signal does not satisfy this criterion. IF REQ-330 CONCLUDED THAT NO MITIGATION IS REQUIRED, this criterion is satisfied instead by the close-out quoting that conclusion verbatim together with a test that drives repeated signals from a single session through the ordinary write path and shows they behave correctly -- every signal recorded, the running count accurate, no error. The criterion is never waived: one of the two forms is always available, so a REQ-330 verdict of 'none needed' still has to be demonstrated rather than asserted"
+      - "no HTTP route is added: `git diff --name-only` shows no change to lib/letflow/routers/ or lib/letflow/router.ex, and no new permission atom is added to lib/letflow/api/authorization.ex. Quoted with the command"
+      - "INV-1 holds: every function takes an explicit prefix and a test proves a signal recorded in one tenant is invisible in another"
+      - "`mix letflow.check` runs in full and its final result is quoted verbatim. If the toolchain or database is unavailable, that is stated with the actual error text and the requirement is reported BLOCKED"
+      - "REVIEWER gives an explicit bucket-C sign-off for each module added, per P3's exit condition"
+    depends_on:
+      - REQ-330
+      - REQ-332
+
+  - id: REQ-334
+    title: Populate the stage-10 bucket-C inventory with P3's first entries and record the A/B reclassifications, closing 0022 rule 3's measurement loop
+    owner: DOC-UPDATER
+    impl_order: 630  # letflow-queue task id, written back at WF-01 Step 3. Queue depends_on edges were NOT mirrored (registered before predecessor ids were known; letflow-queue exposes no update endpoint -- same limitation as ISS-0613). docs/requirements.yaml is authoritative for ordering.
+    status: pending
+    stage: S10
+    description: >
+      bucket: not applicable -- this is stage bookkeeping, not a deliverable
+      in any bucket, and it says so rather than declaring a bucket it does
+      not have. WHY IT IS A REQUIREMENT AND NOT A CLOSE-OUT LINE. 0022 rule 3
+      states that bucket C stays small, that "small" is MEASURED, that the
+      stage file carries a running inventory of lib/letflow/exam/, and that
+      growth there is the stage's primary health metric. That inventory is
+      the only place the metric exists, it currently reads "(none yet)", and
+      an unmaintained metric is worse than no metric because it reads as
+      evidence of restraint that nobody checked. P3 is the first phase to add
+      anything to it, so this is where the loop either closes or is quietly
+      dropped.
+      .
+      UPDATE docs/migration/stage-10-bilimbaga-vertical.md, and nothing about
+      it silently. Specifically:
+      .
+      ONE -- THE BUCKET-C INVENTORY TABLE. Replace the "(none yet)" row with
+      one row per module actually created by REQ-332 and REQ-333, in the
+      table's existing four columns: Module, Why not A (a definition), Why
+      not B (generic), REVIEWER sign-off. The two middle columns are the
+      rule-2 sentences REQ-330 authored and the modules carry in their
+      moduledocs -- copy them, do not paraphrase them, so the design, the
+      code and the inventory say the same thing. The fourth column points at
+      the actual REVIEWER sign-off each module received.
+      .
+      TWO -- REPORT THE MEASUREMENT, NOT ONLY THE LIST. Immediately under the
+      table, state the total number of modules and total lines under
+      lib/letflow/exam/, and the date measured, derived by RUNNING a command
+      and quoting it -- not from the requirement close-outs. A count that
+      cannot be reproduced from the tree is not a measurement.
+      .
+      THREE -- RECORD WHAT LEFT THE BUCKET, WHICH IS THE MORE VALUABLE HALF.
+      P3's analysis moved work OUT of bucket C: the five session tables
+      became entity definitions in the pack (REQ-329, bucket A), and
+      expired-record auto-transition became a generic deadline sweep on the
+      existing poller (REQ-331, bucket B). Record both in the phases table's
+      P3 row or in a short note beside the inventory, with their requirement
+      ids, because 0022 rule 3's metric is meaningless if only the additions
+      are visible. State plainly that P3's row in the phases table reads
+      bucket C but that P3 as executed produced bucket-A and bucket-B work
+      too -- the phase label was a prediction, and the record should show
+      where it held and where it did not.
+      .
+      FOUR -- CLOSE THE ANTI-CHEAT OPEN QUESTION. The "Open questions"
+      section records it as unanswered. REQ-330 answered it. Mark it ANSWERED
+      with a pointer to REQ-330's decision record, in the same style the
+      service_catalog_entries question was closed by decision 0027 -- the
+      question text is kept and annotated, not deleted, because the reasoning
+      is what makes the answer reviewable.
+      .
+      FIVE -- CERTIFICATES. P3's row promises "certificate issuance" and P3
+      did not deliver it. Record why in one or two sentences: it needs PDF
+      and QR rendering, mix.exs carries no such dependency, and gaps 4 and 5
+      have their mechanism settled by decision 0027 but their capabilities
+      remain open and UNOWNED. State that certificate issuance is unexpanded
+      pending an owner for gap 5, so a later reader does not read P3's
+      completion as covering it.
+      .
+      SIX -- IF REQ-330 OVERTURNED ANY STARTING VERDICT, say so and say what
+      changed. A design that overturned a REQ-ANALYST verdict is a working
+      gate, and the record should show the gate working.
+      .
+      DO NOT edit decision 0022 -- a decision record is not amended by
+      bookkeeping. If P3 produced a finding that contradicts 0022's text (the
+      Lua-grading-rules row in its bucket table is the candidate), that
+      belongs in REQ-330's own decision record, and this requirement only
+      POINTS at it from the stage file.
+      .
+      Also flip REQ-329 through REQ-333's status entries and append their
+      status-history events per CLAUDE.md's after-finishing procedure, with
+      real UTC timestamps from the clock.
+    acceptance_criteria:
+      - "docs/migration/stage-10-bilimbaga-vertical.md's bucket-C inventory table no longer contains the '(none yet)' row, and carries one row per module actually present under lib/letflow/exam/ -- verified by listing the directory and comparing, with both the listing and the table quoted in the close-out. A module in the tree but absent from the table is a FAIL, and so is a table row naming a module that does not exist"
+      - "each inventory row's 'Why not A' and 'Why not B' cells are the SAME sentences the corresponding module carries in its moduledoc and that REQ-330's design table authored -- copied, not paraphrased. The close-out shows one row alongside its module's moduledoc to demonstrate they match"
+      - "each inventory row's fourth column points at a real REVIEWER bucket-C sign-off for that module, identified specifically enough to find -- a requirement id plus where the sign-off is recorded. A row with an empty or generic sign-off cell FAILS"
+      - "the total module count and total line count under lib/letflow/exam/ are stated with the date measured, and the close-out QUOTES THE COMMAND AND ITS OUTPUT that produced them. Numbers copied from another requirement's close-out do not satisfy this criterion"
+      - "the work that moved OUT of bucket C is recorded with requirement ids: the five session entity definitions as bucket A (REQ-329) and the deadline-driven sweep as bucket B (REQ-331), together with a plain statement that P3's phases-table row predicted bucket C and that P3 as executed produced bucket-A and bucket-B work as well"
+      - "the anti-cheat open question in the 'Open questions' section is marked ANSWERED with a pointer to REQ-330's decision record by number and path, with the original question text kept and annotated rather than deleted -- the same treatment decision 0027 received"
+      - "the stage file states that certificate issuance is NOT delivered by P3 and why: no PDF or QR dependency in mix.exs, gaps 4 and 5 mechanism-settled by decision 0027 but capabilities open and unowned. The close-out quotes the sentences added"
+      - "if REQ-330 overturned any of REQ-ANALYST's starting verdicts, the change is recorded with what it was and what it became; if none was overturned, the close-out states that explicitly rather than leaving it ambiguous"
+      - "docs/migration/decisions/0022-bilimbaga-vertical.md is NOT modified: `git diff --name-only` shows it unchanged, quoted with the command. Any finding contradicting 0022's text lives in REQ-330's decision record and is pointed at from the stage file"
+      - "REQ-329 through REQ-333 have their status flipped in docs/requirements.yaml and one status-history event appended each to the current run-history volume found via docs/status/requirement_status.index.yaml, each carrying a real UTC timestamp read from the clock. The close-out quotes the appended events"
+    depends_on:
+      - REQ-329
+      - REQ-330
+      - REQ-331
+      - REQ-332
+      - REQ-333

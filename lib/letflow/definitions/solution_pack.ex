@@ -1083,6 +1083,17 @@ defmodule Letflow.Definitions.SolutionPack do
   # `create_packed_entity_definitions/3` above leaves every row it creates
   # `:inactive`-only (0026 §2) -- no `activate_definition/4` call needed
   # here or added anywhere in this module.
+  #
+  # FUTURE MAINTAINER NOTE (ISS-0647 REVIEWER, 2026-09-13): this
+  # match-by-entity-type-name approach is only sound while bilimbaga is the
+  # ONE pack in the repo defining both `question` and `answer_option`. If a
+  # second, unrelated pack ever defines both of those same entity-type
+  # names, its install would ALSO silently trigger bilimbaga's field
+  # restrictions (a false positive -- harmless, since a restriction on a
+  # field that pack doesn't expose is a no-op, but still not what this
+  # branch intends). Before that happens, switch this match to a stable
+  # pack identifier once `install/3` gains one, rather than entity-type-name
+  # matching.
   defp seed_pack_specific_field_restrictions(installed_entities, opts) do
     installed_entity_types =
       installed_entities

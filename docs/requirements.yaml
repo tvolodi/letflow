@@ -22918,7 +22918,7 @@ requirements:
     title: Design record for the live exam session -- which of the five behaviours are bucket B and which are bucket C, and the two one-sentence rule-2 justifications for each C module before any of it is built (S10 P3)
     owner: CODE-DESIGNER
     impl_order: 626  # letflow-queue task id, written back at WF-01 Step 3.
-    status: pending
+    status: done
     stage: S10
     description: >
       bucket: C (this is the design artefact that JUSTIFIES the bucket-C

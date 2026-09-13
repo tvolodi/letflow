@@ -3141,13 +3141,42 @@ volumes:
     path: docs/status/requirement_status.v15.yaml
     status: current
     opened: 2026-09-12
-    entries: 19
+    entries: 20
     note: >
+      Recounted to 20 at feature/WF02-REQ330-20260913's Step Final
+      SECOND rebase, which conflicted at this file's tail between
+      main's own ORCH-direct REQ-331 blocked-event append (independently
+      computed as 19) and this branch's own already-composed REQ-329/
+      REQ-330 recount note (also independently computed as 19, from a
+      base that predated the REQ-331 blocked-event). Both appends land
+      on the SAME on-disk v15.yaml tail with no overlapping lines (the
+      REQ-331 blocked-event is simply the next entry after REQ-329
+      done), so no `at:`-order reordering was needed -- only this index
+      file's declared count and narrative required manual composition.
+      Recounted directly from `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 20 rather than
+      carrying forward either side's independently-computed 19, per
+      this note's own recount-every-time rule. 827 lines / 47659 bytes,
+      well under the roll ceiling.
       Incremented to 19 by ORCH's own REQ-331 blocked-event append
       (direct-action, dependency REQ-330 not yet done) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 19
       on-disk entries; 777 lines / 45429 bytes, well under the roll
       ceiling. No rebase conflict on this file.
+      Recounted to 19 at feature/WF02-REQ330-20260913's Step Final
+      rebase, which conflicted at this file's tail between main's own
+      REQ-329 started+done event pair (landed via WF02-REQ329-20260913,
+      independently computed as 18) and this branch's own REQ-330
+      done-event append (independently computed as 17 against a stale
+      pre-REQ-329 base). Composed in chronological `at:` order --
+      REQ-329 started (2026-09-13T03:42:20Z), REQ-330 done
+      (2026-09-13T04:23:39Z), REQ-329 done (2026-09-13T04:58:22Z) --
+      REQ-330's done-event was reordered between REQ-329's two events
+      rather than appended after both. Recounted directly from `grep -c
+      "^  - req:" docs/status/requirement_status.v15.yaml` = 19 rather
+      than carrying forward either side's independently-computed 17/18,
+      per this note's own recount-every-time rule. 809 lines / 46674
+      bytes, well under the roll ceiling.
       Incremented to 18 by DOC-UPDATER's own REQ-329 close-out
       done-event append (Step 6, WF02-REQ329-20260913) -- `grep -c
       "^  - req:" docs/status/requirement_status.v15.yaml` = 18
@@ -3157,6 +3186,10 @@ volumes:
       `grep -c "^  - req:" docs/status/requirement_status.v15.yaml` =
       17 on-disk entries; 716 lines / 41982 bytes, well under the roll
       ceiling. No rebase conflict on this file.
+      Incremented to 17 by ORCH's own REQ-330 done-event append
+      (WF02-REQ330-20260913) -- `grep -c "^  - req:"
+      docs/status/requirement_status.v15.yaml` = 17 on-disk entries;
+      744 lines, well under the roll ceiling.
       Incremented to 16 by ORCH's own REQ-328 final done-event append
       (docs/close-REQ328-20260913, correcting ORCH's own earlier
       oversight in the prior ISS-0624 entry's status-field claim) --

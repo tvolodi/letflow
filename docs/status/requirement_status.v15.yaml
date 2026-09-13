@@ -651,3 +651,44 @@ history:
       pre-existing/environmental failures). No status-field change to
       REQ-328 itself -- it was already done; this only completes its
       test's deferred coverage.
+  - req: REQ-328
+    event: done
+    agent: ORCH
+    at: "2026-09-13T02:57:45Z"
+    note: >
+      Final close-out for REQ-328 (queue task 622, GH#1303) --
+      correcting ORCH's own earlier oversight. PR #1312
+      (feat/WF02-REQ328-20260913) correctly left this requirement
+      `status: pending`, blocked on ISS-0624, having found live during
+      implementation that Records.field_document/1 dropped locales
+      and every :localized_text write (category, question, exam)
+      raised FunctionClauseError -- an honest escalation per the
+      requirement's own finding clause, not a workaround. The prior
+      WF03-ISS0624-20260912 SCOPE-CHANGE done-event entry in this
+      volume incorrectly stated "no status-field change to REQ-328
+      itself -- it was already done"; that assumption was wrong. This
+      entry corrects it.
+
+      With ISS-0624 now fixed and its own addendum completing REQ-328's
+      originally-deferred test coverage (both already recorded in this
+      volume), all of REQ-328's acceptance criteria are independently
+      re-verified as satisfied on main: `mix test
+      test/letflow/packs/bilimbaga_pack_install_test.exs` -> 5 passed.
+      A real install_result map was produced and quoted in the test's
+      own IO.puts output (ten installed_entity_definitions entries,
+      each status: "installed" -- the hardcoded string, distinct from
+      the persisted EntityDefinition row's :inactive atom); the
+      pre-activation create_record/2 call proven to return
+      {:error, {:definition_not_found, _}}; role_mapping_checklist
+      reports every declared role bound: false (correct, per decision
+      0029's permanent advisory-only stance); real category/question/
+      exam/tag/question_tag/exam_question_rule records written and
+      read back; the question->category FK and question_tag->tag FK
+      both proven to reject with a real Postgres foreign_key_violation;
+      the question.stem :localized_text write round-trips kk/ru/en;
+      the through many-to-many join returns the actual tagged
+      question. No production module touched (git diff --name-only
+      confirmed empty against lib/letflow/definitions/solution_pack.ex,
+      lib/letflow/entities/**, and priv/repo/migrations/ throughout
+      both the original PR and the addendum). docs/requirements.yaml
+      flipped pending -> done.

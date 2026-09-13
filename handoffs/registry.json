@@ -6503,6 +6503,24 @@
       "backfilled": false,
       "last_known_step": "Step Final PASS -- merge pending.",
       "note": "Addendum to WF03-ISS0624-20260912 on the same branch: REQ-328's install-proof test carried a self-documented canary asserting ISS-0624's crash. Now that the bug is fixed, completed REQ-328's deferred acceptance criteria per the canary's own instructions -- real category/question/exam :localized_text writes round-tripping kk/ru/en, a new question->category FK-violation test, a real exam_question_rule against a real exam, and the many-to-many join rewired to assert it returns the actual tagged question. Test-only, no production code. SECURITY-REVIEWER PASS (INV-1, INV-8), REVIEWER PASS (independently ran the full suite: only known pre-existing/environmental failures)."
+    },
+    {
+      "run_id": "docs-close-REQ328-20260913",
+      "workflow_id": "WF-02",
+      "requirement_id": "REQ-328",
+      "issue_id": null,
+      "queue_task_id": 622,
+      "queue_agent_id": "letflow-orch",
+      "github_issue_number": 1303,
+      "status": "COMPLETED",
+      "owned_modules": [],
+      "branch_name": "docs/close-REQ328-20260913",
+      "started_at": "2026-09-13T02:57:45Z",
+      "lock_released_at": null,
+      "released_lock": false,
+      "backfilled": false,
+      "last_known_step": "Step Final PASS -- merge pending.",
+      "note": "Final close-out for REQ-328 (queue task 622, GH#1303), correcting ORCH's own earlier oversight. PR #1312 correctly left REQ-328 pending, blocked on ISS-0624 (Records.field_document/1 dropping locales, breaking :localized_text writes end-to-end) -- an honest escalation, not a workaround. ISS-0624 is now fixed and its own addendum completed REQ-328's deferred test coverage. All acceptance criteria independently re-verified satisfied on main: mix test test/letflow/packs/bilimbaga_pack_install_test.exs -> 5 passed, covering the real install_result map, the inactive-then-activate sequence, both FK-violation proofs, the localized_text round-trip, and the through-join returning the tagged question. No production module touched. docs/requirements.yaml flipped pending -> done, GH#1303 to be closed, queue task 622 to be released done."
     }
   ]
 }
